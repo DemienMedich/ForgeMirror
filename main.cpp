@@ -1,158 +1,446 @@
-// Простой прототип геймифицированных профилей для команды моделлеров
-// Возможности:
-// - Навык (Skill) с уровнем и опытом (XP)
-// - Профиль (Profile) с несколькими навыками и общим уровнем как средним по навыкам
-// - Небольшое CLI‑демо: добавление XP и отображение повышения уровня
+// JobSkill console client: profile issuing, leveling, and simple CLI session
 
 #include <iostream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include <iomanip>
+#include <limits>
+#include <algorithm>
+#include <filesystem>
+#include <cstdlib>
+#include <memory>
+#include <cctype>
+#include <optional>
+#include <unordered_set>
+#include <sstream>
 
-struct Skill {
+#include "Profile.h"
+#include "IJobStorage.h"
+#include "IApiClient.h"
+#include "AppUtils.h"
+#include "SkillCatalog.h"
+
+#if defined(_WIN32)
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
+#endif
+
+struct ProfileBlueprint {
     std::string name;
-    int level = 1;
-    int xp = 0;            // current xp within the level
-    int xpToNext = 100;    // requirement for next level
-
-    Skill() = default;
-    explicit Skill(std::string n, int lvl = 1)
-        : name(std::move(n)), level(lvl) {
-        xpToNext = required_xp_for(level + 1);
-    }
-
-    static int required_xp_for(int targetLevel) {
-        // Простая прогрессия сложности: 100 * L^1.3 (округление)
-        // Ранние уровни быстрые, поздние — более значимые
-        double base = 100.0;
-        double curve = std::pow(targetLevel, 1.3);
-        return static_cast<int>(base * curve);
-    }
-
-    bool add_xp(int amount) {
-        if (amount <= 0) return false;
-        bool leveled = false;
-        xp += amount;
-        // Преобразуем накопленный опыт в уровни по мере необходимости
-        while (xp >= xpToNext) {
-            xp -= xpToNext;
-            level += 1;
-            xpToNext = required_xp_for(level + 1);
-            leveled = true;
-        }
-        return leveled;
-    }
+    std::vector<std::string> skills;
 };
 
-class Profile {
-public:
-    explicit Profile(std::string n) : name_(std::move(n)) {}
+struct ActiveProfile {
+    Profile profile;
+    std::string id;
+};
 
-    void add_skill(const std::string& skillName, int startLevel = 1) {
-        if (skills_.count(skillName) == 0) {
-            skills_.emplace(skillName, Skill(skillName, startLevel));
+static const std::vector<ProfileBlueprint> kIssuedProfiles = {};
+
+static const ProfileBlueprint* find_blueprint(const std::string& name) {
+    for (const auto& bp : kIssuedProfiles) {
+        if (bp.name == name) return &bp;
+    }
+    return nullptr;
+}
+
+static bool is_profile_id(const std::string& value) {
+    if (value.empty()) return false;
+    return std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+}
+
+static std::string trim_copy(std::string s) {
+    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c){ return !is_space(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c){ return !is_space(c); }).base(), s.end());
+    return s;
+}
+
+static Profile make_profile_from_blueprint(const ProfileBlueprint& bp, SkillCatalog& catalog) {
+    Profile profile(bp.name);
+    for (const auto& skill : bp.skills) {
+        if (auto canonical = catalog.canonical(skill)) {
+            profile.add_skill(*canonical, 1, catalog.weight(*canonical));
+        } else {
+            profile.add_skill(skill, 1, catalog.weight(skill));
         }
     }
-
-    bool grant_xp(const std::string& skillName, int amount) {
-        auto it = skills_.find(skillName);
-        if (it == skills_.end()) return false;
-        bool leveled = it->second.add_xp(amount);
-        recompute_overall();
-        return leveled;
-    }
-
-    int overall_level() const { return overallLevel_; }
-    const std::string& name() const { return name_; }
-
-    std::vector<Skill> list_skills() const {
-        std::vector<Skill> out;
-        out.reserve(skills_.size());
-        for (const auto& kv : skills_) out.push_back(kv.second);
-        return out;
-    }
-
-private:
-    void recompute_overall() {
-        // Общий уровень = целая часть среднего по уровням навыков, минимум 1
-        if (skills_.empty()) { overallLevel_ = 1; return; }
-        int sum = 0;
-        for (const auto& kv : skills_) sum += kv.second.level;
-        overallLevel_ = std::max(1, sum / static_cast<int>(skills_.size()));
-    }
-
-    std::string name_;
-    std::unordered_map<std::string, Skill> skills_;
-    int overallLevel_ = 1;
-};
+    return profile;
+}
 
 static void print_profile(const Profile& p) {
-    std::cout << "=== Профиль: " << p.name() << " ===\n";
-    std::cout << "Общий уровень: " << p.overall_level() << "\n";
-    std::cout << "Навыки:\n";
+    std::cout << "=== Profile: " << p.name() << " ===\n";
+    std::cout << "Overall level: " << p.overall_level() << " (" << DescribeOverallRank(p.overall_level()) << ")\n";
+    std::cout << "Skills:\n";
     auto skills = p.list_skills();
-    // sort-like stable order not necessary; just print
     for (const auto& s : skills) {
-        std::cout << " - " << std::left << std::setw(12) << s.name
-                  << " У" << s.level
-                  << " | Опыт: " << s.xp << "/" << s.xpToNext
+        std::cout << " - " << std::left << std::setw(14) << s.name
+                  << " L" << s.level
+                  << " | XP: " << s.xp << "/" << s.xpToNext
+                  << " | W: " << std::fixed << std::setprecision(2) << s.weight << std::defaultfloat
                   << "\n";
     }
 }
 
-int main() {
-    // Демонстрационная настройка для участника команды моделлеров
-    Profile alice("Алиса");
-    // Базовые навыки по умолчанию (русские названия)
-    alice.add_skill("Моделирование");
-    alice.add_skill("Текстурирование");
-    alice.add_skill("Риггинг");
+static void show_skill_catalog(const SkillCatalog& catalog) {
+    std::cout << "\nSkill Catalog:\n";
+    for (const auto& skill : catalog.skills()) {
+        std::cout << " - " << skill << " (weight "
+                  << std::fixed << std::setprecision(2) << catalog.weight(skill) << std::defaultfloat
+                  << ")\n";
+    }
+}
 
-    std::cout << "Добро пожаловать в профили команды!\n";
-    print_profile(alice);
+static void show_available_profiles(IJobStorage& storage) {
+    auto stored = storage.list_profiles();
+    std::unordered_set<std::string> existing;
 
-    std::cout << "\nНачисляем опыт: Моделирование +120, Текстурирование +60, Риггинг +300...\n";
-    bool mUp = alice.grant_xp("Моделирование", 120);
-    bool tUp = alice.grant_xp("Текстурирование", 60);
-    bool rUp = alice.grant_xp("Риггинг", 300);
-
-    if (mUp || tUp || rUp) {
-        std::cout << "Повышение уровня как минимум в одном навыке!\n";
+    std::cout << "\nSaved profiles:";
+    if (stored.empty()) {
+        std::cout << "\n - (none yet)\n";
+    } else {
+        std::cout << "\n";
+        for (const auto& info : stored) {
+            existing.insert(info.name);
+            std::cout << " - [" << info.id << "] " << info.name;
+            std::cout << (info.archived ? " (archived)" : " (active)") << "\n";
+        }
     }
 
-    std::cout << "\nПосле начисления опыта:\n";
-    print_profile(alice);
+    std::cout << "Issued profiles:";
+    if (kIssuedProfiles.empty()) {
+        std::cout << "\n - (none)\n";
+    } else {
+        std::cout << "\n";
+        for (const auto& bp : kIssuedProfiles) {
+            std::cout << " - " << bp.name;
+            if (existing.count(bp.name)) {
+                std::cout << " (already created)";
+            }
+            std::cout << "\n";
+        }
+    }
+}
 
-    // Простой интерактивный цикл (опционально)
-    std::cout << "\nКоманды: добавить <навык> <число> | показать | выход\n";
-    std::cout << "(Доступны и английские алиасы: addxp/show/quit)\n";
+static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillCatalog& catalog, const std::string& token) {
+    if (is_profile_id(token)) {
+        if (!storage.set_active_profile(token)) {
+            std::cout << "Profile ID not found or archived.\n";
+            return std::nullopt;
+        }
+        if (auto profile = storage.load_profile()) {
+            return ActiveProfile{*profile, token};
+        }
+        std::cout << "Profile data is missing.\n";
+        return std::nullopt;
+    }
+
+    auto stored = storage.list_profiles();
+    std::vector<IJobStorage::ProfileInfo> matches;
+    for (const auto& info : stored) {
+        if (info.name == token) matches.push_back(info);
+    }
+
+    if (!matches.empty()) {
+        std::optional<IJobStorage::ProfileInfo> chosen;
+        for (const auto& info : matches) {
+            if (!info.archived) { chosen = info; break; }
+        }
+        if (!chosen) {
+            std::cout << "All profiles named '" << token << "' are archived. Use restore <id>.\n";
+            return std::nullopt;
+        }
+        if (!storage.set_active_profile(chosen->id)) {
+            std::cout << "Unable to open profile ID " << chosen->id << ".\n";
+            return std::nullopt;
+        }
+        if (auto profile = storage.load_profile()) {
+            return ActiveProfile{*profile, chosen->id};
+        }
+        std::cout << "Failed to load profile data.\n";
+        return std::nullopt;
+    }
+
+    Profile profile(token);
+    if (auto bp = find_blueprint(token)) {
+        profile = make_profile_from_blueprint(*bp, catalog);
+    } else {
+        std::string confirm;
+        std::cout << "Profile '" << token << "' not found. Create new profile? (yes/no): ";
+        if (!(std::cin >> confirm) || confirm != "yes") {
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cout << "Creation cancelled.\n";
+            return std::nullopt;
+        }
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        if (auto skill = catalog.canonical("Modeling")) profile.add_skill(*skill, 1, catalog.weight(*skill));
+        if (auto skill = catalog.canonical("Texturing")) profile.add_skill(*skill, 1, catalog.weight(*skill));
+    }
+
+    auto info = storage.create_profile(profile);
+    if (!info) {
+        std::cout << "Failed to create profile.\n";
+        return std::nullopt;
+    }
+    storage.save_profile(profile);
+    std::cout << "Created profile '" << profile.name() << "' with ID " << info->id << ".\n";
+    return ActiveProfile{profile, info->id};
+}
+
+static bool run_profile_session(Profile& profile, const std::string& profileId, IJobStorage& storage, IApiClient& api, SkillCatalog& catalog) {
+    auto sync_now = [&](bool verbose = true) {
+        bool ok = storage.save_profile(profile);
+        if (!ok) {
+            if (verbose) std::cout << "Warning: failed to save profile locally.\n";
+        } else if (verbose) {
+            std::cout << "Sync complete.\n";
+        }
+        return ok;
+    };
+
+    sync_now(false);
+
+    std::cout << "\nLogged in as " << profile.name() << " [" << profileId << "]." << std::endl;
+    print_profile(profile);
+    std::cout << "\nCommands: addxp <skill> <amount> | show | sync | logout | quit\n";
+
     std::string cmd;
     while (true) {
         std::cout << "> ";
-        if (!(std::cin >> cmd)) break;
-        if (cmd == "выход" || cmd == "quit" || cmd == "exit") break;
-        if (cmd == "показать" || cmd == "show") {
-            print_profile(alice);
+        if (!(std::cin >> cmd)) return true; // EOF => exit app
+        if (cmd == "show") {
+            print_profile(profile);
             continue;
         }
-        if (cmd == "добавить" || cmd == "addxp") {
+        if (cmd == "sync") {
+            sync_now();
+            continue;
+        }
+        if (cmd == "logout") {
+            sync_now(false);
+            std::cout << "Logged out.\n";
+            return false;
+        }
+        if (cmd == "quit" || cmd == "exit") {
+            sync_now(false);
+            return true;
+        }
+        if (cmd == "addxp") {
             std::string skill; int amount;
             if (std::cin >> skill >> amount) {
-                // Для удобства — создаём навык, если его ещё нет
-                alice.add_skill(skill);
-                bool up = alice.grant_xp(skill, amount);
-                std::cout << (up ? "Повышение уровня!" : "Опыт начислен.") << "\n";
+                if (amount <= 0) {
+                    std::cout << "Amount must be positive.\n";
+                    continue;
+                }
+                auto canonical = catalog.canonical(skill);
+                if (!canonical) {
+                    std::cout << "Skill not in catalog. Ask admin to add it first.\n";
+                    continue;
+                }
+                const std::string skillName = *canonical;
+                const double skillWeight = catalog.weight(skillName);
+                profile.add_skill(skillName, 1, skillWeight);
+                const bool leveled = profile.grant_xp(skillName, amount);
+                const bool apiOk = api.post_xp(skillName, amount);
+                const bool synced = sync_now(false);
+                std::cout << (leveled ? "Level up!" : "XP added.") << "\n";
+                if (!apiOk) std::cout << "Warning: failed to notify server.\n";
+                if (synced) std::cout << "Auto-sync complete.\n";
+                else std::cout << "Warning: auto-sync failed. Try 'sync'.\n";
             } else {
                 std::cin.clear();
                 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Неверный ввод.\n";
+                std::cout << "Invalid input.\n";
             }
             continue;
         }
-        std::cout << "Неизвестная команда. Доступно: добавить / показать / выход\n";
+        std::cout << "Unknown command. Use: addxp / show / sync / logout / quit\n";
+    }
+}
+
+constexpr const char* kAdminPassword = "admin123";
+
+int main() {
+#if defined(_WIN32)
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+
+    extern IJobStorage* CreateFakeStorage();
+    extern IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
+    extern IApiClient* CreateFakeApi();
+
+    auto storageDir = ResolveStorageDirectory();
+    SkillCatalog catalog(storageDir);
+
+    std::unique_ptr<IJobStorage> storage(CreateFileStorage(storageDir));
+    EnsureAdminProfile(*storage, catalog);
+
+    std::unique_ptr<IApiClient> api(CreateFakeApi());
+
+    std::cout << "Welcome to JobSkill profiles";
+#ifdef APP_VERSION
+    std::cout << " (version " << APP_VERSION << ")";
+#endif
+    std::cout << "!\n";
+
+    bool exitApp = false;
+    while (!exitApp) {
+        std::cout << "\n=== Main Menu ===\n";
+        std::cout << "Commands: list | skills | skill-add <name> | archive <name> | restore <name> | delete <name> | login <name> | help | quit\n> ";
+        std::string menuCmd;
+        if (!(std::cin >> menuCmd)) break;
+
+        if (menuCmd == "quit" || menuCmd == "exit") {
+            exitApp = true;
+            break;
+        }
+
+        if (menuCmd == "help") {
+            std::cout << "Use 'list' to see available profiles.\n"
+                         "Use 'skills' to show the skill catalog.\n"
+                         "Use 'archive <id>' / 'restore <id>' to move profiles.\n"
+                         "Use 'delete <id>' to remove a profile permanently.\n"
+                         "Use 'login <id|name>' to enter a profile session.\n"
+                         "Use 'quit' to close the application.\n";
+            continue;
+        }
+
+        if (menuCmd == "list") {
+            show_available_profiles(*storage);
+            continue;
+        }
+
+        if (menuCmd == "skills") {
+            show_skill_catalog(catalog);
+            continue;
+        }
+
+        if (menuCmd == "skill-add") {
+            std::string rest;
+            std::getline(std::cin >> std::ws, rest);
+            rest = trim_copy(rest);
+            if (rest.empty()) {
+                std::cout << "Specify skill name.\n";
+                continue;
+            }
+            std::string password;
+            std::cout << "Admin password: ";
+            if (!(std::cin >> password)) {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input.\n";
+                continue;
+            }
+            if (password != kAdminPassword) {
+                std::cout << "Access denied.\n";
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                continue;
+            }
+            std::string weightInput;
+            std::cout << "Skill weight [0.5-1.6] (default 1.0): ";
+            std::getline(std::cin >> std::ws, weightInput);
+            double weight = 1.0;
+            if (!weightInput.empty()) {
+                try {
+                    weight = std::stod(weightInput);
+                } catch (...) {
+                    std::cout << "Invalid weight. Using default 1.0.\n";
+                    weight = 1.0;
+                }
+            }
+            if (catalog.add_skill(rest, weight)) {
+                std::cout << "Skill added to catalog.\n";
+            } else {
+                std::cout << "Skill already exists with same weight or invalid.\n";
+            }
+            continue;
+        }
+
+        if (menuCmd == "archive" || menuCmd == "restore" || menuCmd == "delete") {
+            std::string profileId;
+            if (!(std::cin >> profileId)) {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input.\n";
+                continue;
+            }
+
+            if (!is_profile_id(profileId)) {
+                std::cout << "Use numeric profile IDs (see 'list').\n";
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                continue;
+            }
+
+            if (menuCmd == "archive") {
+                if (storage->set_archived(profileId, true)) {
+                    std::cout << "Profile archived.\n";
+                } else {
+                    std::cout << "Failed to archive profile.\n";
+                }
+                continue;
+            }
+
+            if (menuCmd == "restore") {
+                if (storage->set_archived(profileId, false)) {
+                    std::cout << "Profile restored.\n";
+                } else {
+                    std::cout << "Failed to restore profile.\n";
+                }
+                continue;
+            }
+
+            // delete
+            std::string confirm;
+            std::cout << "Type 'yes' to confirm deletion of " << profileId << ": ";
+            std::cin >> confirm;
+            if (confirm == "yes" && storage->delete_profile(profileId)) {
+                std::cout << "Profile deleted.\n";
+            } else {
+                std::cout << "Deletion cancelled or failed.\n";
+            }
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            continue;
+        }
+
+        if (menuCmd == "login") {
+            std::string token;
+            if (!(std::cin >> token)) {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input.\n";
+                continue;
+            }
+
+            auto activeProfile = acquire_profile(*storage, catalog, token);
+            if (!activeProfile) {
+                continue;
+            }
+
+            auto authToken = api->login(activeProfile->profile.name(), "default");
+            if (authToken) {
+                storage->save_token(*authToken);
+                api->set_token(*authToken);
+            } else {
+                std::cout << "Warning: unable to authenticate with server stub.\n";
+            }
+
+            bool requestedExit = run_profile_session(activeProfile->profile, activeProfile->id, *storage, *api, catalog);
+            if (requestedExit) {
+                exitApp = true;
+            }
+            continue;
+        }
+
+        std::cout << "Unknown command. Use: list / login / help / quit\n";
     }
 
-    std::cout << "До встречи!\n";
+    std::cout << "See you soon!\n";
     return 0;
 }
+
+
+
