@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace {
 
@@ -125,6 +126,27 @@ void SkillCatalog::load() {
             add_internal(entry.first, entry.second, false);
         }
         save();
+    } else {
+        bool changed = false;
+        std::unordered_set<std::string> existing(orderedSkills_.begin(), orderedSkills_.end());
+        for (const auto& entry : kDefaultSkills) {
+            const std::string name(entry.first);
+            const std::string norm = normalize(name);
+            if (!index_.count(norm)) {
+                orderedSkills_.push_back(name);
+                index_[norm] = name;
+                weights_[name] = entry.second;
+                changed = true;
+            } else {
+                auto& canonical = index_[norm];
+                double& w = weights_[canonical];
+                if (std::abs(w - entry.second) > 1e-3) {
+                    w = entry.second;
+                    changed = true;
+                }
+            }
+        }
+        if (changed) save();
     }
 }
 

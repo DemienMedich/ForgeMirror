@@ -131,6 +131,8 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
             return std::nullopt;
         }
         if (auto profile = storage.load_profile()) {
+            SyncProfileWithCatalog(*profile, catalog);
+            storage.save_profile(*profile);
             return ActiveProfile{*profile, token};
         }
         std::cout << "Profile data is missing.\n";
@@ -157,6 +159,8 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
             return std::nullopt;
         }
         if (auto profile = storage.load_profile()) {
+            SyncProfileWithCatalog(*profile, catalog);
+            storage.save_profile(*profile);
             return ActiveProfile{*profile, chosen->id};
         }
         std::cout << "Failed to load profile data.\n";
@@ -180,6 +184,7 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
         if (auto skill = catalog.canonical("Texturing")) profile.add_skill(*skill, 1, catalog.weight(*skill));
     }
 
+    SyncProfileWithCatalog(profile, catalog);
     auto info = storage.create_profile(profile);
     if (!info) {
         std::cout << "Failed to create profile.\n";
@@ -290,7 +295,7 @@ int main() {
     bool exitApp = false;
     while (!exitApp) {
         std::cout << "\n=== Main Menu ===\n";
-        std::cout << "Commands: list | skills | skill-add <name> | archive <name> | restore <name> | delete <name> | login <name> | help | quit\n> ";
+        std::cout << "Commands: list | skills | archive <id> | restore <id> | delete <id> | login <id|name> | help | quit\n> ";
         std::string menuCmd;
         if (!(std::cin >> menuCmd)) break;
 
@@ -319,46 +324,6 @@ int main() {
             continue;
         }
 
-        if (menuCmd == "skill-add") {
-            std::string rest;
-            std::getline(std::cin >> std::ws, rest);
-            rest = trim_copy(rest);
-            if (rest.empty()) {
-                std::cout << "Specify skill name.\n";
-                continue;
-            }
-            std::string password;
-            std::cout << "Admin password: ";
-            if (!(std::cin >> password)) {
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Invalid input.\n";
-                continue;
-            }
-            if (password != kAdminPassword) {
-                std::cout << "Access denied.\n";
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                continue;
-            }
-            std::string weightInput;
-            std::cout << "Skill weight [0.5-1.6] (default 1.0): ";
-            std::getline(std::cin >> std::ws, weightInput);
-            double weight = 1.0;
-            if (!weightInput.empty()) {
-                try {
-                    weight = std::stod(weightInput);
-                } catch (...) {
-                    std::cout << "Invalid weight. Using default 1.0.\n";
-                    weight = 1.0;
-                }
-            }
-            if (catalog.add_skill(rest, weight)) {
-                std::cout << "Skill added to catalog.\n";
-            } else {
-                std::cout << "Skill already exists with same weight or invalid.\n";
-            }
-            continue;
-        }
 
         if (menuCmd == "archive" || menuCmd == "restore" || menuCmd == "delete") {
             std::string profileId;

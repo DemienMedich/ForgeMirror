@@ -57,5 +57,10 @@ if(BUILD_IMGUI_GUI)
     if (WIN32)
         target_link_libraries(JobSkillGui PRIVATE opengl32)
     endif()
+
+    add_custom_command(TARGET JobSkillGui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:glfw>
+            $<TARGET_FILE_DIR:JobSkillGui>)
 endif()
 

@@ -70,7 +70,6 @@ or run inside Windows Terminal/VS Code (UTF-8) — the app already sets UTF-8 vi
 ### Main menu commands
 - `list` - show saved profiles with their numeric IDs and issued blueprints
 - `skills` - display the global 3D skill catalog
-- `skill-add <name>` - add a skill to the catalog (requires admin password)
 - `archive <id>` / `restore <id>` - move a profile between active storage and the archive
 - `delete <id>` - permanently remove a profile (confirmation required)
 - `login <id|name>` - open an existing profile by ID or create/select by name
@@ -89,10 +88,16 @@ or run inside Windows Terminal/VS Code (UTF-8) — the app already sets UTF-8 vi
 - Pipeline skills (Texturing, Shading, Lighting, Rendering) are near 1.0–1.1.
 - Asset creation skills (Modeling, Sculpting, Hard Surface, Retopology, Environment) weigh ~1.2.
 - Advanced production skills (Rigging, Animation, Simulation) weigh 1.3–1.4.
-- Weights feed into a weighted average for the overall level; admins can add skills with custom weights (0.5–1.6).
+- Weights feed into a weighted average for the overall level and задаются по умолчанию (изменение не предусмотрено).
 
 ### Default profile
 - Roman (Admin) - Modeling, Lighting, Materials (all start at level 1)
+
+### Rank system
+- 0–9: `Intern`
+- 10–49: `Junior` (sub-levels every 10: 20→Junior (I), 30→Junior (II), ...)
+- 50–149: `Middle` (sub-levels every 10: 60→Middle (I), 70→Middle (II), ...)
+- 150+: `Senior` (sub-levels every 10: 160→Senior (I), 170→Senior (II), ...)
 
 ## Roadmap ideas
 - Real storage format (e.g., JSON with nlohmann/json) or DB backend
@@ -119,3 +124,19 @@ To build the experimental ImGui-based desktop UI:
 
 The GUI uses the same storage/catalog data as the CLI and shows skill weights and ranks.
 
+
+### ImGui GUI (optional)
+To build the experimental ImGui-based desktop UI:
+1. Install [GLFW](https://www.glfw.org/) and OpenGL development headers.
+2. Clone [Dear ImGui](https://github.com/ocornut/imgui) and note the path (set `IMGUI_DIR`).
+3. Configure with GUI support:
+   ```bash
+   cmake -S . -B build-gui -DBUILD_IMGUI_GUI=ON -DIMGUI_DIR=/path/to/imgui
+   cmake --build build-gui --config Release --target JobSkillGui
+   ```
+4. Run `JobSkillGui` to launch the graphical interface (profiles list, details, XP actions).
+
+The GUI uses the same storage/catalog data as the CLI and shows skill weights and ranks.
+
+
+### ImGui GUI설 파이
