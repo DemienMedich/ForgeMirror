@@ -255,8 +255,8 @@ Z_VCPKG_PWSH_PATH:FILEPATH=C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5
 // triplet
 _VCPKG_INSTALLED_DIR:PATH=C:/tools/vcpkg/installed
 
-//No help, variable specified on the command line.
-glfw3_DIR:UNINITIALIZED=C:/tools/vcpkg/installed/x64-windows/share/glfw3
+//The directory containing a CMake configuration file for glfw3.
+glfw3_DIR:PATH=C:/tools/vcpkg/installed/x64-windows/share/glfw3
 
 
 ########################

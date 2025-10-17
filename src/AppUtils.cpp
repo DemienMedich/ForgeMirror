@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
+#include <system_error>
 #include <utility>
 
 namespace {
@@ -85,16 +86,13 @@ void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
 }
 
 std::filesystem::path ResolveStorageDirectory() {
-#ifdef _WIN32
-    if (const char* appdata = std::getenv("APPDATA")) {
-        return std::filesystem::path(appdata) / "JobSkill";
+    auto base = std::filesystem::current_path() / "data";
+    std::error_code ec;
+    std::filesystem::create_directories(base, ec);
+    if (ec) {
+        return std::filesystem::current_path();
     }
-#else
-    if (const char* home = std::getenv("HOME")) {
-        return std::filesystem::path(home) / ".jobskill";
-    }
-#endif
-    return std::filesystem::current_path();
+    return base;
 }
 
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
@@ -108,3 +106,4 @@ void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
     }
     profile.set_skills(skills);
 }
+

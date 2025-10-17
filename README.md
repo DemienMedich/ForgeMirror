@@ -37,6 +37,8 @@ make              # Release build
 make debug        # Debug build
 make run          # Build + run
 make clean        # Remove build directory
+make rebuild      # Clean + configure + build (Release by default)
+make rebuild BUILD_DIR=build CONFIG=Debug  # Example for Debug rebuild
 
 # Override directory/config
 make BUILD_DIR=out CONFIG=Debug build
@@ -115,10 +117,10 @@ or run inside Windows Terminal/VS Code (UTF-8) — the app already sets UTF-8 vi
 To build the experimental ImGui-based desktop UI:
 1. Install [GLFW](https://www.glfw.org/) and OpenGL development headers.
 2. Clone [Dear ImGui](https://github.com/ocornut/imgui) and note the path (set `IMGUI_DIR`).
-3. Configure with GUI support:
+3. Configure with GUI support (vcpkg toolchain optional but recommended):
    ```bash
-   cmake -S . -B build-gui -DBUILD_IMGUI_GUI=ON -DIMGUI_DIR=/path/to/imgui
-   cmake --build build-gui --config Release --target JobSkillGui
+   make rebuild-gui GUI_BUILD_DIR=build-gui IMGUI_DIR=/path/to/imgui \
+        VCPKG_CHAINFILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake
    ```
 4. Run `JobSkillGui` to launch the graphical interface (profiles list, details, XP actions).
 

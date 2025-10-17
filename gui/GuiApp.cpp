@@ -35,9 +35,13 @@ struct GuiProfile {
     std::string id;
 };
 
-enum class ModalAction {
+struct XpEntry {
+    int add = 0;
+    int sub = 0;
+};
+
+enum class ConfirmAction {
     None,
-    Create,
     Archive,
     Restore,
     Delete
@@ -53,9 +57,12 @@ struct GuiState {
     std::string statusMessage;
     float statusColor[4] = {0.6f, 0.7f, 1.0f, 1.0f};
 
-    ModalAction modal = ModalAction::None;
+    bool createPopupRequest = false;
+    bool confirmPopupRequest = false;
+    ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
-    std::string pendingId;
+    std::vector<XpEntry> xpEntries;
+    bool xpPopupRequest = false;
 };
 
 std::vector<IJobStorage::ProfileInfo> LoadProfiles(IJobStorage& storage) {
@@ -72,6 +79,10 @@ void SetStatus(GuiState& state, const std::string& msg, float r, float g, float 
     state.statusColor[1] = g;
     state.statusColor[2] = b;
     state.statusColor[3] = a;
+}
+
+void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
+    state.xpEntries.assign(catalog.skills().size(), {});
 }
 
 void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
@@ -180,34 +191,41 @@ int main() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Create")) {
-            state.modal = ModalAction::Create;
+            state.createPopupRequest = true;
             state.modalBuffer.fill('\0');
-            ImGui::OpenPopup("Create Profile");
         }
         ImGui::SameLine();
-        bool canArchive = state.selectedIndex >= 0 && !state.profiles.empty() && !state.profiles[state.selectedIndex].archived;
+        bool canArchive = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && !state.profiles[state.selectedIndex].archived;
         if (!canArchive) ImGui::BeginDisabled();
         if (ImGui::Button("Archive")) {
-            state.modal = ModalAction::Archive;
-            ImGui::OpenPopup("Confirm Action");
+            state.confirmPopupRequest = true;
+            state.confirmAction = ConfirmAction::Archive;
         }
         if (!canArchive) ImGui::EndDisabled();
         ImGui::SameLine();
-        bool canRestore = state.selectedIndex >= 0 && !state.profiles.empty() && state.profiles[state.selectedIndex].archived;
+        bool canRestore = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && state.profiles[state.selectedIndex].archived;
         if (!canRestore) ImGui::BeginDisabled();
         if (ImGui::Button("Restore")) {
-            state.modal = ModalAction::Restore;
-            ImGui::OpenPopup("Confirm Action");
+            state.confirmPopupRequest = true;
+            state.confirmAction = ConfirmAction::Restore;
         }
         if (!canRestore) ImGui::EndDisabled();
         ImGui::SameLine();
-        bool canDelete = state.selectedIndex >= 0;
+        bool canDelete = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size());
         if (!canDelete) ImGui::BeginDisabled();
         if (ImGui::Button("Delete")) {
-            state.modal = ModalAction::Delete;
-            ImGui::OpenPopup("Confirm Action");
+            state.confirmPopupRequest = true;
+            state.confirmAction = ConfirmAction::Delete;
         }
         if (!canDelete) ImGui::EndDisabled();
+        ImGui::SameLine();
+        bool hasActive = state.active.has_value();
+        if (!hasActive) ImGui::BeginDisabled();
+        if (ImGui::Button("Add Experience")) {
+            PrepareXpEntries(state, catalog);
+            state.xpPopupRequest = true;
+        }
+        if (!hasActive) ImGui::EndDisabled();
 
         ImGui::Separator();
         if (ImGui::BeginChild("profiles", ImVec2(0, 0), false)) {
@@ -339,8 +357,96 @@ int main() {
         }
         ImGui::End();
 
-        // Modal dialogs
-        if (state.modal == ModalAction::Create && ImGui::BeginPopupModal("Create Profile", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Begin("Skill Catalog");
+        for (const auto& skill : catalog.skills()) {
+            ImGui::Text("%s (%.2f)", skill.c_str(), catalog.weight(skill));
+        }
+        ImGui::End();
+
+        // XP sheet modal
+        if (state.xpPopupRequest) {
+            ImGui::OpenPopup("Add Experience");
+            state.xpPopupRequest = false;
+        }
+        bool xpPopupOpen = true;
+        if (ImGui::BeginPopupModal("Add Experience", &xpPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+            const auto& catalogSkills = catalog.skills();
+            if (state.xpEntries.size() != catalogSkills.size()) {
+                PrepareXpEntries(state, catalog);
+            }
+            if (catalogSkills.empty()) {
+                ImGui::TextUnformatted("Catalog is empty.");
+            } else if (!state.active) {
+                ImGui::TextUnformatted("No active profile.");
+            } else if (ImGui::BeginTable("xp_sheet", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Skill");
+                ImGui::TableSetupColumn("Plus");
+                ImGui::TableSetupColumn("Minus");
+                ImGui::TableSetupColumn("Result");
+                ImGui::TableHeadersRow();
+                int total = 0;
+                for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(catalogSkills[i].c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::PushID(i * 2);
+                    if (ImGui::InputInt("##plus", &state.xpEntries[i].add, 1, 10)) {
+                        if (state.xpEntries[i].add < 0) state.xpEntries[i].add = 0;
+                    }
+                    ImGui::PopID();
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::PushID(i * 2 + 1);
+                    if (ImGui::InputInt("##minus", &state.xpEntries[i].sub, 1, 10)) {
+                        if (state.xpEntries[i].sub < 0) state.xpEntries[i].sub = 0;
+                    }
+                    ImGui::PopID();
+                    ImGui::TableSetColumnIndex(3);
+                    int delta = state.xpEntries[i].add - state.xpEntries[i].sub;
+                    if (delta < 0) delta = 0;
+                    total += delta;
+                    ImGui::Text("%d", delta);
+                }
+                ImGui::EndTable();
+                ImGui::Separator();
+                ImGui::Text("Total XP: %d", total);
+
+                if (ImGui::Button("Apply")) {
+                    int applied = 0;
+                    for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
+                        int delta = state.xpEntries[i].add - state.xpEntries[i].sub;
+                        if (delta <= 0) continue;
+                        const std::string& skillName = catalogSkills[i];
+                        double weight = catalog.weight(skillName);
+                        state.active->profile.add_skill(skillName, 1, weight);
+                        state.active->profile.grant_xp(skillName, delta);
+                        applied += delta;
+                    }
+                    storage->save_profile(state.active->profile);
+                    SetStatus(state, applied > 0 ? "XP sheet applied." : "Nothing to apply.",
+                              applied > 0 ? 0.45f : 1.0f,
+                              applied > 0 ? 0.9f : 0.45f,
+                              applied > 0 ? 0.45f : 0.45f);
+                    xpPopupOpen = false;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) {
+                    xpPopupOpen = false;
+                }
+            }
+            ImGui::EndPopup();
+        }
+        if (!xpPopupOpen && ImGui::IsPopupOpen("Add Experience")) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        // Create profile modal
+        if (state.createPopupRequest) {
+            ImGui::OpenPopup("Create Profile");
+            state.createPopupRequest = false;
+        }
+        bool createPopupOpen = true;
+        if (ImGui::BeginPopupModal("Create Profile", &createPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::InputText("Name", state.modalBuffer.data(), state.modalBuffer.size());
             if (ImGui::Button("Create")) {
                 std::string name(state.modalBuffer.data());
@@ -355,8 +461,7 @@ int main() {
                         storage->save_profile(profile);
                         SetStatus(state, "Profile created.", 0.45f, 0.9f, 0.45f);
                         RefreshProfiles(state, *storage, catalog, info->id);
-                        ImGui::CloseCurrentPopup();
-                        state.modal = ModalAction::None;
+                        createPopupOpen = false;
                     } else {
                         SetStatus(state, "Failed to create profile.", 1.0f, 0.45f, 0.45f);
                     }
@@ -364,63 +469,68 @@ int main() {
             }
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
-                state.modal = ModalAction::None;
-                ImGui::CloseCurrentPopup();
+                createPopupOpen = false;
             }
             ImGui::EndPopup();
         }
-
-        if (state.modal == ModalAction::Archive || state.modal == ModalAction::Restore || state.modal == ModalAction::Delete) {
-            if (ImGui::BeginPopupModal("Confirm Action", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
-                    const auto& info = state.profiles[state.selectedIndex];
-                    std::string action = (state.modal == ModalAction::Archive) ? "archive" : (state.modal == ModalAction::Restore) ? "restore" : "delete";
-                    ImGui::Text("Confirm %s of profile [%s] %s?", action.c_str(), info.id.c_str(), info.name.c_str());
-                    if (ImGui::Button("Yes")) {
-                        bool ok = false;
-                        if (state.modal == ModalAction::Archive) {
-                            ok = storage->set_archived(info.id, true);
-                        } else if (state.modal == ModalAction::Restore) {
-                            ok = storage->set_archived(info.id, false);
-                        } else {
-                            ok = storage->delete_profile(info.id);
-                        }
-                        if (ok) {
-                            SetStatus(state, "Operation complete.", 0.45f, 0.9f, 0.45f);
-                            std::string newFocus;
-                            if (state.modal != ModalAction::Delete) {
-                                newFocus = info.id;
-                            }
-                            RefreshProfiles(state, *storage, catalog, newFocus);
-                        } else {
-                            SetStatus(state, "Operation failed.", 1.0f, 0.45f, 0.45f);
-                        }
-                        state.modal = ModalAction::None;
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("No")) {
-                        state.modal = ModalAction::None;
-                        ImGui::CloseCurrentPopup();
-                    }
-                } else {
-                    ImGui::TextUnformatted("No profile selected.");
-                    if (ImGui::Button("Close")) {
-                        state.modal = ModalAction::None;
-                        ImGui::CloseCurrentPopup();
-                    }
-                }
-                ImGui::EndPopup();
-            }
+        if (!createPopupOpen && ImGui::IsPopupOpen("Create Profile")) {
+            ImGui::CloseCurrentPopup();
         }
 
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(0.1f, 0.12f, 0.15f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+        // Confirm modal
+        if (state.confirmPopupRequest) {
+            ImGui::OpenPopup("Confirm Action");
+            state.confirmPopupRequest = false;
+        }
+        bool confirmPopupOpen = true;
+        if (ImGui::BeginPopupModal("Confirm Action", &confirmPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
+                const auto& info = state.profiles[state.selectedIndex];
+                std::string action;
+                switch (state.confirmAction) {
+                    case ConfirmAction::Archive: action = "archive"; break;
+                    case ConfirmAction::Restore: action = "restore"; break;
+                    case ConfirmAction::Delete: action = "delete"; break;
+                    default: action = ""; break;
+                }
+                ImGui::Text("Confirm %s of profile [%s] %s?", action.c_str(), info.id.c_str(), info.name.c_str());
+                if (ImGui::Button("Yes")) {
+                    bool ok = false;
+                    if (state.confirmAction == ConfirmAction::Archive) {
+                        ok = storage->set_archived(info.id, true);
+                    } else if (state.confirmAction == ConfirmAction::Restore) {
+                        ok = storage->set_archived(info.id, false);
+                    } else if (state.confirmAction == ConfirmAction::Delete) {
+                        ok = storage->delete_profile(info.id);
+                    }
+                    if (ok) {
+                        SetStatus(state, "Operation complete.", 0.45f, 0.9f, 0.45f);
+                        std::string newFocus;
+                        if (state.confirmAction != ConfirmAction::Delete) {
+                            newFocus = info.id;
+                        }
+                        RefreshProfiles(state, *storage, catalog, newFocus);
+                    } else {
+                        SetStatus(state, "Operation failed.", 1.0f, 0.45f, 0.45f);
+                    }
+                    confirmPopupOpen = false;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("No")) {
+                    confirmPopupOpen = false;
+                }
+            } else {
+                ImGui::TextUnformatted("No profile selected.");
+                if (ImGui::Button("Close")) {
+                    confirmPopupOpen = false;
+                }
+            }
+            ImGui::EndPopup();
+        }
+        if (!confirmPopupOpen && ImGui::IsPopupOpen("Confirm Action")) {
+            ImGui::CloseCurrentPopup();
+            state.confirmAction = ConfirmAction::None;
+        }    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
     }
 
@@ -432,3 +542,6 @@ int main() {
     glfwTerminate();
     return 0;
 }
+
+
+
