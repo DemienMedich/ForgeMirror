@@ -85,14 +85,42 @@ void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
     }
 }
 
-std::filesystem::path ResolveStorageDirectory() {
-    auto base = std::filesystem::current_path() / "data";
+namespace {
+
+std::filesystem::path GuessProjectRoot() {
     std::error_code ec;
-    std::filesystem::create_directories(base, ec);
-    if (ec) {
-        return std::filesystem::current_path();
+    auto path = std::filesystem::current_path();
+    while (!path.empty()) {
+        const bool hasMain = std::filesystem::exists(path / "main.cpp", ec);
+        const bool hasCMake = std::filesystem::exists(path / "CMakeLists.txt", ec);
+        if (!ec && hasMain && hasCMake) {
+            return path;
+        }
+        auto parent = path.parent_path();
+        if (parent == path) break;
+        path = std::move(parent);
     }
-    return base;
+    return std::filesystem::current_path();
+}
+
+} // namespace
+
+std::filesystem::path ResolveStorageDirectory() {
+    std::error_code ec;
+    auto root = GuessProjectRoot();
+    auto dataDir = root / "data";
+    std::filesystem::create_directories(dataDir, ec);
+    if (!ec) {
+        return dataDir;
+    }
+
+    // Fallback to legacy location near the executable.
+    auto fallback = std::filesystem::current_path() / "data";
+    std::filesystem::create_directories(fallback, ec);
+    if (!ec) {
+        return fallback;
+    }
+    return std::filesystem::current_path();
 }
 
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
