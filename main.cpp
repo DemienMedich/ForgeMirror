@@ -234,32 +234,65 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
             return true;
         }
         if (cmd == "addxp") {
-            std::string skill; int amount;
-            if (std::cin >> skill >> amount) {
-                if (amount <= 0) {
-                    std::cout << "Amount must be positive.\n";
-                    continue;
-                }
-                auto canonical = catalog.canonical(skill);
-                if (!canonical) {
-                    std::cout << "Skill not in catalog. Ask admin to add it first.\n";
-                    continue;
-                }
-                const std::string skillName = *canonical;
-                const double skillWeight = catalog.weight(skillName);
-                profile.add_skill(skillName, 1, skillWeight);
-                const bool leveled = profile.grant_xp(skillName, amount);
-                const bool apiOk = api.post_xp(skillName, amount);
-                const bool synced = sync_now(false);
-                std::cout << (leveled ? "Level up!" : "XP added.") << "\n";
-                if (!apiOk) std::cout << "Warning: failed to notify server.\n";
-                if (synced) std::cout << "Auto-sync complete.\n";
-                else std::cout << "Warning: auto-sync failed. Try 'sync'.\n";
-            } else {
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Invalid input.\n";
+            std::string tail;
+            if (!std::getline(std::cin >> std::ws, tail)) {
+                return true; // EOF or stream error => exit app
             }
+            tail = trim_copy(std::move(tail));
+            if (tail.empty()) {
+                std::cout << "Usage: addxp <skill> <amount>\n";
+                continue;
+            }
+
+            auto lastNonWhitespace = tail.find_last_not_of(" \t\r\n");
+            if (lastNonWhitespace == std::string::npos) {
+                std::cout << "Usage: addxp <skill> <amount>\n";
+                continue;
+            }
+            tail.erase(lastNonWhitespace + 1);
+
+            auto split = tail.find_last_of(" \t");
+            if (split == std::string::npos) {
+                std::cout << "Usage: addxp <skill> <amount>\n";
+                continue;
+            }
+
+            std::string amountStr = trim_copy(tail.substr(split + 1));
+            std::string skill = trim_copy(tail.substr(0, split));
+            if (skill.empty() || amountStr.empty()) {
+                std::cout << "Usage: addxp <skill> <amount>\n";
+                continue;
+            }
+
+            int amount = 0;
+            try {
+                size_t consumed = 0;
+                amount = std::stoi(amountStr, &consumed);
+                if (consumed != amountStr.size()) throw std::invalid_argument("trailing");
+            } catch (...) {
+                std::cout << "Amount must be a positive integer.\n";
+                continue;
+            }
+            if (amount <= 0) {
+                std::cout << "Amount must be positive.\n";
+                continue;
+            }
+
+            auto canonical = catalog.canonical(skill);
+            if (!canonical) {
+                std::cout << "Skill not in catalog. Ask admin to add it first.\n";
+                continue;
+            }
+            const std::string skillName = *canonical;
+            const double skillWeight = catalog.weight(skillName);
+            profile.add_skill(skillName, 1, skillWeight);
+            const bool leveled = profile.grant_xp(skillName, amount);
+            const bool apiOk = api.post_xp(skillName, amount);
+            const bool synced = sync_now(false);
+            std::cout << (leveled ? "Level up!" : "XP added.") << "\n";
+            if (!apiOk) std::cout << "Warning: failed to notify server.\n";
+            if (synced) std::cout << "Auto-sync complete.\n";
+            else std::cout << "Warning: auto-sync failed. Try 'sync'.\n";
             continue;
         }
         std::cout << "Unknown command. Use: addxp / show / sync / logout / quit\n";

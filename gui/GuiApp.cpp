@@ -5,6 +5,9 @@
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #  include <windows.h>
 #  include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -24,8 +27,11 @@
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <deque>
 #include <optional>
 #include <string>
+#include <sstream>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -51,18 +57,16 @@ struct GuiState {
     std::vector<IJobStorage::ProfileInfo> profiles;
     int selectedIndex = -1;
     std::optional<GuiProfile> active;
-    int xpSkillIndex = 0;
-    int addSkillIndex = 0;
-    int xpAmount = 10;
     std::string statusMessage;
     float statusColor[4] = {0.6f, 0.7f, 1.0f, 1.0f};
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
+    bool xpPopupRequest = false;
     ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
     std::vector<XpEntry> xpEntries;
-    bool xpPopupRequest = false;
+    std::unordered_map<std::string, std::deque<std::string>> activityLogs;
 };
 
 std::vector<IJobStorage::ProfileInfo> LoadProfiles(IJobStorage& storage) {
@@ -85,6 +89,31 @@ void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     state.xpEntries.assign(catalog.skills().size(), {});
 }
 
+void AppendLog(GuiState& state, const std::string& profileId, const std::string& message) {
+    auto& log = state.activityLogs[profileId];
+    if (log.size() == 3) {
+        log.pop_front();
+    }
+    log.push_back(message);
+}
+
+int ClampToRange(int value, int minValue, int maxValue) {
+    if (value < minValue) return minValue;
+    if (value > maxValue) return maxValue;
+    return value;
+}
+
+int ComputeAppliedXp(const XpEntry& entry) {
+    int add = entry.add;
+    if (add < 0) add = 0;
+    const int percent = ClampToRange(entry.sub, 0, 100);
+    if (add == 0) return 0;
+    const double remaining = add * (1.0 - static_cast<double>(percent) / 100.0);
+    int result = static_cast<int>(std::round(remaining));
+    if (result < 0) result = 0;
+    return result;
+}
+
 void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     state.active.reset();
     if (state.selectedIndex < 0 || state.selectedIndex >= static_cast<int>(state.profiles.size())) return;
@@ -94,6 +123,8 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
         SyncProfileWithCatalog(*loaded, catalog);
         storage.save_profile(*loaded);
         state.active = GuiProfile{*loaded, info.id};
+        state.activityLogs[state.active->id];
+        PrepareXpEntries(state, catalog);
     }
 }
 
@@ -191,8 +222,8 @@ int main() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Create")) {
-            state.createPopupRequest = true;
             state.modalBuffer.fill('\0');
+            state.createPopupRequest = true;
         }
         ImGui::SameLine();
         bool canArchive = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && !state.profiles[state.selectedIndex].archived;
@@ -278,73 +309,14 @@ int main() {
             ImGui::Columns(1);
 
             ImGui::Separator();
-            const auto& catalogSkills = catalog.skills();
-
-            ImGui::TextUnformatted("Grant XP");
-            if (!catalogSkills.empty()) {
-                if (state.xpSkillIndex >= static_cast<int>(catalogSkills.size())) state.xpSkillIndex = 0;
-                const char* preview = catalogSkills[state.xpSkillIndex].c_str();
-                if (ImGui::BeginCombo("Skill##grant", preview)) {
-                    for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                        bool selected = (state.xpSkillIndex == i);
-                        if (ImGui::Selectable(catalogSkills[i].c_str(), selected)) {
-                            state.xpSkillIndex = i;
-                        }
-                        if (selected) ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
+            ImGui::TextUnformatted("Recent Activity");
+            const auto logIt = state.activityLogs.find(state.active->id);
+            if (logIt != state.activityLogs.end() && !logIt->second.empty()) {
+                for (auto it = logIt->second.rbegin(); it != logIt->second.rend(); ++it) {
+                    ImGui::BulletText("%s", it->c_str());
                 }
             } else {
-                ImGui::TextUnformatted("Catalog is empty.");
-            }
-            ImGui::InputInt("Amount", &state.xpAmount);
-            if (ImGui::Button("Add XP")) {
-                if (catalogSkills.empty()) {
-                    SetStatus(state, "Catalog is empty.", 1.0f, 0.45f, 0.45f);
-                } else if (state.xpAmount <= 0) {
-                    SetStatus(state, "Amount must be positive.", 1.0f, 0.45f, 0.45f);
-                } else {
-                    const std::string& skillName = catalogSkills[state.xpSkillIndex];
-                    double weight = catalog.weight(skillName);
-                    state.active->profile.add_skill(skillName, 1, weight);
-                    bool leveled = state.active->profile.grant_xp(skillName, state.xpAmount);
-                    storage->save_profile(state.active->profile);
-                    SetStatus(state, leveled ? "Level up!" : "XP added.", 0.45f, 0.9f, 0.45f);
-                }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Save")) {
-                if (storage->save_profile(state.active->profile)) {
-                    SetStatus(state, "Profile saved.", 0.45f, 0.9f, 0.45f);
-                } else {
-                    SetStatus(state, "Failed to save profile.", 1.0f, 0.45f, 0.45f);
-                }
-            }
-
-            ImGui::Separator();
-            ImGui::TextUnformatted("Add Skill (level 0)");
-            if (!catalogSkills.empty()) {
-                if (state.addSkillIndex >= static_cast<int>(catalogSkills.size())) state.addSkillIndex = 0;
-                const char* preview = catalogSkills[state.addSkillIndex].c_str();
-                if (ImGui::BeginCombo("Skill##add", preview)) {
-                    for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                        bool selected = (state.addSkillIndex == i);
-                        if (ImGui::Selectable(catalogSkills[i].c_str(), selected)) {
-                            state.addSkillIndex = i;
-                        }
-                        if (selected) ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
-                }
-                if (ImGui::Button("Add Skill")) {
-                    const std::string& skillName = catalogSkills[state.addSkillIndex];
-                    double weight = catalog.weight(skillName);
-                    state.active->profile.add_skill(skillName, 0, weight);
-                    storage->save_profile(state.active->profile);
-                    SetStatus(state, "Skill added with level 0.", 0.45f, 0.9f, 0.45f);
-                }
-            } else {
-                ImGui::TextUnformatted("Catalog is empty.");
+                ImGui::TextUnformatted("No activity yet.");
             }
 
             ShowStatus(state);
@@ -352,12 +324,6 @@ int main() {
         ImGui::End();
 
         ImGui::Begin("Skill Catalog");
-        for (const auto& skill : catalog.skills()) {
-            ImGui::Text("%s (%.2f)", skill.c_str(), catalog.weight(skill));
-        }
-        ImGui::End();
-
-                ImGui::Begin("Skill Catalog");
         for (const auto& skill : catalog.skills()) {
             ImGui::Text("%s (%.2f)", skill.c_str(), catalog.weight(skill));
         }
@@ -384,6 +350,7 @@ int main() {
                 ImGui::TableSetupColumn("Minus");
                 ImGui::TableSetupColumn("Result");
                 ImGui::TableHeadersRow();
+                const float inputWidth = ImGui::CalcTextSize("00000").x + ImGui::GetStyle().FramePadding.x * 4.0f;
                 int total = 0;
                 for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
                     ImGui::TableNextRow();
@@ -391,19 +358,23 @@ int main() {
                     ImGui::TextUnformatted(catalogSkills[i].c_str());
                     ImGui::TableSetColumnIndex(1);
                     ImGui::PushID(i * 2);
-                    if (ImGui::InputInt("##plus", &state.xpEntries[i].add, 1, 10)) {
+                    ImGui::PushItemWidth(inputWidth);
+                    if (ImGui::InputInt("##plus", &state.xpEntries[i].add, 0)) {
                         if (state.xpEntries[i].add < 0) state.xpEntries[i].add = 0;
                     }
+                    ImGui::PopItemWidth();
                     ImGui::PopID();
                     ImGui::TableSetColumnIndex(2);
                     ImGui::PushID(i * 2 + 1);
-                    if (ImGui::InputInt("##minus", &state.xpEntries[i].sub, 1, 10)) {
+                    ImGui::PushItemWidth(inputWidth);
+                    if (ImGui::InputInt("##minus", &state.xpEntries[i].sub, 0)) {
                         if (state.xpEntries[i].sub < 0) state.xpEntries[i].sub = 0;
                     }
+                    state.xpEntries[i].sub = ClampToRange(state.xpEntries[i].sub, 0, 100);
+                    ImGui::PopItemWidth();
                     ImGui::PopID();
                     ImGui::TableSetColumnIndex(3);
-                    int delta = state.xpEntries[i].add - state.xpEntries[i].sub;
-                    if (delta < 0) delta = 0;
+                    int delta = ComputeAppliedXp(state.xpEntries[i]);
                     total += delta;
                     ImGui::Text("%d", delta);
                 }
@@ -414,23 +385,43 @@ int main() {
                 if (ImGui::Button("Apply")) {
                     int applied = 0;
                     for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                        int delta = state.xpEntries[i].add - state.xpEntries[i].sub;
-                        if (delta <= 0) continue;
+                        int rawAdd = state.xpEntries[i].add;
+                        if (rawAdd < 0) rawAdd = 0;
+                        if (rawAdd <= 0) continue;
+                        const int percent = ClampToRange(state.xpEntries[i].sub, 0, 100);
+                        const int delta = ComputeAppliedXp(state.xpEntries[i]);
                         const std::string& skillName = catalogSkills[i];
                         double weight = catalog.weight(skillName);
                         state.active->profile.add_skill(skillName, 1, weight);
-                        state.active->profile.grant_xp(skillName, delta);
-                        applied += delta;
+                        bool leveled = false;
+                        if (delta > 0) {
+                            leveled = state.active->profile.grant_xp(skillName, delta);
+                            applied += delta;
+                        }
+                        std::ostringstream entry;
+                        entry << skillName << ": +" << rawAdd << " XP";
+                        if (percent > 0) {
+                            entry << " (-" << percent << "%)";
+                        }
+                        if (delta > 0 && delta != rawAdd) {
+                            entry << " => +" << delta << " XP";
+                        } else if (delta <= 0) {
+                            entry << " => 0 XP";
+                        }
+                        if (leveled) entry << " (level up)";
+                        AppendLog(state, state.active->id, entry.str());
                     }
                     storage->save_profile(state.active->profile);
                     SetStatus(state, applied > 0 ? "XP sheet applied." : "Nothing to apply.",
                               applied > 0 ? 0.45f : 1.0f,
                               applied > 0 ? 0.9f : 0.45f,
                               applied > 0 ? 0.45f : 0.45f);
+                    ImGui::CloseCurrentPopup();
                     xpPopupOpen = false;
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Cancel")) {
+                    ImGui::CloseCurrentPopup();
                     xpPopupOpen = false;
                 }
             }
@@ -461,6 +452,7 @@ int main() {
                         storage->save_profile(profile);
                         SetStatus(state, "Profile created.", 0.45f, 0.9f, 0.45f);
                         RefreshProfiles(state, *storage, catalog, info->id);
+                        ImGui::CloseCurrentPopup();
                         createPopupOpen = false;
                     } else {
                         SetStatus(state, "Failed to create profile.", 1.0f, 0.45f, 0.45f);
@@ -469,6 +461,7 @@ int main() {
             }
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
                 createPopupOpen = false;
             }
             ImGui::EndPopup();
@@ -513,15 +506,18 @@ int main() {
                     } else {
                         SetStatus(state, "Operation failed.", 1.0f, 0.45f, 0.45f);
                     }
+                    ImGui::CloseCurrentPopup();
                     confirmPopupOpen = false;
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("No")) {
+                    ImGui::CloseCurrentPopup();
                     confirmPopupOpen = false;
                 }
             } else {
                 ImGui::TextUnformatted("No profile selected.");
                 if (ImGui::Button("Close")) {
+                    ImGui::CloseCurrentPopup();
                     confirmPopupOpen = false;
                 }
             }
@@ -530,7 +526,16 @@ int main() {
         if (!confirmPopupOpen && ImGui::IsPopupOpen("Confirm Action")) {
             ImGui::CloseCurrentPopup();
             state.confirmAction = ConfirmAction::None;
-        }    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+        }
+
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.1f, 0.12f, 0.15f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+
         glfwSwapBuffers(window);
     }
 
