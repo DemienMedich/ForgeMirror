@@ -42,11 +42,28 @@ std::string BuildRank(const char* base, int startLevel, int substep, int level) 
 
 } // namespace
 
-std::string DescribeOverallRank(int overallLevel) {
+std::string DescribeOverallRank(const Profile& profile) {
+    const int overallLevel = profile.overall_level();
     if (overallLevel < 10) return "Intern";
     if (overallLevel < 50) return BuildRank("Junior", 10, 10, overallLevel);
     if (overallLevel < 150) return BuildRank("Middle", 50, 10, overallLevel);
-    return BuildRank("Senior", 150, 10, overallLevel);
+    if (profile.all_categories_mastered()) {
+        return BuildRank("Senior", 150, 10, overallLevel);
+    }
+    std::ostringstream ss;
+    ss << BuildRank("Middle", 50, 10, overallLevel) << " (Senior locked: ";
+    bool first = true;
+    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+        if (profile.is_category_mastered(idx)) continue;
+        if (!first) ss << ", ";
+        ss << Profile::kCategoryLabels[idx] << "=" << profile.category_best_score(idx) << "/10";
+        first = false;
+    }
+    if (first) {
+        ss << "complete category challenges";
+    }
+    ss << ")";
+    return ss.str();
 }
 
 void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {

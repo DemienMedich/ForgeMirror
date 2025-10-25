@@ -123,7 +123,7 @@
     <PostBuildEvent>
       <Message></Message>
       <Command>setlocal
-"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/Debug/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/debug/bin -OutVariable out
+"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/Debug/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/debug/bin -OutVariable out
 if %errorlevel% neq 0 goto :cmEnd
 :cmEnd
 endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
@@ -189,7 +189,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <PostBuildEvent>
       <Message></Message>
       <Command>setlocal
-"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/Release/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/bin -OutVariable out
+"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/Release/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/bin -OutVariable out
 if %errorlevel% neq 0 goto :cmEnd
 :cmEnd
 endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
@@ -255,7 +255,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <PostBuildEvent>
       <Message></Message>
       <Command>setlocal
-"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/MinSizeRel/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/bin -OutVariable out
+"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/MinSizeRel/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/bin -OutVariable out
 if %errorlevel% neq 0 goto :cmEnd
 :cmEnd
 endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
@@ -320,7 +320,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <PostBuildEvent>
       <Message></Message>
       <Command>setlocal
-"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/RelWithDebInfo/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/bin -OutVariable out
+"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe\pwsh.exe" -noprofile -executionpolicy Bypass -file C:/tools/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary Z:/CPP/JobSkill/build-gui/RelWithDebInfo/JobSkill.exe -installedDir C:/tools/vcpkg/installed/x64-windows/bin -OutVariable out
 if %errorlevel% neq 0 goto :cmEnd
 :cmEnd
 endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone

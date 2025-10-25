@@ -72,7 +72,16 @@ static Profile make_profile_from_blueprint(const ProfileBlueprint& bp, SkillCata
 
 static void print_profile(const Profile& p) {
     std::cout << "=== Profile: " << p.name() << " ===\n";
-    std::cout << "Overall level: " << p.overall_level() << " (" << DescribeOverallRank(p.overall_level()) << ")\n";
+    std::cout << "Overall level: " << p.overall_level() << " (" << DescribeOverallRank(p) << ")\n";
+    std::cout << "Total XP: " << p.total_xp() << "\n";
+    std::cout << "Progress to next level: " << p.level_progress() << "/" << p.xp_to_next_level() << "\n";
+    std::cout << "Task categories: ";
+    const auto& categories = p.category_best_scores();
+    for (size_t i = 0; i < categories.size(); ++i) {
+        if (i) std::cout << ", ";
+        std::cout << Profile::kCategoryLabels[i] << "=" << categories[i] << "/10";
+    }
+    std::cout << "\n";
     std::cout << "Skills:\n";
     auto skills = p.list_skills();
     for (const auto& s : skills) {

@@ -9,24 +9,28 @@
 
 namespace {
 
-using SkillEntry = std::pair<const char*, double>;
+struct SkillEntry {
+    const char* name;
+    double weight;
+    const char* description;
+};
 
 const std::vector<SkillEntry> kDefaultSkills = {
-    {"Modeling", 1.2},
-    {"Sculpting", 1.2},
-    {"Texturing", 1.0},
-    {"Shading", 1.0},
-    {"Rigging", 1.4},
-    {"Lighting", 1.1},
-    {"UV Mapping", 0.8},
-    {"Retopology", 1.2},
-    {"Materials", 0.8},
-    {"Rendering", 0.9},
-    {"Animation", 1.4},
-    {"Simulation", 1.3},
-    {"Hard Surface", 1.2},
-    {"Environment", 1.1},
-    {"Props", 0.9}
+    {"Modeling", 1.2, "Building clean base meshes for further detailing or animation."},
+    {"Sculpting", 1.2, "High-resolution sculpting for characters, creatures, and props."},
+    {"Texturing", 1.0, "Creating texture maps that add color and detail to models."},
+    {"Shading", 1.0, "Authoring material networks that react believably to light."},
+    {"Rigging", 1.4, "Setting up skeletons and controls to animate characters or props."},
+    {"Lighting", 1.1, "Placing lights and balancing exposure for mood and readability."},
+    {"UV Mapping", 0.8, "Preparing UV layouts that minimize seams and distortion."},
+    {"Retopology", 1.2, "Converting dense sculpts into animation-friendly low-poly meshes."},
+    {"Materials", 0.8, "Authoring reusable material presets with consistent PBR values."},
+    {"Rendering", 0.9, "Configuring render settings and output passes for final frames."},
+    {"Animation", 1.4, "Bringing characters, props, or cameras to life over time."},
+    {"Simulation", 1.3, "Driving cloth, hair, fluids, or rigid bodies with dynamic solvers."},
+    {"Hard Surface", 1.2, "Designing mechanical or industrial assets with crisp detail."},
+    {"Environment", 1.1, "Building large-scale scenes and set dressing for worlds."},
+    {"Props", 0.9, "Creating supporting assets that tell stories and fill environments."}
 };
 
 double clamp_weight(double value) {
@@ -65,23 +69,42 @@ double SkillCatalog::weight(const std::string& skill) const {
     return 1.0;
 }
 
-bool SkillCatalog::add_skill(const std::string& skill, double weight) {
+std::string SkillCatalog::description(const std::string& skill) const {
+    auto norm = normalize(skill);
+    auto it = index_.find(norm);
+    if (it != index_.end()) {
+        auto dIt = descriptions_.find(it->second);
+        if (dIt != descriptions_.end()) return dIt->second;
+    }
+    return {};
+}
+
+bool SkillCatalog::add_skill(const std::string& skill, double weight, const std::string& description) {
     std::string trimmed = trim(skill);
     if (trimmed.empty()) return false;
     weight = clamp_weight(weight);
+    std::string desc = trim(description);
 
     auto norm = normalize(trimmed);
     auto it = index_.find(norm);
     if (it != index_.end()) {
         const std::string& canonicalName = it->second;
         double& storedWeight = weights_[canonicalName];
-        if (std::abs(storedWeight - weight) < 1e-3) return false; // no change
-        storedWeight = weight;
-        save();
-        return true;
+        std::string& storedDesc = descriptions_[canonicalName];
+        bool changed = false;
+        if (std::abs(storedWeight - weight) >= 1e-3) {
+            storedWeight = weight;
+            changed = true;
+        }
+        if (storedDesc != desc) {
+            storedDesc = std::move(desc);
+            changed = true;
+        }
+        if (changed) save();
+        return changed;
     }
 
-    add_internal(trimmed, weight, true);
+    add_internal(trimmed, weight, desc, true);
     return true;
 }
 
@@ -89,11 +112,12 @@ void SkillCatalog::load() {
     orderedSkills_.clear();
     index_.clear();
     weights_.clear();
+    descriptions_.clear();
 
     std::ifstream in(file_path());
     if (!in) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(entry.first, entry.second, false);
+            add_internal(entry.name, entry.weight, entry.description, false);
         }
         save();
         return;
@@ -105,43 +129,58 @@ void SkillCatalog::load() {
         if (trimmed.empty() || trimmed[0] == '#') continue;
 
         double weight = 1.0;
-        auto sep = trimmed.find('|');
         std::string name = trimmed;
-        if (sep != std::string::npos) {
-            name = trim(trimmed.substr(0, sep));
-            std::string weightPart = trim(trimmed.substr(sep + 1));
-            if (!weightPart.empty()) {
+        std::string description;
+
+        std::vector<std::string> parts;
+        std::string part;
+        std::istringstream ss(trimmed);
+        while (std::getline(ss, part, '|')) {
+            parts.push_back(trim(part));
+        }
+        if (!parts.empty()) name = parts[0];
+        if (parts.size() >= 2) {
+            if (!parts[1].empty()) {
                 try {
-                    weight = std::stod(weightPart);
+                    weight = std::stod(parts[1]);
                 } catch (...) {
                     weight = 1.0;
                 }
             }
         }
-        add_internal(name, clamp_weight(weight), false);
+        if (parts.size() >= 3) {
+            description = parts[2];
+        }
+        add_internal(name, clamp_weight(weight), description, false);
     }
 
     if (orderedSkills_.empty()) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(entry.first, entry.second, false);
+            add_internal(entry.name, entry.weight, entry.description, false);
         }
         save();
     } else {
         bool changed = false;
         std::unordered_set<std::string> existing(orderedSkills_.begin(), orderedSkills_.end());
         for (const auto& entry : kDefaultSkills) {
-            const std::string name(entry.first);
+            const std::string name(entry.name);
             const std::string norm = normalize(name);
             if (!index_.count(norm)) {
                 orderedSkills_.push_back(name);
                 index_[norm] = name;
-                weights_[name] = entry.second;
+                weights_[name] = entry.weight;
+                descriptions_[name] = entry.description;
                 changed = true;
             } else {
                 auto& canonical = index_[norm];
                 double& w = weights_[canonical];
-                if (std::abs(w - entry.second) > 1e-3) {
-                    w = entry.second;
+                if (std::abs(w - entry.weight) > 1e-3) {
+                    w = entry.weight;
+                    changed = true;
+                }
+                auto& desc = descriptions_[canonical];
+                if (desc.empty() && entry.description) {
+                    desc = entry.description;
                     changed = true;
                 }
             }
@@ -156,7 +195,12 @@ void SkillCatalog::save() const {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     for (const auto& skill : orderedSkills_) {
         const double w = weight(skill);
-        out << skill << "|" << w << "\n";
+        out << skill << "|" << w;
+        auto it = descriptions_.find(skill);
+        if (it != descriptions_.end() && !it->second.empty()) {
+            out << "|" << it->second;
+        }
+        out << "\n";
     }
 }
 
@@ -182,7 +226,7 @@ std::string SkillCatalog::normalize(const std::string& s) {
     return out;
 }
 
-void SkillCatalog::add_internal(const std::string& skill, double weight, bool persist) {
+void SkillCatalog::add_internal(const std::string& skill, double weight, const std::string& description, bool persist) {
     const std::string canonical = skill;
     const std::string norm = normalize(skill);
     if (index_.count(norm)) return;
@@ -190,6 +234,7 @@ void SkillCatalog::add_internal(const std::string& skill, double weight, bool pe
     orderedSkills_.push_back(canonical);
     index_.emplace(norm, canonical);
     weights_[canonical] = clamp_weight(weight);
+    descriptions_[canonical] = trim(description);
 
     if (persist) save();
 }

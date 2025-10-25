@@ -35,8 +35,7 @@ events:
     found: "C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeCXXCompilerId.cpp.in"
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -59,7 +58,6 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
   -
     kind: "message-v1"
     backtrace:
@@ -76,7 +74,7 @@ events:
       The output was:
       0
       ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-      ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 16:28:34.
+      ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 12:37:39.
       
       ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\4.1.1\\CompilerIdCXX\\CompilerIdCXX.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
       PrepareForBuild:
@@ -105,7 +103,7 @@ events:
           ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
           ╨Ю╤И╨╕╨▒╨╛╨║: 0
       
-      ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.38
+      ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.62
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -138,8 +136,7 @@ events:
       - "link"
     candidate_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -162,14 +159,12 @@ events:
       - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/"
     searched_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
     found: "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -192,7 +187,6 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -216,8 +210,7 @@ events:
       - "lld-link"
     candidate_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -240,17 +233,13 @@ events:
       - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/"
     searched_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/lld-link.com"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/lld-link.exe"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/lld-link"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -317,14 +306,10 @@ events:
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/lld-link.com"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/lld-link.exe"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/lld-link"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/lld-link.com"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/lld-link.exe"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/lld-link"
     found: false
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -347,7 +332,6 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -369,8 +353,7 @@ events:
       - "link"
     candidate_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -393,14 +376,12 @@ events:
       - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/"
     searched_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
     found: "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -423,7 +404,6 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -445,8 +425,7 @@ events:
       - "mt"
     candidate_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -469,17 +448,13 @@ events:
       - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/"
     searched_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/mt.com"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/mt.exe"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/mt"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -546,14 +521,10 @@ events:
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/mt.com"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/mt.exe"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/mt"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/mt.com"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/mt.exe"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/mt"
     found: false
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -576,7 +547,6 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -598,8 +568,7 @@ events:
       - "lib"
     candidate_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -622,14 +591,12 @@ events:
       - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/"
     searched_directories:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.com"
     found: "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.exe"
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -652,7 +619,6 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -676,8 +642,7 @@ events:
     names:
       - "rc"
     candidate_directories:
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -700,7 +665,6 @@ events:
       - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/"
       - "C:/Program Files/bin/"
       - "C:/Program Files/sbin/"
       - "C:/Program Files/"
@@ -710,16 +674,13 @@ events:
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files/CMake/sbin/"
       - "C:/Program Files/CMake/"
-      - "C:/Program Files (x86)/JobSkill/bin/"
-      - "C:/Program Files (x86)/JobSkill/sbin/"
-      - "C:/Program Files (x86)/JobSkill/"
+      - "C:/Program Files/JobSkill/bin/"
+      - "C:/Program Files/JobSkill/sbin/"
+      - "C:/Program Files/JobSkill/"
     searched_directories:
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/rc.com"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/rc.exe"
-      - "C:/Users/mrdem/AppData/Local/Temp/.tmpW5HbEo/rc"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -786,9 +747,6 @@ events:
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/rc.com"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/rc.exe"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/rc"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/rc.com"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/rc.exe"
-      - "C:/Users/mrdem/.vscode/extensions/openai.chatgpt-0.4.19-win32-x64/bin/windows-x86_64/rc"
       - "C:/Program Files/bin/rc.com"
       - "C:/Program Files/bin/rc.exe"
       - "C:/Program Files/bin/rc"
@@ -816,20 +774,19 @@ events:
       - "C:/Program Files/CMake/rc.com"
       - "C:/Program Files/CMake/rc.exe"
       - "C:/Program Files/CMake/rc"
-      - "C:/Program Files (x86)/JobSkill/bin/rc.com"
-      - "C:/Program Files (x86)/JobSkill/bin/rc.exe"
-      - "C:/Program Files (x86)/JobSkill/bin/rc"
-      - "C:/Program Files (x86)/JobSkill/sbin/rc.com"
-      - "C:/Program Files (x86)/JobSkill/sbin/rc.exe"
-      - "C:/Program Files (x86)/JobSkill/sbin/rc"
-      - "C:/Program Files (x86)/JobSkill/rc.com"
-      - "C:/Program Files (x86)/JobSkill/rc.exe"
-      - "C:/Program Files (x86)/JobSkill/rc"
+      - "C:/Program Files/JobSkill/bin/rc.com"
+      - "C:/Program Files/JobSkill/bin/rc.exe"
+      - "C:/Program Files/JobSkill/bin/rc"
+      - "C:/Program Files/JobSkill/sbin/rc.com"
+      - "C:/Program Files/JobSkill/sbin/rc.exe"
+      - "C:/Program Files/JobSkill/sbin/rc"
+      - "C:/Program Files/JobSkill/rc.com"
+      - "C:/Program Files/JobSkill/rc.exe"
+      - "C:/Program Files/JobSkill/rc"
     found: false
     search_context:
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
-        - "C:\\Users\\mrdem\\AppData\\Local\\Temp\\.tmpW5HbEo"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -852,13 +809,12 @@ events:
         - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
-        - "c:\\Users\\mrdem\\.vscode\\extensions\\openai.chatgpt-0.4.19-win32-x64\\bin\\windows-x86_64"
-      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/JobSkill"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files/JobSkill"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
         - "C:/Program Files (x86)"
         - "C:/Program Files/CMake"
-        - "C:/Program Files (x86)/JobSkill"
+        - "C:/Program Files/JobSkill"
   -
     kind: "try_compile-v1"
     backtrace:
@@ -868,8 +824,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-n2kmto"
-      binary: "Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-n2kmto"
+      source: "Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-gb8qtd"
+      binary: "Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-gb8qtd"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -879,40 +835,40 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-n2kmto'
+        Change Dir: 'Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-gb8qtd'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_801e6.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_286ad.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 16:28:36.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 12:37:40.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-n2kmto\\cmTC_801e6.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gb8qtd\\cmTC_286ad.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_801e6.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_286ad.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-n2kmto\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_801e6.dir\\Debug\\cmTC_801e6.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gb8qtd\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_286ad.dir\\Debug\\cmTC_286ad.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_801e6.dir\\Debug\\cmTC_801e6.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_801e6.dir\\Debug\\cmTC_801e6.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_286ad.dir\\Debug\\cmTC_286ad.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_286ad.dir\\Debug\\cmTC_286ad.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_801e6.dir\\Debug\\\\" /Fd"cmTC_801e6.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_286ad.dir\\Debug\\\\" /Fd"cmTC_286ad.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_801e6.dir\\Debug\\\\" /Fd"cmTC_801e6.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_286ad.dir\\Debug\\\\" /Fd"cmTC_286ad.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-n2kmto\\Debug\\cmTC_801e6.exe" /INCREMENTAL /ILK:"cmTC_801e6.dir\\Debug\\cmTC_801e6.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-n2kmto/Debug/cmTC_801e6.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-n2kmto/Debug/cmTC_801e6.lib" /MACHINE:X64  /machine:x64 cmTC_801e6.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_801e6.vcxproj -> Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-n2kmto\\Debug\\cmTC_801e6.exe
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gb8qtd\\Debug\\cmTC_286ad.exe" /INCREMENTAL /ILK:"cmTC_286ad.dir\\Debug\\cmTC_286ad.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-gb8qtd/Debug/cmTC_286ad.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build/CMakeFiles/CMakeScratch/TryCompile-gb8qtd/Debug/cmTC_286ad.lib" /MACHINE:X64  /machine:x64 cmTC_286ad.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_286ad.vcxproj -> Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gb8qtd\\Debug\\cmTC_286ad.exe
         FinalizeBuildStatus:
-          ╨д╨░╨╣╨╗ "cmTC_801e6.dir\\Debug\\cmTC_801e6.tlog\\unsuccessfulbuild" ╤Г╨┤╨░╨╗╤П╨╡╤В╤Б╤П.
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_801e6.dir\\Debug\\cmTC_801e6.tlog\\cmTC_801e6.lastbuildstate".
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-n2kmto\\cmTC_801e6.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+          ╨д╨░╨╣╨╗ "cmTC_286ad.dir\\Debug\\cmTC_286ad.tlog\\unsuccessfulbuild" ╤Г╨┤╨░╨╗╤П╨╡╤В╤Б╤П.
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_286ad.dir\\Debug\\cmTC_286ad.tlog\\cmTC_286ad.lastbuildstate".
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gb8qtd\\cmTC_286ad.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         
         ╨б╨▒╨╛╤А╨║╨░ ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░.
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 0
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.46
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.64
         
       exitCode: 0
   -

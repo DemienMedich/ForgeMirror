@@ -14,7 +14,8 @@ public:
     bool contains(const std::string& skill) const;
     std::optional<std::string> canonical(const std::string& skill) const;
     double weight(const std::string& skill) const;
-    bool add_skill(const std::string& skill, double weight = 1.0);
+    std::string description(const std::string& skill) const;
+    bool add_skill(const std::string& skill, double weight = 1.0, const std::string& description = {});
 
 private:
     void load();
@@ -22,10 +23,11 @@ private:
     std::filesystem::path file_path() const;
     static std::string trim(std::string s);
     static std::string normalize(const std::string& s);
-    void add_internal(const std::string& skill, double weight, bool persist = false);
+    void add_internal(const std::string& skill, double weight, const std::string& description, bool persist = false);
 
     std::filesystem::path baseDir_;
     std::vector<std::string> orderedSkills_;
     std::unordered_map<std::string, std::string> index_;
     std::unordered_map<std::string, double> weights_;
+    std::unordered_map<std::string, std::string> descriptions_;
 };

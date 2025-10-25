@@ -1,6 +1,7 @@
 #include "IJobStorage.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -133,6 +134,9 @@ public:
         std::string line;
         std::string section;
         std::string name;
+        int storedOverall = -1;
+        int storedTotalXp = -1;
+        int storedProgress = -1;
         std::vector<std::string> skillNames;
         std::vector<XpEvent> queue;
         std::optional<std::string> token;
@@ -140,6 +144,8 @@ public:
         std::unordered_map<std::string, int> xpBySkill;
         std::unordered_map<std::string, int> xpNextBySkill;
         std::unordered_map<std::string, double> weightBySkill;
+        std::array<int, Profile::kCategoryCount> categoryScores{};
+        categoryScores.fill(0);
 
         while (std::getline(in, line)) {
             auto t = trim(line);
@@ -157,6 +163,13 @@ public:
                 if (key == "token") token = val;
             } else if (section == "profile") {
                 if (key == "name") name = val;
+                else if (key == "overall") {
+                    try { storedOverall = std::stoi(val); } catch (...) {}
+                } else if (key == "totalXp" || key == "totalXP") {
+                    try { storedTotalXp = std::stoi(val); } catch (...) {}
+                } else if (key == "progress") {
+                    try { storedProgress = std::stoi(val); } catch (...) {}
+                }
             } else if (section == "skills") {
                 if (key == "names") {
                     skillNames.clear();
@@ -193,6 +206,20 @@ public:
                     try { amount = std::stoi(amt); } catch (...) { amount = 0; }
                     if (!skill.empty() && amount > 0) queue.push_back({skill, amount});
                 }
+            } else if (section == "categories") {
+                if (key.rfind("score_", 0) == 0) {
+                    auto label = key.substr(6);
+                    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                        if (label == Profile::kCategoryLabels[idx]) {
+                            int score = 0;
+                            try { score = std::stoi(val); } catch (...) { score = 0; }
+                            if (score < 0) score = 0;
+                            if (score > Profile::kMaxCategoryScore) score = Profile::kMaxCategoryScore;
+                            categoryScores[idx] = score;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -223,6 +250,15 @@ public:
             restored.push_back(skill);
         }
         profile.set_skills(restored);
+        if (storedTotalXp >= 0) {
+            profile.set_total_xp(storedTotalXp);
+        } else if (storedOverall > 0 && storedProgress >= 0) {
+            profile.set_level_and_progress(storedOverall, storedProgress);
+        } else {
+            if (storedOverall > 0) profile.set_overall_level(storedOverall);
+            if (storedProgress >= 0) profile.set_level_progress(storedProgress);
+        }
+        profile.set_category_best_scores(categoryScores);
 
         token_ = token;
         queue_ = std::move(queue);
@@ -240,6 +276,8 @@ public:
         ss << "id=" << activeId_ << "\n";
         ss << "name=" << profile.name() << "\n";
         ss << "overall=" << profile.overall_level() << "\n";
+        ss << "progress=" << profile.level_progress() << "\n";
+        ss << "totalXp=" << profile.total_xp() << "\n";
 
         ss << "\n[skills]\n";
         auto skills = profile.list_skills();
@@ -254,6 +292,12 @@ public:
             ss << "xp_" << s.name << "=" << s.xp << "\n";
             ss << "xpToNext_" << s.name << "=" << s.xpToNext << "\n";
             ss << "weight_" << s.name << "=" << s.weight << "\n";
+        }
+
+        ss << "\n[categories]\n";
+        const auto& catScores = profile.category_best_scores();
+        for (size_t idx = 0; idx < catScores.size(); ++idx) {
+            ss << "score_" << Profile::kCategoryLabels[idx] << "=" << catScores[idx] << "\n";
         }
 
         ss << "\n[queue]\n";

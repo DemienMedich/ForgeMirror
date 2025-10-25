@@ -38,7 +38,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -78,7 +78,7 @@ events:
       The output was:
       0
       ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-      ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:44.
+      ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 13:36:21.
       
       ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\4.1.1\\CompilerIdCXX\\CompilerIdCXX.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
       PrepareForBuild:
@@ -107,7 +107,7 @@ events:
           ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
           ╨Ю╤И╨╕╨▒╨╛╨║: 0
       
-      ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.67
+      ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.57
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -140,7 +140,7 @@ events:
       - "link"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -164,7 +164,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -188,7 +188,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -215,9 +215,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -287,9 +287,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -365,7 +365,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -412,7 +412,7 @@ events:
       - "lld-link"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -436,7 +436,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -460,7 +460,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -487,9 +487,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -559,9 +559,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -631,9 +631,9 @@ events:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -708,7 +708,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -753,7 +753,7 @@ events:
       - "link"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -777,7 +777,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -801,7 +801,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -828,9 +828,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -900,9 +900,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -978,7 +978,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -1023,7 +1023,7 @@ events:
       - "mt"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -1047,7 +1047,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -1071,7 +1071,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -1098,9 +1098,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -1170,9 +1170,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -1242,9 +1242,9 @@ events:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -1319,7 +1319,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -1364,7 +1364,7 @@ events:
       - "lib"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -1388,7 +1388,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -1412,7 +1412,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -1439,9 +1439,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib"
@@ -1511,9 +1511,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib"
@@ -1589,7 +1589,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -1643,7 +1643,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -1685,7 +1685,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -1727,7 +1727,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -1784,9 +1784,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/rc"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -1910,9 +1910,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -2036,9 +2036,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -2149,7 +2149,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -2188,8 +2188,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-7itb4d"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-7itb4d"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2203,40 +2203,40 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-7itb4d'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_e5845.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_11f21.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:46.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 13:36:22.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\cmTC_e5845.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-7itb4d\\cmTC_11f21.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_e5845.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_11f21.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-7itb4d\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_11f21.dir\\Debug\\cmTC_11f21.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_11f21.dir\\Debug\\cmTC_11f21.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_11f21.dir\\Debug\\cmTC_11f21.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_e5845.dir\\Debug\\\\" /Fd"cmTC_e5845.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_11f21.dir\\Debug\\\\" /Fd"cmTC_11f21.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_e5845.dir\\Debug\\\\" /Fd"cmTC_e5845.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_11f21.dir\\Debug\\\\" /Fd"cmTC_11f21.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\Debug\\cmTC_e5845.exe" /INCREMENTAL /ILK:"cmTC_e5845.dir\\Debug\\cmTC_e5845.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy/Debug/cmTC_e5845.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy/Debug/cmTC_e5845.lib" /MACHINE:X64  /machine:x64 cmTC_e5845.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_e5845.vcxproj -> Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\Debug\\cmTC_e5845.exe
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-7itb4d\\Debug\\cmTC_11f21.exe" /INCREMENTAL /ILK:"cmTC_11f21.dir\\Debug\\cmTC_11f21.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-7itb4d/Debug/cmTC_11f21.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-7itb4d/Debug/cmTC_11f21.lib" /MACHINE:X64  /machine:x64 cmTC_11f21.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_11f21.vcxproj -> Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-7itb4d\\Debug\\cmTC_11f21.exe
         FinalizeBuildStatus:
-          ╨д╨░╨╣╨╗ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\unsuccessfulbuild" ╤Г╨┤╨░╨╗╤П╨╡╤В╤Б╤П.
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\cmTC_e5845.lastbuildstate".
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\cmTC_e5845.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+          ╨д╨░╨╣╨╗ "cmTC_11f21.dir\\Debug\\cmTC_11f21.tlog\\unsuccessfulbuild" ╤Г╨┤╨░╨╗╤П╨╡╤В╤Б╤П.
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_11f21.dir\\Debug\\cmTC_11f21.tlog\\cmTC_11f21.lastbuildstate".
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-7itb4d\\cmTC_11f21.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         
         ╨б╨▒╨╛╤А╨║╨░ ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░.
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 0
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.73
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.60
         
       exitCode: 0
   -
@@ -2294,7 +2294,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -2336,7 +2336,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -2378,7 +2378,7 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -2435,9 +2435,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/pwsh"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh"
@@ -2561,9 +2561,9 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh"
@@ -2687,8 +2687,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.com"
-    found: "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.com"
+    found: "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe"
     search_context:
       CMAKE_PROGRAM_PATH:
         - "C:/tools/vcpkg/installed/x64-windows/tools"
@@ -2696,7 +2696,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -2741,8 +2741,8 @@ events:
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4v0wxf"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4v0wxf"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-mwvbpa"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-mwvbpa"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2755,40 +2755,40 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4v0wxf'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-mwvbpa'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_2c450.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_15f4a.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:48.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 13:36:23.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\cmTC_15f4a.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_2c450.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_15f4a.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_2c450.dir\\Debug\\cmTC_2c450.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_15f4a.dir\\Debug\\cmTC_15f4a.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_2c450.dir\\Debug\\cmTC_2c450.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_2c450.dir\\Debug\\cmTC_2c450.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_15f4a.dir\\Debug\\cmTC_15f4a.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_15f4a.dir\\Debug\\cmTC_15f4a.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_2c450.dir\\Debug\\\\" /Fd"cmTC_2c450.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_15f4a.dir\\Debug\\\\" /Fd"cmTC_15f4a.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\src.cxx"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_2c450.dir\\Debug\\\\" /Fd"cmTC_2c450.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_15f4a.dir\\Debug\\\\" /Fd"cmTC_15f4a.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\src.cxx"
           src.cxx
-        Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj]
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
+        Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\cmTC_15f4a.vcxproj]
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\cmTC_15f4a.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
         
         ╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨▒╨╛╤А╨║╨╕.
         
-        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
+        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\cmTC_15f4a.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
         (╨ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ClCompile) -> 
-          Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj]
+          Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-mwvbpa\\cmTC_15f4a.vcxproj]
         
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 1
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.45
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.39
         
       exitCode: 1
   -
@@ -2805,8 +2805,8 @@ events:
     checks:
       - "Looking for pthread_create in pthreads"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-ggcemb"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-ggcemb"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2819,42 +2819,42 @@ events:
       variable: "CMAKE_HAVE_PTHREADS_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-ggcemb'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_22a1f.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_6502b.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:50.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 13:36:24.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\cmTC_6502b.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_22a1f.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_6502b.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_22a1f.dir\\Debug\\cmTC_22a1f.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_6502b.dir\\Debug\\cmTC_6502b.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_22a1f.dir\\Debug\\cmTC_22a1f.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_22a1f.dir\\Debug\\cmTC_22a1f.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_6502b.dir\\Debug\\cmTC_6502b.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_6502b.dir\\Debug\\cmTC_6502b.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_22a1f.dir\\Debug\\\\" /Fd"cmTC_22a1f.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\CheckFunctionExists.cxx"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_6502b.dir\\Debug\\\\" /Fd"cmTC_6502b.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\CheckFunctionExists.cxx"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_22a1f.dir\\Debug\\\\" /Fd"cmTC_22a1f.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_6502b.dir\\Debug\\\\" /Fd"cmTC_6502b.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\Debug\\cmTC_22a1f.exe" /INCREMENTAL /ILK:"cmTC_22a1f.dir\\Debug\\cmTC_22a1f.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7/Debug/cmTC_22a1f.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7/Debug/cmTC_22a1f.lib" /MACHINE:X64  /machine:x64 cmTC_22a1f.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj]
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\Debug\\cmTC_6502b.exe" /INCREMENTAL /ILK:"cmTC_6502b.dir\\Debug\\cmTC_6502b.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-ggcemb/Debug/cmTC_6502b.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-ggcemb/Debug/cmTC_6502b.lib" /MACHINE:X64  /machine:x64 cmTC_6502b.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\cmTC_6502b.vcxproj]
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\cmTC_6502b.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
         
         ╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨▒╨╛╤А╨║╨╕.
         
-        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
+        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\cmTC_6502b.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
         (╨ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В Link) -> 
-          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj]
+          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-ggcemb\\cmTC_6502b.vcxproj]
         
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 1
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.52
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.44
         
       exitCode: 1
   -
@@ -2871,8 +2871,8 @@ events:
     checks:
       - "Looking for pthread_create in pthread"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-oobxnv"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-oobxnv"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2885,42 +2885,42 @@ events:
       variable: "CMAKE_HAVE_PTHREAD_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-oobxnv'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_fdc67.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_63135.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:52.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 25.10.2025 13:36:24.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\cmTC_63135.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_fdc67.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_63135.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_fdc67.dir\\Debug\\cmTC_fdc67.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_63135.dir\\Debug\\cmTC_63135.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_fdc67.dir\\Debug\\cmTC_fdc67.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_fdc67.dir\\Debug\\cmTC_fdc67.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_63135.dir\\Debug\\cmTC_63135.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_63135.dir\\Debug\\cmTC_63135.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_fdc67.dir\\Debug\\\\" /Fd"cmTC_fdc67.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\CheckFunctionExists.cxx"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_63135.dir\\Debug\\\\" /Fd"cmTC_63135.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\CheckFunctionExists.cxx"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_fdc67.dir\\Debug\\\\" /Fd"cmTC_fdc67.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_63135.dir\\Debug\\\\" /Fd"cmTC_63135.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\Debug\\cmTC_fdc67.exe" /INCREMENTAL /ILK:"cmTC_fdc67.dir\\Debug\\cmTC_fdc67.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl/Debug/cmTC_fdc67.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl/Debug/cmTC_fdc67.lib" /MACHINE:X64  /machine:x64 cmTC_fdc67.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj]
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\Debug\\cmTC_63135.exe" /INCREMENTAL /ILK:"cmTC_63135.dir\\Debug\\cmTC_63135.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-oobxnv/Debug/cmTC_63135.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-oobxnv/Debug/cmTC_63135.lib" /MACHINE:X64  /machine:x64 cmTC_63135.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\cmTC_63135.vcxproj]
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\cmTC_63135.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
         
         ╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨▒╨╛╤А╨║╨╕.
         
-        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
+        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\cmTC_63135.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
         (╨ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В Link) -> 
-          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj]
+          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-oobxnv\\cmTC_63135.vcxproj]
         
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 1
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.49
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.47
         
       exitCode: 1
   -
@@ -2992,7 +2992,7 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
