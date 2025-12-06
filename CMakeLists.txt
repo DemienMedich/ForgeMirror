@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if (MSVC)
+    # Ensure UTF-8 string literals so Russian text renders correctly in both CLI and GUI.
+    add_compile_options(/utf-8)
+endif()
+
 add_executable(JobSkill
     src/Skill.cpp
     src/Profile.cpp
@@ -13,6 +18,7 @@ add_executable(JobSkill
     src/FileStorage.cpp
     src/SkillCatalog.cpp
     src/AppUtils.cpp
+    src/GameplayConfig.cpp
     main.cpp
 )
 
@@ -49,6 +55,7 @@ if(BUILD_IMGUI_GUI)
         src/FileStorage.cpp
         src/SkillCatalog.cpp
         src/AppUtils.cpp
+        src/GameplayConfig.cpp
     )
 
     target_sources(JobSkillGui PRIVATE ${IMGUI_SOURCES})

@@ -2,6 +2,7 @@
 #include "IJobStorage.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
+#include "GameplayConfig.h"
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -74,6 +75,9 @@ struct GuiState {
     std::optional<GuiProfile> active;
     std::string statusMessage;
     float statusColor[4] = {0.6f, 0.7f, 1.0f, 1.0f};
+    std::filesystem::path storageDir;
+    GameplayConfig rulesConfig;
+    GameplayConfig rulesDraft;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
@@ -480,6 +484,23 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
     }
 }
 
+void ReapplyRulesToProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    auto list = storage.list_profiles();
+    std::string focusId = state.active ? state.active->id : std::string{};
+    for (const auto& info : list) {
+        if (!storage.set_active_profile(info.id)) continue;
+        if (auto profile = storage.load_profile()) {
+            SyncProfileWithCatalog(*profile, catalog);
+            int total = profile->total_xp();
+            profile->set_total_xp(total);
+            storage.save_profile(*profile);
+        }
+    }
+    if (!focusId.empty()) {
+        storage.set_active_profile(focusId);
+    }
+}
+
 // Reload profile list and try to keep the previously selected/active entry.
 void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId = {}) {
     std::string currentId;
@@ -582,6 +603,16 @@ int main() {
     (void)io;
     ImGui::StyleColorsDark();
 
+    auto storageDir = ResolveStorageDirectory();
+    auto metaDir = storageDir / "meta";
+    std::error_code iniEc;
+    std::filesystem::create_directories(metaDir, iniEc);
+    static std::string layoutPath;
+    layoutPath = (metaDir / "gui-layout.ini").string();
+    if (!layoutPath.empty()) {
+        io.IniFilename = layoutPath.c_str();
+    }
+
     const std::filesystem::path fontCandidates[] = {
         "gui/fonts/Roboto-Medium.ttf",
         "gui/fonts/Roboto-Regular.ttf",
@@ -616,12 +647,16 @@ int main() {
     ImGui_ImplOpenGL2_Init();
 
     extern IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
-    auto storageDir = ResolveStorageDirectory();
     SkillCatalog catalog(storageDir);
+    auto gameplayConfig = LoadGameplayConfig(storageDir);
+    SetGameplayConfig(gameplayConfig);
     std::unique_ptr<IJobStorage> storage(CreateFileStorage(storageDir));
     EnsureAdminProfile(*storage, catalog);
 
     GuiState state;
+    state.storageDir = storageDir;
+    state.rulesConfig = gameplayConfig;
+    state.rulesDraft = gameplayConfig;
     RefreshProfiles(state, *storage, catalog);
 
     while (!glfwWindowShouldClose(window)) {
@@ -632,19 +667,19 @@ int main() {
         ImGui::NewFrame();
 
         // Main menu window
-        ImGui::Begin("Main Menu");
-        if (ImGui::Button("Refresh")) {
+        ImGui::Begin(u8"Главное меню");
+        if (ImGui::Button(u8"Обновить")) {
             RefreshProfiles(state, *storage, catalog);
         }
         ImGui::SameLine();
-        if (ImGui::Button("Create")) {
+        if (ImGui::Button(u8"Создать")) {
             state.modalBuffer.fill('\0');
             state.createPopupRequest = true;
         }
         ImGui::SameLine();
         bool canArchive = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && !state.profiles[state.selectedIndex].archived;
         if (!canArchive) ImGui::BeginDisabled();
-        if (ImGui::Button("Archive")) {
+        if (ImGui::Button(u8"В архив")) {
             state.confirmPopupRequest = true;
             state.confirmAction = ConfirmAction::Archive;
         }
@@ -652,7 +687,7 @@ int main() {
         ImGui::SameLine();
         bool canRestore = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && state.profiles[state.selectedIndex].archived;
         if (!canRestore) ImGui::BeginDisabled();
-        if (ImGui::Button("Restore")) {
+        if (ImGui::Button(u8"Вернуть")) {
             state.confirmPopupRequest = true;
             state.confirmAction = ConfirmAction::Restore;
         }
@@ -660,7 +695,7 @@ int main() {
         ImGui::SameLine();
         bool canDelete = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size());
         if (!canDelete) ImGui::BeginDisabled();
-        if (ImGui::Button("Delete")) {
+        if (ImGui::Button(u8"Удалить")) {
             state.confirmPopupRequest = true;
             state.confirmAction = ConfirmAction::Delete;
         }
@@ -668,7 +703,7 @@ int main() {
         ImGui::SameLine();
         bool hasActive = state.active.has_value();
         if (!hasActive) ImGui::BeginDisabled();
-        if (ImGui::Button("Add Experience")) {
+        if (ImGui::Button(u8"Добавить опыт")) {
             PrepareXpEntries(state, catalog);
             state.xpPopupRequest = true;
         }
@@ -678,7 +713,7 @@ int main() {
         if (ImGui::BeginChild("profiles", ImVec2(0, 0), false)) {
             for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
                 const auto& info = state.profiles[i];
-                std::string label = "[" + info.id + "] " + info.name + (info.archived ? " (archived)" : "");
+                std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
                 if (ImGui::Selectable(label.c_str(), state.selectedIndex == i)) {
                     state.selectedIndex = i;
                     RefreshActiveProfile(state, *storage, catalog);
@@ -690,9 +725,9 @@ int main() {
         ImGui::End();
 
         // Profile details window
-        ImGui::Begin("Profile Details");
+        ImGui::Begin(u8"Профиль");
         if (!state.active) {
-            ImGui::TextUnformatted("Select a profile to view details.");
+            ImGui::TextUnformatted(u8"Выберите профиль, чтобы увидеть детали.");
         } else {
             Profile& profile = state.active->profile;
             const int overallLevel = profile.overall_level();
@@ -719,9 +754,9 @@ int main() {
                               ImVec2(levelX, headerStartScreen.y),
                               ImGui::GetColorU32(ImGuiCol_Text), levelText.c_str());
 
-            ImGui::Text("Name: %s", profile.name().c_str());
+            ImGui::Text(u8"Имя: %s", profile.name().c_str());
             ImGui::Text("ID: %s", state.active->id.c_str());
-            ImGui::Text("Rank: %s", DescribeOverallRank(state.active->profile).c_str());
+            ImGui::Text(u8"Ранг: %s", DescribeOverallRank(state.active->profile).c_str());
             {
                 const auto& catScores = state.active->profile.category_best_scores();
                 std::ostringstream catStream;
@@ -729,21 +764,21 @@ int main() {
                     if (i) catStream << ", ";
                     catStream << Profile::kCategoryLabels[i] << "=" << catScores[i] << "/10";
                 }
-                ImGui::Text("Categories: %s", catStream.str().c_str());
+                ImGui::Text(u8"Категории: %s", catStream.str().c_str());
             }
-            ImGui::Text("Total XP: %d", totalXp);
+            ImGui::Text(u8"Всего XP: %d", totalXp);
             ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
             ImGui::Separator();
 
-            ImGui::TextUnformatted("Skills");
+            ImGui::TextUnformatted(u8"Навыки");
             ImGui::Columns(4, "skill_table");
-            ImGui::TextUnformatted("Skill");
+            ImGui::TextUnformatted(u8"Навык");
             ImGui::NextColumn();
-            ImGui::TextUnformatted("Level");
+            ImGui::TextUnformatted(u8"Уровень");
             ImGui::NextColumn();
             ImGui::TextUnformatted("XP");
             ImGui::NextColumn();
-            ImGui::TextUnformatted("Weight");
+            ImGui::TextUnformatted(u8"Вес");
             ImGui::NextColumn();
             ImGui::Separator();
 
@@ -775,14 +810,14 @@ int main() {
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
             ImGui::Separator();
-            ImGui::TextUnformatted("Recent Activity");
+            ImGui::TextUnformatted(u8"Последние действия");
             const auto logIt = state.activityLogs.find(state.active->id);
             if (logIt != state.activityLogs.end() && !logIt->second.empty()) {
                 for (auto it = logIt->second.rbegin(); it != logIt->second.rend(); ++it) {
                     ImGui::BulletText("%s", it->c_str());
                 }
             } else {
-                ImGui::TextUnformatted("No activity yet.");
+                ImGui::TextUnformatted(u8"Пока нет действий.");
             }
 
             ShowStatus(state);
@@ -852,6 +887,61 @@ int main() {
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
                 ImGui::TextUnformatted(step.description);
                 ImGui::PopTextWrapPos();
+            }
+        }
+        ImGui::End();
+
+        if (ImGui::Begin("Gameplay Rules")) {
+            GameplayConfig& draft = state.rulesDraft;
+            ImGui::TextUnformatted("Leveling curve");
+            ImGui::InputInt("Base XP (level 1)", &draft.levelBaseXp);
+            ImGui::InputInt("Linear gain per level", &draft.levelLinearXp);
+            ImGui::InputInt("Quadratic gain per level", &draft.levelQuadraticXp);
+            ImGui::Separator();
+            ImGui::TextUnformatted("Category base XP");
+            for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                std::string label = std::string("Tier ") + Profile::kCategoryLabels[idx] + " XP";
+                int value = draft.categoryBaseXp[idx];
+                if (ImGui::InputInt(label.c_str(), &value)) {
+                    draft.categoryBaseXp[idx] = value;
+                }
+            }
+            ImGui::Separator();
+            ImGui::TextUnformatted("Bonuses & penalties");
+            ImGui::InputFloat("Focus base bonus", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
+            ImGui::InputFloat("Focus extra bonus", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
+            ImGui::SliderFloat("Repeat reward factor", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Recovery reward factor", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
+            ImGui::InputInt("Recovery warm-up tasks", &draft.recoveryWarmupTasks);
+            ImGui::TextDisabled("Changes affect both CLI and GUI once saved.");
+            if (ImGui::Button("Reset changes")) {
+                draft = state.rulesConfig;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Save && Apply")) {
+                GameplayConfig sanitized = draft;
+                sanitized.levelBaseXp = std::max(1, sanitized.levelBaseXp);
+                sanitized.levelLinearXp = std::max(0, sanitized.levelLinearXp);
+                sanitized.levelQuadraticXp = std::max(0, sanitized.levelQuadraticXp);
+                for (auto& value : sanitized.categoryBaseXp) {
+                    value = std::max(0, value);
+                }
+                sanitized.focusBaseBonus = std::clamp(sanitized.focusBaseBonus, 0.0f, 10.0f);
+                sanitized.focusAdditionalBonus = std::clamp(sanitized.focusAdditionalBonus, 0.0f, 10.0f);
+                sanitized.repeatRewardFactor = std::clamp(sanitized.repeatRewardFactor, 0.0f, 1.0f);
+                sanitized.recoveryRewardFactor = std::clamp(sanitized.recoveryRewardFactor, 0.0f, 1.0f);
+                sanitized.recoveryWarmupTasks = std::max(0, sanitized.recoveryWarmupTasks);
+                if (SaveGameplayConfig(sanitized, state.storageDir)) {
+                    state.rulesConfig = sanitized;
+                    state.rulesDraft = sanitized;
+                    SetGameplayConfig(sanitized);
+                    ReapplyRulesToProfiles(state, *storage, catalog);
+                    std::string keepId = state.active ? state.active->id : std::string{};
+                    RefreshProfiles(state, *storage, catalog, keepId);
+                    SetStatus(state, "Gameplay rules saved.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, "Failed to save gameplay rules.", 1.0f, 0.45f, 0.45f);
+                }
             }
         }
         ImGui::End();

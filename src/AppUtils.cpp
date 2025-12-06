@@ -45,15 +45,15 @@ std::string BuildRank(const char* base, int startLevel, int substep, int level) 
 std::string DescribeOverallRank(const Profile& profile) {
     const int overallLevel = profile.overall_level();
     std::string base;
-    if (overallLevel < 10) base = "Intern";
-    else if (overallLevel < 50) base = BuildRank("Junior", 10, 10, overallLevel);
-    else if (overallLevel < 150) base = BuildRank("Middle", 50, 10, overallLevel);
-    else base = BuildRank("Senior", 150, 10, overallLevel);
+    if (overallLevel < 10) base = "Стажёр";
+    else if (overallLevel < 50) base = BuildRank("Джуниор", 10, 10, overallLevel);
+    else if (overallLevel < 150) base = BuildRank("Мидл", 50, 10, overallLevel);
+    else base = BuildRank("Сеньор", 150, 10, overallLevel);
 
     std::ostringstream details;
     bool hasDetail = false;
     if (overallLevel >= 150 && !profile.all_categories_mastered()) {
-        details << "Senior locked: ";
+        details << "Сеньор заблокирован: ";
         bool first = true;
         for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
             if (profile.is_category_mastered(idx)) continue;
@@ -61,20 +61,20 @@ std::string DescribeOverallRank(const Profile& profile) {
             details << Profile::kCategoryLabels[idx] << "=" << profile.category_best_score(idx) << "/10";
             const int cooldown = profile.category_cooldown(idx);
             if (cooldown <= 0) details << " (!)";
-            else details << " (cooldown " << cooldown << ")";
+            else details << " (кулдаун " << cooldown << ")";
             first = false;
         }
-        if (first) details << "complete category challenges";
+        if (first) details << "закончите испытания категорий";
         hasDetail = true;
     }
     if (profile.penalty_active()) {
         if (hasDetail) details << " | ";
-        details << "recovery tasks left: " << profile.recovery_tasks_remaining();
+        details << "штрафных задач осталось: " << profile.recovery_tasks_remaining();
         hasDetail = true;
     }
     if (profile.inactivity_tasks() > 0) {
         if (hasDetail) details << " | ";
-        details << "decay buffer: " << profile.inactivity_tasks() << " tasks";
+        details << "буфер деградации: " << profile.inactivity_tasks() << " задач";
         hasDetail = true;
     }
     if (hasDetail) {
@@ -113,9 +113,9 @@ void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
     auto info = storage.create_profile(admin);
     if (info) {
         storage.save_profile(admin);
-        std::cout << "Created default admin profile '" << admin.name() << "' with ID " << info->id << ".\n";
+        std::cout << "Создан профиль администратора '" << admin.name() << "' с ID " << info->id << ".\n";
     } else {
-        std::cout << "Warning: failed to create default admin profile.\n";
+        std::cout << "Внимание: не удалось создать профиль администратора.\n";
     }
 }
 

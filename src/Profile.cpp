@@ -4,6 +4,8 @@
 #include <cmath>
 #include <numeric>
 
+#include "GameplayConfig.h"
+
 namespace {
 
 int ClampScore(int value) {
@@ -49,9 +51,10 @@ void Profile::set_skills(const std::vector<Skill>& skills) {
 }
 
 int Profile::RequiredXpForLevel(int level) {
-    if (level <= 1) return 1500;
+    const auto& cfg = GetGameplayConfig();
+    if (level <= 1) return cfg.levelBaseXp;
     const int tier = level - 1;
-    return 1500 + 250 * tier + 50 * tier * tier;
+    return cfg.levelBaseXp + cfg.levelLinearXp * tier + cfg.levelQuadraticXp * tier * tier;
 }
 
 int Profile::TotalXpForLevel(int level) {

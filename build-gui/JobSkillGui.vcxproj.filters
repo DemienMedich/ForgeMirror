@@ -19,6 +19,9 @@
     <ClCompile Include="Z:\CPP\JobSkill\src\AppUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Z:\CPP\JobSkill\src\GameplayConfig.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Z:\CPP\JobSkill\libs\imgui\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
