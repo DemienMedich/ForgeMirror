@@ -1,11 +1,16 @@
-// JobSkill console client: profile issuing, leveling, and simple CLI session
+// JobSkill console client: profile issuing, leveling, and CLI front-end.
+// This translation unit wires together profile storage, skill catalog,
+// XP accounting commands, and the interactive loop for one console session.
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <chrono>
+#include <ctime>
 #include <limits>
 #include <algorithm>
+#include <clocale>
 #include <filesystem>
 #include <cstdlib>
 #include <memory>
@@ -13,6 +18,7 @@
 #include <optional>
 #include <unordered_set>
 #include <sstream>
+#include <locale>
 
 #include "Profile.h"
 #include "IJobStorage.h"
@@ -27,11 +33,13 @@
 #  include <windows.h>
 #endif
 
+// Blueprint used to auto-create starter profiles with a predefined skill set.
 struct ProfileBlueprint {
     std::string name;
     std::vector<std::string> skills;
 };
 
+// Wrapper that keeps the loaded profile and its numeric storage id.
 struct ActiveProfile {
     Profile profile;
     std::string id;
@@ -39,6 +47,7 @@ struct ActiveProfile {
 
 static const std::vector<ProfileBlueprint> kIssuedProfiles = {};
 
+// Find a template profile by name so new users can inherit skill layouts.
 static const ProfileBlueprint* find_blueprint(const std::string& name) {
     for (const auto& bp : kIssuedProfiles) {
         if (bp.name == name) return &bp;
@@ -46,11 +55,13 @@ static const ProfileBlueprint* find_blueprint(const std::string& name) {
     return nullptr;
 }
 
+// Simple helper: profile ids are numeric strings (0001, 0002, ...).
 static bool is_profile_id(const std::string& value) {
     if (value.empty()) return false;
     return std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
 }
 
+// Standard trimming utility for CLI parsing.
 static std::string trim_copy(std::string s) {
     auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c){ return !is_space(c); }));
@@ -58,6 +69,7 @@ static std::string trim_copy(std::string s) {
     return s;
 }
 
+// Create an actual Profile instance from a blueprint and align skill weights.
 static Profile make_profile_from_blueprint(const ProfileBlueprint& bp, SkillCatalog& catalog) {
     Profile profile(bp.name);
     for (const auto& skill : bp.skills) {
@@ -70,16 +82,53 @@ static Profile make_profile_from_blueprint(const ProfileBlueprint& bp, SkillCata
     return profile;
 }
 
+namespace {
+
+std::string FormatTimestamp(std::int64_t seconds) {
+    if (seconds <= 0) return "never";
+    std::time_t tt = static_cast<std::time_t>(seconds);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    char buffer[64];
+    if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm) == 0) {
+        return "unknown";
+    }
+    return buffer;
+}
+
+} // namespace
+
+// Pretty-print the active profile: level, XP, task category scores, skills.
 static void print_profile(const Profile& p) {
     std::cout << "=== Profile: " << p.name() << " ===\n";
     std::cout << "Overall level: " << p.overall_level() << " (" << DescribeOverallRank(p) << ")\n";
     std::cout << "Total XP: " << p.total_xp() << "\n";
     std::cout << "Progress to next level: " << p.level_progress() << "/" << p.xp_to_next_level() << "\n";
-    std::cout << "Task categories: ";
     const auto& categories = p.category_best_scores();
+    const auto& cooldowns = p.category_cooldowns();
+    std::cout << "Task categories (score / cooldown):\n";
     for (size_t i = 0; i < categories.size(); ++i) {
-        if (i) std::cout << ", ";
-        std::cout << Profile::kCategoryLabels[i] << "=" << categories[i] << "/10";
+        std::cout << " - " << Profile::kCategoryLabels[i] << ": "
+                  << categories[i] << "/10 ("
+                  << cooldowns[i] << ")\n";
+    }
+    if (p.penalty_active()) {
+        std::cout << "Recovery tasks remaining: " << p.recovery_tasks_remaining() << "\n";
+    }
+    std::cout << "Decay buffer tasks before downgrade: " << p.inactivity_tasks() << "\n";
+    std::cout << "Last task: " << FormatTimestamp(p.last_task_timestamp());
+    if (p.last_task_timestamp() > 0) {
+        const auto now = std::chrono::system_clock::now();
+        const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        const auto delta = nowSeconds - p.last_task_timestamp();
+        if (delta > 0) {
+            const int days = static_cast<int>(delta / (24 * 3600));
+            std::cout << " (" << days << " days ago)";
+        }
     }
     std::cout << "\n";
     std::cout << "Skills:\n";
@@ -93,6 +142,7 @@ static void print_profile(const Profile& p) {
     }
 }
 
+// Dump available skills and their weights so the user knows what exists.
 static void show_skill_catalog(const SkillCatalog& catalog) {
     std::cout << "\nSkill Catalog:\n";
     for (const auto& skill : catalog.skills()) {
@@ -102,6 +152,7 @@ static void show_skill_catalog(const SkillCatalog& catalog) {
     }
 }
 
+// Display saved and issued profiles, showing id/name/archived status.
 static void show_available_profiles(IJobStorage& storage) {
     auto stored = storage.list_profiles();
     std::unordered_set<std::string> existing;
@@ -133,6 +184,8 @@ static void show_available_profiles(IJobStorage& storage) {
     }
 }
 
+// Resolve user input (id or name) into a profile: load existing, revive archived,
+// or create a new profile based on blueprints and synchronized catalog data.
 static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillCatalog& catalog, const std::string& token) {
     if (is_profile_id(token)) {
         if (!storage.set_active_profile(token)) {
@@ -204,6 +257,7 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
     return ActiveProfile{profile, info->id};
 }
 
+// Command loop for a single logged-in profile: handles addxp/show/sync/logout/quit.
 static bool run_profile_session(Profile& profile, const std::string& profileId, IJobStorage& storage, IApiClient& api, SkillCatalog& catalog) {
     auto sync_now = [&](bool verbose = true) {
         bool ok = storage.save_profile(profile);
@@ -220,6 +274,10 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
     std::cout << "\nLogged in as " << profile.name() << " [" << profileId << "]." << std::endl;
     print_profile(profile);
     std::cout << "\nCommands: addxp <skill> <amount> | show | sync | logout | quit\n";
+    if (profile.penalty_active()) {
+        std::cout << "Note: global XP recovery in progress (" << profile.recovery_tasks_remaining()
+                  << " tasks).\n";
+    }
 
     std::string cmd;
     while (true) {
@@ -310,11 +368,49 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
 
 constexpr const char* kAdminPassword = "admin123";
 
-int main() {
+namespace {
+
+// Ensure wide/platform console streams speak UTF-8 and pick up system locale.
+void ConfigureLocale() {
 #if defined(_WIN32)
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 #endif
+    std::setlocale(LC_ALL, "");
+    try {
+        std::locale systemLocale("");
+        std::locale::global(systemLocale);
+        std::cout.imbue(systemLocale);
+        std::cin.imbue(systemLocale);
+        std::cerr.imbue(systemLocale);
+        std::clog.imbue(systemLocale);
+        std::wcout.imbue(systemLocale);
+        std::wcin.imbue(systemLocale);
+        std::wcerr.imbue(systemLocale);
+    } catch (...) {
+#if defined(_WIN32)
+        try {
+            std::locale utf8Locale(".UTF-8");
+            std::locale::global(utf8Locale);
+            std::cout.imbue(utf8Locale);
+            std::cin.imbue(utf8Locale);
+            std::cerr.imbue(utf8Locale);
+            std::clog.imbue(utf8Locale);
+            std::wcout.imbue(utf8Locale);
+            std::wcin.imbue(utf8Locale);
+            std::wcerr.imbue(utf8Locale);
+        } catch (...) {
+            // keep classic locale
+        }
+#endif
+    }
+}
+
+} // namespace
+
+// Entry point: configure locale, bootstrap storage/api/catalog, then run menu loop.
+int main() {
+    ConfigureLocale();
 
     extern IJobStorage* CreateFakeStorage();
     extern IJobStorage* CreateFileStorage(const std::filesystem::path& dir);

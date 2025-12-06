@@ -24,34 +24,42 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <clocale>
+#include <locale>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <deque>
 #include <iomanip>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <sstream>
 #include <unordered_map>
 #include <numeric>
 #include <vector>
+#include <chrono>
 
 namespace {
 
+// View-model representing a loaded profile + storage id for the GUI.
 struct GuiProfile {
     Profile profile;
     std::string id;
 };
 
+// User-entered share for a skill in the Add Experience sheet.
 struct XpEntry {
     int percent = 0;
 };
 
+// Simple description struct for pipeline hints shown in the UI sidebar.
 struct PipelineStep {
     const char* title;
     const char* description;
 };
 
+// Actions supported by the confirmation modal.
 enum class ConfirmAction {
     None,
     Archive,
@@ -59,6 +67,7 @@ enum class ConfirmAction {
     Delete
 };
 
+// Aggregates every bit of GUI state (selected profile, popups, sheet values, etc.).
 struct GuiState {
     std::vector<IJobStorage::ProfileInfo> profiles;
     int selectedIndex = -1;
@@ -79,6 +88,7 @@ struct GuiState {
     int selectedPipelineIndex = 0;
 };
 
+// Walk parent directories trying to locate an asset (fonts, ini, etc.).
 std::optional<std::filesystem::path> FindAssetUpwards(const std::filesystem::path& relative) {
     std::error_code ec;
     auto current = std::filesystem::current_path();
@@ -94,6 +104,7 @@ std::optional<std::filesystem::path> FindAssetUpwards(const std::filesystem::pat
     return std::nullopt;
 }
 
+// Pull profile list from storage and sort it for deterministic GUI display.
 std::vector<IJobStorage::ProfileInfo> LoadProfiles(IJobStorage& storage) {
     auto list = storage.list_profiles();
     std::sort(list.begin(), list.end(), [](const auto& a, const auto& b) {
@@ -102,6 +113,7 @@ std::vector<IJobStorage::ProfileInfo> LoadProfiles(IJobStorage& storage) {
     return list;
 }
 
+// Helper to show feedback banner with color-coded message.
 void SetStatus(GuiState& state, const std::string& msg, float r, float g, float b, float a = 1.0f) {
     state.statusMessage = msg;
     state.statusColor[0] = r;
@@ -110,6 +122,7 @@ void SetStatus(GuiState& state, const std::string& msg, float r, float g, float 
     state.statusColor[3] = a;
 }
 
+// Reset Add Experience sheet: one row per catalog skill, even split of 100%.
 void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     const auto& skills = catalog.skills();
     state.xpEntries.assign(skills.size(), {});
@@ -128,6 +141,7 @@ void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     }
 }
 
+// Maintain a small rolling activity feed per profile.
 void AppendLog(GuiState& state, const std::string& profileId, const std::string& message) {
     auto& log = state.activityLogs[profileId];
     if (log.size() == 3) {
@@ -136,13 +150,12 @@ void AppendLog(GuiState& state, const std::string& profileId, const std::string&
     log.push_back(message);
 }
 
+// Generic clamp used all over the GUI logic.
 int ClampToRange(int value, int minValue, int maxValue) {
     if (value < minValue) return minValue;
     if (value > maxValue) return maxValue;
     return value;
 }
-
-constexpr int kBaseXpPerPoint = 1000;
 
 int NormalizeCategoryIndex(int index) {
     if (index < 0) return 0;
@@ -150,21 +163,18 @@ int NormalizeCategoryIndex(int index) {
     return index;
 }
 
-int ClassificationXpPerPoint(int categoryIndex) {
-    const int normalized = NormalizeCategoryIndex(categoryIndex);
-    return kBaseXpPerPoint * (normalized + 1);
-}
-
 const char* ClassificationLabel(int categoryIndex) {
     return Profile::kCategoryLabels[NormalizeCategoryIndex(categoryIndex)];
 }
 
+// Utility functions below keep the Add Experience sliders in sync.
 int SumPercentages(const std::vector<XpEntry>& entries) {
     int total = 0;
     for (const auto& entry : entries) total += entry.percent;
     return total;
 }
 
+// Reduce percentages on non-selected rows until the sum drops back to 100%.
 void ReduceOthers(std::vector<XpEntry>& entries, int fixedIndex, int overflow) {
     if (overflow <= 0) return;
     const int size = static_cast<int>(entries.size());
@@ -215,6 +225,7 @@ void ReduceOthers(std::vector<XpEntry>& entries, int fixedIndex, int overflow) {
     }
 }
 
+// Distribute remaining percent points across other rows to reach 100%.
 void IncreaseOthers(std::vector<XpEntry>& entries, int fixedIndex, int deficit) {
     if (deficit <= 0) return;
     const int size = static_cast<int>(entries.size());
@@ -251,6 +262,7 @@ void IncreaseOthers(std::vector<XpEntry>& entries, int fixedIndex, int deficit) 
     }
 }
 
+// High-level balancer that ensures the sheet always totals 100%.
 void BalancePercentages(std::vector<XpEntry>& entries, int fixedIndex) {
     if (entries.empty()) return;
     if (fixedIndex < 0 || fixedIndex >= static_cast<int>(entries.size())) {
@@ -274,6 +286,7 @@ void BalancePercentages(std::vector<XpEntry>& entries, int fixedIndex) {
     }
 }
 
+// Entry point invoked when the user drags a slider.
 void AdjustSkillShare(GuiState& state, int index, int desiredPercent) {
     if (index < 0 || index >= static_cast<int>(state.xpEntries.size())) return;
     desiredPercent = ClampToRange(desiredPercent, 0, 100);
@@ -281,6 +294,7 @@ void AdjustSkillShare(GuiState& state, int index, int desiredPercent) {
     BalancePercentages(state.xpEntries, index);
 }
 
+// Render a polar chart of skill levels inside the profile preview.
 void DrawSkillRadarChart(const std::vector<Skill>& skills, const ImVec2& canvasPos, const ImVec2& canvasSize, ImDrawList* drawList) {
     if (skills.size() < 3) {
         drawList->AddText(canvasPos, ImGui::GetColorU32(ImVec4(1.0f, 0.8f, 0.5f, 1.0f)),
@@ -451,6 +465,7 @@ R"(❗️❗️При экспорте из Blender, в настройках э�
 ✅Каждый этап отправляется Арт-лиду на одобрение!)"}
 };
 
+// Load the currently selected profile from storage and synchronise its skills.
 void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     state.active.reset();
     if (state.selectedIndex < 0 || state.selectedIndex >= static_cast<int>(state.profiles.size())) return;
@@ -465,6 +480,7 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
     }
 }
 
+// Reload profile list and try to keep the previously selected/active entry.
 void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId = {}) {
     std::string currentId;
     if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
@@ -500,9 +516,42 @@ void ShowStatus(const GuiState& state) {
     ImGui::PopStyleColor();
 }
 
+void ConfigureLocale() {
+#if defined(_WIN32)
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+    std::setlocale(LC_ALL, "");
+    try {
+        std::locale sys("");
+        std::locale::global(sys);
+        std::cout.imbue(sys);
+        std::cerr.imbue(sys);
+        std::clog.imbue(sys);
+        std::wcout.imbue(sys);
+        std::wcerr.imbue(sys);
+    } catch (...) {
+#if defined(_WIN32)
+        try {
+            std::locale utf8(".UTF-8");
+            std::locale::global(utf8);
+            std::cout.imbue(utf8);
+            std::cerr.imbue(utf8);
+            std::clog.imbue(utf8);
+            std::wcout.imbue(utf8);
+            std::wcerr.imbue(utf8);
+        } catch (...) {
+            // ignore
+        }
+#endif
+    }
+}
+
 } // namespace
 
+// GUI entry point: configure locale, init GLFW/ImGui, then run main loop.
 int main() {
+    ConfigureLocale();
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialise GLFW\n");
         return 1;
@@ -535,9 +584,15 @@ int main() {
 
     const std::filesystem::path fontCandidates[] = {
         "gui/fonts/Roboto-Medium.ttf",
+        "gui/fonts/Roboto-Regular.ttf",
         "fonts/Roboto-Medium.ttf",
+        "fonts/Roboto-Regular.ttf",
         "Roboto-Medium.ttf",
-        "libs/imgui/misc/fonts/Roboto-Medium.ttf"
+        "Roboto-Regular.ttf",
+        "libs/imgui/misc/fonts/Roboto-Medium.ttf",
+        "libs/imgui/misc/fonts/DroidSans.ttf",
+        "libs/imgui/misc/fonts/Karla-Regular.ttf",
+        "libs/imgui/misc/fonts/Cousine-Regular.ttf"
     };
     ImFont* primaryFont = nullptr;
     for (const auto& candidate : fontCandidates) {
@@ -547,7 +602,14 @@ int main() {
         }
     }
     if (!primaryFont) {
-        io.Fonts->AddFontDefault();
+        ImFont* fallback = io.Fonts->AddFontDefault();
+        (void)fallback;
+        if (auto droid = FindAssetUpwards("libs/imgui/misc/fonts/DroidSans.ttf")) {
+            ImFontConfig cfg;
+            cfg.MergeMode = true;
+            cfg.PixelSnapH = true;
+            io.Fonts->AddFontFromFileTTF(droid->string().c_str(), 18.0f, &cfg, io.Fonts->GetGlyphRangesCyrillic());
+        }
     }
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -821,16 +883,17 @@ int main() {
                     state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
                 }
                 const int currentCategory = state.taskCategoryIndex;
-                const int currentXpPerPoint = ClassificationXpPerPoint(currentCategory);
-                const int currentTotalXp = currentXpPerPoint * ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
+                const int baseXp = Profile::kCategoryBaseXp[currentCategory];
+                const float scoreRatio = static_cast<float>(state.taskScore) / static_cast<float>(Profile::kMaxCategoryScore);
+                const float scoreMultiplier = std::pow(std::max(0.1f, scoreRatio), 1.35f);
                 const int currentBest = state.active->profile.category_best_score(static_cast<size_t>(currentCategory));
                 ImGui::SameLine();
-                ImGui::Text("XP per point: %d", currentXpPerPoint);
-                ImGui::TextDisabled("A is highest, E is entry. Each grade adds +1000 XP per point.");
+                ImGui::Text("Base XP: %d", baseXp);
+                ImGui::TextDisabled("Category tier defines base XP; score adds a non-linear multiplier.");
                 if (ImGui::SliderInt("Score", &state.taskScore, 1, Profile::kMaxCategoryScore)) {
                     state.taskScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
                 }
-                ImGui::Text("Total task XP: %d", currentTotalXp);
+                ImGui::Text("Score multiplier: %.2f", scoreMultiplier);
                 if (currentBest >= Profile::kMaxCategoryScore) {
                     ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f),
                                        "Previous best: %d/10 (category mastered)", currentBest);
@@ -838,7 +901,7 @@ int main() {
                     ImGui::Text("Previous best: %d/10", currentBest);
                     if (state.taskScore <= currentBest) {
                         ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f),
-                                           "Increase score above previous best to gain XP.");
+                                           "Repeat score => global XP limited to 35%% (skills still full).");
                     }
                 }
 
@@ -846,7 +909,7 @@ int main() {
                 ImGui::TextUnformatted("Distribute skills (auto-balanced to 100%)");
                 const float sliderWidth = ImGui::CalcTextSize("000").x + ImGui::GetStyle().FramePadding.x * 6.0f;
                 int percentSum = 0;
-                int previewApplied = 0;
+                int maxSharePercent = 0;
                 if (ImGui::BeginTable("xp_sheet", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                     ImGui::TableSetupColumn("Skill");
                     ImGui::TableSetupColumn("Share (%)");
@@ -867,9 +930,11 @@ int main() {
                         ImGui::PopItemWidth();
                         ImGui::PopID();
                         percentSum += state.xpEntries[i].percent;
+                        if (state.xpEntries[i].percent > maxSharePercent) {
+                            maxSharePercent = state.xpEntries[i].percent;
+                        }
                         ImGui::TableSetColumnIndex(2);
-                        const int previewXp = (currentTotalXp * state.xpEntries[i].percent) / 100;
-                        previewApplied += previewXp;
+                        const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
                         ImGui::Text("%d", previewXp);
                     }
                     ImGui::EndTable();
@@ -877,110 +942,139 @@ int main() {
 
                 ImGui::Separator();
                 ImGui::Text("Assigned: %d%%", percentSum);
-                const int previewDelta = currentTotalXp - previewApplied;
-                if (std::abs(previewDelta) > 0) {
-                    ImGui::TextDisabled("Preview delta due to rounding: %d XP", previewDelta);
-                }
+                const float focusBonus = 0.6f + 0.4f * (static_cast<float>(maxSharePercent) / 100.0f);
+                const int previewPool = static_cast<int>(std::round(baseXp * scoreMultiplier * focusBonus));
+                ImGui::Text("Focus bonus: %.2f (max share %d%%)", focusBonus, maxSharePercent);
+                ImGui::TextDisabled("Projected skill XP pool before penalties: %d", previewPool);
 
                 if (ImGui::Button("Apply")) {
                     const int readyCategory = NormalizeCategoryIndex(state.taskCategoryIndex);
                     const int readyScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
                     const int storedBest = state.active->profile.category_best_score(static_cast<size_t>(readyCategory));
-                    const bool alreadyMastered = storedBest >= Profile::kMaxCategoryScore;
-                    if (alreadyMastered) {
-                        SetStatus(state, "Category already mastered with score 10. No XP awarded.", 1.0f, 0.45f, 0.45f);
-                    } else if (readyScore < storedBest) {
-                        std::ostringstream msg;
-                        msg << "Score must exceed previous best (" << storedBest << "/10).";
-                        SetStatus(state, msg.str(), 1.0f, 0.45f, 0.45f);
+                    int percentCheck = 0;
+                    bool hasContribution = false;
+                    for (const auto& entry : state.xpEntries) {
+                        int clamped = ClampToRange(entry.percent, 0, 100);
+                        percentCheck += clamped;
+                        if (clamped > 0) hasContribution = true;
+                    }
+                    if (percentCheck != 100) {
+                        SetStatus(state, "Distribution must stay at 100%.", 1.0f, 0.45f, 0.45f);
+                    } else if (!hasContribution) {
+                        SetStatus(state, "At least one skill must receive experience.", 1.0f, 0.45f, 0.45f);
                     } else {
-                        int percentCheck = 0;
-                        bool hasContribution = false;
-                        for (const auto& entry : state.xpEntries) {
-                            int clamped = ClampToRange(entry.percent, 0, 100);
-                            percentCheck += clamped;
-                            if (clamped > 0) hasContribution = true;
+                        float maxShare = 0.0f;
+                        if (!state.xpEntries.empty()) {
+                            const auto it = std::max_element(
+                                state.xpEntries.begin(), state.xpEntries.end(),
+                                [](const XpEntry& a, const XpEntry& b) { return a.percent < b.percent; });
+                            maxShare = static_cast<float>(it->percent) / 100.0f;
                         }
-                        const bool improved = readyScore > storedBest;
-                        const int taskTotalXp = ClassificationXpPerPoint(readyCategory) * readyScore;
-                        if (percentCheck != 100) {
-                            SetStatus(state, "Distribution must stay at 100%.", 1.0f, 0.45f, 0.45f);
-                        } else if (!hasContribution) {
-                            SetStatus(state, "At least one skill must receive experience.", 1.0f, 0.45f, 0.45f);
-                        } else if (taskTotalXp <= 0) {
-                            SetStatus(state, "Task XP must be positive.", 1.0f, 0.45f, 0.45f);
-                        } else {
-                            std::vector<int> xpDistribution(state.xpEntries.size(), 0);
-                            int remainder = taskTotalXp;
-                            int fallbackIndex = -1;
-                            for (int i = 0; i < static_cast<int>(state.xpEntries.size()); ++i) {
-                                int percent = ClampToRange(state.xpEntries[i].percent, 0, 100);
-                                if (percent <= 0) continue;
-                                int shareXp = (taskTotalXp * percent) / 100;
-                                xpDistribution[i] = shareXp;
-                                remainder -= shareXp;
-                                if (fallbackIndex == -1 || percent > state.xpEntries[fallbackIndex].percent) {
-                                    fallbackIndex = i;
-                                }
+                        const float focusBonus = 0.6f + 0.4f * maxShare;
+                        int basePool = static_cast<int>(std::round(
+                            Profile::kCategoryBaseXp[readyCategory] *
+                            std::pow(std::max(0.1f, static_cast<float>(readyScore) / 10.0f), 1.35f) * focusBonus));
+                        if (basePool < 0) basePool = 0;
+                        std::vector<int> xpDistribution(state.xpEntries.size(), 0);
+                        int remainder = basePool;
+                        int fallbackIndex = -1;
+                        for (int i = 0; i < static_cast<int>(state.xpEntries.size()); ++i) {
+                            int percent = ClampToRange(state.xpEntries[i].percent, 0, 100);
+                            if (percent <= 0) continue;
+                            int shareXp = (basePool * percent) / 100;
+                            xpDistribution[i] = shareXp;
+                            remainder -= shareXp;
+                            if (fallbackIndex == -1 || percent > state.xpEntries[fallbackIndex].percent) {
+                                fallbackIndex = i;
                             }
-                            if (remainder > 0 && fallbackIndex >= 0) {
-                                xpDistribution[fallbackIndex] += remainder;
-                                remainder = 0;
-                            }
-                            const char* categoryLabel = ClassificationLabel(readyCategory);
-                            std::ostringstream skillsStream;
-                            bool firstSkill = true;
-                            int totalApplied = 0;
-                            for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                                int shareXp = xpDistribution[i];
-                                if (shareXp <= 0) continue;
-                                const std::string& skillName = catalogSkills[i];
-                                double weight = catalog.weight(skillName);
-                                state.active->profile.add_skill(skillName, 1, weight);
-                                bool leveled = state.active->profile.grant_xp(skillName, shareXp);
-                                totalApplied += shareXp;
-                                if (!firstSkill) skillsStream << " | ";
-                                skillsStream << skillName << " +" << shareXp << " XP (" << state.xpEntries[i].percent << "%)";
-                                if (leveled) skillsStream << " lvl up";
-                                firstSkill = false;
-                            }
-                            if (!firstSkill) {
-                                AppendLog(state, state.active->id, skillsStream.str());
-                            }
-                            std::string summaryText;
-                            if (improved) {
-                                state.active->profile.grant_global_xp(taskTotalXp);
-                                state.active->profile.update_category_best_score(static_cast<size_t>(readyCategory), readyScore);
-                                std::ostringstream summaryStream;
-                                summaryStream << "Task [" << categoryLabel << "] score " << readyScore
-                                              << " => +" << taskTotalXp << " XP overall";
-                                summaryText = summaryStream.str();
-                                AppendLog(state, state.active->id, summaryText);
-                                std::ostringstream bestStream;
-                                bestStream << "Category " << categoryLabel << " best: " << readyScore << "/10";
-                                AppendLog(state, state.active->id, bestStream.str());
-                                if (readyScore == Profile::kMaxCategoryScore) {
-                                    std::ostringstream mastery;
-                                    mastery << "Category " << categoryLabel << " mastered!";
-                                    AppendLog(state, state.active->id, mastery.str());
-                                }
-                            } else {
-                                std::ostringstream summaryStream;
-                                summaryStream << "Task [" << categoryLabel << "] score " << readyScore
-                                              << " => skill XP only (overall locked)";
-                                summaryText = summaryStream.str();
-                                AppendLog(state, state.active->id, summaryText);
-                            }
-                            storage->save_profile(state.active->profile);
-                            PrepareXpEntries(state, catalog);
-                            if (improved) {
-                                SetStatus(state, summaryText, 0.45f, 0.9f, 0.45f);
-                            } else {
-                                SetStatus(state, summaryText, 0.8f, 0.8f, 0.45f);
-                            }
-                            ImGui::CloseCurrentPopup();
-                            xpPopupOpen = false;
                         }
+                        if (remainder > 0 && fallbackIndex >= 0) {
+                            xpDistribution[fallbackIndex] += remainder;
+                        }
+                        const char* categoryLabel = ClassificationLabel(readyCategory);
+                        std::ostringstream skillsStream;
+                        bool firstSkill = true;
+                        for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
+                            int shareXp = xpDistribution[i];
+                            if (shareXp <= 0) continue;
+                            const std::string& skillName = catalogSkills[i];
+                            double weight = catalog.weight(skillName);
+                            state.active->profile.add_skill(skillName, 1, weight);
+                            bool leveled = state.active->profile.grant_xp(skillName, shareXp);
+                            if (!firstSkill) skillsStream << " | ";
+                            skillsStream << skillName << " +" << shareXp << " XP (" << state.xpEntries[i].percent << "%)";
+                            if (leveled) skillsStream << " lvl up";
+                            firstSkill = false;
+                        }
+                        if (!firstSkill) {
+                            AppendLog(state, state.active->id, skillsStream.str());
+                        }
+                        bool repeatPenalty = readyScore <= storedBest;
+                        int effectiveXp = basePool;
+                        if (repeatPenalty) {
+                            effectiveXp = static_cast<int>(std::round(effectiveXp * 0.35f));
+                        }
+                        const auto now = std::chrono::system_clock::now();
+                        const std::int64_t nowSeconds =
+                            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+                        constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
+                        if (state.active->profile.last_task_timestamp() > 0 &&
+                            (nowSeconds - state.active->profile.last_task_timestamp()) > kThirtyDays) {
+                            state.active->profile.start_penalty_recovery(3);
+                        }
+                        bool recoveryPenalty = false;
+                        if (state.active->profile.penalty_active()) {
+                            recoveryPenalty = true;
+                            effectiveXp = static_cast<int>(std::round(effectiveXp * 0.6f));
+                            state.active->profile.consume_penalty_task();
+                        }
+                        state.active->profile.set_last_task_timestamp(nowSeconds);
+                        if (effectiveXp > 0) {
+                            state.active->profile.grant_global_xp(effectiveXp);
+                        }
+                        if (readyScore > storedBest) {
+                            state.active->profile.update_category_best_score(static_cast<size_t>(readyCategory), readyScore);
+                            std::ostringstream bestStream;
+                            bestStream << "Category " << categoryLabel << " best: " << readyScore << "/10";
+                            AppendLog(state, state.active->id, bestStream.str());
+                            if (readyScore == Profile::kMaxCategoryScore) {
+                                std::ostringstream mastery;
+                                mastery << "Category " << categoryLabel << " mastered!";
+                                AppendLog(state, state.active->id, mastery.str());
+                            }
+                        }
+                        state.active->profile.reset_category_cooldown(static_cast<size_t>(readyCategory));
+                        for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                            if (idx == static_cast<size_t>(readyCategory)) continue;
+                            state.active->profile.tick_category_cooldown(idx);
+                            if (state.active->profile.category_cooldown(idx) < 0) {
+                                state.active->profile.update_category_best_score(
+                                    idx, state.active->profile.category_best_score(idx) - 1);
+                                state.active->profile.reset_category_cooldown(idx);
+                                std::ostringstream decay;
+                                decay << "Category " << Profile::kCategoryLabels[idx] << " decayed to "
+                                      << state.active->profile.category_best_score(idx) << "/10";
+                                AppendLog(state, state.active->id, decay.str());
+                            }
+                        }
+                        int buffer = state.active->profile.category_cooldown(0);
+                        for (size_t idx = 1; idx < Profile::kCategoryCount; ++idx) {
+                            buffer = std::min(buffer, state.active->profile.category_cooldown(idx));
+                        }
+                        buffer = std::max(0, buffer);
+                        state.active->profile.set_inactivity_tasks(buffer);
+                        std::ostringstream summaryStream;
+                        summaryStream << "Task [" << categoryLabel << "] score " << readyScore
+                                      << " => +" << effectiveXp << " XP overall";
+                        if (repeatPenalty) summaryStream << " (repeat 35%)";
+                        if (recoveryPenalty) summaryStream << " (recovery 60%)";
+                        const std::string summaryText = summaryStream.str();
+                        AppendLog(state, state.active->id, summaryText);
+                        storage->save_profile(state.active->profile);
+                        PrepareXpEntries(state, catalog);
+                        SetStatus(state, summaryText, 0.45f, 0.9f, 0.45f);
+                        ImGui::CloseCurrentPopup();
+                        xpPopupOpen = false;
                     }
                 }
                 ImGui::SameLine();

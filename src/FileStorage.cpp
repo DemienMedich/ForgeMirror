@@ -146,6 +146,11 @@ public:
         std::unordered_map<std::string, double> weightBySkill;
         std::array<int, Profile::kCategoryCount> categoryScores{};
         categoryScores.fill(0);
+        std::array<int, Profile::kCategoryCount> categoryCooldowns{};
+        categoryCooldowns.fill(10);
+        std::int64_t storedLastTask = 0;
+        int storedInertiaTasks = 0;
+        int storedRecoveryTasks = 0;
 
         while (std::getline(in, line)) {
             auto t = trim(line);
@@ -169,6 +174,12 @@ public:
                     try { storedTotalXp = std::stoi(val); } catch (...) {}
                 } else if (key == "progress") {
                     try { storedProgress = std::stoi(val); } catch (...) {}
+                } else if (key == "lastTaskTs") {
+                    try { storedLastTask = std::stoll(val); } catch (...) {}
+                } else if (key == "inertiaTasks") {
+                    try { storedInertiaTasks = std::stoi(val); } catch (...) {}
+                } else if (key == "recoveryTasks") {
+                    try { storedRecoveryTasks = std::stoi(val); } catch (...) {}
                 }
             } else if (section == "skills") {
                 if (key == "names") {
@@ -219,6 +230,16 @@ public:
                             break;
                         }
                     }
+                } else if (key.rfind("cooldown_", 0) == 0) {
+                    auto label = key.substr(9);
+                    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                        if (label == Profile::kCategoryLabels[idx]) {
+                            int value = 0;
+                            try { value = std::stoi(val); } catch (...) { value = 0; }
+                            categoryCooldowns[idx] = value;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -259,6 +280,10 @@ public:
             if (storedProgress >= 0) profile.set_level_progress(storedProgress);
         }
         profile.set_category_best_scores(categoryScores);
+        profile.set_category_cooldowns(categoryCooldowns);
+        profile.set_last_task_timestamp(storedLastTask);
+        profile.set_inactivity_tasks(storedInertiaTasks);
+        profile.start_penalty_recovery(storedRecoveryTasks);
 
         token_ = token;
         queue_ = std::move(queue);
@@ -278,6 +303,9 @@ public:
         ss << "overall=" << profile.overall_level() << "\n";
         ss << "progress=" << profile.level_progress() << "\n";
         ss << "totalXp=" << profile.total_xp() << "\n";
+        ss << "lastTaskTs=" << profile.last_task_timestamp() << "\n";
+        ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
+        ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
 
         ss << "\n[skills]\n";
         auto skills = profile.list_skills();
@@ -296,8 +324,12 @@ public:
 
         ss << "\n[categories]\n";
         const auto& catScores = profile.category_best_scores();
+        const auto& cooldowns = profile.category_cooldowns();
         for (size_t idx = 0; idx < catScores.size(); ++idx) {
             ss << "score_" << Profile::kCategoryLabels[idx] << "=" << catScores[idx] << "\n";
+        }
+        for (size_t idx = 0; idx < cooldowns.size(); ++idx) {
+            ss << "cooldown_" << Profile::kCategoryLabels[idx] << "=" << cooldowns[idx] << "\n";
         }
 
         ss << "\n[queue]\n";

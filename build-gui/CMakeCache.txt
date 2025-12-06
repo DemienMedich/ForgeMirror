@@ -228,9 +228,6 @@ VCPKG_MANIFEST_MODE:BOOL=OFF
 // found after toolchain/system libraries/packages.
 VCPKG_PREFER_SYSTEM_LIBS:BOOL=OFF
 
-//No help, variable specified on the command line.
-VCPKG_PWSH_PATH:UNINITIALIZED=C:/Program Files/PowerShell/7/pwsh.exe
-
 //Enable the setup of CMAKE_PROGRAM_PATH to vcpkg paths
 VCPKG_SETUP_CMAKE_PROGRAM_PATH:BOOL=ON
 

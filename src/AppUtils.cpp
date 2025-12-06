@@ -44,26 +44,43 @@ std::string BuildRank(const char* base, int startLevel, int substep, int level) 
 
 std::string DescribeOverallRank(const Profile& profile) {
     const int overallLevel = profile.overall_level();
-    if (overallLevel < 10) return "Intern";
-    if (overallLevel < 50) return BuildRank("Junior", 10, 10, overallLevel);
-    if (overallLevel < 150) return BuildRank("Middle", 50, 10, overallLevel);
-    if (profile.all_categories_mastered()) {
-        return BuildRank("Senior", 150, 10, overallLevel);
+    std::string base;
+    if (overallLevel < 10) base = "Intern";
+    else if (overallLevel < 50) base = BuildRank("Junior", 10, 10, overallLevel);
+    else if (overallLevel < 150) base = BuildRank("Middle", 50, 10, overallLevel);
+    else base = BuildRank("Senior", 150, 10, overallLevel);
+
+    std::ostringstream details;
+    bool hasDetail = false;
+    if (overallLevel >= 150 && !profile.all_categories_mastered()) {
+        details << "Senior locked: ";
+        bool first = true;
+        for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+            if (profile.is_category_mastered(idx)) continue;
+            if (!first) details << ", ";
+            details << Profile::kCategoryLabels[idx] << "=" << profile.category_best_score(idx) << "/10";
+            const int cooldown = profile.category_cooldown(idx);
+            if (cooldown <= 0) details << " (!)";
+            else details << " (cooldown " << cooldown << ")";
+            first = false;
+        }
+        if (first) details << "complete category challenges";
+        hasDetail = true;
     }
-    std::ostringstream ss;
-    ss << BuildRank("Middle", 50, 10, overallLevel) << " (Senior locked: ";
-    bool first = true;
-    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
-        if (profile.is_category_mastered(idx)) continue;
-        if (!first) ss << ", ";
-        ss << Profile::kCategoryLabels[idx] << "=" << profile.category_best_score(idx) << "/10";
-        first = false;
+    if (profile.penalty_active()) {
+        if (hasDetail) details << " | ";
+        details << "recovery tasks left: " << profile.recovery_tasks_remaining();
+        hasDetail = true;
     }
-    if (first) {
-        ss << "complete category challenges";
+    if (profile.inactivity_tasks() > 0) {
+        if (hasDetail) details << " | ";
+        details << "decay buffer: " << profile.inactivity_tasks() << " tasks";
+        hasDetail = true;
     }
-    ss << ")";
-    return ss.str();
+    if (hasDetail) {
+        return base + " (" + details.str() + ")";
+    }
+    return base;
 }
 
 void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
