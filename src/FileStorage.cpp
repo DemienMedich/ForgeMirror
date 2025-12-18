@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <locale>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -26,6 +27,52 @@ std::string trim(std::string s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c) { return !is_space(c); }));
     s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c) { return !is_space(c); }).base(), s.end());
     return s;
+}
+
+std::string sanitize_int(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (unsigned char ch : value) {
+        if (std::isdigit(ch)) {
+            out.push_back(static_cast<char>(ch));
+        } else if (ch == '-' && out.empty()) {
+            out.push_back('-');
+        }
+    }
+    if (out.empty()) return value;
+    return out;
+}
+
+std::string sanitize_float(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (unsigned char ch : value) {
+        if (std::isdigit(ch)) {
+            out.push_back(static_cast<char>(ch));
+        } else if (ch == '.' || ch == ',') {
+            out.push_back('.');
+        } else if (ch == '-' && out.empty()) {
+            out.push_back('-');
+        }
+    }
+    if (out.empty()) return value;
+    return out;
+}
+
+int parse_int(const std::string& value, int fallback = 0) {
+    try {
+        return std::stoi(sanitize_int(value));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+double parse_double(const std::string& value, double fallback = 0.0) {
+    try {
+        return std::stod(sanitize_float(value));
+    } catch (...) {
+        return fallback;
+    }
 }
 
 std::string read_all(const std::filesystem::path& p) {
@@ -169,17 +216,17 @@ public:
             } else if (section == "profile") {
                 if (key == "name") name = val;
                 else if (key == "overall") {
-                    try { storedOverall = std::stoi(val); } catch (...) {}
+                    storedOverall = parse_int(val, -1);
                 } else if (key == "totalXp" || key == "totalXP") {
-                    try { storedTotalXp = std::stoi(val); } catch (...) {}
+                    storedTotalXp = parse_int(val, -1);
                 } else if (key == "progress") {
-                    try { storedProgress = std::stoi(val); } catch (...) {}
+                    storedProgress = parse_int(val, -1);
                 } else if (key == "lastTaskTs") {
-                    try { storedLastTask = std::stoll(val); } catch (...) {}
+                    try { storedLastTask = std::stoll(sanitize_int(val)); } catch (...) {}
                 } else if (key == "inertiaTasks") {
-                    try { storedInertiaTasks = std::stoi(val); } catch (...) {}
+                    storedInertiaTasks = parse_int(val, 0);
                 } else if (key == "recoveryTasks") {
-                    try { storedRecoveryTasks = std::stoi(val); } catch (...) {}
+                    storedRecoveryTasks = parse_int(val, 0);
                 }
             } else if (section == "skills") {
                 if (key == "names") {
@@ -192,16 +239,16 @@ public:
                     }
                 } else if (key.rfind("level_", 0) == 0) {
                     auto sk = key.substr(6);
-                    try { levelBySkill[sk] = std::stoi(val); } catch (...) {}
+                    levelBySkill[sk] = parse_int(val, 0);
                 } else if (key.rfind("xp_", 0) == 0) {
                     auto sk = key.substr(3);
-                    try { xpBySkill[sk] = std::stoi(val); } catch (...) {}
+                    xpBySkill[sk] = parse_int(val, 0);
                 } else if (key.rfind("xpToNext_", 0) == 0) {
                     auto sk = key.substr(9);
-                    try { xpNextBySkill[sk] = std::stoi(val); } catch (...) {}
+                    xpNextBySkill[sk] = parse_int(val, 0);
                 } else if (key.rfind("weight_", 0) == 0) {
                     auto sk = key.substr(7);
-                    try { weightBySkill[sk] = std::stod(val); } catch (...) {}
+                    weightBySkill[sk] = parse_double(val, 0.0);
                 }
             } else if (section == "queue" && key == "items") {
                 queue.clear();
@@ -223,7 +270,7 @@ public:
                     for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
                         if (label == Profile::kCategoryLabels[idx]) {
                             int score = 0;
-                            try { score = std::stoi(val); } catch (...) { score = 0; }
+                            score = parse_int(val, 0);
                             if (score < 0) score = 0;
                             if (score > Profile::kMaxCategoryScore) score = Profile::kMaxCategoryScore;
                             categoryScores[idx] = score;
@@ -235,7 +282,7 @@ public:
                     for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
                         if (label == Profile::kCategoryLabels[idx]) {
                             int value = 0;
-                            try { value = std::stoi(val); } catch (...) { value = 0; }
+                            value = parse_int(val, 0);
                             categoryCooldowns[idx] = value;
                             break;
                         }
@@ -294,6 +341,7 @@ public:
         if (!is_active()) return false;
 
         std::ostringstream ss;
+        ss.imbue(std::locale::classic());
         ss << "[auth]\n";
         if (token_) ss << "token=" << *token_ << "\n";
 

@@ -47,6 +47,14 @@ std::string sanitize_float(const std::string& value) {
     return out;
 }
 
+float parse_float(const std::string& value) {
+    std::stringstream ss(sanitize_float(value));
+    ss.imbue(std::locale::classic());
+    float result = 0.0f;
+    ss >> result;
+    return result;
+}
+
 bool iequals(const std::string& a, const std::string& b) {
     if (a.size() != b.size()) return false;
     for (size_t i = 0; i < a.size(); ++i) {
@@ -121,13 +129,13 @@ GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir) {
         } else if (section == "rewards") {
             try {
                 if (iequals(key, "focus_base")) {
-                    config.focusBaseBonus = std::clamp(std::stof(sanitize_float(value)), 0.0f, 10.0f);
+                    config.focusBaseBonus = std::clamp(parse_float(value), 0.0f, 10.0f);
                 } else if (iequals(key, "focus_bonus")) {
-                    config.focusAdditionalBonus = std::clamp(std::stof(sanitize_float(value)), 0.0f, 10.0f);
+                    config.focusAdditionalBonus = std::clamp(parse_float(value), 0.0f, 10.0f);
                 } else if (iequals(key, "repeat_factor")) {
-                    config.repeatRewardFactor = std::clamp(std::stof(sanitize_float(value)), 0.0f, 10.0f);
+                    config.repeatRewardFactor = std::clamp(parse_float(value), 0.0f, 10.0f);
                 } else if (iequals(key, "recovery_factor")) {
-                    config.recoveryRewardFactor = std::clamp(std::stof(sanitize_float(value)), 0.0f, 10.0f);
+                    config.recoveryRewardFactor = std::clamp(parse_float(value), 0.0f, 10.0f);
                 } else if (iequals(key, "recovery_tasks")) {
                     config.recoveryWarmupTasks = std::max(0, std::stoi(sanitize_int(value)));
                 }

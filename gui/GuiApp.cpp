@@ -491,8 +491,10 @@ void ReapplyRulesToProfiles(GuiState& state, IJobStorage& storage, SkillCatalog&
         if (!storage.set_active_profile(info.id)) continue;
         if (auto profile = storage.load_profile()) {
             SyncProfileWithCatalog(*profile, catalog);
-            int total = profile->total_xp();
-            profile->set_total_xp(total);
+            // Preserve current level/progress but re-evaluate XP with the new rules.
+            int level = profile->overall_level();
+            int progress = profile->level_progress();
+            profile->set_level_and_progress(level, progress);
             storage.save_profile(*profile);
         }
     }
@@ -734,9 +736,10 @@ int main() {
             const int totalXp = profile.total_xp();
             const int progressXp = profile.level_progress();
             const int xpToNext = profile.xp_to_next_level();
-            const float progressRatio = xpToNext > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpToNext) : 0.0f;
+            const int xpNeededThisLevel = progressXp + xpToNext;
+            const float progressRatio = xpNeededThisLevel > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpNeededThisLevel) : 0.0f;
             const std::string levelText = "Level " + std::to_string(overallLevel);
-            const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpToNext);
+            const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpNeededThisLevel);
 
             const float levelScale = 1.8f;
             ImVec2 headerStartScreen = ImGui::GetCursorScreenPos();
@@ -964,6 +967,7 @@ int main() {
             } else {
                 state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
                 state.taskScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
+                const GameplayConfig& rules = GetGameplayConfig();
 
                 ImGui::TextUnformatted("Task parameters");
                 ImGui::Separator();
@@ -973,7 +977,7 @@ int main() {
                     state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
                 }
                 const int currentCategory = state.taskCategoryIndex;
-                const int baseXp = Profile::kCategoryBaseXp[currentCategory];
+                const int baseXp = rules.categoryBaseXp[currentCategory];
                 const float scoreRatio = static_cast<float>(state.taskScore) / static_cast<float>(Profile::kMaxCategoryScore);
                 const float scoreMultiplier = std::pow(std::max(0.1f, scoreRatio), 1.35f);
                 const int currentBest = state.active->profile.category_best_score(static_cast<size_t>(currentCategory));
@@ -1032,7 +1036,7 @@ int main() {
 
                 ImGui::Separator();
                 ImGui::Text("Assigned: %d%%", percentSum);
-                const float focusBonus = 0.6f + 0.4f * (static_cast<float>(maxSharePercent) / 100.0f);
+                const float focusBonus = rules.focusBaseBonus + rules.focusAdditionalBonus * (static_cast<float>(maxSharePercent) / 100.0f);
                 const int previewPool = static_cast<int>(std::round(baseXp * scoreMultiplier * focusBonus));
                 ImGui::Text("Focus bonus: %.2f (max share %d%%)", focusBonus, maxSharePercent);
                 ImGui::TextDisabled("Projected skill XP pool before penalties: %d", previewPool);
@@ -1060,9 +1064,9 @@ int main() {
                                 [](const XpEntry& a, const XpEntry& b) { return a.percent < b.percent; });
                             maxShare = static_cast<float>(it->percent) / 100.0f;
                         }
-                        const float focusBonus = 0.6f + 0.4f * maxShare;
+                        const float focusBonus = rules.focusBaseBonus + rules.focusAdditionalBonus * maxShare;
                         int basePool = static_cast<int>(std::round(
-                            Profile::kCategoryBaseXp[readyCategory] *
+                            rules.categoryBaseXp[readyCategory] *
                             std::pow(std::max(0.1f, static_cast<float>(readyScore) / 10.0f), 1.35f) * focusBonus));
                         if (basePool < 0) basePool = 0;
                         std::vector<int> xpDistribution(state.xpEntries.size(), 0);
@@ -1102,7 +1106,7 @@ int main() {
                         bool repeatPenalty = readyScore <= storedBest;
                         int effectiveXp = basePool;
                         if (repeatPenalty) {
-                            effectiveXp = static_cast<int>(std::round(effectiveXp * 0.35f));
+                            effectiveXp = static_cast<int>(std::round(effectiveXp * rules.repeatRewardFactor));
                         }
                         const auto now = std::chrono::system_clock::now();
                         const std::int64_t nowSeconds =
@@ -1110,12 +1114,12 @@ int main() {
                         constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
                         if (state.active->profile.last_task_timestamp() > 0 &&
                             (nowSeconds - state.active->profile.last_task_timestamp()) > kThirtyDays) {
-                            state.active->profile.start_penalty_recovery(3);
+                            state.active->profile.start_penalty_recovery(rules.recoveryWarmupTasks);
                         }
                         bool recoveryPenalty = false;
                         if (state.active->profile.penalty_active()) {
                             recoveryPenalty = true;
-                            effectiveXp = static_cast<int>(std::round(effectiveXp * 0.6f));
+                            effectiveXp = static_cast<int>(std::round(effectiveXp * rules.recoveryRewardFactor));
                             state.active->profile.consume_penalty_task();
                         }
                         state.active->profile.set_last_task_timestamp(nowSeconds);
