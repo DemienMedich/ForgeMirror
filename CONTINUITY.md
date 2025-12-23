@@ -17,6 +17,7 @@ State:
 - Storage: FileStorage now writes/reads numbers locale-independently; recoveryTasks preserved across restarts.
 - Documentation: Added docs/USER_GUIDE.md (RU) describing gameplay rules, XP system, skill catalog management, storage, and CLI/GUI usage.
 - Access control: Admin profile seeded as "Admin" (admin flag persisted); admin password `admin123` required for full access. CLI/GUI default to read-only until admin login.
+- Localization: Gameplay rules and GUI controls translated to Russian; user-facing statuses/logs/messages now predominantly RU (XP labels remain).
 
 Done:
 - Fixed level progress bar math (uses total needed XP).

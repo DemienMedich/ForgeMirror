@@ -1,4 +1,4 @@
-Modeling|1,2|Building clean base meshes for further detailing or animation.
+Modeling|1,1|Building clean base meshes for further detailing or animation.
 Sculpting|1,2|High-resolution sculpting for characters, creatures, and props.
 Texturing|1|Creating texture maps that add color and detail to models.
 Shading|1|Authoring material networks that react believably to light.
