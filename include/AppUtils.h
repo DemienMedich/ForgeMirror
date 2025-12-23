@@ -3,12 +3,12 @@
 #include <filesystem>
 #include <string>
 
-class SkillCatalog;
 class IJobStorage;
 class Profile;
+class SkillCatalog;
 
 // Convert overall level to human-readable rank (Intern, Junior, etc.).
-std::string DescribeOverallRank(int overallLevel);
+std::string DescribeOverallRank(const Profile& profile);
 
 // Ensure default admin profile exists in storage.
 void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog);

@@ -38,7 +38,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -58,7 +59,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_FIND_ROOT_PATH: "C:/tools/vcpkg/installed/x64-windows/debug;C:/tools/vcpkg/installed/x64-windows"
@@ -78,7 +78,7 @@ events:
       The output was:
       0
       ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-      ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:44.
+      ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 06.12.2025 22:43:13.
       
       ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\4.1.1\\CompilerIdCXX\\CompilerIdCXX.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
       PrepareForBuild:
@@ -107,7 +107,7 @@ events:
           ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
           ╨Ю╤И╨╕╨▒╨╛╨║: 0
       
-      ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.67
+      ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.66
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -140,7 +140,8 @@ events:
       - "link"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -160,11 +161,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -184,11 +185,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -208,16 +209,18 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
     searched_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -275,9 +278,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/link"
@@ -287,9 +287,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/link"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -347,9 +350,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/link"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/link"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/link"
@@ -365,7 +365,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -385,7 +386,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_FIND_ROOT_PATH: "C:/tools/vcpkg/installed/x64-windows/debug;C:/tools/vcpkg/installed/x64-windows"
@@ -412,7 +412,8 @@ events:
       - "lld-link"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -432,11 +433,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -456,11 +457,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -480,16 +481,18 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
     searched_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/lld-link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/lld-link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/lld-link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -547,9 +550,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/lld-link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/lld-link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/lld-link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/lld-link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/lld-link"
@@ -559,9 +559,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/lld-link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/lld-link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/lld-link"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -619,9 +622,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/lld-link"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/lld-link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/lld-link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/lld-link"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/lld-link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/lld-link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/lld-link"
@@ -631,9 +631,12 @@ events:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.com"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link.exe"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lld-link"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lld-link"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lld-link"
+      - "Z:/Oculus/Support/oculus-runtime/lld-link.com"
+      - "Z:/Oculus/Support/oculus-runtime/lld-link.exe"
+      - "Z:/Oculus/Support/oculus-runtime/lld-link"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lld-link"
@@ -691,9 +694,6 @@ events:
       - "Z:/Soft/Microsoft VS Code/bin/lld-link.com"
       - "Z:/Soft/Microsoft VS Code/bin/lld-link.exe"
       - "Z:/Soft/Microsoft VS Code/bin/lld-link"
-      - "Z:/Soft/cursor/resources/app/bin/lld-link.com"
-      - "Z:/Soft/cursor/resources/app/bin/lld-link.exe"
-      - "Z:/Soft/cursor/resources/app/bin/lld-link"
       - "C:/Users/mrdem/.dotnet/tools/lld-link.com"
       - "C:/Users/mrdem/.dotnet/tools/lld-link.exe"
       - "C:/Users/mrdem/.dotnet/tools/lld-link"
@@ -708,7 +708,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -728,7 +729,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_FIND_ROOT_PATH: "C:/tools/vcpkg/installed/x64-windows/debug;C:/tools/vcpkg/installed/x64-windows"
@@ -753,7 +753,8 @@ events:
       - "link"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -773,11 +774,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -797,11 +798,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -821,16 +822,18 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
     searched_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -888,9 +891,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/link"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/link"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/link"
@@ -900,9 +900,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/link"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/link"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/link.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/link.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/link"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/link"
@@ -960,9 +963,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/link"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/link.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/link.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/link"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/link.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/link.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/link"
@@ -978,7 +978,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -998,7 +999,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_FIND_ROOT_PATH: "C:/tools/vcpkg/installed/x64-windows/debug;C:/tools/vcpkg/installed/x64-windows"
@@ -1023,7 +1023,8 @@ events:
       - "mt"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -1043,11 +1044,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -1067,11 +1068,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -1091,16 +1092,18 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
     searched_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/mt.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/mt.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/mt"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -1158,9 +1161,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/mt"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/mt.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/mt.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/mt"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/mt"
@@ -1170,9 +1170,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/mt.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/mt.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/mt"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -1230,9 +1233,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/mt"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/mt.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/mt.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/mt"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/mt.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/mt.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/mt"
@@ -1242,9 +1242,12 @@ events:
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.com"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt.exe"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/mt"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/mt"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/mt"
+      - "Z:/Oculus/Support/oculus-runtime/mt.com"
+      - "Z:/Oculus/Support/oculus-runtime/mt.exe"
+      - "Z:/Oculus/Support/oculus-runtime/mt"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/mt"
@@ -1302,9 +1305,6 @@ events:
       - "Z:/Soft/Microsoft VS Code/bin/mt.com"
       - "Z:/Soft/Microsoft VS Code/bin/mt.exe"
       - "Z:/Soft/Microsoft VS Code/bin/mt"
-      - "Z:/Soft/cursor/resources/app/bin/mt.com"
-      - "Z:/Soft/cursor/resources/app/bin/mt.exe"
-      - "Z:/Soft/cursor/resources/app/bin/mt"
       - "C:/Users/mrdem/.dotnet/tools/mt.com"
       - "C:/Users/mrdem/.dotnet/tools/mt.exe"
       - "C:/Users/mrdem/.dotnet/tools/mt"
@@ -1319,7 +1319,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -1339,7 +1340,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_FIND_ROOT_PATH: "C:/tools/vcpkg/installed/x64-windows/debug;C:/tools/vcpkg/installed/x64-windows"
@@ -1364,7 +1364,8 @@ events:
       - "lib"
     candidate_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -1384,11 +1385,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -1408,11 +1409,11 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "Z:/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -1432,16 +1433,18 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
     searched_directories:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/lib.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/lib.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/lib"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib"
@@ -1499,9 +1502,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/lib"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/lib.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/lib.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/lib"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/lib"
@@ -1511,9 +1511,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/VC2022/VC/Tools/MSVC/14.43.34808/bin/Hostx64/x64/lib"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/lib"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/lib"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/lib.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/lib.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/lib"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/lib"
@@ -1571,9 +1574,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/lib"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/lib.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/lib.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/lib"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/lib.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/lib.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/lib"
@@ -1589,7 +1589,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -1609,7 +1610,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_FIND_ROOT_PATH: "C:/tools/vcpkg/installed/x64-windows/debug;C:/tools/vcpkg/installed/x64-windows"
@@ -1643,7 +1643,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -1663,7 +1664,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/bin/"
@@ -1685,7 +1685,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -1705,7 +1706,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/bin/"
@@ -1727,7 +1727,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -1747,7 +1748,6 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/Program Files/bin/"
@@ -1784,9 +1784,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/rc"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/rc.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/rc.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/rc"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -1844,9 +1847,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/rc"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/rc.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/rc.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/rc"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/rc"
@@ -1910,9 +1910,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/rc.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/rc.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/rc"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -1970,9 +1973,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/rc"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/rc.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/rc.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/rc"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/rc"
@@ -2036,9 +2036,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/rc"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.com"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc.exe"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/rc"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.com"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/rc"
+      - "Z:/Oculus/Support/oculus-runtime/rc.com"
+      - "Z:/Oculus/Support/oculus-runtime/rc.exe"
+      - "Z:/Oculus/Support/oculus-runtime/rc"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.com"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc.exe"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/rc"
@@ -2096,9 +2099,6 @@ events:
       - "Z:/Soft/Microsoft VS Code/bin/rc.com"
       - "Z:/Soft/Microsoft VS Code/bin/rc.exe"
       - "Z:/Soft/Microsoft VS Code/bin/rc"
-      - "Z:/Soft/cursor/resources/app/bin/rc.com"
-      - "Z:/Soft/cursor/resources/app/bin/rc.exe"
-      - "Z:/Soft/cursor/resources/app/bin/rc"
       - "C:/Users/mrdem/.dotnet/tools/rc.com"
       - "C:/Users/mrdem/.dotnet/tools/rc.exe"
       - "C:/Users/mrdem/.dotnet/tools/rc"
@@ -2149,7 +2149,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -2169,7 +2170,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/JobSkill"
@@ -2188,8 +2188,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-islfbj"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-islfbj"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2203,40 +2203,40 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-islfbj'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_e5845.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_83919.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:46.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 06.12.2025 22:43:14.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\cmTC_e5845.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-islfbj\\cmTC_83919.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_e5845.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_83919.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-islfbj\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_83919.dir\\Debug\\cmTC_83919.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_83919.dir\\Debug\\cmTC_83919.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_83919.dir\\Debug\\cmTC_83919.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_e5845.dir\\Debug\\\\" /Fd"cmTC_e5845.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_83919.dir\\Debug\\\\" /Fd"cmTC_83919.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_e5845.dir\\Debug\\\\" /Fd"cmTC_e5845.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /Fo"cmTC_83919.dir\\Debug\\\\" /Fd"cmTC_83919.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.1\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\Debug\\cmTC_e5845.exe" /INCREMENTAL /ILK:"cmTC_e5845.dir\\Debug\\cmTC_e5845.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy/Debug/cmTC_e5845.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-18aivy/Debug/cmTC_e5845.lib" /MACHINE:X64  /machine:x64 cmTC_e5845.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_e5845.vcxproj -> Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\Debug\\cmTC_e5845.exe
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-islfbj\\Debug\\cmTC_83919.exe" /INCREMENTAL /ILK:"cmTC_83919.dir\\Debug\\cmTC_83919.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-islfbj/Debug/cmTC_83919.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-islfbj/Debug/cmTC_83919.lib" /MACHINE:X64  /machine:x64 cmTC_83919.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_83919.vcxproj -> Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-islfbj\\Debug\\cmTC_83919.exe
         FinalizeBuildStatus:
-          ╨д╨░╨╣╨╗ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\unsuccessfulbuild" ╤Г╨┤╨░╨╗╤П╨╡╤В╤Б╤П.
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_e5845.dir\\Debug\\cmTC_e5845.tlog\\cmTC_e5845.lastbuildstate".
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-18aivy\\cmTC_e5845.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+          ╨д╨░╨╣╨╗ "cmTC_83919.dir\\Debug\\cmTC_83919.tlog\\unsuccessfulbuild" ╤Г╨┤╨░╨╗╤П╨╡╤В╤Б╤П.
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_83919.dir\\Debug\\cmTC_83919.tlog\\cmTC_83919.lastbuildstate".
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-islfbj\\cmTC_83919.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         
         ╨б╨▒╨╛╤А╨║╨░ ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░.
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 0
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.73
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.61
         
       exitCode: 0
   -
@@ -2294,7 +2294,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/Microsoft MPI/Bin/"
@@ -2314,7 +2315,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/bin/"
@@ -2336,7 +2336,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/Microsoft MPI/Bin/"
@@ -2356,7 +2357,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/bin/"
@@ -2378,7 +2378,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/sbin/"
       - "C:/tools/vcpkg/installed/x64-windows/"
       - "C:/tools/vcpkg/installed/x64-windows/tools/"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/"
+      - "Z:/Oculus/Support/oculus-runtime/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/"
       - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/libnvvp/"
       - "C:/Program Files/Microsoft MPI/Bin/"
@@ -2398,7 +2399,6 @@ events:
       - "C:/Users/mrdem/AppData/Local/Programs/Python/Python312/"
       - "C:/Users/mrdem/AppData/Local/Microsoft/WindowsApps/"
       - "Z:/Soft/Microsoft VS Code/bin/"
-      - "Z:/Soft/cursor/resources/app/bin/"
       - "C:/Users/mrdem/.dotnet/tools/"
       - "C:/Users/mrdem/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Python 3.13/"
       - "C:/Program Files/bin/"
@@ -2435,9 +2435,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/tools/vcpkg/installed/x64-windows/tools/pwsh"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/pwsh.com"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/pwsh.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/debug/Oculus/Support/oculus-runtime/pwsh"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh"
@@ -2495,9 +2498,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/Microsoft VS Code/bin/pwsh"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/pwsh.com"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/pwsh.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/debug/Soft/cursor/resources/app/bin/pwsh"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/debug/Users/mrdem/.dotnet/tools/pwsh"
@@ -2561,9 +2561,12 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/pwsh.com"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/pwsh.exe"
+      - "C:/tools/vcpkg/installed/x64-windows/Oculus/Support/oculus-runtime/pwsh"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.5/bin/pwsh"
@@ -2621,9 +2624,6 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Soft/Microsoft VS Code/bin/pwsh"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/pwsh.com"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/pwsh.exe"
-      - "C:/tools/vcpkg/installed/x64-windows/Soft/cursor/resources/app/bin/pwsh"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/Users/mrdem/.dotnet/tools/pwsh"
@@ -2687,8 +2687,8 @@ events:
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.com"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh.exe"
       - "C:/tools/vcpkg/installed/x64-windows/tools/pwsh"
-      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.com"
-    found: "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe"
+      - "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.com"
+    found: "C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe"
     search_context:
       CMAKE_PROGRAM_PATH:
         - "C:/tools/vcpkg/installed/x64-windows/tools"
@@ -2696,7 +2696,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -2716,7 +2717,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/JobSkill"
@@ -2737,12 +2737,12 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeFindDependencyMacro.cmake:78 (find_package)"
       - "C:/tools/vcpkg/installed/x64-windows/share/glfw3/glfw3Config.cmake:2 (find_dependency)"
       - "C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake:904 (_find_package)"
-      - "CMakeLists.txt:34 (find_package)"
+      - "CMakeLists.txt:35 (find_package)"
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4v0wxf"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4v0wxf"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4jb1bv"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4jb1bv"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2755,40 +2755,40 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4v0wxf'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-4jb1bv'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_2c450.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_dda4c.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:48.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 06.12.2025 22:43:14.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\cmTC_dda4c.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_2c450.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_dda4c.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_2c450.dir\\Debug\\cmTC_2c450.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_dda4c.dir\\Debug\\cmTC_dda4c.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_2c450.dir\\Debug\\cmTC_2c450.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_2c450.dir\\Debug\\cmTC_2c450.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_dda4c.dir\\Debug\\cmTC_dda4c.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_dda4c.dir\\Debug\\cmTC_dda4c.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_2c450.dir\\Debug\\\\" /Fd"cmTC_2c450.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_dda4c.dir\\Debug\\\\" /Fd"cmTC_dda4c.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\src.cxx"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_2c450.dir\\Debug\\\\" /Fd"cmTC_2c450.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_dda4c.dir\\Debug\\\\" /Fd"cmTC_dda4c.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\src.cxx"
           src.cxx
-        Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj]
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
+        Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\cmTC_dda4c.vcxproj]
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\cmTC_dda4c.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
         
         ╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨▒╨╛╤А╨║╨╕.
         
-        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
+        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\cmTC_dda4c.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
         (╨ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ClCompile) -> 
-          Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4v0wxf\\cmTC_2c450.vcxproj]
+          Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\src.cxx(1,10): error C1083: ╨Э╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ ╨▓╨║╨╗╤О╤З╨╡╨╜╨╕╨╡: pthread.h: No such file or directory, [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-4jb1bv\\cmTC_dda4c.vcxproj]
         
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 1
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.45
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.32
         
       exitCode: 1
   -
@@ -2801,12 +2801,12 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeFindDependencyMacro.cmake:78 (find_package)"
       - "C:/tools/vcpkg/installed/x64-windows/share/glfw3/glfw3Config.cmake:2 (find_dependency)"
       - "C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake:904 (_find_package)"
-      - "CMakeLists.txt:34 (find_package)"
+      - "CMakeLists.txt:35 (find_package)"
     checks:
       - "Looking for pthread_create in pthreads"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-av6mtr"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-av6mtr"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2819,42 +2819,42 @@ events:
       variable: "CMAKE_HAVE_PTHREADS_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-av6mtr'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_22a1f.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_1b583.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:50.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 06.12.2025 22:43:15.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\cmTC_1b583.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_22a1f.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_1b583.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_22a1f.dir\\Debug\\cmTC_22a1f.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_1b583.dir\\Debug\\cmTC_1b583.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_22a1f.dir\\Debug\\cmTC_22a1f.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_22a1f.dir\\Debug\\cmTC_22a1f.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_1b583.dir\\Debug\\cmTC_1b583.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_1b583.dir\\Debug\\cmTC_1b583.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_22a1f.dir\\Debug\\\\" /Fd"cmTC_22a1f.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\CheckFunctionExists.cxx"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_1b583.dir\\Debug\\\\" /Fd"cmTC_1b583.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\CheckFunctionExists.cxx"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_22a1f.dir\\Debug\\\\" /Fd"cmTC_22a1f.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_1b583.dir\\Debug\\\\" /Fd"cmTC_1b583.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\Debug\\cmTC_22a1f.exe" /INCREMENTAL /ILK:"cmTC_22a1f.dir\\Debug\\cmTC_22a1f.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7/Debug/cmTC_22a1f.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-zrzbg7/Debug/cmTC_22a1f.lib" /MACHINE:X64  /machine:x64 cmTC_22a1f.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj]
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\Debug\\cmTC_1b583.exe" /INCREMENTAL /ILK:"cmTC_1b583.dir\\Debug\\cmTC_1b583.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-av6mtr/Debug/cmTC_1b583.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-av6mtr/Debug/cmTC_1b583.lib" /MACHINE:X64  /machine:x64 cmTC_1b583.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\cmTC_1b583.vcxproj]
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\cmTC_1b583.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
         
         ╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨▒╨╛╤А╨║╨╕.
         
-        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
+        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\cmTC_1b583.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
         (╨ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В Link) -> 
-          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-zrzbg7\\cmTC_22a1f.vcxproj]
+          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthreads.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-av6mtr\\cmTC_1b583.vcxproj]
         
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 1
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.52
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.48
         
       exitCode: 1
   -
@@ -2867,12 +2867,12 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeFindDependencyMacro.cmake:78 (find_package)"
       - "C:/tools/vcpkg/installed/x64-windows/share/glfw3/glfw3Config.cmake:2 (find_dependency)"
       - "C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake:904 (_find_package)"
-      - "CMakeLists.txt:34 (find_package)"
+      - "CMakeLists.txt:35 (find_package)"
     checks:
       - "Looking for pthread_create in pthread"
     directories:
-      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl"
-      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl"
+      source: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-s0rkah"
+      binary: "Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-s0rkah"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2885,49 +2885,49 @@ events:
       variable: "CMAKE_HAVE_PTHREAD_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl'
+        Change Dir: 'Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-s0rkah'
         
-        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_fdc67.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        Run Build Command(s): Z:/Soft/VC2022/MSBuild/Current/Bin/amd64/MSBuild.exe cmTC_fd8ef.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
         ╨Т╨╡╤А╤Б╨╕╤П MSBuild 17.14.10+8b8e13593 ╨┤╨╗╤П .NET Framework
-        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 17.10.2025 23:09:52.
+        ╨б╨▒╨╛╤А╨║╨░ ╨╜╨░╤З╨░╤В╨░ 06.12.2025 22:43:16.
         
-        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
+        ╨Я╤А╨╛╨╡╨║╤В "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\cmTC_fd8ef.vcxproj" ╨▓ ╤Г╨╖╨╗╨╡ 1 (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О).
         PrepareForBuild:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_fdc67.dir\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_fd8ef.dir\\Debug\\".
           ╨б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╣ ╨▓╤Л╨▓╨╛╨┤ ╨▓╨║╨╗╤О╤З╨╡╨╜. ╨д╨╛╤А╨╝╨░╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨┤╨╕╨░╨│╨╜╨╛╤Б╤В╨╕╨║╨╕ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А╨░ ╨▒╤Г╨┤╨╡╤В ╨╛╤В╤А╨░╨╢╨░╤В╤М ╨╕╨╡╤А╨░╤А╤Е╨╕╤О ╨╛╤И╨╕╨▒╨╛╨║. ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╡╨╡ ╤Б╨╝. https://aka.ms/cpp/structured-output.
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\Debug\\".
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_fdc67.dir\\Debug\\cmTC_fdc67.tlog\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\Debug\\".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╨║╨░╤В╨░╨╗╨╛╨│╨░ "cmTC_fd8ef.dir\\Debug\\cmTC_fd8ef.tlog\\".
         InitializeBuildStatus:
-          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_fdc67.dir\\Debug\\cmTC_fdc67.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
-          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_fdc67.dir\\Debug\\cmTC_fdc67.tlog\\unsuccessfulbuild".
+          ╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ "cmTC_fd8ef.dir\\Debug\\cmTC_fd8ef.tlog\\unsuccessfulbuild", ╤В╨░╨║ ╨║╨░╨║ ╨▒╤Л╨╗╨╛ ╨╖╨░╨┤╨░╨╜╨╛ "AlwaysCreate".
+          ╨Ю╨▒╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨║ "cmTC_fd8ef.dir\\Debug\\cmTC_fd8ef.tlog\\unsuccessfulbuild".
         ClCompile:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_fdc67.dir\\Debug\\\\" /Fd"cmTC_fdc67.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\CheckFunctionExists.cxx"
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_fd8ef.dir\\Debug\\\\" /Fd"cmTC_fd8ef.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\CheckFunctionExists.cxx"
           ╨Ю╨┐╤В╨╕╨╝╨╕╨╖╨╕╤А╤Г╤О╤Й╨╕╨╣ ╨║╨╛╨╝╨┐╨╕╨╗╤П╤В╨╛╤А Microsoft (R) C/C++ ╨▓╨╡╤А╤Б╨╕╨╕ 19.43.34810 ╨┤╨╗╤П x64
           (C) ╨Ъ╨╛╤А╨┐╨╛╤А╨░╤Ж╨╕╤П ╨Ь╨░╨╣╨║╤А╨╛╤Б╨╛╤Д╤В (Microsoft Corporation).  ╨Т╤Б╨╡ ╨┐╤А╨░╨▓╨░ ╨╖╨░╤Й╨╕╤Й╨╡╨╜╤Л.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_fdc67.dir\\Debug\\\\" /Fd"cmTC_fdc67.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GS /fp:precise /GR /std:c++17 /Fo"cmTC_fd8ef.dir\\Debug\\\\" /Fd"cmTC_fd8ef.dir\\Debug\\vc143.pdb" /external:W1 /Gd /TP /errorReport:queue "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\Debug\\cmTC_fdc67.exe" /INCREMENTAL /ILK:"cmTC_fdc67.dir\\Debug\\cmTC_fdc67.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl/Debug/cmTC_fdc67.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-okdlsl/Debug/cmTC_fdc67.lib" /MACHINE:X64  /machine:x64 cmTC_fdc67.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj]
-        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
+          Z:\\Soft\\VC2022\\VC\\Tools\\MSVC\\14.43.34808\\bin\\HostX64\\x64\\link.exe /OUT:"Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\Debug\\cmTC_fd8ef.exe" /INCREMENTAL /ILK:"cmTC_fd8ef.dir\\Debug\\cmTC_fd8ef.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-s0rkah/Debug/cmTC_fd8ef.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"Z:/CPP/JobSkill/build-gui/CMakeFiles/CMakeScratch/TryCompile-s0rkah/Debug/cmTC_fd8ef.lib" /MACHINE:X64  /machine:x64 cmTC_fd8ef.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\cmTC_fd8ef.vcxproj]
+        ╨б╨▒╨╛╤А╨║╨░ ╨┐╤А╨╛╨╡╨║╤В╨░ "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\cmTC_fd8ef.vcxproj" ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Ж╨╡╨╗╨╡╨▓╤Л╨╡ ╨╛╨▒╤К╨╡╨║╤В╤Л ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣.
         
         ╨Ю╤И╨╕╨▒╨║╨░ ╤Б╨▒╨╛╤А╨║╨╕.
         
-        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
+        "Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\cmTC_fd8ef.vcxproj" (╤Ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) (1) ->
         (╨ж╨╡╨╗╨╡╨▓╨╛╨╣ ╨╛╨▒╤К╨╡╨║╤В Link) -> 
-          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-okdlsl\\cmTC_fdc67.vcxproj]
+          LINK : fatal error LNK1104: ╨╜╨╡ ╤Г╨┤╨░╨╡╤В╤Б╤П ╨╛╤В╨║╤А╤Л╤В╤М ╤Д╨░╨╣╨╗ "pthread.lib" [Z:\\CPP\\JobSkill\\build-gui\\CMakeFiles\\CMakeScratch\\TryCompile-s0rkah\\cmTC_fd8ef.vcxproj]
         
             ╨Я╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╣: 0
             ╨Ю╤И╨╕╨▒╨╛╨║: 1
         
-        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:01.49
+        ╨Я╤А╨╛╤И╨╗╨╛ ╨▓╤А╨╡╨╝╨╡╨╜╨╕ 00:00:00.46
         
       exitCode: 1
   -
     kind: "find_package-v1"
     backtrace:
       - "C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake:904 (_find_package)"
-      - "CMakeLists.txt:34 (find_package)"
+      - "CMakeLists.txt:35 (find_package)"
     name: "glfw3"
     configs:
       -
@@ -2992,7 +2992,8 @@ events:
         - "C:/tools/vcpkg/installed/x64-windows/debug"
         - "C:/tools/vcpkg/installed/x64-windows"
       ENV{PATH}:
-        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe"
+        - "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe"
+        - "Z:\\Oculus\\Support\\oculus-runtime"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\bin"
         - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.5\\libnvvp"
         - "C:\\Program Files\\Microsoft MPI\\Bin\\"
@@ -3012,7 +3013,6 @@ events:
         - "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Python\\Python312\\"
         - "C:\\Users\\mrdem\\AppData\\Local\\Microsoft\\WindowsApps"
         - "Z:\\Soft\\Microsoft VS Code\\bin"
-        - "Z:\\Soft\\cursor\\resources\\app\\bin"
         - "C:\\Users\\mrdem\\.dotnet\\tools"
         - "C:\\Users\\mrdem\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Python 3.13"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/JobSkill"
