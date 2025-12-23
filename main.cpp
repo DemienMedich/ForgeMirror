@@ -75,10 +75,8 @@ static std::string trim_copy(std::string s) {
 static Profile make_profile_from_blueprint(const ProfileBlueprint& bp, SkillCatalog& catalog) {
     Profile profile(bp.name);
     for (const auto& skill : bp.skills) {
-        if (auto canonical = catalog.canonical(skill)) {
-            profile.add_skill(*canonical, 1, catalog.weight(*canonical));
-        } else {
-            profile.add_skill(skill, 1, catalog.weight(skill));
+        if (auto id = catalog.id_for_name(skill)) {
+            profile.add_skill(*id, 1, catalog.weight(*id));
         }
     }
     return profile;
@@ -97,7 +95,9 @@ struct TaskDetails {
 
 struct SkillResult {
     std::string name;
+    int baseXp = 0;
     int xp = 0;
+    double bonusPercent = 0.0;
     bool leveled = false;
     bool apiOk = true;
 };
@@ -223,11 +223,7 @@ static std::optional<std::vector<TaskShare>> prompt_skill_distribution(const Pro
                 for (int i = 0; i < count; ++i) {
                     int percent = base + (i < remainder ? 1 : 0);
                     if (percent <= 0) continue;
-                    std::string skillName = skills[i].name;
-                    if (auto canonical = catalog.canonical(skillName)) {
-                        skillName = *canonical;
-                    }
-                    shares.push_back(TaskShare{skillName, percent});
+                    shares.push_back(TaskShare{skills[i].name, percent});
                 }
                 return shares;
             }
@@ -256,21 +252,26 @@ static std::optional<std::vector<TaskShare>> prompt_skill_distribution(const Pro
                 std::cout << "Total would exceed 100%. Currently assigned " << assigned << "%.\n";
                 continue;
             }
-            auto canonical = catalog.canonical(skillName);
-            if (!canonical) {
+            std::optional<std::string> skillId;
+            if (catalog.contains_id(skillName)) {
+                skillId = skillName;
+            } else {
+                skillId = catalog.id_for_name(skillName);
+            }
+            if (!skillId) {
                 std::cout << "Skill '" << skillName << "' not found in the catalog. Use 'skills' to list available entries.\n";
                 continue;
             }
             bool merged = false;
             for (auto& share : shares) {
-                if (share.skill == *canonical) {
+                if (share.skill == *skillId) {
                     share.percent += percent;
                     merged = true;
                     break;
                 }
             }
             if (!merged) {
-                shares.push_back(TaskShare{*canonical, percent});
+                shares.push_back(TaskShare{*skillId, percent});
             }
             assigned += percent;
             if (assigned == 100) break;
@@ -307,6 +308,8 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
     TaskOutcome outcome;
     outcome.categoryIndex = details.categoryIndex;
     outcome.score = details.score;
+    const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 
     float maxShare = 0.0f;
     for (const auto& share : details.shares) {
@@ -342,13 +345,21 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
     for (size_t i = 0; i < details.shares.size(); ++i) {
         const auto& share = details.shares[i];
         SkillResult result;
-        result.name = share.skill;
-        result.xp = xpDistribution[i];
+        result.name = catalog.display_name(share.skill);
+        result.baseXp = xpDistribution[i];
+        result.xp = result.baseXp;
         double weight = catalog.weight(share.skill);
         profile.add_skill(share.skill, 1, weight);
-        if (result.xp > 0) {
-            result.leveled = profile.grant_xp(share.skill, result.xp);
-            result.apiOk = api.post_xp(share.skill, result.xp);
+        double mult = profile.skill_bonus_multiplier(share.skill, nowSeconds);
+        result.bonusPercent = std::max(0.0, (mult - 1.0) * 100.0);
+        if (result.baseXp > 0) {
+            int finalXp = result.baseXp;
+            if (result.bonusPercent > 0.01) {
+                finalXp = static_cast<int>(std::round(static_cast<double>(result.baseXp) * mult));
+            }
+            result.xp = finalXp;
+            result.leveled = profile.grant_xp(share.skill, finalXp);
+            result.apiOk = api.post_xp(share.skill, finalXp);
         }
         outcome.skillResults.push_back(result);
     }
@@ -360,8 +371,6 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
         effectiveXp = static_cast<int>(std::round(effectiveXp * rules.repeatRewardFactor));
     }
 
-    const auto now = std::chrono::system_clock::now();
-    const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
     constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
     if (profile.last_task_timestamp() > 0 &&
         (nowSeconds - profile.last_task_timestamp()) > kThirtyDays) {
@@ -439,7 +448,7 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
 }
 
 // Pretty-print the active profile: level, XP, task category scores, skills.
-static void print_profile(const Profile& p) {
+static void print_profile(const Profile& p, const SkillCatalog& catalog) {
     std::cout << "=== Профиль: " << p.name() << " ===\n";
     std::cout << "Общий уровень: " << p.overall_level() << " (" << DescribeOverallRank(p) << ")\n";
     std::cout << "Всего XP: " << p.total_xp() << "\n";
@@ -470,7 +479,8 @@ static void print_profile(const Profile& p) {
     std::cout << "Навыки:\n";
     auto skills = p.list_skills();
     for (const auto& s : skills) {
-        std::cout << " - " << std::left << std::setw(14) << s.name
+        const std::string displayName = catalog.display_name(s.name);
+        std::cout << " - " << std::left << std::setw(14) << displayName
                   << " L" << s.level
                   << " | XP: " << s.xp << "/" << s.xpToNext
                   << " | W: " << std::fixed << std::setprecision(2) << s.weight << std::defaultfloat
@@ -482,7 +492,7 @@ static void print_profile(const Profile& p) {
 static void show_skill_catalog(const SkillCatalog& catalog) {
     std::cout << "\nКаталог навыков:\n";
     for (const auto& skill : catalog.skills()) {
-        std::cout << " - " << skill << " (вес "
+        std::cout << " - " << catalog.display_name(skill) << " (вес "
                   << std::fixed << std::setprecision(2) << catalog.weight(skill) << std::defaultfloat
                   << ")\n";
     }
@@ -583,8 +593,8 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
             return std::nullopt;
         }
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        if (auto skill = catalog.canonical("Modeling")) profile.add_skill(*skill, 1, catalog.weight(*skill));
-        if (auto skill = catalog.canonical("Texturing")) profile.add_skill(*skill, 1, catalog.weight(*skill));
+        if (auto skill = catalog.id_for_name("Modeling")) profile.add_skill(*skill, 1, catalog.weight(*skill));
+        if (auto skill = catalog.id_for_name("Texturing")) profile.add_skill(*skill, 1, catalog.weight(*skill));
     }
 
     SyncProfileWithCatalog(profile, catalog);
@@ -613,7 +623,7 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
     sync_now(false);
 
     std::cout << "\nВы вошли как " << profile.name() << " [" << profileId << "]." << (adminMode ? " (Администратор)" : " (Просмотр)") << std::endl;
-    print_profile(profile);
+    print_profile(profile, catalog);
     if (adminMode) {
         std::cout << "\nКоманды: addxp <skill> <amount> | task | show | sync | logout | quit\n";
         if (profile.penalty_active()) {
@@ -629,7 +639,7 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
         std::cout << "> ";
         if (!(std::cin >> cmd)) return true; // EOF => exit app
         if (cmd == "show") {
-            print_profile(profile);
+            print_profile(profile, catalog);
             continue;
         }
         if (cmd == "sync") {
@@ -679,6 +689,9 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
             bool allApiOk = true;
             for (const auto& result : outcome.skillResults) {
                 std::cout << " - " << result.name << ": +" << result.xp << " XP";
+                if (result.bonusPercent > 0.01) {
+                    std::cout << " (+" << std::fixed << std::setprecision(1) << result.bonusPercent << "%)" << std::defaultfloat;
+                }
                 if (result.leveled) std::cout << " (уровень вверх)";
                 if (!result.apiOk) {
                     std::cout << " [ошибка синхронизации с сервером]";
@@ -746,18 +759,34 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
                 continue;
             }
 
-            auto canonical = catalog.canonical(skill);
-            if (!canonical) {
+            std::optional<std::string> skillId;
+            if (catalog.contains_id(skill)) {
+                skillId = skill;
+            } else {
+                skillId = catalog.id_for_name(skill);
+            }
+            if (!skillId) {
                 std::cout << "Навыка нет в каталоге. Сначала добавьте его в каталоге.\n";
                 continue;
             }
-            const std::string skillName = *canonical;
-            const double skillWeight = catalog.weight(skillName);
-            profile.add_skill(skillName, 1, skillWeight);
-            const bool leveled = profile.grant_xp(skillName, amount);
+            const double skillWeight = catalog.weight(*skillId);
+            profile.add_skill(*skillId, 1, skillWeight);
+            const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            const double mult = profile.skill_bonus_multiplier(*skillId, nowSeconds);
+            const double bonusPercent = std::max(0.0, (mult - 1.0) * 100.0);
+            int finalAmount = amount;
+            if (bonusPercent > 0.01) {
+                finalAmount = static_cast<int>(std::round(static_cast<double>(amount) * mult));
+            }
+            const bool leveled = profile.grant_xp(*skillId, finalAmount);
             profile.grant_global_xp(amount);
-            const bool apiOk = api.post_xp(skillName, amount);
+            const bool apiOk = api.post_xp(*skillId, finalAmount);
             const bool synced = sync_now(false);
+            if (bonusPercent > 0.01) {
+                std::cout << "Бонус ачивок: +" << std::fixed << std::setprecision(1) << bonusPercent << "%, итог " << finalAmount << " XP.\n";
+                std::cout << std::defaultfloat;
+            }
             std::cout << (leveled ? "Новый уровень навыка!" : "XP добавлены.") << "\n";
             if (!apiOk) std::cout << "Внимание: не удалось уведомить сервер.\n";
             if (synced) std::cout << "Автосинхронизация успешна.\n";

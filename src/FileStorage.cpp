@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <locale>
+#include <chrono>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -59,9 +61,61 @@ std::string sanitize_float(const std::string& value) {
     return out;
 }
 
+void append_utf8(std::string& out, uint32_t cp) {
+    if (cp <= 0x7F) {
+        out.push_back(static_cast<char>(cp));
+    } else if (cp <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+}
+
+std::string json_escape(const std::string& value) {
+    std::string out;
+    out.reserve(value.size() + 8);
+    for (unsigned char ch : value) {
+        switch (ch) {
+            case '\\': out += "\\\\"; break;
+            case '"': out += "\\\""; break;
+            case '\b': out += "\\b"; break;
+            case '\f': out += "\\f"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (ch < 0x20) {
+                    char buf[7];
+                    std::snprintf(buf, sizeof(buf), "\\u%04X", ch);
+                    out += buf;
+                } else {
+                    out.push_back(static_cast<char>(ch));
+                }
+                break;
+        }
+    }
+    return out;
+}
+
 int parse_int(const std::string& value, int fallback = 0) {
     try {
         return std::stoi(sanitize_int(value));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+std::int64_t parse_int64(const std::string& value, std::int64_t fallback = 0) {
+    try {
+        return std::stoll(sanitize_int(value));
     } catch (...) {
         return fallback;
     }
@@ -75,19 +129,245 @@ double parse_double(const std::string& value, double fallback = 0.0) {
     }
 }
 
-std::string read_all(const std::filesystem::path& p) {
-    std::ifstream in(p, std::ios::binary);
-    if (!in) return {};
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    return ss.str();
+std::int64_t now_seconds() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 
-bool write_all(const std::filesystem::path& p, const std::string& data) {
-    auto parent = p.parent_path();
-    if (!parent.empty()) {
-        std::filesystem::create_directories(parent);
+void normalize_achievement_times(Achievement& a, std::int64_t nowSec) {
+    constexpr std::int64_t kMinEpoch = 1577836800; // 2020-01-01
+    if (a.awardedAt < kMinEpoch) {
+        a.awardedAt = nowSec;
     }
+    if (a.expiresAt > 0) {
+        if (a.expiresAt < kMinEpoch) {
+            std::int64_t durationDays = std::max<std::int64_t>(0, a.expiresAt);
+            a.expiresAt = a.awardedAt + durationDays * 24 * 3600;
+        }
+        if (a.expiresAt <= a.awardedAt) {
+            a.expiresAt = 0;
+        }
+    }
+}
+
+void skip_ws(const std::string& text, size_t& pos) {
+    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) {
+        ++pos;
+    }
+}
+
+bool parse_string(const std::string& text, size_t& pos, std::string& out) {
+    if (pos >= text.size() || text[pos] != '"') return false;
+    ++pos;
+    while (pos < text.size()) {
+        char c = text[pos++];
+        if (c == '"') return true;
+        if (c == '\\') {
+            if (pos >= text.size()) return false;
+            char esc = text[pos++];
+            switch (esc) {
+                case '"': out.push_back('"'); break;
+                case '\\': out.push_back('\\'); break;
+                case '/': out.push_back('/'); break;
+                case 'b': out.push_back('\b'); break;
+                case 'f': out.push_back('\f'); break;
+                case 'n': out.push_back('\n'); break;
+                case 'r': out.push_back('\r'); break;
+                case 't': out.push_back('\t'); break;
+                case 'u': {
+                    auto hex_value = [](char h) -> int {
+                        if (h >= '0' && h <= '9') return h - '0';
+                        if (h >= 'a' && h <= 'f') return 10 + (h - 'a');
+                        if (h >= 'A' && h <= 'F') return 10 + (h - 'A');
+                        return -1;
+                    };
+                    if (pos + 3 < text.size()) {
+                        uint32_t cp = 0;
+                        bool ok = true;
+                        for (int i = 0; i < 4; ++i) {
+                            int v = hex_value(text[pos + i]);
+                            if (v < 0) { ok = false; break; }
+                            cp = (cp << 4) | static_cast<uint32_t>(v);
+                        }
+                        if (ok) {
+                            append_utf8(out, cp);
+                            pos += 4;
+                            break;
+                        }
+                    }
+                    out.push_back('\\');
+                    out.push_back('u');
+                    break;
+                }
+                default:
+                    out.push_back('\\');
+                    out.push_back(esc);
+                    break;
+            }
+        } else {
+            out.push_back(c);
+        }
+    }
+    return false;
+}
+
+bool parse_value_token(const std::string& text, size_t& pos, std::string& out) {
+    skip_ws(text, pos);
+    if (pos >= text.size()) return false;
+    if (text[pos] == '"') {
+        return parse_string(text, pos, out);
+    }
+    size_t start = pos;
+    while (pos < text.size()) {
+        char c = text[pos];
+        if (c == ',' || c == '}' || c == ']' || std::isspace(static_cast<unsigned char>(c))) break;
+        ++pos;
+    }
+    if (pos == start) return false;
+    out.assign(text.substr(start, pos - start));
+    return true;
+}
+
+bool parse_object(const std::string& text, size_t& pos, std::unordered_map<std::string, std::string>& out) {
+    skip_ws(text, pos);
+    if (pos >= text.size() || text[pos] != '{') return false;
+    ++pos;
+    while (pos < text.size()) {
+        skip_ws(text, pos);
+        if (pos < text.size() && text[pos] == '}') {
+            ++pos;
+            return true;
+        }
+        std::string key;
+        if (!parse_string(text, pos, key)) return false;
+        skip_ws(text, pos);
+        if (pos >= text.size() || text[pos] != ':') return false;
+        ++pos;
+        std::string value;
+        if (!parse_value_token(text, pos, value)) return false;
+        out[key] = value;
+        skip_ws(text, pos);
+        if (pos < text.size() && text[pos] == ',') {
+            ++pos;
+            continue;
+        }
+        if (pos < text.size() && text[pos] == '}') {
+            ++pos;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<std::unordered_map<std::string, std::string>> parse_object_array(const std::string& text) {
+    std::vector<std::unordered_map<std::string, std::string>> objects;
+    size_t pos = 0;
+    skip_ws(text, pos);
+    if (pos >= text.size() || text[pos] != '[') return objects;
+    ++pos;
+    while (pos < text.size()) {
+        skip_ws(text, pos);
+        if (pos < text.size() && text[pos] == ']') {
+            ++pos;
+            break;
+        }
+        std::unordered_map<std::string, std::string> obj;
+        if (!parse_object(text, pos, obj)) break;
+        objects.push_back(std::move(obj));
+        skip_ws(text, pos);
+        if (pos < text.size() && text[pos] == ',') {
+            ++pos;
+        }
+    }
+    return objects;
+}
+
+        std::string read_all(const std::filesystem::path& p) {
+            std::ifstream in(p, std::ios::binary);
+            if (!in) return {};
+            std::ostringstream ss;
+            ss << in.rdbuf();
+            return ss.str();
+        }
+
+        std::vector<Achievement> load_achievements(const std::filesystem::path& baseDir, const std::string& id) {
+            std::vector<Achievement> result;
+            auto path = baseDir / "achievements" / (id + ".json");
+            std::ifstream in(path);
+            if (!in) return result;
+            const auto nowSec = now_seconds();
+            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            const auto objects = parse_object_array(content);
+            for (const auto& obj : objects) {
+                Achievement a;
+                auto find_value = [&](const char* key) -> std::optional<std::string> {
+                    auto it = obj.find(key);
+                    if (it == obj.end()) return std::nullopt;
+                    return it->second;
+                };
+                if (auto v = find_value("title")) a.title = *v;
+                if (auto v = find_value("skillId")) a.skill = *v;
+                if (a.skill.empty()) {
+                    if (auto v = find_value("skill")) a.skill = *v;
+                }
+                if (auto v = find_value("bonus")) a.bonusPercent = parse_double(*v, 0.0);
+                if (auto v = find_value("bonusPercent")) a.bonusPercent = parse_double(*v, a.bonusPercent);
+                if (auto v = find_value("awarded")) a.awardedAt = parse_int64(*v, 0);
+                if (auto v = find_value("awardedAt")) a.awardedAt = parse_int64(*v, a.awardedAt);
+                if (auto v = find_value("icon")) a.icon = *v;
+
+                std::int64_t durationDays = -1;
+                if (auto v = find_value("durationDays")) durationDays = parse_int64(*v, -1);
+                if (durationDays > 0) {
+                    if (a.awardedAt <= 0) a.awardedAt = nowSec;
+                    a.expiresAt = a.awardedAt + durationDays * 24 * 3600;
+                } else if (durationDays == 0) {
+                    a.expiresAt = 0;
+                } else {
+                    if (auto v = find_value("expires")) a.expiresAt = parse_int64(*v, 0);
+                    if (auto v = find_value("expiresAt")) a.expiresAt = parse_int64(*v, a.expiresAt);
+                }
+                normalize_achievement_times(a, nowSec);
+                result.push_back(std::move(a));
+            }
+            return result;
+        }
+
+        void save_achievements(const std::filesystem::path& baseDir, const std::string& id, const std::vector<Achievement>& items) {
+            auto dir = baseDir / "achievements";
+            std::filesystem::create_directories(dir);
+            auto path = dir / (id + ".json");
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            if (!out) return;
+            out.imbue(std::locale::classic());
+            auto normalized = items;
+            const auto nowSec = now_seconds();
+            for (auto& a : normalized) {
+                normalize_achievement_times(a, nowSec);
+            }
+            out << "[\n";
+            for (size_t i = 0; i < normalized.size(); ++i) {
+                const auto& a = normalized[i];
+                std::int64_t durationDays = 0;
+                if (a.expiresAt > 0 && a.awardedAt > 0) {
+                    durationDays = (a.expiresAt - a.awardedAt) / (24 * 3600);
+                }
+                out << "  {\"title\":\"" << json_escape(a.title) << "\",\"skill\":\"" << json_escape(a.skill)
+                    << "\",\"bonus\":" << a.bonusPercent << ",\"awarded\":" << a.awardedAt
+                    << ",\"durationDays\":" << durationDays << ",\"expires\":" << a.expiresAt
+                    << ",\"icon\":\"" << json_escape(a.icon) << "\"}";
+                if (i + 1 < normalized.size()) out << ",";
+                out << "\n";
+            }
+            out << "]";
+        }
+
+        bool write_all(const std::filesystem::path& p, const std::string& data) {
+            auto parent = p.parent_path();
+            if (!parent.empty()) {
+                std::filesystem::create_directories(parent);
+            }
     auto tmp = p;
     tmp += ".tmp";
     {
@@ -335,6 +615,7 @@ public:
         profile.set_inactivity_tasks(storedInertiaTasks);
         profile.start_penalty_recovery(storedRecoveryTasks);
         profile.set_admin(storedAdmin);
+        profile.set_achievements(load_achievements(baseDir_, activeId_));
 
         token_ = token;
         queue_ = std::move(queue);
@@ -393,7 +674,9 @@ public:
         }
         ss << "\n";
 
-        return write_all(activePath_, ss.str());
+        bool ok = write_all(activePath_, ss.str());
+        save_achievements(baseDir_, activeId_, profile.achievements());
+        return ok;
     }
 
     std::optional<ProfileInfo> create_profile(const Profile& profile) override {
@@ -444,6 +727,9 @@ public:
         std::error_code ec;
         std::filesystem::remove(*current, ec);
         if (ec) return false;
+        std::error_code achEc;
+        auto achPath = baseDir_ / "achievements" / (id + ".json");
+        std::filesystem::remove(achPath, achEc);
         if (activeId_ == id) {
             activeId_.clear();
             activePath_.clear();
@@ -532,6 +818,17 @@ private:
     void normalize_directory(const std::filesystem::path& dir) {
         std::error_code ec;
         if (!std::filesystem::exists(dir, ec)) return;
+        auto rename_achievement = [&](const std::string& fromId, const std::string& toId) {
+            std::error_code achEc;
+            auto achDir = baseDir_ / "achievements";
+            auto from = achDir / (fromId + ".json");
+            auto to = achDir / (toId + ".json");
+            if (!std::filesystem::exists(from, achEc)) return;
+            if (std::filesystem::exists(to, achEc)) {
+                std::filesystem::remove(to, achEc);
+            }
+            std::filesystem::rename(from, to, achEc);
+        };
         int maxId = 0;
         for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
             if (!is_profile_file(entry)) continue;
@@ -542,6 +839,7 @@ private:
             }
             const std::string newId = generate_id(++maxId);
             auto target = entry.path().parent_path() / (newId + ".ini");
+            rename_achievement(stem, newId);
             std::filesystem::rename(entry.path(), target, ec);
         }
         if (maxId >= nextId_) nextId_ = maxId + 1;
