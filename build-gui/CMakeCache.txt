@@ -249,7 +249,7 @@ X_VCPKG_APPLOCAL_DEPS_INSTALL:BOOL=OFF
 X_VCPKG_APPLOCAL_DEPS_SERIALIZED:BOOL=OFF
 
 //Path to a program.
-Z_VCPKG_PWSH_PATH:FILEPATH=C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe
+Z_VCPKG_PWSH_PATH:FILEPATH=C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe
 
 //The directory which contains the installed libraries for each
 // triplet
@@ -406,7 +406,7 @@ VCPKG_VERBOSE-ADVANCED:INTERNAL=1
 //Making sure VCPKG_MANIFEST_MODE doesn't change
 Z_VCPKG_CHECK_MANIFEST_MODE:INTERNAL=OFF
 //The path to the PowerShell implementation to use.
-Z_VCPKG_POWERSHELL_PATH:INTERNAL=C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.3.0_x64__8wekyb3d8bbwe/pwsh.exe
+Z_VCPKG_POWERSHELL_PATH:INTERNAL=C:/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe
 //Vcpkg root directory
 Z_VCPKG_ROOT_DIR:INTERNAL=C:/tools/vcpkg
 

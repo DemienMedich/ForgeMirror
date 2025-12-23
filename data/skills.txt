@@ -1,15 +1,15 @@
-Modeling|1.2
-Sculpting|1.2
-Texturing|1
-Shading|1
-Rigging|1.4
-Lighting|1.1
-UV Mapping|0.8
-Retopology|1.2
-Materials|0.8
-Rendering|0.9
-Animation|1.4
-Simulation|1.3
-Hard Surface|1.2
-Environment|1.1
-Props|0.9
+Modeling|1,1|Building clean base meshes for further detailing or animation.
+Sculpting|1,2|High-resolution sculpting for characters, creatures, and props.
+Texturing|1|Creating texture maps that add color and detail to models.
+Shading|1|Authoring material networks that react believably to light.
+Rigging|1,4|Setting up skeletons and controls to animate characters or props.
+Lighting|1,1|Placing lights and balancing exposure for mood and readability.
+UV Mapping|0,8|Preparing UV layouts that minimize seams and distortion.
+Retopology|1,2|Converting dense sculpts into animation-friendly low-poly meshes.
+Materials|0,8|Authoring reusable material presets with consistent PBR values.
+Rendering|0,9|Configuring render settings and output passes for final frames.
+Animation|1,4|Bringing characters, props, or cameras to life over time.
+Simulation|1,3|Driving cloth, hair, fluids, or rigid bodies with dynamic solvers.
+Hard Surface|1,2|Designing mechanical or industrial assets with crisp detail.
+Environment|1,1|Building large-scale scenes and set dressing for worlds.
+Props|0,9|Creating supporting assets that tell stories and fill environments.
