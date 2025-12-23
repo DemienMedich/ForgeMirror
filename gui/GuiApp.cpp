@@ -18,6 +18,10 @@
 #endif
 #include <GLFW/glfw3.h>
 
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
+
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl2.h>
@@ -36,10 +40,15 @@
 #include <optional>
 #include <string>
 #include <sstream>
+#include <ctime>
 #include <unordered_map>
+#include <unordered_set>
 #include <numeric>
 #include <vector>
 #include <chrono>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 namespace {
 
@@ -86,16 +95,29 @@ struct GuiState {
     bool xpPopupRequest = false;
     bool addSkillPopupRequest = false;
     bool deleteSkillPopupRequest = false;
+    bool mergeSkillPopupRequest = false;
     bool adminPopupRequest = false;
     bool isAdmin = false;
     ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
     std::array<char, 128> newSkillName{};
     std::array<char, 256> newSkillDesc{};
+    std::array<char, 128> editSkillName{};
+    std::array<char, 256> editSkillDesc{};
     float newSkillWeight = 1.0f;
     std::array<char, 64> adminPassword{};
     std::string pendingSkillDelete;
+    std::string pendingMergeFromId;
+    std::string pendingMergeToId;
+    std::string pendingMergeName;
+    std::string pendingMergeDesc;
+    float pendingMergeWeight = 1.0f;
     float editedSkillWeight = 1.0f;
+    std::array<char, 128> achTitle{};
+    std::array<char, 128> achIcon{};
+    float achBonus = 0.0f;
+    int achDurationDays = 0;
+    int selectedAchievementIndex = -1;
     std::vector<XpEntry> xpEntries;
     std::unordered_map<std::string, std::deque<std::string>> activityLogs;
     int taskScore = 10;
@@ -160,14 +182,211 @@ void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
 }
 
 std::string NormalizeSkillNameGui(const std::string& name) {
+    auto decode_utf8 = [](const std::string& s, size_t& i, uint32_t& out) {
+        unsigned char c0 = static_cast<unsigned char>(s[i]);
+        if (c0 < 0x80) {
+            out = c0;
+            ++i;
+            return true;
+        }
+        if ((c0 >> 5) == 0x6 && i + 1 < s.size()) {
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            if ((c1 & 0xC0) != 0x80) return false;
+            out = ((c0 & 0x1F) << 6) | (c1 & 0x3F);
+            i += 2;
+            return true;
+        }
+        if ((c0 >> 4) == 0xE && i + 2 < s.size()) {
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return false;
+            out = ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
+            i += 3;
+            return true;
+        }
+        if ((c0 >> 3) == 0x1E && i + 3 < s.size()) {
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) return false;
+            out = ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+            i += 4;
+            return true;
+        }
+        return false;
+    };
+    auto append_utf8 = [](std::string& out, uint32_t cp) {
+        if (cp <= 0x7F) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp <= 0x7FF) {
+            out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp <= 0xFFFF) {
+            out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    };
+    auto lower_codepoint = [](uint32_t cp) {
+        if (cp >= 'A' && cp <= 'Z') return cp + 32;
+        if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;
+        if (cp == 0x0401) return static_cast<uint32_t>(0x0451);
+        return cp;
+    };
+
     std::string out;
     out.reserve(name.size());
-    for (char c : name) {
-        if (!std::isspace(static_cast<unsigned char>(c))) {
-            out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-        }
+    size_t i = 0;
+    while (i < name.size()) {
+        uint32_t cp = 0;
+        if (!decode_utf8(name, i, cp)) break;
+        if (cp <= 0x7F && std::isspace(static_cast<unsigned char>(cp))) continue;
+        append_utf8(out, lower_codepoint(cp));
     }
     return out;
+}
+
+std::string TrimStringGui(std::string s) {
+    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c) { return !is_space(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c) { return !is_space(c); }).base(), s.end());
+    return s;
+}
+
+std::int64_t NowSeconds() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
+struct IconTexture {
+    GLuint id = 0;
+    int width = 0;
+    int height = 0;
+};
+
+struct IconCache {
+    std::unordered_map<std::string, IconTexture> textures;
+    std::unordered_set<std::string> missing;
+};
+
+IconCache& GetIconCache() {
+    static IconCache cache;
+    return cache;
+}
+
+std::string NormalizeIconKey(const std::filesystem::path& path) {
+    std::error_code ec;
+    auto normalized = path.lexically_normal();
+    if (!normalized.is_absolute()) {
+        normalized = std::filesystem::absolute(normalized, ec);
+        if (ec) {
+            normalized = path.lexically_normal();
+        }
+    }
+    auto key = normalized.generic_string();
+    if (key.empty()) key = path.generic_string();
+    return key;
+}
+
+std::optional<std::filesystem::path> ResolveIconPath(const std::string& icon, const std::filesystem::path& storageDir) {
+    if (icon.empty()) return std::nullopt;
+    std::filesystem::path path(icon);
+    std::error_code ec;
+    if (path.is_relative()) {
+        const std::filesystem::path candidates[] = {
+            storageDir / path,
+            std::filesystem::current_path() / path,
+            storageDir.parent_path() / path
+        };
+        for (const auto& candidate : candidates) {
+            if (std::filesystem::exists(candidate, ec)) {
+                return candidate;
+            }
+        }
+    }
+    if (std::filesystem::exists(path, ec)) {
+        return path;
+    }
+    return std::nullopt;
+}
+
+bool LoadIconTexture(const std::filesystem::path& path, IconTexture& out) {
+    int w = 0;
+    int h = 0;
+    int comp = 0;
+    stbi_set_flip_vertically_on_load(0);
+    std::string pathStr = path.string();
+    unsigned char* data = stbi_load(pathStr.c_str(), &w, &h, &comp, 4);
+    if (!data || w <= 0 || h <= 0) {
+        if (data) stbi_image_free(data);
+        return false;
+    }
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    GLint lastTex = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &lastTex);
+    GLint lastUnpack = 0;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &lastUnpack);
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, lastUnpack);
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(lastTex));
+
+    stbi_image_free(data);
+    out.id = tex;
+    out.width = w;
+    out.height = h;
+    return true;
+}
+
+const IconTexture* GetIconTexture(const std::filesystem::path& path) {
+    auto& cache = GetIconCache();
+    const std::string key = NormalizeIconKey(path);
+    if (auto it = cache.textures.find(key); it != cache.textures.end()) {
+        return &it->second;
+    }
+    if (cache.missing.find(key) != cache.missing.end()) {
+        return nullptr;
+    }
+    IconTexture tex;
+    if (!LoadIconTexture(path, tex)) {
+        cache.missing.insert(key);
+        return nullptr;
+    }
+    auto [it, inserted] = cache.textures.emplace(key, tex);
+    return &it->second;
+}
+
+ImVec2 FitIconSize(const IconTexture& tex, float maxSize) {
+    if (tex.width <= 0 || tex.height <= 0) return ImVec2(maxSize, maxSize);
+    const float maxDim = static_cast<float>(std::max(tex.width, tex.height));
+    const float scale = maxDim > 0.0f ? (maxSize / maxDim) : 1.0f;
+    return ImVec2(tex.width * scale, tex.height * scale);
+}
+
+void ReleaseIconTextures() {
+    auto& cache = GetIconCache();
+    for (auto& kv : cache.textures) {
+        if (kv.second.id != 0) {
+            glDeleteTextures(1, &kv.second.id);
+            kv.second.id = 0;
+        }
+    }
+    cache.textures.clear();
+    cache.missing.clear();
 }
 
 struct RankOption {
@@ -538,10 +757,11 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
 
 bool RemoveSkillFromProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& skillName) {
     std::string target = skillName;
-    if (auto canonical = catalog.canonical(skillName)) {
-        target = *canonical;
+    if (!catalog.contains_id(target)) {
+        if (auto id = catalog.id_for_name(skillName)) {
+            target = *id;
+        }
     }
-    const std::string normTarget = NormalizeSkillNameGui(target);
     bool removedAny = false;
     auto list = storage.list_profiles();
     std::string restoreId = state.active ? state.active->id : std::string{};
@@ -551,7 +771,7 @@ bool RemoveSkillFromProfiles(GuiState& state, IJobStorage& storage, SkillCatalog
             auto skills = profile->list_skills();
             auto before = skills.size();
             skills.erase(std::remove_if(skills.begin(), skills.end(), [&](const Skill& s) {
-                return NormalizeSkillNameGui(s.name) == normTarget;
+                return s.name == target;
             }), skills.end());
             if (skills.size() != before) {
                 profile->set_skills(skills);
@@ -564,6 +784,72 @@ bool RemoveSkillFromProfiles(GuiState& state, IJobStorage& storage, SkillCatalog
         storage.set_active_profile(restoreId);
     }
     return removedAny;
+}
+
+int TotalSkillXp(const Skill& skill) {
+    int total = skill.xp;
+    for (int lvl = 2; lvl <= skill.level; ++lvl) {
+        total += Skill::required_xp_for(lvl);
+    }
+    return total;
+}
+
+bool MergeSkillInProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& fromId, const std::string& toId) {
+    if (fromId == toId) return false;
+    bool changedAny = false;
+    auto list = storage.list_profiles();
+    std::string restoreId = state.active ? state.active->id : std::string{};
+    for (const auto& info : list) {
+        if (!storage.set_active_profile(info.id)) continue;
+        if (auto profile = storage.load_profile()) {
+            bool changed = false;
+            auto skills = profile->list_skills();
+            int fromIndex = -1;
+            int toIndex = -1;
+            for (int i = 0; i < static_cast<int>(skills.size()); ++i) {
+                if (skills[i].name == fromId) fromIndex = i;
+                if (skills[i].name == toId) toIndex = i;
+            }
+            if (fromIndex >= 0) {
+                if (toIndex >= 0 && toIndex != fromIndex) {
+                    int totalFrom = TotalSkillXp(skills[fromIndex]);
+                    skills[toIndex].add_xp(totalFrom);
+                    if (fromIndex > toIndex) {
+                        skills.erase(skills.begin() + fromIndex);
+                    } else {
+                        skills.erase(skills.begin() + fromIndex);
+                        toIndex -= 1;
+                    }
+                } else {
+                    skills[fromIndex].name = toId;
+                }
+                profile->set_skills(skills);
+                changed = true;
+            }
+
+            auto ach = profile->achievements();
+            bool achChanged = false;
+            for (auto& a : ach) {
+                if (a.skill == fromId) {
+                    a.skill = toId;
+                    achChanged = true;
+                }
+            }
+            if (achChanged) {
+                profile->set_achievements(ach);
+            }
+
+            if (changed || achChanged) {
+                SyncProfileWithCatalog(*profile, catalog);
+                storage.save_profile(*profile);
+                changedAny = true;
+            }
+        }
+    }
+    if (!restoreId.empty()) {
+        storage.set_active_profile(restoreId);
+    }
+    return changedAny;
 }
 
 void ReapplyRulesToProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
@@ -874,6 +1160,95 @@ int main() {
                 }
                 ImGui::Text(u8"Категории: %s", catStream.str().c_str());
             }
+            if (!profile.achievements().empty()) {
+                ImGui::Separator();
+                ImGui::TextUnformatted(u8"Ачивки");
+                auto formatDate = [](std::int64_t ts) -> std::string {
+                    if (ts <= 0) return std::string(u8"без срока");
+                    std::time_t t = static_cast<std::time_t>(ts);
+                    std::tm tm{};
+#if defined(_WIN32)
+                    localtime_s(&tm, &t);
+#else
+                    localtime_r(&t, &tm);
+#endif
+                    char buf[32];
+                    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm)) {
+                        return std::string(buf);
+                    }
+                    return std::string(u8"срок указан");
+                };
+                auto formatRemaining = [](std::int64_t seconds) -> std::string {
+                    if (seconds <= 0) return std::string("00:00:00");
+                    constexpr std::int64_t daySeconds = 24 * 3600;
+                    const std::int64_t days = seconds / daySeconds;
+                    seconds %= daySeconds;
+                    const std::int64_t hours = seconds / 3600;
+                    seconds %= 3600;
+                    const std::int64_t minutes = seconds / 60;
+                    const std::int64_t secs = seconds % 60;
+                    std::ostringstream out;
+                    out << std::setfill('0');
+                    if (days > 0) {
+                        out << days << u8"д ";
+                    }
+                    out << std::setw(2) << hours << ":" << std::setw(2) << minutes << ":" << std::setw(2) << secs;
+                    return out.str();
+                };
+                const auto nowSec = NowSeconds();
+                constexpr int kIconsPerRow = 6;
+                const float iconCell = 110.0f;
+                int iconIndex = 0;
+                for (const auto& a : profile.achievements()) {
+                    bool active = a.is_active(nowSec);
+                    const std::string expires = formatDate(a.expiresAt);
+                    const auto iconPath = ResolveIconPath(a.icon, state.storageDir);
+                    ImGui::PushID(iconIndex);
+                    bool hovered = false;
+                    if (iconPath) {
+                        if (const auto* iconTex = GetIconTexture(*iconPath)) {
+                            ImGui::Image(ImTextureRef((ImTextureID)(intptr_t)iconTex->id), ImVec2(iconCell, iconCell));
+                            hovered = ImGui::IsItemHovered();
+                        } else {
+                            ImGui::BeginDisabled();
+                            ImGui::Button("?", ImVec2(iconCell, iconCell));
+                            ImGui::EndDisabled();
+                            hovered = ImGui::IsItemHovered();
+                        }
+                    } else {
+                        ImGui::BeginDisabled();
+                        ImGui::Button("?", ImVec2(iconCell, iconCell));
+                        ImGui::EndDisabled();
+                        hovered = ImGui::IsItemHovered();
+                    }
+                    if (hovered) {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted(a.title.c_str());
+                        const std::string achSkillName = catalog.display_name(a.skill);
+                        ImGui::Text(u8"%s, %+0.1f%% XP", achSkillName.c_str(), a.bonusPercent);
+                        if (a.expiresAt == 0) {
+                            ImGui::TextUnformatted(u8"Срок: без срока");
+                        } else {
+                            ImGui::Text(u8"Срок до: %s", expires.c_str());
+                            if (active) {
+                                const std::string remaining = formatRemaining(a.expiresAt - nowSec);
+                                ImGui::Text(u8"Осталось: %s", remaining.c_str());
+                            } else {
+                                ImGui::TextUnformatted(u8"Срок: истекла");
+                            }
+                        }
+                        ImGui::EndTooltip();
+                    }
+                    ImGui::PopID();
+                    ++iconIndex;
+                    if (iconIndex % kIconsPerRow != 0) {
+                        ImGui::SameLine();
+                    }
+                }
+                if (iconIndex % kIconsPerRow != 0) {
+                    ImGui::NewLine();
+                }
+            }
             ImGui::Text(u8"Всего XP: %d", totalXp);
             ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
             ImGui::Separator();
@@ -911,11 +1286,12 @@ int main() {
             ImGui::Separator();
 
             auto skills = state.active->profile.list_skills();
-            std::sort(skills.begin(), skills.end(), [](const Skill& a, const Skill& b) {
-                return a.name < b.name;
+            std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
+                return catalog.display_name(a.name) < catalog.display_name(b.name);
             });
             for (const auto& skill : skills) {
-                ImGui::TextUnformatted(skill.name.c_str());
+                const std::string displayName = catalog.display_name(skill.name);
+                ImGui::TextUnformatted(displayName.c_str());
                 ImGui::NextColumn();
                 ImGui::Text("%d", skill.level);
                 ImGui::NextColumn();
@@ -933,7 +1309,11 @@ int main() {
             ImVec2 radarPos = ImGui::GetCursorScreenPos();
             ImGui::InvisibleButton("##skill_radar_canvas", radarSize);
             if (ImGui::IsItemVisible()) {
-                DrawSkillRadarChart(skills, radarPos, ImGui::GetItemRectSize(), ImGui::GetWindowDrawList());
+                auto radarSkills = skills;
+                for (auto& skill : radarSkills) {
+                    skill.name = catalog.display_name(skill.name);
+                }
+                DrawSkillRadarChart(radarSkills, radarPos, ImGui::GetItemRectSize(), ImGui::GetWindowDrawList());
             }
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
@@ -954,13 +1334,23 @@ int main() {
 
         if (ImGui::Begin(u8"Каталог навыков")) {
             const auto& catalogSkills = catalog.skills();
-            if (state.selectedCatalogIndex >= static_cast<int>(catalogSkills.size())) {
-                state.selectedCatalogIndex = -1;
-            }
-            if (state.selectedCatalogIndex != state.lastCatalogSelection && state.selectedCatalogIndex >= 0 && state.selectedCatalogIndex < static_cast<int>(catalogSkills.size())) {
-                state.editedSkillWeight = static_cast<float>(catalog.weight(catalogSkills[state.selectedCatalogIndex]));
-                state.lastCatalogSelection = state.selectedCatalogIndex;
-            }
+        if (state.selectedCatalogIndex >= static_cast<int>(catalogSkills.size())) {
+            state.selectedCatalogIndex = -1;
+        }
+        if (state.selectedCatalogIndex != state.lastCatalogSelection && state.selectedCatalogIndex >= 0 && state.selectedCatalogIndex < static_cast<int>(catalogSkills.size())) {
+            const std::string& selectedId = catalogSkills[state.selectedCatalogIndex];
+            const std::string selectedName = catalog.display_name(selectedId);
+            const std::string selectedDesc = catalog.description(selectedId);
+            state.editedSkillWeight = static_cast<float>(catalog.weight(selectedId));
+            state.lastCatalogSelection = state.selectedCatalogIndex;
+            state.selectedAchievementIndex = -1;
+            state.achTitle.fill('\0');
+            state.achIcon.fill('\0');
+            state.achBonus = 0.0f;
+            state.achDurationDays = 0;
+            std::snprintf(state.editSkillName.data(), state.editSkillName.size(), "%s", selectedName.c_str());
+            std::snprintf(state.editSkillDesc.data(), state.editSkillDesc.size(), "%s", selectedDesc.c_str());
+        }
 
             ImGui::BeginGroup();
             if (!state.isAdmin) ImGui::BeginDisabled();
@@ -983,15 +1373,16 @@ int main() {
 
             ImGui::Separator();
             for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                const std::string& skillName = catalogSkills[i];
+                const std::string& skillId = catalogSkills[i];
+                const std::string displayName = catalog.display_name(skillId);
                 std::ostringstream label;
-                label << skillName << " (" << std::fixed << std::setprecision(2) << catalog.weight(skillName) << ")";
+                label << displayName << " (" << std::fixed << std::setprecision(2) << catalog.weight(skillId) << ")";
                 bool selected = state.selectedCatalogIndex == i;
                 if (ImGui::Selectable(label.str().c_str(), selected)) {
                     state.selectedCatalogIndex = i;
                 }
                 if (ImGui::IsItemHovered()) {
-                    const std::string desc = catalog.description(skillName);
+                    const std::string desc = catalog.description(skillId);
                     if (!desc.empty()) {
                         ImGui::BeginTooltip();
                         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
@@ -1002,10 +1393,12 @@ int main() {
                 }
             }
             ImGui::Separator();
+            const std::int64_t nowSecGlobal = NowSeconds();
             if (state.selectedCatalogIndex >= 0 && state.selectedCatalogIndex < static_cast<int>(catalogSkills.size())) {
-                const std::string& skillName = catalogSkills[state.selectedCatalogIndex];
-                const std::string desc = catalog.description(skillName);
-                ImGui::TextColored(ImVec4(0.8f, 0.9f, 1.0f, 1.0f), "%s", skillName.c_str());
+                const std::string& skillId = catalogSkills[state.selectedCatalogIndex];
+                const std::string displayName = catalog.display_name(skillId);
+                const std::string desc = catalog.description(skillId);
+                ImGui::TextColored(ImVec4(0.8f, 0.9f, 1.0f, 1.0f), "%s", displayName.c_str());
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
                 ImGui::TextWrapped("%s", desc.empty() ? u8"Описание отсутствует." : desc.c_str());
@@ -1016,10 +1409,142 @@ int main() {
                     ImGui::SliderFloat("##edit_weight", &state.editedSkillWeight, 0.5f, 1.6f, "%.2f");
                     if (ImGui::Button(u8"Сохранить вес")) {
                         double newW = static_cast<double>(state.editedSkillWeight);
-                        catalog.add_skill(skillName, newW, desc);
+                        catalog.update_skill(skillId, displayName, newW, desc);
                         PrepareXpEntries(state, catalog);
                         RefreshProfiles(state, *storage, catalog, state.active ? state.active->id : std::string{});
                         SetStatus(state, u8"Вес навыка обновлён.", 0.45f, 0.9f, 0.45f);
+                    }
+                    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                    ImGui::TextUnformatted(u8"Редактирование навыка");
+                    ImGui::InputText(u8"Название", state.editSkillName.data(), state.editSkillName.size());
+                    ImGui::InputTextMultiline(u8"Описание", state.editSkillDesc.data(), state.editSkillDesc.size(), ImVec2(-1.0f, 80.0f));
+                    if (ImGui::Button(u8"Сохранить навык")) {
+                        const std::string newName = TrimStringGui(state.editSkillName.data());
+                        const std::string newDesc = TrimStringGui(state.editSkillDesc.data());
+                        if (newName.empty()) {
+                            SetStatus(state, u8"Название не может быть пустым.", 1.0f, 0.45f, 0.45f);
+                        } else {
+                            auto existingId = catalog.id_for_name(newName);
+                            if (existingId && *existingId != skillId) {
+                                state.mergeSkillPopupRequest = true;
+                                state.pendingMergeFromId = skillId;
+                                state.pendingMergeToId = *existingId;
+                                state.pendingMergeName = newName;
+                                state.pendingMergeDesc = newDesc;
+                                state.pendingMergeWeight = state.editedSkillWeight;
+                            } else {
+                                bool changed = catalog.update_skill(skillId, newName,
+                                                                    static_cast<double>(state.editedSkillWeight),
+                                                                    newDesc);
+                                if (!changed) {
+                                    SetStatus(state, u8"Изменений нет.", 0.9f, 0.8f, 0.5f);
+                                } else {
+                                    PrepareXpEntries(state, catalog);
+                                    RefreshProfiles(state, *storage, catalog, state.active ? state.active->id : std::string{});
+                                    state.lastCatalogSelection = -1;
+                                    SetStatus(state, u8"Навык обновлён.", 0.45f, 0.9f, 0.45f);
+                                }
+                            }
+                        }
+                    }
+                    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                    ImGui::TextUnformatted(u8"Ачивки навыка");
+                    if (state.active) {
+                        auto& ach = state.active->profile.achievements();
+                        std::vector<int> filtered;
+                        filtered.reserve(ach.size());
+                        for (size_t idx = 0; idx < ach.size(); ++idx) {
+                            if (ach[idx].skill != skillId) continue;
+                            filtered.push_back(static_cast<int>(idx));
+                        }
+                        if (ImGui::BeginChild("ach_list", ImVec2(0, 140), true)) {
+                            for (int fi = 0; fi < static_cast<int>(filtered.size()); ++fi) {
+                                int idx = filtered[fi];
+                                const auto& a = ach[idx];
+                                const bool expired = !a.is_active(nowSecGlobal);
+                                bool selected = state.selectedAchievementIndex == idx;
+                                std::string row = a.title + " (" + std::to_string(a.bonusPercent) + "%)";
+                                if (expired) row += u8" [истекла]";
+                                ImGui::PushID(idx);
+                                if (ImGui::Selectable(row.c_str(), selected)) {
+                                    state.selectedAchievementIndex = idx;
+                                    std::snprintf(state.achTitle.data(), state.achTitle.size(), "%s", a.title.c_str());
+                                    std::snprintf(state.achIcon.data(), state.achIcon.size(), "%s", a.icon.c_str());
+                                    state.achBonus = static_cast<float>(a.bonusPercent);
+                                    if (a.expiresAt > 0 && a.awardedAt > 0) {
+                                        auto dur = a.expiresAt - a.awardedAt;
+                                        state.achDurationDays = static_cast<int>(dur / (24 * 3600));
+                                    } else {
+                                        state.achDurationDays = 0;
+                                    }
+                                }
+                                ImGui::PopID();
+                            }
+                        }
+                        ImGui::EndChild();
+                        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                        ImGui::InputText(u8"Название ачивки", state.achTitle.data(), state.achTitle.size());
+                        ImGui::InputText(u8"Иконка (путь)", state.achIcon.data(), state.achIcon.size());
+                        ImGui::InputFloat(u8"Бонус к XP (%)", &state.achBonus, 0.5f, 2.0f, "%.1f");
+                        ImGui::InputInt(u8"Срок (дней, 0 = без срока)", &state.achDurationDays);
+                        if (state.achDurationDays < 0) state.achDurationDays = 0;
+                        if (ImGui::Button(u8"Выдать ачивку")) {
+                            Achievement a;
+                            a.title = state.achTitle.data();
+                            a.skill = skillId;
+                            a.bonusPercent = static_cast<double>(state.achBonus);
+                            a.icon = state.achIcon.data();
+                            a.awardedAt = nowSecGlobal;
+                            if (state.achDurationDays > 0) {
+                                a.expiresAt = nowSecGlobal + static_cast<std::int64_t>(state.achDurationDays) * 24 * 3600;
+                            } else {
+                                a.expiresAt = 0;
+                            }
+                            state.active->profile.add_achievement(a);
+                            storage->save_profile(state.active->profile);
+                            SetStatus(state, u8"Ачивка выдана.", 0.45f, 0.9f, 0.45f);
+                            RefreshProfiles(state, *storage, catalog, state.active->id);
+                            state.selectedAchievementIndex = -1;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button(u8"Сохранить изменения")) {
+                            if (state.selectedAchievementIndex >= 0 && state.selectedAchievementIndex < static_cast<int>(state.active->profile.achievements().size())) {
+                                auto achIdx = state.selectedAchievementIndex;
+                                auto achList = state.active->profile.achievements();
+                                Achievement& a = achList[achIdx];
+                                a.title = state.achTitle.data();
+                                a.icon = state.achIcon.data();
+                                a.bonusPercent = static_cast<double>(state.achBonus);
+                                if (state.achDurationDays > 0) {
+                                    if (a.awardedAt == 0) a.awardedAt = nowSecGlobal;
+                                    a.expiresAt = a.awardedAt + static_cast<std::int64_t>(state.achDurationDays) * 24 * 3600;
+                                } else {
+                                    a.expiresAt = 0;
+                                }
+                                state.active->profile.set_achievements(achList);
+                                storage->save_profile(state.active->profile);
+                                SetStatus(state, u8"Ачивка обновлена.", 0.45f, 0.9f, 0.45f);
+                                RefreshProfiles(state, *storage, catalog, state.active->id);
+                            } else {
+                                SetStatus(state, u8"Сначала выберите ачивку.", 1.0f, 0.45f, 0.45f);
+                            }
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button(u8"Удалить ачивку")) {
+                            if (state.selectedAchievementIndex >= 0 && state.selectedAchievementIndex < static_cast<int>(state.active->profile.achievements().size())) {
+                                auto achList = state.active->profile.achievements();
+                                achList.erase(achList.begin() + state.selectedAchievementIndex);
+                                state.active->profile.set_achievements(achList);
+                                storage->save_profile(state.active->profile);
+                                state.selectedAchievementIndex = -1;
+                                SetStatus(state, u8"Ачивка удалена.", 0.45f, 0.9f, 0.45f);
+                                RefreshProfiles(state, *storage, catalog, state.active->id);
+                            } else {
+                                SetStatus(state, u8"Сначала выберите ачивку.", 1.0f, 0.45f, 0.45f);
+                            }
+                        }
+                    } else {
+                        ImGui::TextDisabled(u8"Ачивки отображаются при выборе профиля.");
                     }
                 }
             } else {
@@ -1086,11 +1611,13 @@ int main() {
                         PrepareXpEntries(state, catalog);
                         std::string keepId = state.active ? state.active->id : std::string{};
                         RefreshProfiles(state, *storage, catalog, keepId);
-                        const auto& skills = catalog.skills();
-                        for (int i = 0; i < static_cast<int>(skills.size()); ++i) {
-                            if (NormalizeSkillNameGui(skills[i]) == NormalizeSkillNameGui(name)) {
-                                state.selectedCatalogIndex = i;
-                                break;
+                        if (auto newId = catalog.id_for_name(name)) {
+                            const auto& skills = catalog.skills();
+                            for (int i = 0; i < static_cast<int>(skills.size()); ++i) {
+                                if (skills[i] == *newId) {
+                                    state.selectedCatalogIndex = i;
+                                    break;
+                                }
                             }
                         }
                         SetStatus(state, u8"Навык добавлен.", 0.45f, 0.9f, 0.45f);
@@ -1119,7 +1646,8 @@ int main() {
         bool deleteSkillOpen = true;
         if (ImGui::BeginPopupModal(u8"Удалить навык", &deleteSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
             if (!state.pendingSkillDelete.empty()) {
-                ImGui::Text(u8"Удалить навык '%s' из каталога?", state.pendingSkillDelete.c_str());
+                const std::string displayName = catalog.display_name(state.pendingSkillDelete);
+                ImGui::Text(u8"Удалить навык '%s' из каталога?", displayName.c_str());
                 if (ImGui::Button(u8"Удалить")) {
                     bool removed = catalog.remove_skill(state.pendingSkillDelete);
                     bool stripped = RemoveSkillFromProfiles(state, *storage, catalog, state.pendingSkillDelete);
@@ -1156,6 +1684,67 @@ int main() {
             ImGui::EndPopup();
         }
         if (!deleteSkillOpen && ImGui::IsPopupOpen(u8"Удалить навык")) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        if (state.mergeSkillPopupRequest) {
+            ImGui::OpenPopup(u8"Слияние навыков");
+            state.mergeSkillPopupRequest = false;
+        }
+        bool mergeSkillOpen = true;
+        if (ImGui::BeginPopupModal(u8"Слияние навыков", &mergeSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (!state.pendingMergeFromId.empty() && !state.pendingMergeToId.empty()) {
+                const std::string fromName = catalog.display_name(state.pendingMergeFromId);
+                const std::string toName = catalog.display_name(state.pendingMergeToId);
+                ImGui::Text(u8"Навык '%s' уже существует.", toName.c_str());
+                ImGui::Text(u8"Слить опыт из '%s' в '%s'?", fromName.c_str(), toName.c_str());
+                if (ImGui::Button(u8"Слить")) {
+                    MergeSkillInProfiles(state, *storage, catalog, state.pendingMergeFromId, state.pendingMergeToId);
+                    catalog.remove_skill(state.pendingMergeFromId);
+                    catalog.update_skill(state.pendingMergeToId,
+                                         state.pendingMergeName,
+                                         static_cast<double>(state.pendingMergeWeight),
+                                         state.pendingMergeDesc);
+                    PrepareXpEntries(state, catalog);
+                    std::string keepId = state.active ? state.active->id : std::string{};
+                    RefreshProfiles(state, *storage, catalog, keepId);
+                    const auto& skills = catalog.skills();
+                    for (int i = 0; i < static_cast<int>(skills.size()); ++i) {
+                        if (skills[i] == state.pendingMergeToId) {
+                            state.selectedCatalogIndex = i;
+                            break;
+                        }
+                    }
+                    state.lastCatalogSelection = -1;
+                    SetStatus(state, u8"Навыки объединены.", 0.45f, 0.9f, 0.45f);
+                    state.pendingMergeFromId.clear();
+                    state.pendingMergeToId.clear();
+                    state.pendingMergeName.clear();
+                    state.pendingMergeDesc.clear();
+                    state.pendingMergeWeight = 1.0f;
+                    ImGui::CloseCurrentPopup();
+                    mergeSkillOpen = false;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(u8"Отмена")) {
+                    state.pendingMergeFromId.clear();
+                    state.pendingMergeToId.clear();
+                    state.pendingMergeName.clear();
+                    state.pendingMergeDesc.clear();
+                    state.pendingMergeWeight = 1.0f;
+                    ImGui::CloseCurrentPopup();
+                    mergeSkillOpen = false;
+                }
+            } else {
+                ImGui::TextUnformatted(u8"Нет данных для слияния.");
+                if (ImGui::Button(u8"Закрыть")) {
+                    ImGui::CloseCurrentPopup();
+                    mergeSkillOpen = false;
+                }
+            }
+            ImGui::EndPopup();
+        }
+        if (!mergeSkillOpen && ImGui::IsPopupOpen(u8"Слияние навыков")) {
             ImGui::CloseCurrentPopup();
         }
 
@@ -1309,15 +1898,21 @@ int main() {
                 const float sliderWidth = ImGui::CalcTextSize("000").x + ImGui::GetStyle().FramePadding.x * 6.0f;
                 int percentSum = 0;
                 int maxSharePercent = 0;
-                if (ImGui::BeginTable("xp_sheet", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                const auto now = std::chrono::system_clock::now();
+                const std::int64_t nowSeconds =
+                    std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+                if (ImGui::BeginTable("xp_sheet", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                     ImGui::TableSetupColumn(u8"Навык");
                     ImGui::TableSetupColumn(u8"Доля (%)");
+                    ImGui::TableSetupColumn(u8"Ачивки");
                     ImGui::TableSetupColumn("XP");
                     ImGui::TableHeadersRow();
                     for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
                         ImGui::TableNextRow();
+                        const std::string& skillId = catalogSkills[i];
+                        const std::string displayName = catalog.display_name(skillId);
                         ImGui::TableSetColumnIndex(0);
-                        ImGui::TextUnformatted(catalogSkills[i].c_str());
+                        ImGui::TextUnformatted(displayName.c_str());
                         ImGui::TableSetColumnIndex(1);
                         ImGui::PushID(i);
                         int percent = state.xpEntries[i].percent;
@@ -1333,8 +1928,21 @@ int main() {
                             maxSharePercent = state.xpEntries[i].percent;
                         }
                         ImGui::TableSetColumnIndex(2);
+                        double mult = state.active->profile.skill_bonus_multiplier(skillId, nowSeconds);
+                        double bonusPercent = std::max(0.0, (mult - 1.0) * 100.0);
+                        if (bonusPercent > 0.01) {
+                            ImGui::Text("+%.1f%%", bonusPercent);
+                        } else {
+                            ImGui::TextUnformatted("-");
+                        }
+                        ImGui::TableSetColumnIndex(3);
                         const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
-                        ImGui::Text("%d", previewXp);
+                        const int finalPreviewXp = static_cast<int>(std::round(previewXp * mult));
+                        if (finalPreviewXp != previewXp) {
+                            ImGui::Text("%d -> %d", previewXp, finalPreviewXp);
+                        } else {
+                            ImGui::Text("%d", previewXp);
+                        }
                     }
                     ImGui::EndTable();
                 }
@@ -1397,13 +2005,22 @@ int main() {
                         for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
                             int shareXp = xpDistribution[i];
                             if (shareXp <= 0) continue;
-                            const std::string& skillName = catalogSkills[i];
-                            double weight = catalog.weight(skillName);
-                            state.active->profile.add_skill(skillName, 1, weight);
-                            bool leveled = state.active->profile.grant_xp(skillName, shareXp);
+                            const std::string& skillId = catalogSkills[i];
+                            const std::string displayName = catalog.display_name(skillId);
+                            double weight = catalog.weight(skillId);
+                            state.active->profile.add_skill(skillId, 1, weight);
+                            double mult = state.active->profile.skill_bonus_multiplier(skillId, nowSeconds);
+                            double bonusPercent = std::max(0.0, (mult - 1.0) * 100.0);
+                            int finalSkillXp = static_cast<int>(std::round(shareXp * mult));
+                            bool leveled = state.active->profile.grant_xp(skillId, finalSkillXp);
                             if (!firstSkill) skillsStream << " | ";
-                            skillsStream << skillName << " +" << shareXp << " XP (" << state.xpEntries[i].percent << "%)";
-                            if (leveled) skillsStream << u8" ↑уровень";
+                            skillsStream << displayName << " +" << finalSkillXp << " XP (" << state.xpEntries[i].percent << "%";
+                            if (bonusPercent > 0.01) {
+                                skillsStream << ", +" << std::fixed << std::setprecision(1) << bonusPercent << "%";
+                                skillsStream << std::defaultfloat;
+                            }
+                            skillsStream << ")";
+                            if (leveled) skillsStream << u8" уровень вверх";
                             firstSkill = false;
                         }
                         if (!firstSkill) {
@@ -1414,9 +2031,6 @@ int main() {
                         if (repeatPenalty) {
                             effectiveXp = static_cast<int>(std::round(effectiveXp * rules.repeatRewardFactor));
                         }
-                        const auto now = std::chrono::system_clock::now();
-                        const std::int64_t nowSeconds =
-                            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
                         constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
                         if (state.active->profile.last_task_timestamp() > 0 &&
                             (nowSeconds - state.active->profile.last_task_timestamp()) > kThirtyDays) {
@@ -1473,8 +2087,10 @@ int main() {
                         summaryStream.imbue(std::locale::classic());
                         summaryStream << u8"Задача [" << categoryLabel << u8"] с оценкой " << readyScore
                                       << u8" => +" << effectiveXp << " XP";
-                        if (repeatPenalty) summaryStream << u8" (повтор 35%)";
-                        if (recoveryPenalty) summaryStream << u8" (прогрев 60%)";
+                        const int repeatPercent = static_cast<int>(std::round(rules.repeatRewardFactor * 100.0f));
+                        const int recoveryPercent = static_cast<int>(std::round(rules.recoveryRewardFactor * 100.0f));
+                        if (repeatPenalty) summaryStream << u8" (повтор " << repeatPercent << "%)";
+                        if (recoveryPenalty) summaryStream << u8" (прогрев " << recoveryPercent << "%)";
                         const std::string summaryText = summaryStream.str();
                         AppendLog(state, state.active->id, summaryText);
                         storage->save_profile(state.active->profile);
@@ -1605,6 +2221,7 @@ skip_xp_body:
         glfwSwapBuffers(window);
     }
 
+    ReleaseIconTextures();
     ImGui_ImplOpenGL2_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

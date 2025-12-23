@@ -8,6 +8,19 @@
 
 #include "Skill.h"
 
+struct Achievement {
+    std::string title;
+    std::string skill;
+    double bonusPercent = 0.0; // percent applied to skill XP
+    std::int64_t awardedAt = 0;
+    std::int64_t expiresAt = 0; // 0 = no expiry
+    std::string icon;
+
+    bool is_active(std::int64_t now) const {
+        return expiresAt == 0 || now <= expiresAt;
+    }
+};
+
 class Profile {
 public:
     inline static constexpr int kCategoryCount = 5;
@@ -57,6 +70,12 @@ public:
     void start_penalty_recovery(int tasks);
     void consume_penalty_task();
 
+    const std::vector<Achievement>& achievements() const { return achievements_; }
+    void set_achievements(const std::vector<Achievement>& items) { achievements_ = items; }
+    void add_achievement(const Achievement& ach) { achievements_.push_back(ach); }
+    void remove_achievement(size_t idx) { if (idx < achievements_.size()) achievements_.erase(achievements_.begin() + idx); }
+    double skill_bonus_multiplier(const std::string& skillName, std::int64_t now) const;
+
 private:
     static int RequiredXpForLevel(int level);
     static int TotalXpForLevel(int level);
@@ -73,4 +92,5 @@ private:
     std::int64_t lastTaskTimestamp_ = 0;
     int inactivityTasks_ = 0;
     int recoveryTasksRemaining_ = 0;
+    std::vector<Achievement> achievements_;
 };

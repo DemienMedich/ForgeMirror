@@ -105,20 +105,14 @@ void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
     if (exists) return;
 
     Profile admin(kAdminName);
-    if (auto skill = catalog.canonical("Modeling")) {
+    if (auto skill = catalog.id_for_name("Modeling")) {
         admin.add_skill(*skill, 1, catalog.weight(*skill));
-    } else {
-        admin.add_skill("Modeling", 1, catalog.weight("Modeling"));
     }
-    if (auto skill = catalog.canonical("Lighting")) {
+    if (auto skill = catalog.id_for_name("Lighting")) {
         admin.add_skill(*skill, 1, catalog.weight(*skill));
-    } else {
-        admin.add_skill("Lighting", 1, catalog.weight("Lighting"));
     }
-    if (auto skill = catalog.canonical("Materials")) {
+    if (auto skill = catalog.id_for_name("Materials")) {
         admin.add_skill(*skill, 1, catalog.weight(*skill));
-    } else {
-        admin.add_skill("Materials", 1, catalog.weight("Materials"));
     }
 
     SyncProfileWithCatalog(admin, catalog);
@@ -174,12 +168,32 @@ std::filesystem::path ResolveStorageDirectory() {
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
     auto skills = profile.list_skills();
     if (skills.empty()) return;
+    bool changed = false;
     for (auto& skill : skills) {
-        if (auto canonical = catalog.canonical(skill.name)) {
-            skill.name = *canonical;
+        if (!catalog.contains_id(skill.name)) {
+            if (auto id = catalog.id_for_name(skill.name)) {
+                skill.name = *id;
+                changed = true;
+            }
         }
         skill.weight = catalog.weight(skill.name);
     }
-    profile.set_skills(skills);
+
+    auto ach = profile.achievements();
+    bool achChanged = false;
+    for (auto& a : ach) {
+        if (!catalog.contains_id(a.skill)) {
+            if (auto id = catalog.id_for_name(a.skill)) {
+                a.skill = *id;
+                achChanged = true;
+            }
+        }
+    }
+    if (achChanged) {
+        profile.set_achievements(ach);
+    }
+    if (changed || achChanged) {
+        profile.set_skills(skills);
+    }
 }
 

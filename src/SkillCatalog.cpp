@@ -4,6 +4,8 @@
 #include <cctype>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
+#include <locale>
 #include <sstream>
 #include <unordered_set>
 
@@ -41,6 +43,97 @@ double clamp_weight(double value) {
     return value;
 }
 
+double parse_weight(const std::string& value, double fallback) {
+    std::string out;
+    out.reserve(value.size());
+    for (unsigned char ch : value) {
+        if (std::isdigit(ch)) {
+            out.push_back(static_cast<char>(ch));
+        } else if (ch == '.' || ch == ',') {
+            out.push_back('.');
+        } else if (ch == '-' && out.empty()) {
+            out.push_back('-');
+        }
+    }
+    if (out.empty()) return fallback;
+    try {
+        return std::stod(out);
+    } catch (...) {
+        return fallback;
+    }
+}
+
+bool decode_utf8(const std::string& s, size_t& i, uint32_t& out) {
+    unsigned char c0 = static_cast<unsigned char>(s[i]);
+    if (c0 < 0x80) {
+        out = c0;
+        ++i;
+        return true;
+    }
+    if ((c0 >> 5) == 0x6 && i + 1 < s.size()) {
+        unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+        if ((c1 & 0xC0) != 0x80) return false;
+        out = ((c0 & 0x1F) << 6) | (c1 & 0x3F);
+        i += 2;
+        return true;
+    }
+    if ((c0 >> 4) == 0xE && i + 2 < s.size()) {
+        unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+        unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+        if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return false;
+        out = ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
+        i += 3;
+        return true;
+    }
+    if ((c0 >> 3) == 0x1E && i + 3 < s.size()) {
+        unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+        unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+        unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+        if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) return false;
+        out = ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+        i += 4;
+        return true;
+    }
+    return false;
+}
+
+void append_utf8(std::string& out, uint32_t cp) {
+    if (cp <= 0x7F) {
+        out.push_back(static_cast<char>(cp));
+    } else if (cp <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+}
+
+uint32_t lower_codepoint(uint32_t cp) {
+    if (cp >= 'A' && cp <= 'Z') return cp + 32;
+    if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;
+    if (cp == 0x0401) return 0x0451;
+    return cp;
+}
+
+std::string lowercase_utf8(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    size_t i = 0;
+    while (i < value.size()) {
+        uint32_t cp = 0;
+        if (!decode_utf8(value, i, cp)) break;
+        append_utf8(out, lower_codepoint(cp));
+    }
+    return out;
+}
+
 } // namespace
 
 SkillCatalog::SkillCatalog(std::filesystem::path baseDir)
@@ -48,33 +141,47 @@ SkillCatalog::SkillCatalog(std::filesystem::path baseDir)
     load();
 }
 
-bool SkillCatalog::contains(const std::string& skill) const {
-    return index_.count(normalize(skill)) > 0;
+bool SkillCatalog::contains_id(const std::string& id) const {
+    return namesById_.count(id) > 0;
 }
 
-std::optional<std::string> SkillCatalog::canonical(const std::string& skill) const {
-    auto norm = normalize(skill);
-    auto it = index_.find(norm);
-    if (it == index_.end()) return std::nullopt;
+bool SkillCatalog::contains_name(const std::string& name) const {
+    return idByName_.count(normalize(name)) > 0;
+}
+
+std::optional<std::string> SkillCatalog::id_for_name(const std::string& name) const {
+    auto norm = normalize(name);
+    auto it = idByName_.find(norm);
+    if (it == idByName_.end()) return std::nullopt;
     return it->second;
 }
 
+std::optional<std::string> SkillCatalog::resolve_id(const std::string& idOrName) const {
+    if (contains_id(idOrName)) return idOrName;
+    return id_for_name(idOrName);
+}
+
 double SkillCatalog::weight(const std::string& skill) const {
-    auto norm = normalize(skill);
-    auto it = index_.find(norm);
-    if (it != index_.end()) {
-        auto wIt = weights_.find(it->second);
-        if (wIt != weights_.end()) return wIt->second;
+    auto id = resolve_id(skill);
+    if (id) {
+        auto it = weightsById_.find(*id);
+        if (it != weightsById_.end()) return it->second;
     }
     return 1.0;
 }
 
-std::string SkillCatalog::description(const std::string& skill) const {
-    auto norm = normalize(skill);
-    auto it = index_.find(norm);
-    if (it != index_.end()) {
-        auto dIt = descriptions_.find(it->second);
-        if (dIt != descriptions_.end()) return dIt->second;
+std::string SkillCatalog::display_name(const std::string& id) const {
+    if (auto resolved = resolve_id(id)) {
+        auto it = namesById_.find(*resolved);
+        if (it != namesById_.end()) return it->second;
+    }
+    return id;
+}
+
+std::string SkillCatalog::description(const std::string& id) const {
+    if (auto resolved = resolve_id(id)) {
+        auto it = descriptionsById_.find(*resolved);
+        if (it != descriptionsById_.end()) return it->second;
     }
     return {};
 }
@@ -86,11 +193,11 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
     std::string desc = trim(description);
 
     auto norm = normalize(trimmed);
-    auto it = index_.find(norm);
-    if (it != index_.end()) {
-        const std::string& canonicalName = it->second;
-        double& storedWeight = weights_[canonicalName];
-        std::string& storedDesc = descriptions_[canonicalName];
+    auto it = idByName_.find(norm);
+    if (it != idByName_.end()) {
+        const std::string& id = it->second;
+        double& storedWeight = weightsById_[id];
+        std::string& storedDesc = descriptionsById_[id];
         bool changed = false;
         if (std::abs(storedWeight - weight) >= 1e-3) {
             storedWeight = weight;
@@ -104,36 +211,78 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
         return changed;
     }
 
-    add_internal(trimmed, weight, desc, true);
+    const std::string id = make_id(trimmed);
+    add_internal(id, trimmed, weight, desc, true);
     return true;
 }
 
-bool SkillCatalog::remove_skill(const std::string& skill) {
-    std::string trimmed = trim(skill);
+bool SkillCatalog::update_skill(const std::string& id, const std::string& displayName, double weight, const std::string& description) {
+    auto resolved = resolve_id(id);
+    if (!resolved) return false;
+    std::string trimmed = trim(displayName);
     if (trimmed.empty()) return false;
-    const std::string norm = normalize(trimmed);
-    auto it = index_.find(norm);
-    if (it == index_.end()) return false;
-    const std::string canonical = it->second;
+    weight = clamp_weight(weight);
+    std::string desc = trim(description);
 
-    index_.erase(it);
-    weights_.erase(canonical);
-    descriptions_.erase(canonical);
-    orderedSkills_.erase(std::remove(orderedSkills_.begin(), orderedSkills_.end(), canonical), orderedSkills_.end());
+    const std::string currentId = *resolved;
+    const std::string newNorm = normalize(trimmed);
+    auto existing = idByName_.find(newNorm);
+    if (existing != idByName_.end() && existing->second != currentId) {
+        return false;
+    }
+
+    bool changed = false;
+    auto nameIt = namesById_.find(currentId);
+    if (nameIt != namesById_.end() && nameIt->second != trimmed) {
+        if (nameIt->second.size()) {
+            idByName_.erase(normalize(nameIt->second));
+        }
+        nameIt->second = trimmed;
+        idByName_[newNorm] = currentId;
+        changed = true;
+    }
+
+    double& storedWeight = weightsById_[currentId];
+    if (std::abs(storedWeight - weight) >= 1e-3) {
+        storedWeight = weight;
+        changed = true;
+    }
+    std::string& storedDesc = descriptionsById_[currentId];
+    if (storedDesc != desc) {
+        storedDesc = std::move(desc);
+        changed = true;
+    }
+    if (changed) save();
+    return changed;
+}
+
+bool SkillCatalog::remove_skill(const std::string& idOrName) {
+    auto resolved = resolve_id(idOrName);
+    if (!resolved) return false;
+    const std::string id = *resolved;
+    auto nameIt = namesById_.find(id);
+    if (nameIt == namesById_.end()) return false;
+
+    idByName_.erase(normalize(nameIt->second));
+    namesById_.erase(id);
+    weightsById_.erase(id);
+    descriptionsById_.erase(id);
+    orderedIds_.erase(std::remove(orderedIds_.begin(), orderedIds_.end(), id), orderedIds_.end());
     save();
     return true;
 }
 
 void SkillCatalog::load() {
-    orderedSkills_.clear();
-    index_.clear();
-    weights_.clear();
-    descriptions_.clear();
+    orderedIds_.clear();
+    idByName_.clear();
+    namesById_.clear();
+    weightsById_.clear();
+    descriptionsById_.clear();
 
     std::ifstream in(file_path());
     if (!in) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(entry.name, entry.weight, entry.description, false);
+            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
         }
         save();
         return;
@@ -144,57 +293,76 @@ void SkillCatalog::load() {
         auto trimmed = trim(line);
         if (trimmed.empty() || trimmed[0] == '#') continue;
 
-        double weight = 1.0;
-        std::string name = trimmed;
-        std::string description;
-
         std::vector<std::string> parts;
         std::string part;
         std::istringstream ss(trimmed);
         while (std::getline(ss, part, '|')) {
             parts.push_back(trim(part));
         }
-        if (!parts.empty()) name = parts[0];
-        if (parts.size() >= 2) {
-            if (!parts[1].empty()) {
-                try {
-                    weight = std::stod(parts[1]);
-                } catch (...) {
-                    weight = 1.0;
+        std::string id;
+        std::string name;
+        std::string desc;
+        double weight = 1.0;
+
+        if (parts.size() >= 4) {
+            id = parts[0];
+            name = parts[1];
+            weight = parse_weight(parts[2], 1.0);
+            desc = parts[3];
+            if (parts.size() > 4) {
+                for (size_t i = 4; i < parts.size(); ++i) {
+                    if (!desc.empty()) desc += "|";
+                    desc += parts[i];
                 }
             }
+        } else if (parts.size() >= 3) {
+            name = parts[0];
+            weight = parse_weight(parts[1], 1.0);
+            desc = parts[2];
+            if (parts.size() > 3) {
+                for (size_t i = 3; i < parts.size(); ++i) {
+                    if (!desc.empty()) desc += "|";
+                    desc += parts[i];
+                }
+            }
+        } else if (parts.size() >= 2) {
+            name = parts[0];
+            weight = parse_weight(parts[1], 1.0);
+        } else if (!parts.empty()) {
+            name = parts[0];
         }
-        if (parts.size() >= 3) {
-            description = parts[2];
-        }
-        add_internal(name, clamp_weight(weight), description, false);
+        name = trim(name);
+        if (name.empty()) continue;
+        if (id.empty()) id = make_id(name);
+        add_internal(id, name, clamp_weight(weight), desc, false);
     }
 
-    if (orderedSkills_.empty()) {
+    if (orderedIds_.empty()) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(entry.name, entry.weight, entry.description, false);
+            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
         }
         save();
     } else {
         bool changed = false;
-        std::unordered_set<std::string> existing(orderedSkills_.begin(), orderedSkills_.end());
+        std::unordered_set<std::string> existing(orderedIds_.begin(), orderedIds_.end());
         for (const auto& entry : kDefaultSkills) {
             const std::string name(entry.name);
-            const std::string norm = normalize(name);
-            if (!index_.count(norm)) {
-                orderedSkills_.push_back(name);
-                index_[norm] = name;
-                weights_[name] = entry.weight;
-                descriptions_[name] = entry.description;
+            if (!idByName_.count(normalize(name))) {
+                const std::string id = make_id(name);
+                orderedIds_.push_back(id);
+                namesById_[id] = name;
+                idByName_[normalize(name)] = id;
+                weightsById_[id] = entry.weight;
+                descriptionsById_[id] = entry.description;
                 changed = true;
             } else {
-                auto& canonical = index_[norm];
-                double& w = weights_[canonical];
+                const std::string id = *id_for_name(name);
+                double& w = weightsById_[id];
                 if (std::abs(w - entry.weight) > 1e-3) {
                     w = entry.weight;
                     changed = true;
                 }
-                auto& desc = descriptions_[canonical];
+                auto& desc = descriptionsById_[id];
                 if (desc.empty() && entry.description) {
                     desc = entry.description;
                     changed = true;
@@ -209,11 +377,14 @@ void SkillCatalog::save() const {
     auto path = file_path();
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    for (const auto& skill : orderedSkills_) {
-        const double w = weight(skill);
-        out << skill << "|" << w;
-        auto it = descriptions_.find(skill);
-        if (it != descriptions_.end() && !it->second.empty()) {
+    out.imbue(std::locale::classic());
+    for (const auto& id : orderedIds_) {
+        auto nameIt = namesById_.find(id);
+        if (nameIt == namesById_.end()) continue;
+        const double w = weight(id);
+        out << id << "|" << nameIt->second << "|" << w;
+        auto it = descriptionsById_.find(id);
+        if (it != descriptionsById_.end() && !it->second.empty()) {
             out << "|" << it->second;
         }
         out << "\n";
@@ -232,25 +403,61 @@ std::string SkillCatalog::trim(std::string s) {
 }
 
 std::string SkillCatalog::normalize(const std::string& s) {
+    std::string trimmed = trim(s);
+    std::string lower = lowercase_utf8(trimmed);
     std::string out;
-    out.reserve(s.size());
-    for (char c : s) {
+    out.reserve(lower.size());
+    for (char c : lower) {
         if (!std::isspace(static_cast<unsigned char>(c))) {
-            out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            out.push_back(c);
         }
     }
     return out;
 }
 
-void SkillCatalog::add_internal(const std::string& skill, double weight, const std::string& description, bool persist) {
-    const std::string canonical = skill;
-    const std::string norm = normalize(skill);
-    if (index_.count(norm)) return;
+std::string SkillCatalog::make_id(const std::string& displayName) const {
+    uint64_t hash = 14695981039346656037ULL;
+    for (unsigned char c : displayName) {
+        hash ^= c;
+        hash *= 1099511628211ULL;
+    }
+    std::ostringstream ss;
+    ss << "sk_" << std::hex << std::setw(16) << std::setfill('0') << hash;
+    std::string base = ss.str();
+    std::string candidate = base;
+    int suffix = 1;
+    while (namesById_.count(candidate) > 0) {
+        candidate = base + "_" + std::to_string(suffix++);
+    }
+    return candidate;
+}
 
-    orderedSkills_.push_back(canonical);
-    index_.emplace(norm, canonical);
-    weights_[canonical] = clamp_weight(weight);
-    descriptions_[canonical] = trim(description);
+void SkillCatalog::add_internal(const std::string& id, const std::string& displayName, double weight, const std::string& description, bool persist) {
+    std::string trimmedName = trim(displayName);
+    if (trimmedName.empty()) return;
+    const std::string norm = normalize(trimmedName);
+    auto existingByName = idByName_.find(norm);
+    if (existingByName != idByName_.end()) {
+        const std::string existingId = existingByName->second;
+        namesById_[existingId] = trimmedName;
+        weightsById_[existingId] = clamp_weight(weight);
+        descriptionsById_[existingId] = trim(description);
+        if (persist) save();
+        return;
+    }
+
+    if (namesById_.count(id) == 0) {
+        orderedIds_.push_back(id);
+    } else {
+        const std::string& oldName = namesById_[id];
+        if (!oldName.empty()) {
+            idByName_.erase(normalize(oldName));
+        }
+    }
+    namesById_[id] = trimmedName;
+    idByName_[norm] = id;
+    weightsById_[id] = clamp_weight(weight);
+    descriptionsById_[id] = trim(description);
 
     if (persist) save();
 }

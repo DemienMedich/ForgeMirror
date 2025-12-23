@@ -115,6 +115,18 @@ void Profile::set_level_and_progress(int level, int progress) {
     RecalculateLevel();
 }
 
+double Profile::skill_bonus_multiplier(const std::string& skillName, std::int64_t now) const {
+    double bonusSum = 0.0;
+    for (const auto& ach : achievements_) {
+        if (!ach.is_active(now)) continue;
+        if (ach.skill == skillName) {
+            bonusSum += ach.bonusPercent;
+        }
+    }
+    if (bonusSum <= 0.0) return 1.0;
+    return 1.0 + bonusSum / 100.0;
+}
+
 int Profile::category_best_score(size_t index) const {
     if (index >= bestCategoryScores_.size()) return 0;
     return bestCategoryScores_[index];
