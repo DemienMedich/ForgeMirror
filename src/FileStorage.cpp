@@ -184,6 +184,7 @@ public:
         int storedOverall = -1;
         int storedTotalXp = -1;
         int storedProgress = -1;
+        bool storedAdmin = false;
         std::vector<std::string> skillNames;
         std::vector<XpEvent> queue;
         std::optional<std::string> token;
@@ -221,6 +222,8 @@ public:
                     storedTotalXp = parse_int(val, -1);
                 } else if (key == "progress") {
                     storedProgress = parse_int(val, -1);
+                } else if (key == "admin") {
+                    storedAdmin = parse_int(val, 0) != 0;
                 } else if (key == "lastTaskTs") {
                     try { storedLastTask = std::stoll(sanitize_int(val)); } catch (...) {}
                 } else if (key == "inertiaTasks") {
@@ -331,6 +334,7 @@ public:
         profile.set_last_task_timestamp(storedLastTask);
         profile.set_inactivity_tasks(storedInertiaTasks);
         profile.start_penalty_recovery(storedRecoveryTasks);
+        profile.set_admin(storedAdmin);
 
         token_ = token;
         queue_ = std::move(queue);
@@ -351,6 +355,7 @@ public:
         ss << "overall=" << profile.overall_level() << "\n";
         ss << "progress=" << profile.level_progress() << "\n";
         ss << "totalXp=" << profile.total_xp() << "\n";
+        ss << "admin=" << (profile.is_admin() ? 1 : 0) << "\n";
         ss << "lastTaskTs=" << profile.last_task_timestamp() << "\n";
         ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
         ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";

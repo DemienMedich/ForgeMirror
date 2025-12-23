@@ -50,6 +50,8 @@ public:
     std::int64_t last_task_timestamp() const { return lastTaskTimestamp_; }
     void set_inactivity_tasks(int tasks) { inactivityTasks_ = tasks; }
     int inactivity_tasks() const { return inactivityTasks_; }
+    bool is_admin() const { return isAdmin_; }
+    void set_admin(bool value) { isAdmin_ = value; }
     bool penalty_active() const { return recoveryTasksRemaining_ > 0; }
     int recovery_tasks_remaining() const { return recoveryTasksRemaining_; }
     void start_penalty_recovery(int tasks);
@@ -65,6 +67,7 @@ private:
     int levelProgress_ = 0;
     int overallLevel_ = 1;
     int totalXp_ = 0;
+    bool isAdmin_ = false;
     std::array<int, kCategoryCount> bestCategoryScores_ = {0, 0, 0, 0, 0};
     std::array<int, kCategoryCount> categoryCooldowns_ = {10, 10, 10, 10, 10};
     std::int64_t lastTaskTimestamp_ = 0;

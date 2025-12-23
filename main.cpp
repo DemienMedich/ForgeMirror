@@ -408,29 +408,32 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
         }
     }
 
-    profile.reset_category_cooldown(static_cast<size_t>(details.categoryIndex));
-    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
-        if (idx == static_cast<size_t>(details.categoryIndex)) continue;
-        profile.tick_category_cooldown(idx);
-        if (profile.category_cooldown(idx) < 0) {
-            int decayedScore = profile.category_best_score(idx) - 1;
-            profile.update_category_best_score(idx, decayedScore);
-            profile.reset_category_cooldown(idx);
-            std::ostringstream decay;
-            decay << "Категория " << Profile::kCategoryLabels[idx]
-                  << " деградировала до " << profile.category_best_score(idx) << "/10.";
-            outcome.notes.push_back(decay.str());
+    constexpr bool kDecayEnabled = false;
+    if (kDecayEnabled) {
+        profile.reset_category_cooldown(static_cast<size_t>(details.categoryIndex));
+        for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+            if (idx == static_cast<size_t>(details.categoryIndex)) continue;
+            profile.tick_category_cooldown(idx);
+            if (profile.category_cooldown(idx) < 0) {
+                int decayedScore = profile.category_best_score(idx) - 1;
+                profile.update_category_best_score(idx, decayedScore);
+                profile.reset_category_cooldown(idx);
+                std::ostringstream decay;
+                decay << "Категория " << Profile::kCategoryLabels[idx]
+                      << " деградировала до " << profile.category_best_score(idx) << "/10.";
+                outcome.notes.push_back(decay.str());
+            }
         }
+        int buffer = profile.category_cooldown(0);
+        for (size_t idx = 1; idx < Profile::kCategoryCount; ++idx) {
+            buffer = std::min(buffer, profile.category_cooldown(idx));
+        }
+        buffer = std::max(0, buffer);
+        profile.set_inactivity_tasks(buffer);
+        std::ostringstream bufferMsg;
+        bufferMsg << "Буфер деградации обновлён: " << buffer << " задач.";
+        outcome.notes.push_back(bufferMsg.str());
     }
-    int buffer = profile.category_cooldown(0);
-    for (size_t idx = 1; idx < Profile::kCategoryCount; ++idx) {
-        buffer = std::min(buffer, profile.category_cooldown(idx));
-    }
-    buffer = std::max(0, buffer);
-    profile.set_inactivity_tasks(buffer);
-    std::ostringstream bufferMsg;
-    bufferMsg << "Буфер деградации обновлён: " << buffer << " задач.";
-    outcome.notes.push_back(bufferMsg.str());
 
     return outcome;
 }
@@ -519,7 +522,7 @@ static void show_available_profiles(IJobStorage& storage) {
 
 // Resolve user input (id or name) into a profile: load existing, revive archived,
 // or create a new profile based on blueprints and synchronized catalog data.
-static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillCatalog& catalog, const std::string& token) {
+static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillCatalog& catalog, const std::string& token, bool allowCreation) {
     if (is_profile_id(token)) {
         if (!storage.set_active_profile(token)) {
             std::cout << "Профиль с таким ID не найден или находится в архиве.\n";
@@ -562,6 +565,11 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
         return std::nullopt;
     }
 
+    if (!allowCreation) {
+        std::cout << "Создание профиля доступно только администратору.\n";
+        return std::nullopt;
+    }
+
     Profile profile(token);
     if (auto bp = find_blueprint(token)) {
         profile = make_profile_from_blueprint(*bp, catalog);
@@ -591,7 +599,7 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
 }
 
 // Command loop for a single logged-in profile: handles addxp/show/sync/logout/quit.
-static bool run_profile_session(Profile& profile, const std::string& profileId, IJobStorage& storage, IApiClient& api, SkillCatalog& catalog) {
+static bool run_profile_session(Profile& profile, const std::string& profileId, IJobStorage& storage, IApiClient& api, SkillCatalog& catalog, bool adminMode) {
     auto sync_now = [&](bool verbose = true) {
         bool ok = storage.save_profile(profile);
         if (!ok) {
@@ -604,12 +612,16 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
 
     sync_now(false);
 
-    std::cout << "\nВы вошли как " << profile.name() << " [" << profileId << "]." << std::endl;
+    std::cout << "\nВы вошли как " << profile.name() << " [" << profileId << "]." << (adminMode ? " (Администратор)" : " (Просмотр)") << std::endl;
     print_profile(profile);
-    std::cout << "\nКоманды: addxp <skill> <amount> | task | show | sync | logout | quit\n";
-    if (profile.penalty_active()) {
-        std::cout << "Внимание: действует штраф за простои (" << profile.recovery_tasks_remaining()
-                  << " задач).\n";
+    if (adminMode) {
+        std::cout << "\nКоманды: addxp <skill> <amount> | task | show | sync | logout | quit\n";
+        if (profile.penalty_active()) {
+            std::cout << "Внимание: действует штраф за простои (" << profile.recovery_tasks_remaining()
+                      << " задач).\n";
+        }
+    } else {
+        std::cout << "\nРежим просмотра: доступны команды show | logout | quit\n";
     }
 
     std::string cmd;
@@ -621,6 +633,10 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
             continue;
         }
         if (cmd == "sync") {
+            if (!adminMode) {
+                std::cout << "Недоступно в режиме просмотра.\n";
+                continue;
+            }
             sync_now();
             continue;
         }
@@ -634,6 +650,10 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
             return true;
         }
         if (cmd == "task") {
+            if (!adminMode) {
+                std::cout << "Недоступно в режиме просмотра.\n";
+                continue;
+            }
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             auto details = prompt_task_details(profile, catalog);
             if (!details) {
@@ -678,6 +698,10 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
             continue;
         }
         if (cmd == "addxp") {
+            if (!adminMode) {
+                std::cout << "Недоступно в режиме просмотра.\n";
+                continue;
+            }
             std::string tail;
             if (!std::getline(std::cin >> std::ws, tail)) {
                 return true; // EOF or stream error => exit app
@@ -810,10 +834,14 @@ int main() {
 #endif
     std::cout << "!\n";
 
+    bool adminAuthed = false;
     bool exitApp = false;
     while (!exitApp) {
         std::cout << "\n=== Главное меню ===\n";
-        std::cout << "Команды: list | skills | archive <id> | restore <id> | delete <id> | login <id|name> | help | quit\n> ";
+        std::cout << (adminAuthed ? "[Режим администратора]\n" : "[Режим просмотра]\n");
+        std::cout << "Команды: list | skills | login <id|name> | admin | help | quit";
+        if (adminAuthed) std::cout << " | archive <id> | restore <id> | delete <id>";
+        std::cout << "\n> ";
         std::string menuCmd;
         if (!(std::cin >> menuCmd)) break;
 
@@ -823,12 +851,15 @@ int main() {
         }
 
         if (menuCmd == "help") {
-            std::cout << "list — показать профили.\n"
-                         "skills — вывести каталог навыков.\n"
-                         "archive <id> / restore <id> — архивировать или восстановить профиль.\n"
-                         "delete <id> — удалить профиль навсегда.\n"
-                         "login <id|name> — войти в профиль по ID или имени.\n"
-                         "quit — завершить работу приложения.\n";
+            std::cout << "list - показать профили.\n"
+                         "skills - вывести каталог навыков.\n"
+                         "login <id|name> - открыть профиль (модификация только при активном администраторе).\n"
+                         "admin - вход/выход из режима администратора.\n";
+            if (adminAuthed) {
+                std::cout << "archive <id> / restore <id> - архивировать или восстановить профиль.\n"
+                             "delete <id> - удалить профиль навсегда.\n";
+            }
+            std::cout << "quit - завершить работу приложения.\n";
             continue;
         }
 
@@ -842,8 +873,31 @@ int main() {
             continue;
         }
 
+        if (menuCmd == "admin") {
+            if (adminAuthed) {
+                adminAuthed = false;
+                std::cout << "Режим администратора отключён.\n";
+                continue;
+            }
+            std::string password;
+            std::cout << "Введите пароль администратора: ";
+            std::cin >> password;
+            if (password == kAdminPassword) {
+                adminAuthed = true;
+                std::cout << "Режим администратора активирован.\n";
+            } else {
+                std::cout << "Неверный пароль.\n";
+            }
+            continue;
+        }
+
 
         if (menuCmd == "archive" || menuCmd == "restore" || menuCmd == "delete") {
+            if (!adminAuthed) {
+                std::cout << "Недоступно: требуется режим администратора (команда 'admin').\n";
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                continue;
+            }
             std::string profileId;
             if (!(std::cin >> profileId)) {
                 std::cin.clear();
@@ -898,10 +952,11 @@ int main() {
                 continue;
             }
 
-            auto activeProfile = acquire_profile(*storage, catalog, token);
+            auto activeProfile = acquire_profile(*storage, catalog, token, adminAuthed);
             if (!activeProfile) {
                 continue;
             }
+            const bool adminMode = adminAuthed && activeProfile->profile.is_admin();
 
             auto authToken = api->login(activeProfile->profile.name(), "default");
             if (authToken) {
@@ -911,7 +966,7 @@ int main() {
                 std::cout << "Внимание: не удалось авторизоваться на сервере.\n";
             }
 
-            bool requestedExit = run_profile_session(activeProfile->profile, activeProfile->id, *storage, *api, catalog);
+            bool requestedExit = run_profile_session(activeProfile->profile, activeProfile->id, *storage, *api, catalog, adminMode);
             if (requestedExit) {
                 exitApp = true;
             }

@@ -16,6 +16,7 @@ public:
     double weight(const std::string& skill) const;
     std::string description(const std::string& skill) const;
     bool add_skill(const std::string& skill, double weight = 1.0, const std::string& description = {});
+    bool remove_skill(const std::string& skill);
 
 private:
     void load();

@@ -108,6 +108,22 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
     return true;
 }
 
+bool SkillCatalog::remove_skill(const std::string& skill) {
+    std::string trimmed = trim(skill);
+    if (trimmed.empty()) return false;
+    const std::string norm = normalize(trimmed);
+    auto it = index_.find(norm);
+    if (it == index_.end()) return false;
+    const std::string canonical = it->second;
+
+    index_.erase(it);
+    weights_.erase(canonical);
+    descriptions_.erase(canonical);
+    orderedSkills_.erase(std::remove(orderedSkills_.begin(), orderedSkills_.end(), canonical), orderedSkills_.end());
+    save();
+    return true;
+}
+
 void SkillCatalog::load() {
     orderedSkills_.clear();
     index_.clear();

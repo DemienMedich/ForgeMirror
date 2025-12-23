@@ -84,11 +84,24 @@ std::string DescribeOverallRank(const Profile& profile) {
 }
 
 void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
-    constexpr const char* kAdminName = "Roman";
+    constexpr const char* kAdminName = "Admin";
     auto stored = storage.list_profiles();
-    bool exists = std::any_of(stored.begin(), stored.end(), [&](const IJobStorage::ProfileInfo& info) {
-        return info.name == kAdminName && !info.archived;
-    });
+    bool exists = false;
+    for (const auto& info : stored) {
+        if (info.name == kAdminName && !info.archived) {
+            exists = true;
+            // Ensure admin flag is set on the stored profile.
+            if (storage.set_active_profile(info.id)) {
+                if (auto prof = storage.load_profile()) {
+                    if (!prof->is_admin()) {
+                        prof->set_admin(true);
+                        storage.save_profile(*prof);
+                    }
+                }
+            }
+            break;
+        }
+    }
     if (exists) return;
 
     Profile admin(kAdminName);
@@ -109,6 +122,7 @@ void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
     }
 
     SyncProfileWithCatalog(admin, catalog);
+    admin.set_admin(true);
 
     auto info = storage.create_profile(admin);
     if (info) {
