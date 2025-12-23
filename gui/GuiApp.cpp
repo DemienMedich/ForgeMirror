@@ -316,6 +316,37 @@ std::optional<std::filesystem::path> ResolveIconPath(const std::string& icon, co
     return std::nullopt;
 }
 
+struct IconChoice {
+    std::string label;
+    std::string relativePath;
+    std::filesystem::path absolutePath;
+};
+
+std::vector<IconChoice> LoadAchievementIconChoices(const std::filesystem::path& storageDir) {
+    std::vector<IconChoice> out;
+    std::error_code ec;
+    auto iconDir = storageDir / "achievements" / "icons";
+    if (!std::filesystem::exists(iconDir, ec)) return out;
+    for (const auto& entry : std::filesystem::directory_iterator(iconDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        auto ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (ext != ".png") continue;
+        const auto filename = entry.path().filename();
+        auto rel = std::filesystem::path("achievements") / "icons" / filename;
+        IconChoice choice;
+        choice.label = filename.string();
+        choice.relativePath = rel.generic_string();
+        choice.absolutePath = entry.path();
+        out.push_back(std::move(choice));
+    }
+    std::sort(out.begin(), out.end(), [](const IconChoice& a, const IconChoice& b) {
+        return a.label < b.label;
+    });
+    return out;
+}
+
 bool LoadIconTexture(const std::filesystem::path& path, IconTexture& out) {
     int w = 0;
     int h = 0;
@@ -1266,7 +1297,7 @@ int main() {
                 ImGui::SameLine();
                 if (ImGui::Button(u8"Применить ранг")) {
                     const int newLevel = opts[state.selectedRankIndex].level;
-                    state.active->profile.set_level_and_progress(newLevel, 0);
+                    state.active->profile.set_level_and_progress(newLevel, newLevel);
                     storage->save_profile(state.active->profile);
                     SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
                 }
@@ -1485,6 +1516,37 @@ int main() {
                         ImGui::Dummy(ImVec2(0.0f, 4.0f));
                         ImGui::InputText(u8"Название ачивки", state.achTitle.data(), state.achTitle.size());
                         ImGui::InputText(u8"Иконка (путь)", state.achIcon.data(), state.achIcon.size());
+                        ImGui::SameLine();
+                        if (ImGui::Button(u8"Список иконок")) {
+                            ImGui::OpenPopup(u8"Выбор иконки");
+                        }
+                        if (ImGui::BeginPopup(u8"Выбор иконки")) {
+                            const auto icons = LoadAchievementIconChoices(state.storageDir);
+                            if (icons.empty()) {
+                                ImGui::TextUnformatted(u8"Иконки не найдены.");
+                            } else {
+                                if (ImGui::BeginChild("icon_picker", ImVec2(360.0f, 240.0f), true)) {
+                                    for (size_t i = 0; i < icons.size(); ++i) {
+                                        const auto& choice = icons[i];
+                                        ImGui::PushID(static_cast<int>(i));
+                                        bool selected = choice.relativePath == std::string(state.achIcon.data());
+                                        if (const auto* tex = GetIconTexture(choice.absolutePath)) {
+                                            ImGui::Image(ImTextureRef((ImTextureID)(intptr_t)tex->id), ImVec2(32.0f, 32.0f));
+                                        } else {
+                                            ImGui::Button("?", ImVec2(32.0f, 32.0f));
+                                        }
+                                        ImGui::SameLine();
+                                        if (ImGui::Selectable(choice.label.c_str(), selected)) {
+                                            std::snprintf(state.achIcon.data(), state.achIcon.size(), "%s", choice.relativePath.c_str());
+                                            ImGui::CloseCurrentPopup();
+                                        }
+                                        ImGui::PopID();
+                                    }
+                                }
+                                ImGui::EndChild();
+                            }
+                            ImGui::EndPopup();
+                        }
                         ImGui::InputFloat(u8"Бонус к XP (%)", &state.achBonus, 0.5f, 2.0f, "%.1f");
                         ImGui::InputInt(u8"Срок (дней, 0 = без срока)", &state.achDurationDays);
                         if (state.achDurationDays < 0) state.achDurationDays = 0;
