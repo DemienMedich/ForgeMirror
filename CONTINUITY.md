@@ -25,6 +25,7 @@ State:
 - Skill catalog: admin can add/remove skills and rename/edit descriptions; catalog now stores stable skill IDs with display names; rename uses confirmation before merging XP.
 - UI customization: added `data/meta/ui.ini` with theme/style controls, per-window background textures from `data/ui/backgrounds`, and a 3D preview window that loads `.obj`/`.fbx` from `data/models` (wireframe + orbit controls).
 - UI recovery: clamps invalid UI settings and enforces min window sizes; `F10` resets UI settings + clears layout.
+- Workspace: main menu now toggles visibility of auxiliary windows; profile stays always visible.
 
 Done:
 - Fixed level progress bar math (uses total needed XP).

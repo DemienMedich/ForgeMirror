@@ -204,6 +204,11 @@ struct GuiState {
     std::string viewMeshPath;
     std::string viewMeshError;
     std::array<char, 260> modelPathBuffer{};
+    bool showSkillCatalog = false;
+    bool showPipeline = false;
+    bool showRules = false;
+    bool showUiSettings = false;
+    bool showView3d = false;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
@@ -1810,6 +1815,10 @@ int main() {
             }
         }
         ApplyUiSettings(state.ui, style, io);
+        if (!state.isAdmin) {
+            state.showRules = false;
+            state.showUiSettings = false;
+        }
 
         // Main menu window
         ImGui::Begin(u8"Главное меню");
@@ -1820,6 +1829,8 @@ int main() {
         if (ImGui::Button(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ")) {
             if (state.isAdmin) {
                 state.isAdmin = false;
+                state.showRules = false;
+                state.showUiSettings = false;
             } else {
                 state.adminPopupRequest = true;
                 state.adminPassword.fill('\0');
@@ -1870,6 +1881,28 @@ int main() {
         if (!hasActive) ImGui::EndDisabled();
         if (!state.isAdmin) ImGui::EndDisabled();
 
+        ImGui::Separator();
+        ImGui::TextUnformatted(u8"Меню");
+        auto toggleButton = [](const char* label, bool& value) {
+            if (value) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.75f, 0.9f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.55f, 0.85f, 0.95f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.4f, 0.7f, 1.0f));
+            }
+            if (ImGui::Button(label)) {
+                value = !value;
+            }
+            if (value) {
+                ImGui::PopStyleColor(3);
+            }
+        };
+        toggleButton(u8"Каталог навыков", state.showSkillCatalog);
+        toggleButton(u8"Пайплайн", state.showPipeline);
+        toggleButton(u8"3D просмотр", state.showView3d);
+        if (state.isAdmin) {
+            toggleButton(u8"Правила", state.showRules);
+            toggleButton(u8"Настройки интерфейса", state.showUiSettings);
+        }
         ImGui::Separator();
         if (ImGui::BeginChild("profiles", ImVec2(0, 0), false)) {
             for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
@@ -2111,10 +2144,11 @@ int main() {
         }
         ImGui::End();
 
-        if (ImGui::Begin(u8"Каталог навыков")) {
-            EnsureWindowVisible();
-            DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
-            const auto& catalogSkills = catalog.skills();
+        if (state.showSkillCatalog) {
+            if (ImGui::Begin(u8"Каталог навыков", &state.showSkillCatalog)) {
+                EnsureWindowVisible();
+                DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
+                const auto& catalogSkills = catalog.skills();
         if (state.selectedCatalogIndex >= static_cast<int>(catalogSkills.size())) {
             state.selectedCatalogIndex = -1;
         }
@@ -2364,6 +2398,7 @@ int main() {
             }
         }
         ImGui::End();
+        }
 
         // Admin login modal
         if (state.adminPopupRequest) {
@@ -2560,182 +2595,189 @@ int main() {
             ImGui::CloseCurrentPopup();
         }
 
-        if (ImGui::Begin(u8"Пайплайн")) {
-            EnsureWindowVisible();
-            DrawWindowBackground(state.ui, UiWindowId::Pipeline, state.storageDir);
-            const int stepCount = static_cast<int>(kPipelineSteps.size());
-            if (stepCount == 0) {
-                ImGui::TextUnformatted(u8"Пайплайн пуст.");
-            } else {
-                if (state.selectedPipelineIndex < 0 || state.selectedPipelineIndex >= stepCount) {
-                    state.selectedPipelineIndex = 0;
+        if (state.showPipeline) {
+            if (ImGui::Begin(u8"Пайплайн", &state.showPipeline)) {
+                EnsureWindowVisible();
+                DrawWindowBackground(state.ui, UiWindowId::Pipeline, state.storageDir);
+                const int stepCount = static_cast<int>(kPipelineSteps.size());
+                if (stepCount == 0) {
+                    ImGui::TextUnformatted(u8"Пайплайн пуст.");
+                } else {
+                    if (state.selectedPipelineIndex < 0 || state.selectedPipelineIndex >= stepCount) {
+                        state.selectedPipelineIndex = 0;
+                    }
+                    if (ImGui::BeginChild("pipeline_list", ImVec2(0, 140), true)) {
+                        for (int i = 0; i < stepCount; ++i) {
+                            bool selected = state.selectedPipelineIndex == i;
+                            if (ImGui::Selectable(kPipelineSteps[i].title, selected)) {
+                                state.selectedPipelineIndex = i;
+                            }
+                        }
+                    }
+                    ImGui::EndChild();
+                    ImGui::Separator();
+                    const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
+                    ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), "%s", step.title);
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
+                    ImGui::TextUnformatted(step.description);
+                    ImGui::PopTextWrapPos();
                 }
-                if (ImGui::BeginChild("pipeline_list", ImVec2(0, 140), true)) {
-                    for (int i = 0; i < stepCount; ++i) {
-                        bool selected = state.selectedPipelineIndex == i;
-                        if (ImGui::Selectable(kPipelineSteps[i].title, selected)) {
-                            state.selectedPipelineIndex = i;
+            }
+            ImGui::End();
+        }
+
+        if (state.isAdmin && state.showRules) {
+            if (ImGui::Begin(u8"Правила", &state.showRules)) {
+                EnsureWindowVisible();
+                DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
+                GameplayConfig& draft = state.rulesDraft;
+                ImGui::TextUnformatted(u8"Кривая уровней");
+                ImGui::InputInt(u8"Базовый XP (уровень 1)", &draft.levelBaseXp);
+                ImGui::InputInt(u8"Линейный прирост за уровень", &draft.levelLinearXp);
+                ImGui::InputInt(u8"Квадратичный прирост за уровень", &draft.levelQuadraticXp);
+                ImGui::Separator();
+                ImGui::TextUnformatted(u8"Базовый XP категорий");
+                for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                    std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
+                    int value = draft.categoryBaseXp[idx];
+                    if (ImGui::InputInt(label.c_str(), &value)) {
+                        draft.categoryBaseXp[idx] = value;
+                    }
+                }
+                ImGui::Separator();
+                ImGui::TextUnformatted(u8"Бонусы и штрафы");
+                ImGui::InputFloat(u8"Базовый фокус-бонус", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
+                ImGui::InputFloat(u8"Доп. фокус-бонус", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
+                ImGui::SliderFloat(u8"Коэффициент награды при повторе", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
+                ImGui::SliderFloat(u8"Коэффициент награды при прогреве", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
+                ImGui::InputInt(u8"Задач прогрева", &draft.recoveryWarmupTasks);
+                ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
+                if (ImGui::Button(u8"Сбросить")) {
+                    draft = state.rulesConfig;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(u8"Сохранить и применить")) {
+                    GameplayConfig sanitized = draft;
+                    sanitized.levelBaseXp = std::max(1, sanitized.levelBaseXp);
+                    sanitized.levelLinearXp = std::max(0, sanitized.levelLinearXp);
+                    sanitized.levelQuadraticXp = std::max(0, sanitized.levelQuadraticXp);
+                    for (auto& value : sanitized.categoryBaseXp) {
+                        value = std::max(0, value);
+                    }
+                    sanitized.focusBaseBonus = std::clamp(sanitized.focusBaseBonus, 0.0f, 10.0f);
+                    sanitized.focusAdditionalBonus = std::clamp(sanitized.focusAdditionalBonus, 0.0f, 10.0f);
+                    sanitized.repeatRewardFactor = std::clamp(sanitized.repeatRewardFactor, 0.0f, 1.0f);
+                    sanitized.recoveryRewardFactor = std::clamp(sanitized.recoveryRewardFactor, 0.0f, 1.0f);
+                    sanitized.recoveryWarmupTasks = std::max(0, sanitized.recoveryWarmupTasks);
+                    if (SaveGameplayConfig(sanitized, state.storageDir)) {
+                        state.rulesConfig = sanitized;
+                        state.rulesDraft = sanitized;
+                        SetGameplayConfig(sanitized);
+                        ReapplyRulesToProfiles(state, *storage, catalog);
+                        std::string keepId = state.active ? state.active->id : std::string{};
+                        RefreshProfiles(state, *storage, catalog, keepId);
+                        SetStatus(state, u8"Правила сохранены.", 0.45f, 0.9f, 0.45f);
+                    } else {
+                        SetStatus(state, u8"Не удалось сохранить правила.", 1.0f, 0.45f, 0.45f);
+                    }
+                }
+            }
+            ImGui::End();
+        }
+
+        if (state.isAdmin && state.showUiSettings) {
+            if (ImGui::Begin(u8"Настройки интерфейса", &state.showUiSettings)) {
+                EnsureWindowVisible();
+                DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
+                ImGui::TextUnformatted(u8"Тема и стиль");
+                const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
+                if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
+                    state.uiDirty = true;
+                }
+                ImGui::SliderFloat(u8"Масштаб шрифта", &state.ui.fontScale, 0.8f, 1.6f, "%.2f");
+                ImGui::SliderFloat(u8"Прозрачность", &state.ui.alpha, 0.6f, 1.0f, "%.2f");
+                ImGui::SliderFloat(u8"Скругление окон", &state.ui.windowRounding, 0.0f, 16.0f, "%.1f");
+                ImGui::SliderFloat(u8"Скругление элементов", &state.ui.frameRounding, 0.0f, 16.0f, "%.1f");
+                ImGui::SliderFloat(u8"Скругление скролла", &state.ui.scrollbarRounding, 0.0f, 16.0f, "%.1f");
+                ImGui::SliderFloat(u8"Скругление захвата", &state.ui.grabRounding, 0.0f, 16.0f, "%.1f");
+                ImGui::SliderFloat(u8"Прозрачность фона", &state.ui.backgroundAlpha, 0.0f, 1.0f, "%.2f");
+                ImGui::Separator();
+                ImGui::TextUnformatted(u8"Отступы");
+                ImGui::SliderFloat2(u8"Отступ окна", &state.ui.windowPadding.x, 0.0f, 20.0f, "%.1f");
+                ImGui::SliderFloat2(u8"Отступ элемента", &state.ui.framePadding.x, 0.0f, 20.0f, "%.1f");
+                ImGui::SliderFloat2(u8"Интервал", &state.ui.itemSpacing.x, 0.0f, 20.0f, "%.1f");
+
+                ImGui::Separator();
+                if (ImGui::Checkbox(u8"Кастомные цвета", &state.ui.customColors)) {
+                    if (state.ui.customColors) {
+                        const auto& entries = UiColorEntries();
+                        for (size_t i = 0; i < entries.size(); ++i) {
+                            state.ui.colors[i] = style.Colors[entries[i].col];
                         }
                     }
                 }
-                ImGui::EndChild();
-                ImGui::Separator();
-                const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
-                ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), "%s", step.title);
-                ImGui::Dummy(ImVec2(0.0f, 4.0f));
-                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
-                ImGui::TextUnformatted(step.description);
-                ImGui::PopTextWrapPos();
-            }
-        }
-        ImGui::End();
-
-        if (state.isAdmin && ImGui::Begin(u8"Правила")) {
-            EnsureWindowVisible();
-            DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
-            GameplayConfig& draft = state.rulesDraft;
-            ImGui::TextUnformatted(u8"Кривая уровней");
-            ImGui::InputInt(u8"Базовый XP (уровень 1)", &draft.levelBaseXp);
-            ImGui::InputInt(u8"Линейный прирост за уровень", &draft.levelLinearXp);
-            ImGui::InputInt(u8"Квадратичный прирост за уровень", &draft.levelQuadraticXp);
-            ImGui::Separator();
-            ImGui::TextUnformatted(u8"Базовый XP категорий");
-            for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
-                std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
-                int value = draft.categoryBaseXp[idx];
-                if (ImGui::InputInt(label.c_str(), &value)) {
-                    draft.categoryBaseXp[idx] = value;
-                }
-            }
-            ImGui::Separator();
-            ImGui::TextUnformatted(u8"Бонусы и штрафы");
-            ImGui::InputFloat(u8"Базовый фокус-бонус", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
-            ImGui::InputFloat(u8"Доп. фокус-бонус", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
-            ImGui::SliderFloat(u8"Коэффициент награды при повторе", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
-            ImGui::SliderFloat(u8"Коэффициент награды при прогреве", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
-            ImGui::InputInt(u8"Задач прогрева", &draft.recoveryWarmupTasks);
-            ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
-            if (ImGui::Button(u8"Сбросить")) {
-                draft = state.rulesConfig;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Сохранить и применить")) {
-                GameplayConfig sanitized = draft;
-                sanitized.levelBaseXp = std::max(1, sanitized.levelBaseXp);
-                sanitized.levelLinearXp = std::max(0, sanitized.levelLinearXp);
-                sanitized.levelQuadraticXp = std::max(0, sanitized.levelQuadraticXp);
-                for (auto& value : sanitized.categoryBaseXp) {
-                    value = std::max(0, value);
-                }
-                sanitized.focusBaseBonus = std::clamp(sanitized.focusBaseBonus, 0.0f, 10.0f);
-                sanitized.focusAdditionalBonus = std::clamp(sanitized.focusAdditionalBonus, 0.0f, 10.0f);
-                sanitized.repeatRewardFactor = std::clamp(sanitized.repeatRewardFactor, 0.0f, 1.0f);
-                sanitized.recoveryRewardFactor = std::clamp(sanitized.recoveryRewardFactor, 0.0f, 1.0f);
-                sanitized.recoveryWarmupTasks = std::max(0, sanitized.recoveryWarmupTasks);
-                if (SaveGameplayConfig(sanitized, state.storageDir)) {
-                    state.rulesConfig = sanitized;
-                    state.rulesDraft = sanitized;
-                    SetGameplayConfig(sanitized);
-                    ReapplyRulesToProfiles(state, *storage, catalog);
-                    std::string keepId = state.active ? state.active->id : std::string{};
-                    RefreshProfiles(state, *storage, catalog, keepId);
-                    SetStatus(state, u8"Правила сохранены.", 0.45f, 0.9f, 0.45f);
-                } else {
-                    SetStatus(state, u8"Не удалось сохранить правила.", 1.0f, 0.45f, 0.45f);
-                }
-            }
-        }
-        if (state.isAdmin) ImGui::End();
-
-        if (ImGui::Begin(u8"Настройки интерфейса")) {
-            EnsureWindowVisible();
-            DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
-            ImGui::TextUnformatted(u8"Тема и стиль");
-            const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
-            if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
-                state.uiDirty = true;
-            }
-            ImGui::SliderFloat(u8"Масштаб шрифта", &state.ui.fontScale, 0.8f, 1.6f, "%.2f");
-            ImGui::SliderFloat(u8"Прозрачность", &state.ui.alpha, 0.6f, 1.0f, "%.2f");
-            ImGui::SliderFloat(u8"Скругление окон", &state.ui.windowRounding, 0.0f, 16.0f, "%.1f");
-            ImGui::SliderFloat(u8"Скругление элементов", &state.ui.frameRounding, 0.0f, 16.0f, "%.1f");
-            ImGui::SliderFloat(u8"Скругление скролла", &state.ui.scrollbarRounding, 0.0f, 16.0f, "%.1f");
-            ImGui::SliderFloat(u8"Скругление захвата", &state.ui.grabRounding, 0.0f, 16.0f, "%.1f");
-            ImGui::SliderFloat(u8"Прозрачность фона", &state.ui.backgroundAlpha, 0.0f, 1.0f, "%.2f");
-            ImGui::Separator();
-            ImGui::TextUnformatted(u8"Отступы");
-            ImGui::SliderFloat2(u8"Отступ окна", &state.ui.windowPadding.x, 0.0f, 20.0f, "%.1f");
-            ImGui::SliderFloat2(u8"Отступ элемента", &state.ui.framePadding.x, 0.0f, 20.0f, "%.1f");
-            ImGui::SliderFloat2(u8"Интервал", &state.ui.itemSpacing.x, 0.0f, 20.0f, "%.1f");
-
-            ImGui::Separator();
-            if (ImGui::Checkbox(u8"Кастомные цвета", &state.ui.customColors)) {
                 if (state.ui.customColors) {
+                    const auto& entries = UiColorEntries();
+                    for (size_t i = 0; i < entries.size(); ++i) {
+                        ImGui::ColorEdit4(entries[i].name, &state.ui.colors[i].x);
+                    }
+                }
+
+                ImGui::Separator();
+                ImGui::TextUnformatted(u8"Фоны окон");
+                const auto backgrounds = LoadUiBackgroundChoices(state.storageDir);
+                const auto& windows = UiWindows();
+                for (size_t i = 0; i < windows.size(); ++i) {
+                    ImGui::PushID(static_cast<int>(i));
+                    std::string current = state.ui.backgrounds[i];
+                    std::string label = current.empty() ? u8"(нет)" : std::filesystem::path(current).filename().string();
+                    if (ImGui::BeginCombo(windows[i].label, label.c_str())) {
+                        bool noneSelected = current.empty();
+                        if (ImGui::Selectable(u8"(нет)", noneSelected)) {
+                            state.ui.backgrounds[i].clear();
+                            state.uiDirty = true;
+                        }
+                        for (const auto& bg : backgrounds) {
+                            bool selected = bg.relativePath == current;
+                            ImGui::PushID(bg.label.c_str());
+                            if (const auto* tex = GetIconTexture(bg.absolutePath)) {
+                                ImGui::Image((ImTextureID)(intptr_t)tex->id, ImVec2(32.0f, 32.0f));
+                                ImGui::SameLine();
+                            }
+                            if (ImGui::Selectable(bg.label.c_str(), selected)) {
+                                state.ui.backgrounds[i] = bg.relativePath;
+                                state.uiDirty = true;
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::PopID();
+                }
+
+                ImGui::Separator();
+                if (ImGui::Button(u8"Сохранить настройки")) {
+                    SaveUiSettings(state.storageDir, state.ui);
+                    state.uiDirty = false;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(u8"Сбросить к теме")) {
+                    ApplyUiTheme(state.ui.theme, style);
                     const auto& entries = UiColorEntries();
                     for (size_t i = 0; i < entries.size(); ++i) {
                         state.ui.colors[i] = style.Colors[entries[i].col];
                     }
+                    state.ui.customColors = false;
+                    state.uiDirty = true;
                 }
             }
-            if (state.ui.customColors) {
-                const auto& entries = UiColorEntries();
-                for (size_t i = 0; i < entries.size(); ++i) {
-                    ImGui::ColorEdit4(entries[i].name, &state.ui.colors[i].x);
-                }
-            }
-
-            ImGui::Separator();
-            ImGui::TextUnformatted(u8"Фоны окон");
-            const auto backgrounds = LoadUiBackgroundChoices(state.storageDir);
-            const auto& windows = UiWindows();
-            for (size_t i = 0; i < windows.size(); ++i) {
-                ImGui::PushID(static_cast<int>(i));
-                std::string current = state.ui.backgrounds[i];
-                std::string label = current.empty() ? u8"(нет)" : std::filesystem::path(current).filename().string();
-                if (ImGui::BeginCombo(windows[i].label, label.c_str())) {
-                    bool noneSelected = current.empty();
-                    if (ImGui::Selectable(u8"(нет)", noneSelected)) {
-                        state.ui.backgrounds[i].clear();
-                        state.uiDirty = true;
-                    }
-                    for (const auto& bg : backgrounds) {
-                        bool selected = bg.relativePath == current;
-                        ImGui::PushID(bg.label.c_str());
-                        if (const auto* tex = GetIconTexture(bg.absolutePath)) {
-                            ImGui::Image((ImTextureID)(intptr_t)tex->id, ImVec2(32.0f, 32.0f));
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Selectable(bg.label.c_str(), selected)) {
-                            state.ui.backgrounds[i] = bg.relativePath;
-                            state.uiDirty = true;
-                        }
-                        ImGui::PopID();
-                    }
-                    ImGui::EndCombo();
-                }
-                ImGui::PopID();
-            }
-
-            ImGui::Separator();
-            if (ImGui::Button(u8"Сохранить настройки")) {
-                SaveUiSettings(state.storageDir, state.ui);
-                state.uiDirty = false;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Сбросить к теме")) {
-                ApplyUiTheme(state.ui.theme, style);
-                const auto& entries = UiColorEntries();
-                for (size_t i = 0; i < entries.size(); ++i) {
-                    state.ui.colors[i] = style.Colors[entries[i].col];
-                }
-                state.ui.customColors = false;
-                state.uiDirty = true;
-            }
+            ImGui::End();
         }
-        ImGui::End();
 
-        if (ImGui::Begin(u8"3D просмотр")) {
-            EnsureWindowVisible();
+        if (state.showView3d) {
+            if (ImGui::Begin(u8"3D просмотр", &state.showView3d)) {
+                EnsureWindowVisible();
             DrawWindowBackground(state.ui, UiWindowId::View3D, state.storageDir);
             const auto models = LoadModelChoices(state.storageDir);
             std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
@@ -2815,8 +2857,9 @@ int main() {
                 ImGui::GetWindowDrawList()->AddText(viewportPos, ImGui::GetColorU32(ImVec4(0.8f, 0.7f, 0.4f, 1.0f)),
                                                     u8"Загрузите OBJ/FBX модель.");
             }
+            }
+            ImGui::End();
         }
-        ImGui::End();
 
         // XP sheet modal
         if (state.xpPopupRequest) {
