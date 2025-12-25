@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(JobSkill LANGUAGES CXX)
+project(JobSkill LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,7 @@ if(BUILD_IMGUI_GUI)
 
     add_executable(JobSkillGui
         gui/GuiApp.cpp
+        libs/ufbx/ufbx.c
         src/Skill.cpp
         src/Profile.cpp
         src/FileStorage.cpp
@@ -59,7 +60,7 @@ if(BUILD_IMGUI_GUI)
     )
 
     target_sources(JobSkillGui PRIVATE ${IMGUI_SOURCES})
-    target_include_directories(JobSkillGui PRIVATE include ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+    target_include_directories(JobSkillGui PRIVATE include libs/ufbx ${IMGUI_DIR} ${IMGUI_DIR}/backends)
     target_link_libraries(JobSkillGui PRIVATE glfw OpenGL::GL)
     if (WIN32)
         target_link_libraries(JobSkillGui PRIVATE opengl32)

@@ -4,7 +4,7 @@ sk_7 eb8 07c 175 346 147|Texturing|1|Creating texture maps that add color and de
 sk_9 a6e 477 711 885 68d|Shading|1|Authoring material networks that react believably to light.
 sk_c 6e1 18e 12f bb9 e76|Rigging|1.4|Setting up skeletons and controls to animate characters or props.
 sk_f 6ef f9c cbe 01a 254|Ð¡Ð²ÐµÑ‚|1|Placing lights and balancing exposure for mood and readability.
-sk_a 34e 0c0 c0b 1be f68|UV Ñ€Ð°Ð·Ð²ÐµÑ€Ñ‚ÐºÐ°|0.8|Preparing UV layouts that minimize seams and distortion.
+sk_a 34e 0c0 c0b 1be f68|UV Ñ€Ð°Ð·Ð²ÐµÑ€Ñ‚ÐºÐ°|0.5|Preparing UV layouts that minimize seams and distortion.
 sk_a a5a 25b 85c a05 bb5|Retopology|1.2|Converting dense sculpts into animation-friendly low-poly meshes.
 sk_5 096 bdb 5f8 82f b29|Materials|0.8|Authoring reusable material presets with consistent PBR values.
 sk_1 6c7 c91 074 561 213|Rendering|0.9|Configuring render settings and output passes for final frames.
@@ -17,3 +17,4 @@ sk_b 3d0 19d c57 99b 466|Modeling|1.2|Building clean base meshes for further det
 sk_d a84 3b1 8b4 09b fa9|Lighting|1.1|Placing lights and balancing exposure for mood and readability.
 sk_a 602 e3f d3f 2d9 8fd|Animation|1.4|Bringing characters, props, or cameras to life over time.
 sk_4 aad 052 fd9 fcb 20f|Hard Surface|1.2|Designing mechanical or industrial assets with crisp detail.
+sk_a 34e 0c0 c0b 1be f68_1|UV Mapping|0.8|Preparing UV layouts that minimize seams and distortion.

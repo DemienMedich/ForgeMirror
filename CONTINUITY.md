@@ -23,6 +23,8 @@ State:
 - Localization: Gameplay rules and GUI controls translated to Russian; user-facing statuses/logs/messages now predominantly RU (XP labels remain).
 - Achievements: stored per-profile in data/achievements/*.json with bonus applied to skill XP; GUI shows icons + tooltip (expiry/remaining time); icon textures cached in GUI; JSON parsing is now order-agnostic.
 - Skill catalog: admin can add/remove skills and rename/edit descriptions; catalog now stores stable skill IDs with display names; rename uses confirmation before merging XP.
+- UI customization: added `data/meta/ui.ini` with theme/style controls, per-window background textures from `data/ui/backgrounds`, and a 3D preview window that loads `.obj`/`.fbx` from `data/models` (wireframe + orbit controls).
+- UI recovery: clamps invalid UI settings and enforces min window sizes; `F10` resets UI settings + clears layout.
 
 Done:
 - Fixed level progress bar math (uses total needed XP).
@@ -40,9 +42,11 @@ Done:
 - CLI now applies achievement XP bonuses (task/addxp) and reports bonus percent.
 - GUI “Последние действия” uses configured repeat/recovery percentages.
 - Profile delete/ID normalization cleans up achievement JSON files.
+- UI settings window with theme/color/spacing controls and per-window backgrounds; saved to `data/meta/ui.ini`.
+- 3D preview window with OBJ/FBX loading (wireframe) and default cube fallback.
 
 Now:
-- No active task; awaiting new requests.
+- Active: UI customization requested (themes/visuals, backgrounds/plates, 3D objects view). User confirmed "yes to all three".
 
 Next:
 - TBD based on user request (e.g., refine catalog UX, re-enable decay with config, further localization).
@@ -53,6 +57,9 @@ Open questions:
 - Should repeat/recovery penalties affect skill XP or only global XP?
 - When adding new skills to the catalog, should existing profiles auto-add them at level 1/0 XP?
 - When deleting a profile, should its achievements JSON be removed too?
+
+UI customization notes:
+- User wants all three: theme/style switching, background/plates customization, and ability to show 3D objects.
 
 Working set (files/ids/commands):
 - gui/GuiApp.cpp, src/SkillCatalog.cpp, include/SkillCatalog.h, src/FileStorage.cpp, main.cpp; data/skills.txt; builds via `cmake --build build --config Release` and `cmake --build build-gui --config Release --target JobSkillGui`.

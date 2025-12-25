@@ -23,6 +23,7 @@
 #endif
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl2.h>
 
@@ -36,7 +37,9 @@
 #include <filesystem>
 #include <deque>
 #include <iomanip>
+#include <fstream>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <sstream>
@@ -49,6 +52,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#include "ufbx.h"
 
 namespace {
 
@@ -79,6 +83,110 @@ enum class ConfirmAction {
     Delete
 };
 
+enum class UiWindowId {
+    MainMenu = 0,
+    Profile,
+    SkillCatalog,
+    Pipeline,
+    Rules,
+    UiSettings,
+    View3D,
+    Count
+};
+
+constexpr size_t kUiWindowCount = static_cast<size_t>(UiWindowId::Count);
+
+struct UiWindowInfo {
+    UiWindowId id;
+    const char* label;
+};
+
+const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
+    static const std::array<UiWindowInfo, kUiWindowCount> windows = {{
+        {UiWindowId::MainMenu, "Главное меню"},
+        {UiWindowId::Profile, "Профиль"},
+        {UiWindowId::SkillCatalog, "Каталог навыков"},
+        {UiWindowId::Pipeline, "Пайплайн"},
+        {UiWindowId::Rules, "Правила"},
+        {UiWindowId::UiSettings, "Настройки интерфейса"},
+        {UiWindowId::View3D, "3D просмотр"}
+    }};
+    return windows;
+}
+
+struct UiSettings {
+    int theme = 0; // 0=Dark,1=Light,2=Classic
+    float fontScale = 1.0f;
+    float alpha = 1.0f;
+    float windowRounding = 6.0f;
+    float frameRounding = 4.0f;
+    float scrollbarRounding = 6.0f;
+    float grabRounding = 4.0f;
+    ImVec2 windowPadding = ImVec2(8.0f, 8.0f);
+    ImVec2 framePadding = ImVec2(6.0f, 4.0f);
+    ImVec2 itemSpacing = ImVec2(8.0f, 4.0f);
+    bool customColors = false;
+    float backgroundAlpha = 0.25f;
+    std::array<ImVec4, 18> colors{};
+    std::array<std::string, kUiWindowCount> backgrounds{};
+
+    std::string modelPath;
+    float modelYaw = 0.0f;
+    float modelPitch = 0.0f;
+    float modelZoom = 1.0f;
+    bool modelAutoRotate = true;
+    float modelAutoSpeed = 0.6f;
+    ImVec4 modelColor = ImVec4(0.6f, 0.85f, 1.0f, 1.0f);
+};
+
+struct UiColorEntry {
+    const char* name;
+    ImGuiCol col;
+};
+
+const std::array<UiColorEntry, 18>& UiColorEntries() {
+    static const std::array<UiColorEntry, 18> entries = {{
+        {"Text", ImGuiCol_Text},
+        {"TextDisabled", ImGuiCol_TextDisabled},
+        {"WindowBg", ImGuiCol_WindowBg},
+        {"ChildBg", ImGuiCol_ChildBg},
+        {"PopupBg", ImGuiCol_PopupBg},
+        {"Border", ImGuiCol_Border},
+        {"FrameBg", ImGuiCol_FrameBg},
+        {"FrameBgHovered", ImGuiCol_FrameBgHovered},
+        {"FrameBgActive", ImGuiCol_FrameBgActive},
+        {"TitleBg", ImGuiCol_TitleBg},
+        {"TitleBgActive", ImGuiCol_TitleBgActive},
+        {"TitleBgCollapsed", ImGuiCol_TitleBgCollapsed},
+        {"Header", ImGuiCol_Header},
+        {"HeaderHovered", ImGuiCol_HeaderHovered},
+        {"HeaderActive", ImGuiCol_HeaderActive},
+        {"Button", ImGuiCol_Button},
+        {"ButtonHovered", ImGuiCol_ButtonHovered},
+        {"ButtonActive", ImGuiCol_ButtonActive}
+    }};
+    return entries;
+}
+
+struct Vec3 {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+struct Triangle {
+    Vec3 a;
+    Vec3 b;
+    Vec3 c;
+};
+
+struct MeshData {
+    std::vector<Triangle> triangles;
+    Vec3 min;
+    Vec3 max;
+    bool valid = false;
+};
+
 // Aggregates every bit of GUI state (selected profile, popups, sheet values, etc.).
 struct GuiState {
     std::vector<IJobStorage::ProfileInfo> profiles;
@@ -89,6 +197,13 @@ struct GuiState {
     std::filesystem::path storageDir;
     GameplayConfig rulesConfig;
     GameplayConfig rulesDraft;
+    UiSettings ui;
+    bool uiDirty = false;
+    int uiLastTheme = -1;
+    MeshData viewMesh;
+    std::string viewMeshPath;
+    std::string viewMeshError;
+    std::array<char, 260> modelPathBuffer{};
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
@@ -258,6 +373,210 @@ std::string TrimStringGui(std::string s) {
     return s;
 }
 
+std::string UiSettingsPath(const std::filesystem::path& storageDir) {
+    return (storageDir / "meta" / "ui.ini").string();
+}
+
+std::string NormalizeFloatList(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    for (unsigned char ch : value) {
+        if (std::isdigit(ch) || ch == '-' || ch == '+') out.push_back(static_cast<char>(ch));
+        else if (ch == '.' || ch == ',') out.push_back('.');
+        else if (ch == ' ' || ch == '\t') out.push_back(' ');
+    }
+    return out;
+}
+
+float ParseFloat(const std::string& value, float fallback = 0.0f) {
+    try {
+        return std::stof(NormalizeFloatList(value));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+float ClampFinite(float value, float minValue, float maxValue, float fallback) {
+    if (!std::isfinite(value)) return fallback;
+    return std::clamp(value, minValue, maxValue);
+}
+
+int ParseInt(const std::string& value, int fallback = 0) {
+    try {
+        return std::stoi(TrimStringGui(value));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+bool ParseBool(const std::string& value, bool fallback = false) {
+    std::string v = TrimStringGui(value);
+    std::transform(v.begin(), v.end(), v.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (v == "1" || v == "true" || v == "yes") return true;
+    if (v == "0" || v == "false" || v == "no") return false;
+    return fallback;
+}
+
+ImVec2 ParseVec2(const std::string& value, const ImVec2& fallback) {
+    std::stringstream ss(NormalizeFloatList(value));
+    ss.imbue(std::locale::classic());
+    float x = 0.0f;
+    float y = 0.0f;
+    if (ss >> x >> y) return ImVec2(x, y);
+    return fallback;
+}
+
+ImVec4 ParseVec4(const std::string& value, const ImVec4& fallback) {
+    std::stringstream ss(NormalizeFloatList(value));
+    ss.imbue(std::locale::classic());
+    float x = 0.0f, y = 0.0f, z = 0.0f, w = 0.0f;
+    if (ss >> x >> y >> z >> w) return ImVec4(x, y, z, w);
+    return fallback;
+}
+
+std::string Vec4ToString(const ImVec4& v) {
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss << std::fixed << std::setprecision(3)
+       << v.x << " " << v.y << " " << v.z << " " << v.w;
+    return ss.str();
+}
+
+UiSettings LoadUiSettings(const std::filesystem::path& storageDir, const ImGuiStyle& style) {
+    UiSettings settings;
+    const auto& entries = UiColorEntries();
+    for (size_t i = 0; i < entries.size(); ++i) {
+        settings.colors[i] = style.Colors[entries[i].col];
+    }
+    auto path = UiSettingsPath(storageDir);
+    std::ifstream in(path);
+    if (!in) return settings;
+    in.imbue(std::locale::classic());
+    std::string section;
+    std::string line;
+    while (std::getline(in, line)) {
+        auto t = TrimStringGui(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.front() == '[' && t.back() == ']') {
+            section = t.substr(1, t.size() - 2);
+            continue;
+        }
+        auto eq = t.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = TrimStringGui(t.substr(0, eq));
+        std::string value = TrimStringGui(t.substr(eq + 1));
+        if (section == "style") {
+            if (key == "theme") settings.theme = ParseInt(value, settings.theme);
+            else if (key == "fontScale") settings.fontScale = ParseFloat(value, settings.fontScale);
+            else if (key == "alpha") settings.alpha = ParseFloat(value, settings.alpha);
+            else if (key == "windowRounding") settings.windowRounding = ParseFloat(value, settings.windowRounding);
+            else if (key == "frameRounding") settings.frameRounding = ParseFloat(value, settings.frameRounding);
+            else if (key == "scrollbarRounding") settings.scrollbarRounding = ParseFloat(value, settings.scrollbarRounding);
+            else if (key == "grabRounding") settings.grabRounding = ParseFloat(value, settings.grabRounding);
+            else if (key == "windowPadding") settings.windowPadding = ParseVec2(value, settings.windowPadding);
+            else if (key == "framePadding") settings.framePadding = ParseVec2(value, settings.framePadding);
+            else if (key == "itemSpacing") settings.itemSpacing = ParseVec2(value, settings.itemSpacing);
+            else if (key == "customColors") settings.customColors = ParseBool(value, settings.customColors);
+            else if (key == "backgroundAlpha") settings.backgroundAlpha = ParseFloat(value, settings.backgroundAlpha);
+        } else if (section == "colors") {
+            for (size_t i = 0; i < entries.size(); ++i) {
+                if (key == entries[i].name) {
+                    settings.colors[i] = ParseVec4(value, settings.colors[i]);
+                    settings.customColors = true;
+                    break;
+                }
+            }
+        } else if (section == "backgrounds") {
+            const auto& windows = UiWindows();
+            for (size_t i = 0; i < windows.size(); ++i) {
+                if (key == windows[i].label) {
+                    settings.backgrounds[i] = value;
+                    break;
+                }
+            }
+        } else if (section == "view3d") {
+            if (key == "modelPath") settings.modelPath = value;
+            else if (key == "yaw") settings.modelYaw = ParseFloat(value, settings.modelYaw);
+            else if (key == "pitch") settings.modelPitch = ParseFloat(value, settings.modelPitch);
+            else if (key == "zoom") settings.modelZoom = ParseFloat(value, settings.modelZoom);
+            else if (key == "autoRotate") settings.modelAutoRotate = ParseBool(value, settings.modelAutoRotate);
+            else if (key == "autoSpeed") settings.modelAutoSpeed = ParseFloat(value, settings.modelAutoSpeed);
+            else if (key == "color") settings.modelColor = ParseVec4(value, settings.modelColor);
+        }
+    }
+    settings.theme = std::clamp(settings.theme, 0, 2);
+    settings.fontScale = ClampFinite(settings.fontScale, 0.6f, 2.0f, 1.0f);
+    settings.alpha = ClampFinite(settings.alpha, 0.4f, 1.0f, 1.0f);
+    settings.windowRounding = ClampFinite(settings.windowRounding, 0.0f, 24.0f, style.WindowRounding);
+    settings.frameRounding = ClampFinite(settings.frameRounding, 0.0f, 24.0f, style.FrameRounding);
+    settings.scrollbarRounding = ClampFinite(settings.scrollbarRounding, 0.0f, 24.0f, style.ScrollbarRounding);
+    settings.grabRounding = ClampFinite(settings.grabRounding, 0.0f, 24.0f, style.GrabRounding);
+    settings.backgroundAlpha = ClampFinite(settings.backgroundAlpha, 0.0f, 1.0f, 0.25f);
+    settings.windowPadding.x = ClampFinite(settings.windowPadding.x, 0.0f, 32.0f, style.WindowPadding.x);
+    settings.windowPadding.y = ClampFinite(settings.windowPadding.y, 0.0f, 32.0f, style.WindowPadding.y);
+    settings.framePadding.x = ClampFinite(settings.framePadding.x, 0.0f, 24.0f, style.FramePadding.x);
+    settings.framePadding.y = ClampFinite(settings.framePadding.y, 0.0f, 24.0f, style.FramePadding.y);
+    settings.itemSpacing.x = ClampFinite(settings.itemSpacing.x, 0.0f, 32.0f, style.ItemSpacing.x);
+    settings.itemSpacing.y = ClampFinite(settings.itemSpacing.y, 0.0f, 32.0f, style.ItemSpacing.y);
+    settings.modelYaw = ClampFinite(settings.modelYaw, -50.0f, 50.0f, 0.0f);
+    settings.modelPitch = ClampFinite(settings.modelPitch, -5.0f, 5.0f, 0.0f);
+    settings.modelZoom = ClampFinite(settings.modelZoom, 0.3f, 3.0f, 1.0f);
+    settings.modelAutoSpeed = ClampFinite(settings.modelAutoSpeed, 0.0f, 5.0f, 0.6f);
+    settings.modelColor.x = ClampFinite(settings.modelColor.x, 0.0f, 1.0f, settings.modelColor.x);
+    settings.modelColor.y = ClampFinite(settings.modelColor.y, 0.0f, 1.0f, settings.modelColor.y);
+    settings.modelColor.z = ClampFinite(settings.modelColor.z, 0.0f, 1.0f, settings.modelColor.z);
+    settings.modelColor.w = ClampFinite(settings.modelColor.w, 0.0f, 1.0f, settings.modelColor.w);
+    if (settings.customColors) {
+        for (size_t i = 0; i < settings.colors.size(); ++i) {
+            settings.colors[i].x = ClampFinite(settings.colors[i].x, 0.0f, 1.0f, style.Colors[entries[i].col].x);
+            settings.colors[i].y = ClampFinite(settings.colors[i].y, 0.0f, 1.0f, style.Colors[entries[i].col].y);
+            settings.colors[i].z = ClampFinite(settings.colors[i].z, 0.0f, 1.0f, style.Colors[entries[i].col].z);
+            settings.colors[i].w = ClampFinite(settings.colors[i].w, 0.0f, 1.0f, style.Colors[entries[i].col].w);
+        }
+    }
+    return settings;
+}
+
+void SaveUiSettings(const std::filesystem::path& storageDir, const UiSettings& settings) {
+    auto path = std::filesystem::path(UiSettingsPath(storageDir));
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return;
+    out.imbue(std::locale::classic());
+    out << "[style]\n";
+    out << "theme=" << settings.theme << "\n";
+    out << "fontScale=" << settings.fontScale << "\n";
+    out << "alpha=" << settings.alpha << "\n";
+    out << "windowRounding=" << settings.windowRounding << "\n";
+    out << "frameRounding=" << settings.frameRounding << "\n";
+    out << "scrollbarRounding=" << settings.scrollbarRounding << "\n";
+    out << "grabRounding=" << settings.grabRounding << "\n";
+    out << "windowPadding=" << settings.windowPadding.x << " " << settings.windowPadding.y << "\n";
+    out << "framePadding=" << settings.framePadding.x << " " << settings.framePadding.y << "\n";
+    out << "itemSpacing=" << settings.itemSpacing.x << " " << settings.itemSpacing.y << "\n";
+    out << "customColors=" << (settings.customColors ? 1 : 0) << "\n";
+    out << "backgroundAlpha=" << settings.backgroundAlpha << "\n\n";
+
+    out << "[colors]\n";
+    const auto& entries = UiColorEntries();
+    for (size_t i = 0; i < entries.size(); ++i) {
+        out << entries[i].name << "=" << Vec4ToString(settings.colors[i]) << "\n";
+    }
+    out << "\n[backgrounds]\n";
+    const auto& windows = UiWindows();
+    for (size_t i = 0; i < windows.size(); ++i) {
+        out << windows[i].label << "=" << settings.backgrounds[i] << "\n";
+    }
+    out << "\n[view3d]\n";
+    out << "modelPath=" << settings.modelPath << "\n";
+    out << "yaw=" << settings.modelYaw << "\n";
+    out << "pitch=" << settings.modelPitch << "\n";
+    out << "zoom=" << settings.modelZoom << "\n";
+    out << "autoRotate=" << (settings.modelAutoRotate ? 1 : 0) << "\n";
+    out << "autoSpeed=" << settings.modelAutoSpeed << "\n";
+    out << "color=" << Vec4ToString(settings.modelColor) << "\n";
+}
+
 std::int64_t NowSeconds() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
@@ -347,6 +666,37 @@ std::vector<IconChoice> LoadAchievementIconChoices(const std::filesystem::path& 
     return out;
 }
 
+struct BackgroundChoice {
+    std::string label;
+    std::string relativePath;
+    std::filesystem::path absolutePath;
+};
+
+std::vector<BackgroundChoice> LoadUiBackgroundChoices(const std::filesystem::path& storageDir) {
+    std::vector<BackgroundChoice> out;
+    std::error_code ec;
+    auto bgDir = storageDir / "ui" / "backgrounds";
+    if (!std::filesystem::exists(bgDir, ec)) return out;
+    for (const auto& entry : std::filesystem::directory_iterator(bgDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        auto ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (ext != ".png") continue;
+        const auto filename = entry.path().filename();
+        auto rel = std::filesystem::path("ui") / "backgrounds" / filename;
+        BackgroundChoice choice;
+        choice.label = filename.string();
+        choice.relativePath = rel.generic_string();
+        choice.absolutePath = entry.path();
+        out.push_back(std::move(choice));
+    }
+    std::sort(out.begin(), out.end(), [](const BackgroundChoice& a, const BackgroundChoice& b) {
+        return a.label < b.label;
+    });
+    return out;
+}
+
 bool LoadIconTexture(const std::filesystem::path& path, IconTexture& out) {
     int w = 0;
     int h = 0;
@@ -420,6 +770,228 @@ void ReleaseIconTextures() {
     cache.missing.clear();
 }
 
+struct ModelChoice {
+    std::string label;
+    std::string relativePath;
+    std::filesystem::path absolutePath;
+};
+
+std::vector<ModelChoice> LoadModelChoices(const std::filesystem::path& storageDir) {
+    std::vector<ModelChoice> out;
+    std::error_code ec;
+    auto modelDir = storageDir / "models";
+    if (!std::filesystem::exists(modelDir, ec)) return out;
+    for (const auto& entry : std::filesystem::directory_iterator(modelDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        auto ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (ext != ".obj" && ext != ".fbx") continue;
+        const auto filename = entry.path().filename();
+        auto rel = std::filesystem::path("models") / filename;
+        ModelChoice choice;
+        choice.label = filename.string();
+        choice.relativePath = rel.generic_string();
+        choice.absolutePath = entry.path();
+        out.push_back(std::move(choice));
+    }
+    std::sort(out.begin(), out.end(), [](const ModelChoice& a, const ModelChoice& b) {
+        return a.label < b.label;
+    });
+    return out;
+}
+
+void ResetMeshBounds(MeshData& mesh) {
+    mesh.min = { std::numeric_limits<float>::max(),
+                 std::numeric_limits<float>::max(),
+                 std::numeric_limits<float>::max() };
+    mesh.max = { std::numeric_limits<float>::lowest(),
+                 std::numeric_limits<float>::lowest(),
+                 std::numeric_limits<float>::lowest() };
+}
+
+void UpdateBounds(MeshData& mesh, const Vec3& v) {
+    mesh.min.x = std::min(mesh.min.x, v.x);
+    mesh.min.y = std::min(mesh.min.y, v.y);
+    mesh.min.z = std::min(mesh.min.z, v.z);
+    mesh.max.x = std::max(mesh.max.x, v.x);
+    mesh.max.y = std::max(mesh.max.y, v.y);
+    mesh.max.z = std::max(mesh.max.z, v.z);
+}
+
+bool LoadObjMesh(const std::filesystem::path& path, MeshData& mesh, std::string& error) {
+    std::ifstream in(path);
+    if (!in) {
+        error = "Не удалось открыть OBJ.";
+        return false;
+    }
+    std::vector<Vec3> positions;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.size() < 2) continue;
+        if (line[0] == 'v' && std::isspace(static_cast<unsigned char>(line[1]))) {
+            std::istringstream ss(line.substr(2));
+            Vec3 v{};
+            ss >> v.x >> v.y >> v.z;
+            if (!ss.fail()) positions.push_back(v);
+        } else if (line[0] == 'f' && std::isspace(static_cast<unsigned char>(line[1]))) {
+            std::istringstream ss(line.substr(2));
+            std::vector<int> indices;
+            std::string part;
+            while (ss >> part) {
+                auto slash = part.find('/');
+                std::string idxStr = slash == std::string::npos ? part : part.substr(0, slash);
+                if (idxStr.empty()) continue;
+                int idx = 0;
+                try {
+                    idx = std::stoi(idxStr);
+                } catch (...) {
+                    idx = 0;
+                }
+                if (idx == 0) continue;
+                if (idx < 0) idx = static_cast<int>(positions.size()) + idx + 1;
+                indices.push_back(idx - 1);
+            }
+            if (indices.size() >= 3) {
+                for (size_t i = 1; i + 1 < indices.size(); ++i) {
+                    const int ia = indices[0];
+                    const int ib = indices[i];
+                    const int ic = indices[i + 1];
+                    if (ia < 0 || ib < 0 || ic < 0) continue;
+                    if (ia >= static_cast<int>(positions.size()) ||
+                        ib >= static_cast<int>(positions.size()) ||
+                        ic >= static_cast<int>(positions.size())) {
+                        continue;
+                    }
+                    Triangle tri{positions[ia], positions[ib], positions[ic]};
+                    mesh.triangles.push_back(tri);
+                }
+            }
+        }
+    }
+    if (mesh.triangles.empty()) {
+        error = "OBJ не содержит треугольников.";
+        return false;
+    }
+    ResetMeshBounds(mesh);
+    for (const auto& tri : mesh.triangles) {
+        UpdateBounds(mesh, tri.a);
+        UpdateBounds(mesh, tri.b);
+        UpdateBounds(mesh, tri.c);
+    }
+    mesh.valid = true;
+    return true;
+}
+
+bool LoadFbxMesh(const std::filesystem::path& path, MeshData& mesh, std::string& error) {
+    ufbx_error uerr;
+    ufbx_load_opts opts{};
+    opts.ignore_missing_external_files = true;
+    opts.load_external_files = false;
+    ufbx_scene* scene = ufbx_load_file(path.string().c_str(), &opts, &uerr);
+    if (!scene) {
+        if (uerr.description.data && uerr.description.length > 0) {
+            error.assign(uerr.description.data, uerr.description.length);
+        } else {
+            error = "Не удалось прочитать FBX.";
+        }
+        return false;
+    }
+    std::vector<uint32_t> triIndices;
+    for (size_t mi = 0; mi < scene->meshes.count; ++mi) {
+        const ufbx_mesh* umesh = scene->meshes.data[mi];
+        if (!umesh->vertex_position.exists) continue;
+        const size_t maxTris = umesh->max_face_triangles * 3;
+        if (maxTris == 0) continue;
+        triIndices.resize(maxTris);
+        for (size_t fi = 0; fi < umesh->faces.count; ++fi) {
+            ufbx_face face = umesh->faces.data[fi];
+            if (face.num_indices < 3) continue;
+            const uint32_t triCount = ufbx_triangulate_face(triIndices.data(), triIndices.size(), umesh, face);
+            for (uint32_t ti = 0; ti < triCount; ++ti) {
+                uint32_t ia = triIndices[ti * 3 + 0];
+                uint32_t ib = triIndices[ti * 3 + 1];
+                uint32_t ic = triIndices[ti * 3 + 2];
+                if (ia >= umesh->vertex_position.indices.count ||
+                    ib >= umesh->vertex_position.indices.count ||
+                    ic >= umesh->vertex_position.indices.count) {
+                    continue;
+                }
+                uint32_t va = umesh->vertex_position.indices.data[ia];
+                uint32_t vb = umesh->vertex_position.indices.data[ib];
+                uint32_t vc = umesh->vertex_position.indices.data[ic];
+                if (va >= umesh->vertex_position.values.count ||
+                    vb >= umesh->vertex_position.values.count ||
+                    vc >= umesh->vertex_position.values.count) {
+                    continue;
+                }
+                ufbx_vec3 p0 = umesh->vertex_position.values.data[va];
+                ufbx_vec3 p1 = umesh->vertex_position.values.data[vb];
+                ufbx_vec3 p2 = umesh->vertex_position.values.data[vc];
+                Triangle tri{{static_cast<float>(p0.x), static_cast<float>(p0.y), static_cast<float>(p0.z)},
+                             {static_cast<float>(p1.x), static_cast<float>(p1.y), static_cast<float>(p1.z)},
+                             {static_cast<float>(p2.x), static_cast<float>(p2.y), static_cast<float>(p2.z)}};
+                mesh.triangles.push_back(tri);
+            }
+        }
+    }
+    ufbx_free_scene(scene);
+    if (mesh.triangles.empty()) {
+        error = "FBX не содержит треугольников.";
+        return false;
+    }
+    ResetMeshBounds(mesh);
+    for (const auto& tri : mesh.triangles) {
+        UpdateBounds(mesh, tri.a);
+        UpdateBounds(mesh, tri.b);
+        UpdateBounds(mesh, tri.c);
+    }
+    mesh.valid = true;
+    return true;
+}
+
+bool LoadMeshFromFile(const std::filesystem::path& path, MeshData& mesh, std::string& error) {
+    mesh.triangles.clear();
+    mesh.valid = false;
+    error.clear();
+    auto ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (ext == ".obj") return LoadObjMesh(path, mesh, error);
+    if (ext == ".fbx") return LoadFbxMesh(path, mesh, error);
+    error = "Неподдерживаемый формат.";
+    return false;
+}
+
+MeshData MakeCubeMesh() {
+    MeshData mesh;
+    const float s = 0.5f;
+    const Vec3 v0{-s, -s, -s};
+    const Vec3 v1{ s, -s, -s};
+    const Vec3 v2{ s,  s, -s};
+    const Vec3 v3{-s,  s, -s};
+    const Vec3 v4{-s, -s,  s};
+    const Vec3 v5{ s, -s,  s};
+    const Vec3 v6{ s,  s,  s};
+    const Vec3 v7{-s,  s,  s};
+    mesh.triangles = {
+        {v0, v1, v2}, {v0, v2, v3},
+        {v4, v6, v5}, {v4, v7, v6},
+        {v0, v4, v5}, {v0, v5, v1},
+        {v1, v5, v6}, {v1, v6, v2},
+        {v2, v6, v7}, {v2, v7, v3},
+        {v3, v7, v4}, {v3, v4, v0}
+    };
+    ResetMeshBounds(mesh);
+    for (const auto& tri : mesh.triangles) {
+        UpdateBounds(mesh, tri.a);
+        UpdateBounds(mesh, tri.b);
+        UpdateBounds(mesh, tri.c);
+    }
+    mesh.valid = true;
+    return mesh;
+}
+
 struct RankOption {
     const char* label;
     int level;
@@ -445,6 +1017,146 @@ const std::vector<RankOption>& RankOptions() {
         {u8"Сеньор V", 190}
     };
     return opts;
+}
+
+void ApplyUiTheme(int theme, ImGuiStyle& style) {
+    switch (theme) {
+        case 1: ImGui::StyleColorsLight(&style); break;
+        case 2: ImGui::StyleColorsClassic(&style); break;
+        default: ImGui::StyleColorsDark(&style); break;
+    }
+}
+
+void ApplyUiSettings(const UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {
+    io.FontGlobalScale = settings.fontScale;
+    style.Alpha = settings.alpha;
+    style.WindowRounding = settings.windowRounding;
+    style.FrameRounding = settings.frameRounding;
+    style.ScrollbarRounding = settings.scrollbarRounding;
+    style.GrabRounding = settings.grabRounding;
+    style.WindowPadding = settings.windowPadding;
+    style.FramePadding = settings.framePadding;
+    style.ItemSpacing = settings.itemSpacing;
+    if (settings.customColors) {
+        const auto& entries = UiColorEntries();
+        for (size_t i = 0; i < entries.size(); ++i) {
+            style.Colors[entries[i].col] = settings.colors[i];
+        }
+    }
+}
+
+void ResetUiSettings(UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {
+    settings = UiSettings();
+    ApplyUiTheme(settings.theme, style);
+    ApplyUiSettings(settings, style, io);
+}
+
+void EnsureWindowVisible(float padding = 12.0f, ImVec2 minSize = ImVec2(240.0f, 160.0f)) {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport) return;
+    if (viewport->WorkSize.x <= 0.0f || viewport->WorkSize.y <= 0.0f) return;
+    ImVec2 pos = ImGui::GetWindowPos();
+    ImVec2 size = ImGui::GetWindowSize();
+    if (size.x < minSize.x || size.y < minSize.y) {
+        ImVec2 target(std::max(size.x, minSize.x), std::max(size.y, minSize.y));
+        ImGui::SetWindowSize(target, ImGuiCond_Always);
+        size = target;
+    }
+    ImVec2 min = viewport->WorkPos;
+    ImVec2 max(min.x + viewport->WorkSize.x, min.y + viewport->WorkSize.y);
+    const bool offscreen =
+        pos.x + size.x < min.x + padding ||
+        pos.y + size.y < min.y + padding ||
+        pos.x > max.x - padding ||
+        pos.y > max.y - padding;
+    if (!offscreen) return;
+    if (size.x >= viewport->WorkSize.x) {
+        pos.x = min.x;
+    } else {
+        pos.x = std::clamp(pos.x, min.x + padding, max.x - size.x - padding);
+    }
+    if (size.y >= viewport->WorkSize.y) {
+        pos.y = min.y;
+    } else {
+        pos.y = std::clamp(pos.y, min.y + padding, max.y - size.y - padding);
+    }
+    ImGui::SetWindowPos(pos, ImGuiCond_Always);
+}
+
+void DrawWindowBackground(const UiSettings& settings, UiWindowId id, const std::filesystem::path& storageDir) {
+    const auto idx = static_cast<size_t>(id);
+    if (idx >= settings.backgrounds.size()) return;
+    const std::string& relPath = settings.backgrounds[idx];
+    if (relPath.empty()) return;
+    auto resolved = ResolveIconPath(relPath, storageDir);
+    if (!resolved) return;
+    if (const auto* tex = GetIconTexture(*resolved)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetWindowPos();
+        ImVec2 size = ImGui::GetWindowSize();
+        ImU32 tint = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, settings.backgroundAlpha));
+        drawList->AddImage((ImTextureID)(intptr_t)tex->id, pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                           ImVec2(0, 0), ImVec2(1, 1), tint);
+    }
+}
+
+Vec3 RotateX(const Vec3& v, float angle) {
+    float c = std::cos(angle);
+    float s = std::sin(angle);
+    return {v.x, v.y * c - v.z * s, v.y * s + v.z * c};
+}
+
+Vec3 RotateY(const Vec3& v, float angle) {
+    float c = std::cos(angle);
+    float s = std::sin(angle);
+    return {v.x * c + v.z * s, v.y, -v.x * s + v.z * c};
+}
+
+ImVec2 ProjectPoint(const Vec3& v, float fov, float aspect, float distance, const ImVec2& center, float scale) {
+    const float z = v.z + distance;
+    if (z <= 0.001f) return center;
+    const float f = 1.0f / std::tan(fov * 0.5f);
+    const float x = (v.x * f / aspect) / z;
+    const float y = (v.y * f) / z;
+    return ImVec2(center.x + x * scale, center.y - y * scale);
+}
+
+void DrawMeshWireframe(const MeshData& mesh, const UiSettings& settings, ImDrawList* drawList,
+                       const ImVec2& pos, const ImVec2& size) {
+    if (!mesh.valid || mesh.triangles.empty()) return;
+    Vec3 center{
+        (mesh.min.x + mesh.max.x) * 0.5f,
+        (mesh.min.y + mesh.max.y) * 0.5f,
+        (mesh.min.z + mesh.max.z) * 0.5f
+    };
+    const float dx = mesh.max.x - mesh.min.x;
+    const float dy = mesh.max.y - mesh.min.y;
+    const float dz = mesh.max.z - mesh.min.z;
+    const float maxDim = std::max({dx, dy, dz, 0.001f});
+    const float scale = 0.45f * std::min(size.x, size.y) / maxDim;
+    const float fov = 60.0f * 3.1415926535f / 180.0f;
+    const float aspect = size.x > 0.0f ? size.x / size.y : 1.0f;
+    const float distance = 2.5f / std::max(0.2f, settings.modelZoom);
+    const ImVec2 screenCenter(pos.x + size.x * 0.5f, pos.y + size.y * 0.5f);
+
+    const ImU32 color = ImGui::GetColorU32(settings.modelColor);
+    for (const auto& tri : mesh.triangles) {
+        Vec3 a = tri.a;
+        Vec3 b = tri.b;
+        Vec3 c = tri.c;
+        a.x -= center.x; a.y -= center.y; a.z -= center.z;
+        b.x -= center.x; b.y -= center.y; b.z -= center.z;
+        c.x -= center.x; c.y -= center.y; c.z -= center.z;
+        a = RotateY(RotateX(a, settings.modelPitch), settings.modelYaw);
+        b = RotateY(RotateX(b, settings.modelPitch), settings.modelYaw);
+        c = RotateY(RotateX(c, settings.modelPitch), settings.modelYaw);
+        ImVec2 pa = ProjectPoint(a, fov, aspect, distance, screenCenter, scale);
+        ImVec2 pb = ProjectPoint(b, fov, aspect, distance, screenCenter, scale);
+        ImVec2 pc = ProjectPoint(c, fov, aspect, distance, screenCenter, scale);
+        drawList->AddLine(pa, pb, color, 1.0f);
+        drawList->AddLine(pb, pc, color, 1.0f);
+        drawList->AddLine(pc, pa, color, 1.0f);
+    }
 }
 
 // Maintain a small rolling activity feed per profile.
@@ -1054,10 +1766,16 @@ int main() {
     std::unique_ptr<IJobStorage> storage(CreateFileStorage(storageDir));
     EnsureAdminProfile(*storage, catalog);
 
+    ImGuiStyle& style = ImGui::GetStyle();
     GuiState state;
     state.storageDir = storageDir;
     state.rulesConfig = gameplayConfig;
     state.rulesDraft = gameplayConfig;
+    state.ui = LoadUiSettings(storageDir, style);
+    ApplyUiTheme(state.ui.theme, style);
+    ApplyUiSettings(state.ui, style, io);
+    state.uiLastTheme = state.ui.theme;
+    std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
     RefreshProfiles(state, *storage, catalog);
 
     while (!glfwWindowShouldClose(window)) {
@@ -1067,8 +1785,36 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        if (ImGui::IsKeyPressed(ImGuiKey_F10)) {
+            ResetUiSettings(state.ui, style, io);
+            state.uiLastTheme = state.ui.theme;
+            state.uiDirty = false;
+            std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
+            SaveUiSettings(state.storageDir, state.ui);
+            if (!layoutPath.empty()) {
+                std::error_code ec;
+                std::filesystem::remove(layoutPath, ec);
+            }
+            ImGui::ClearIniSettings();
+            SetStatus(state, u8"Интерфейс сброшен (F10).", 0.45f, 0.9f, 0.45f);
+        }
+
+        if (state.ui.theme != state.uiLastTheme) {
+            ApplyUiTheme(state.ui.theme, style);
+            state.uiLastTheme = state.ui.theme;
+            if (!state.ui.customColors) {
+                const auto& entries = UiColorEntries();
+                for (size_t i = 0; i < entries.size(); ++i) {
+                    state.ui.colors[i] = style.Colors[entries[i].col];
+                }
+            }
+        }
+        ApplyUiSettings(state.ui, style, io);
+
         // Main menu window
         ImGui::Begin(u8"Главное меню");
+        EnsureWindowVisible();
+        DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
         ImGui::TextUnformatted(state.isAdmin ? u8"[Режим администратора]" : u8"[Режим просмотра]");
         if (!state.isAdmin) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.8f, 0.5f, 1.0f));
         if (ImGui::Button(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ")) {
@@ -1131,25 +1877,27 @@ int main() {
                 std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
                 if (ImGui::Selectable(label.c_str(), state.selectedIndex == i)) {
                     state.selectedIndex = i;
-        RefreshActiveProfile(state, *storage, catalog);
-        // Align rank selector to current level
-        const auto& opts = RankOptions();
-        int bestIdx = 0;
-        for (int i = 0; i < static_cast<int>(opts.size()); ++i) {
-            if (state.active && state.active->profile.overall_level() >= opts[i].level) {
-                bestIdx = i;
+                    RefreshActiveProfile(state, *storage, catalog);
+                    // Align rank selector to current level
+                    const auto& opts = RankOptions();
+                    int bestIdx = 0;
+                    for (int idx = 0; idx < static_cast<int>(opts.size()); ++idx) {
+                        if (state.active && state.active->profile.overall_level() >= opts[idx].level) {
+                            bestIdx = idx;
+                        }
+                    }
+                    state.selectedRankIndex = bestIdx;
+                    SetStatus(state, "", 0.6f, 0.7f, 1.0f);
+                }
             }
-        }
-        state.selectedRankIndex = bestIdx;
-        SetStatus(state, "", 0.6f, 0.7f, 1.0f);
-    }
-}
         }
         ImGui::EndChild();
         ImGui::End();
 
         // Profile details window
         ImGui::Begin(u8"Профиль");
+        EnsureWindowVisible();
+        DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
         if (!state.active) {
             ImGui::TextUnformatted(u8"Выберите профиль, чтобы увидеть детали.");
         } else {
@@ -1364,6 +2112,8 @@ int main() {
         ImGui::End();
 
         if (ImGui::Begin(u8"Каталог навыков")) {
+            EnsureWindowVisible();
+            DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
             const auto& catalogSkills = catalog.skills();
         if (state.selectedCatalogIndex >= static_cast<int>(catalogSkills.size())) {
             state.selectedCatalogIndex = -1;
@@ -1811,6 +2561,8 @@ int main() {
         }
 
         if (ImGui::Begin(u8"Пайплайн")) {
+            EnsureWindowVisible();
+            DrawWindowBackground(state.ui, UiWindowId::Pipeline, state.storageDir);
             const int stepCount = static_cast<int>(kPipelineSteps.size());
             if (stepCount == 0) {
                 ImGui::TextUnformatted(u8"Пайплайн пуст.");
@@ -1839,6 +2591,8 @@ int main() {
         ImGui::End();
 
         if (state.isAdmin && ImGui::Begin(u8"Правила")) {
+            EnsureWindowVisible();
+            DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
             GameplayConfig& draft = state.rulesDraft;
             ImGui::TextUnformatted(u8"Кривая уровней");
             ImGui::InputInt(u8"Базовый XP (уровень 1)", &draft.levelBaseXp);
@@ -1892,6 +2646,177 @@ int main() {
             }
         }
         if (state.isAdmin) ImGui::End();
+
+        if (ImGui::Begin(u8"Настройки интерфейса")) {
+            EnsureWindowVisible();
+            DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
+            ImGui::TextUnformatted(u8"Тема и стиль");
+            const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
+            if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
+                state.uiDirty = true;
+            }
+            ImGui::SliderFloat(u8"Масштаб шрифта", &state.ui.fontScale, 0.8f, 1.6f, "%.2f");
+            ImGui::SliderFloat(u8"Прозрачность", &state.ui.alpha, 0.6f, 1.0f, "%.2f");
+            ImGui::SliderFloat(u8"Скругление окон", &state.ui.windowRounding, 0.0f, 16.0f, "%.1f");
+            ImGui::SliderFloat(u8"Скругление элементов", &state.ui.frameRounding, 0.0f, 16.0f, "%.1f");
+            ImGui::SliderFloat(u8"Скругление скролла", &state.ui.scrollbarRounding, 0.0f, 16.0f, "%.1f");
+            ImGui::SliderFloat(u8"Скругление захвата", &state.ui.grabRounding, 0.0f, 16.0f, "%.1f");
+            ImGui::SliderFloat(u8"Прозрачность фона", &state.ui.backgroundAlpha, 0.0f, 1.0f, "%.2f");
+            ImGui::Separator();
+            ImGui::TextUnformatted(u8"Отступы");
+            ImGui::SliderFloat2(u8"Отступ окна", &state.ui.windowPadding.x, 0.0f, 20.0f, "%.1f");
+            ImGui::SliderFloat2(u8"Отступ элемента", &state.ui.framePadding.x, 0.0f, 20.0f, "%.1f");
+            ImGui::SliderFloat2(u8"Интервал", &state.ui.itemSpacing.x, 0.0f, 20.0f, "%.1f");
+
+            ImGui::Separator();
+            if (ImGui::Checkbox(u8"Кастомные цвета", &state.ui.customColors)) {
+                if (state.ui.customColors) {
+                    const auto& entries = UiColorEntries();
+                    for (size_t i = 0; i < entries.size(); ++i) {
+                        state.ui.colors[i] = style.Colors[entries[i].col];
+                    }
+                }
+            }
+            if (state.ui.customColors) {
+                const auto& entries = UiColorEntries();
+                for (size_t i = 0; i < entries.size(); ++i) {
+                    ImGui::ColorEdit4(entries[i].name, &state.ui.colors[i].x);
+                }
+            }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted(u8"Фоны окон");
+            const auto backgrounds = LoadUiBackgroundChoices(state.storageDir);
+            const auto& windows = UiWindows();
+            for (size_t i = 0; i < windows.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                std::string current = state.ui.backgrounds[i];
+                std::string label = current.empty() ? u8"(нет)" : std::filesystem::path(current).filename().string();
+                if (ImGui::BeginCombo(windows[i].label, label.c_str())) {
+                    bool noneSelected = current.empty();
+                    if (ImGui::Selectable(u8"(нет)", noneSelected)) {
+                        state.ui.backgrounds[i].clear();
+                        state.uiDirty = true;
+                    }
+                    for (const auto& bg : backgrounds) {
+                        bool selected = bg.relativePath == current;
+                        ImGui::PushID(bg.label.c_str());
+                        if (const auto* tex = GetIconTexture(bg.absolutePath)) {
+                            ImGui::Image((ImTextureID)(intptr_t)tex->id, ImVec2(32.0f, 32.0f));
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Selectable(bg.label.c_str(), selected)) {
+                            state.ui.backgrounds[i] = bg.relativePath;
+                            state.uiDirty = true;
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button(u8"Сохранить настройки")) {
+                SaveUiSettings(state.storageDir, state.ui);
+                state.uiDirty = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Сбросить к теме")) {
+                ApplyUiTheme(state.ui.theme, style);
+                const auto& entries = UiColorEntries();
+                for (size_t i = 0; i < entries.size(); ++i) {
+                    state.ui.colors[i] = style.Colors[entries[i].col];
+                }
+                state.ui.customColors = false;
+                state.uiDirty = true;
+            }
+        }
+        ImGui::End();
+
+        if (ImGui::Begin(u8"3D просмотр")) {
+            EnsureWindowVisible();
+            DrawWindowBackground(state.ui, UiWindowId::View3D, state.storageDir);
+            const auto models = LoadModelChoices(state.storageDir);
+            std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
+            if (ImGui::BeginCombo(u8"Модель", modelLabel.c_str())) {
+                bool noneSelected = state.ui.modelPath.empty();
+                if (ImGui::Selectable(u8"(не выбрана)", noneSelected)) {
+                    state.ui.modelPath.clear();
+                    std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", "");
+                    state.viewMeshPath.clear();
+                }
+                for (const auto& model : models) {
+                    bool selected = model.relativePath == state.ui.modelPath;
+                    if (ImGui::Selectable(model.label.c_str(), selected)) {
+                        state.ui.modelPath = model.relativePath;
+                        std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
+                        state.viewMeshPath.clear();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (ImGui::InputText(u8"Путь к модели", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
+                state.ui.modelPath = state.modelPathBuffer.data();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Загрузить")) {
+                state.viewMeshPath.clear();
+            }
+            ImGui::Checkbox(u8"Авто‑вращение", &state.ui.modelAutoRotate);
+            ImGui::SliderFloat(u8"Скорость вращения", &state.ui.modelAutoSpeed, 0.0f, 3.0f, "%.2f");
+            ImGui::SliderFloat(u8"Yaw", &state.ui.modelYaw, -3.14f, 3.14f, "%.2f");
+            ImGui::SliderFloat(u8"Pitch", &state.ui.modelPitch, -1.57f, 1.57f, "%.2f");
+            ImGui::SliderFloat(u8"Zoom", &state.ui.modelZoom, 0.3f, 3.0f, "%.2f");
+            ImGui::ColorEdit4(u8"Цвет линий", &state.ui.modelColor.x);
+
+            auto resolved = state.ui.modelPath.empty()
+                ? std::optional<std::filesystem::path>()
+                : ResolveIconPath(state.ui.modelPath, state.storageDir);
+            if (!resolved) {
+                if (state.viewMeshPath != "<cube>") {
+                    state.viewMesh = MakeCubeMesh();
+                    state.viewMeshPath = "<cube>";
+                    state.viewMeshError.clear();
+                }
+            } else if (state.viewMeshPath != resolved->string()) {
+                state.viewMeshPath = resolved->string();
+                state.viewMeshError.clear();
+                state.viewMesh.triangles.clear();
+                state.viewMesh.valid = false;
+                if (!LoadMeshFromFile(*resolved, state.viewMesh, state.viewMeshError)) {
+                    state.viewMesh = MakeCubeMesh();
+                }
+            }
+            if (!state.viewMeshError.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", state.viewMeshError.c_str());
+            }
+
+            ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+            if (viewportSize.y < 180.0f) viewportSize.y = 180.0f;
+            ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("##view3d", viewportSize, ImGuiButtonFlags_MouseButtonLeft);
+            bool hovered = ImGui::IsItemHovered();
+            if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                ImVec2 delta = ImGui::GetIO().MouseDelta;
+                state.ui.modelYaw += delta.x * 0.01f;
+                state.ui.modelPitch += delta.y * 0.01f;
+                state.ui.modelAutoRotate = false;
+            }
+            if (hovered && ImGui::GetIO().MouseWheel != 0.0f) {
+                state.ui.modelZoom = std::clamp(state.ui.modelZoom + ImGui::GetIO().MouseWheel * 0.1f, 0.3f, 3.0f);
+            }
+            if (state.ui.modelAutoRotate) {
+                state.ui.modelYaw += state.ui.modelAutoSpeed * ImGui::GetIO().DeltaTime;
+            }
+            if (state.viewMesh.valid) {
+                DrawMeshWireframe(state.viewMesh, state.ui, ImGui::GetWindowDrawList(), viewportPos, viewportSize);
+            } else {
+                ImGui::GetWindowDrawList()->AddText(viewportPos, ImGui::GetColorU32(ImVec4(0.8f, 0.7f, 0.4f, 1.0f)),
+                                                    u8"Загрузите OBJ/FBX модель.");
+            }
+        }
+        ImGui::End();
 
         // XP sheet modal
         if (state.xpPopupRequest) {

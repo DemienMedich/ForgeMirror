@@ -4,6 +4,9 @@
     <ClCompile Include="Z:\CPP\JobSkill\gui\GuiApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Z:\CPP\JobSkill\libs\ufbx\ufbx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Z:\CPP\JobSkill\src\Skill.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
