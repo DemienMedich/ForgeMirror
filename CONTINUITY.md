@@ -45,6 +45,7 @@ Done:
 - Profile delete/ID normalization cleans up achievement JSON files.
 - UI settings window with theme/color/spacing controls and per-window backgrounds; saved to `data/meta/ui.ini`.
 - 3D preview window with OBJ/FBX loading (wireframe) and default cube fallback.
+- Added background tiling option for UI backgrounds; split 3D view and 3D settings into separate windows; added borderless-window toggle, fullscreen mode (F11), and Alt+drag window movement for borderless mode.
 
 Now:
 - Active: UI customization requested (themes/visuals, backgrounds/plates, 3D objects view). User confirmed "yes to all three".

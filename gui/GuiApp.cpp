@@ -91,6 +91,7 @@ enum class UiWindowId {
     Rules,
     UiSettings,
     View3D,
+    View3DSettings,
     Count
 };
 
@@ -109,7 +110,8 @@ const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
         {UiWindowId::Pipeline, "Пайплайн"},
         {UiWindowId::Rules, "Правила"},
         {UiWindowId::UiSettings, "Настройки интерфейса"},
-        {UiWindowId::View3D, "3D просмотр"}
+        {UiWindowId::View3D, "3D просмотр"},
+        {UiWindowId::View3DSettings, "3D настройки"}
     }};
     return windows;
 }
@@ -127,6 +129,10 @@ struct UiSettings {
     ImVec2 itemSpacing = ImVec2(8.0f, 4.0f);
     bool customColors = false;
     float backgroundAlpha = 0.25f;
+    bool backgroundTiled = false;
+    float backgroundTileScale = 1.0f;
+    bool windowDecorated = true;
+    bool windowFullscreen = false;
     std::array<ImVec4, 18> colors{};
     std::array<std::string, kUiWindowCount> backgrounds{};
 
@@ -200,6 +206,12 @@ struct GuiState {
     UiSettings ui;
     bool uiDirty = false;
     int uiLastTheme = -1;
+    bool windowDecoratedLast = true;
+    bool windowFullscreenLast = false;
+    int windowedX = 100;
+    int windowedY = 100;
+    int windowedW = 1280;
+    int windowedH = 720;
     MeshData viewMesh;
     std::string viewMeshPath;
     std::string viewMeshError;
@@ -209,6 +221,7 @@ struct GuiState {
     bool showRules = false;
     bool showUiSettings = false;
     bool showView3d = false;
+    bool showView3dSettings = false;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
@@ -483,6 +496,10 @@ UiSettings LoadUiSettings(const std::filesystem::path& storageDir, const ImGuiSt
             else if (key == "itemSpacing") settings.itemSpacing = ParseVec2(value, settings.itemSpacing);
             else if (key == "customColors") settings.customColors = ParseBool(value, settings.customColors);
             else if (key == "backgroundAlpha") settings.backgroundAlpha = ParseFloat(value, settings.backgroundAlpha);
+            else if (key == "backgroundTiled") settings.backgroundTiled = ParseBool(value, settings.backgroundTiled);
+            else if (key == "backgroundTileScale") settings.backgroundTileScale = ParseFloat(value, settings.backgroundTileScale);
+            else if (key == "windowDecorated") settings.windowDecorated = ParseBool(value, settings.windowDecorated);
+            else if (key == "windowFullscreen") settings.windowFullscreen = ParseBool(value, settings.windowFullscreen);
         } else if (section == "colors") {
             for (size_t i = 0; i < entries.size(); ++i) {
                 if (key == entries[i].name) {
@@ -492,8 +509,8 @@ UiSettings LoadUiSettings(const std::filesystem::path& storageDir, const ImGuiSt
                 }
             }
         } else if (section == "backgrounds") {
-            const auto& windows = UiWindows();
-            for (size_t i = 0; i < windows.size(); ++i) {
+                const auto& windows = UiWindows();
+                for (size_t i = 0; i < windows.size(); ++i) {
                 if (key == windows[i].label) {
                     settings.backgrounds[i] = value;
                     break;
@@ -517,6 +534,7 @@ UiSettings LoadUiSettings(const std::filesystem::path& storageDir, const ImGuiSt
     settings.scrollbarRounding = ClampFinite(settings.scrollbarRounding, 0.0f, 24.0f, style.ScrollbarRounding);
     settings.grabRounding = ClampFinite(settings.grabRounding, 0.0f, 24.0f, style.GrabRounding);
     settings.backgroundAlpha = ClampFinite(settings.backgroundAlpha, 0.0f, 1.0f, 0.25f);
+    settings.backgroundTileScale = ClampFinite(settings.backgroundTileScale, 0.25f, 4.0f, 1.0f);
     settings.windowPadding.x = ClampFinite(settings.windowPadding.x, 0.0f, 32.0f, style.WindowPadding.x);
     settings.windowPadding.y = ClampFinite(settings.windowPadding.y, 0.0f, 32.0f, style.WindowPadding.y);
     settings.framePadding.x = ClampFinite(settings.framePadding.x, 0.0f, 24.0f, style.FramePadding.x);
@@ -561,6 +579,10 @@ void SaveUiSettings(const std::filesystem::path& storageDir, const UiSettings& s
     out << "itemSpacing=" << settings.itemSpacing.x << " " << settings.itemSpacing.y << "\n";
     out << "customColors=" << (settings.customColors ? 1 : 0) << "\n";
     out << "backgroundAlpha=" << settings.backgroundAlpha << "\n\n";
+    out << "backgroundTiled=" << (settings.backgroundTiled ? 1 : 0) << "\n";
+    out << "backgroundTileScale=" << settings.backgroundTileScale << "\n\n";
+    out << "windowDecorated=" << (settings.windowDecorated ? 1 : 0) << "\n\n";
+    out << "windowFullscreen=" << (settings.windowFullscreen ? 1 : 0) << "\n\n";
 
     out << "[colors]\n";
     const auto& entries = UiColorEntries();
@@ -568,8 +590,8 @@ void SaveUiSettings(const std::filesystem::path& storageDir, const UiSettings& s
         out << entries[i].name << "=" << Vec4ToString(settings.colors[i]) << "\n";
     }
     out << "\n[backgrounds]\n";
-    const auto& windows = UiWindows();
-    for (size_t i = 0; i < windows.size(); ++i) {
+                const auto& windows = UiWindows();
+                for (size_t i = 0; i < windows.size(); ++i) {
         out << windows[i].label << "=" << settings.backgrounds[i] << "\n";
     }
     out << "\n[view3d]\n";
@@ -1050,6 +1072,67 @@ void ApplyUiSettings(const UiSettings& settings, ImGuiStyle& style, ImGuiIO& io)
     }
 }
 
+void ApplyWindowDecorations(GLFWwindow* window, bool decorated, bool& lastDecorated) {
+    if (!window) return;
+    if (decorated == lastDecorated) return;
+    glfwSetWindowAttrib(window, GLFW_DECORATED, decorated ? GLFW_TRUE : GLFW_FALSE);
+    lastDecorated = decorated;
+}
+
+GLFWmonitor* FindMonitorForWindow(GLFWwindow* window) {
+    if (!window) return glfwGetPrimaryMonitor();
+    int wx = 0, wy = 0, ww = 0, wh = 0;
+    glfwGetWindowPos(window, &wx, &wy);
+    glfwGetWindowSize(window, &ww, &wh);
+    int count = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&count);
+    if (!monitors || count == 0) return glfwGetPrimaryMonitor();
+    const int cx = wx + ww / 2;
+    const int cy = wy + wh / 2;
+    for (int i = 0; i < count; ++i) {
+        int mx = 0, my = 0;
+        glfwGetMonitorPos(monitors[i], &mx, &my);
+        const GLFWvidmode* mode = glfwGetVideoMode(monitors[i]);
+        if (!mode) continue;
+        if (cx >= mx && cx < mx + mode->width && cy >= my && cy < my + mode->height) {
+            return monitors[i];
+        }
+    }
+    return monitors[0];
+}
+
+void ApplyWindowMode(GLFWwindow* window, GuiState& state) {
+    if (!window) return;
+    if (state.ui.windowFullscreen == state.windowFullscreenLast) return;
+    if (state.ui.windowFullscreen) {
+        glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
+        glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
+        GLFWmonitor* monitor = FindMonitorForWindow(window);
+        const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+        if (monitor && mode) {
+            glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        }
+    } else {
+        int restoreW = state.windowedW > 0 ? state.windowedW : 1280;
+        int restoreH = state.windowedH > 0 ? state.windowedH : 720;
+        glfwSetWindowMonitor(window, nullptr, state.windowedX, state.windowedY, restoreW, restoreH, 0);
+    }
+    state.windowFullscreenLast = state.ui.windowFullscreen;
+}
+
+void HandleBorderlessDrag(GLFWwindow* window, const UiSettings& settings) {
+    if (!window) return;
+    if (settings.windowDecorated || settings.windowFullscreen) return;
+    const ImGuiIO& io = ImGui::GetIO();
+    if (!io.KeyAlt) return;
+    if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) return;
+    ImVec2 delta = io.MouseDelta;
+    if (delta.x == 0.0f && delta.y == 0.0f) return;
+    int wx = 0, wy = 0;
+    glfwGetWindowPos(window, &wx, &wy);
+    glfwSetWindowPos(window, wx + static_cast<int>(delta.x), wy + static_cast<int>(delta.y));
+}
+
 void ResetUiSettings(UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {
     settings = UiSettings();
     ApplyUiTheme(settings.theme, style);
@@ -1100,8 +1183,25 @@ void DrawWindowBackground(const UiSettings& settings, UiWindowId id, const std::
         ImVec2 pos = ImGui::GetWindowPos();
         ImVec2 size = ImGui::GetWindowSize();
         ImU32 tint = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, settings.backgroundAlpha));
-        drawList->AddImage((ImTextureID)(intptr_t)tex->id, pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                           ImVec2(0, 0), ImVec2(1, 1), tint);
+        if (!settings.backgroundTiled) {
+            drawList->AddImage((ImTextureID)(intptr_t)tex->id, pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                               ImVec2(0, 0), ImVec2(1, 1), tint);
+            return;
+        }
+        const float scale = std::max(0.05f, settings.backgroundTileScale);
+        float tileW = std::max(8.0f, static_cast<float>(tex->width) * scale);
+        float tileH = std::max(8.0f, static_cast<float>(tex->height) * scale);
+        ImVec2 end(pos.x + size.x, pos.y + size.y);
+        for (float y = pos.y; y < end.y; y += tileH) {
+            float y2 = std::min(y + tileH, end.y);
+            float v1 = (y2 - y) / tileH;
+            for (float x = pos.x; x < end.x; x += tileW) {
+                float x2 = std::min(x + tileW, end.x);
+                float u1 = (x2 - x) / tileW;
+                drawList->AddImage((ImTextureID)(intptr_t)tex->id, ImVec2(x, y), ImVec2(x2, y2),
+                                   ImVec2(0, 0), ImVec2(u1, v1), tint);
+            }
+        }
     }
 }
 
@@ -1780,6 +1880,15 @@ int main() {
     ApplyUiTheme(state.ui.theme, style);
     ApplyUiSettings(state.ui, style, io);
     state.uiLastTheme = state.ui.theme;
+    glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
+    glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
+    state.windowFullscreenLast = state.ui.windowFullscreen;
+    glfwSetWindowAttrib(window, GLFW_DECORATED, state.ui.windowDecorated ? GLFW_TRUE : GLFW_FALSE);
+    state.windowDecoratedLast = state.ui.windowDecorated;
+    if (state.ui.windowFullscreen) {
+        state.windowFullscreenLast = false;
+        ApplyWindowMode(window, state);
+    }
     std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
     RefreshProfiles(state, *storage, catalog);
 
@@ -1803,6 +1912,10 @@ int main() {
             ImGui::ClearIniSettings();
             SetStatus(state, u8"Интерфейс сброшен (F10).", 0.45f, 0.9f, 0.45f);
         }
+        if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
+            state.ui.windowFullscreen = !state.ui.windowFullscreen;
+            state.uiDirty = true;
+        }
 
         if (state.ui.theme != state.uiLastTheme) {
             ApplyUiTheme(state.ui.theme, style);
@@ -1815,9 +1928,13 @@ int main() {
             }
         }
         ApplyUiSettings(state.ui, style, io);
+        ApplyWindowMode(window, state);
+        ApplyWindowDecorations(window, state.ui.windowDecorated, state.windowDecoratedLast);
+        HandleBorderlessDrag(window, state.ui);
         if (!state.isAdmin) {
             state.showRules = false;
             state.showUiSettings = false;
+            state.showView3dSettings = false;
         }
 
         // Main menu window
@@ -1831,13 +1948,14 @@ int main() {
                 state.isAdmin = false;
                 state.showRules = false;
                 state.showUiSettings = false;
+                state.showView3dSettings = false;
             } else {
                 state.adminPopupRequest = true;
                 state.adminPassword.fill('\0');
             }
         }
         if (!state.isAdmin) ImGui::PopStyleColor();
-        ImGui::Separator();
+                ImGui::Separator();
         if (ImGui::Button(u8"Обновить")) {
             RefreshProfiles(state, *storage, catalog);
         }
@@ -1881,7 +1999,7 @@ int main() {
         if (!hasActive) ImGui::EndDisabled();
         if (!state.isAdmin) ImGui::EndDisabled();
 
-        ImGui::Separator();
+                ImGui::Separator();
         ImGui::TextUnformatted(u8"Меню");
         auto toggleButton = [](const char* label, bool& value) {
             if (value) {
@@ -1900,10 +2018,11 @@ int main() {
         toggleButton(u8"Пайплайн", state.showPipeline);
         toggleButton(u8"3D просмотр", state.showView3d);
         if (state.isAdmin) {
+            toggleButton(u8"3D настройки", state.showView3dSettings);
             toggleButton(u8"Правила", state.showRules);
             toggleButton(u8"Настройки интерфейса", state.showUiSettings);
         }
-        ImGui::Separator();
+                ImGui::Separator();
         if (ImGui::BeginChild("profiles", ImVec2(0, 0), false)) {
             for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
                 const auto& info = state.profiles[i];
@@ -2063,7 +2182,7 @@ int main() {
             }
             ImGui::Text(u8"Всего XP: %d", totalXp);
             ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
-            ImGui::Separator();
+                ImGui::Separator();
 
             if (state.isAdmin) {
                 const auto& opts = RankOptions();
@@ -2095,7 +2214,7 @@ int main() {
             ImGui::NextColumn();
             ImGui::TextUnformatted(u8"Вес");
             ImGui::NextColumn();
-            ImGui::Separator();
+                ImGui::Separator();
 
             auto skills = state.active->profile.list_skills();
             std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
@@ -2114,7 +2233,7 @@ int main() {
             }
             ImGui::Columns(1);
 
-            ImGui::Separator();
+                ImGui::Separator();
             ImGui::TextUnformatted("Диаграмма навыков");
             ImVec2 radarSize(ImGui::GetContentRegionAvail().x, 320.0f);
             if (radarSize.x < 200.0f) radarSize.x = 200.0f;
@@ -2129,7 +2248,7 @@ int main() {
             }
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
-            ImGui::Separator();
+                ImGui::Separator();
             ImGui::TextUnformatted(u8"Последние действия");
             const auto logIt = state.activityLogs.find(state.active->id);
             if (logIt != state.activityLogs.end() && !logIt->second.empty()) {
@@ -2186,7 +2305,7 @@ int main() {
             if (!state.isAdmin) ImGui::EndDisabled();
             ImGui::EndGroup();
 
-            ImGui::Separator();
+                ImGui::Separator();
             for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
                 const std::string& skillId = catalogSkills[i];
                 const std::string displayName = catalog.display_name(skillId);
@@ -2207,7 +2326,7 @@ int main() {
                     }
                 }
             }
-            ImGui::Separator();
+                ImGui::Separator();
             const std::int64_t nowSecGlobal = NowSeconds();
             if (state.selectedCatalogIndex >= 0 && state.selectedCatalogIndex < static_cast<int>(catalogSkills.size())) {
                 const std::string& skillId = catalogSkills[state.selectedCatalogIndex];
@@ -2615,7 +2734,7 @@ int main() {
                         }
                     }
                     ImGui::EndChild();
-                    ImGui::Separator();
+                ImGui::Separator();
                     const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
                     ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), "%s", step.title);
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -2703,6 +2822,16 @@ int main() {
                 ImGui::SliderFloat(u8"Скругление захвата", &state.ui.grabRounding, 0.0f, 16.0f, "%.1f");
                 ImGui::SliderFloat(u8"Прозрачность фона", &state.ui.backgroundAlpha, 0.0f, 1.0f, "%.2f");
                 ImGui::Separator();
+                ImGui::TextUnformatted(u8"Окно");
+                bool borderless = !state.ui.windowDecorated;
+                if (ImGui::Checkbox(u8"Без рамки окна", &borderless)) {
+                    state.ui.windowDecorated = !borderless;
+                    state.uiDirty = true;
+                }
+                if (ImGui::Checkbox(u8"Полноэкранный режим (F11)", &state.ui.windowFullscreen)) {
+                    state.uiDirty = true;
+                }
+                ImGui::Separator();
                 ImGui::TextUnformatted(u8"Отступы");
                 ImGui::SliderFloat2(u8"Отступ окна", &state.ui.windowPadding.x, 0.0f, 20.0f, "%.1f");
                 ImGui::SliderFloat2(u8"Отступ элемента", &state.ui.framePadding.x, 0.0f, 20.0f, "%.1f");
@@ -2726,6 +2855,8 @@ int main() {
 
                 ImGui::Separator();
                 ImGui::TextUnformatted(u8"Фоны окон");
+                ImGui::Checkbox(u8"Замостить фон", &state.ui.backgroundTiled);
+                ImGui::SliderFloat(u8"Масштаб плитки", &state.ui.backgroundTileScale, 0.25f, 3.0f, "%.2f");
                 const auto backgrounds = LoadUiBackgroundChoices(state.storageDir);
                 const auto& windows = UiWindows();
                 for (size_t i = 0; i < windows.size(); ++i) {
@@ -2775,88 +2906,96 @@ int main() {
             ImGui::End();
         }
 
+        if (state.showView3dSettings) {
+            if (ImGui::Begin(u8"3D настройки", &state.showView3dSettings)) {
+                EnsureWindowVisible();
+                DrawWindowBackground(state.ui, UiWindowId::View3DSettings, state.storageDir);
+                const auto models = LoadModelChoices(state.storageDir);
+                std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
+                if (ImGui::BeginCombo(u8"Модель", modelLabel.c_str())) {
+                    bool noneSelected = state.ui.modelPath.empty();
+                    if (ImGui::Selectable(u8"(не выбрана)", noneSelected)) {
+                        state.ui.modelPath.clear();
+                        std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", "");
+                        state.viewMeshPath.clear();
+                    }
+                    for (const auto& model : models) {
+                        bool selected = model.relativePath == state.ui.modelPath;
+                        if (ImGui::Selectable(model.label.c_str(), selected)) {
+                            state.ui.modelPath = model.relativePath;
+                            std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
+                            state.viewMeshPath.clear();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::InputText(u8"Путь к модели", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
+                    state.ui.modelPath = state.modelPathBuffer.data();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(u8"Загрузить")) {
+                    state.viewMeshPath.clear();
+                }
+                ImGui::Checkbox(u8"Авто?вращение", &state.ui.modelAutoRotate);
+                ImGui::SliderFloat(u8"Скорость вращения", &state.ui.modelAutoSpeed, 0.0f, 3.0f, "%.2f");
+                ImGui::SliderFloat(u8"Yaw", &state.ui.modelYaw, -3.14f, 3.14f, "%.2f");
+                ImGui::SliderFloat(u8"Pitch", &state.ui.modelPitch, -1.57f, 1.57f, "%.2f");
+                ImGui::SliderFloat(u8"Zoom", &state.ui.modelZoom, 0.3f, 3.0f, "%.2f");
+                ImGui::ColorEdit4(u8"Цвет линий", &state.ui.modelColor.x);
+            }
+            ImGui::End();
+        }
+
         if (state.showView3d) {
             if (ImGui::Begin(u8"3D просмотр", &state.showView3d)) {
                 EnsureWindowVisible();
-            DrawWindowBackground(state.ui, UiWindowId::View3D, state.storageDir);
-            const auto models = LoadModelChoices(state.storageDir);
-            std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
-            if (ImGui::BeginCombo(u8"Модель", modelLabel.c_str())) {
-                bool noneSelected = state.ui.modelPath.empty();
-                if (ImGui::Selectable(u8"(не выбрана)", noneSelected)) {
-                    state.ui.modelPath.clear();
-                    std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", "");
-                    state.viewMeshPath.clear();
-                }
-                for (const auto& model : models) {
-                    bool selected = model.relativePath == state.ui.modelPath;
-                    if (ImGui::Selectable(model.label.c_str(), selected)) {
-                        state.ui.modelPath = model.relativePath;
-                        std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
-                        state.viewMeshPath.clear();
+                DrawWindowBackground(state.ui, UiWindowId::View3D, state.storageDir);
+
+                auto resolved = state.ui.modelPath.empty()
+                    ? std::optional<std::filesystem::path>()
+                    : ResolveIconPath(state.ui.modelPath, state.storageDir);
+                if (!resolved) {
+                    if (state.viewMeshPath != "<cube>") {
+                        state.viewMesh = MakeCubeMesh();
+                        state.viewMeshPath = "<cube>";
+                        state.viewMeshError.clear();
+                    }
+                } else if (state.viewMeshPath != resolved->string()) {
+                    state.viewMeshPath = resolved->string();
+                    state.viewMeshError.clear();
+                    state.viewMesh.triangles.clear();
+                    state.viewMesh.valid = false;
+                    if (!LoadMeshFromFile(*resolved, state.viewMesh, state.viewMeshError)) {
+                        state.viewMesh = MakeCubeMesh();
                     }
                 }
-                ImGui::EndCombo();
-            }
-            if (ImGui::InputText(u8"Путь к модели", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
-                state.ui.modelPath = state.modelPathBuffer.data();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Загрузить")) {
-                state.viewMeshPath.clear();
-            }
-            ImGui::Checkbox(u8"Авто‑вращение", &state.ui.modelAutoRotate);
-            ImGui::SliderFloat(u8"Скорость вращения", &state.ui.modelAutoSpeed, 0.0f, 3.0f, "%.2f");
-            ImGui::SliderFloat(u8"Yaw", &state.ui.modelYaw, -3.14f, 3.14f, "%.2f");
-            ImGui::SliderFloat(u8"Pitch", &state.ui.modelPitch, -1.57f, 1.57f, "%.2f");
-            ImGui::SliderFloat(u8"Zoom", &state.ui.modelZoom, 0.3f, 3.0f, "%.2f");
-            ImGui::ColorEdit4(u8"Цвет линий", &state.ui.modelColor.x);
-
-            auto resolved = state.ui.modelPath.empty()
-                ? std::optional<std::filesystem::path>()
-                : ResolveIconPath(state.ui.modelPath, state.storageDir);
-            if (!resolved) {
-                if (state.viewMeshPath != "<cube>") {
-                    state.viewMesh = MakeCubeMesh();
-                    state.viewMeshPath = "<cube>";
-                    state.viewMeshError.clear();
+                if (!state.viewMeshError.empty()) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", state.viewMeshError.c_str());
                 }
-            } else if (state.viewMeshPath != resolved->string()) {
-                state.viewMeshPath = resolved->string();
-                state.viewMeshError.clear();
-                state.viewMesh.triangles.clear();
-                state.viewMesh.valid = false;
-                if (!LoadMeshFromFile(*resolved, state.viewMesh, state.viewMeshError)) {
-                    state.viewMesh = MakeCubeMesh();
-                }
-            }
-            if (!state.viewMeshError.empty()) {
-                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", state.viewMeshError.c_str());
-            }
 
-            ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-            if (viewportSize.y < 180.0f) viewportSize.y = 180.0f;
-            ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-            ImGui::InvisibleButton("##view3d", viewportSize, ImGuiButtonFlags_MouseButtonLeft);
-            bool hovered = ImGui::IsItemHovered();
-            if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-                ImVec2 delta = ImGui::GetIO().MouseDelta;
-                state.ui.modelYaw += delta.x * 0.01f;
-                state.ui.modelPitch += delta.y * 0.01f;
-                state.ui.modelAutoRotate = false;
-            }
-            if (hovered && ImGui::GetIO().MouseWheel != 0.0f) {
-                state.ui.modelZoom = std::clamp(state.ui.modelZoom + ImGui::GetIO().MouseWheel * 0.1f, 0.3f, 3.0f);
-            }
-            if (state.ui.modelAutoRotate) {
-                state.ui.modelYaw += state.ui.modelAutoSpeed * ImGui::GetIO().DeltaTime;
-            }
-            if (state.viewMesh.valid) {
-                DrawMeshWireframe(state.viewMesh, state.ui, ImGui::GetWindowDrawList(), viewportPos, viewportSize);
-            } else {
-                ImGui::GetWindowDrawList()->AddText(viewportPos, ImGui::GetColorU32(ImVec4(0.8f, 0.7f, 0.4f, 1.0f)),
-                                                    u8"Загрузите OBJ/FBX модель.");
-            }
+                ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+                if (viewportSize.y < 180.0f) viewportSize.y = 180.0f;
+                ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+                ImGui::InvisibleButton("##view3d", viewportSize, ImGuiButtonFlags_MouseButtonLeft);
+                bool hovered = ImGui::IsItemHovered();
+                if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                    ImVec2 delta = ImGui::GetIO().MouseDelta;
+                    state.ui.modelYaw += delta.x * 0.01f;
+                    state.ui.modelPitch += delta.y * 0.01f;
+                    state.ui.modelAutoRotate = false;
+                }
+                if (hovered && ImGui::GetIO().MouseWheel != 0.0f) {
+                    state.ui.modelZoom = std::clamp(state.ui.modelZoom + ImGui::GetIO().MouseWheel * 0.1f, 0.3f, 3.0f);
+                }
+                if (state.ui.modelAutoRotate) {
+                    state.ui.modelYaw += state.ui.modelAutoSpeed * ImGui::GetIO().DeltaTime;
+                }
+                if (state.viewMesh.valid) {
+                    DrawMeshWireframe(state.viewMesh, state.ui, ImGui::GetWindowDrawList(), viewportPos, viewportSize);
+                } else {
+                    ImGui::GetWindowDrawList()->AddText(viewportPos, ImGui::GetColorU32(ImVec4(0.8f, 0.7f, 0.4f, 1.0f)),
+                                                        u8"Загрузите OBJ/FBX модель.");
+                }
             }
             ImGui::End();
         }
