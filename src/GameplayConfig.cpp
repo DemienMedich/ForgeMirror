@@ -76,6 +76,22 @@ void SetGameplayConfig(const GameplayConfig& config) {
     gConfig = config;
 }
 
+GameplayConfig SanitizeGameplayConfig(const GameplayConfig& config) {
+    GameplayConfig sanitized = config;
+    sanitized.levelBaseXp = std::max(1, sanitized.levelBaseXp);
+    sanitized.levelLinearXp = std::max(0, sanitized.levelLinearXp);
+    sanitized.levelQuadraticXp = std::max(0, sanitized.levelQuadraticXp);
+    for (auto& value : sanitized.categoryBaseXp) {
+        value = std::max(0, value);
+    }
+    sanitized.focusBaseBonus = std::clamp(sanitized.focusBaseBonus, 0.0f, 10.0f);
+    sanitized.focusAdditionalBonus = std::clamp(sanitized.focusAdditionalBonus, 0.0f, 10.0f);
+    sanitized.repeatRewardFactor = std::clamp(sanitized.repeatRewardFactor, 0.0f, 1.0f);
+    sanitized.recoveryRewardFactor = std::clamp(sanitized.recoveryRewardFactor, 0.0f, 1.0f);
+    sanitized.recoveryWarmupTasks = std::max(0, sanitized.recoveryWarmupTasks);
+    return sanitized;
+}
+
 std::filesystem::path GameplayConfigPath(const std::filesystem::path& storageDir) {
     auto metaDir = storageDir / "meta";
     std::error_code ec;
@@ -142,10 +158,11 @@ GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir) {
             } catch (...) {}
         }
     }
-    return config;
+    return SanitizeGameplayConfig(config);
 }
 
 bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::path& storageDir) {
+    GameplayConfig sanitized = SanitizeGameplayConfig(config);
     auto path = GameplayConfigPath(storageDir);
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -153,19 +170,19 @@ bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::pat
     out.imbue(std::locale::classic());
     out << "# Gameplay rules for JobSkill\n";
     out << "[leveling]\n";
-    out << "base=" << config.levelBaseXp << "\n";
-    out << "linear=" << config.levelLinearXp << "\n";
-    out << "quadratic=" << config.levelQuadraticXp << "\n\n";
+    out << "base=" << sanitized.levelBaseXp << "\n";
+    out << "linear=" << sanitized.levelLinearXp << "\n";
+    out << "quadratic=" << sanitized.levelQuadraticXp << "\n\n";
 
     out << "[categories]\n";
     for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
-        out << Profile::kCategoryLabels[idx] << "=" << config.categoryBaseXp[idx] << "\n";
+        out << Profile::kCategoryLabels[idx] << "=" << sanitized.categoryBaseXp[idx] << "\n";
     }
     out << "\n[rewards]\n";
-    out << "focus_base=" << config.focusBaseBonus << "\n";
-    out << "focus_bonus=" << config.focusAdditionalBonus << "\n";
-    out << "repeat_factor=" << config.repeatRewardFactor << "\n";
-    out << "recovery_factor=" << config.recoveryRewardFactor << "\n";
-    out << "recovery_tasks=" << config.recoveryWarmupTasks << "\n";
+    out << "focus_base=" << sanitized.focusBaseBonus << "\n";
+    out << "focus_bonus=" << sanitized.focusAdditionalBonus << "\n";
+    out << "repeat_factor=" << sanitized.repeatRewardFactor << "\n";
+    out << "recovery_factor=" << sanitized.recoveryRewardFactor << "\n";
+    out << "recovery_tasks=" << sanitized.recoveryWarmupTasks << "\n";
     return true;
 }

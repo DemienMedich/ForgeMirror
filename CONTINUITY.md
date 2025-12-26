@@ -46,9 +46,46 @@ Done:
 - UI settings window with theme/color/spacing controls and per-window backgrounds; saved to `data/meta/ui.ini`.
 - 3D preview window with OBJ/FBX loading (wireframe) and default cube fallback.
 - Added background tiling option for UI backgrounds; split 3D view and 3D settings into separate windows; added borderless-window toggle, fullscreen mode (F11), and Alt+drag window movement for borderless mode.
+- Added admin-only app log panel with severity filtering; key operations now emit structured logs (profiles, rules, catalog, achievements, UI settings).
+- UI settings now include presentation/compact presets; app logs support text search and export to `data/meta/logs`.
+- Added admin-only statistics panel (summary KPIs + top profiles by level/XP) in the workspace tabs.
+- Profile view now includes a "Состояние" block with last activity, recovery status, and categories needing attention.
+- Added category mini-report in profile (progress bars), admin export reports (TXT/CSV) to `data/meta/reports`, and skill table filters by weight category/range with hover tooltips.
+- Admin stats now include rank distribution and least-active profiles list (based on last activity + recovery tasks).
+- Admin stats tables are now clickable to jump to a profile; centralized rank-selection sync added.
+- Added admin stats CSV export and profile activity log filtering/export in the profile view.
+- Added profile indicators (recovery, categories below 10/10, stale activity), copy-ID button, and inactivity threshold slider in admin stats.
+- Admin stats now support ID/name filtering and archive toggle; exports respect filters. Activity export respects the current filter.
+- Added achievements KPIs in admin stats, profile KPI now shows active/total achievements, and a "Топ навыков" block in profile.
+- Admin stats KPI now includes count of profiles with active recovery (penalty) tasks.
+- Profile overview now shows progress to the next rank; profile list shows filtered count.
+- "Топ навыков" now supports sorting by XP/level/weight.
+- Admin stats now track profiles without activity/achievements and include a top achievements table.
+- Admin stats now include average category scores across profiles.
+- Achievements section now lists expiring-soon badges; profile skill table shows total XP column.
+- Achievements section now supports filtering and hiding expired items with counts.
+- Add Experience modal now previews global XP after repeat/recovery penalties.
+- Added copy-name button in profile details and a "profiles on recovery" table in admin stats.
+- Added exit button in main menu.
+- Borderless mode now defaults to fullscreen when enabled or loaded from settings.
+- F10 toggles borderless mode; Ctrl+F10 resets UI/layout.
+- Added window controls (fullscreen/borderless) in main menu; removed auto-fullscreen on borderless.
+- Added reset buttons for profile/skill/activity/achievement/admin/log filters.
+- Admin stats now support auto-refresh with configurable interval.
+- Logs panel now has a compact view toggle.
+- Add Experience modal now has a quick "Равномерно" distribution button and color-coded 100% indicator.
+- Add Experience modal now supports skill filtering and sorting, with visible count.
+- Profile panel now has a section selector (overview/achievements/skills/chart/activity) to reduce clutter.
+- Started service-layer extraction: created `GuiActions` for profile/rules/skill/achievement operations and wired GUI to use it.
+- Added `SanitizeGameplayConfig` for centralized validation; used on load/save and GUI rule saves.
+- Profile UI: added "Обзор" section and grouped achievements/skills/chart/activity into collapsible sections for cleaner navigation.
+- Workspace UI: consolidated tools into a single tabbed "Рабочее окно"; added profile/skill search filters (incl. profile skill search), KPI cards in profile overview, uniform toolbar layout in main menu, a scrollable activity section, and a table-based profile skills view.
+- Skill catalog list now uses a table with weight column and filtered result count.
+- Profile skills table supports sorting (name/level/XP/weight).
+- Profile list: added archive toggle and sorting by ID/name with filter-aware display.
 
 Now:
-- Active: UI customization requested (themes/visuals, backgrounds/plates, 3D objects view). User confirmed "yes to all three".
+- Continuing UX/professional polish in GUI (admin analytics panel added; awaiting next refinements).
 
 Next:
 - TBD based on user request (e.g., refine catalog UX, re-enable decay with config, further localization).
