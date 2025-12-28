@@ -1,0 +1,378 @@
+void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    DrawWindowBackground(state.ui, UiWindowId::AdminStats, state.storageDir);
+    const std::int64_t nowSec = NowSeconds();
+    bool refresh = false;
+    ImGui::BeginGroup();
+    if (ImGui::Button(u8"Обновить")) {
+        refresh = true;
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(90.0f);
+    ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
+    ImGui::EndGroup();
+    std::string updated = FormatTimestamp(state.adminStats.lastUpdated, "%Y-%m-%d %H:%M:%S");
+    ImGui::SameLine();
+    ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
+    ImGui::Separator();
+    ImGui::TextUnformatted(u8"Фильтры");
+    ImGui::SetNextItemWidth(220.0f);
+    ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
+                             state.filters.adminStats.data(), state.filters.adminStats.size());
+    ImGui::SameLine();
+    ImGui::Checkbox(u8"Архив", &state.adminStatsIncludeArchived);
+    ImGui::SameLine();
+    const auto& rankOptions = RankOptions();
+    std::vector<const char*> rankLabels;
+    rankLabels.reserve(rankOptions.size() + 1);
+    rankLabels.push_back(u8"Все ранги");
+    for (const auto& opt : rankOptions) rankLabels.push_back(opt.label);
+    ImGui::SetNextItemWidth(150.0f);
+    ImGui::Combo(u8"Ранг##admin_stats", &state.adminStatsRankFilter,
+                 rankLabels.data(), static_cast<int>(rankLabels.size()));
+    ImGui::SameLine();
+    if (ImGui::SmallButton(u8"Сброс##admin_stats_filter")) {
+        state.filters.adminStats.fill('\0');
+        state.adminStatsIncludeArchived = true;
+        state.adminStatsRankFilter = 0;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"Экспорт CSV")) {
+        std::filesystem::path outPath;
+        if (ExportAdminStatsCsv(state, outPath)) {
+            std::string msg = u8"Экспортировано: ";
+            msg += outPath.string();
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Статистика");
+        } else {
+            SetStatus(state, u8"Нет данных для экспорта.", 1.0f, 0.75f, 0.35f, 1.0f,
+                      AppLogLevel::Warning, u8"Статистика");
+        }
+    }
+    SyncFiltersToUi(state);
+
+    const int refreshSeconds = std::clamp(state.adminStatsRefreshSeconds, 5, 120);
+    if (refresh || state.adminStatsDirty || state.adminStats.lastUpdated == 0 ||
+        (state.adminStatsAutoRefresh && nowSec - state.adminStats.lastUpdated > refreshSeconds)) {
+        RefreshAdminStats(state, storage);
+    }
+
+    const auto& stats = state.adminStats;
+    const auto filtered = FilterAdminProfiles(state);
+    ImGui::TextDisabled(u8"Показано: %d из %d",
+                        static_cast<int>(filtered.size()),
+                        static_cast<int>(stats.profiles.size()));
+    if (filtered.empty()) {
+        ImGui::TextDisabled(u8"Нет данных для отображения.");
+        SyncFiltersToUi(state);
+        return;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 4.0f));
+    const float topTableHeight = 180.0f;
+    ImGui::TextUnformatted(u8"Сводка");
+    if (ImGui::BeginTable("admin_kpi", 3, ImGuiTableFlags_SizingStretchProp)) {
+        auto kpi = [&](const char* id, const char* title, const std::string& value, const ImVec4& accent) {
+            ImGui::TableNextColumn();
+            DrawKpiCard(id, title, value, accent);
+        };
+        kpi("kpi_total_profiles", u8"Профилей всего", std::to_string(stats.totalProfiles), ImVec4(0.7f, 0.9f, 1.0f, 1.0f));
+        kpi("kpi_active_profiles", u8"Активных", std::to_string(stats.activeProfiles), ImVec4(0.6f, 0.9f, 0.6f, 1.0f));
+        kpi("kpi_archived_profiles", u8"В архиве", std::to_string(stats.archivedProfiles), ImVec4(0.9f, 0.7f, 0.4f, 1.0f));
+
+        std::ostringstream avgStream;
+        avgStream.imbue(std::locale::classic());
+        avgStream << std::fixed << std::setprecision(1) << stats.avgLevel;
+        kpi("kpi_avg_level", u8"Средний уровень", avgStream.str(), ImVec4(0.85f, 0.8f, 1.0f, 1.0f));
+        kpi("kpi_max_level", u8"Макс. уровень", std::to_string(stats.maxLevel), ImVec4(0.95f, 0.8f, 0.3f, 1.0f));
+        kpi("kpi_total_xp", u8"Всего XP", std::to_string(stats.totalXp), ImVec4(0.75f, 0.85f, 1.0f, 1.0f));
+
+        std::ostringstream avgXpStream;
+        avgXpStream.imbue(std::locale::classic());
+        avgXpStream << std::fixed << std::setprecision(0) << stats.avgXp;
+        kpi("kpi_avg_xp", u8"Средний XP", avgXpStream.str(), ImVec4(0.7f, 0.85f, 0.95f, 1.0f));
+        kpi("kpi_ach_total", u8"Ачивок всего", std::to_string(stats.achievementsTotal), ImVec4(0.9f, 0.75f, 0.55f, 1.0f));
+        kpi("kpi_ach_active", u8"Ачивок активных", std::to_string(stats.achievementsActive), ImVec4(0.6f, 0.9f, 0.6f, 1.0f));
+        kpi("kpi_recovery", u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
+            ImVec4(0.95f, 0.65f, 0.45f, 1.0f));
+        kpi("kpi_no_activity", u8"Без активности", std::to_string(stats.profilesNoActivity),
+            ImVec4(0.9f, 0.6f, 0.6f, 1.0f));
+        kpi("kpi_no_ach", u8"Без ачивок", std::to_string(stats.profilesNoAchievements),
+            ImVec4(0.8f, 0.7f, 0.9f, 1.0f));
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    auto drawTopTable = [&](const char* id, const char* title, const std::vector<AdminStatsProfile>& items) {
+        ImGui::TextUnformatted(title);
+        ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
+                                ImGuiTableFlags_SizingStretchProp;
+        if (ImGui::BeginTable(id, 4, flags, ImVec2(0.0f, topTableHeight))) {
+            ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+            ImGui::TableHeadersRow();
+            for (const auto& item : items) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                const std::string rowId = std::string("##row_") + item.id;
+                if (ImGui::Selectable(rowId.c_str(), false, ImGuiSelectableFlags_SpanAllColumns)) {
+                    SelectProfileById(state, storage, catalog, item.id);
+                }
+                ImGui::SameLine();
+                ImGui::TextUnformatted(item.id.c_str());
+                ImGui::TableSetColumnIndex(1);
+                std::string name = item.name + (item.archived ? u8" (архив)" : "");
+                ImGui::TextUnformatted(name.c_str());
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%d", item.level);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%d", item.totalXp);
+            }
+            ImGui::EndTable();
+        }
+    };
+
+    std::vector<AdminStatsProfile> byLevel = filtered;
+    std::sort(byLevel.begin(), byLevel.end(), [](const auto& a, const auto& b) {
+        if (a.level != b.level) return a.level > b.level;
+        return a.totalXp > b.totalXp;
+    });
+    if (byLevel.size() > 6) byLevel.resize(6);
+
+    std::vector<AdminStatsProfile> byXp = filtered;
+    std::sort(byXp.begin(), byXp.end(), [](const auto& a, const auto& b) {
+        if (a.totalXp != b.totalXp) return a.totalXp > b.totalXp;
+        return a.level > b.level;
+    });
+    if (byXp.size() > 6) byXp.resize(6);
+
+    drawTopTable("top_level", u8"Топ по уровню", byLevel);
+    drawTopTable("top_xp", u8"Топ по XP", byXp);
+
+    std::vector<AdminStatsProfile> byAchievements = filtered;
+    std::sort(byAchievements.begin(), byAchievements.end(), [](const auto& a, const auto& b) {
+        if (a.achievementsActive != b.achievementsActive) return a.achievementsActive > b.achievementsActive;
+        if (a.achievementsTotal != b.achievementsTotal) return a.achievementsTotal > b.achievementsTotal;
+        return a.level > b.level;
+    });
+    if (byAchievements.size() > 6) byAchievements.resize(6);
+    ImGui::TextUnformatted(u8"Топ по ачивкам");
+    if (ImGui::BeginTable("top_achievements", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                             ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
+                                             ImGuiTableFlags_SizingStretchProp, ImVec2(0.0f, topTableHeight))) {
+        ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn(u8"Активные", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn(u8"Всего", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableHeadersRow();
+        for (const auto& item : byAchievements) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            const std::string rowId = std::string("##ach_") + item.id;
+            if (ImGui::Selectable(rowId.c_str(), false, ImGuiSelectableFlags_SpanAllColumns)) {
+                SelectProfileById(state, storage, catalog, item.id);
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(item.id.c_str());
+            ImGui::TableSetColumnIndex(1);
+            std::string name = item.name + (item.archived ? u8" (архив)" : "");
+            ImGui::TextUnformatted(name.c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%d", item.achievementsActive);
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("%d", item.achievementsTotal);
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted(u8"Средние категории");
+    if (ImGui::BeginTable("avg_categories", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                            ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn(u8"Категория");
+        ImGui::TableSetupColumn(u8"Средняя оценка", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableHeadersRow();
+        for (size_t i = 0; i < Profile::kCategoryCount; ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[i];
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::TableSetColumnIndex(1);
+            if (stats.categoryCounts[i] > 0) {
+                double avg = static_cast<double>(stats.categoryTotals[i]) /
+                    static_cast<double>(stats.categoryCounts[i]);
+                ImGui::Text("%.2f", avg);
+            } else {
+                ImGui::TextUnformatted("-");
+            }
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted(u8"Распределение по рангам");
+    const auto& opts = RankOptions();
+    std::vector<int> rankCounts(opts.size(), 0);
+    for (const auto& item : filtered) {
+        int idx = RankIndexForLevel(item.level);
+        if (idx >= 0 && idx < static_cast<int>(rankCounts.size())) {
+            rankCounts[idx] += 1;
+        }
+    }
+    if (ImGui::BeginTable("rank_dist", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                           ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn(u8"Ранг");
+        ImGui::TableSetupColumn(u8"Профилей", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableHeadersRow();
+        for (size_t i = 0; i < opts.size(); ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(opts[i].label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%d", rankCounts[i]);
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted(u8"Неактивные профили");
+    int thresholdDays = std::clamp(state.inactivityThresholdDays, 1, 365);
+    ImGui::SetNextItemWidth(160.0f);
+    ImGui::SliderInt(u8"Порог (дней)", &thresholdDays, 1, 365);
+    state.inactivityThresholdDays = thresholdDays;
+    SyncFiltersToUi(state);
+    const std::int64_t thresholdSec = static_cast<std::int64_t>(thresholdDays) * 24 * 3600;
+    std::vector<AdminStatsProfile> byInactivity;
+    byInactivity.reserve(filtered.size());
+    for (const auto& item : filtered) {
+        if (item.lastTaskTimestamp == 0) {
+            byInactivity.push_back(item);
+        } else if ((nowSec - item.lastTaskTimestamp) >= thresholdSec) {
+            byInactivity.push_back(item);
+        }
+    }
+    std::sort(byInactivity.begin(), byInactivity.end(), [](const auto& a, const auto& b) {
+        const std::int64_t ta = a.lastTaskTimestamp;
+        const std::int64_t tb = b.lastTaskTimestamp;
+        if (ta == tb) return a.totalXp > b.totalXp;
+        if (ta == 0) return true;
+        if (tb == 0) return false;
+        return ta < tb;
+    });
+    const int inactiveTotal = static_cast<int>(byInactivity.size());
+    if (byInactivity.size() > 6) byInactivity.resize(6);
+    ImGui::TextDisabled(u8"Показано: %d из %d",
+                        static_cast<int>(byInactivity.size()), inactiveTotal);
+    if (ImGui::BeginTable("inactive_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                               ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY,
+                                               ImVec2(0.0f, topTableHeight))) {
+        ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn(u8"Последняя активность", ImGuiTableColumnFlags_WidthFixed, 170.0f);
+        ImGui::TableSetupColumn(u8"Прошло", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn(u8"Прогрев", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableHeadersRow();
+        if (byInactivity.empty()) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted("-");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(u8"Нет профилей старше порога.");
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextUnformatted("-");
+            ImGui::TableSetColumnIndex(3);
+            ImGui::TextUnformatted("-");
+            ImGui::TableSetColumnIndex(4);
+            ImGui::TextUnformatted("-");
+        }
+        for (const auto& item : byInactivity) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            const std::string rowId = std::string("##inactive_") + item.id;
+            if (ImGui::Selectable(rowId.c_str(), false, ImGuiSelectableFlags_SpanAllColumns)) {
+                SelectProfileById(state, storage, catalog, item.id);
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(item.id.c_str());
+            ImGui::TableSetColumnIndex(1);
+            std::string name = item.name + (item.archived ? u8" (архив)" : "");
+            ImGui::TextUnformatted(name.c_str());
+            ImGui::TableSetColumnIndex(2);
+            std::string lastText = item.lastTaskTimestamp > 0
+                ? FormatTimestamp(item.lastTaskTimestamp, "%Y-%m-%d %H:%M")
+                : std::string(u8"нет данных");
+            ImGui::TextUnformatted(lastText.c_str());
+            ImGui::TableSetColumnIndex(3);
+            if (item.lastTaskTimestamp > 0) {
+                ImGui::TextUnformatted(FormatDurationShort(nowSec - item.lastTaskTimestamp).c_str());
+            } else {
+                ImGui::TextUnformatted(u8"—");
+            }
+            ImGui::TableSetColumnIndex(4);
+            if (item.recoveryTasksRemaining > 0) {
+                ImGui::Text("%d", item.recoveryTasksRemaining);
+            } else {
+                ImGui::TextUnformatted("-");
+            }
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted(u8"Профили на прогреве");
+    std::vector<AdminStatsProfile> byRecovery;
+    byRecovery.reserve(filtered.size());
+    for (const auto& item : filtered) {
+        if (item.recoveryTasksRemaining > 0) {
+            byRecovery.push_back(item);
+        }
+    }
+    std::sort(byRecovery.begin(), byRecovery.end(), [](const auto& a, const auto& b) {
+        if (a.recoveryTasksRemaining != b.recoveryTasksRemaining) {
+            return a.recoveryTasksRemaining > b.recoveryTasksRemaining;
+        }
+        return a.totalXp > b.totalXp;
+    });
+    const int recoveryTotal = static_cast<int>(byRecovery.size());
+    if (byRecovery.size() > 6) byRecovery.resize(6);
+    ImGui::TextDisabled(u8"Показано: %d из %d",
+                        static_cast<int>(byRecovery.size()), recoveryTotal);
+    if (ImGui::BeginTable("recovery_table", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                            ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY,
+                                            ImVec2(0.0f, topTableHeight))) {
+        ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn(u8"Осталось", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableHeadersRow();
+        if (byRecovery.empty()) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted("-");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(u8"Нет активных профилей.");
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextUnformatted("-");
+        }
+        for (const auto& item : byRecovery) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            const std::string rowId = std::string("##recovery_") + item.id;
+            if (ImGui::Selectable(rowId.c_str(), false, ImGuiSelectableFlags_SpanAllColumns)) {
+                SelectProfileById(state, storage, catalog, item.id);
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(item.id.c_str());
+            ImGui::TableSetColumnIndex(1);
+            std::string name = item.name + (item.archived ? u8" (архив)" : "");
+            ImGui::TextUnformatted(name.c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%d", item.recoveryTasksRemaining);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleVar();
+}
+

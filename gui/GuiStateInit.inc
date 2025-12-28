@@ -1,0 +1,25 @@
+void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
+                  const GameplayConfig& gameplayConfig, const std::filesystem::path& storageDir,
+                  ImGuiStyle& style, ImGuiIO& io, GLFWwindow* window) {
+    state.storageDir = storageDir;
+    state.rulesConfig = gameplayConfig;
+    state.rulesDraft = gameplayConfig;
+    state.ui = LoadUiSettings(storageDir, style);
+    ApplyUiTheme(state.ui.theme, style);
+    ApplyUiSettings(state.ui, style, io);
+    state.uiLastTheme = state.ui.theme;
+    state.profileSection = std::clamp(state.ui.profileTab, 0, 4);
+    state.profileTabRequest = state.profileSection;
+    ApplyUiFiltersToState(state);
+    glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
+    glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
+    state.windowFullscreenLast = state.ui.windowFullscreen;
+    glfwSetWindowAttrib(window, GLFW_DECORATED, state.ui.windowDecorated ? GLFW_TRUE : GLFW_FALSE);
+    state.windowDecoratedLast = state.ui.windowDecorated;
+    if (state.ui.windowFullscreen) {
+        state.windowFullscreenLast = false;
+        ApplyWindowMode(window, state);
+    }
+    std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
+    RefreshProfiles(state, storage, catalog);
+}
