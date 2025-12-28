@@ -71,6 +71,55 @@ static std::string trim_copy(std::string s) {
     return s;
 }
 
+static std::string to_lower_ascii(std::string s) {
+    for (char& ch : s) {
+        if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+    }
+    return s;
+}
+
+static std::vector<std::string> split_command_line(const std::string& line) {
+    std::vector<std::string> tokens;
+    std::string current;
+    bool in_quotes = false;
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        if (c == '\\' && i + 1 < line.size()) {
+            char next = line[i + 1];
+            if (next == '"' || next == '\\') {
+                current.push_back(next);
+                ++i;
+                continue;
+            }
+        }
+        if (c == '"') {
+            in_quotes = !in_quotes;
+            continue;
+        }
+        if (!in_quotes && std::isspace(static_cast<unsigned char>(c)) != 0) {
+            if (!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+            continue;
+        }
+        current.push_back(c);
+    }
+    if (!current.empty()) tokens.push_back(current);
+    return tokens;
+}
+
+static std::string join_tokens(const std::vector<std::string>& tokens, size_t start, size_t end) {
+    if (start >= end || start >= tokens.size()) return {};
+    end = std::min(end, tokens.size());
+    std::string out = tokens[start];
+    for (size_t i = start + 1; i < end; ++i) {
+        out += ' ';
+        out += tokens[i];
+    }
+    return out;
+}
+
 // Create an actual Profile instance from a blueprint and align skill weights.
 static Profile make_profile_from_blueprint(const ProfileBlueprint& bp, SkillCatalog& catalog) {
     Profile profile(bp.name);
@@ -125,7 +174,7 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
 namespace {
 
 std::string FormatTimestamp(std::int64_t seconds) {
-    if (seconds <= 0) return "never";
+    if (seconds <= 0) return "нет данных";
     std::time_t tt = static_cast<std::time_t>(seconds);
     std::tm tm{};
 #if defined(_WIN32)
@@ -135,7 +184,7 @@ std::string FormatTimestamp(std::int64_t seconds) {
 #endif
     char buffer[64];
     if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm) == 0) {
-        return "unknown";
+        return "неизвестно";
     }
     return buffer;
 }
@@ -192,7 +241,7 @@ static std::optional<int> prompt_task_score() {
 static std::optional<std::vector<TaskShare>> prompt_skill_distribution(const Profile& profile,
                                                                        const SkillCatalog& catalog) {
     std::cout << "Распределите 100% XP между навыками (формат: Навык=процент).\n";
-    std::cout << "Введите 'even' чтобы распределить поровну, или 'cancel' для отмены.\n";
+    std::cout << "Введите 'равномерно' (even) чтобы распределить поровну, или 'отмена' (cancel) для отмены.\n";
     while (true) {
         std::vector<TaskShare> shares;
         int assigned = 0;
@@ -207,16 +256,17 @@ static std::optional<std::vector<TaskShare>> prompt_skill_distribution(const Pro
             std::string lowered = line;
             std::transform(lowered.begin(), lowered.end(), lowered.begin(),
                            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-            if (lowered == "cancel") {
+            if (lowered == "cancel" || line == u8"отмена") {
                 return std::nullopt;
             }
-            if (lowered == "even" || lowered == "auto" || lowered == "spread") {
+            if (lowered == "even" || lowered == "auto" || lowered == "spread" ||
+                line == u8"равномерно" || line == u8"поровну") {
                 auto skills = profile.list_skills();
                 if (skills.empty()) {
-                std::cout << "В профиле пока нет навыков. Укажите навыки вручную.\n";
-                continue;
-            }
-            shares.clear();
+                    std::cout << "В профиле пока нет навыков. Укажите навыки вручную.\n";
+                    continue;
+                }
+                shares.clear();
                 const int count = static_cast<int>(skills.size());
                 int base = 100 / count;
                 int remainder = 100 % count;
@@ -229,13 +279,13 @@ static std::optional<std::vector<TaskShare>> prompt_skill_distribution(const Pro
             }
             auto sep = line.find_first_of("=:");
             if (sep == std::string::npos) {
-                std::cout << "Use the format Skill=percent (example: Modeling=60).\n";
+                std::cout << "Используйте формат Навык=процент (пример: Modeling=60).\n";
                 continue;
             }
             std::string skillName = trim_copy(line.substr(0, sep));
             std::string percentStr = trim_copy(line.substr(sep + 1));
             if (skillName.empty() || percentStr.empty()) {
-                std::cout << "Provide both skill name and percentage.\n";
+                std::cout << "Укажите и навык, и процент.\n";
                 continue;
             }
             int percent = 0;
@@ -277,7 +327,7 @@ static std::optional<std::vector<TaskShare>> prompt_skill_distribution(const Pro
             if (assigned == 100) break;
         }
         if (shares.empty()) {
-            std::cout << "Распределение пустое. Попробуйте снова или введите 'cancel'.\n";
+            std::cout << "Распределение пустое. Попробуйте снова или введите 'отмена' (cancel).\n";
             continue;
         }
         if (assigned != 100) {
@@ -625,7 +675,7 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
     std::cout << "\nВы вошли как " << profile.name() << " [" << profileId << "]." << (adminMode ? " (Администратор)" : " (Просмотр)") << std::endl;
     print_profile(profile, catalog);
     if (adminMode) {
-        std::cout << "\nКоманды: addxp <skill> <amount> | task | show | sync | logout | quit\n";
+        std::cout << "\nКоманды: addxp \"Навык\" <количество> | task | show | sync | logout | quit\n";
         if (profile.penalty_active()) {
             std::cout << "Внимание: действует штраф за простои (" << profile.recovery_tasks_remaining()
                       << " задач).\n";
@@ -634,10 +684,13 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
         std::cout << "\nРежим просмотра: доступны команды show | logout | quit\n";
     }
 
-    std::string cmd;
     while (true) {
         std::cout << "> ";
-        if (!(std::cin >> cmd)) return true; // EOF => exit app
+        std::string line;
+        if (!std::getline(std::cin >> std::ws, line)) return true; // EOF => exit app
+        auto tokens = split_command_line(line);
+        if (tokens.empty()) continue;
+        std::string cmd = to_lower_ascii(tokens[0]);
         if (cmd == "show") {
             print_profile(profile, catalog);
             continue;
@@ -664,7 +717,6 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
                 std::cout << "Недоступно в режиме просмотра.\n";
                 continue;
             }
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             auto details = prompt_task_details(profile, catalog);
             if (!details) {
                 std::cout << "Запись отменена.\n";
@@ -715,33 +767,15 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
                 std::cout << "Недоступно в режиме просмотра.\n";
                 continue;
             }
-            std::string tail;
-            if (!std::getline(std::cin >> std::ws, tail)) {
-                return true; // EOF or stream error => exit app
-            }
-            tail = trim_copy(std::move(tail));
-            if (tail.empty()) {
-                std::cout << "Использование: addxp <skill> <amount>\n";
+            if (tokens.size() < 3) {
+                std::cout << "Использование: addxp \"Навык\" <количество>\n";
                 continue;
             }
 
-            auto lastNonWhitespace = tail.find_last_not_of(" \t\r\n");
-            if (lastNonWhitespace == std::string::npos) {
-                std::cout << "Использование: addxp <skill> <amount>\n";
-                continue;
-            }
-            tail.erase(lastNonWhitespace + 1);
-
-            auto split = tail.find_last_of(" \t");
-            if (split == std::string::npos) {
-                std::cout << "Использование: addxp <skill> <amount>\n";
-                continue;
-            }
-
-            std::string amountStr = trim_copy(tail.substr(split + 1));
-            std::string skill = trim_copy(tail.substr(0, split));
+            std::string amountStr = tokens.back();
+            std::string skill = join_tokens(tokens, 1, tokens.size() - 1);
             if (skill.empty() || amountStr.empty()) {
-                std::cout << "Использование: addxp <skill> <amount>\n";
+                std::cout << "Использование: addxp \"Навык\" <количество>\n";
                 continue;
             }
 
@@ -871,8 +905,11 @@ int main() {
         std::cout << "Команды: list | skills | login <id|name> | admin | help | quit";
         if (adminAuthed) std::cout << " | archive <id> | restore <id> | delete <id>";
         std::cout << "\n> ";
-        std::string menuCmd;
-        if (!(std::cin >> menuCmd)) break;
+        std::string menuLine;
+        if (!std::getline(std::cin >> std::ws, menuLine)) break;
+        auto menuTokens = split_command_line(menuLine);
+        if (menuTokens.empty()) continue;
+        std::string menuCmd = to_lower_ascii(menuTokens[0]);
 
         if (menuCmd == "quit" || menuCmd == "exit") {
             exitApp = true;
@@ -888,7 +925,8 @@ int main() {
                 std::cout << "archive <id> / restore <id> - архивировать или восстановить профиль.\n"
                              "delete <id> - удалить профиль навсегда.\n";
             }
-            std::cout << "quit - завершить работу приложения.\n";
+            std::cout << "quit - завершить работу приложения.\n"
+                         "Подсказка: если имя содержит пробелы, используйте кавычки (login \"Имя профиля\").\n";
             continue;
         }
 
@@ -909,8 +947,12 @@ int main() {
                 continue;
             }
             std::string password;
-            std::cout << "Введите пароль администратора: ";
-            std::cin >> password;
+            if (menuTokens.size() >= 2) {
+                password = menuTokens[1];
+            } else {
+                std::cout << "Введите пароль администратора: ";
+                std::getline(std::cin >> std::ws, password);
+            }
             if (password == kAdminPassword) {
                 adminAuthed = true;
                 std::cout << "Режим администратора активирован.\n";
@@ -924,20 +966,17 @@ int main() {
         if (menuCmd == "archive" || menuCmd == "restore" || menuCmd == "delete") {
             if (!adminAuthed) {
                 std::cout << "Недоступно: требуется режим администратора (команда 'admin').\n";
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                 continue;
             }
             std::string profileId;
-            if (!(std::cin >> profileId)) {
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Некорректный ввод.\n";
+            if (menuTokens.size() >= 2) profileId = menuTokens[1];
+            if (profileId.empty()) {
+                std::cout << "Использование: " << menuCmd << " <id>\n";
                 continue;
             }
 
             if (!is_profile_id(profileId)) {
                 std::cout << "Используйте числовые ID (команда 'list').\n";
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                 continue;
             }
 
@@ -962,22 +1001,22 @@ int main() {
             // delete
             std::string confirm;
             std::cout << "Введите 'yes' для удаления профиля " << profileId << ": ";
-            std::cin >> confirm;
+            std::getline(std::cin >> std::ws, confirm);
             if (confirm == "yes" && storage->delete_profile(profileId)) {
                 std::cout << "Профиль удалён.\n";
             } else {
                 std::cout << "Удаление отменено или не удалось.\n";
             }
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
         }
 
         if (menuCmd == "login") {
             std::string token;
-            if (!(std::cin >> token)) {
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::cout << "Некорректный ввод.\n";
+            if (menuTokens.size() >= 2) {
+                token = join_tokens(menuTokens, 1, menuTokens.size());
+            }
+            if (token.empty()) {
+                std::cout << "Использование: login <id|name>\n";
                 continue;
             }
 

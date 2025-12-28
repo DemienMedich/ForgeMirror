@@ -19,6 +19,7 @@ struct GameplayConfig {
 
 const GameplayConfig& GetGameplayConfig();
 void SetGameplayConfig(const GameplayConfig& config);
+GameplayConfig SanitizeGameplayConfig(const GameplayConfig& config);
 GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir);
 bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::path& storageDir);
 std::filesystem::path GameplayConfigPath(const std::filesystem::path& storageDir);

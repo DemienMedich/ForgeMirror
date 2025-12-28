@@ -50,6 +50,7 @@ if(BUILD_IMGUI_GUI)
 
     add_executable(JobSkillGui
         gui/GuiApp.cpp
+        gui/GuiActions.cpp
         libs/ufbx/ufbx.c
         src/Skill.cpp
         src/Profile.cpp
