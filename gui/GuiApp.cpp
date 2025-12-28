@@ -94,6 +94,7 @@ const std::vector<RankOption>& RankOptions();
 #include "GuiXpUtils.inc"
 
 #include "GuiCharts.inc"
+#include "GuiProfileSections.inc"
 #include "GuiProfileOps.inc"
 
 #include "GuiPipeline.inc"

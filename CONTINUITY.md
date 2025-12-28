@@ -161,10 +161,13 @@ Done:
 - Started service-layer extraction: created `GuiActions` for profile/rules/skill/achievement operations and wired GUI to use it.
 - Added `SanitizeGameplayConfig` for centralized validation; used on load/save and GUI rule saves.
 - Profile UI: added "Обзор" section and grouped achievements/skills/chart/activity into collapsible sections for cleaner navigation.
+- Профильные секции вынесены в `gui/GuiProfileSections.inc`; исправлен баланс скобок после разбиения.
 - Workspace UI: consolidated tools into a single tabbed "Рабочее окно"; added profile/skill search filters (incl. profile skill search), KPI cards in profile overview, uniform toolbar layout in main menu, a scrollable activity section, and a table-based profile skills view.
 - Skill catalog list now uses a table with weight column and filtered result count.
 - Profile skills table supports sorting (name/level/XP/weight).
 - Profile list: added archive toggle and sorting by ID/name with filter-aware display.
+- CLI: локализованы оставшиеся англоязычные подсказки (format/empty/cancel), добавлены русские алиасы для распределения XP (`равномерно/поровну`, `отмена`), метки времени теперь "нет данных/неизвестно".
+- CLI: введён нормальный парсер команд (чтение строки, поддержка кавычек и пробелов), унифицированы подсказки и обработка аргументов.
 
 Now:
 - Continuing UX/professional polish in GUI (admin analytics panel added; awaiting next refinements).
