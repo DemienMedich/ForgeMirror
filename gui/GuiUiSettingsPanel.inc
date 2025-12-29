@@ -2,73 +2,165 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
     ImGui::TextUnformatted(u8"Тема и стиль");
     const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
-    if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
-        state.uiDirty = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Сбросить тему")) {
-        ApplyUiTheme(state.ui.theme, style);
-        const auto& entries = UiColorEntries();
-        for (size_t i = 0; i < entries.size(); ++i) {
-            state.ui.colors[i] = style.Colors[entries[i].col];
+    const float headerWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackTheme = headerWidth < 520.0f;
+    if (stackTheme) {
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
+            state.uiDirty = true;
         }
-        state.ui.customColors = false;
-        state.uiDirty = true;
+        if (ImGui::Button(u8"Сбросить тему", ImVec2(-1.0f, 0.0f))) {
+            ApplyUiTheme(state.ui.theme, style);
+            const auto& entries = UiColorEntries();
+            for (size_t i = 0; i < entries.size(); ++i) {
+                state.ui.colors[i] = style.Colors[entries[i].col];
+            }
+            state.ui.customColors = false;
+            state.uiDirty = true;
+        }
+    } else if (ImGui::BeginTable("theme_row", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("theme_combo", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("theme_reset", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
+            state.uiDirty = true;
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сбросить тему", ImVec2(-1.0f, 0.0f))) {
+            ApplyUiTheme(state.ui.theme, style);
+            const auto& entries = UiColorEntries();
+            for (size_t i = 0; i < entries.size(); ++i) {
+                state.ui.colors[i] = style.Colors[entries[i].col];
+            }
+            state.ui.customColors = false;
+            state.uiDirty = true;
+        }
+        ImGui::EndTable();
     }
     ImGui::TextUnformatted(u8"Готовые темы");
-    if (ImGui::Button(u8"Графит")) {
-        ApplyThemePreset(0, state.ui, style);
-        state.uiDirty = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Сапфир")) {
-        ApplyThemePreset(1, state.ui, style);
-        state.uiDirty = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Песок")) {
-        ApplyThemePreset(2, state.ui, style);
-        state.uiDirty = true;
+    const bool stackThemePresets = headerWidth < 520.0f;
+    if (stackThemePresets) {
+        if (ImGui::Button(u8"Графит", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(0, state.ui, style);
+            state.uiDirty = true;
+        }
+        if (ImGui::Button(u8"Сапфир", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(1, state.ui, style);
+            state.uiDirty = true;
+        }
+        if (ImGui::Button(u8"Песок", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(2, state.ui, style);
+            state.uiDirty = true;
+        }
+    } else if (ImGui::BeginTable("theme_presets", 3, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Графит", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(0, state.ui, style);
+            state.uiDirty = true;
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сапфир", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(1, state.ui, style);
+            state.uiDirty = true;
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Песок", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(2, state.ui, style);
+            state.uiDirty = true;
+        }
+        ImGui::EndTable();
     }
     ImGui::TextUnformatted(u8"Пресеты интерфейса");
-    if (ImGui::Button(u8"Презентация")) {
-        state.ui.fontScale = 1.25f;
-        state.ui.alpha = 1.0f;
-        state.ui.windowRounding = 8.0f;
-        state.ui.frameRounding = 6.0f;
-        state.ui.scrollbarRounding = 8.0f;
-        state.ui.grabRounding = 6.0f;
-        state.ui.windowPadding = ImVec2(12.0f, 12.0f);
-        state.ui.framePadding = ImVec2(8.0f, 6.0f);
-        state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
-        state.uiDirty = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Компактный")) {
-        state.ui.fontScale = 0.9f;
-        state.ui.alpha = 0.95f;
-        state.ui.windowRounding = 4.0f;
-        state.ui.frameRounding = 3.0f;
-        state.ui.scrollbarRounding = 4.0f;
-        state.ui.grabRounding = 3.0f;
-        state.ui.windowPadding = ImVec2(6.0f, 6.0f);
-        state.ui.framePadding = ImVec2(5.0f, 3.0f);
-        state.ui.itemSpacing = ImVec2(6.0f, 4.0f);
-        state.uiDirty = true;
+    const bool stackUiPresets = headerWidth < 520.0f;
+    if (stackUiPresets) {
+        if (ImGui::Button(u8"Презентация", ImVec2(-1.0f, 0.0f))) {
+            state.ui.fontScale = 1.25f;
+            state.ui.alpha = 1.0f;
+            state.ui.windowRounding = 8.0f;
+            state.ui.frameRounding = 6.0f;
+            state.ui.scrollbarRounding = 8.0f;
+            state.ui.grabRounding = 6.0f;
+            state.ui.windowPadding = ImVec2(12.0f, 12.0f);
+            state.ui.framePadding = ImVec2(8.0f, 6.0f);
+            state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
+            state.uiDirty = true;
+        }
+        if (ImGui::Button(u8"Компактный", ImVec2(-1.0f, 0.0f))) {
+            state.ui.fontScale = 0.9f;
+            state.ui.alpha = 0.95f;
+            state.ui.windowRounding = 4.0f;
+            state.ui.frameRounding = 3.0f;
+            state.ui.scrollbarRounding = 4.0f;
+            state.ui.grabRounding = 3.0f;
+            state.ui.windowPadding = ImVec2(6.0f, 6.0f);
+            state.ui.framePadding = ImVec2(5.0f, 3.0f);
+            state.ui.itemSpacing = ImVec2(6.0f, 4.0f);
+            state.uiDirty = true;
+        }
+    } else if (ImGui::BeginTable("ui_presets", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Презентация", ImVec2(-1.0f, 0.0f))) {
+            state.ui.fontScale = 1.25f;
+            state.ui.alpha = 1.0f;
+            state.ui.windowRounding = 8.0f;
+            state.ui.frameRounding = 6.0f;
+            state.ui.scrollbarRounding = 8.0f;
+            state.ui.grabRounding = 6.0f;
+            state.ui.windowPadding = ImVec2(12.0f, 12.0f);
+            state.ui.framePadding = ImVec2(8.0f, 6.0f);
+            state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
+            state.uiDirty = true;
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Компактный", ImVec2(-1.0f, 0.0f))) {
+            state.ui.fontScale = 0.9f;
+            state.ui.alpha = 0.95f;
+            state.ui.windowRounding = 4.0f;
+            state.ui.frameRounding = 3.0f;
+            state.ui.scrollbarRounding = 4.0f;
+            state.ui.grabRounding = 3.0f;
+            state.ui.windowPadding = ImVec2(6.0f, 6.0f);
+            state.ui.framePadding = ImVec2(5.0f, 3.0f);
+            state.ui.itemSpacing = ImVec2(6.0f, 4.0f);
+            state.uiDirty = true;
+        }
+        ImGui::EndTable();
     }
     ImGui::Separator();
     ImGui::TextUnformatted(u8"Пользовательские пресеты");
-    ImGui::InputText(u8"Имя пресета", state.uiPresetName.data(), state.uiPresetName.size());
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Сохранить пресет")) {
-        const std::string rawName = TrimStringGui(state.uiPresetName.data());
-        const std::string presetName = SanitizePresetName(rawName);
-        std::error_code ec;
-        std::filesystem::create_directories(UiPresetsDir(state.storageDir), ec);
-        auto presetPath = UiPresetPath(state.storageDir, presetName);
-        SaveUiSettingsToPath(presetPath, state.ui);
-        std::snprintf(state.uiPresetName.data(), state.uiPresetName.size(), "%s", presetName.c_str());
-        SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+    if (stackTheme) {
+        ImGui::InputText(u8"Имя пресета", state.uiPresetName.data(), state.uiPresetName.size());
+        if (ImGui::Button(u8"Сохранить пресет", ImVec2(-1.0f, 0.0f))) {
+            const std::string rawName = TrimStringGui(state.uiPresetName.data());
+            const std::string presetName = SanitizePresetName(rawName);
+            std::error_code ec;
+            std::filesystem::create_directories(UiPresetsDir(state.storageDir), ec);
+            auto presetPath = UiPresetPath(state.storageDir, presetName);
+            SaveUiSettingsToPath(presetPath, state.ui);
+            std::snprintf(state.uiPresetName.data(), state.uiPresetName.size(), "%s", presetName.c_str());
+            SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+        }
+    } else if (ImGui::BeginTable("ui_preset_save", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputText(u8"Имя пресета", state.uiPresetName.data(), state.uiPresetName.size());
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сохранить пресет", ImVec2(-1.0f, 0.0f))) {
+            const std::string rawName = TrimStringGui(state.uiPresetName.data());
+            const std::string presetName = SanitizePresetName(rawName);
+            std::error_code ec;
+            std::filesystem::create_directories(UiPresetsDir(state.storageDir), ec);
+            auto presetPath = UiPresetPath(state.storageDir, presetName);
+            SaveUiSettingsToPath(presetPath, state.ui);
+            std::snprintf(state.uiPresetName.data(), state.uiPresetName.size(), "%s", presetName.c_str());
+            SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+        }
+        ImGui::EndTable();
     }
     const auto presets = LoadUiPresetNames(state.storageDir);
     if (presets.empty()) {
@@ -79,27 +171,53 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         std::vector<const char*> presetLabels;
         presetLabels.reserve(presets.size());
         for (const auto& name : presets) presetLabels.push_back(name.c_str());
-        ImGui::SetNextItemWidth(200.0f);
-        ImGui::Combo(u8"Список пресетов", &state.uiPresetIndex, presetLabels.data(),
-                     static_cast<int>(presetLabels.size()));
-        ImGui::SameLine();
-        if (ImGui::Button(u8"Загрузить пресет")) {
-            const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
-            state.ui = LoadUiSettingsFromPath(presetPath, style);
-            ApplyUiTheme(state.ui.theme, style);
-            ApplyUiSettings(state.ui, style, ImGui::GetIO());
-            state.uiLastTheme = state.ui.theme;
-            state.uiDirty = true;
-            std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
-            ApplyUiFiltersToState(state);
-            SetStatus(state, u8"Пресет загружен.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(u8"Удалить пресет")) {
-            const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
-            std::error_code ec;
-            std::filesystem::remove(presetPath, ec);
-            SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+        if (stackTheme) {
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"Список пресетов", &state.uiPresetIndex, presetLabels.data(),
+                         static_cast<int>(presetLabels.size()));
+            if (ImGui::Button(u8"Загрузить пресет", ImVec2(-1.0f, 0.0f))) {
+                const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
+                state.ui = LoadUiSettingsFromPath(presetPath, style);
+                ApplyUiTheme(state.ui.theme, style);
+                ApplyUiSettings(state.ui, style, ImGui::GetIO());
+                state.uiLastTheme = state.ui.theme;
+                state.uiDirty = true;
+                std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
+                ApplyUiFiltersToState(state);
+                SetStatus(state, u8"Пресет загружен.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+            }
+            if (ImGui::Button(u8"Удалить пресет", ImVec2(-1.0f, 0.0f))) {
+                const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
+                std::error_code ec;
+                std::filesystem::remove(presetPath, ec);
+                SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+            }
+        } else if (ImGui::BeginTable("ui_preset_list", 3, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"Список пресетов", &state.uiPresetIndex, presetLabels.data(),
+                         static_cast<int>(presetLabels.size()));
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Загрузить пресет", ImVec2(-1.0f, 0.0f))) {
+                const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
+                state.ui = LoadUiSettingsFromPath(presetPath, style);
+                ApplyUiTheme(state.ui.theme, style);
+                ApplyUiSettings(state.ui, style, ImGui::GetIO());
+                state.uiLastTheme = state.ui.theme;
+                state.uiDirty = true;
+                std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
+                ApplyUiFiltersToState(state);
+                SetStatus(state, u8"Пресет загружен.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+            }
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Удалить пресет", ImVec2(-1.0f, 0.0f))) {
+                const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
+                std::error_code ec;
+                std::filesystem::remove(presetPath, ec);
+                SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
+            }
+            ImGui::EndTable();
         }
     }
     ImGui::SliderFloat(u8"Масштаб шрифта", &state.ui.fontScale, 0.8f, 1.6f, "%.2f");
@@ -172,6 +290,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     } else {
         quickLabel = std::filesystem::path(uniformBackground).filename().string();
     }
+    const float bgWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackBackground = bgWidth < 520.0f;
     if (ImGui::BeginCombo(u8"Быстрый фон", quickLabel.c_str())) {
         const bool noneSelected = uniform && uniformBackground.empty();
         if (ImGui::Selectable(u8"(нет)", noneSelected)) {
@@ -195,18 +315,39 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         }
         ImGui::EndCombo();
     }
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Очистить все")) {
-        for (auto& bg : state.ui.backgrounds) {
-            bg.clear();
+    if (stackBackground) {
+        if (ImGui::Button(u8"Очистить все", ImVec2(-1.0f, 0.0f))) {
+            for (auto& bg : state.ui.backgrounds) {
+                bg.clear();
+            }
+            state.uiDirty = true;
         }
-        state.uiDirty = true;
-    }
-    ImGui::InputTextWithHint(u8"##bg_filter", u8"Фильтр фонов",
-                             state.filters.background.data(), state.filters.background.size());
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##bg_filter")) {
-        state.filters.background.fill('\0');
+        ImGui::InputTextWithHint(u8"##bg_filter", u8"Фильтр фонов",
+                                 state.filters.background.data(), state.filters.background.size());
+        if (ImGui::SmallButton(u8"Сброс##bg_filter")) {
+            state.filters.background.fill('\0');
+        }
+    } else if (ImGui::BeginTable("bg_controls", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("bg_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableSetupColumn("bg_reset", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableSetupColumn("bg_clear", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint(u8"##bg_filter", u8"Фильтр фонов",
+                                 state.filters.background.data(), state.filters.background.size());
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            state.filters.background.fill('\0');
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Очистить все", ImVec2(-1.0f, 0.0f))) {
+            for (auto& bg : state.ui.backgrounds) {
+                bg.clear();
+            }
+            state.uiDirty = true;
+        }
+        ImGui::EndTable();
     }
     int visibleBackgrounds = 0;
     for (const auto& bg : backgrounds) {
@@ -253,14 +394,26 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         state.uiDirty = false;
         AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
     }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Сбросить цвета")) {
-        ApplyUiTheme(state.ui.theme, style);
-        const auto& entries = UiColorEntries();
-        for (size_t i = 0; i < entries.size(); ++i) {
-            state.ui.colors[i] = style.Colors[entries[i].col];
+    if (stackTheme) {
+        if (ImGui::Button(u8"Сбросить цвета", ImVec2(-1.0f, 0.0f))) {
+            ApplyUiTheme(state.ui.theme, style);
+            const auto& entries = UiColorEntries();
+            for (size_t i = 0; i < entries.size(); ++i) {
+                state.ui.colors[i] = style.Colors[entries[i].col];
+            }
+            state.ui.customColors = false;
+            state.uiDirty = true;
         }
-        state.ui.customColors = false;
-        state.uiDirty = true;
+    } else {
+        ImGui::SameLine();
+        if (ImGui::Button(u8"Сбросить цвета")) {
+            ApplyUiTheme(state.ui.theme, style);
+            const auto& entries = UiColorEntries();
+            for (size_t i = 0; i < entries.size(); ++i) {
+                state.ui.colors[i] = style.Colors[entries[i].col];
+            }
+            state.ui.customColors = false;
+            state.uiDirty = true;
+        }
     }
 }

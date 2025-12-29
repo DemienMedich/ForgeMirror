@@ -2,45 +2,170 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
     GameplayConfig& draft = state.rulesDraft;
     ImGui::TextUnformatted(u8"Кривая уровней");
-    ImGui::InputInt(u8"Базовый XP (уровень 1)", &draft.levelBaseXp);
-    ImGui::InputInt(u8"Линейный прирост за уровень", &draft.levelLinearXp);
-    ImGui::InputInt(u8"Квадратичный прирост за уровень", &draft.levelQuadraticXp);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const bool stackRules = avail < 420.0f;
+    if (stackRules) {
+        ImGui::TextDisabled(u8"Базовый XP (уровень 1)");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##level_base", &draft.levelBaseXp);
+        ImGui::TextDisabled(u8"Линейный прирост за уровень");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##level_linear", &draft.levelLinearXp);
+        ImGui::TextDisabled(u8"Квадратичный прирост за уровень");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##level_quad", &draft.levelQuadraticXp);
+    } else if (ImGui::BeginTable("level_rules", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("level_label", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("level_value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Базовый XP (уровень 1)");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##level_base", &draft.levelBaseXp);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Линейный прирост за уровень");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##level_linear", &draft.levelLinearXp);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Квадратичный прирост за уровень");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##level_quad", &draft.levelQuadraticXp);
+        ImGui::EndTable();
+    }
     ImGui::Separator();
     ImGui::TextUnformatted(u8"Базовый XP категорий");
-    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
-        std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
-        int value = draft.categoryBaseXp[idx];
-        if (ImGui::InputInt(label.c_str(), &value)) {
-            draft.categoryBaseXp[idx] = value;
+    if (stackRules) {
+        for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+            std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
+            ImGui::TextDisabled("%s", label.c_str());
+            int value = draft.categoryBaseXp[idx];
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::InputInt(("##cat_xp_" + std::to_string(idx)).c_str(), &value)) {
+                draft.categoryBaseXp[idx] = value;
+            }
         }
+    } else if (ImGui::BeginTable("category_rules", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("cat_label", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("cat_value", ImGuiTableColumnFlags_WidthStretch);
+        for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+            std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
+            int value = draft.categoryBaseXp[idx];
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("%s", label.c_str());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::InputInt(("##cat_xp_" + std::to_string(idx)).c_str(), &value)) {
+                draft.categoryBaseXp[idx] = value;
+            }
+        }
+        ImGui::EndTable();
     }
     ImGui::Separator();
     ImGui::TextUnformatted(u8"Бонусы и штрафы");
-    ImGui::InputFloat(u8"Базовый фокус-бонус", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
-    ImGui::InputFloat(u8"Доп. фокус-бонус", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
-    ImGui::SliderFloat(u8"Коэффициент награды при повторе", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat(u8"Коэффициент награды при прогреве", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
-    ImGui::InputInt(u8"Задач прогрева", &draft.recoveryWarmupTasks);
-    ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
-    if (ImGui::Button(u8"Сбросить")) {
-        draft = state.rulesConfig;
+    if (stackRules) {
+        ImGui::TextDisabled(u8"Базовый фокус-бонус");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputFloat(u8"##focus_base", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
+        ImGui::TextDisabled(u8"Доп. фокус-бонус");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputFloat(u8"##focus_extra", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
+        ImGui::TextDisabled(u8"Коэффициент награды при повторе");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat(u8"##repeat_factor", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
+        ImGui::TextDisabled(u8"Коэффициент награды при прогреве");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat(u8"##recovery_factor", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
+        ImGui::TextDisabled(u8"Задач прогрева");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##recovery_tasks", &draft.recoveryWarmupTasks);
+    } else if (ImGui::BeginTable("bonus_rules", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("bonus_label", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("bonus_value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Базовый фокус-бонус");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputFloat(u8"##focus_base", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Доп. фокус-бонус");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputFloat(u8"##focus_extra", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Коэффициент награды при повторе");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat(u8"##repeat_factor", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Коэффициент награды при прогреве");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat(u8"##recovery_factor", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Задач прогрева");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputInt(u8"##recovery_tasks", &draft.recoveryWarmupTasks);
+        ImGui::EndTable();
     }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Сохранить и применить")) {
-        SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
-        if (result.ok) {
-            state.rulesConfig = result.config;
-            state.rulesDraft = result.config;
-            SetGameplayConfig(result.config);
-            ReapplyRulesToProfiles(state, storage, catalog);
-            std::string keepId = state.active ? state.active->id : std::string{};
-            RefreshProfiles(state, storage, catalog, keepId);
-            SetStatus(state, result.message, 0.45f, 0.9f, 0.45f, 1.0f,
-                      AppLogLevel::Info, u8"Правила");
-        } else {
-            SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
-                      AppLogLevel::Error, u8"Правила");
+    ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
+    if (stackRules) {
+        if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+            draft = state.rulesConfig;
         }
+        if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
+            SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
+            if (result.ok) {
+                state.rulesConfig = result.config;
+                state.rulesDraft = result.config;
+                SetGameplayConfig(result.config);
+                ReapplyRulesToProfiles(state, storage, catalog);
+                std::string keepId = state.active ? state.active->id : std::string{};
+                RefreshProfiles(state, storage, catalog, keepId);
+                SetStatus(state, result.message, 0.45f, 0.9f, 0.45f, 1.0f,
+                          AppLogLevel::Info, u8"Правила");
+            } else {
+                SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
+                          AppLogLevel::Error, u8"Правила");
+            }
+        }
+    } else if (ImGui::BeginTable("rules_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+            draft = state.rulesConfig;
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
+            SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
+            if (result.ok) {
+                state.rulesConfig = result.config;
+                state.rulesDraft = result.config;
+                SetGameplayConfig(result.config);
+                ReapplyRulesToProfiles(state, storage, catalog);
+                std::string keepId = state.active ? state.active->id : std::string{};
+                RefreshProfiles(state, storage, catalog, keepId);
+                SetStatus(state, result.message, 0.45f, 0.9f, 0.45f, 1.0f,
+                          AppLogLevel::Info, u8"Правила");
+            } else {
+                SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
+                          AppLogLevel::Error, u8"Правила");
+            }
+        }
+        ImGui::EndTable();
     }
 }
 

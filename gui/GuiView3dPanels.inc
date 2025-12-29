@@ -1,11 +1,29 @@
 void DrawView3dSettingsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::View3DSettings, state.storageDir);
     const auto models = LoadModelChoices(state.storageDir);
-    ImGui::InputTextWithHint(u8"##model_filter", u8"Фильтр моделей",
-                             state.filters.model.data(), state.filters.model.size());
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##model_filter")) {
-        state.filters.model.fill('\0');
+    const float filterWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackFilter = filterWidth < 360.0f;
+    if (stackFilter) {
+        ImGui::TextDisabled(u8"Фильтр моделей");
+        ImGui::InputTextWithHint(u8"##model_filter", u8"Фильтр моделей",
+                                 state.filters.model.data(), state.filters.model.size());
+        if (ImGui::SmallButton(u8"Сброс##model_filter")) {
+            state.filters.model.fill('\0');
+        }
+    } else if (ImGui::BeginTable("model_filter_row", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("model_filter", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("model_reset", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Фильтр моделей");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint(u8"##model_filter", u8"Фильтр моделей",
+                                 state.filters.model.data(), state.filters.model.size());
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            state.filters.model.fill('\0');
+        }
+        ImGui::EndTable();
     }
     int visibleModels = 0;
     for (const auto& model : models) {
@@ -15,7 +33,8 @@ void DrawView3dSettingsPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         visibleModels, static_cast<int>(models.size()));
     std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
-    if (ImGui::BeginCombo(u8"Модель", modelLabel.c_str())) {
+    ImGui::TextDisabled(u8"Модель");
+    if (ImGui::BeginCombo(u8"##model_combo", modelLabel.c_str())) {
         bool noneSelected = state.ui.modelPath.empty();
         if (ImGui::Selectable(u8"(не выбрана)", noneSelected)) {
             state.ui.modelPath.clear();
@@ -36,12 +55,31 @@ void DrawView3dSettingsPanel(GuiState& state) {
         }
         ImGui::EndCombo();
     }
-    if (ImGui::InputText(u8"Путь к модели", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
-        state.ui.modelPath = state.modelPathBuffer.data();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Загрузить")) {
-        state.viewMeshPath.clear();
+    const float pathWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackPath = pathWidth < 420.0f;
+    if (stackPath) {
+        ImGui::TextDisabled(u8"Путь к модели");
+        if (ImGui::InputText(u8"##model_path", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
+            state.ui.modelPath = state.modelPathBuffer.data();
+        }
+        if (ImGui::Button(u8"Загрузить", ImVec2(-1.0f, 0.0f))) {
+            state.viewMeshPath.clear();
+        }
+    } else if (ImGui::BeginTable("model_path_row", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("model_path", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("model_load", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Путь к модели");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::InputText(u8"##model_path", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
+            state.ui.modelPath = state.modelPathBuffer.data();
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Загрузить", ImVec2(-1.0f, 0.0f))) {
+            state.viewMeshPath.clear();
+        }
+        ImGui::EndTable();
     }
     ImGui::Checkbox(u8"Авто?вращение", &state.ui.modelAutoRotate);
     ImGui::SliderFloat(u8"Скорость вращения", &state.ui.modelAutoSpeed, 0.0f, 3.0f, "%.2f");

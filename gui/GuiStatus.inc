@@ -40,11 +40,15 @@ void ShowStatus(const GuiState& state) {
     ImGui::PopStyleColor();
 }
 
-void DrawKpiCard(const char* id, const char* title, const std::string& value, const ImVec4& accent, float height = 56.0f) {
+void DrawKpiCard(const char* id, const char* title, const std::string& value, const ImVec4& accent, float height = 68.0f) {
     ImGui::PushID(id);
-    ImGui::BeginChild("kpi_card", ImVec2(0.0f, height), true);
+    ImGui::BeginChild("kpi_card", ImVec2(0.0f, height), true, ImGuiWindowFlags_NoScrollbar);
     ImGui::TextDisabled("%s", title);
-    ImGui::TextColored(accent, "%s", value.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, accent);
+    ImGui::SetWindowFontScale(1.15f);
+    ImGui::TextUnformatted(value.c_str());
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::PopStyleColor();
     ImGui::EndChild();
     ImGui::PopID();
 }

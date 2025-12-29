@@ -6,6 +6,7 @@ Z:\CPP\JobSkill\src\Profile.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Releas
 Z:\CPP\JobSkill\src\FileStorage.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\FileStorage.obj
 Z:\CPP\JobSkill\src\SkillCatalog.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\SkillCatalog.obj
 Z:\CPP\JobSkill\src\AppUtils.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\AppUtils.obj
+Z:\CPP\JobSkill\src\CloudSync.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\CloudSync.obj
 Z:\CPP\JobSkill\src\GameplayConfig.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\GameplayConfig.obj
 Z:\CPP\JobSkill\libs\imgui\imgui.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\imgui.obj
 Z:\CPP\JobSkill\libs\imgui\imgui_draw.cpp;Z:\CPP\JobSkill\build-gui\JobSkillGui.dir\Release\imgui_draw.obj

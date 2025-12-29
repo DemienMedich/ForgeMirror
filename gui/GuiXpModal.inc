@@ -33,19 +33,38 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
             ImGui::TextUnformatted(u8"Параметры задачи");
             ImGui::Separator();
-            ImGui::SetNextItemWidth(200.0f);
-            if (ImGui::Combo(u8"Категория", &state.taskCategoryIndex,
-            Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
-                state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
+            const float headerWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackHeader = headerWidth < 440.0f;
+            if (stackHeader) {
+                ImGui::TextDisabled(u8"Категория");
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo(u8"##task_category", &state.taskCategoryIndex,
+                Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
+                    state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
+                }
+            } else if (ImGui::BeginTable("xp_task_header", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableSetupColumn("header_left", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("header_right", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled(u8"Категория");
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo(u8"##task_category", &state.taskCategoryIndex,
+                Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
+                    state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
+                }
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled(u8"Базовый XP");
+                ImGui::Text("%d", rules.categoryBaseXp[state.taskCategoryIndex]);
+                ImGui::EndTable();
             }
             const int currentCategory = state.taskCategoryIndex;
             const int baseXp = rules.categoryBaseXp[currentCategory];
             const float scoreRatio = static_cast<float>(state.taskScore) / static_cast<float>(Profile::kMaxCategoryScore);
             const float scoreMultiplier = std::pow(std::max(0.1f, scoreRatio), 1.35f);
             const int currentBest = state.active->profile.category_best_score(static_cast<size_t>(currentCategory));
-            ImGui::SameLine();
-            ImGui::Text(u8"Базовый XP: %d", baseXp);
-            ImGui::TextDisabled(u8"Категория задаёт базовый XP; оценка — нелинейный множитель.");
+            const bool penaltiesEnabled = state.active->profile.penalties_enabled();
+            ImGui::TextDisabled(u8"Категория задаёт базовый XP; оценка - нелинейный множитель.");
             if (ImGui::SliderInt(u8"Оценка", &state.taskScore, 1, Profile::kMaxCategoryScore)) {
                 state.taskScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
             }
@@ -55,27 +74,59 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 u8"Лучший результат: %d/10 (категория освоена)", currentBest);
             } else {
                 ImGui::Text(u8"Лучший результат: %d/10", currentBest);
-                if (state.taskScore <= currentBest) {
+                if (penaltiesEnabled && state.taskScore <= currentBest) {
                     ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f),
-                    u8"Повтор оценки — глобальный XP ограничен 35%% (навыки без штрафа).");
+                    u8"Повтор оценки - глобальный XP ограничен 35%% (навыки без штрафа).");
+                } else if (!penaltiesEnabled && state.taskScore <= currentBest) {
+                    ImGui::TextColored(ImVec4(0.6f, 0.8f, 0.95f, 1.0f),
+                    u8"Штрафы за повтор включатся после ранга Сеньор.");
                 }
             }
 
             ImGui::Separator();
             ImGui::TextUnformatted(u8"Распределите навыки (автоподбор до 100%)");
-            if (ImGui::Button(u8"Равномерно")) {
-                PrepareXpEntries(state, catalog);
+            const float controlsWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackControls = controlsWidth < 520.0f;
+            if (stackControls) {
+                if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
+                    PrepareXpEntries(state, catalog);
+                }
+                ImGui::TextDisabled(u8"Фильтр навыков");
+                ImGui::InputTextWithHint(u8"##xp_filter", u8"Фильтр навыков",
+                state.filters.xpSkill.data(), state.filters.xpSkill.size());
+                if (ImGui::SmallButton(u8"Сброс##xp_filter")) {
+                    state.filters.xpSkill.fill('\0');
+                }
+                const char* xpSortLabels[] = {u8"По имени", u8"По доле", u8"По бонусу", u8"По XP"};
+                ImGui::TextDisabled(u8"Сортировка");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo(u8"##xp_sort", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
+            } else if (ImGui::BeginTable("xp_controls", 4, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableSetupColumn("xp_btn", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("xp_filter", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("xp_reset", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("xp_sort", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
+                    PrepareXpEntries(state, catalog);
+                }
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled(u8"Фильтр");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextWithHint(u8"##xp_filter", u8"Фильтр навыков",
+                state.filters.xpSkill.data(), state.filters.xpSkill.size());
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+                    state.filters.xpSkill.fill('\0');
+                }
+                ImGui::TableNextColumn();
+                const char* xpSortLabels[] = {u8"По имени", u8"По доле", u8"По бонусу", u8"По XP"};
+                ImGui::TextDisabled(u8"Сортировка");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo(u8"##xp_sort", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
+                ImGui::EndTable();
             }
-            ImGui::SameLine();
-            ImGui::InputTextWithHint(u8"##xp_filter", u8"Фильтр навыков",
-            state.filters.xpSkill.data(), state.filters.xpSkill.size());
-            ImGui::SameLine();
-            if (ImGui::SmallButton(u8"Сброс##xp_filter")) {
-                state.filters.xpSkill.fill('\0');
-            }
-            const char* xpSortLabels[] = {u8"По имени", u8"По доле", u8"По бонусу", u8"По XP"};
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::Combo(u8"Сортировка##xp", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
             const float sliderWidth = ImGui::CalcTextSize("000").x + ImGui::GetStyle().FramePadding.x * 6.0f;
             int percentSum = 0;
             int maxSharePercent = 0;
@@ -177,7 +228,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             ImGui::Text(u8"Фокус-бонус: %.2f (макс. доля %d%%)", focusBonus, maxSharePercent);
             ImGui::TextDisabled(u8"Прогноз XP по навыкам до штрафов: %d", previewPool);
 
-            const bool repeatPenaltyPreview = state.taskScore <= currentBest;
+            const bool repeatPenaltyPreview = penaltiesEnabled && state.taskScore <= currentBest;
             const int repeatPercentPreview = static_cast<int>(std::round(rules.repeatRewardFactor * 100.0f));
             const int recoveryPercentPreview = static_cast<int>(std::round(rules.recoveryRewardFactor * 100.0f));
             std::string globalHint = u8"Глобальный XP";
@@ -186,7 +237,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 globalHint += u8" (повтор " + std::to_string(repeatPercentPreview) + "%)";
                 previewPenalty = true;
             }
-            if (state.active->profile.penalty_active()) {
+            if (penaltiesEnabled && state.active->profile.penalty_active()) {
                 globalHint += u8" (прогрев " + std::to_string(recoveryPercentPreview) + "%)";
                 previewPenalty = true;
             }
@@ -194,13 +245,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             if (repeatPenaltyPreview) {
                 effectivePreview = static_cast<int>(std::round(effectivePreview * rules.repeatRewardFactor));
             }
-            if (state.active->profile.penalty_active()) {
+            if (penaltiesEnabled && state.active->profile.penalty_active()) {
                 effectivePreview = static_cast<int>(std::round(effectivePreview * rules.recoveryRewardFactor));
             }
             ImGui::TextDisabled(u8"%s: %d%s", globalHint.c_str(), effectivePreview,
             previewPenalty ? u8" (после штрафов)" : "");
 
-            if (ImGui::Button(u8"Применить")) {
+            if (ImGui::Button(u8"Применить", ImVec2(stackControls ? -1.0f : 0.0f, 0.0f))) {
                 const int readyCategory = NormalizeCategoryIndex(state.taskCategoryIndex);
                 const int readyScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
                 const int storedBest = state.active->profile.category_best_score(static_cast<size_t>(readyCategory));
@@ -272,23 +323,28 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     if (!firstSkill) {
                         AppendLog(state, state.active->id, skillsStream.str());
                     }
-                    bool repeatPenalty = readyScore <= storedBest;
+                    const bool penaltiesEnabled = state.active->profile.penalties_enabled();
+                    bool repeatPenalty = penaltiesEnabled && readyScore <= storedBest;
                     int effectiveXp = basePool;
                     if (repeatPenalty) {
                         effectiveXp = static_cast<int>(std::round(effectiveXp * rules.repeatRewardFactor));
                     }
                     constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
-                    if (state.active->profile.last_task_timestamp() > 0 &&
+                    if (penaltiesEnabled && state.active->profile.last_task_timestamp() > 0 &&
                     (nowSeconds - state.active->profile.last_task_timestamp()) > kThirtyDays) {
                         state.active->profile.start_penalty_recovery(rules.recoveryWarmupTasks);
                     }
                     bool recoveryPenalty = false;
-                    if (state.active->profile.penalty_active()) {
+                    if (!penaltiesEnabled && state.active->profile.penalty_active()) {
+                        state.active->profile.start_penalty_recovery(0);
+                    }
+                    if (penaltiesEnabled && state.active->profile.penalty_active()) {
                         recoveryPenalty = true;
                         effectiveXp = static_cast<int>(std::round(effectiveXp * rules.recoveryRewardFactor));
                         state.active->profile.consume_penalty_task();
                     }
                     state.active->profile.set_last_task_timestamp(nowSeconds);
+                    state.active->profile.increment_tasks_completed();
                     if (effectiveXp > 0) {
                         state.active->profile.grant_global_xp(effectiveXp);
                     }
@@ -346,8 +402,10 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     xpPopupOpen = false;
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Отмена")) {
+            if (!stackControls) {
+                ImGui::SameLine();
+            }
+            if (ImGui::Button(u8"Отмена", ImVec2(stackControls ? -1.0f : 0.0f, 0.0f))) {
                 ImGui::CloseCurrentPopup();
                 xpPopupOpen = false;
             }

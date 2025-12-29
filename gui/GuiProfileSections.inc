@@ -16,16 +16,36 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 
     if (ImGui::CollapsingHeader(u8"Топ навыков", ImGuiTreeNodeFlags_DefaultOpen)) {
         const char* topModes[] = {u8"По XP", u8"По уровню", u8"По весу"};
-        ImGui::SetNextItemWidth(180.0f);
-        ImGui::Combo(u8"Рейтинг", &state.topSkillMode, topModes, IM_ARRAYSIZE(topModes));
+        const float topWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackTop = topWidth < 420.0f;
+        if (stackTop) {
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"Рейтинг", &state.topSkillMode, topModes, IM_ARRAYSIZE(topModes));
+        } else if (ImGui::BeginTable("top_skill_filters", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"Рейтинг", &state.topSkillMode, topModes, IM_ARRAYSIZE(topModes));
+            ImGui::TableNextColumn();
+            ImGui::Dummy(ImVec2(0.0f, 0.0f));
+            ImGui::EndTable();
+        }
         auto skills = profile.list_skills();
         if (skills.empty()) {
             ImGui::TextUnformatted(u8"Навыков нет.");
         } else {
             const int totalSkills = static_cast<int>(skills.size());
             const int shownSkills = std::min(totalSkills, 5);
-            ImGui::SameLine();
-            ImGui::TextDisabled(u8"Показано: %d", shownSkills);
+            if (stackTop) {
+                ImGui::TextDisabled(u8"Показано: %d", shownSkills);
+            } else if (ImGui::BeginTable("top_skill_count", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Dummy(ImVec2(0.0f, 0.0f));
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled(u8"Показано: %d", shownSkills);
+                ImGui::EndTable();
+            }
             const int mode = std::clamp(state.topSkillMode, 0, 2);
             std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
                 if (mode == 1) {
@@ -40,6 +60,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 return a.level > b.level;
             });
             if (skills.size() > 5) skills.resize(5);
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
             if (ImGui::BeginTable("top_skills", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn(u8"Навык");
@@ -60,6 +81,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 }
                 ImGui::EndTable();
             }
+            ImGui::PopStyleVar();
         }
     }
 
@@ -74,14 +96,17 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 categoriesBelow++;
             }
         }
-        bool hasRecovery = profile.recovery_tasks_remaining() > 0;
+        const bool penaltiesEnabled = profile.penalties_enabled();
+        bool hasRecovery = penaltiesEnabled && profile.recovery_tasks_remaining() > 0;
         if (ImGui::CollapsingHeader(u8"Индикаторы", ImGuiTreeNodeFlags_DefaultOpen)) {
             const int signals = (hasRecovery ? 1 : 0) + (categoriesBelow > 0 ? 1 : 0) + (isStale ? 1 : 0);
             ImGui::TextDisabled(u8"Активных сигналов: %d", signals);
             if (signals == 0) {
                 ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), u8"Все в норме.");
-            } else if (ImGui::BeginTable("profile_flags", 2, ImGuiTableFlags_SizingStretchProp |
-            ImGuiTableFlags_BordersInnerV)) {
+            } else {
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+                if (ImGui::BeginTable("profile_flags", 2, ImGuiTableFlags_SizingStretchProp |
+                ImGuiTableFlags_BordersInnerV)) {
                 ImGui::TableSetupColumn(u8"Сигнал");
                 ImGui::TableSetupColumn(u8"Статус");
                 ImGui::TableHeadersRow();
@@ -115,6 +140,8 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     }
                 }
                 ImGui::EndTable();
+                }
+                ImGui::PopStyleVar();
             }
         }
     }
@@ -127,7 +154,8 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         std::string elapsedLabel = lastTask > 0
         ? FormatDurationShort(std::max<std::int64_t>(0, nowSec - lastTask))
         : std::string(u8"-");
-        const int recoveryLeft = profile.recovery_tasks_remaining();
+        const bool penaltiesEnabled = profile.penalties_enabled();
+        const int recoveryLeft = penaltiesEnabled ? profile.recovery_tasks_remaining() : 0;
 
         std::string categoryAttention;
         int categoriesBelow = 0;
@@ -145,6 +173,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             categoryAttention = u8"все освоены";
         }
 
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
         if (ImGui::BeginTable("profile_status", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
             ImGui::TableSetupColumn(u8"Параметр");
             ImGui::TableSetupColumn(u8"Статус");
@@ -190,6 +219,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             }
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar();
     }
 
     if (ImGui::CollapsingHeader(u8"Категории", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -234,14 +264,33 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
                 expiredCount += 1;
             }
         }
-        ImGui::InputTextWithHint(u8"##ach_filter", u8"Фильтр ачивок",
-        state.filters.achievement.data(), state.filters.achievement.size());
-        ImGui::SameLine();
-        ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
-        ImGui::SameLine();
-        if (ImGui::SmallButton(u8"Сброс##ach_filter")) {
-            state.filters.achievement.fill('\0');
-            state.showExpiredAchievements = true;
+        const float achFilterWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackAchFilters = achFilterWidth < 520.0f;
+        if (stackAchFilters) {
+            ImGui::InputTextWithHint(u8"##ach_filter", u8"Фильтр ачивок",
+            state.filters.achievement.data(), state.filters.achievement.size());
+            ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
+            if (ImGui::SmallButton(u8"Сброс##ach_filter")) {
+                state.filters.achievement.fill('\0');
+                state.showExpiredAchievements = true;
+            }
+        } else if (ImGui::BeginTable("ach_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("ach_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+            ImGui::TableSetupColumn("ach_toggle", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##ach_filter", u8"Фильтр ачивок",
+            state.filters.achievement.data(), state.filters.achievement.size());
+            ImGui::TableNextColumn();
+            ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+                state.filters.achievement.fill('\0');
+                state.showExpiredAchievements = true;
+            }
+            ImGui::EndTable();
         }
         int visibleAch = 0;
         for (const auto& a : profile.achievements()) {
@@ -368,13 +417,11 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
 
 static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
     if (ImGui::CollapsingHeader(u8"Навыки", ImGuiTreeNodeFlags_DefaultOpen)) {
+    const float skillFilterWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackSkillFilters = skillFilterWidth < 620.0f;
     ImGui::InputText(u8"Поиск навыка в профиле", state.filters.profileSkill.data(),
     state.filters.profileSkill.size());
     const char* sortLabels[] = {u8"По имени", u8"По уровню", u8"По XP", u8"По весу"};
-    ImGui::SetNextItemWidth(180.0f);
-    ImGui::Combo(u8"Сортировка", &state.profileSkillSort, sortLabels, IM_ARRAYSIZE(sortLabels));
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(160.0f);
     const char* weightCategoryLabels[] = {
         u8"Все",
         u8"A (>=1.30)",
@@ -383,14 +430,38 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         u8"D (0.70-0.89)",
         u8"E (<0.70)"
     };
-    ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
-    weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##skill_filters")) {
-        state.filters.profileSkill.fill('\0');
-        state.profileSkillCategoryFilter = 0;
-        state.profileSkillWeightRange[0] = 0.0f;
-        state.profileSkillWeightRange[1] = 2.0f;
+    if (stackSkillFilters) {
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo(u8"Сортировка", &state.profileSkillSort, sortLabels, IM_ARRAYSIZE(sortLabels));
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
+        weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
+        if (ImGui::SmallButton(u8"Сброс##skill_filters")) {
+            state.filters.profileSkill.fill('\0');
+            state.profileSkillCategoryFilter = 0;
+            state.profileSkillWeightRange[0] = 0.0f;
+            state.profileSkillWeightRange[1] = 2.0f;
+        }
+    } else if (ImGui::BeginTable("profile_skill_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("profile_sort", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+        ImGui::TableSetupColumn("profile_category", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("profile_reset", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo(u8"Сортировка", &state.profileSkillSort, sortLabels, IM_ARRAYSIZE(sortLabels));
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
+        weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            state.filters.profileSkill.fill('\0');
+            state.profileSkillCategoryFilter = 0;
+            state.profileSkillWeightRange[0] = 0.0f;
+            state.profileSkillWeightRange[1] = 2.0f;
+        }
+        ImGui::EndTable();
     }
     float range[2] = {state.profileSkillWeightRange[0], state.profileSkillWeightRange[1]};
     if (ImGui::SliderFloat2(u8"Диапазон веса", range, 0.0f, 2.0f, "%.2f")) {
@@ -417,6 +488,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     int visibleCount = 0;
     ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
     ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
     if (ImGui::BeginTable("skill_table", 5, tableFlags)) {
         ImGui::TableSetupColumn(u8"Навык");
         ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 80.0f);
@@ -474,6 +546,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(skills.size()));
     if (visibleCount == 0) {
         ImGui::TextDisabled(u8"Нет навыков по фильтру.");
@@ -506,12 +579,6 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
     if (ImGui::BeginChild("profile_activity", ImVec2(0, 140), true)) {
         const auto logIt = state.activityLogs.find(profileId);
         const bool hasLog = logIt != state.activityLogs.end() && !logIt->second.empty();
-        ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
-        state.filters.activity.data(), state.filters.activity.size());
-        ImGui::SameLine();
-        if (ImGui::SmallButton(u8"Сброс##activity_filter")) {
-            state.filters.activity.fill('\0');
-        }
         int activityShown = 0;
         if (hasLog) {
             for (auto it = logIt->second.rbegin(); it != logIt->second.rend(); ++it) {
@@ -519,10 +586,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 activityShown += 1;
             }
         }
-        ImGui::SameLine();
-        ImGui::TextDisabled(u8"Показано: %d", activityShown);
-        ImGui::SameLine();
-        if (ImGui::Button(u8"Экспорт")) {
+        auto exportActivity = [&]() {
             if (hasLog) {
                 std::filesystem::path outPath;
                 if (ExportProfileActivity(state, profileId, logIt->second,
@@ -536,6 +600,40 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             } else {
                 SetStatus(state, u8"Нет действий для экспорта.", 1.0f, 0.75f, 0.35f);
             }
+        };
+        const float activityWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActivity = activityWidth < 540.0f;
+        if (stackActivity) {
+            ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
+            state.filters.activity.data(), state.filters.activity.size());
+            if (ImGui::SmallButton(u8"Сброс##activity_filter")) {
+                state.filters.activity.fill('\0');
+            }
+            ImGui::TextDisabled(u8"Показано: %d", activityShown);
+            if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+                exportActivity();
+            }
+        } else if (ImGui::BeginTable("activity_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("activity_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+            ImGui::TableSetupColumn("activity_reset", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+            ImGui::TableSetupColumn("activity_count", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("activity_export", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
+            state.filters.activity.data(), state.filters.activity.size());
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+                state.filters.activity.fill('\0');
+            }
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Показано: %d", activityShown);
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+                exportActivity();
+            }
+            ImGui::EndTable();
         }
         ImGui::Separator();
         if (hasLog) {

@@ -479,6 +479,7 @@ public:
         std::int64_t storedLastTask = 0;
         int storedInertiaTasks = 0;
         int storedRecoveryTasks = 0;
+        int storedTasksCompleted = 0;
 
         while (std::getline(in, line)) {
             auto t = trim(line);
@@ -510,6 +511,8 @@ public:
                     storedInertiaTasks = parse_int(val, 0);
                 } else if (key == "recoveryTasks") {
                     storedRecoveryTasks = parse_int(val, 0);
+                } else if (key == "tasksCompleted") {
+                    storedTasksCompleted = parse_int(val, 0);
                 }
             } else if (section == "skills") {
                 if (key == "names") {
@@ -614,6 +617,7 @@ public:
         profile.set_last_task_timestamp(storedLastTask);
         profile.set_inactivity_tasks(storedInertiaTasks);
         profile.start_penalty_recovery(storedRecoveryTasks);
+        profile.set_tasks_completed(storedTasksCompleted);
         profile.set_admin(storedAdmin);
         profile.set_achievements(load_achievements(baseDir_, activeId_));
 
@@ -640,6 +644,7 @@ public:
         ss << "lastTaskTs=" << profile.last_task_timestamp() << "\n";
         ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
         ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
+        ss << "tasksCompleted=" << profile.tasks_completed() << "\n";
 
         ss << "\n[skills]\n";
         auto skills = profile.list_skills();

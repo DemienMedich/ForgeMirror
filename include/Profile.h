@@ -63,9 +63,13 @@ public:
     std::int64_t last_task_timestamp() const { return lastTaskTimestamp_; }
     void set_inactivity_tasks(int tasks) { inactivityTasks_ = tasks; }
     int inactivity_tasks() const { return inactivityTasks_; }
+    int tasks_completed() const { return tasksCompleted_; }
+    void set_tasks_completed(int count);
+    void increment_tasks_completed(int delta = 1);
     bool is_admin() const { return isAdmin_; }
     void set_admin(bool value) { isAdmin_ = value; }
     bool penalty_active() const { return recoveryTasksRemaining_ > 0; }
+    bool penalties_enabled() const;
     int recovery_tasks_remaining() const { return recoveryTasksRemaining_; }
     void start_penalty_recovery(int tasks);
     void consume_penalty_task();
@@ -92,5 +96,6 @@ private:
     std::int64_t lastTaskTimestamp_ = 0;
     int inactivityTasks_ = 0;
     int recoveryTasksRemaining_ = 0;
+    int tasksCompleted_ = 0;
     std::vector<Achievement> achievements_;
 };

@@ -27,6 +27,7 @@
 #include "AppUtils.h"
 #include "SkillCatalog.h"
 #include "GameplayConfig.h"
+#include "CloudSync.h"
 
 #if defined(_WIN32)
 #  ifndef NOMINMAX
@@ -411,18 +412,19 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
             result.leveled = profile.grant_xp(share.skill, finalXp);
             result.apiOk = api.post_xp(share.skill, finalXp);
         }
-        outcome.skillResults.push_back(result);
-    }
+    outcome.skillResults.push_back(result);
+}
 
     const int storedBest = profile.category_best_score(static_cast<size_t>(details.categoryIndex));
-    outcome.repeatPenalty = details.score <= storedBest;
+    const bool penaltiesEnabled = profile.penalties_enabled();
+    outcome.repeatPenalty = penaltiesEnabled && details.score <= storedBest;
     int effectiveXp = basePool;
     if (outcome.repeatPenalty) {
         effectiveXp = static_cast<int>(std::round(effectiveXp * rules.repeatRewardFactor));
     }
 
     constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
-    if (profile.last_task_timestamp() > 0 &&
+    if (penaltiesEnabled && profile.last_task_timestamp() > 0 &&
         (nowSeconds - profile.last_task_timestamp()) > kThirtyDays) {
         profile.start_penalty_recovery(rules.recoveryWarmupTasks);
         if (rules.recoveryWarmupTasks > 0) {
@@ -432,7 +434,10 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
         }
     }
 
-    if (profile.penalty_active()) {
+    if (!penaltiesEnabled && profile.penalty_active()) {
+        profile.start_penalty_recovery(0);
+    }
+    if (penaltiesEnabled && profile.penalty_active()) {
         outcome.recoveryPenalty = true;
         effectiveXp = static_cast<int>(std::round(effectiveXp * rules.recoveryRewardFactor));
         int before = profile.recovery_tasks_remaining();
@@ -446,6 +451,7 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
     }
 
     profile.set_last_task_timestamp(nowSeconds);
+    profile.increment_tasks_completed();
     if (effectiveXp > 0) {
         profile.grant_global_xp(effectiveXp);
     }
@@ -503,6 +509,7 @@ static void print_profile(const Profile& p, const SkillCatalog& catalog) {
     std::cout << "Общий уровень: " << p.overall_level() << " (" << DescribeOverallRank(p) << ")\n";
     std::cout << "Всего XP: " << p.total_xp() << "\n";
     std::cout << "Прогресс до следующего уровня: " << p.level_progress() << "/" << p.xp_to_next_level() << "\n";
+    std::cout << "Выполнено задач: " << p.tasks_completed() << "\n";
     const auto& categories = p.category_best_scores();
     const auto& cooldowns = p.category_cooldowns();
     std::cout << "Категории задач (оценка / кулдаун):\n";
@@ -511,7 +518,7 @@ static void print_profile(const Profile& p, const SkillCatalog& catalog) {
                   << categories[i] << "/10 ("
                   << cooldowns[i] << ")\n";
     }
-    if (p.penalty_active()) {
+    if (p.penalties_enabled() && p.penalty_active()) {
         std::cout << "Осталось восстановительных задач: " << p.recovery_tasks_remaining() << "\n";
     }
     std::cout << "Буфер деградации (задач до понижения): " << p.inactivity_tasks() << "\n";
@@ -659,13 +666,21 @@ static std::optional<ActiveProfile> acquire_profile(IJobStorage& storage, SkillC
 }
 
 // Command loop for a single logged-in profile: handles addxp/show/sync/logout/quit.
-static bool run_profile_session(Profile& profile, const std::string& profileId, IJobStorage& storage, IApiClient& api, SkillCatalog& catalog, bool adminMode) {
+static bool run_profile_session(Profile& profile, const std::string& profileId, IJobStorage& storage, IApiClient& api,
+                                SkillCatalog& catalog, bool adminMode,
+                                const std::filesystem::path& storageDir, const CloudSyncConfig& cloudConfig) {
     auto sync_now = [&](bool verbose = true) {
         bool ok = storage.save_profile(profile);
         if (!ok) {
             if (verbose) std::cout << "Внимание: не удалось сохранить профиль локально.\n";
         } else if (verbose) {
             std::cout << "Синхронизация завершена.\n";
+        }
+        if (ok && adminMode && cloudConfig.enabled && cloudConfig.autoPush) {
+            CloudSyncResult cloudResult = PushCloudSnapshot(cloudConfig, storageDir, CloudRole::Admin);
+            if (verbose && !cloudResult.message.empty()) {
+                std::cout << cloudResult.message << "\n";
+            }
         }
         return ok;
     };
@@ -676,7 +691,7 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
     print_profile(profile, catalog);
     if (adminMode) {
         std::cout << "\nКоманды: addxp \"Навык\" <количество> | task | show | sync | logout | quit\n";
-        if (profile.penalty_active()) {
+        if (profile.penalties_enabled() && profile.penalty_active()) {
             std::cout << "Внимание: действует штраф за простои (" << profile.recovery_tasks_remaining()
                       << " задач).\n";
         }
@@ -882,6 +897,10 @@ int main() {
     extern IApiClient* CreateFakeApi();
 
     auto storageDir = ResolveStorageDirectory();
+    CloudSyncConfig cloudConfig = LoadCloudSyncConfig(storageDir);
+    if (cloudConfig.enabled && cloudConfig.autoPull) {
+        PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
+    }
     auto gameplayConfig = LoadGameplayConfig(storageDir);
     SetGameplayConfig(gameplayConfig);
     SkillCatalog catalog(storageDir);
@@ -896,6 +915,19 @@ int main() {
     std::cout << " (версия " << APP_VERSION << ")";
 #endif
     std::cout << "!\n";
+    if (cloudConfig.enabled) {
+        CloudManifest manifest = LoadCloudManifest(cloudConfig, storageDir);
+        if (!manifest.appVersion.empty()) {
+            std::cout << "Облако: версия " << manifest.appVersion;
+            if (manifest.dataUpdatedAt > 0) {
+                std::cout << ", данные обновлены " << FormatTimestamp(manifest.dataUpdatedAt);
+            }
+            std::cout << ".\n";
+            if (IsUpdateAvailable(manifest, APP_VERSION)) {
+                std::cout << "Доступно обновление клиента через облако.\n";
+            }
+        }
+    }
 
     bool adminAuthed = false;
     bool exitApp = false;
@@ -1034,7 +1066,8 @@ int main() {
                 std::cout << "Внимание: не удалось авторизоваться на сервере.\n";
             }
 
-            bool requestedExit = run_profile_session(activeProfile->profile, activeProfile->id, *storage, *api, catalog, adminMode);
+            bool requestedExit = run_profile_session(activeProfile->profile, activeProfile->id, *storage, *api, catalog,
+                                                     adminMode, storageDir, cloudConfig);
             if (requestedExit) {
                 exitApp = true;
             }

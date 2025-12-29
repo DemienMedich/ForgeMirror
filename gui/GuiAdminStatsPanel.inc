@@ -2,43 +2,51 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     DrawWindowBackground(state.ui, UiWindowId::AdminStats, state.storageDir);
     const std::int64_t nowSec = NowSeconds();
     bool refresh = false;
-    ImGui::BeginGroup();
-    if (ImGui::Button(u8"Обновить")) {
-        refresh = true;
-    }
-    ImGui::SameLine();
-    ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(90.0f);
-    ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
-    ImGui::EndGroup();
+    const float headerWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackHeader = headerWidth < 620.0f;
     std::string updated = FormatTimestamp(state.adminStats.lastUpdated, "%Y-%m-%d %H:%M:%S");
-    ImGui::SameLine();
-    ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
+    if (stackHeader) {
+        if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
+            refresh = true;
+        }
+        ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
+        ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
+    } else if (ImGui::BeginTable("admin_refresh", 4, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("admin_refresh_btn", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("admin_refresh_auto", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableSetupColumn("admin_refresh_secs", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("admin_refresh_stamp", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
+            refresh = true;
+        }
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
+        ImGui::EndTable();
+    }
     ImGui::Separator();
     ImGui::TextUnformatted(u8"Фильтры");
-    ImGui::SetNextItemWidth(220.0f);
-    ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
-                             state.filters.adminStats.data(), state.filters.adminStats.size());
-    ImGui::SameLine();
-    ImGui::Checkbox(u8"Архив", &state.adminStatsIncludeArchived);
-    ImGui::SameLine();
+    const float filtersWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackFilters = filtersWidth < 740.0f;
     const auto& rankOptions = RankOptions();
     std::vector<const char*> rankLabels;
     rankLabels.reserve(rankOptions.size() + 1);
     rankLabels.push_back(u8"Все ранги");
     for (const auto& opt : rankOptions) rankLabels.push_back(opt.label);
-    ImGui::SetNextItemWidth(150.0f);
-    ImGui::Combo(u8"Ранг##admin_stats", &state.adminStatsRankFilter,
-                 rankLabels.data(), static_cast<int>(rankLabels.size()));
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##admin_stats_filter")) {
+    auto resetFilters = [&]() {
         state.filters.adminStats.fill('\0');
         state.adminStatsIncludeArchived = true;
         state.adminStatsRankFilter = 0;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Экспорт CSV")) {
+    };
+    auto exportStats = [&]() {
         std::filesystem::path outPath;
         if (ExportAdminStatsCsv(state, outPath)) {
             std::string msg = u8"Экспортировано: ";
@@ -48,6 +56,50 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             SetStatus(state, u8"Нет данных для экспорта.", 1.0f, 0.75f, 0.35f, 1.0f,
                       AppLogLevel::Warning, u8"Статистика");
         }
+    };
+    if (stackFilters) {
+        ImGui::TextDisabled(u8"Поиск");
+        ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
+                                 state.filters.adminStats.data(), state.filters.adminStats.size());
+        ImGui::Checkbox(u8"Архив", &state.adminStatsIncludeArchived);
+        ImGui::TextDisabled(u8"Ранг");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
+                     rankLabels.data(), static_cast<int>(rankLabels.size()));
+        if (ImGui::SmallButton(u8"Сброс##admin_stats_filter")) {
+            resetFilters();
+        }
+        if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+            exportStats();
+        }
+    } else if (ImGui::BeginTable("admin_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("admin_filter_search", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableSetupColumn("admin_filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("admin_filter_rank", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+        ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Поиск");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
+                                 state.filters.adminStats.data(), state.filters.adminStats.size());
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Архив", &state.adminStatsIncludeArchived);
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Ранг");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
+                     rankLabels.data(), static_cast<int>(rankLabels.size()));
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            resetFilters();
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+            exportStats();
+        }
+        ImGui::EndTable();
     }
     SyncFiltersToUi(state);
 

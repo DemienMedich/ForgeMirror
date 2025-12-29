@@ -1,15 +1,7 @@
 void DrawLogsPanel(GuiState& state) {
     ImGui::TextUnformatted(u8"Фильтры");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(240.0f);
-    ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
-                             state.filters.logs.data(), state.filters.logs.size());
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##log_filter")) {
-        state.filters.logs.fill('\0');
-        state.filters.logSource.fill('\0');
-    }
-    ImGui::SameLine();
+    const float filterWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackFilters = filterWidth < 720.0f;
     std::vector<std::string> logSources;
     logSources.reserve(state.appLogs.size());
     for (const auto& entry : state.appLogs) {
@@ -32,51 +24,114 @@ void DrawLogsPanel(GuiState& state) {
             }
         }
     }
-    ImGui::SetNextItemWidth(180.0f);
-    if (ImGui::Combo(u8"Источник##log_source", &sourceIndex, logSourceLabels.data(),
-                     static_cast<int>(logSourceLabels.size()))) {
+    auto applySourceFilter = [&]() {
         if (sourceIndex <= 0) {
             state.filters.logSource.fill('\0');
         } else {
             std::snprintf(state.filters.logSource.data(), state.filters.logSource.size(), "%s",
                           logSources[static_cast<size_t>(sourceIndex - 1)].c_str());
         }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Экспорт")) {
+    };
+    auto exportLogs = [&]() {
         int filteredCount = CountFilteredLogs(state);
         if (filteredCount == 0) {
             SetStatus(state, u8"Нет записей для экспорта.", 1.0f, 0.75f, 0.35f, 1.0f,
                       AppLogLevel::Warning, u8"Логи");
-        } else {
-            std::filesystem::path outPath;
-            int exportedCount = 0;
-            if (ExportAppLogs(state, outPath, exportedCount)) {
-                std::string msg = u8"Экспортировано записей: ";
-                msg += std::to_string(exportedCount);
-                msg += u8". Файл: ";
-                msg += outPath.string();
-                SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Логи");
-            } else {
-                SetStatus(state, u8"Не удалось сохранить лог-файл.", 1.0f, 0.45f, 0.45f, 1.0f,
-                          AppLogLevel::Error, u8"Логи");
-            }
+            return;
         }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Очистить")) {
-        state.appLogs.clear();
+        std::filesystem::path outPath;
+        int exportedCount = 0;
+        if (ExportAppLogs(state, outPath, exportedCount)) {
+            std::string msg = u8"Экспортировано записей: ";
+            msg += std::to_string(exportedCount);
+            msg += u8". Файл: ";
+            msg += outPath.string();
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Логи");
+        } else {
+            SetStatus(state, u8"Не удалось сохранить лог-файл.", 1.0f, 0.45f, 0.45f, 1.0f,
+                      AppLogLevel::Error, u8"Логи");
+        }
+    };
+    if (stackFilters) {
+        ImGui::TextDisabled(u8"Поиск");
+        ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
+                                 state.filters.logs.data(), state.filters.logs.size());
+        if (ImGui::SmallButton(u8"Сброс##log_filter")) {
+            state.filters.logs.fill('\0');
+            state.filters.logSource.fill('\0');
+        }
+        ImGui::TextDisabled(u8"Источник");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##log_source", &sourceIndex, logSourceLabels.data(),
+                         static_cast<int>(logSourceLabels.size()))) {
+            applySourceFilter();
+        }
+        if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+            exportLogs();
+        }
+        if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+            state.appLogs.clear();
+        }
+    } else if (ImGui::BeginTable("log_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("log_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableSetupColumn("log_reset", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+        ImGui::TableSetupColumn("log_source", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+        ImGui::TableSetupColumn("log_export", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableSetupColumn("log_clear", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Поиск");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
+                                 state.filters.logs.data(), state.filters.logs.size());
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            state.filters.logs.fill('\0');
+            state.filters.logSource.fill('\0');
+        }
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Источник");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##log_source", &sourceIndex, logSourceLabels.data(),
+                         static_cast<int>(logSourceLabels.size()))) {
+            applySourceFilter();
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+            exportLogs();
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+            state.appLogs.clear();
+        }
+        ImGui::EndTable();
     }
 
-    ImGui::Checkbox(u8"Инфо", &state.logShowInfo);
-    ImGui::SameLine();
-    ImGui::Checkbox(u8"Предупреждения", &state.logShowWarning);
-    ImGui::SameLine();
-    ImGui::Checkbox(u8"Ошибки", &state.logShowError);
-    ImGui::SameLine();
-    ImGui::Checkbox(u8"Автопрокрутка", &state.logAutoScroll);
-    ImGui::SameLine();
-    ImGui::Checkbox(u8"Компактно", &state.logCompactView);
+    const float toggleWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackToggles = toggleWidth < 520.0f;
+    if (stackToggles) {
+        ImGui::Checkbox(u8"Инфо", &state.logShowInfo);
+        ImGui::Checkbox(u8"Предупреждения", &state.logShowWarning);
+        ImGui::Checkbox(u8"Ошибки", &state.logShowError);
+        ImGui::Checkbox(u8"Автопрокрутка", &state.logAutoScroll);
+        ImGui::Checkbox(u8"Компактно", &state.logCompactView);
+    } else if (ImGui::BeginTable("log_toggles", 3, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Инфо", &state.logShowInfo);
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Предупреждения", &state.logShowWarning);
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Ошибки", &state.logShowError);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Автопрокрутка", &state.logAutoScroll);
+        ImGui::TableNextColumn();
+        ImGui::Checkbox(u8"Компактно", &state.logCompactView);
+        ImGui::TableNextColumn();
+        ImGui::Dummy(ImVec2(0.0f, 0.0f));
+        ImGui::EndTable();
+    }
     int filteredCount = CountFilteredLogs(state);
     ImGui::TextDisabled(u8"Показано: %d из %d", filteredCount, static_cast<int>(state.appLogs.size()));
 

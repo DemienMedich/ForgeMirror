@@ -46,6 +46,20 @@ void DrawNavigationPanel(GuiState& state) {
     if (ImGui::Button(u8"Главное меню", navButtonSize)) {
         state.showMainMenu = !state.showMainMenu;
     }
+
+    if (state.isAdmin) {
+        const float footerHeight = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+        const float targetY = ImGui::GetWindowHeight() - footerHeight - ImGui::GetStyle().WindowPadding.y;
+        if (targetY > ImGui::GetCursorPosY()) {
+            ImGui::SetCursorPosY(targetY);
+        }
+        ImGui::Separator();
+#ifdef APP_VERSION
+        ImGui::TextDisabled(u8"Версия: %s", APP_VERSION);
+#else
+        ImGui::TextDisabled(u8"Версия: dev");
+#endif
+    }
     ImGui::End();
 
 }

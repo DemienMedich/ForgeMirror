@@ -5,11 +5,29 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::TextUnformatted(u8"Пайплайн пуст.");
         return;
     }
-    ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Фильтр пайплайна",
-                             state.filters.pipeline.data(), state.filters.pipeline.size());
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##pipeline_filter")) {
-        state.filters.pipeline.fill('\0');
+    const float filterWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackFilter = filterWidth < 360.0f;
+    if (stackFilter) {
+        ImGui::TextDisabled(u8"Фильтр");
+        ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Фильтр пайплайна",
+                                 state.filters.pipeline.data(), state.filters.pipeline.size());
+        if (ImGui::SmallButton(u8"Сброс##pipeline_filter")) {
+            state.filters.pipeline.fill('\0');
+        }
+    } else if (ImGui::BeginTable("pipeline_filter_row", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("pipeline_filter", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("pipeline_reset", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Фильтр");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Фильтр пайплайна",
+                                 state.filters.pipeline.data(), state.filters.pipeline.size());
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            state.filters.pipeline.fill('\0');
+        }
+        ImGui::EndTable();
     }
     int visibleCount = 0;
     for (int i = 0; i < stepCount; ++i) {

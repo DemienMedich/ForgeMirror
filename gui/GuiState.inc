@@ -5,6 +5,9 @@ struct GuiDataState {
     std::filesystem::path storageDir;
     GameplayConfig rulesConfig;
     GameplayConfig rulesDraft;
+    CloudSyncConfig cloudConfig;
+    CloudManifest cloudManifest;
+    bool cloudUpdateAvailable = false;
     std::unordered_map<std::string, std::deque<std::string>> activityLogs;
     std::deque<AppLogEntry> appLogs;
     AdminStatsCache adminStats;

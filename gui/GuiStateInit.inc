@@ -4,6 +4,9 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.storageDir = storageDir;
     state.rulesConfig = gameplayConfig;
     state.rulesDraft = gameplayConfig;
+    state.cloudConfig = LoadCloudSyncConfig(storageDir);
+    state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
+    state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
     state.ui = LoadUiSettings(storageDir, style);
     ApplyUiTheme(state.ui.theme, style);
     ApplyUiSettings(state.ui, style, io);

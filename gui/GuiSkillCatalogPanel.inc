@@ -30,40 +30,51 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::BeginChild("catalog_list_panel", ImVec2(0.0f, panelHeight), false);
 
         ImGui::TextUnformatted(u8"Каталог навыков");
-        if (!state.isAdmin) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Добавить навык")) {
-            state.addSkillPopupRequest = true;
-            std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
-            std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
-            state.newSkillWeight = 1.0f;
-        }
-        ImGui::SameLine();
+        const float listWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActions = listWidth < 320.0f;
         const bool canDeleteSkill = state.selectedCatalogIndex >= 0 &&
             state.selectedCatalogIndex < static_cast<int>(catalogSkills.size());
-        if (!canDeleteSkill) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Удалить навык")) {
-            state.deleteSkillPopupRequest = true;
-            state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
+        if (stackActions) {
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
+                state.addSkillPopupRequest = true;
+                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
+                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                state.newSkillWeight = 1.0f;
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
+                state.deleteSkillPopupRequest = true;
+                state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
+            }
+            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
+        } else if (ImGui::BeginTable("catalog_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableSetupColumn("action_left", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("action_right", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
+                state.addSkillPopupRequest = true;
+                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
+                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                state.newSkillWeight = 1.0f;
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+            ImGui::TableNextColumn();
+            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
+                state.deleteSkillPopupRequest = true;
+                state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
+            }
+            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
+            ImGui::EndTable();
         }
-        if (!canDeleteSkill) ImGui::EndDisabled();
-        if (!state.isAdmin) ImGui::EndDisabled();
 
         ImGui::Separator();
-        ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
-                                 state.filters.skill.data(), state.filters.skill.size());
-        ImGui::SameLine();
-        if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
-            state.filters.skill.fill('\0');
-            state.catalogWeightCategoryFilter = 0;
-        }
-        ImGui::SetNextItemWidth(180.0f);
         const char* sortLabels[] = {u8"По названию", u8"По весу (убыв.)"};
-        ImGui::Combo(u8"Сортировка##catalog", &state.catalogSortMode, sortLabels, IM_ARRAYSIZE(sortLabels));
-        ImGui::SetNextItemWidth(180.0f);
         const char* groupLabels[] = {u8"Без группировки", u8"По категории веса"};
-        ImGui::Combo(u8"Группировка##catalog", &state.catalogGroupMode,
-                     groupLabels, IM_ARRAYSIZE(groupLabels));
-        ImGui::SetNextItemWidth(180.0f);
         const char* weightCategoryLabels[] = {
             u8"Все",
             u8"A (>=1.30)",
@@ -72,8 +83,56 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             u8"D (0.70-0.89)",
             u8"E (<0.70)"
         };
-        ImGui::Combo(u8"Категория##catalog_weight", &state.catalogWeightCategoryFilter,
-                     weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
+        const bool stackFilters = listWidth < 360.0f;
+        if (stackFilters) {
+            ImGui::TextDisabled(u8"Поиск");
+            ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
+                                     state.filters.skill.data(), state.filters.skill.size());
+            if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
+                state.filters.skill.fill('\0');
+                state.catalogWeightCategoryFilter = 0;
+            }
+            ImGui::TextDisabled(u8"Сортировка");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_sort", &state.catalogSortMode, sortLabels, IM_ARRAYSIZE(sortLabels));
+            ImGui::TextDisabled(u8"Группировка");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_group", &state.catalogGroupMode,
+                         groupLabels, IM_ARRAYSIZE(groupLabels));
+            ImGui::TextDisabled(u8"Категория веса");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
+                         weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
+        } else if (ImGui::BeginTable("catalog_filters", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableSetupColumn("filter_left", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("filter_right", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Поиск");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
+                                     state.filters.skill.data(), state.filters.skill.size());
+            if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
+                state.filters.skill.fill('\0');
+                state.catalogWeightCategoryFilter = 0;
+            }
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Сортировка");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_sort", &state.catalogSortMode, sortLabels, IM_ARRAYSIZE(sortLabels));
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Группировка");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_group", &state.catalogGroupMode,
+                         groupLabels, IM_ARRAYSIZE(groupLabels));
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Категория веса");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
+                         weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
+            ImGui::EndTable();
+        }
         ImGui::TextDisabled(u8"Всего: %d", static_cast<int>(catalogSkills.size()));
         ImGui::Separator();
 

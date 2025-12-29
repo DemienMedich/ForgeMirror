@@ -3,6 +3,7 @@
 #include "Profile.h"
 #include "SkillCatalog.h"
 #include "GameplayConfig.h"
+#include "CloudSync.h"
 #include "GuiActions.h"
 
 #if defined(_WIN32)
@@ -150,6 +151,10 @@ int main() {
     ImGuiIO& io = InitImGuiContext();
 
     auto storageDir = ResolveStorageDirectory();
+    CloudSyncConfig cloudConfig = LoadCloudSyncConfig(storageDir);
+    if (cloudConfig.enabled && cloudConfig.autoPull) {
+        PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
+    }
     static std::string layoutPath;
     ConfigureLayoutPath(io, storageDir, layoutPath);
     LoadGuiFonts(io);
@@ -164,6 +169,9 @@ int main() {
     ImGuiStyle& style = ImGui::GetStyle();
     GuiState state;
     InitGuiState(state, *storage, catalog, gameplayConfig, storageDir, style, io, window);
+    state.cloudConfig = cloudConfig;
+    state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
+    state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
 
     RunGuiLoop(window, state, *storage, catalog, style, io, layoutPath);
 

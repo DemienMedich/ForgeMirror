@@ -67,7 +67,7 @@ std::string DescribeOverallRank(const Profile& profile) {
         if (first) details << "закончите испытания категорий";
         hasDetail = true;
     }
-    if (profile.penalty_active()) {
+    if (profile.penalties_enabled() && profile.penalty_active()) {
         if (hasDetail) details << " | ";
         details << "штрафных задач осталось: " << profile.recovery_tasks_remaining();
         hasDetail = true;

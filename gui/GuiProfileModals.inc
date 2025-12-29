@@ -7,7 +7,7 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
     bool createPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Создать профиль", &createPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText(u8"Имя", state.modalBuffer.data(), state.modalBuffer.size());
-        if (ImGui::Button(u8"Создать")) {
+        auto createProfile = [&]() {
             CreateProfileResult result = CreateProfileAction(storage, catalog, state.modalBuffer.data());
             AppLogLevel level = LogLevelForResult(result);
             SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
@@ -17,11 +17,29 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 createPopupOpen = false;
             }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(u8"Отмена")) {
-            ImGui::CloseCurrentPopup();
-            createPopupOpen = false;
+        };
+        const float actionWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActions = actionWidth < 280.0f;
+        if (stackActions) {
+            if (ImGui::Button(u8"Создать", ImVec2(-1.0f, 0.0f))) {
+                createProfile();
+            }
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+                createPopupOpen = false;
+            }
+        } else if (ImGui::BeginTable("create_profile_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Создать", ImVec2(-1.0f, 0.0f))) {
+                createProfile();
+            }
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+                createPopupOpen = false;
+            }
+            ImGui::EndTable();
         }
         ImGui::EndPopup();
     }
@@ -50,7 +68,7 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 default: action = ""; break;
             }
             ImGui::Text(u8"Подтвердить %s профиля [%s] %s?", action.c_str(), info.id.c_str(), info.name.c_str());
-            if (ImGui::Button(u8"Да")) {
+            auto applyAction = [&]() {
                 ActionResult actionResult;
                 if (state.confirmAction == ConfirmAction::Archive) {
                     actionResult = SetProfileArchivedAction(storage, info.id, true);
@@ -73,11 +91,29 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
                 ImGui::CloseCurrentPopup();
                 confirmPopupOpen = false;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Нет")) {
-                ImGui::CloseCurrentPopup();
-                confirmPopupOpen = false;
+            };
+            const float actionWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackActions = actionWidth < 280.0f;
+            if (stackActions) {
+                if (ImGui::Button(u8"Да", ImVec2(-1.0f, 0.0f))) {
+                    applyAction();
+                }
+                if (ImGui::Button(u8"Нет", ImVec2(-1.0f, 0.0f))) {
+                    ImGui::CloseCurrentPopup();
+                    confirmPopupOpen = false;
+                }
+            } else if (ImGui::BeginTable("confirm_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Да", ImVec2(-1.0f, 0.0f))) {
+                    applyAction();
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Нет", ImVec2(-1.0f, 0.0f))) {
+                    ImGui::CloseCurrentPopup();
+                    confirmPopupOpen = false;
+                }
+                ImGui::EndTable();
             }
         } else {
             ImGui::TextUnformatted(u8"Профиль не выбран.");

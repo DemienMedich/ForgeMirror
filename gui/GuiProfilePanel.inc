@@ -14,24 +14,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const int xpNeededThisLevel = progressXp + xpToNext;
         const float progressRatio = xpNeededThisLevel > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpNeededThisLevel) : 0.0f;
         const std::int64_t nowSec = NowSeconds();
-        const std::string levelText = u8"Уровень " + std::to_string(overallLevel);
         const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpNeededThisLevel);
-
-        const float levelScale = 1.8f;
-        ImVec2 headerStartScreen = ImGui::GetCursorScreenPos();
-        ImVec2 levelSize = ImGui::CalcTextSize(levelText.c_str());
-        float scaledWidth = levelSize.x * levelScale;
-        ImVec2 contentMax = ImGui::GetWindowContentRegionMax();
-        ImVec2 contentMin = ImGui::GetWindowContentRegionMin();
-        ImVec2 windowPos = ImGui::GetWindowPos();
-        float rightEdge = windowPos.x + contentMax.x;
-        float leftEdge = windowPos.x + contentMin.x;
-        float levelX = rightEdge - scaledWidth - ImGui::GetStyle().ItemInnerSpacing.x;
-        if (levelX < leftEdge) levelX = leftEdge;
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * levelScale,
-        ImVec2(levelX, headerStartScreen.y),
-        ImGui::GetColorU32(ImGuiCol_Text), levelText.c_str());
+        ImVec4 accent(0.92f, 0.74f, 0.45f, 1.0f);
 
         const std::string rankText = DescribeOverallRank(state.active->profile);
         std::string categoriesLine;
@@ -44,13 +28,29 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             categoriesLine = catStream.str();
         }
+        const float headerAvail = ImGui::GetContentRegionAvail().x;
+        const float spacingX = ImGui::GetStyle().ItemSpacing.x;
+        const float minLeftWidth = 240.0f;
+        const float maxLeftWidth = 420.0f;
+        const float minRightWidth = 240.0f;
+        float leftWidth = std::clamp(headerAvail * 0.56f, minLeftWidth, maxLeftWidth);
+        if (headerAvail - leftWidth - spacingX < minRightWidth) {
+            leftWidth = std::max(0.0f, headerAvail - minRightWidth - spacingX);
+        }
+        ImGui::BeginChild("profile_header_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_AutoResizeY,
+            ImGuiWindowFlags_NoScrollbar);
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
         if (ImGui::BeginTable("profile_info", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Имя");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(profile.name().c_str());
-            ImGui::SameLine();
+            if (ImGui::GetContentRegionAvail().x > 120.0f) {
+                ImGui::SameLine();
+            }
             if (ImGui::SmallButton(u8"Копировать##profile_name")) {
                 ImGui::SetClipboardText(profile.name().c_str());
             }
@@ -59,7 +59,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextDisabled(u8"ID");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(state.active->id.c_str());
-            ImGui::SameLine();
+            if (ImGui::GetContentRegionAvail().x > 120.0f) {
+                ImGui::SameLine();
+            }
             if (ImGui::SmallButton(u8"Копировать##profile_id")) {
                 ImGui::SetClipboardText(state.active->id.c_str());
             }
@@ -75,9 +77,20 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextWrapped("%s", categoriesLine.c_str());
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginChild("profile_header_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+            ImGuiWindowFlags_NoScrollbar);
+        ImGui::SetWindowFontScale(1.25f);
+        ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::TextDisabled(u8"Всего XP: %d", totalXp);
+        ImGui::TextDisabled(u8"Прогресс уровня");
+        ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
+        ImGui::EndChild();
         ImGui::Separator();
         ImGui::TextUnformatted(u8"Сводка профиля");
-        ImVec4 accent(0.9f, 0.85f, 0.3f, 1.0f);
         const int skillCount = static_cast<int>(profile.list_skills().size());
         const int achCount = static_cast<int>(profile.achievements().size());
         int activeAchCount = 0;
@@ -107,11 +120,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             DrawKpiCard("kpi_bonus", u8"Активный бонус", bonusLabel, accent);
             ImGui::EndTable();
         }
-        ImGui::TextDisabled(u8"Навыков: %d • Ачивок активных: %d / %d",
+        ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
         skillCount, activeAchCount, achCount);
+        ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        ImGui::TextDisabled(u8"Прогресс уровня");
-        ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
         if (!profile.achievements().empty()) {
             auto formatDate = [](std::int64_t ts) -> std::string {
                 if (ts <= 0) return std::string(u8"без срока");
@@ -255,20 +267,41 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             for (const auto& o : opts) labels.push_back(o.label);
             ImGui::TextUnformatted(u8"Назначить ранг");
             if (state.selectedRankIndex >= static_cast<int>(opts.size())) state.selectedRankIndex = 0;
-            if (ImGui::Combo("##rank_combo", &state.selectedRankIndex, labels.data(), static_cast<int>(labels.size()))) {
-                state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Применить ранг")) {
-                const int newLevel = opts[state.selectedRankIndex].level;
-                state.active->profile.set_level_and_progress(newLevel, newLevel);
-                storage.save_profile(state.active->profile);
-                SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
+            const float rankWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackRank = rankWidth < 360.0f;
+            if (stackRank) {
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##rank_combo", &state.selectedRankIndex, labels.data(),
+                                 static_cast<int>(labels.size()))) {
+                    state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
+                }
+                if (ImGui::Button(u8"Применить ранг", ImVec2(-1.0f, 0.0f))) {
+                    const int newLevel = opts[state.selectedRankIndex].level;
+                    state.active->profile.set_level_and_progress(newLevel, newLevel);
+                    storage.save_profile(state.active->profile);
+                    SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
+                }
+            } else if (ImGui::BeginTable("profile_rank_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##rank_combo", &state.selectedRankIndex, labels.data(),
+                                 static_cast<int>(labels.size()))) {
+                    state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Применить ранг", ImVec2(-1.0f, 0.0f))) {
+                    const int newLevel = opts[state.selectedRankIndex].level;
+                    state.active->profile.set_level_and_progress(newLevel, newLevel);
+                    storage.save_profile(state.active->profile);
+                    SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
+                }
+                ImGui::EndTable();
             }
         }
 
         if (state.isAdmin && ImGui::CollapsingHeader(u8"Отчет", ImGuiTreeNodeFlags_DefaultOpen)) {
-            if (ImGui::Button(u8"Экспорт TXT")) {
+            auto exportTxt = [&]() {
                 std::filesystem::path outPath;
                 if (ExportProfileReportTxt(state, catalog, profile, state.active->id, outPath)) {
                     std::string msg = u8"Отчет сохранен: ";
@@ -277,9 +310,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 } else {
                     SetStatus(state, u8"Не удалось сохранить отчет.", 1.0f, 0.45f, 0.45f);
                 }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Экспорт CSV")) {
+            };
+            auto exportCsv = [&]() {
                 std::filesystem::path outPath;
                 if (ExportProfileReportCsv(state, catalog, profile, state.active->id, outPath)) {
                     std::string msg = u8"Отчет сохранен: ";
@@ -288,6 +320,27 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 } else {
                     SetStatus(state, u8"Не удалось сохранить отчет.", 1.0f, 0.45f, 0.45f);
                 }
+            };
+            const float reportWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackReport = reportWidth < 360.0f;
+            if (stackReport) {
+                if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
+                    exportTxt();
+                }
+                if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+                    exportCsv();
+                }
+            } else if (ImGui::BeginTable("profile_report_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
+                    exportTxt();
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+                    exportCsv();
+                }
+                ImGui::EndTable();
             }
             ImGui::TextDisabled(u8"Отчеты сохраняются в data/meta/reports.");
         }

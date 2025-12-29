@@ -8,8 +8,8 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     if (ImGui::BeginPopupModal(u8"Добавить навык", &addSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText(u8"Название", state.newSkillName.data(), state.newSkillName.size());
         ImGui::InputFloat(u8"Вес (0.5 - 1.6)", &state.newSkillWeight, 0.05f, 0.2f, "%.2f");
-        ImGui::InputTextMultiline(u8"Описание", state.newSkillDesc.data(), state.newSkillDesc.size(), ImVec2(360, 120));
-        if (ImGui::Button(u8"Сохранить")) {
+        ImGui::InputTextMultiline(u8"Описание", state.newSkillDesc.data(), state.newSkillDesc.size(), ImVec2(-1.0f, 120.0f));
+        auto saveSkill = [&]() {
             AddSkillResult result = AddSkillAction(catalog, state.newSkillName.data(),
             static_cast<double>(state.newSkillWeight),
             state.newSkillDesc.data());
@@ -32,11 +32,29 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 addSkillOpen = false;
             }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(u8"Отмена")) {
-            ImGui::CloseCurrentPopup();
-            addSkillOpen = false;
+        };
+        const float actionWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActions = actionWidth < 300.0f;
+        if (stackActions) {
+            if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
+                saveSkill();
+            }
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+                addSkillOpen = false;
+            }
+        } else if (ImGui::BeginTable("add_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
+                saveSkill();
+            }
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+                addSkillOpen = false;
+            }
+            ImGui::EndTable();
         }
         ImGui::EndPopup();
     }
@@ -53,7 +71,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         if (!state.pendingSkillDelete.empty()) {
             const std::string displayName = catalog.display_name(state.pendingSkillDelete);
             ImGui::Text(u8"Удалить навык '%s' из каталога?", displayName.c_str());
-            if (ImGui::Button(u8"Удалить")) {
+            auto deleteSkill = [&]() {
                 bool removedFromProfiles = false;
                 ActionResult result = RemoveSkillAction(storage, catalog, state.pendingSkillDelete,
                 state.active ? state.active->id : std::string{},
@@ -72,12 +90,31 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 deleteSkillOpen = false;
                 state.pendingSkillDelete.clear();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Отмена")) {
-                ImGui::CloseCurrentPopup();
-                deleteSkillOpen = false;
-                state.pendingSkillDelete.clear();
+            };
+            const float actionWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackActions = actionWidth < 300.0f;
+            if (stackActions) {
+                if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                    deleteSkill();
+                }
+                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                    ImGui::CloseCurrentPopup();
+                    deleteSkillOpen = false;
+                    state.pendingSkillDelete.clear();
+                }
+            } else if (ImGui::BeginTable("delete_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                    deleteSkill();
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                    ImGui::CloseCurrentPopup();
+                    deleteSkillOpen = false;
+                    state.pendingSkillDelete.clear();
+                }
+                ImGui::EndTable();
             }
         } else {
             ImGui::TextUnformatted(u8"Навык не выбран.");
@@ -103,7 +140,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             const std::string toName = catalog.display_name(state.pendingMergeToId);
             ImGui::Text(u8"Навык '%s' уже существует.", toName.c_str());
             ImGui::Text(u8"Слить опыт из '%s' в '%s'?", fromName.c_str(), toName.c_str());
-            if (ImGui::Button(u8"Слить")) {
+            auto mergeSkills = [&]() {
                 ActionResult result = MergeSkillAction(storage, catalog,
                 state.pendingMergeFromId,
                 state.pendingMergeToId,
@@ -134,16 +171,39 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 state.pendingMergeWeight = 1.0f;
                 ImGui::CloseCurrentPopup();
                 mergeSkillOpen = false;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Отмена")) {
-                state.pendingMergeFromId.clear();
-                state.pendingMergeToId.clear();
-                state.pendingMergeName.clear();
-                state.pendingMergeDesc.clear();
-                state.pendingMergeWeight = 1.0f;
-                ImGui::CloseCurrentPopup();
-                mergeSkillOpen = false;
+            };
+            const float actionWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackActions = actionWidth < 300.0f;
+            if (stackActions) {
+                if (ImGui::Button(u8"Слить", ImVec2(-1.0f, 0.0f))) {
+                    mergeSkills();
+                }
+                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                    state.pendingMergeFromId.clear();
+                    state.pendingMergeToId.clear();
+                    state.pendingMergeName.clear();
+                    state.pendingMergeDesc.clear();
+                    state.pendingMergeWeight = 1.0f;
+                    ImGui::CloseCurrentPopup();
+                    mergeSkillOpen = false;
+                }
+            } else if (ImGui::BeginTable("merge_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Слить", ImVec2(-1.0f, 0.0f))) {
+                    mergeSkills();
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                    state.pendingMergeFromId.clear();
+                    state.pendingMergeToId.clear();
+                    state.pendingMergeName.clear();
+                    state.pendingMergeDesc.clear();
+                    state.pendingMergeWeight = 1.0f;
+                    ImGui::CloseCurrentPopup();
+                    mergeSkillOpen = false;
+                }
+                ImGui::EndTable();
             }
         } else {
             ImGui::TextUnformatted(u8"Нет данных для слияния.");

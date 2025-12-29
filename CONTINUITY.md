@@ -19,7 +19,7 @@ State:
 - Builds: Release targets JobSkill.exe and JobSkillGui.exe compile clean.
 - Storage: FileStorage now writes/reads numbers locale-independently; recoveryTasks preserved across restarts.
 - Documentation: Added docs/USER_GUIDE.md (RU) describing gameplay rules, XP system, skill catalog management, storage, and CLI/GUI usage.
-- Access control: Admin profile seeded as "Admin" (admin flag persisted); admin password `admin123` required for full access. CLI/GUI default to read-only until admin login.
+- Access control: Admin profile seeded as "Admin" (admin flag persisted); admin access requires authorization. CLI/GUI default to read-only until admin login.
 - Localization: Gameplay rules and GUI controls translated to Russian; user-facing statuses/logs/messages now predominantly RU (XP labels remain).
 - Achievements: stored per-profile in data/achievements/*.json with bonus applied to skill XP; GUI shows icons + tooltip (expiry/remaining time); icon textures cached in GUI; JSON parsing is now order-agnostic.
 - Skill catalog: admin can add/remove skills and rename/edit descriptions; catalog now stores stable skill IDs with display names; rename uses confirmation before merging XP.
@@ -86,7 +86,7 @@ Done:
 - Skill catalog now includes a weight-category filter.
 - Profile "Состояние" block uses a compact 3-column table with colored status markers and tooltip details.
 - Profile list now filters by a compact "Все/Активные/Архив" selector.
-- Admin login shows current keyboard layout under the password field.
+- Admin login shows current keyboard layout under the input field.
 - Skill achievements list now has status/filter controls and shown count.
 - Pipeline list now has a quick filter with shown count.
 - Logs panel now supports a source filter dropdown.
@@ -168,6 +168,30 @@ Done:
 - Profile list: added archive toggle and sorting by ID/name with filter-aware display.
 - CLI: локализованы оставшиеся англоязычные подсказки (format/empty/cancel), добавлены русские алиасы для распределения XP (`равномерно/поровну`, `отмена`), метки времени теперь "нет данных/неизвестно".
 - CLI: введён нормальный парсер команд (чтение строки, поддержка кавычек и пробелов), унифицированы подсказки и обработка аргументов.
+- Главное меню: кнопкам "Быстрые действия" и "Сервис" задана фиксированная высота для читаемости (исправлено сжатие).
+- Профиль: верхний блок переразложен в 2 колонки (инфо + уровень/XP), прогресс перенесён в шапку, строка статуса очищена от мусорного символа.
+- Профиль: шапка закреплена через левые/правые блоки с минимальными ширинами, чтобы не ломалась верстка.
+- Профиль: шапка переведена на auto-resize child-блоки, чтобы вкладки не пропадали.
+- Задачи: добавлен счётчик выполненных задач (хранится в профиле, отображается в профиле и CLI).
+- Штрафы: повтор/прогрев теперь включаются только после ранга "Сеньор" (уровень >=150 и все категории 10/10).
+- UI: главное меню стало более отзывчивым к ресайзу (стек кнопок и фильтров при узкой ширине).
+- UI: кнопки блока "Окно" переведены на таблицу/стек, чтобы не уплывали при ресайзе.
+- UI: таблицы кнопок в главном меню переведены на StretchSame с явными колонками, чтобы ширина не схлопывалась.
+- UI: фильтры главного меню переведены на безлейбловые поля с подписями сверху и таблицей, чтобы подписи не выходили за границы.
+- Облако: манифест теперь может хранить файл релиза; добавлена загрузка обновления в `data/meta/updates`.
+- UI: каталог навыков получил адаптивные кнопки/фильтры (стек на узкой ширине, таблицы на широкой).
+- UI: правила и модалка добавления XP переведены на адаптивные таблицы/стек, чтобы лейблы не уплывали при ресайзе.
+- Облако: добавлен манифест версии/времени данных; при админ-пуше он обновляется, клиент умеет показывать доступность обновления.
+- UI: KPI карточки стали выше и крупнее по числам, визуальная иерархия усилена.
+- UI: добавлена тема "Тёплая Pro" и задана как направление по умолчанию.
+- Навигация: версия отображается в нижней части боковой панели для админа.
+- Облако: добавлена базовая синхронизация (cloud.ini, локальный снимок push/pull), админ может выгружать, пользователи обновлять.
+- Профиль: таблицы (топ навыков/индикаторы/состояние/навыки) теперь с единым padding для ровных строк.
+- UI: панель 3D-настроек получила адаптивные фильтры/путь (стек на узкой ширине, таблицы на широкой).
+- UI: логи/админ-статистика/пайплайн переведены на адаптивные фильтры и тулбары без схлопывания при ресайзе.
+- UI: настройки интерфейса переведены на адаптивные ряды (тема/пресеты/фон/действия) без SameLine-сжатий.
+- UI: модалки профиля/админа/каталога переведены на адаптивные кнопки и растянутые поля (без узких полос).
+- UI: профильные секции (топ навыков/ачивки/навыки/активность/админ-отчет) переведены на адаптивные фильтры и кнопки.
 
 Now:
 - Continuing UX/professional polish in GUI (admin analytics panel added; awaiting next refinements).

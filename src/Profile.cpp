@@ -172,6 +172,19 @@ bool Profile::all_categories_mastered() const {
                        [](int score) { return score >= kMaxCategoryScore; });
 }
 
+void Profile::set_tasks_completed(int count) {
+    tasksCompleted_ = std::max(0, count);
+}
+
+void Profile::increment_tasks_completed(int delta) {
+    if (delta <= 0) return;
+    tasksCompleted_ = std::max(0, tasksCompleted_ + delta);
+}
+
+bool Profile::penalties_enabled() const {
+    return overallLevel_ >= 150 && all_categories_mastered();
+}
+
 void Profile::start_penalty_recovery(int tasks) {
     recoveryTasksRemaining_ = std::max(0, tasks);
 }
