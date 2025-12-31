@@ -144,8 +144,8 @@ ImVec4 CardBackgroundColor() {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 base = style.Colors[ImGuiCol_WindowBg];
     ImVec4 lift = style.Colors[ImGuiCol_FrameBg];
-    ImVec4 out = BlendColor(base, lift, 0.45f);
-    out.w = std::max(out.w, 0.78f);
+    ImVec4 out = BlendColor(base, lift, 0.35f);
+    out.w = std::max(out.w, 0.72f);
     return out;
 }
 
@@ -161,6 +161,20 @@ float CardRounding() {
     return std::max(8.0f, style.WindowRounding + 2.0f);
 }
 
+void DrawCardHeader(const char* label) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    ImVec4 base = style.Colors[ImGuiCol_Text];
+    ImVec4 title = BlendColor(base, accent, 0.25f);
+    title.w = base.w;
+    ImVec4 sep = accent;
+    sep.w = std::clamp(sep.w * 0.55f, 0.20f, 0.45f);
+    ImGui::TextColored(title, "%s", label);
+    ImGui::PushStyleColor(ImGuiCol_Separator, sep);
+    ImGui::Separator();
+    ImGui::PopStyleColor();
+}
+
 bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags flags = ImGuiChildFlags_AutoResizeY) {
     ImVec4 bg = CardBackgroundColor();
     ImVec4 border = CardBorderColor();
@@ -170,6 +184,19 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
     const bool open = ImGui::BeginChild(id, size, flags | ImGuiChildFlags_Border,
                                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    if (open) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetWindowPos();
+        ImVec2 sizeNow = ImGui::GetWindowSize();
+        float rounding = CardRounding();
+        float highlightHeight = std::min(26.0f, sizeNow.y * 0.35f);
+        ImU32 top = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.06f));
+        ImU32 bottom = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.00f));
+        drawList->AddRectFilledMultiColor(pos, ImVec2(pos.x + sizeNow.x, pos.y + highlightHeight),
+                                          top, top, bottom, bottom);
+        ImU32 glow = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.05f));
+        drawList->AddRect(pos, ImVec2(pos.x + sizeNow.x, pos.y + sizeNow.y), glow, rounding, 0, 1.0f);
+    }
     return open;
 }
 

@@ -46,6 +46,10 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             ApplyThemePreset(0, state.ui, style);
             state.uiDirty = true;
         }
+        if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(3, state.ui, style);
+            state.uiDirty = true;
+        }
         if (ImGui::Button(u8"Сапфир", ImVec2(-1.0f, 0.0f))) {
             ApplyThemePreset(1, state.ui, style);
             state.uiDirty = true;
@@ -54,11 +58,16 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             ApplyThemePreset(2, state.ui, style);
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("theme_presets", 3, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("theme_presets", 4, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Графит", ImVec2(-1.0f, 0.0f))) {
             ApplyThemePreset(0, state.ui, style);
+            state.uiDirty = true;
+        }
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
+            ApplyThemePreset(3, state.ui, style);
             state.uiDirty = true;
         }
         ImGui::TableNextColumn();
@@ -75,7 +84,26 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     }
     ImGui::TextUnformatted(u8"Пресеты интерфейса");
     const bool stackUiPresets = headerWidth < 520.0f;
+    auto applyGlassUiPreset = [&]() {
+        ApplyThemePreset(3, state.ui, style);
+        state.ui.fontScale = 1.05f;
+        state.ui.alpha = 0.96f;
+        state.ui.windowRounding = 14.0f;
+        state.ui.frameRounding = 10.0f;
+        state.ui.scrollbarRounding = 12.0f;
+        state.ui.grabRounding = 10.0f;
+        state.ui.windowPadding = ImVec2(14.0f, 12.0f);
+        state.ui.framePadding = ImVec2(10.0f, 7.0f);
+        state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
+        state.ui.backgroundAlpha = 0.20f;
+        state.ui.backgroundTiled = false;
+        state.ui.windowDecorated = false;
+        state.uiDirty = true;
+    };
     if (stackUiPresets) {
+        if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
+            applyGlassUiPreset();
+        }
         if (ImGui::Button(u8"Минимализм", ImVec2(-1.0f, 0.0f))) {
             state.ui.fontScale = 1.0f;
             state.ui.alpha = 0.98f;
@@ -115,8 +143,12 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.ui.itemSpacing = ImVec2(6.0f, 4.0f);
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("ui_presets", 3, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("ui_presets", 4, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
+            applyGlassUiPreset();
+        }
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Минимализм", ImVec2(-1.0f, 0.0f))) {
             state.ui.fontScale = 1.0f;

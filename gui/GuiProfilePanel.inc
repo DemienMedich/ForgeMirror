@@ -15,7 +15,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const float progressRatio = xpNeededThisLevel > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpNeededThisLevel) : 0.0f;
         const std::int64_t nowSec = NowSeconds();
         const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpNeededThisLevel);
-        ImVec4 accent(0.92f, 0.74f, 0.45f, 1.0f);
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
 
         const std::string rankText = DescribeOverallRank(state.active->profile);
         std::string categoriesLine;
@@ -94,7 +95,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         EndCard();
         ImGui::Spacing();
         if (BeginCard("profile_summary_card")) {
-        ImGui::TextUnformatted(u8"Сводка профиля");
+        DrawCardHeader(u8"Сводка профиля");
         const int skillCount = static_cast<int>(profile.list_skills().size());
         const int achCount = static_cast<int>(profile.achievements().size());
         int activeAchCount = 0;

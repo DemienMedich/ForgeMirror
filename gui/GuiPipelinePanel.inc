@@ -62,7 +62,9 @@ void DrawPipelinePanel(GuiState& state) {
     ImGui::Separator();
     if (visibleCount > 0) {
         const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
-        ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), "%s", step.title);
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImGui::TextColored(accent, "%s", step.title);
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
         ImGui::TextUnformatted(step.description);

@@ -35,7 +35,7 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
         ImGui::Spacing();
 
         if (BeginCard("main_window_card")) {
-            ImGui::TextUnformatted(u8"Окно");
+            DrawCardHeader(u8"Окно");
             const float windowAvail = ImGui::GetContentRegionAvail().x;
             const bool stackWindowButtons = windowAvail < 360.0f;
             bool fullscreen = state.ui.windowFullscreen;
@@ -81,7 +81,7 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
         const float actionHeight = std::max(ImGui::GetFrameHeight() * 1.35f, 34.0f);
 
         if (BeginCard("main_quick_card")) {
-            ImGui::TextUnformatted(u8"Быстрые действия");
+            DrawCardHeader(u8"Быстрые действия");
             const bool stackQuick = ImGui::GetContentRegionAvail().x < 360.0f;
             const bool canArchiveAction = canArchive || canRestore;
             const char* archiveLabel = canRestore ? u8"Вернуть" : u8"В архив";
@@ -156,7 +156,7 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
         ImGui::Spacing();
 
         if (BeginCard("main_service_card")) {
-            ImGui::TextUnformatted(u8"Сервис");
+            DrawCardHeader(u8"Сервис");
             const bool stackService = ImGui::GetContentRegionAvail().x < 420.0f;
             if (stackService) {
                 if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, actionHeight))) {
@@ -202,7 +202,7 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                 state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
             };
             if (BeginCard("main_cloud_card")) {
-                ImGui::TextUnformatted(u8"Облако");
+                DrawCardHeader(u8"Облако");
                 if (ImGui::Button(u8"Обновить из облака", ImVec2(-1.0f, actionHeight))) {
                     CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
                     CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
@@ -262,7 +262,7 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
         }
 
         if (BeginCard("main_profiles_card")) {
-        ImGui::TextUnformatted(u8"Профили");
+        DrawCardHeader(u8"Профили");
         const float filtersWidth = ImGui::GetContentRegionAvail().x;
         const bool stackFilters = filtersWidth < 520.0f;
         const char* archiveLabels[] = {u8"Все", u8"Активные", u8"Архив"};

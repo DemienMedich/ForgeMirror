@@ -1,9 +1,17 @@
 static bool ToggleMenuButtonGui(const char* label, bool& value, ImVec2 size) {
     bool toggled = false;
     if (value) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.36f, 0.55f, 0.95f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.44f, 0.68f, 0.98f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.34f, 0.52f, 1.0f));
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        ImVec4 base = BlendColor(style.Colors[ImGuiCol_ButtonActive], accent, 0.35f);
+        ImVec4 hover = BlendColor(style.Colors[ImGuiCol_ButtonHovered], accent, 0.30f);
+        ImVec4 active = BlendColor(base, accent, 0.20f);
+        base.w = std::max(base.w, 0.85f);
+        hover.w = std::max(hover.w, 0.90f);
+        active.w = std::max(active.w, 0.95f);
+        ImGui::PushStyleColor(ImGuiCol_Button, base);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, active);
     }
     if (ImGui::Button(label, size)) {
         value = !value;

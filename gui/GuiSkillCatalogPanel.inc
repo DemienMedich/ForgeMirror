@@ -29,7 +29,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::TableSetColumnIndex(0);
         ImGui::BeginChild("catalog_list_panel", ImVec2(0.0f, panelHeight), false);
 
-        ImGui::TextUnformatted(u8"Каталог навыков");
+        DrawCardHeader(u8"Каталог навыков");
         const float listWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = listWidth < 320.0f;
         const bool canDeleteSkill = state.selectedCatalogIndex >= 0 &&
@@ -220,21 +220,22 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
 
         ImGui::TableSetColumnIndex(1);
         ImGui::BeginChild("catalog_editor_panel", ImVec2(0.0f, panelHeight), false);
-        ImGui::TextUnformatted(u8"Детали навыка");
-        ImGui::Separator();
+        DrawCardHeader(u8"Детали навыка");
         const std::int64_t nowSecGlobal = NowSeconds();
         if (state.selectedCatalogIndex >= 0 && state.selectedCatalogIndex < static_cast<int>(catalogSkills.size())) {
             const std::string& skillId = catalogSkills[state.selectedCatalogIndex];
             const std::string displayName = catalog.display_name(skillId);
             const std::string desc = catalog.description(skillId);
-            ImGui::TextColored(ImVec4(0.8f, 0.9f, 1.0f, 1.0f), "%s", displayName.c_str());
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImGui::TextColored(accent, "%s", displayName.c_str());
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
             ImGui::TextWrapped("%s", desc.empty() ? u8"Описание отсутствует." : desc.c_str());
             ImGui::PopTextWrapPos();
             if (state.isAdmin) {
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
-                ImGui::TextUnformatted(u8"Вес навыка");
+                DrawCardHeader(u8"Вес навыка");
                 ImGui::SliderFloat("##edit_weight", &state.editedSkillWeight, 0.5f, 1.6f, "%.2f");
                 if (ImGui::Button(u8"Сохранить вес")) {
                     double newW = static_cast<double>(state.editedSkillWeight);
@@ -248,7 +249,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                 }
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
-                ImGui::TextUnformatted(u8"Редактирование навыка");
+                DrawCardHeader(u8"Редактирование навыка");
                 ImGui::InputText(u8"Название", state.editSkillName.data(), state.editSkillName.size());
                 ImGui::InputTextMultiline(u8"Описание", state.editSkillDesc.data(), state.editSkillDesc.size(), ImVec2(-1.0f, 80.0f));
                 if (ImGui::Button(u8"Сохранить навык")) {
@@ -278,7 +279,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                 }
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
-                ImGui::TextUnformatted(u8"Ачивки навыка");
+                DrawCardHeader(u8"Ачивки навыка");
                 if (state.active) {
                     auto& ach = state.active->profile.achievements();
                     ImGui::InputTextWithHint(u8"##skill_ach_filter", u8"Фильтр ачивок",
