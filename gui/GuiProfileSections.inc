@@ -472,8 +472,8 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     auto skills = state.active->profile.list_skills();
     const int sortMode = std::clamp(state.profileSkillSort, 0, 3);
     std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
-        const std::string nameA = catalog.display_name(a.name);
-        const std::string nameB = catalog.display_name(b.name);
+        const std::string nameA = ToLowerUtf8(catalog.display_name(a.name));
+        const std::string nameB = ToLowerUtf8(catalog.display_name(b.name));
         if (sortMode == 1) {
             if (a.level != b.level) return a.level > b.level;
         } else if (sortMode == 2) {
@@ -558,7 +558,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
     if (ImGui::CollapsingHeader(u8"Диаграмма навыков", ImGuiTreeNodeFlags_DefaultOpen)) {
     auto skills = state.active->profile.list_skills();
     std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
-        return catalog.display_name(a.name) < catalog.display_name(b.name);
+        return ToLowerUtf8(catalog.display_name(a.name)) < ToLowerUtf8(catalog.display_name(b.name));
     });
     ImVec2 radarSize(ImGui::GetContentRegionAvail().x, 320.0f);
     if (radarSize.x < 200.0f) radarSize.x = 200.0f;

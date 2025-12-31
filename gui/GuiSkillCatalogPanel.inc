@@ -157,8 +157,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (sortMode == 1) {
                 if (wA != wB) return wA > wB;
             }
-            const std::string nameA = catalog.display_name(idA);
-            const std::string nameB = catalog.display_name(idB);
+            const std::string nameA = ToLowerUtf8(catalog.display_name(idA));
+            const std::string nameB = ToLowerUtf8(catalog.display_name(idB));
             if (nameA != nameB) return nameA < nameB;
             return idA < idB;
         });
