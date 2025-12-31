@@ -189,11 +189,6 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
         ImVec2 pos = ImGui::GetWindowPos();
         ImVec2 sizeNow = ImGui::GetWindowSize();
         float rounding = CardRounding();
-        float highlightHeight = std::min(26.0f, sizeNow.y * 0.35f);
-        ImU32 top = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.06f));
-        ImU32 bottom = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.00f));
-        drawList->AddRectFilledMultiColor(pos, ImVec2(pos.x + sizeNow.x, pos.y + highlightHeight),
-                                          top, top, bottom, bottom);
         ImU32 glow = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.05f));
         drawList->AddRect(pos, ImVec2(pos.x + sizeNow.x, pos.y + sizeNow.y), glow, rounding, 0, 1.0f);
     }

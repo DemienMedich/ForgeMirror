@@ -32,8 +32,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
         ImGui::EndTable();
     }
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Фильтры");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Фильтры");
     const float filtersWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilters = filtersWidth < 740.0f;
     const auto& rankOptions = RankOptions();
@@ -122,7 +122,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 4.0f));
     const float topTableHeight = 180.0f;
-    ImGui::TextUnformatted(u8"Сводка");
+    DrawCardHeader(u8"Сводка");
     if (ImGui::BeginTable("admin_kpi", 3, ImGuiTableFlags_SizingStretchProp)) {
         auto kpi = [&](const char* id, const char* title, const std::string& value, const ImVec4& accent) {
             ImGui::TableNextColumn();
@@ -154,9 +154,9 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::EndTable();
     }
 
-    ImGui::Separator();
+    ImGui::Spacing();
     auto drawTopTable = [&](const char* id, const char* title, const std::vector<AdminStatsProfile>& items) {
-        ImGui::TextUnformatted(title);
+        DrawCardHeader(title);
         ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                 ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
                                 ImGuiTableFlags_SizingStretchProp;
@@ -211,7 +211,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         return a.level > b.level;
     });
     if (byAchievements.size() > 6) byAchievements.resize(6);
-    ImGui::TextUnformatted(u8"Топ по ачивкам");
+    DrawCardHeader(u8"Топ по ачивкам");
     if (ImGui::BeginTable("top_achievements", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                              ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
                                              ImGuiTableFlags_SizingStretchProp, ImVec2(0.0f, topTableHeight))) {
@@ -240,8 +240,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::EndTable();
     }
 
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Средние категории");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Средние категории");
     if (ImGui::BeginTable("avg_categories", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                             ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn(u8"Категория");
@@ -264,8 +264,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::EndTable();
     }
 
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Распределение по рангам");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Распределение по рангам");
     const auto& opts = RankOptions();
     std::vector<int> rankCounts(opts.size(), 0);
     for (const auto& item : filtered) {
@@ -289,8 +289,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::EndTable();
     }
 
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Неактивные профили");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Неактивные профили");
     int thresholdDays = std::clamp(state.inactivityThresholdDays, 1, 365);
     ImGui::SetNextItemWidth(160.0f);
     ImGui::SliderInt(u8"Порог (дней)", &thresholdDays, 1, 365);
@@ -373,8 +373,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::EndTable();
     }
 
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Профили на прогреве");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Профили на прогреве");
     std::vector<AdminStatsProfile> byRecovery;
     byRecovery.reserve(filtered.size());
     for (const auto& item : filtered) {

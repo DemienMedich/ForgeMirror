@@ -1,7 +1,7 @@
 void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
     GameplayConfig& draft = state.rulesDraft;
-    ImGui::TextUnformatted(u8"Кривая уровней");
+    DrawCardHeader(u8"Кривая уровней");
     const float avail = ImGui::GetContentRegionAvail().x;
     const bool stackRules = avail < 420.0f;
     if (stackRules) {
@@ -37,8 +37,8 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::InputInt(u8"##level_quad", &draft.levelQuadraticXp);
         ImGui::EndTable();
     }
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Базовый XP категорий");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Базовый XP категорий");
     if (stackRules) {
         for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
             std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
@@ -66,8 +66,8 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::EndTable();
     }
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Бонусы и штрафы");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Бонусы и штрафы");
     if (stackRules) {
         ImGui::TextDisabled(u8"Базовый фокус-бонус");
         ImGui::SetNextItemWidth(-1.0f);

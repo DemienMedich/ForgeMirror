@@ -1,5 +1,5 @@
 void DrawLogsPanel(GuiState& state) {
-    ImGui::TextUnformatted(u8"Фильтры");
+    DrawCardHeader(u8"Фильтры");
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilters = filterWidth < 720.0f;
     std::vector<std::string> logSources;
