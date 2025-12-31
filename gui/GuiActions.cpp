@@ -30,6 +30,26 @@ int TotalSkillXp(const Skill& skill) {
     return total;
 }
 
+bool ActivateProfileForEdit(IJobStorage& storage, const IJobStorage::ProfileInfo& info, bool& wasArchived) {
+    wasArchived = info.archived;
+    if (info.archived) {
+        if (!storage.set_archived(info.id, false)) return false;
+    }
+    if (!storage.set_active_profile(info.id)) {
+        if (info.archived) {
+            storage.set_archived(info.id, true);
+        }
+        return false;
+    }
+    return true;
+}
+
+void RestoreArchiveState(IJobStorage& storage, const std::string& id, bool wasArchived) {
+    if (wasArchived) {
+        storage.set_archived(id, true);
+    }
+}
+
 bool RemoveSkillFromProfiles(IJobStorage& storage, SkillCatalog& catalog, const std::string& skillName,
                              const std::string& restoreId) {
     std::string target = skillName;
@@ -41,7 +61,8 @@ bool RemoveSkillFromProfiles(IJobStorage& storage, SkillCatalog& catalog, const 
     bool removedAny = false;
     auto list = storage.list_profiles();
     for (const auto& info : list) {
-        if (!storage.set_active_profile(info.id)) continue;
+        bool wasArchived = false;
+        if (!ActivateProfileForEdit(storage, info, wasArchived)) continue;
         if (auto profile = storage.load_profile()) {
             auto skills = profile->list_skills();
             auto before = skills.size();
@@ -54,6 +75,7 @@ bool RemoveSkillFromProfiles(IJobStorage& storage, SkillCatalog& catalog, const 
                 removedAny = true;
             }
         }
+        RestoreArchiveState(storage, info.id, wasArchived);
     }
     if (!restoreId.empty()) {
         storage.set_active_profile(restoreId);
@@ -67,7 +89,8 @@ bool MergeSkillInProfiles(IJobStorage& storage, SkillCatalog& catalog, const std
     bool changedAny = false;
     auto list = storage.list_profiles();
     for (const auto& info : list) {
-        if (!storage.set_active_profile(info.id)) continue;
+        bool wasArchived = false;
+        if (!ActivateProfileForEdit(storage, info, wasArchived)) continue;
         if (auto profile = storage.load_profile()) {
             bool changed = false;
             auto skills = profile->list_skills();
@@ -112,6 +135,7 @@ bool MergeSkillInProfiles(IJobStorage& storage, SkillCatalog& catalog, const std
                 changedAny = true;
             }
         }
+        RestoreArchiveState(storage, info.id, wasArchived);
     }
     if (!restoreId.empty()) {
         storage.set_active_profile(restoreId);

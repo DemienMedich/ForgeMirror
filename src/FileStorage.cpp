@@ -777,6 +777,7 @@ public:
         if (!is_active()) return false;
         token_ = token;
         if (auto profile = load_profile()) {
+            token_ = token;
             return save_profile(*profile);
         }
         std::ostringstream ss;
