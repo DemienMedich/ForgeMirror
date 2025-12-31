@@ -1,6 +1,6 @@
 void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
-    ImGui::TextUnformatted(u8"Тема и стиль");
+    DrawCardHeader(u8"Тема и стиль");
     const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
     const float headerWidth = ImGui::GetContentRegionAvail().x;
     const bool stackTheme = headerWidth < 520.0f;
@@ -39,7 +39,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         }
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted(u8"Готовые темы");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Готовые темы");
     const bool stackThemePresets = headerWidth < 520.0f;
     if (stackThemePresets) {
         if (ImGui::Button(u8"Графит", ImVec2(-1.0f, 0.0f))) {
@@ -82,7 +83,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         }
         ImGui::EndTable();
     }
-    ImGui::TextUnformatted(u8"Пресеты интерфейса");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Пресеты интерфейса");
     const bool stackUiPresets = headerWidth < 520.0f;
     auto applyGlassUiPreset = [&]() {
         ApplyThemePreset(3, state.ui, style);
@@ -97,6 +99,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
         state.ui.backgroundAlpha = 0.20f;
         state.ui.backgroundTiled = false;
+        for (auto& bg : state.ui.backgrounds) {
+            bg.clear();
+        }
         state.ui.windowDecorated = false;
         state.uiDirty = true;
     };
@@ -193,8 +198,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         }
         ImGui::EndTable();
     }
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Пользовательские пресеты");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Пользовательские пресеты");
     if (stackTheme) {
         ImGui::InputText(u8"Имя пресета", state.uiPresetName.data(), state.uiPresetName.size());
         if (ImGui::Button(u8"Сохранить пресет", ImVec2(-1.0f, 0.0f))) {
@@ -290,8 +295,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImGui::SliderFloat(u8"Скругление скролла", &state.ui.scrollbarRounding, 0.0f, 16.0f, "%.1f");
     ImGui::SliderFloat(u8"Скругление захвата", &state.ui.grabRounding, 0.0f, 16.0f, "%.1f");
     ImGui::SliderFloat(u8"Прозрачность фона", &state.ui.backgroundAlpha, 0.0f, 1.0f, "%.2f");
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Окно");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Окно");
     bool borderless = !state.ui.windowDecorated;
     if (ImGui::Checkbox(u8"Без рамки окна", &borderless)) {
         state.ui.windowDecorated = !borderless;
@@ -300,13 +305,14 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     if (ImGui::Checkbox(u8"Полноэкранный режим (F11)", &state.ui.windowFullscreen)) {
         state.uiDirty = true;
     }
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Отступы");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Отступы");
     ImGui::SliderFloat2(u8"Отступ окна", &state.ui.windowPadding.x, 0.0f, 20.0f, "%.1f");
     ImGui::SliderFloat2(u8"Отступ элемента", &state.ui.framePadding.x, 0.0f, 20.0f, "%.1f");
     ImGui::SliderFloat2(u8"Интервал", &state.ui.itemSpacing.x, 0.0f, 20.0f, "%.1f");
 
-    ImGui::Separator();
+    ImGui::Spacing();
+    DrawCardHeader(u8"Цвета");
     if (ImGui::Checkbox(u8"Кастомные цвета", &state.ui.customColors)) {
         if (state.ui.customColors) {
             const auto& entries = UiColorEntries();
@@ -328,8 +334,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         }
     }
 
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Фоны окон");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Фоны окон");
     ImGui::Checkbox(u8"Замостить фон", &state.ui.backgroundTiled);
     ImGui::SliderFloat(u8"Масштаб плитки", &state.ui.backgroundTileScale, 0.25f, 3.0f, "%.2f");
     const auto backgrounds = LoadUiBackgroundChoices(state.storageDir);
@@ -451,7 +457,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         ImGui::PopID();
     }
 
-    ImGui::Separator();
+    ImGui::Spacing();
+    DrawCardHeader(u8"Действия");
     if (ImGui::Button(u8"Сохранить настройки")) {
         SaveUiSettings(state.storageDir, state.ui);
         state.uiDirty = false;

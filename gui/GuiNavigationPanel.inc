@@ -9,7 +9,7 @@ void DrawNavigationPanel(GuiState& state) {
     }
     ImGui::Begin(u8"Навигация", nullptr, navFlags);
     DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
-    ImGui::TextUnformatted(u8"Разделы");
+    DrawCardHeader(u8"Разделы");
     const float navWidth = ImGui::GetContentRegionAvail().x;
     const ImVec2 navButtonSize(navWidth, 0.0f);
     if (ImGui::Button(u8"Профиль [F1]", navButtonSize)) {
@@ -41,8 +41,8 @@ void DrawNavigationPanel(GuiState& state) {
             OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
         }
     }
-    ImGui::Separator();
-    ImGui::TextUnformatted(u8"Сервис");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Сервис");
     if (ImGui::Button(u8"Главное меню", navButtonSize)) {
         state.showMainMenu = !state.showMainMenu;
     }

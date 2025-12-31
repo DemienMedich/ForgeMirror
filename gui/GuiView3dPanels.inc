@@ -1,5 +1,6 @@
 void DrawView3dSettingsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::View3DSettings, state.storageDir);
+    DrawCardHeader(u8"Модели");
     const auto models = LoadModelChoices(state.storageDir);
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilter = filterWidth < 360.0f;
@@ -81,6 +82,8 @@ void DrawView3dSettingsPanel(GuiState& state) {
         }
         ImGui::EndTable();
     }
+    ImGui::Spacing();
+    DrawCardHeader(u8"Параметры");
     ImGui::Checkbox(u8"Авто?вращение", &state.ui.modelAutoRotate);
     ImGui::SliderFloat(u8"Скорость вращения", &state.ui.modelAutoSpeed, 0.0f, 3.0f, "%.2f");
     ImGui::SliderFloat(u8"Yaw", &state.ui.modelYaw, -3.14f, 3.14f, "%.2f");
