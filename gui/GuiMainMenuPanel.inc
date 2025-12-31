@@ -320,8 +320,8 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             const auto& pa = state.profiles[a];
             const auto& pb = state.profiles[b];
             if (sortMode == 1) {
-                std::string nameA = ToLowerAscii(pa.name);
-                std::string nameB = ToLowerAscii(pb.name);
+                std::string nameA = ToLowerUtf8(pa.name);
+                std::string nameB = ToLowerUtf8(pb.name);
                 if (nameA != nameB) return nameA < nameB;
             }
             return pa.id < pb.id;
