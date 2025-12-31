@@ -31,6 +31,9 @@ void ConfigureLocale() {
 
 void LoadGuiFonts(ImGuiIO& io) {
     const std::filesystem::path fontCandidates[] = {
+        "gui/fonts/Rubik-Regular.ttf",
+        "fonts/Rubik-Regular.ttf",
+        "Rubik-Regular.ttf",
         "gui/fonts/Roboto-Medium.ttf",
         "gui/fonts/Roboto-Regular.ttf",
         "fonts/Roboto-Medium.ttf",

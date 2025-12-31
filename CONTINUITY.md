@@ -6,7 +6,7 @@ Constraints/Assumptions:
 - Degradation system currently disabled (kDecayEnabled=false) and should stay off unless explicitly re-enabled.
 - Skill catalog persists to data/skills.txt; profiles stored in data/*.ini via FileStorage.
 - Achievements durations are specified in days only; countdown timer still displays hours/minutes.
-- No automated tests for now (per user request).
+- Tests should be run after UI restyle changes (user request).
 
 Key decisions:
 - Disabled category decay/buffer recomputation (both CLI and GUI) via kDecayEnabled=false.
@@ -14,9 +14,10 @@ Key decisions:
 - GUI/CLI logs use classic locale to avoid non-ASCII separators.
 - GUI supports adding/removing skills (persists catalog and cleans profiles on delete).
 - Skill IDs are stable internal identifiers; GUI/CLI show display names (incl. Cyrillic).
+- UI restyle target: desktop dashboard with left sidebar; prioritize main menu and profile; external assets allowed.
 
 State:
-- Builds: Release targets JobSkill.exe and JobSkillGui.exe compile clean.
+- Builds: Release targets JobSkill.exe and JobSkillGui.exe compile clean (re-verified after UI asset changes).
 - Storage: FileStorage now writes/reads numbers locale-independently; recoveryTasks preserved across restarts.
 - Documentation: Added docs/USER_GUIDE.md (RU) describing gameplay rules, XP system, skill catalog management, storage, and CLI/GUI usage.
 - Access control: Admin profile seeded as "Admin" (admin flag persisted); admin access requires authorization. CLI/GUI default to read-only until admin login.
@@ -24,6 +25,7 @@ State:
 - Achievements: stored per-profile in data/achievements/*.json with bonus applied to skill XP; GUI shows icons + tooltip (expiry/remaining time); icon textures cached in GUI; JSON parsing is now order-agnostic.
 - Skill catalog: admin can add/remove skills and rename/edit descriptions; catalog now stores stable skill IDs with display names; rename uses confirmation before merging XP.
 - UI customization: added `data/meta/ui.ini` with theme/style controls, per-window background textures from `data/ui/backgrounds`, and a 3D preview window that loads `.obj`/`.fbx` from `data/models` (wireframe + orbit controls).
+- UI restyle assets: added Rubik font and `data/ui/backgrounds/dashboard-gradient.png`.
 - UI recovery: clamps invalid UI settings and enforces min window sizes; `F10` resets UI settings + clears layout.
 - Workspace: main menu now toggles visibility of auxiliary windows; profile stays always visible.
 
@@ -194,10 +196,13 @@ Done:
 - UI: профильные секции (топ навыков/ачивки/навыки/активность/админ-отчет) переведены на адаптивные фильтры и кнопки.
 
 Now:
-- Continuing UX/professional polish in GUI (admin analytics panel added; awaiting next refinements).
+- Restyle in progress toward dark, soft, card-based desktop dashboard with left sidebar; focus on main menu and profile first.
+- User requested to continue and run tests after changes.
+- User requested a code review.
 
 Next:
-- TBD based on user request (e.g., refine catalog UX, re-enable decay with config, further localization).
+- Implement theme/preset + card styling for main menu and profile; add fonts/icons/background assets.
+- Review current code changes and report findings.
 
 Open questions:
 - Need confirmation if decay should ever return and under what rules (UNCONFIRMED).
