@@ -3,6 +3,7 @@ struct GuiDataState {
     std::vector<IJobStorage::ProfileInfo> profiles;
     std::optional<GuiProfile> active;
     std::filesystem::path storageDir;
+    std::string adminPasswordExpected;
     GameplayConfig rulesConfig;
     GameplayConfig rulesDraft;
     CloudSyncConfig cloudConfig;
@@ -48,6 +49,7 @@ struct GuiRuntimeState {
     bool deleteSkillPopupRequest = false;
     bool mergeSkillPopupRequest = false;
     bool adminPopupRequest = false;
+    bool adminChangePopupRequest = false;
     bool isAdmin = false;
     ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
@@ -57,6 +59,9 @@ struct GuiRuntimeState {
     std::array<char, 256> editSkillDesc{};
     float newSkillWeight = 1.0f;
     std::array<char, 64> adminPassword{};
+    std::array<char, 64> adminPasswordCurrent{};
+    std::array<char, 64> adminPasswordNew{};
+    std::array<char, 64> adminPasswordConfirm{};
     std::string pendingSkillDelete;
     std::string pendingMergeFromId;
     std::string pendingMergeToId;

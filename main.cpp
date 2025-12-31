@@ -846,8 +846,6 @@ static bool run_profile_session(Profile& profile, const std::string& profileId, 
     }
 }
 
-constexpr const char* kAdminPassword = "admin123";
-
 namespace {
 
 // Ensure wide/platform console streams speak UTF-8 and pick up system locale.
@@ -904,6 +902,7 @@ int main() {
     auto gameplayConfig = LoadGameplayConfig(storageDir);
     SetGameplayConfig(gameplayConfig);
     SkillCatalog catalog(storageDir);
+    std::string adminPassword = LoadAdminPassword(storageDir);
 
     std::unique_ptr<IJobStorage> storage(CreateFileStorage(storageDir));
     EnsureAdminProfile(*storage, catalog);
@@ -935,7 +934,7 @@ int main() {
         std::cout << "\n=== Главное меню ===\n";
         std::cout << (adminAuthed ? "[Режим администратора]\n" : "[Режим просмотра]\n");
         std::cout << "Команды: list | skills | login <id|name> | admin | help | quit";
-        if (adminAuthed) std::cout << " | archive <id> | restore <id> | delete <id>";
+        if (adminAuthed) std::cout << " | archive <id> | restore <id> | delete <id> | passwd";
         std::cout << "\n> ";
         std::string menuLine;
         if (!std::getline(std::cin >> std::ws, menuLine)) break;
@@ -955,7 +954,8 @@ int main() {
                          "admin - вход/выход из режима администратора.\n";
             if (adminAuthed) {
                 std::cout << "archive <id> / restore <id> - архивировать или восстановить профиль.\n"
-                             "delete <id> - удалить профиль навсегда.\n";
+                             "delete <id> - удалить профиль навсегда.\n"
+                             "passwd - сменить пароль администратора.\n";
             }
             std::cout << "quit - завершить работу приложения.\n"
                          "Подсказка: если имя содержит пробелы, используйте кавычки (login \"Имя профиля\").\n";
@@ -985,12 +985,45 @@ int main() {
                 std::cout << "Введите пароль администратора: ";
                 std::getline(std::cin >> std::ws, password);
             }
-            if (password == kAdminPassword) {
+            if (password == adminPassword) {
                 adminAuthed = true;
                 std::cout << "Режим администратора активирован.\n";
             } else {
                 std::cout << "Неверный пароль.\n";
             }
+            continue;
+        }
+
+        if (menuCmd == "passwd" || menuCmd == "adminpass") {
+            if (!adminAuthed) {
+                std::cout << "Недоступно: требуется режим администратора (команда 'admin').\n";
+                continue;
+            }
+            const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD");
+            if (env && *env) {
+                std::cout << "Пароль задан через JOBSKILL_ADMIN_PASSWORD; изменение из приложения недоступно.\n";
+                continue;
+            }
+            std::string pass1;
+            std::string pass2;
+            std::cout << "Новый пароль администратора: ";
+            std::getline(std::cin >> std::ws, pass1);
+            std::cout << "Повторите пароль: ";
+            std::getline(std::cin >> std::ws, pass2);
+            if (pass1.empty()) {
+                std::cout << "Пароль не может быть пустым.\n";
+                continue;
+            }
+            if (pass1 != pass2) {
+                std::cout << "Пароли не совпадают.\n";
+                continue;
+            }
+            if (!SetAdminPassword(storageDir, pass1)) {
+                std::cout << "Не удалось сохранить пароль.\n";
+                continue;
+            }
+            adminPassword = pass1;
+            std::cout << "Пароль администратора обновлён.\n";
             continue;
         }
 

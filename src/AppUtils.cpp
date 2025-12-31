@@ -1,12 +1,15 @@
 #include "AppUtils.h"
 
 #include <iostream>
+#include <fstream>
 
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
 #include "Profile.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -145,29 +148,172 @@ std::filesystem::path GuessProjectRoot() {
     return std::filesystem::current_path();
 }
 
+std::filesystem::path DefaultUserStorageDir() {
+#if defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA")) {
+        return std::filesystem::path(appdata) / "JobSkill";
+    }
+#elif defined(__APPLE__)
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / "Library" / "Application Support" / "JobSkill";
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / ".jobskill";
+    }
+#endif
+    return {};
+}
+
+bool EnsureDirectory(const std::filesystem::path& dir) {
+    if (dir.empty()) return false;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return !ec;
+}
+
+bool HasStorageData(const std::filesystem::path& dir) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec)) return false;
+    if (std::filesystem::exists(dir / "skills.txt", ec)) return true;
+    if (std::filesystem::exists(dir / "meta" / "gameplay.ini", ec)) return true;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+    }
+    auto archiveDir = dir / "archive";
+    if (std::filesystem::exists(archiveDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(archiveDir, ec)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+        }
+    }
+    return false;
+}
+
+bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::path& dst) {
+    if (src.empty() || dst.empty() || src == dst) return false;
+    std::error_code ec;
+    if (!std::filesystem::exists(src, ec)) return false;
+    std::filesystem::create_directories(dst, ec);
+    if (ec) return false;
+    for (auto it = std::filesystem::recursive_directory_iterator(src, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) return false;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), src, ec);
+        if (ec) return false;
+        auto target = dst / rel;
+        if (entry.is_directory()) {
+            std::filesystem::create_directories(target, ec);
+            if (ec) return false;
+            continue;
+        }
+        if (entry.is_regular_file()) {
+            std::filesystem::create_directories(target.parent_path(), ec);
+            if (ec) return false;
+            std::filesystem::copy_file(entry.path(), target,
+                                       std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec) return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 std::filesystem::path ResolveStorageDirectory() {
-    std::error_code ec;
     auto root = GuessProjectRoot();
-    auto dataDir = root / "data";
-    std::filesystem::create_directories(dataDir, ec);
-    if (!ec) {
-        return dataDir;
+    auto legacyDir = root / "data";
+    if (const char* env = std::getenv("JOBSKILL_STORAGE_DIR")) {
+        std::filesystem::path custom(env);
+        if (EnsureDirectory(custom)) return custom;
     }
 
-    // Fallback to legacy location near the executable.
-    auto fallback = std::filesystem::current_path() / "data";
-    std::filesystem::create_directories(fallback, ec);
-    if (!ec) {
-        return fallback;
+    const bool legacyHasData = HasStorageData(legacyDir);
+    auto userDir = DefaultUserStorageDir();
+    const bool userReady = EnsureDirectory(userDir);
+    const bool userHasData = userReady && HasStorageData(userDir);
+
+    if (legacyHasData && userReady && !userHasData) {
+        if (CopyStorageTree(legacyDir, userDir)) {
+            return userDir;
+        }
+        return legacyDir;
     }
-    return std::filesystem::current_path();
+    if (userHasData) {
+        return userDir;
+    }
+    if (legacyHasData) {
+        return legacyDir;
+    }
+    if (userReady) {
+        return userDir;
+    }
+    EnsureDirectory(legacyDir);
+    return legacyDir;
+}
+
+namespace {
+
+std::string TrimCopy(std::string s) {
+    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c) { return !is_space(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c) { return !is_space(c); }).base(), s.end());
+    return s;
+}
+
+std::filesystem::path AdminPasswordPath(const std::filesystem::path& storageDir) {
+    auto metaDir = storageDir / "meta";
+    std::error_code ec;
+    std::filesystem::create_directories(metaDir, ec);
+    (void)ec;
+    return metaDir / "admin.ini";
+}
+
+bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
+    auto path = AdminPasswordPath(storageDir);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << "# JobSkill admin password\n";
+    out << "password=" << password << "\n";
+    return out.good();
+}
+
+} // namespace
+
+std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
+    if (const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD")) {
+        if (*env != '\0') return env;
+    }
+
+    auto path = AdminPasswordPath(storageDir);
+    std::ifstream in(path);
+    if (in) {
+        std::string line;
+        while (std::getline(in, line)) {
+            std::string t = TrimCopy(line);
+            if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+            if (t.rfind("password=", 0) == 0) {
+                std::string value = TrimCopy(t.substr(9));
+                if (!value.empty()) return value;
+            } else {
+                return t;
+            }
+        }
+    }
+
+    const std::string fallback = "admin123";
+    SaveAdminPassword(storageDir, fallback);
+    return fallback;
+}
+
+bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
+    std::string trimmed = TrimCopy(password);
+    if (trimmed.empty()) return false;
+    return SaveAdminPassword(storageDir, trimmed);
 }
 
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
     auto skills = profile.list_skills();
-    if (skills.empty()) return;
     bool changed = false;
     for (auto& skill : skills) {
         if (!catalog.contains_id(skill.name)) {
@@ -176,7 +322,11 @@ void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
                 changed = true;
             }
         }
-        skill.weight = catalog.weight(skill.name);
+        const double newWeight = catalog.weight(skill.name);
+        if (std::abs(skill.weight - newWeight) > 1e-6) {
+            skill.weight = newWeight;
+            changed = true;
+        }
     }
 
     auto ach = profile.achievements();

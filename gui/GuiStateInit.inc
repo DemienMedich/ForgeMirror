@@ -2,6 +2,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
                   const GameplayConfig& gameplayConfig, const std::filesystem::path& storageDir,
                   ImGuiStyle& style, ImGuiIO& io, GLFWwindow* window) {
     state.storageDir = storageDir;
+    state.adminPasswordExpected = LoadAdminPassword(storageDir);
     state.rulesConfig = gameplayConfig;
     state.rulesDraft = gameplayConfig;
     state.cloudConfig = LoadCloudSyncConfig(storageDir);

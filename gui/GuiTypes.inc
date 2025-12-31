@@ -1,5 +1,3 @@
-constexpr const char* kAdminPassword = "admin123";
-
 // View-model representing a loaded profile + storage id for the GUI.
 struct GuiProfile {
     Profile profile;

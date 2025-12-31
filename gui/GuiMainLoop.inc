@@ -12,6 +12,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
         DrawProfilePanel(state, storage, catalog);
         DrawWorkspacePanel(state, storage, catalog, style);
         DrawAdminLoginModal(state);
+        DrawAdminPasswordModal(state);
         DrawSkillCatalogModals(state, storage, catalog);
         DrawXpModal(state, storage, catalog);
         DrawCreateProfileModal(state, storage, catalog);
