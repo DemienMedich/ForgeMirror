@@ -492,6 +492,11 @@ void ApplyUiSettings(const UiSettings& settings, ImGuiStyle& style, ImGuiIO& io)
             style.Colors[entries[i].col] = settings.colors[i];
         }
     }
+    ImVec4 titleBg = style.Colors[ImGuiCol_WindowBg];
+    titleBg.w = 0.0f;
+    style.Colors[ImGuiCol_TitleBg] = titleBg;
+    style.Colors[ImGuiCol_TitleBgActive] = titleBg;
+    style.Colors[ImGuiCol_TitleBgCollapsed] = titleBg;
 }
 
 void ApplyUiFiltersToState(GuiState& state) {
