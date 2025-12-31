@@ -6,6 +6,7 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
     }
     bool createPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Создать профиль", &createPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawCardHeader(u8"Данные профиля");
         ImGui::InputText(u8"Имя", state.modalBuffer.data(), state.modalBuffer.size());
         auto createProfile = [&]() {
             CreateProfileResult result = CreateProfileAction(storage, catalog, state.modalBuffer.data());
@@ -67,7 +68,10 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 case ConfirmAction::Delete: action = u8"удаление"; break;
                 default: action = ""; break;
             }
-            ImGui::Text(u8"Подтвердить %s профиля [%s] %s?", action.c_str(), info.id.c_str(), info.name.c_str());
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImGui::TextColored(accent, u8"Подтвердить %s профиля [%s] %s?",
+                               action.c_str(), info.id.c_str(), info.name.c_str());
             auto applyAction = [&]() {
                 ActionResult actionResult;
                 if (state.confirmAction == ConfirmAction::Archive) {
@@ -116,7 +120,7 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::EndTable();
             }
         } else {
-            ImGui::TextUnformatted(u8"Профиль не выбран.");
+            ImGui::TextDisabled(u8"Профиль не выбран.");
             if (ImGui::Button(u8"Закрыть")) {
                 ImGui::CloseCurrentPopup();
                 confirmPopupOpen = false;

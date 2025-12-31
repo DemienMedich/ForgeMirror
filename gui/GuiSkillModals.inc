@@ -6,6 +6,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     }
     bool addSkillOpen = true;
     if (ImGui::BeginPopupModal(u8"Добавить навык", &addSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawCardHeader(u8"Параметры навыка");
         ImGui::InputText(u8"Название", state.newSkillName.data(), state.newSkillName.size());
         ImGui::InputFloat(u8"Вес (0.5 - 1.6)", &state.newSkillWeight, 0.05f, 0.2f, "%.2f");
         ImGui::InputTextMultiline(u8"Описание", state.newSkillDesc.data(), state.newSkillDesc.size(), ImVec2(-1.0f, 120.0f));
@@ -70,7 +71,9 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     if (ImGui::BeginPopupModal(u8"Удалить навык", &deleteSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (!state.pendingSkillDelete.empty()) {
             const std::string displayName = catalog.display_name(state.pendingSkillDelete);
-            ImGui::Text(u8"Удалить навык '%s' из каталога?", displayName.c_str());
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImGui::TextColored(accent, u8"Удалить навык '%s' из каталога?", displayName.c_str());
             auto deleteSkill = [&]() {
                 bool removedFromProfiles = false;
                 ActionResult result = RemoveSkillAction(storage, catalog, state.pendingSkillDelete,
@@ -117,7 +120,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::EndTable();
             }
         } else {
-            ImGui::TextUnformatted(u8"Навык не выбран.");
+            ImGui::TextDisabled(u8"Навык не выбран.");
             if (ImGui::Button(u8"Закрыть")) {
                 ImGui::CloseCurrentPopup();
                 deleteSkillOpen = false;
@@ -139,7 +142,9 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             const std::string fromName = catalog.display_name(state.pendingMergeFromId);
             const std::string toName = catalog.display_name(state.pendingMergeToId);
             ImGui::Text(u8"Навык '%s' уже существует.", toName.c_str());
-            ImGui::Text(u8"Слить опыт из '%s' в '%s'?", fromName.c_str(), toName.c_str());
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImGui::TextColored(accent, u8"Слить опыт из '%s' в '%s'?", fromName.c_str(), toName.c_str());
             auto mergeSkills = [&]() {
                 ActionResult result = MergeSkillAction(storage, catalog,
                 state.pendingMergeFromId,
@@ -206,7 +211,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::EndTable();
             }
         } else {
-            ImGui::TextUnformatted(u8"Нет данных для слияния.");
+            ImGui::TextDisabled(u8"Нет данных для слияния.");
             if (ImGui::Button(u8"Закрыть")) {
                 ImGui::CloseCurrentPopup();
                 mergeSkillOpen = false;

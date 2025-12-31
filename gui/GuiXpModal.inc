@@ -7,7 +7,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     bool xpPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Добавление опыта", &xpPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (!state.isAdmin) {
-            ImGui::TextUnformatted(u8"Доступно только администратору.");
+            ImGui::TextDisabled(u8"Доступно только администратору.");
             if (ImGui::Button(u8"Закрыть")) {
                 ImGui::CloseCurrentPopup();
                 xpPopupOpen = false;
@@ -23,16 +23,19 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             PrepareXpEntries(state, catalog);
         }
         if (catalogSkills.empty()) {
-            ImGui::TextUnformatted(u8"Каталог пуст.");
+            ImGui::TextDisabled(u8"Каталог пуст.");
         } else if (!state.active) {
-            ImGui::TextUnformatted(u8"Нет активного профиля.");
+            ImGui::TextDisabled(u8"Нет активного профиля.");
         } else {
             state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
             state.taskScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
             const GameplayConfig& rules = GetGameplayConfig();
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImVec4 accentSoft = accent;
+            accentSoft.w = 0.75f;
 
-            ImGui::TextUnformatted(u8"Параметры задачи");
-            ImGui::Separator();
+            DrawCardHeader(u8"Параметры задачи");
             const float headerWidth = ImGui::GetContentRegionAvail().x;
             const bool stackHeader = headerWidth < 440.0f;
             if (stackHeader) {
@@ -76,15 +79,15 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::Text(u8"Лучший результат: %d/10", currentBest);
                 if (penaltiesEnabled && state.taskScore <= currentBest) {
                     ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f),
-                    u8"Повтор оценки - глобальный XP ограничен 35%% (навыки без штрафа).");
+                                       u8"Повтор оценки - глобальный XP ограничен 35%% (навыки без штрафа).");
                 } else if (!penaltiesEnabled && state.taskScore <= currentBest) {
-                    ImGui::TextColored(ImVec4(0.6f, 0.8f, 0.95f, 1.0f),
-                    u8"Штрафы за повтор включатся после ранга Сеньор.");
+                    ImGui::TextColored(accentSoft, u8"Штрафы за повтор включатся после ранга Сеньор.");
                 }
             }
 
-            ImGui::Separator();
-            ImGui::TextUnformatted(u8"Распределите навыки (автоподбор до 100%)");
+            ImGui::Spacing();
+            DrawCardHeader(u8"Распределение навыков");
+            ImGui::TextDisabled(u8"Автоподбор до 100%.");
             const float controlsWidth = ImGui::GetContentRegionAvail().x;
             const bool stackControls = controlsWidth < 520.0f;
             if (stackControls) {
@@ -217,9 +220,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TextDisabled(u8"Нет навыков по фильтру.");
             }
 
-            ImGui::Separator();
             if (percentSum == 100) {
-                ImGui::TextColored(ImVec4(0.45f, 0.9f, 0.45f, 1.0f), u8"Назначено: %d%%", percentSum);
+                ImGui::TextColored(accent, u8"Назначено: %d%%", percentSum);
             } else {
                 ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f), u8"Назначено: %d%%", percentSum);
             }

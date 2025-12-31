@@ -6,6 +6,7 @@ void DrawAdminLoginModal(GuiState& state) {
     }
     bool adminPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Вход администратора", &adminPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawCardHeader(u8"Пароль администратора");
         ImGui::InputText(u8"Пароль", state.adminPassword.data(), state.adminPassword.size(), ImGuiInputTextFlags_Password);
         const std::string layoutLabel = KeyboardLayoutLabel();
         ImGui::TextDisabled(u8"Раскладка: %s", layoutLabel.c_str());
@@ -59,12 +60,13 @@ void DrawAdminPasswordModal(GuiState& state) {
     }
     bool popupOpen = true;
     if (ImGui::BeginPopupModal(u8"Смена пароля администратора", &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawCardHeader(u8"Пароль");
         const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD");
         const bool envOverride = env && *env;
         if (envOverride) {
             ImGui::TextDisabled(u8"Пароль задан через JOBSKILL_ADMIN_PASSWORD.");
             ImGui::TextDisabled(u8"Смена через приложение недоступна.");
-            ImGui::Separator();
+            ImGui::Spacing();
         }
 
         if (envOverride) ImGui::BeginDisabled();
