@@ -130,3 +130,43 @@ void ResetUiSettings(UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {
     ApplyUiTheme(settings.theme, style);
     ApplyUiSettings(settings, style, io);
 }
+
+ImVec4 BlendColor(const ImVec4& a, const ImVec4& b, float t) {
+    return ImVec4(
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+        a.z + (b.z - a.z) * t,
+        a.w + (b.w - a.w) * t
+    );
+}
+
+ImVec4 CardBackgroundColor() {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 base = style.Colors[ImGuiCol_WindowBg];
+    ImVec4 lift = style.Colors[ImGuiCol_FrameBg];
+    ImVec4 out = BlendColor(base, lift, 0.6f);
+    out.w = std::max(out.w, 0.85f);
+    return out;
+}
+
+float CardRounding() {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    return std::max(6.0f, style.WindowRounding + 2.0f);
+}
+
+bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags flags = ImGuiChildFlags_AutoResizeY) {
+    ImVec4 bg = CardBackgroundColor();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.25f, 0.25f, 0.55f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, CardRounding());
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+    const bool open = ImGui::BeginChild(id, size, flags | ImGuiChildFlags_Border,
+                                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    return open;
+}
+
+void EndCard() {
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+}

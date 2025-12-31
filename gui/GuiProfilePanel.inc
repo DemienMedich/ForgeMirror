@@ -28,6 +28,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             categoriesLine = catStream.str();
         }
+        if (BeginCard("profile_header_card")) {
         const float headerAvail = ImGui::GetContentRegionAvail().x;
         const float spacingX = ImGui::GetStyle().ItemSpacing.x;
         const float minLeftWidth = 240.0f;
@@ -89,7 +90,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::TextDisabled(u8"Прогресс уровня");
         ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
         ImGui::EndChild();
-        ImGui::Separator();
+        }
+        EndCard();
+        ImGui::Spacing();
+        if (BeginCard("profile_summary_card")) {
         ImGui::TextUnformatted(u8"Сводка профиля");
         const int skillCount = static_cast<int>(profile.list_skills().size());
         const int achCount = static_cast<int>(profile.achievements().size());
@@ -213,6 +217,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
             }
         }
+        }
+        EndCard();
+        ImGui::Spacing();
 
         state.profileSection = std::clamp(state.ui.profileTab, 0, 4);
         if (ImGui::BeginTabBar("profile_tabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
