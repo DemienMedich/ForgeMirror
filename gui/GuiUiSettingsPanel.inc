@@ -76,6 +76,21 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImGui::TextUnformatted(u8"Пресеты интерфейса");
     const bool stackUiPresets = headerWidth < 520.0f;
     if (stackUiPresets) {
+        if (ImGui::Button(u8"Минимализм", ImVec2(-1.0f, 0.0f))) {
+            state.ui.fontScale = 1.0f;
+            state.ui.alpha = 0.98f;
+            state.ui.windowRounding = 10.0f;
+            state.ui.frameRounding = 8.0f;
+            state.ui.scrollbarRounding = 10.0f;
+            state.ui.grabRounding = 8.0f;
+            state.ui.windowPadding = ImVec2(12.0f, 10.0f);
+            state.ui.framePadding = ImVec2(8.0f, 6.0f);
+            state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
+            state.ui.backgroundAlpha = 0.18f;
+            state.ui.backgroundTiled = false;
+            state.ui.windowDecorated = false;
+            state.uiDirty = true;
+        }
         if (ImGui::Button(u8"Презентация", ImVec2(-1.0f, 0.0f))) {
             state.ui.fontScale = 1.25f;
             state.ui.alpha = 1.0f;
@@ -100,8 +115,24 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.ui.itemSpacing = ImVec2(6.0f, 4.0f);
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("ui_presets", 2, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("ui_presets", 3, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        if (ImGui::Button(u8"Минимализм", ImVec2(-1.0f, 0.0f))) {
+            state.ui.fontScale = 1.0f;
+            state.ui.alpha = 0.98f;
+            state.ui.windowRounding = 10.0f;
+            state.ui.frameRounding = 8.0f;
+            state.ui.scrollbarRounding = 10.0f;
+            state.ui.grabRounding = 8.0f;
+            state.ui.windowPadding = ImVec2(12.0f, 10.0f);
+            state.ui.framePadding = ImVec2(8.0f, 6.0f);
+            state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
+            state.ui.backgroundAlpha = 0.18f;
+            state.ui.backgroundTiled = false;
+            state.ui.windowDecorated = false;
+            state.uiDirty = true;
+        }
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Презентация", ImVec2(-1.0f, 0.0f))) {
             state.ui.fontScale = 1.25f;

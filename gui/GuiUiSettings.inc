@@ -348,21 +348,25 @@ void ApplyThemePreset(int preset, UiSettings& settings, ImGuiStyle& style) {
         case 0: { // Graphite
             settings.theme = 0;
             ImGui::StyleColorsDark(&style);
-            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.09f, 0.11f, 1.00f);
-            style.Colors[ImGuiCol_FrameBg] = ImVec4(0.16f, 0.18f, 0.21f, 0.90f);
-            style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.22f, 0.24f, 0.28f, 0.95f);
-            style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.30f, 0.32f, 0.37f, 1.00f);
-            style.Colors[ImGuiCol_TitleBg] = ImVec4(0.12f, 0.13f, 0.16f, 1.00f);
-            style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.18f, 0.20f, 0.24f, 1.00f);
-            style.Colors[ImGuiCol_Header] = ImVec4(0.22f, 0.26f, 0.32f, 0.65f);
-            style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.30f, 0.35f, 0.42f, 0.80f);
-            style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.28f, 0.33f, 0.40f, 1.00f);
-            style.Colors[ImGuiCol_Button] = ImVec4(0.22f, 0.26f, 0.32f, 0.60f);
-            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.30f, 0.35f, 0.42f, 0.85f);
-            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.28f, 0.32f, 0.38f, 1.00f);
-            style.Colors[ImGuiCol_Tab] = ImVec4(0.14f, 0.18f, 0.22f, 1.00f);
-            style.Colors[ImGuiCol_TabHovered] = ImVec4(0.32f, 0.40f, 0.50f, 0.80f);
-            style.Colors[ImGuiCol_TabSelected] = ImVec4(0.20f, 0.26f, 0.34f, 1.00f);
+            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.07f, 0.08f, 1.00f);
+            style.Colors[ImGuiCol_FrameBg] = ImVec4(0.13f, 0.15f, 0.18f, 0.92f);
+            style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.21f, 0.25f, 0.95f);
+            style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.23f, 0.27f, 0.33f, 1.00f);
+            style.Colors[ImGuiCol_TitleBg] = ImVec4(0.08f, 0.09f, 0.11f, 1.00f);
+            style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.14f, 0.17f, 1.00f);
+            style.Colors[ImGuiCol_Header] = ImVec4(0.17f, 0.20f, 0.24f, 0.60f);
+            style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.23f, 0.27f, 0.32f, 0.75f);
+            style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.25f, 0.30f, 0.36f, 0.90f);
+            style.Colors[ImGuiCol_Button] = ImVec4(0.16f, 0.19f, 0.23f, 0.60f);
+            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.23f, 0.27f, 0.33f, 0.80f);
+            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.25f, 0.29f, 0.35f, 0.95f);
+            style.Colors[ImGuiCol_Tab] = ImVec4(0.10f, 0.13f, 0.16f, 1.00f);
+            style.Colors[ImGuiCol_TabHovered] = ImVec4(0.22f, 0.28f, 0.35f, 0.75f);
+            style.Colors[ImGuiCol_TabSelected] = ImVec4(0.16f, 0.20f, 0.26f, 1.00f);
+            style.Colors[ImGuiCol_Border] = ImVec4(0.18f, 0.20f, 0.24f, 0.35f);
+            style.Colors[ImGuiCol_Separator] = ImVec4(0.18f, 0.20f, 0.24f, 0.35f);
+            style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.24f, 0.28f, 0.34f, 0.65f);
+            style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.26f, 0.31f, 0.38f, 0.85f);
             break;
         }
         case 1: { // Sapphire
@@ -383,6 +387,10 @@ void ApplyThemePreset(int preset, UiSettings& settings, ImGuiStyle& style) {
             style.Colors[ImGuiCol_Tab] = ImVec4(0.10f, 0.18f, 0.32f, 1.00f);
             style.Colors[ImGuiCol_TabHovered] = ImVec4(0.22f, 0.36f, 0.58f, 0.85f);
             style.Colors[ImGuiCol_TabSelected] = ImVec4(0.16f, 0.28f, 0.48f, 1.00f);
+            style.Colors[ImGuiCol_Border] = ImVec4(0.18f, 0.26f, 0.38f, 0.45f);
+            style.Colors[ImGuiCol_Separator] = ImVec4(0.18f, 0.26f, 0.38f, 0.45f);
+            style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.24f, 0.34f, 0.48f, 0.70f);
+            style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.28f, 0.40f, 0.58f, 0.90f);
             break;
         }
         case 2: { // Sand
@@ -403,6 +411,10 @@ void ApplyThemePreset(int preset, UiSettings& settings, ImGuiStyle& style) {
             style.Colors[ImGuiCol_Tab] = ImVec4(0.92f, 0.86f, 0.76f, 1.00f);
             style.Colors[ImGuiCol_TabHovered] = ImVec4(0.86f, 0.80f, 0.70f, 0.90f);
             style.Colors[ImGuiCol_TabSelected] = ImVec4(0.88f, 0.82f, 0.72f, 1.00f);
+            style.Colors[ImGuiCol_Border] = ImVec4(0.72f, 0.66f, 0.56f, 0.60f);
+            style.Colors[ImGuiCol_Separator] = ImVec4(0.72f, 0.66f, 0.56f, 0.60f);
+            style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.66f, 0.60f, 0.50f, 0.75f);
+            style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.62f, 0.56f, 0.46f, 0.90f);
             break;
         }
         default:
@@ -419,12 +431,20 @@ void ApplyUiSettings(const UiSettings& settings, ImGuiStyle& style, ImGuiIO& io)
     io.FontGlobalScale = settings.fontScale;
     style.Alpha = settings.alpha;
     style.WindowRounding = settings.windowRounding;
+    style.ChildRounding = settings.windowRounding;
     style.FrameRounding = settings.frameRounding;
+    style.PopupRounding = settings.windowRounding;
     style.ScrollbarRounding = settings.scrollbarRounding;
     style.GrabRounding = settings.grabRounding;
+    style.TabRounding = settings.frameRounding;
     style.WindowPadding = settings.windowPadding;
     style.FramePadding = settings.framePadding;
     style.ItemSpacing = settings.itemSpacing;
+    style.WindowBorderSize = 0.0f;
+    style.ChildBorderSize = 1.0f;
+    style.PopupBorderSize = 0.0f;
+    style.FrameBorderSize = 0.0f;
+    style.TabBorderSize = 0.0f;
     if (settings.customColors) {
         const auto& entries = UiColorEntries();
         for (size_t i = 0; i < entries.size(); ++i) {
