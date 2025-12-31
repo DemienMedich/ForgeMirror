@@ -21,6 +21,81 @@ std::string ToLowerAscii(std::string s) {
     return s;
 }
 
+std::string ToLowerUtf8(std::string s) {
+    auto decode_utf8 = [](const std::string& text, size_t& pos, uint32_t& out) {
+        unsigned char c0 = static_cast<unsigned char>(text[pos]);
+        if (c0 < 0x80) {
+            out = c0;
+            ++pos;
+            return true;
+        }
+        if ((c0 >> 5) == 0x6 && pos + 1 < text.size()) {
+            unsigned char c1 = static_cast<unsigned char>(text[pos + 1]);
+            if ((c1 & 0xC0) != 0x80) return false;
+            out = ((c0 & 0x1F) << 6) | (c1 & 0x3F);
+            pos += 2;
+            return true;
+        }
+        if ((c0 >> 4) == 0xE && pos + 2 < text.size()) {
+            unsigned char c1 = static_cast<unsigned char>(text[pos + 1]);
+            unsigned char c2 = static_cast<unsigned char>(text[pos + 2]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return false;
+            out = ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
+            pos += 3;
+            return true;
+        }
+        if ((c0 >> 3) == 0x1E && pos + 3 < text.size()) {
+            unsigned char c1 = static_cast<unsigned char>(text[pos + 1]);
+            unsigned char c2 = static_cast<unsigned char>(text[pos + 2]);
+            unsigned char c3 = static_cast<unsigned char>(text[pos + 3]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) return false;
+            out = ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+            pos += 4;
+            return true;
+        }
+        return false;
+    };
+    auto append_utf8 = [](std::string& out, uint32_t cp) {
+        if (cp <= 0x7F) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp <= 0x7FF) {
+            out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp <= 0xFFFF) {
+            out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    };
+    auto lower_codepoint = [](uint32_t cp) {
+        if (cp >= 'A' && cp <= 'Z') return cp + 32;
+        if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;
+        if (cp == 0x0401) return static_cast<uint32_t>(0x0451);
+        return cp;
+    };
+
+    std::string out;
+    out.reserve(s.size());
+    size_t i = 0;
+    while (i < s.size()) {
+        uint32_t cp = 0;
+        size_t next = i;
+        if (!decode_utf8(s, next, cp)) {
+            out.push_back(s[i]);
+            ++i;
+            continue;
+        }
+        i = next;
+        append_utf8(out, lower_codepoint(cp));
+    }
+    return out;
+}
+
 std::string NormalizeSkillNameGui(const std::string& name) {
     auto decode_utf8 = [](const std::string& s, size_t& i, uint32_t& out) {
         unsigned char c0 = static_cast<unsigned char>(s[i]);
@@ -103,8 +178,8 @@ bool MatchesFilter(const std::string& text, const char* filter) {
     if (!filter || filter[0] == '\0') return true;
     std::string needle = TrimStringGui(filter);
     if (needle.empty()) return true;
-    std::string hay = ToLowerAscii(text);
-    needle = ToLowerAscii(needle);
+    std::string hay = ToLowerUtf8(text);
+    needle = ToLowerUtf8(needle);
     return hay.find(needle) != std::string::npos;
 }
 
