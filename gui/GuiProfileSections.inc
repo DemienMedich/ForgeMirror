@@ -1,4 +1,9 @@
 static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, Profile& profile, int overallLevel, std::int64_t nowSec) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+    ImVec4 accentSoft = accent;
+    accentSoft.w = 0.75f;
     {
         RankSpan span = ComputeRankSpan(overallLevel);
         if (span.hasNext && span.nextLevel > span.currentLevel) {
@@ -102,7 +107,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             const int signals = (hasRecovery ? 1 : 0) + (categoriesBelow > 0 ? 1 : 0) + (isStale ? 1 : 0);
             ImGui::TextDisabled(u8"Активных сигналов: %d", signals);
             if (signals == 0) {
-                ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), u8"Все в норме.");
+                ImGui::TextColored(accentSoft, u8"Все в норме.");
             } else {
                 ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
                 if (ImGui::BeginTable("profile_flags", 2, ImGuiTableFlags_SizingStretchProp |
@@ -183,7 +188,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Активность");
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), "%s", lastTaskLabel.c_str());
+            ImGui::TextColored(accentSoft, "%s", lastTaskLabel.c_str());
             ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"%s назад", elapsedLabel.c_str());
             ImGui::TableNextRow();
@@ -195,7 +200,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 ImGui::TableSetColumnIndex(2);
                 ImGui::Text(u8"задач: %d", recoveryLeft);
             } else {
-                ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), u8"нет");
+                ImGui::TextColored(accentSoft, u8"нет");
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TextUnformatted(u8"-");
             }
@@ -213,7 +218,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     ImGui::EndTooltip();
                 }
             } else {
-                ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), u8"все 10/10");
+                ImGui::TextColored(accentSoft, u8"все 10/10");
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TextUnformatted(u8"-");
             }
@@ -264,6 +269,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
                 expiredCount += 1;
             }
         }
+        DrawCardHeader(u8"Фильтры");
         const float achFilterWidth = ImGui::GetContentRegionAvail().x;
         const bool stackAchFilters = achFilterWidth < 520.0f;
         if (stackAchFilters) {
@@ -325,17 +331,17 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
         if (!expiringSoon.empty()) {
             std::sort(expiringSoon.begin(), expiringSoon.end(),
             [](const auto& a, const auto& b) { return a.second < b.second; });
-            ImGui::TextUnformatted(u8"Скоро истекают");
+            DrawCardHeader(u8"Скоро истекают");
             const size_t limit = std::min<size_t>(3, expiringSoon.size());
             for (size_t i = 0; i < limit; ++i) {
-                ImGui::BulletText("%s — %s",
+                ImGui::BulletText("%s - %s",
                 expiringSoon[i].first.c_str(),
                 FormatDurationShort(expiringSoon[i].second).c_str());
             }
             if (expiringSoon.size() > limit) {
                 ImGui::TextDisabled(u8"И ещё: %d", static_cast<int>(expiringSoon.size() - limit));
             }
-            ImGui::Separator();
+            ImGui::Spacing();
         }
 
         constexpr int kIconsPerRow = 6;
@@ -417,6 +423,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
 
 static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
     if (ImGui::CollapsingHeader(u8"Навыки", ImGuiTreeNodeFlags_DefaultOpen)) {
+    DrawCardHeader(u8"Фильтры");
     const float skillFilterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackSkillFilters = skillFilterWidth < 620.0f;
     ImGui::InputText(u8"Поиск навыка в профиле", state.filters.profileSkill.data(),
@@ -577,6 +584,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
 static void DrawProfileActivitySection(GuiState& state, const std::string& profileId) {
     if (ImGui::CollapsingHeader(u8"Последние действия", ImGuiTreeNodeFlags_DefaultOpen)) {
     if (ImGui::BeginChild("profile_activity", ImVec2(0, 140), true)) {
+        DrawCardHeader(u8"Фильтры");
         const auto logIt = state.activityLogs.find(profileId);
         const bool hasLog = logIt != state.activityLogs.end() && !logIt->second.empty();
         int activityShown = 0;
@@ -635,7 +643,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             }
             ImGui::EndTable();
         }
-        ImGui::Separator();
+        DrawCardHeader(u8"История");
         if (hasLog) {
             for (auto it = logIt->second.rbegin(); it != logIt->second.rend(); ++it) {
                 if (!MatchesFilter(*it, state.filters.activity.data())) continue;
