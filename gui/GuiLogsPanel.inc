@@ -1,16 +1,152 @@
+static void DrawLogKpiCard(const char* id, UiIcon icon, const char* title, const std::string& value,
+                           const ImVec4& accent, float height = 70.0f) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float rounding = std::max(9.0f, style.FrameRounding + 3.0f);
+    ImVec4 bg = CardBackgroundColor();
+    ImVec4 border = CardBorderColor();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+    if (ImGui::BeginChild("log_kpi", ImVec2(0.0f, height), ImGuiChildFlags_Border,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
+        const float badgeSize = std::clamp(height - 24.0f, 30.0f, 42.0f);
+        const float badgeRadius = badgeSize * 0.5f;
+        const ImVec2 badgePos = ImGui::GetCursorScreenPos();
+        const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
+        DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, accent, true);
+
+        ImGui::Dummy(ImVec2(badgeSize + 10.0f, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
+        float y = ImGui::GetCursorPosY();
+        float textBlock = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+        float offsetY = std::max(0.0f, (contentH - textBlock) * 0.5f);
+        ImGui::SetCursorPosY(y + offsetY);
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("%s", title);
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::SetWindowFontScale(1.12f);
+        ImGui::TextUnformatted(value.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopID();
+}
+
 void DrawLogsPanel(GuiState& state) {
-    DrawCardHeader(u8"Фильтры");
-    const float filterWidth = ImGui::GetContentRegionAvail().x;
-    const bool stackFilters = filterWidth < 720.0f;
+    DrawWindowBackground(state.ui, UiWindowId::Logs, state.storageDir);
+    int infoCount = 0;
+    int warnCount = 0;
+    int errorCount = 0;
+    std::int64_t minTs = 0;
+    std::int64_t maxTs = 0;
     std::vector<std::string> logSources;
     logSources.reserve(state.appLogs.size());
     for (const auto& entry : state.appLogs) {
+        if (entry.level == AppLogLevel::Warning) {
+            warnCount += 1;
+        } else if (entry.level == AppLogLevel::Error) {
+            errorCount += 1;
+        } else {
+            infoCount += 1;
+        }
+        if (entry.timestamp > 0) {
+            if (minTs == 0 || entry.timestamp < minTs) minTs = entry.timestamp;
+            if (maxTs == 0 || entry.timestamp > maxTs) maxTs = entry.timestamp;
+        }
         if (entry.source.empty()) continue;
         if (std::find(logSources.begin(), logSources.end(), entry.source) == logSources.end()) {
             logSources.push_back(entry.source);
         }
     }
     std::sort(logSources.begin(), logSources.end());
+
+    const int totalCount = static_cast<int>(state.appLogs.size());
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+    ImVec4 infoColor = LogLevelColor(AppLogLevel::Info);
+    ImVec4 warnColor = LogLevelColor(AppLogLevel::Warning);
+    ImVec4 errorColor = LogLevelColor(AppLogLevel::Error);
+
+    if (BeginCard("log_summary_card")) {
+        DrawCardHeader(u8"Сводка");
+        const float summaryWidth = ImGui::GetContentRegionAvail().x;
+        const int columns = summaryWidth < 540.0f ? 2 : 4;
+        struct LogKpi { const char* id; UiIcon icon; const char* label; int value; ImVec4 accent; };
+        const std::array<LogKpi, 4> kpis = {{
+            {"total", UiIcon::List, u8"Всего", totalCount, accent},
+            {"info", UiIcon::Chart, u8"Инфо", infoCount, infoColor},
+            {"warn", UiIcon::Bell, u8"Предупр.", warnCount, warnColor},
+            {"error", UiIcon::Exit, u8"Ошибки", errorCount, errorColor}
+        }};
+        if (ImGui::BeginTable("log_kpi", columns, ImGuiTableFlags_SizingStretchSame)) {
+            size_t index = 0;
+            const int rows = static_cast<int>((kpis.size() + columns - 1) / columns);
+            for (int r = 0; r < rows; ++r) {
+                ImGui::TableNextRow();
+                for (int c = 0; c < columns; ++c) {
+                    ImGui::TableNextColumn();
+                    if (index < kpis.size()) {
+                        const LogKpi& kpi = kpis[index];
+                        DrawLogKpiCard(kpi.id, kpi.icon, kpi.label, std::to_string(kpi.value), kpi.accent);
+                        ++index;
+                    } else {
+                        ImGui::Dummy(ImVec2(0.0f, 0.0f));
+                    }
+                }
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::TextDisabled(u8"Активность");
+        constexpr int kBins = 16;
+        std::array<float, kBins> activity{};
+        if (totalCount > 0) {
+            if (minTs > 0 && maxTs > minTs) {
+                const double span = static_cast<double>(maxTs - minTs);
+                for (const auto& entry : state.appLogs) {
+                    if (entry.timestamp <= 0) continue;
+                    double t = static_cast<double>(entry.timestamp - minTs) / span;
+                    int bin = static_cast<int>(t * (kBins - 1));
+                    bin = std::clamp(bin, 0, kBins - 1);
+                    activity[static_cast<size_t>(bin)] += 1.0f;
+                }
+            } else {
+                int idx = 0;
+                const int count = totalCount;
+                for (const auto& entry : state.appLogs) {
+                    (void)entry;
+                    int bin = (count > 0) ? static_cast<int>((idx * kBins) / count) : 0;
+                    bin = std::clamp(bin, 0, kBins - 1);
+                    activity[static_cast<size_t>(bin)] += 1.0f;
+                    ++idx;
+                }
+            }
+        }
+        float maxActivity = 0.0f;
+        for (float v : activity) maxActivity = std::max(maxActivity, v);
+        if (maxActivity <= 0.0f) maxActivity = 1.0f;
+        DrawSparkline("##log_activity", activity.data(), kBins, maxActivity, accent, 52.0f);
+        if (totalCount == 0) {
+            ImGui::TextDisabled(u8"Пока нет записей.");
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
+    DrawCardHeader(u8"Фильтры");
+    const float filterWidth = ImGui::GetContentRegionAvail().x;
+    const bool stackFilters = filterWidth < 720.0f;
     std::vector<const char*> logSourceLabels;
     logSourceLabels.reserve(logSources.size() + 1);
     logSourceLabels.push_back(u8"Все источники");
