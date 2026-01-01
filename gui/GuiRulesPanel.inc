@@ -1,6 +1,19 @@
 void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
     GameplayConfig& draft = state.rulesDraft;
+    auto rulesMatch = [](const GameplayConfig& a, const GameplayConfig& b) {
+        auto closeEnough = [](float lhs, float rhs) { return std::fabs(lhs - rhs) < 0.0001f; };
+        if (a.levelBaseXp != b.levelBaseXp) return false;
+        if (a.levelLinearXp != b.levelLinearXp) return false;
+        if (a.levelQuadraticXp != b.levelQuadraticXp) return false;
+        if (a.categoryBaseXp != b.categoryBaseXp) return false;
+        if (!closeEnough(a.focusBaseBonus, b.focusBaseBonus)) return false;
+        if (!closeEnough(a.focusAdditionalBonus, b.focusAdditionalBonus)) return false;
+        if (!closeEnough(a.repeatRewardFactor, b.repeatRewardFactor)) return false;
+        if (!closeEnough(a.recoveryRewardFactor, b.recoveryRewardFactor)) return false;
+        if (a.recoveryWarmupTasks != b.recoveryWarmupTasks) return false;
+        return true;
+    };
     DrawCardHeader(u8"Кривая уровней");
     const float avail = ImGui::GetContentRegionAvail().x;
     const bool stackRules = avail < 420.0f;
@@ -120,7 +133,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::EndTable();
     }
     ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
+    const bool hasChanges = !rulesMatch(draft, state.rulesConfig);
     if (stackRules) {
+        if (!hasChanges) ImGui::BeginDisabled();
         if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
             draft = state.rulesConfig;
         }
@@ -140,7 +155,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                           AppLogLevel::Error, u8"Правила");
             }
         }
+        if (!hasChanges) ImGui::EndDisabled();
     } else if (ImGui::BeginTable("rules_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+        if (!hasChanges) ImGui::BeginDisabled();
         ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableNextRow();
@@ -165,7 +182,11 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                           AppLogLevel::Error, u8"Правила");
             }
         }
+        if (!hasChanges) ImGui::EndDisabled();
         ImGui::EndTable();
+    }
+    if (!hasChanges) {
+        ImGui::TextDisabled(u8"Нет несохранённых изменений.");
     }
 }
 
