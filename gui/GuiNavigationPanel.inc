@@ -9,43 +9,66 @@ void DrawNavigationPanel(GuiState& state) {
     }
     ImGui::Begin(u8"Навигация", nullptr, navFlags);
     DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
     DrawCardHeader(u8"Разделы");
     const float navWidth = ImGui::GetContentRegionAvail().x;
     const ImVec2 navButtonSize(navWidth, 0.0f);
-    if (ImGui::Button(u8"Профиль [F1]", navButtonSize)) {
+    auto navButton = [&](const char* label, bool active, auto onClick) {
+        if (active) {
+            ImVec4 base = BlendColor(style.Colors[ImGuiCol_Button], accent, 0.35f);
+            ImVec4 hover = BlendColor(style.Colors[ImGuiCol_ButtonHovered], accent, 0.30f);
+            ImVec4 pressed = BlendColor(style.Colors[ImGuiCol_ButtonActive], accent, 0.25f);
+            base.w = std::max(base.w, 0.85f);
+            hover.w = std::max(hover.w, 0.90f);
+            pressed.w = std::max(pressed.w, 0.95f);
+            ImGui::PushStyleColor(ImGuiCol_Button, base);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, pressed);
+        }
+        if (ImGui::Button(label, navButtonSize)) {
+            onClick();
+        }
+        if (active) {
+            ImGui::PopStyleColor(3);
+        }
+    };
+    const bool profileActive = !state.showMainMenu;
+    navButton(u8"Профиль [F1]", profileActive, [&]() {
         state.showMainMenu = false;
-    }
-    if (ImGui::Button(u8"Каталог навыков [F2]", navButtonSize)) {
+    });
+    navButton(u8"Каталог навыков [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
-    }
-    if (ImGui::Button(u8"Пайплайн [F3]", navButtonSize)) {
+    });
+    navButton(u8"Пайплайн [F3]", state.showPipeline, [&]() {
         OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
-    }
-    if (ImGui::Button(u8"3D просмотр", navButtonSize)) {
+    });
+    navButton(u8"3D просмотр", state.showView3d, [&]() {
         OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
-    }
+    });
     if (state.isAdmin) {
-        if (ImGui::Button(u8"Правила [F4]", navButtonSize)) {
+        navButton(u8"Правила [F4]", state.showRules, [&]() {
             OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
-        }
-        if (ImGui::Button(u8"Статистика [F5]", navButtonSize)) {
+        });
+        navButton(u8"Статистика [F5]", state.showAdminStats, [&]() {
             OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
-        }
-        if (ImGui::Button(u8"Логи [F6]", navButtonSize)) {
+        });
+        navButton(u8"Логи [F6]", state.showLogs, [&]() {
             OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
-        }
-        if (ImGui::Button(u8"Настройки интерфейса", navButtonSize)) {
+        });
+        navButton(u8"Настройки интерфейса", state.showUiSettings, [&]() {
             OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
-        }
-        if (ImGui::Button(u8"3D настройки", navButtonSize)) {
+        });
+        navButton(u8"3D настройки", state.showView3dSettings, [&]() {
             OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
-        }
+        });
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
-    if (ImGui::Button(u8"Главное меню", navButtonSize)) {
+    navButton(u8"Главное меню", state.showMainMenu, [&]() {
         state.showMainMenu = !state.showMainMenu;
-    }
+    });
 
     if (state.isAdmin) {
         const float footerHeight = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
