@@ -3,10 +3,15 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
     if (state.showMainMenu) {
         ImGui::Begin(u8"Главное меню", &state.showMainMenu);
         EnsureWindowVisible();
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImVec4 accentSoft = accent;
+        accentSoft.w = 0.8f;
         DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
         if (BeginCard("main_admin_card")) {
             ImGui::TextUnformatted(state.isAdmin ? u8"[Режим администратора]" : u8"[Режим просмотра]");
-            if (!state.isAdmin) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.8f, 0.5f, 1.0f));
+            if (!state.isAdmin) ImGui::PushStyleColor(ImGuiCol_Text, accentSoft);
             if (ImGui::Button(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ",
                 ImVec2(-1.0f, 0.0f))) {
                 if (state.isAdmin) {
@@ -235,8 +240,7 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                         ImGui::TextWrapped(u8"Примечание: %s", state.cloudManifest.notes.c_str());
                     }
                     if (state.cloudUpdateAvailable) {
-                        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1.0f),
-                        u8"Доступно обновление клиента.");
+                        ImGui::TextColored(accent, u8"Доступно обновление клиента.");
                         if (state.cloudManifest.releaseFile.empty()) {
                             ImGui::TextDisabled(u8"Файл обновления не указан.");
                         } else {

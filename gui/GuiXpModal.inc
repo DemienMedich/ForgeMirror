@@ -73,12 +73,12 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             }
             ImGui::Text(u8"Множитель за оценку: %.2f", scoreMultiplier);
             if (currentBest >= Profile::kMaxCategoryScore) {
-                ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f),
+                ImGui::TextColored(accent,
                 u8"Лучший результат: %d/10 (категория освоена)", currentBest);
             } else {
                 ImGui::Text(u8"Лучший результат: %d/10", currentBest);
                 if (penaltiesEnabled && state.taskScore <= currentBest) {
-                    ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f),
+                    ImGui::TextColored(accentSoft,
                                        u8"Повтор оценки - глобальный XP ограничен 35%% (навыки без штрафа).");
                 } else if (!penaltiesEnabled && state.taskScore <= currentBest) {
                     ImGui::TextColored(accentSoft, u8"Штрафы за повтор включатся после ранга Сеньор.");
@@ -223,7 +223,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             if (percentSum == 100) {
                 ImGui::TextColored(accent, u8"Назначено: %d%%", percentSum);
             } else {
-                ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f), u8"Назначено: %d%%", percentSum);
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Назначено: %d%%", percentSum);
             }
             const float focusBonus = rules.focusBaseBonus + rules.focusAdditionalBonus * (static_cast<float>(maxSharePercent) / 100.0f);
             const int previewPool = static_cast<int>(std::round(baseXp * scoreMultiplier * focusBonus));
