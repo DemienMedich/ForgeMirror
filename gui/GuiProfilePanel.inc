@@ -1,3 +1,46 @@
+static void DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, const std::string& value,
+                            const ImVec4& accent, float height = 72.0f) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float rounding = std::max(10.0f, style.FrameRounding + 4.0f);
+    ImVec4 bg = CardBackgroundColor();
+    ImVec4 border = CardBorderColor();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+    if (ImGui::BeginChild("kpi_card", ImVec2(0.0f, height), ImGuiChildFlags_Border,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
+        const float badgeSize = std::clamp(height - 26.0f, 34.0f, 46.0f);
+        const float badgeRadius = badgeSize * 0.5f;
+        const ImVec2 badgePos = ImGui::GetCursorScreenPos();
+        const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
+        DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, accent, true);
+
+        ImGui::Dummy(ImVec2(badgeSize + 10.0f, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
+        float y = ImGui::GetCursorPosY();
+        float textBlock = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+        float offsetY = std::max(0.0f, (contentH - textBlock) * 0.5f - 1.0f);
+        ImGui::SetCursorPosY(y + offsetY);
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("%s", title);
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::TextUnformatted(value.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopID();
+}
+
 void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     // Profile details window
     ImGui::Begin(u8"Профиль");
@@ -94,10 +137,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
 
-        const std::string rankText = DescribeOverallRank(state.active->profile);
+        const std::string rankText = DescribeOverallRank(profile);
+        const auto& catScores = profile.category_best_scores();
         std::string categoriesLine;
         {
-            const auto& catScores = state.active->profile.category_best_scores();
             std::ostringstream catStream;
             for (size_t i = 0; i < catScores.size(); ++i) {
                 if (i) catStream << ", ";
@@ -160,12 +203,70 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::SameLine();
         ImGui::BeginChild("profile_header_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
             ImGuiWindowFlags_NoScrollbar);
-        ImGui::SetWindowFontScale(1.25f);
-        ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::TextDisabled(u8"Всего XP: %d", totalXp);
-        ImGui::TextDisabled(u8"Прогресс уровня");
-        ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
+        const float ringSize = std::min(190.0f, ImGui::GetContentRegionAvail().x);
+        if (ringSize >= 140.0f) {
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            ImVec2 chartSize(ringSize, ringSize);
+            ImGui::Dummy(chartSize);
+            const ImVec2 pMin = ImGui::GetItemRectMin();
+            const ImVec2 pMax = ImGui::GetItemRectMax();
+            const ImVec2 center((pMin.x + pMax.x) * 0.5f, (pMin.y + pMax.y) * 0.5f);
+
+            float outerRadius = ringSize * 0.5f - 6.0f;
+            float outerThickness = std::max(10.0f, outerRadius * 0.16f);
+            float innerRadius = std::max(6.0f, outerRadius - outerThickness - 8.0f);
+            float innerThickness = std::max(8.0f, outerThickness * 0.70f);
+
+            if (!catScores.empty()) {
+                std::vector<float> segValues;
+                segValues.reserve(catScores.size());
+                for (size_t i = 0; i < catScores.size(); ++i) {
+                    segValues.push_back(static_cast<float>(catScores[i]));
+                }
+                DrawSegmentedRing(drawList, center, outerRadius, outerThickness,
+                                  segValues.data(), static_cast<int>(segValues.size()), 10.0f, 0.12f);
+            }
+
+            ImVec4 track = style.Colors[ImGuiCol_TextDisabled];
+            track.w = 0.18f;
+            ImVec4 fill = accent;
+            fill.w = 0.92f;
+            DrawProgressRing(drawList, center, innerRadius, innerThickness, progressRatio,
+                             ImGui::GetColorU32(track), ImGui::GetColorU32(fill));
+
+            ImVec4 centerBg = style.Colors[ImGuiCol_FrameBg];
+            centerBg.w = std::max(centerBg.w, 0.35f);
+            float fillRadius = std::max(0.0f, innerRadius - innerThickness * 0.55f);
+            drawList->AddCircleFilled(center, fillRadius, ImGui::GetColorU32(centerBg), 32);
+
+            std::string levelText = std::to_string(overallLevel);
+            std::ostringstream pctStream;
+            pctStream.imbue(std::locale::classic());
+            pctStream << std::fixed << std::setprecision(1) << (progressRatio * 100.0f);
+            std::string pctText = pctStream.str() + "%";
+
+            ImFont* font = ImGui::GetFont();
+            const float fontBase = ImGui::GetFontSize();
+            const float bigFont = fontBase * 1.55f;
+            const float smallFont = fontBase * 0.95f;
+            const ImVec2 levelSize = font->CalcTextSizeA(bigFont, std::numeric_limits<float>::max(), 0.0f, levelText.c_str());
+            const ImVec2 pctSize = font->CalcTextSizeA(smallFont, std::numeric_limits<float>::max(), 0.0f, pctText.c_str());
+            const ImVec2 levelPos(center.x - levelSize.x * 0.5f, center.y - levelSize.y * 0.65f);
+            const ImVec2 pctPos(center.x - pctSize.x * 0.5f, center.y + levelSize.y * 0.05f);
+            drawList->AddText(font, bigFont, levelPos, ImGui::GetColorU32(accent), levelText.c_str());
+            drawList->AddText(font, smallFont, pctPos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]), pctText.c_str());
+
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::TextDisabled(u8"Всего XP: %d", totalXp);
+            ImGui::TextDisabled(u8"Прогресс: %s", progressLabel.c_str());
+        } else {
+            ImGui::SetWindowFontScale(1.25f);
+            ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::TextDisabled(u8"Всего XP: %d", totalXp);
+            ImGui::TextDisabled(u8"Прогресс уровня");
+            ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
+        }
         ImGui::EndChild();
         }
         EndCard();
@@ -191,14 +292,14 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         if (ImGui::BeginTable("profile_kpi", 2, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            DrawKpiCard("kpi_level", u8"Уровень", std::to_string(overallLevel), accent);
+            DrawKpiCardIcon("kpi_level", UiIcon::Chart, u8"Уровень", std::to_string(overallLevel), accent);
             ImGui::TableSetColumnIndex(1);
-            DrawKpiCard("kpi_rank", u8"Ранг", rankText, accent);
+            DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            DrawKpiCard("kpi_total", u8"Всего XP", std::to_string(totalXp), accent);
+            DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
             ImGui::TableSetColumnIndex(1);
-            DrawKpiCard("kpi_bonus", u8"Активный бонус", bonusLabel, accent);
+            DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
             ImGui::EndTable();
         }
         ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",

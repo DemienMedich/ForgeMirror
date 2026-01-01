@@ -225,7 +225,32 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             ImGui::EndMenu();
         }
 
-        if (ImGui::MenuItem(u8"Выход")) {
+        const float iconSize = ImGui::GetFrameHeight();
+        const float iconGap = style.ItemSpacing.x * 0.75f;
+        const int iconCount = 5;
+        const float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
+        float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - iconsWidth;
+        if (rightX > ImGui::GetCursorPosX()) {
+            ImGui::SetCursorPosX(rightX);
+        }
+
+        if (IconButtonGui("top_profiles", UiIcon::Users, u8"Профили", accent, iconSize, true, state.showProfilesWindow)) {
+            state.showProfilesWindow = !state.showProfilesWindow;
+        }
+        ImGui::SameLine(0.0f, iconGap);
+        if (IconButtonGui("top_refresh", UiIcon::Refresh, u8"Обновить профили", accent, iconSize)) {
+            RefreshProfiles(state, storage, catalog);
+        }
+        ImGui::SameLine(0.0f, iconGap);
+        if (IconButtonGui("top_chart", UiIcon::Chart, u8"Статистика", accent, iconSize, state.isAdmin, state.showAdminStats)) {
+            OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
+        }
+        ImGui::SameLine(0.0f, iconGap);
+        if (IconButtonGui("top_settings", UiIcon::Settings, u8"Настройки интерфейса", accent, iconSize, state.isAdmin, state.showUiSettings)) {
+            OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
+        }
+        ImGui::SameLine(0.0f, iconGap);
+        if (IconButtonGui("top_exit", UiIcon::Exit, u8"Выход", accent, iconSize)) {
             state.requestExit = true;
         }
 
@@ -332,4 +357,3 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
 
     ImGui::End();
 }
-

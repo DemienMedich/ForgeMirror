@@ -92,6 +92,7 @@ const std::vector<RankOption>& RankOptions();
 #include "GuiStatus.inc"
 #include "GuiUiSettings.inc"
 #include "GuiUiHelpers.inc"
+#include "GuiIcons.inc"
 #include "GuiXpUtils.inc"
 
 #include "GuiCharts.inc"
