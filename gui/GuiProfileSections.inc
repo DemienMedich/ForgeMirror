@@ -718,6 +718,21 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
 }
 
 static void DrawProfileActivitySection(GuiState& state, const std::string& profileId) {
+    if (BeginCard("profile_actions_card")) {
+        DrawCardHeader(u8"Действия");
+        const float actionsWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActions = actionsWidth < 360.0f;
+        if (!state.isAdmin) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Добавить опыт", ImVec2(stackActions ? -1.0f : 0.0f, 0.0f))) {
+            state.xpPopupRequest = true;
+        }
+        if (!state.isAdmin) ImGui::EndDisabled();
+        if (!state.isAdmin) {
+            ImGui::TextDisabled(u8"Доступно только администратору.");
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
     if (ImGui::CollapsingHeader(u8"Последние действия", ImGuiTreeNodeFlags_DefaultOpen)) {
     if (ImGui::BeginChild("profile_activity", ImVec2(0, 140), true)) {
         DrawCardHeader(u8"Фильтры");
