@@ -567,22 +567,153 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
 }
 
 static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Profile& profile) {
-    if (ImGui::CollapsingHeader(u8"Диаграмма навыков", ImGuiTreeNodeFlags_DefaultOpen)) {
-    auto skills = state.active->profile.list_skills();
-    std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
-        return ToLowerUtf8(catalog.display_name(a.name)) < ToLowerUtf8(catalog.display_name(b.name));
-    });
-    ImVec2 radarSize(ImGui::GetContentRegionAvail().x, 320.0f);
-    if (radarSize.x < 200.0f) radarSize.x = 200.0f;
-    ImVec2 radarPos = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##skill_radar_canvas", radarSize);
-    if (ImGui::IsItemVisible()) {
-        for (auto& skill : skills) {
-            skill.name = catalog.display_name(skill.name);
+    if (ImGui::CollapsingHeader(u8"Диаграммы", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+
+        const auto& catScores = profile.category_best_scores();
+        if (BeginCard("profile_chart_categories")) {
+            DrawCardHeader(u8"Категории");
+            if (catScores.empty()) {
+                ImGui::TextDisabled(u8"Нет данных по категориям.");
+            } else {
+                std::vector<float> values;
+                values.reserve(catScores.size());
+                for (size_t i = 0; i < catScores.size(); ++i) {
+                    values.push_back(static_cast<float>(catScores[i]));
+                }
+                DrawSparkline("##cat_spark", values.data(), static_cast<int>(values.size()), 10.0f, accent, 56.0f);
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                if (ImGui::BeginTable("cat_bars", 3, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("cat_label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                    ImGui::TableSetupColumn("cat_value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                    ImGui::TableSetupColumn("cat_bar", ImGuiTableColumnFlags_WidthStretch);
+                    for (int i = 0; i < static_cast<int>(catScores.size()); ++i) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextDisabled("%s", Profile::kCategoryLabels[i]);
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%d/10", catScores[i]);
+                        ImGui::TableNextColumn();
+                        ImGui::PushID(i);
+                        DrawMiniBar("##cat_bar", static_cast<float>(catScores[i]) / 10.0f,
+                                    ChartPaletteColor(i, static_cast<int>(catScores.size()), 0.92f), 8.0f);
+                        ImGui::PopID();
+                    }
+                    ImGui::EndTable();
+                }
+            }
         }
-        DrawSkillRadarChart(skills, radarPos, ImGui::GetItemRectSize(), ImGui::GetWindowDrawList());
-    }
-    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        EndCard();
+        ImGui::Spacing();
+
+        auto skills = profile.list_skills();
+        if (BeginCard("profile_chart_top_skills")) {
+            DrawCardHeader(u8"Топ навыков");
+            if (skills.empty()) {
+                ImGui::TextDisabled(u8"У профиля нет навыков.");
+            } else {
+                struct SkillStatRow {
+                    Skill skill;
+                    int totalXp = 0;
+                };
+                std::vector<SkillStatRow> rows;
+                rows.reserve(skills.size());
+                for (const auto& skill : skills) {
+                    SkillStatRow row;
+                    row.skill = skill;
+                    row.totalXp = TotalSkillXpGui(skill);
+                    rows.push_back(row);
+                }
+                std::sort(rows.begin(), rows.end(), [&](const SkillStatRow& a, const SkillStatRow& b) {
+                    if (a.totalXp != b.totalXp) return a.totalXp > b.totalXp;
+                    return ToLowerUtf8(catalog.display_name(a.skill.name)) < ToLowerUtf8(catalog.display_name(b.skill.name));
+                });
+                const int showCount = std::min<int>(6, static_cast<int>(rows.size()));
+                const int maxXp = std::max(1, rows.front().totalXp);
+                ImGui::TextDisabled(u8"Показано: %d из %d", showCount, static_cast<int>(rows.size()));
+                if (ImGui::BeginTable("top_skill_bars", 3, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("skill_name", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+                    ImGui::TableSetupColumn("skill_xp", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                    ImGui::TableSetupColumn("skill_bar", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+                    for (int i = 0; i < showCount; ++i) {
+                        auto& row = rows[i];
+                        const std::string displayName = catalog.display_name(row.skill.name);
+                        const float ratio = static_cast<float>(row.totalXp) / static_cast<float>(maxXp);
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted(displayName.c_str());
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted(displayName.c_str());
+                            ImGui::Separator();
+                            ImGui::Text(u8"Уровень: %d", row.skill.level);
+                            ImGui::Text(u8"XP: %d / %d", row.skill.xp, row.skill.xpToNext);
+                            ImGui::Text(u8"Всего XP: %d", row.totalXp);
+                            ImGui::Text(u8"Вес: %.2f", row.skill.weight);
+                            ImGui::EndTooltip();
+                        }
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%d XP", row.totalXp);
+                        ImGui::TableNextColumn();
+                        ImGui::PushID(i);
+                        DrawMiniBar("##skill_bar", ratio,
+                                    ChartPaletteColor(i, showCount, 0.92f), 8.0f);
+                        ImGui::PopID();
+                    }
+                    ImGui::EndTable();
+                }
+            }
+        }
+        EndCard();
+        ImGui::Spacing();
+
+        if (BeginCard("profile_chart_radar")) {
+            DrawCardHeader(u8"Радар навыков");
+            if (skills.size() < 3) {
+                ImGui::TextDisabled(u8"Недостаточно навыков для радар-диаграммы (минимум 3).");
+            } else {
+                static int radarCount = 8;
+                const int maxRadar = std::min<int>(16, static_cast<int>(skills.size()));
+                radarCount = std::clamp(radarCount, 3, maxRadar);
+                ImGui::SetNextItemWidth(std::min(260.0f, ImGui::GetContentRegionAvail().x));
+                ImGui::SliderInt(u8"Навыков на диаграмме", &radarCount, 3, maxRadar);
+                ImGui::TextDisabled(u8"Показано: %d из %d", radarCount, static_cast<int>(skills.size()));
+                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+
+                std::vector<Skill> top;
+                top.reserve(static_cast<size_t>(radarCount));
+                std::vector<std::pair<int, Skill>> scored;
+                scored.reserve(skills.size());
+                for (const auto& skill : skills) {
+                    scored.push_back({TotalSkillXpGui(skill), skill});
+                }
+                std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) {
+                    if (a.first != b.first) return a.first > b.first;
+                    return a.second.name < b.second.name;
+                });
+                for (int i = 0; i < radarCount && i < static_cast<int>(scored.size()); ++i) {
+                    top.push_back(scored[i].second);
+                }
+                std::sort(top.begin(), top.end(), [&](const Skill& a, const Skill& b) {
+                    return ToLowerUtf8(catalog.display_name(a.name)) < ToLowerUtf8(catalog.display_name(b.name));
+                });
+                for (auto& skill : top) {
+                    skill.name = catalog.display_name(skill.name);
+                }
+
+                ImVec2 radarSize(ImGui::GetContentRegionAvail().x, 320.0f);
+                if (radarSize.x < 200.0f) radarSize.x = 200.0f;
+                ImVec2 radarPos = ImGui::GetCursorScreenPos();
+                ImGui::InvisibleButton("##skill_radar_canvas", radarSize);
+                if (ImGui::IsItemVisible()) {
+                    DrawSkillRadarChart(top, radarPos, ImGui::GetItemRectSize(), ImGui::GetWindowDrawList());
+                }
+            }
+        }
+        EndCard();
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
     }
 }
 

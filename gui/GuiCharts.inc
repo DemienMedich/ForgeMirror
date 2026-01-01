@@ -61,6 +61,92 @@ void DrawSegmentedRing(ImDrawList* drawList, ImVec2 center, float radius, float 
     }
 }
 
+static void DrawMiniBar(const char* id, float ratio, const ImVec4& fillColor, float height = 8.0f) {
+    ratio = std::clamp(ratio, 0.0f, 1.0f);
+    if (height <= 0.0f) return;
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 track = style.Colors[ImGuiCol_FrameBg];
+    track.w = std::max(track.w, 0.45f);
+    ImVec4 border = style.Colors[ImGuiCol_Border];
+    border.w = std::max(border.w, 0.25f);
+
+    float width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    ImGui::InvisibleButton(id, ImVec2(width, height));
+    if (!ImGui::IsItemVisible()) return;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    const ImVec2 pMin = ImGui::GetItemRectMin();
+    const ImVec2 pMax = ImGui::GetItemRectMax();
+    const float rounding = height * 0.5f;
+
+    ImVec4 fill = fillColor;
+    fill.w = std::max(fill.w, 0.65f);
+    ImVec4 glow = fillColor;
+    glow.w = 0.10f;
+
+    drawList->AddRectFilled(pMin, pMax, ImGui::GetColorU32(track), rounding);
+    if (ratio > 0.0f) {
+        const float w = (pMax.x - pMin.x) * ratio;
+        ImVec2 fMax(pMin.x + w, pMax.y);
+        drawList->AddRectFilled(pMin, fMax, ImGui::GetColorU32(fill), rounding);
+        drawList->AddRect(pMin, fMax, ImGui::GetColorU32(glow), rounding, 0, 1.5f);
+    }
+    drawList->AddRect(pMin, pMax, ImGui::GetColorU32(border), rounding, 0, 1.0f);
+}
+
+static void DrawSparkline(const char* id, const float* values, int count, float maxValue,
+                          const ImVec4& accent, float height = 44.0f) {
+    if (!values || count < 2 || height <= 0.0f) return;
+    if (maxValue <= 0.0f) maxValue = 1.0f;
+
+    float width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    ImGui::InvisibleButton(id, ImVec2(width, height));
+    if (!ImGui::IsItemVisible()) return;
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 track = style.Colors[ImGuiCol_FrameBg];
+    track.w = std::max(track.w, 0.35f);
+    ImVec4 border = style.Colors[ImGuiCol_Border];
+    border.w = std::max(border.w, 0.22f);
+    ImVec4 line = accent;
+    line.w = 0.95f;
+    ImVec4 fill = accent;
+    fill.w = 0.12f;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    const ImVec2 pMin = ImGui::GetItemRectMin();
+    const ImVec2 pMax = ImGui::GetItemRectMax();
+    const float rounding = std::max(6.0f, style.FrameRounding + 4.0f);
+    const float pad = 6.0f;
+    const ImVec2 innerMin(pMin.x + pad, pMin.y + pad);
+    const ImVec2 innerMax(pMax.x - pad, pMax.y - pad);
+
+    drawList->AddRectFilled(pMin, pMax, ImGui::GetColorU32(track), rounding);
+    drawList->AddRect(pMin, pMax, ImGui::GetColorU32(border), rounding, 0, 1.0f);
+
+    std::vector<ImVec2> pts;
+    pts.reserve(static_cast<size_t>(count));
+    const float spanX = std::max(1.0f, innerMax.x - innerMin.x);
+    const float spanY = std::max(1.0f, innerMax.y - innerMin.y);
+    for (int i = 0; i < count; ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(count - 1);
+        float v = std::clamp(values[i] / maxValue, 0.0f, 1.0f);
+        pts.emplace_back(innerMin.x + spanX * t, innerMax.y - spanY * v);
+    }
+
+    std::vector<ImVec2> fillPts;
+    fillPts.reserve(pts.size() + 2);
+    fillPts.push_back(ImVec2(innerMin.x, innerMax.y));
+    fillPts.insert(fillPts.end(), pts.begin(), pts.end());
+    fillPts.push_back(ImVec2(innerMax.x, innerMax.y));
+    drawList->AddConvexPolyFilled(fillPts.data(), static_cast<int>(fillPts.size()), ImGui::GetColorU32(fill));
+    drawList->AddPolyline(pts.data(), static_cast<int>(pts.size()), ImGui::GetColorU32(line), false, 2.0f);
+    for (const ImVec2& p : pts) {
+        drawList->AddCircleFilled(p, 2.2f, ImGui::GetColorU32(line), 12);
+    }
+}
+
 void DrawSkillRadarChart(const std::vector<Skill>& skills, const ImVec2& canvasPos, const ImVec2& canvasSize, ImDrawList* drawList) {
     if (skills.size() < 3) {
         drawList->AddText(canvasPos, ImGui::GetColorU32(ImGuiCol_TextDisabled),
