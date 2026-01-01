@@ -210,6 +210,9 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::EndTable();
         }
     }
+    if (filteredCount == 0) {
+        ImGui::TextDisabled(u8"Нет записей по фильтру.");
+    }
     SyncFiltersToUi(state);
 }
 
