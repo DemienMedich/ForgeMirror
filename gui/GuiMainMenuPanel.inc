@@ -7,7 +7,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showView3dSettings = false;
     state.showLogs = false;
     state.showAdminStats = false;
-    state.workspaceTabRequest = -1;
+    state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
 }
 
 void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
@@ -44,7 +44,11 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             }
             ImGui::Separator();
 
+            const bool profilesWasOpen = state.showProfilesWindow;
             ImGui::MenuItem(u8"Окно профилей", nullptr, &state.showProfilesWindow);
+            if (!profilesWasOpen && state.showProfilesWindow) {
+                state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
+            }
             if (ImGui::MenuItem(u8"Обновить список")) {
                 RefreshProfiles(state, storage, catalog);
             }
@@ -236,6 +240,9 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
         if (IconButtonGui("top_profiles", UiIcon::Users, u8"Профили", accent, iconSize, true, state.showProfilesWindow)) {
             state.showProfilesWindow = !state.showProfilesWindow;
+            if (state.showProfilesWindow) {
+                state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
+            }
         }
         ImGui::SameLine(0.0f, iconGap);
         if (IconButtonGui("top_refresh", UiIcon::Refresh, u8"Обновить профили", accent, iconSize)) {
@@ -260,9 +267,6 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 }
 
 void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
-    if (!state.showProfilesWindow) return;
-    ImGui::Begin(u8"Профили", &state.showProfilesWindow);
-    EnsureWindowVisible();
     DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
 
     if (BeginCard("profiles_list_card")) {
@@ -355,5 +359,4 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
     }
     EndCard();
 
-    ImGui::End();
 }

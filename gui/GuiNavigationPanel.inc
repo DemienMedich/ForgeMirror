@@ -34,7 +34,7 @@ void DrawNavigationPanel(GuiState& state) {
         state.showView3dSettings = false;
         state.showLogs = false;
         state.showAdminStats = false;
-        state.workspaceTabRequest = -1;
+        state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     });
     navButton("nav_catalog", UiIcon::Book, u8"Каталог навыков [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
@@ -66,6 +66,9 @@ void DrawNavigationPanel(GuiState& state) {
     DrawCardHeader(u8"Сервис");
     navButton("nav_profiles", UiIcon::Users, u8"Профили", state.showProfilesWindow, [&]() {
         state.showProfilesWindow = !state.showProfilesWindow;
+        if (state.showProfilesWindow) {
+            state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
+        }
     });
 
     if (state.isAdmin) {

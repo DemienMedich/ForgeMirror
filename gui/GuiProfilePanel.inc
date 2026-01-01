@@ -42,17 +42,6 @@ static void DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
 }
 
 void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
-    // Profile details window
-    ImGuiWindowFlags profileFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-    if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
-        ImGuiViewportP* viewportP = (ImGuiViewportP*)(void*)viewport;
-        ImRect workRect = viewportP->GetBuildWorkRect();
-        const float navWidth = kNavigationPanelWidth;
-        const float width = std::max(0.0f, (workRect.Max.x - workRect.Min.x) - navWidth);
-        ImGui::SetNextWindowPos(ImVec2(workRect.Min.x + navWidth, workRect.Min.y), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(width, workRect.Max.y - workRect.Min.y), ImGuiCond_Always);
-    }
-    ImGui::Begin(u8"Профиль", nullptr, profileFlags);
     DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
 
     if (BeginCard("profile_select_card")) {
@@ -88,6 +77,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
                 if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
                     state.showProfilesWindow = true;
+                    state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
                 }
                 if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
                     RefreshProfiles(state, storage, catalog);
@@ -117,6 +107,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::TableNextColumn();
                 if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
                     state.showProfilesWindow = true;
+                    state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
                 }
                 ImGui::TableNextColumn();
                 if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
@@ -573,7 +564,5 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
         ShowStatus(state);
     }
-    ImGui::End();
-
 }
 

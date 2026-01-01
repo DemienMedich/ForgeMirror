@@ -66,7 +66,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showView3dSettings = false;
         state.showLogs = false;
         state.showAdminStats = false;
-        state.workspaceTabRequest = -1;
+        state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F2)) {
         state.showSkillCatalog = true;
