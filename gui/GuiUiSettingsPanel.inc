@@ -460,6 +460,10 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImGui::Spacing();
     DrawCardHeader(u8"Действия");
     const bool hasPendingChanges = state.uiDirty;
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+    ImVec4 accentSoft = accent;
+    accentSoft.w = 0.75f;
     if (!hasPendingChanges) ImGui::BeginDisabled();
     if (ImGui::Button(u8"Сохранить настройки")) {
         SaveUiSettings(state.storageDir, state.ui);
@@ -489,7 +493,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
     }
-    if (!hasPendingChanges) {
+    if (hasPendingChanges) {
+        ImGui::TextColored(accentSoft, u8"Есть несохранённые изменения.");
+    } else {
         ImGui::TextDisabled(u8"Нет несохранённых изменений.");
     }
 }
