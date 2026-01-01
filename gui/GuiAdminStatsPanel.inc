@@ -339,7 +339,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             ImGui::TableSetColumnIndex(0);
             ImGui::TextUnformatted("-");
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(u8"Нет профилей старше порога.");
+            ImGui::TextDisabled(u8"Нет профилей старше порога.");
             ImGui::TableSetColumnIndex(2);
             ImGui::TextUnformatted("-");
             ImGui::TableSetColumnIndex(3);
@@ -411,7 +411,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             ImGui::TableSetColumnIndex(0);
             ImGui::TextUnformatted("-");
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(u8"Нет активных профилей.");
+            ImGui::TextDisabled(u8"Нет активных профилей.");
             ImGui::TableSetColumnIndex(2);
             ImGui::TextUnformatted("-");
         }

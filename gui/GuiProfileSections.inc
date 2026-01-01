@@ -37,7 +37,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
         auto skills = profile.list_skills();
         if (skills.empty()) {
-            ImGui::TextUnformatted(u8"Навыков нет.");
+            ImGui::TextDisabled(u8"Навыков нет.");
         } else {
             const int totalSkills = static_cast<int>(skills.size());
             const int shownSkills = std::min(totalSkills, 5);
@@ -243,7 +243,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
     if (ImGui::CollapsingHeader(u8"Ачивки", ImGuiTreeNodeFlags_DefaultOpen)) {
     if (profile.achievements().empty()) {
-        ImGui::TextUnformatted(u8"Ачивок нет.");
+        ImGui::TextDisabled(u8"Ачивок нет.");
     } else {
         auto formatDate = [](std::int64_t ts) -> std::string {
             if (ts <= 0) return std::string(u8"без срока");
@@ -413,7 +413,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             }
         }
         if (visibleAch == 0) {
-            ImGui::TextUnformatted(u8"Нет ачивок по фильтру.");
+            ImGui::TextDisabled(u8"Нет ачивок по фильтру.");
         }
         ImGui::TextDisabled(u8"Показано: %d | активных: %d | истекших: %d",
         visibleAch, activeCount, expiredCount);
@@ -650,10 +650,10 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 ImGui::BulletText("%s", it->c_str());
             }
             if (activityShown == 0) {
-                ImGui::TextUnformatted(u8"Нет действий по фильтру.");
+                ImGui::TextDisabled(u8"Нет действий по фильтру.");
             }
         } else {
-            ImGui::TextUnformatted(u8"Пока нет действий.");
+            ImGui::TextDisabled(u8"Пока нет действий.");
         }
     }
     ImGui::EndChild();
