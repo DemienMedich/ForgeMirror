@@ -284,7 +284,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             std::vector<const char*> labels;
             labels.reserve(opts.size());
             for (const auto& o : opts) labels.push_back(o.label);
-            ImGui::TextUnformatted(u8"Назначить ранг");
+            ImGui::TextDisabled(u8"Назначить ранг");
             if (state.selectedRankIndex >= static_cast<int>(opts.size())) state.selectedRankIndex = 0;
             const float rankWidth = ImGui::GetContentRegionAvail().x;
             const bool stackRank = rankWidth < 360.0f;
