@@ -459,11 +459,14 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
 
     ImGui::Spacing();
     DrawCardHeader(u8"Действия");
+    const bool hasPendingChanges = state.uiDirty;
+    if (!hasPendingChanges) ImGui::BeginDisabled();
     if (ImGui::Button(u8"Сохранить настройки")) {
         SaveUiSettings(state.storageDir, state.ui);
         state.uiDirty = false;
         AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
     }
+    if (!hasPendingChanges) ImGui::EndDisabled();
     if (stackTheme) {
         if (ImGui::Button(u8"Сбросить цвета", ImVec2(-1.0f, 0.0f))) {
             ApplyUiTheme(state.ui.theme, style);
@@ -485,5 +488,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.ui.customColors = false;
             state.uiDirty = true;
         }
+    }
+    if (!hasPendingChanges) {
+        ImGui::TextDisabled(u8"Нет несохранённых изменений.");
     }
 }
