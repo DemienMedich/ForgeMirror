@@ -1,3 +1,46 @@
+static void DrawAdminKpiCardIcon(const char* id, UiIcon icon, const char* title, const std::string& value,
+                                 const ImVec4& accent, float height = 72.0f) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float rounding = std::max(9.0f, style.FrameRounding + 3.0f);
+    ImVec4 bg = CardBackgroundColor();
+    ImVec4 border = CardBorderColor();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+    if (ImGui::BeginChild("admin_kpi", ImVec2(0.0f, height), ImGuiChildFlags_Border,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
+        const float badgeSize = std::clamp(height - 26.0f, 32.0f, 44.0f);
+        const float badgeRadius = badgeSize * 0.5f;
+        const ImVec2 badgePos = ImGui::GetCursorScreenPos();
+        const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
+        DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, accent, true);
+
+        ImGui::Dummy(ImVec2(badgeSize + 10.0f, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
+        float y = ImGui::GetCursorPosY();
+        float textBlock = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+        float offsetY = std::max(0.0f, (contentH - textBlock) * 0.5f);
+        ImGui::SetCursorPosY(y + offsetY);
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("%s", title);
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::SetWindowFontScale(1.12f);
+        ImGui::TextUnformatted(value.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopID();
+}
+
 void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::AdminStats, state.storageDir);
     const std::int64_t nowSec = NowSeconds();
@@ -131,32 +174,32 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         accentStrong.w = 1.0f;
         ImVec4 accentSoft = BlendColor(accent, style.Colors[ImGuiCol_TextDisabled], 0.35f);
         accentSoft.w = 0.9f;
-        auto kpi = [&](const char* id, const char* title, const std::string& value, const ImVec4& accent) {
+        auto kpi = [&](const char* id, UiIcon icon, const char* title, const std::string& value, const ImVec4& accent) {
             ImGui::TableNextColumn();
-            DrawKpiCard(id, title, value, accent);
+            DrawAdminKpiCardIcon(id, icon, title, value, accent);
         };
-        kpi("kpi_total_profiles", u8"Профилей всего", std::to_string(stats.totalProfiles), accentStrong);
-        kpi("kpi_active_profiles", u8"Активных", std::to_string(stats.activeProfiles), accent);
-        kpi("kpi_archived_profiles", u8"В архиве", std::to_string(stats.archivedProfiles), accentSoft);
+        kpi("kpi_total_profiles", UiIcon::Users, u8"Профилей всего", std::to_string(stats.totalProfiles), accentStrong);
+        kpi("kpi_active_profiles", UiIcon::User, u8"Активных", std::to_string(stats.activeProfiles), accent);
+        kpi("kpi_archived_profiles", UiIcon::LockClosed, u8"В архиве", std::to_string(stats.archivedProfiles), accentSoft);
 
         std::ostringstream avgStream;
         avgStream.imbue(std::locale::classic());
         avgStream << std::fixed << std::setprecision(1) << stats.avgLevel;
-        kpi("kpi_avg_level", u8"Средний уровень", avgStream.str(), accent);
-        kpi("kpi_max_level", u8"Макс. уровень", std::to_string(stats.maxLevel), accentStrong);
-        kpi("kpi_total_xp", u8"Всего XP", std::to_string(stats.totalXp), accent);
+        kpi("kpi_avg_level", UiIcon::Chart, u8"Средний уровень", avgStream.str(), accent);
+        kpi("kpi_max_level", UiIcon::Chart, u8"Макс. уровень", std::to_string(stats.maxLevel), accentStrong);
+        kpi("kpi_total_xp", UiIcon::Chart, u8"Всего XP", std::to_string(stats.totalXp), accent);
 
         std::ostringstream avgXpStream;
         avgXpStream.imbue(std::locale::classic());
         avgXpStream << std::fixed << std::setprecision(0) << stats.avgXp;
-        kpi("kpi_avg_xp", u8"Средний XP", avgXpStream.str(), accentSoft);
-        kpi("kpi_ach_total", u8"Ачивок всего", std::to_string(stats.achievementsTotal), accentSoft);
-        kpi("kpi_ach_active", u8"Ачивок активных", std::to_string(stats.achievementsActive), accent);
-        kpi("kpi_recovery", u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
+        kpi("kpi_avg_xp", UiIcon::Chart, u8"Средний XP", avgXpStream.str(), accentSoft);
+        kpi("kpi_ach_total", UiIcon::Bell, u8"Ачивок всего", std::to_string(stats.achievementsTotal), accentSoft);
+        kpi("kpi_ach_active", UiIcon::Bell, u8"Ачивок активных", std::to_string(stats.achievementsActive), accent);
+        kpi("kpi_recovery", UiIcon::Refresh, u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
             accentSoft);
-        kpi("kpi_no_activity", u8"Без активности", std::to_string(stats.profilesNoActivity),
+        kpi("kpi_no_activity", UiIcon::Search, u8"Без активности", std::to_string(stats.profilesNoActivity),
             accentSoft);
-        kpi("kpi_no_ach", u8"Без ачивок", std::to_string(stats.profilesNoAchievements),
+        kpi("kpi_no_ach", UiIcon::List, u8"Без ачивок", std::to_string(stats.profilesNoAchievements),
             accentSoft);
         ImGui::EndTable();
     }
