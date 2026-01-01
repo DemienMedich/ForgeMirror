@@ -348,7 +348,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     if (ImGui::BeginPopup(u8"Выбор иконки")) {
                         const auto icons = LoadAchievementIconChoices(state.storageDir);
                         if (icons.empty()) {
-                            ImGui::TextUnformatted(u8"Иконки не найдены.");
+                            ImGui::TextDisabled(u8"Иконки не найдены.");
                         } else {
                             ImGui::InputTextWithHint(u8"##icon_filter", u8"Фильтр иконок",
                                                      state.filters.iconPicker.data(), state.filters.iconPicker.size());

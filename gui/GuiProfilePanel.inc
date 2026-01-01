@@ -4,7 +4,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     EnsureWindowVisible();
     DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
     if (!state.active) {
-        ImGui::TextUnformatted(u8"Выберите профиль, чтобы увидеть детали.");
+        ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
     } else {
         Profile& profile = state.active->profile;
         const int overallLevel = profile.overall_level();

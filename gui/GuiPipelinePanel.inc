@@ -2,7 +2,7 @@ void DrawPipelinePanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pipeline, state.storageDir);
     const int stepCount = static_cast<int>(kPipelineSteps.size());
     if (stepCount == 0) {
-        ImGui::TextUnformatted(u8"Пайплайн пуст.");
+        ImGui::TextDisabled(u8"Пайплайн пуст.");
         return;
     }
     const float filterWidth = ImGui::GetContentRegionAvail().x;
