@@ -8,6 +8,7 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
         SyncProfileWithCatalog(*loaded, catalog);
         storage.save_profile(*loaded);
         state.active = GuiProfile{*loaded, info.id};
+        state.ui.lastProfileId = info.id;
         state.activityLogs[state.active->id];
         PrepareXpEntries(state, catalog);
     }

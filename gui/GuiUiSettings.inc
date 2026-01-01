@@ -147,6 +147,8 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "windowDecorated") settings.windowDecorated = ParseBool(value, settings.windowDecorated);
             else if (key == "windowFullscreen") settings.windowFullscreen = ParseBool(value, settings.windowFullscreen);
             else if (key == "profileTab") settings.profileTab = ParseInt(value, settings.profileTab);
+        } else if (section == "profile") {
+            if (key == "lastProfileId") settings.lastProfileId = value;
         } else if (section == "logs") {
             if (key == "filter") settings.logFilter = value;
             else if (key == "source") settings.logSourceFilter = value;
@@ -253,6 +255,9 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "windowDecorated=" << (settings.windowDecorated ? 1 : 0) << "\n\n";
     out << "windowFullscreen=" << (settings.windowFullscreen ? 1 : 0) << "\n\n";
     out << "profileTab=" << settings.profileTab << "\n\n";
+
+    out << "[profile]\n";
+    out << "lastProfileId=" << SanitizeLogLine(settings.lastProfileId) << "\n\n";
 
     out << "[logs]\n";
     out << "filter=" << SanitizeLogLine(settings.logFilter) << "\n";

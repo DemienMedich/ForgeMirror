@@ -53,6 +53,7 @@ struct UiSettings {
     bool windowDecorated = true;
     bool windowFullscreen = false;
     int profileTab = 0;
+    std::string lastProfileId;
     std::string logFilter;
     std::string logSourceFilter;
     bool logShowInfo = true;

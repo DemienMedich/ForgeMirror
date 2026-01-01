@@ -126,7 +126,9 @@ void HandleBorderlessDrag(GLFWwindow* window, const UiSettings& settings) {
 }
 
 void ResetUiSettings(UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {
+    std::string lastProfileId = std::move(settings.lastProfileId);
     settings = UiSettings();
+    settings.lastProfileId = std::move(lastProfileId);
     ApplyUiTheme(settings.theme, style);
     ApplyUiSettings(settings, style, io);
 }

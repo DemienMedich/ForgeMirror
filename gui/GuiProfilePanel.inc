@@ -203,10 +203,16 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::SameLine();
         ImGui::BeginChild("profile_header_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
             ImGuiWindowFlags_NoScrollbar);
-        const float ringSize = std::min(190.0f, ImGui::GetContentRegionAvail().x);
+        const float ringAvail = ImGui::GetContentRegionAvail().x;
+        const float ringSize = std::min(190.0f, ringAvail);
         if (ringSize >= 140.0f) {
             ImDrawList* drawList = ImGui::GetWindowDrawList();
             ImVec2 chartSize(ringSize, ringSize);
+            const float baseX = ImGui::GetCursorPosX();
+            const float centerX = baseX + std::max(0.0f, (ringAvail - ringSize) * 0.5f);
+            if (centerX > baseX) {
+                ImGui::SetCursorPosX(centerX);
+            }
             ImGui::Dummy(chartSize);
             const ImVec2 pMin = ImGui::GetItemRectMin();
             const ImVec2 pMax = ImGui::GetItemRectMax();
@@ -257,8 +263,14 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             drawList->AddText(font, smallFont, pctPos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]), pctText.c_str());
 
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
-            ImGui::TextDisabled(u8"Всего XP: %d", totalXp);
-            ImGui::TextDisabled(u8"Прогресс: %s", progressLabel.c_str());
+            auto centeredTextDisabled = [&](const std::string& text) {
+                const float w = ImGui::CalcTextSize(text.c_str()).x;
+                ImGui::SetCursorPosX(baseX + std::max(0.0f, (ringAvail - w) * 0.5f));
+                ImGui::TextDisabled("%s", text.c_str());
+            };
+            centeredTextDisabled(std::string(u8"Всего XP: ") + std::to_string(totalXp));
+            centeredTextDisabled(std::string(u8"Прогресс: ") + progressLabel);
+            ImGui::SetCursorPosX(baseX);
         } else {
             ImGui::SetWindowFontScale(1.25f);
             ImGui::TextColored(accent, u8"Уровень %d", overallLevel);

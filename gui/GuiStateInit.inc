@@ -25,5 +25,5 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
         ApplyWindowMode(window, state);
     }
     std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
-    RefreshProfiles(state, storage, catalog);
+    RefreshProfiles(state, storage, catalog, state.ui.lastProfileId);
 }
