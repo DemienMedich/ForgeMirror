@@ -270,7 +270,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             };
             centeredTextDisabled(std::string(u8"Всего XP: ") + std::to_string(totalXp));
             centeredTextDisabled(std::string(u8"Прогресс: ") + progressLabel);
-            ImGui::SetCursorPosX(baseX);
         } else {
             ImGui::SetWindowFontScale(1.25f);
             ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
