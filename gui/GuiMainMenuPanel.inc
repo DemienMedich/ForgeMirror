@@ -30,9 +30,9 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
     ImGui::PushStyleColor(ImGuiCol_MenuBarBg, menuBg);
     if (ImGui::BeginMainMenuBar()) {
 #ifdef APP_VERSION
-        ImGui::TextDisabled("JobSkill %s", APP_VERSION);
+        ImGui::TextDisabled("ForgeMirror %s", APP_VERSION);
 #else
-        ImGui::TextDisabled("JobSkill");
+        ImGui::TextDisabled("ForgeMirror");
 #endif
 
         if (ImGui::BeginMenu(u8"Профили")) {

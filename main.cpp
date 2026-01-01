@@ -1,4 +1,4 @@
-// JobSkill console client: profile issuing, leveling, and CLI front-end.
+// ForgeMirror console client: profile issuing, leveling, and CLI front-end.
 // This translation unit wires together profile storage, skill catalog,
 // XP accounting commands, and the interactive loop for one console session.
 
@@ -909,7 +909,7 @@ int main() {
 
     std::unique_ptr<IApiClient> api(CreateFakeApi());
 
-    std::cout << "Добро пожаловать в JobSkill";
+    std::cout << "Добро пожаловать в ForgeMirror";
 #ifdef APP_VERSION
     std::cout << " (версия " << APP_VERSION << ")";
 #endif
@@ -999,9 +999,14 @@ int main() {
                 std::cout << "Недоступно: требуется режим администратора (команда 'admin').\n";
                 continue;
             }
-            const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD");
+            const char* envLabel = "FORGEMIRROR_ADMIN_PASSWORD";
+            const char* env = std::getenv(envLabel);
+            if (!env || !*env) {
+                envLabel = "JOBSKILL_ADMIN_PASSWORD";
+                env = std::getenv(envLabel);
+            }
             if (env && *env) {
-                std::cout << "Пароль задан через JOBSKILL_ADMIN_PASSWORD; изменение из приложения недоступно.\n";
+                std::cout << "Пароль задан через " << envLabel << "; изменение из приложения недоступно.\n";
                 continue;
             }
             std::string pass1;

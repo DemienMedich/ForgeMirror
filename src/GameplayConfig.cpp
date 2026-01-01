@@ -168,7 +168,7 @@ bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::pat
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
-    out << "# Gameplay rules for JobSkill\n";
+    out << "# Gameplay rules for ForgeMirror\n";
     out << "[leveling]\n";
     out << "base=" << sanitized.levelBaseXp << "\n";
     out << "linear=" << sanitized.levelLinearXp << "\n";

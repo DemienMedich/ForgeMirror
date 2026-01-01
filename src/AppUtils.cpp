@@ -151,6 +151,23 @@ std::filesystem::path GuessProjectRoot() {
 std::filesystem::path DefaultUserStorageDir() {
 #if defined(_WIN32)
     if (const char* appdata = std::getenv("APPDATA")) {
+        return std::filesystem::path(appdata) / "ForgeMirror";
+    }
+#elif defined(__APPLE__)
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / "Library" / "Application Support" / "ForgeMirror";
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / ".forgemirror";
+    }
+#endif
+    return {};
+}
+
+std::filesystem::path LegacyUserStorageDir() {
+#if defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA")) {
         return std::filesystem::path(appdata) / "JobSkill";
     }
 #elif defined(__APPLE__)
@@ -223,6 +240,10 @@ bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::pa
 std::filesystem::path ResolveStorageDirectory() {
     auto root = GuessProjectRoot();
     auto legacyDir = root / "data";
+    if (const char* env = std::getenv("FORGEMIRROR_STORAGE_DIR")) {
+        std::filesystem::path custom(env);
+        if (EnsureDirectory(custom)) return custom;
+    }
     if (const char* env = std::getenv("JOBSKILL_STORAGE_DIR")) {
         std::filesystem::path custom(env);
         if (EnsureDirectory(custom)) return custom;
@@ -230,8 +251,11 @@ std::filesystem::path ResolveStorageDirectory() {
 
     const bool legacyHasData = HasStorageData(legacyDir);
     auto userDir = DefaultUserStorageDir();
+    auto legacyUserDir = LegacyUserStorageDir();
     const bool userReady = EnsureDirectory(userDir);
+    const bool legacyUserReady = EnsureDirectory(legacyUserDir);
     const bool userHasData = userReady && HasStorageData(userDir);
+    const bool legacyUserHasData = legacyUserReady && HasStorageData(legacyUserDir);
 
     if (legacyHasData && userReady && !userHasData) {
         if (CopyStorageTree(legacyDir, userDir)) {
@@ -242,11 +266,17 @@ std::filesystem::path ResolveStorageDirectory() {
     if (userHasData) {
         return userDir;
     }
+    if (legacyUserHasData) {
+        return legacyUserDir;
+    }
     if (legacyHasData) {
         return legacyDir;
     }
     if (userReady) {
         return userDir;
+    }
+    if (legacyUserReady) {
+        return legacyUserDir;
     }
     EnsureDirectory(legacyDir);
     return legacyDir;
@@ -273,7 +303,7 @@ bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::strin
     auto path = AdminPasswordPath(storageDir);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return false;
-    out << "# JobSkill admin password\n";
+    out << "# ForgeMirror admin password\n";
     out << "password=" << password << "\n";
     return out.good();
 }
@@ -281,6 +311,9 @@ bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::strin
 } // namespace
 
 std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
+    if (const char* env = std::getenv("FORGEMIRROR_ADMIN_PASSWORD")) {
+        if (*env != '\0') return env;
+    }
     if (const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD")) {
         if (*env != '\0') return env;
     }

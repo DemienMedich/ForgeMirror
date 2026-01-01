@@ -1,4 +1,4 @@
-# JobSkill
+# ForgeMirror
 
 Геймифицированный трекер профилей навыков на C++ с консольным клиентом и дополнительным десктопным GUI на ImGui. Отслеживайте навыки, фиксируйте результаты задач и повышайте общий ранг, пока система следит за выполнением требований по категориям.
 
@@ -30,7 +30,7 @@ cmake --build build-gui --config Release --target JobSkillGui
 
 На Linux/macOS замените строку с генератором на `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` и уберите Windows-флаги для GUI.
 
-Исполняемые файлы оказываются в `build/Release/JobSkill.exe` (CLI) и `build-gui/Release/JobSkillGui.exe` (GUI). Очистка: `cmake -E rm -rf build build-gui`.
+Исполняемые файлы оказываются в `build/Release/ForgeMirror.exe` (CLI) и `build-gui/Release/ForgeMirrorGui.exe` (GUI). Очистка: `cmake -E rm -rf build build-gui`.
 
 ### Makefile-обёртка (CLI)
 ```bash
@@ -42,22 +42,22 @@ make rebuild      # Очистка + конфигурация + Release
 
 ## Запуск
 ```bash
-./build/Release/JobSkill.exe        # CLI под Windows
-./build-gui/Release/JobSkillGui.exe # GUI под Windows
+./build/Release/ForgeMirror.exe        # CLI под Windows
+./build-gui/Release/ForgeMirrorGui.exe # GUI под Windows
 ```
-Под Linux/macOS бинарники лежат в `build/JobSkill` и `build-gui/JobSkillGui`.
+Под Linux/macOS бинарники лежат в `build/ForgeMirror` и `build-gui/ForgeMirrorGui`.
 
 ### Хранилище
-- По умолчанию: Windows `%APPDATA%\\JobSkill`, macOS `~/Library/Application Support/JobSkill`, Linux `~/.jobskill`.
-- Можно переопределить каталог через `JOBSKILL_STORAGE_DIR`.
+- По умолчанию: Windows `%APPDATA%\\ForgeMirror`, macOS `~/Library/Application Support/ForgeMirror`, Linux `~/.forgemirror`.
+- Можно переопределить каталог через `FORGEMIRROR_STORAGE_DIR` (поддерживается и `JOBSKILL_STORAGE_DIR`).
 - Если в корне проекта есть `data/` с данными, при первом запуске они копируются в пользовательский каталог (если он пуст).
-- Чтобы продолжать использовать локальный `data/`, задайте `JOBSKILL_STORAGE_DIR=./data`.
+- Чтобы продолжать использовать локальный `data/`, задайте `FORGEMIRROR_STORAGE_DIR=./data`.
 - Внутри каталога хранения:
   - профили: `*.ini`
   - архив: `archive/*.ini`
   - правила: `meta/gameplay.ini`
   - каталог навыков: `skills.txt`
-  - пароль администратора: `meta/admin.ini` (или `JOBSKILL_ADMIN_PASSWORD`)
+  - пароль администратора: `meta/admin.ini` (или `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`)
   - layout GUI: `meta/gui-layout.ini`
 
 Профили лежат вне папок сборки (`build/`), поэтому прогресс переживает пересборки. Лучшие оценки категорий сохраняются в секции `[categories]` каждого профиля.
@@ -123,7 +123,7 @@ ImGui-фронтенд отображает те же данные, что и CL
 ## Заметки администратора
 - Профиль администратора создаётся автоматически с базовыми навыками; доступ администратора включается отдельно.
 - Каталог навыков хранится в `skills.txt` в каталоге хранения.
-- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `JOBSKILL_ADMIN_PASSWORD`).
+- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`).
 - Архивные профили лежат в `archive/`.
 - Профили - INI-файлы (`0001.ini`, `0002.ini`, ...); ID увеличиваются автоматически.
 

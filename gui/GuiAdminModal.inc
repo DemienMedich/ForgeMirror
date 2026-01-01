@@ -61,10 +61,15 @@ void DrawAdminPasswordModal(GuiState& state) {
     bool popupOpen = true;
     if (ImGui::BeginPopupModal(u8"Смена пароля администратора", &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawCardHeader(u8"Пароль");
-        const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD");
+        const char* envLabel = "FORGEMIRROR_ADMIN_PASSWORD";
+        const char* env = std::getenv(envLabel);
+        if (!env || !*env) {
+            envLabel = "JOBSKILL_ADMIN_PASSWORD";
+            env = std::getenv(envLabel);
+        }
         const bool envOverride = env && *env;
         if (envOverride) {
-            ImGui::TextDisabled(u8"Пароль задан через JOBSKILL_ADMIN_PASSWORD.");
+            ImGui::TextDisabled(u8"Пароль задан через %s.", envLabel);
             ImGui::TextDisabled(u8"Смена через приложение недоступна.");
             ImGui::Spacing();
         }

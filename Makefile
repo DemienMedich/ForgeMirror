@@ -23,8 +23,14 @@ debug:
 	@$(MAKE) CONFIG=Debug build
 
 run: build
-	@echo Running JobSkill...
-	@if [ -x "$(BUILD_DIR)/JobSkill" ]; then \
+	@echo Running ForgeMirror...
+	@if [ -x "$(BUILD_DIR)/ForgeMirror" ]; then \
+		"$(BUILD_DIR)/ForgeMirror"; \
+	elif [ -x "$(BUILD_DIR)/$(CONFIG)/ForgeMirror" ]; then \
+		"$(BUILD_DIR)/$(CONFIG)/ForgeMirror"; \
+	elif [ -x "$(BUILD_DIR)/$(CONFIG)/ForgeMirror.exe" ]; then \
+		"$(BUILD_DIR)/$(CONFIG)/ForgeMirror.exe"; \
+	elif [ -x "$(BUILD_DIR)/JobSkill" ]; then \
 		"$(BUILD_DIR)/JobSkill"; \
 	elif [ -x "$(BUILD_DIR)/$(CONFIG)/JobSkill" ]; then \
 		"$(BUILD_DIR)/$(CONFIG)/JobSkill"; \

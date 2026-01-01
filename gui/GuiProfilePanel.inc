@@ -187,6 +187,22 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Опыт");
+            ImGui::TableSetColumnIndex(1);
+            const bool xpEnabled = state.isAdmin;
+            if (!xpEnabled) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+                PrepareXpEntries(state, catalog);
+                state.xpPopupRequest = true;
+            }
+            if (!xpEnabled) {
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(u8"Доступно только администратору.");
+                }
+                ImGui::EndDisabled();
+            }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Ранг");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(rankText.c_str());

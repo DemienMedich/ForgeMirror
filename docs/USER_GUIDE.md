@@ -1,9 +1,9 @@
-# JobSkill — пользовательская документация
+# ForgeMirror - пользовательская документация
 
 ## Обзор
-JobSkill — инструмент ведения прогресса художника/дизайнера с двумя интерфейсами:
-- **CLI** (`JobSkill.exe`) — управление профилями, задачами и XP через консоль.
-- **GUI** (`JobSkillGui.exe`) — визуальный контроль профиля, добавление опыта, редактирование правил и каталога навыков.
+ForgeMirror - инструмент ведения прогресса художника/дизайнера с двумя интерфейсами:
+- **CLI** (`ForgeMirror.exe`) - управление профилями, задачами и XP через консоль.
+- **GUI** (`ForgeMirrorGui.exe`) - визуальный контроль профиля, добавление опыта, редактирование правил и каталога навыков.
 
 Данные хранятся локально в каталоге хранения (см. ниже): `meta/gameplay.ini`, `skills.txt`, `*.ini` для профилей. В GUI и CLI используется одна и та же логика расчёта опыта.
 
@@ -22,18 +22,18 @@ cmake -S . -B build-gui `
   -DVCPKG_PWSH_PATH="C:/Program Files/PowerShell/7/pwsh.exe"
 cmake --build build-gui --config Release --target JobSkillGui
 ```
-Готовые бинарники: `build/Release/JobSkill.exe`, `build-gui/Release/JobSkillGui.exe`.
+Готовые бинарники: `build/Release/ForgeMirror.exe`, `build-gui/Release/ForgeMirrorGui.exe`.
 
 ## Хранение данных
-- **По умолчанию:** Windows `%APPDATA%\JobSkill`, macOS `~/Library/Application Support/JobSkill`, Linux `~/.jobskill`.
-- **Переопределение:** переменная `JOBSKILL_STORAGE_DIR`.
+- **По умолчанию:** Windows `%APPDATA%\ForgeMirror`, macOS `~/Library/Application Support/ForgeMirror`, Linux `~/.forgemirror`.
+- **Переопределение:** переменная `FORGEMIRROR_STORAGE_DIR` (поддерживается `JOBSKILL_STORAGE_DIR`).
 - **Миграция:** если в корне проекта есть `data/` с данными, при первом запуске они копируются в пользовательский каталог (если он пуст).
-- **Локальный `data/`:** задайте `JOBSKILL_STORAGE_DIR=./data`.
+- **Локальный `data/`:** задайте `FORGEMIRROR_STORAGE_DIR=./data`.
 - **Профили:** `*.ini` (плюс `archive/*.ini` для архивных).
 - **Геймплейные правила:** `meta/gameplay.ini`.
 - **Каталог навыков:** `skills.txt` (список `Название|Вес|Описание`).
 - **Разметка окон GUI:** `meta/gui-layout.ini` (можно удалить для сброса).
-- **Пароль администратора:** `meta/admin.ini` (или переменная `JOBSKILL_ADMIN_PASSWORD`).
+- **Пароль администратора:** `meta/admin.ini` (или переменная `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`).
 
 ## Каталог навыков
 - Просмотр: окно **Skill Catalog** в GUI.
