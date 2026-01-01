@@ -136,8 +136,8 @@ void DrawView3dPanel(GuiState& state) {
     if (state.viewMesh.valid) {
         DrawMeshWireframe(state.viewMesh, state.ui, ImGui::GetWindowDrawList(), viewportPos, viewportSize);
     } else {
-        ImGui::GetWindowDrawList()->AddText(viewportPos, ImGui::GetColorU32(ImVec4(0.8f, 0.7f, 0.4f, 1.0f)),
-                                            u8"Загрузите OBJ/FBX модель.");
+        ImU32 hintColor = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+        ImGui::GetWindowDrawList()->AddText(viewportPos, hintColor, u8"Загрузите OBJ/FBX модель.");
     }
 }
 

@@ -1,7 +1,7 @@
 // Render a polar chart of skill levels inside the profile preview.
 void DrawSkillRadarChart(const std::vector<Skill>& skills, const ImVec2& canvasPos, const ImVec2& canvasSize, ImDrawList* drawList) {
     if (skills.size() < 3) {
-        drawList->AddText(canvasPos, ImGui::GetColorU32(ImVec4(1.0f, 0.8f, 0.5f, 1.0f)),
+        drawList->AddText(canvasPos, ImGui::GetColorU32(ImGuiCol_TextDisabled),
                           "Недостаточно данных для диаграммы (минимум 3 навыка).");
         return;
     }
@@ -36,12 +36,30 @@ void DrawSkillRadarChart(const std::vector<Skill>& skills, const ImVec2& canvasP
     const float angleStep = 2.0f * kPi / static_cast<float>(values.size());
     const float startAngle = -kPi * 0.5f;
 
-    const ImU32 gridColor = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.15f));
-    const ImU32 axisColor = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.25f));
-    const ImU32 fillColor = ImGui::GetColorU32(ImVec4(0.3f, 0.6f, 0.9f, 0.25f));
-    const ImU32 outlineColor = ImGui::GetColorU32(ImVec4(0.3f, 0.6f, 0.9f, 0.85f));
-    const ImU32 pointColor = ImGui::GetColorU32(ImVec4(0.95f, 0.98f, 1.0f, 1.0f));
-    const ImU32 labelColor = ImGui::GetColorU32(ImVec4(0.8f, 0.9f, 1.0f, 1.0f));
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+    ImVec4 text = style.Colors[ImGuiCol_Text];
+    ImVec4 textMuted = style.Colors[ImGuiCol_TextDisabled];
+
+    ImVec4 grid = textMuted;
+    grid.w = 0.22f;
+    ImVec4 axis = textMuted;
+    axis.w = 0.35f;
+    ImVec4 fill = accent;
+    fill.w = 0.18f;
+    ImVec4 outline = accent;
+    outline.w = 0.75f;
+    ImVec4 point = BlendColor(accent, text, 0.40f);
+    point.w = 0.95f;
+    const ImVec4 label = text;
+
+    const ImU32 gridColor = ImGui::GetColorU32(grid);
+    const ImU32 axisColor = ImGui::GetColorU32(axis);
+    const ImU32 fillColor = ImGui::GetColorU32(fill);
+    const ImU32 outlineColor = ImGui::GetColorU32(outline);
+    const ImU32 pointColor = ImGui::GetColorU32(point);
+    const ImU32 labelColor = ImGui::GetColorU32(label);
 
     const int ringCount = 4;
     for (int ring = 1; ring <= ringCount; ++ring) {
@@ -91,6 +109,6 @@ void DrawSkillRadarChart(const std::vector<Skill>& skills, const ImVec2& canvasP
     std::ostringstream legend;
     legend << "Макс. уровень: " << std::fixed << std::setprecision(1) << maxValue;
     drawList->AddText(ImVec2(canvasPos.x + 5.0f, canvasPos.y + 5.0f),
-                      ImGui::GetColorU32(ImVec4(1.0f, 0.9f, 0.7f, 1.0f)),
+                      ImGui::GetColorU32(text),
                       legend.str().c_str());
 }
