@@ -202,7 +202,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             } else {
                 ImGui::TextColored(accentSoft, u8"нет");
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextUnformatted(u8"-");
+                ImGui::TextDisabled(u8"-");
             }
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -220,7 +220,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             } else {
                 ImGui::TextColored(accentSoft, u8"все 10/10");
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextUnformatted(u8"-");
+                ImGui::TextDisabled(u8"-");
             }
             ImGui::EndTable();
         }

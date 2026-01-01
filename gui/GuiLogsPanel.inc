@@ -184,12 +184,20 @@ void DrawLogsPanel(GuiState& state) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 std::string ts = FormatTimestamp(entry.timestamp, "%Y-%m-%d %H:%M:%S");
-                ImGui::TextUnformatted(ts.empty() ? "-" : ts.c_str());
+                if (ts.empty()) {
+                    ImGui::TextDisabled("-");
+                } else {
+                    ImGui::TextUnformatted(ts.c_str());
+                }
                 ImGui::TableSetColumnIndex(1);
                 ImVec4 levelColor = LogLevelColor(entry.level);
                 ImGui::TextColored(levelColor, "%s", LogLevelLabel(entry.level));
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextUnformatted(entry.source.empty() ? "-" : entry.source.c_str());
+                if (entry.source.empty()) {
+                    ImGui::TextDisabled("-");
+                } else {
+                    ImGui::TextUnformatted(entry.source.c_str());
+                }
                 ImGui::TableSetColumnIndex(3);
                 ImGui::TextWrapped("%s", entry.message.c_str());
             }

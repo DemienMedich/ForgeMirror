@@ -265,7 +265,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
                     static_cast<double>(stats.categoryCounts[i]);
                 ImGui::Text("%.2f", avg);
             } else {
-                ImGui::TextUnformatted("-");
+                ImGui::TextDisabled("-");
             }
         }
         ImGui::EndTable();
@@ -337,15 +337,15 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         if (byInactivity.empty()) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted("-");
+            ImGui::TextDisabled("-");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextDisabled(u8"Нет профилей старше порога.");
             ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted("-");
+            ImGui::TextDisabled("-");
             ImGui::TableSetColumnIndex(3);
-            ImGui::TextUnformatted("-");
+            ImGui::TextDisabled("-");
             ImGui::TableSetColumnIndex(4);
-            ImGui::TextUnformatted("-");
+            ImGui::TextDisabled("-");
         }
         for (const auto& item : byInactivity) {
             ImGui::TableNextRow();
@@ -360,21 +360,26 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             std::string name = item.name + (item.archived ? u8" (архив)" : "");
             ImGui::TextUnformatted(name.c_str());
             ImGui::TableSetColumnIndex(2);
-            std::string lastText = item.lastTaskTimestamp > 0
+            const bool hasLastTask = item.lastTaskTimestamp > 0;
+            std::string lastText = hasLastTask
                 ? FormatTimestamp(item.lastTaskTimestamp, "%Y-%m-%d %H:%M")
                 : std::string(u8"нет данных");
-            ImGui::TextUnformatted(lastText.c_str());
+            if (hasLastTask) {
+                ImGui::TextUnformatted(lastText.c_str());
+            } else {
+                ImGui::TextDisabled("%s", lastText.c_str());
+            }
             ImGui::TableSetColumnIndex(3);
             if (item.lastTaskTimestamp > 0) {
                 ImGui::TextUnformatted(FormatDurationShort(nowSec - item.lastTaskTimestamp).c_str());
             } else {
-                ImGui::TextUnformatted(u8"—");
+                ImGui::TextDisabled(u8"-");
             }
             ImGui::TableSetColumnIndex(4);
             if (item.recoveryTasksRemaining > 0) {
                 ImGui::Text("%d", item.recoveryTasksRemaining);
             } else {
-                ImGui::TextUnformatted("-");
+                ImGui::TextDisabled("-");
             }
         }
         ImGui::EndTable();
@@ -409,11 +414,11 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         if (byRecovery.empty()) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted("-");
+            ImGui::TextDisabled("-");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextDisabled(u8"Нет активных профилей.");
             ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted("-");
+            ImGui::TextDisabled("-");
         }
         for (const auto& item : byRecovery) {
             ImGui::TableNextRow();

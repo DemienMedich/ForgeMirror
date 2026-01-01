@@ -231,7 +231,11 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TextColored(accent, "%s", displayName.c_str());
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
-            ImGui::TextWrapped("%s", desc.empty() ? u8"Описание отсутствует." : desc.c_str());
+            if (desc.empty()) {
+                ImGui::TextDisabled(u8"Описание отсутствует.");
+            } else {
+                ImGui::TextWrapped("%s", desc.c_str());
+            }
             ImGui::PopTextWrapPos();
             if (state.isAdmin) {
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
