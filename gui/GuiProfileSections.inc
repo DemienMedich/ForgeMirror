@@ -153,10 +153,11 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 
     if (ImGui::CollapsingHeader(u8"Состояние", ImGuiTreeNodeFlags_DefaultOpen)) {
         const std::int64_t lastTask = profile.last_task_timestamp();
-        std::string lastTaskLabel = lastTask > 0
+        const bool hasLastTask = lastTask > 0;
+        std::string lastTaskLabel = hasLastTask
         ? FormatTimestamp(lastTask, "%Y-%m-%d %H:%M")
         : std::string(u8"нет данных");
-        std::string elapsedLabel = lastTask > 0
+        std::string elapsedLabel = hasLastTask
         ? FormatDurationShort(std::max<std::int64_t>(0, nowSec - lastTask))
         : std::string(u8"-");
         const bool penaltiesEnabled = profile.penalties_enabled();
@@ -188,7 +189,11 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Активность");
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextColored(accentSoft, "%s", lastTaskLabel.c_str());
+            if (hasLastTask) {
+                ImGui::TextColored(accentSoft, "%s", lastTaskLabel.c_str());
+            } else {
+                ImGui::TextDisabled("%s", lastTaskLabel.c_str());
+            }
             ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"%s назад", elapsedLabel.c_str());
             ImGui::TableNextRow();
