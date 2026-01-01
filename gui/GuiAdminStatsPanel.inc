@@ -124,33 +124,40 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     const float topTableHeight = 180.0f;
     DrawCardHeader(u8"Сводка");
     if (ImGui::BeginTable("admin_kpi", 3, ImGuiTableFlags_SizingStretchProp)) {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImVec4 accentStrong = BlendColor(accent, style.Colors[ImGuiCol_Text], 0.20f);
+        accentStrong.w = 1.0f;
+        ImVec4 accentSoft = BlendColor(accent, style.Colors[ImGuiCol_TextDisabled], 0.35f);
+        accentSoft.w = 0.9f;
         auto kpi = [&](const char* id, const char* title, const std::string& value, const ImVec4& accent) {
             ImGui::TableNextColumn();
             DrawKpiCard(id, title, value, accent);
         };
-        kpi("kpi_total_profiles", u8"Профилей всего", std::to_string(stats.totalProfiles), ImVec4(0.7f, 0.9f, 1.0f, 1.0f));
-        kpi("kpi_active_profiles", u8"Активных", std::to_string(stats.activeProfiles), ImVec4(0.6f, 0.9f, 0.6f, 1.0f));
-        kpi("kpi_archived_profiles", u8"В архиве", std::to_string(stats.archivedProfiles), ImVec4(0.9f, 0.7f, 0.4f, 1.0f));
+        kpi("kpi_total_profiles", u8"Профилей всего", std::to_string(stats.totalProfiles), accentStrong);
+        kpi("kpi_active_profiles", u8"Активных", std::to_string(stats.activeProfiles), accent);
+        kpi("kpi_archived_profiles", u8"В архиве", std::to_string(stats.archivedProfiles), accentSoft);
 
         std::ostringstream avgStream;
         avgStream.imbue(std::locale::classic());
         avgStream << std::fixed << std::setprecision(1) << stats.avgLevel;
-        kpi("kpi_avg_level", u8"Средний уровень", avgStream.str(), ImVec4(0.85f, 0.8f, 1.0f, 1.0f));
-        kpi("kpi_max_level", u8"Макс. уровень", std::to_string(stats.maxLevel), ImVec4(0.95f, 0.8f, 0.3f, 1.0f));
-        kpi("kpi_total_xp", u8"Всего XP", std::to_string(stats.totalXp), ImVec4(0.75f, 0.85f, 1.0f, 1.0f));
+        kpi("kpi_avg_level", u8"Средний уровень", avgStream.str(), accent);
+        kpi("kpi_max_level", u8"Макс. уровень", std::to_string(stats.maxLevel), accentStrong);
+        kpi("kpi_total_xp", u8"Всего XP", std::to_string(stats.totalXp), accent);
 
         std::ostringstream avgXpStream;
         avgXpStream.imbue(std::locale::classic());
         avgXpStream << std::fixed << std::setprecision(0) << stats.avgXp;
-        kpi("kpi_avg_xp", u8"Средний XP", avgXpStream.str(), ImVec4(0.7f, 0.85f, 0.95f, 1.0f));
-        kpi("kpi_ach_total", u8"Ачивок всего", std::to_string(stats.achievementsTotal), ImVec4(0.9f, 0.75f, 0.55f, 1.0f));
-        kpi("kpi_ach_active", u8"Ачивок активных", std::to_string(stats.achievementsActive), ImVec4(0.6f, 0.9f, 0.6f, 1.0f));
+        kpi("kpi_avg_xp", u8"Средний XP", avgXpStream.str(), accentSoft);
+        kpi("kpi_ach_total", u8"Ачивок всего", std::to_string(stats.achievementsTotal), accentSoft);
+        kpi("kpi_ach_active", u8"Ачивок активных", std::to_string(stats.achievementsActive), accent);
         kpi("kpi_recovery", u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
-            ImVec4(0.95f, 0.65f, 0.45f, 1.0f));
+            accentSoft);
         kpi("kpi_no_activity", u8"Без активности", std::to_string(stats.profilesNoActivity),
-            ImVec4(0.9f, 0.6f, 0.6f, 1.0f));
+            accentSoft);
         kpi("kpi_no_ach", u8"Без ачивок", std::to_string(stats.profilesNoAchievements),
-            ImVec4(0.8f, 0.7f, 0.9f, 1.0f));
+            accentSoft);
         ImGui::EndTable();
     }
 
