@@ -1,3 +1,46 @@
+static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, const std::string& value,
+                               const ImVec4& accent, float height = 70.0f) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float rounding = std::max(9.0f, style.FrameRounding + 3.0f);
+    ImVec4 bg = CardBackgroundColor();
+    ImVec4 border = CardBorderColor();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+    if (ImGui::BeginChild("catalog_kpi", ImVec2(0.0f, height), ImGuiChildFlags_Border,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
+        const float badgeSize = std::clamp(height - 24.0f, 30.0f, 42.0f);
+        const float badgeRadius = badgeSize * 0.5f;
+        const ImVec2 badgePos = ImGui::GetCursorScreenPos();
+        const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
+        DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, accent, true);
+
+        ImGui::Dummy(ImVec2(badgeSize + 10.0f, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
+        float y = ImGui::GetCursorPosY();
+        float textBlock = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+        float offsetY = std::max(0.0f, (contentH - textBlock) * 0.5f);
+        ImGui::SetCursorPosY(y + offsetY);
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("%s", title);
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::SetWindowFontScale(1.12f);
+        ImGui::TextUnformatted(value.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopID();
+}
+
 void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
     const auto& catalogSkills = catalog.skills();
@@ -165,28 +208,112 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
 
         std::array<int, 6> weightCounts{};
         int matchingCount = 0;
+        double minWeight = 0.0;
+        double maxWeight = 0.0;
+        double sumWeight = 0.0;
+        std::vector<float> matchingWeights;
+        matchingWeights.reserve(viewIndices.size());
         for (int viewIndex : viewIndices) {
             const std::string& skillId = catalogSkills[viewIndex];
             const std::string displayName = catalog.display_name(skillId);
             if (!MatchesFilter(displayName, state.filters.skill.data())) {
                 continue;
             }
-            const int weightCategory = WeightCategoryIndex(catalog.weight(skillId));
+            const double weight = catalog.weight(skillId);
+            const int weightCategory = WeightCategoryIndex(weight);
             if (state.catalogWeightCategoryFilter > 0 &&
                 weightCategory != state.catalogWeightCategoryFilter) {
                 continue;
             }
             matchingCount += 1;
+            sumWeight += weight;
+            if (matchingCount == 1) {
+                minWeight = weight;
+                maxWeight = weight;
+            } else {
+                minWeight = std::min(minWeight, weight);
+                maxWeight = std::max(maxWeight, weight);
+            }
+            matchingWeights.push_back(static_cast<float>(weight));
             if (weightCategory >= 1 && weightCategory <= 5) {
                 weightCounts[static_cast<size_t>(weightCategory)] += 1;
             }
         }
         if (BeginCard("catalog_summary_card")) {
             DrawCardHeader(u8"Сводка");
-            ImGui::TextDisabled(u8"Показано: %d из %d", matchingCount, static_cast<int>(catalogSkills.size()));
+            const float summaryWidth = ImGui::GetContentRegionAvail().x;
+            const int columns = summaryWidth < 540.0f ? 2 : 4;
+            const int totalCount = static_cast<int>(catalogSkills.size());
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            std::ostringstream avgStream;
+            avgStream.imbue(std::locale::classic());
+            if (matchingCount > 0) {
+                avgStream << std::fixed << std::setprecision(2) << (sumWeight / static_cast<double>(matchingCount));
+            } else {
+                avgStream << "0.00";
+            }
+            std::ostringstream rangeStream;
+            rangeStream.imbue(std::locale::classic());
+            if (matchingCount > 0) {
+                rangeStream << std::fixed << std::setprecision(2) << minWeight << "-" << maxWeight;
+            } else {
+                rangeStream << "-";
+            }
+            if (ImGui::BeginTable("catalog_kpi", columns, ImGuiTableFlags_SizingStretchSame)) {
+                struct KpiItem {
+                    const char* id;
+                    UiIcon icon;
+                    const char* label;
+                    std::string value;
+                    ImVec4 color;
+                };
+                std::array<KpiItem, 4> kpis = {{
+                    {"total", UiIcon::List, u8"Всего", std::to_string(totalCount), accent},
+                    {"shown", UiIcon::Search, u8"Показано", std::to_string(matchingCount), accent},
+                    {"avg", UiIcon::Chart, u8"Средний вес", avgStream.str(), accent},
+                    {"range", UiIcon::Flow, u8"Диапазон", rangeStream.str(), accent}
+                }};
+                size_t index = 0;
+                const int rows = static_cast<int>((kpis.size() + columns - 1) / columns);
+                for (int r = 0; r < rows; ++r) {
+                    ImGui::TableNextRow();
+                    for (int c = 0; c < columns; ++c) {
+                        ImGui::TableNextColumn();
+                        if (index < kpis.size()) {
+                            const auto& kpi = kpis[index];
+                            DrawCatalogKpiCard(kpi.id, kpi.icon, kpi.label, kpi.value, kpi.color);
+                            ++index;
+                        } else {
+                            ImGui::Dummy(ImVec2(0.0f, 0.0f));
+                        }
+                    }
+                }
+                ImGui::EndTable();
+            }
             if (matchingCount == 0) {
                 ImGui::TextDisabled(u8"Нет навыков по фильтру.");
-            } else if (ImGui::BeginTable("catalog_weights", 3, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                ImGui::TextDisabled(u8"Вес (выборка)");
+                constexpr int kSamples = 24;
+                std::array<float, kSamples> series{};
+                if (matchingWeights.size() == 1) {
+                    series.fill(matchingWeights.front());
+                } else if (!matchingWeights.empty()) {
+                    const size_t last = matchingWeights.size() - 1;
+                    for (int i = 0; i < kSamples; ++i) {
+                        size_t idx = static_cast<size_t>(std::round((static_cast<double>(i) / (kSamples - 1)) * last));
+                        idx = std::min(idx, last);
+                        series[static_cast<size_t>(i)] = matchingWeights[idx];
+                    }
+                }
+                float maxSeries = 0.0f;
+                for (float v : series) maxSeries = std::max(maxSeries, v);
+                if (maxSeries <= 0.0f) maxSeries = 1.0f;
+                DrawSparkline("##catalog_weight_series", series.data(), kSamples, maxSeries, accent, 54.0f);
+                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                if (ImGui::BeginTable("catalog_weights", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("cat", ImGuiTableColumnFlags_WidthFixed, 96.0f);
                 ImGui::TableSetupColumn("count", ImGuiTableColumnFlags_WidthFixed, 64.0f);
                 ImGui::TableSetupColumn("bar", ImGuiTableColumnFlags_WidthStretch);
@@ -205,6 +332,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
+                }
             }
         }
         EndCard();
