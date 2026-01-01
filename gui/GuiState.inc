@@ -39,7 +39,7 @@ struct GuiRuntimeState {
     bool showView3d = false;
     bool showView3dSettings = false;
     bool showAdminStats = false;
-    bool showMainMenu = true;
+    bool showProfilesWindow = true;
     int workspaceTabRequest = -1;
 
     bool createPopupRequest = false;

@@ -1,19 +1,140 @@
-void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
-    // Main menu window
-    if (state.showMainMenu) {
-        ImGui::Begin(u8"Главное меню", &state.showMainMenu);
-        EnsureWindowVisible();
-        const ImGuiStyle& style = ImGui::GetStyle();
-        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
-        accent.w = 1.0f;
-        ImVec4 accentSoft = accent;
-        accentSoft.w = 0.8f;
-        DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
-        if (BeginCard("main_admin_card")) {
+static void CloseWorkspaceWindows(GuiState& state) {
+    state.showSkillCatalog = false;
+    state.showPipeline = false;
+    state.showView3d = false;
+    state.showRules = false;
+    state.showUiSettings = false;
+    state.showView3dSettings = false;
+    state.showLogs = false;
+    state.showAdminStats = false;
+    state.workspaceTabRequest = -1;
+}
+
+void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+
+    const bool canArchive = state.selectedIndex >= 0 &&
+    state.selectedIndex < static_cast<int>(state.profiles.size()) &&
+    !state.profiles[state.selectedIndex].archived;
+    const bool canRestore = state.selectedIndex >= 0 &&
+    state.selectedIndex < static_cast<int>(state.profiles.size()) &&
+    state.profiles[state.selectedIndex].archived;
+    const bool canDelete = state.selectedIndex >= 0 &&
+    state.selectedIndex < static_cast<int>(state.profiles.size());
+    const bool hasActive = state.active.has_value();
+
+    ImVec4 menuBg = style.Colors[ImGuiCol_WindowBg];
+    menuBg.w = std::max(menuBg.w, 0.85f);
+    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, menuBg);
+    if (ImGui::BeginMainMenuBar()) {
+#ifdef APP_VERSION
+        ImGui::TextDisabled("JobSkill %s", APP_VERSION);
+#else
+        ImGui::TextDisabled("JobSkill");
+#endif
+
+        if (ImGui::BeginMenu(u8"Профили")) {
+            if (state.active) {
+                std::string label = "[" + state.active->id + "] " + state.active->profile.name();
+                ImGui::TextDisabled(u8"Активный: %s", label.c_str());
+            } else {
+                ImGui::TextDisabled(u8"Активный: (не выбран)");
+            }
+            ImGui::Separator();
+
+            ImGui::MenuItem(u8"Окно профилей", nullptr, &state.showProfilesWindow);
+            if (ImGui::MenuItem(u8"Обновить список")) {
+                RefreshProfiles(state, storage, catalog);
+            }
+            ImGui::Separator();
+
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(u8"Создать")) {
+                state.modalBuffer.fill('\0');
+                state.createPopupRequest = true;
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+
+            if (!state.isAdmin || !hasActive) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(u8"Добавить опыт")) {
+                PrepareXpEntries(state, catalog);
+                state.xpPopupRequest = true;
+            }
+            if (!state.isAdmin || !hasActive) ImGui::EndDisabled();
+
+            const bool canArchiveAction = canArchive || canRestore;
+            const char* archiveLabel = canRestore ? u8"Вернуть" : u8"В архив";
+            if (!state.isAdmin || !canArchiveAction) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(archiveLabel)) {
+                state.confirmPopupRequest = true;
+                state.confirmAction = canRestore ? ConfirmAction::Restore : ConfirmAction::Archive;
+            }
+            if (!state.isAdmin || !canArchiveAction) ImGui::EndDisabled();
+
+            if (!state.isAdmin || !canDelete) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(u8"Удалить")) {
+                state.confirmPopupRequest = true;
+                state.confirmAction = ConfirmAction::Delete;
+            }
+            if (!state.isAdmin || !canDelete) ImGui::EndDisabled();
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu(u8"Разделы")) {
+            if (ImGui::MenuItem(u8"Профиль", "F1")) {
+                CloseWorkspaceWindows(state);
+            }
+            if (ImGui::MenuItem(u8"Каталог навыков", "F2")) {
+                OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
+            }
+            if (ImGui::MenuItem(u8"Пайплайн", "F3")) {
+                OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
+            }
+            if (ImGui::MenuItem(u8"3D просмотр")) {
+                OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
+            }
+            if (state.isAdmin) {
+                ImGui::Separator();
+                if (ImGui::MenuItem(u8"Правила", "F4")) {
+                    OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
+                }
+                if (ImGui::MenuItem(u8"Статистика", "F5")) {
+                    OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
+                }
+                if (ImGui::MenuItem(u8"Логи", "F6")) {
+                    OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
+                }
+                if (ImGui::MenuItem(u8"Настройки интерфейса")) {
+                    OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
+                }
+                if (ImGui::MenuItem(u8"3D настройки")) {
+                    OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
+                }
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu(u8"Окно")) {
+            bool fullscreen = state.ui.windowFullscreen;
+            if (ImGui::MenuItem(u8"Во весь экран", "F11", &fullscreen)) {
+                state.ui.windowFullscreen = fullscreen;
+                state.uiDirty = true;
+            }
+            bool borderless = !state.ui.windowDecorated;
+            if (ImGui::MenuItem(u8"Без рамки", "F10", &borderless)) {
+                state.ui.windowDecorated = !borderless;
+                state.uiDirty = true;
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu(u8"Админ")) {
             ImGui::TextUnformatted(state.isAdmin ? u8"[Режим администратора]" : u8"[Режим просмотра]");
-            if (!state.isAdmin) ImGui::PushStyleColor(ImGuiCol_Text, accentSoft);
-            if (ImGui::Button(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ",
-                ImVec2(-1.0f, 0.0f))) {
+            ImGui::Separator();
+            if (ImGui::MenuItem(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ")) {
                 if (state.isAdmin) {
                     state.isAdmin = false;
                     state.showRules = false;
@@ -26,246 +147,100 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                     state.adminPassword.fill('\0');
                 }
             }
-            if (!state.isAdmin) ImGui::PopStyleColor();
             if (state.isAdmin) {
-                if (ImGui::Button(u8"Сменить пароль администратора", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::MenuItem(u8"Сменить пароль администратора")) {
                     state.adminChangePopupRequest = true;
                     state.adminPasswordCurrent.fill('\0');
                     state.adminPasswordNew.fill('\0');
                     state.adminPasswordConfirm.fill('\0');
                 }
             }
+            ImGui::EndMenu();
         }
-        EndCard();
-        ImGui::Spacing();
 
-        if (BeginCard("main_window_card")) {
-            DrawCardHeader(u8"Окно");
-            const float windowAvail = ImGui::GetContentRegionAvail().x;
-            const bool stackWindowButtons = windowAvail < 360.0f;
-            bool fullscreen = state.ui.windowFullscreen;
-            bool borderless = !state.ui.windowDecorated;
-            if (stackWindowButtons) {
-                if (ToggleMenuButtonGui(u8"Во весь экран", fullscreen, ImVec2(-1.0f, 0.0f))) {
-                    state.ui.windowFullscreen = fullscreen;
-                    state.uiDirty = true;
-                }
-                if (ToggleMenuButtonGui(u8"Без рамки", borderless, ImVec2(-1.0f, 0.0f))) {
-                    state.ui.windowDecorated = !borderless;
-                    state.uiDirty = true;
-                }
-            } else if (ImGui::BeginTable("window_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
-                ImGui::TableSetupColumn("window_left", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("window_right", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                if (ToggleMenuButtonGui(u8"Во весь экран", fullscreen, ImVec2(-1.0f, 0.0f))) {
-                    state.ui.windowFullscreen = fullscreen;
-                    state.uiDirty = true;
-                }
-                ImGui::TableNextColumn();
-                if (ToggleMenuButtonGui(u8"Без рамки", borderless, ImVec2(-1.0f, 0.0f))) {
-                    state.ui.windowDecorated = !borderless;
-                    state.uiDirty = true;
-                }
-                ImGui::EndTable();
-            }
-        }
-        EndCard();
-        ImGui::Spacing();
-
-        const bool canArchive = state.selectedIndex >= 0 &&
-        state.selectedIndex < static_cast<int>(state.profiles.size()) &&
-        !state.profiles[state.selectedIndex].archived;
-        const bool canRestore = state.selectedIndex >= 0 &&
-        state.selectedIndex < static_cast<int>(state.profiles.size()) &&
-        state.profiles[state.selectedIndex].archived;
-        const bool canDelete = state.selectedIndex >= 0 &&
-        state.selectedIndex < static_cast<int>(state.profiles.size());
-        const bool hasActive = state.active.has_value();
-        const float actionHeight = std::max(ImGui::GetFrameHeight() * 1.35f, 34.0f);
-
-        if (BeginCard("main_quick_card")) {
-            DrawCardHeader(u8"Быстрые действия");
-            const bool stackQuick = ImGui::GetContentRegionAvail().x < 360.0f;
-            const bool canArchiveAction = canArchive || canRestore;
-            const char* archiveLabel = canRestore ? u8"Вернуть" : u8"В архив";
-            if (stackQuick) {
-                if (!state.isAdmin) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Создать", ImVec2(-1.0f, actionHeight))) {
-                    state.modalBuffer.fill('\0');
-                    state.createPopupRequest = true;
-                }
-                if (!state.isAdmin) ImGui::EndDisabled();
-
-                if (!state.isAdmin || !hasActive) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, actionHeight))) {
-                    PrepareXpEntries(state, catalog);
-                    state.xpPopupRequest = true;
-                }
-                if (!state.isAdmin || !hasActive) ImGui::EndDisabled();
-
-                if (!state.isAdmin || !canArchiveAction) ImGui::BeginDisabled();
-                if (ImGui::Button(archiveLabel, ImVec2(-1.0f, actionHeight))) {
-                    state.confirmPopupRequest = true;
-                    state.confirmAction = canRestore ? ConfirmAction::Restore : ConfirmAction::Archive;
-                }
-                if (!state.isAdmin || !canArchiveAction) ImGui::EndDisabled();
-
-                if (!state.isAdmin) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Статистика", ImVec2(-1.0f, actionHeight))) {
-                    state.showAdminStats = true;
-                    state.workspaceTabRequest = static_cast<int>(UiWindowId::AdminStats);
-                }
-                if (!state.isAdmin) ImGui::EndDisabled();
-            } else if (ImGui::BeginTable("quick_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
-                ImGui::TableSetupColumn("quick_left", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("quick_right", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableNextRow(0, actionHeight);
-                ImGui::TableNextColumn();
-                if (!state.isAdmin) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Создать", ImVec2(-1.0f, actionHeight))) {
-                    state.modalBuffer.fill('\0');
-                    state.createPopupRequest = true;
-                }
-                if (!state.isAdmin) ImGui::EndDisabled();
-
-                ImGui::TableNextColumn();
-                if (!state.isAdmin || !hasActive) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, actionHeight))) {
-                    PrepareXpEntries(state, catalog);
-                    state.xpPopupRequest = true;
-                }
-                if (!state.isAdmin || !hasActive) ImGui::EndDisabled();
-
-                ImGui::TableNextRow(0, actionHeight);
-                ImGui::TableNextColumn();
-                if (!state.isAdmin || !canArchiveAction) ImGui::BeginDisabled();
-                if (ImGui::Button(archiveLabel, ImVec2(-1.0f, actionHeight))) {
-                    state.confirmPopupRequest = true;
-                    state.confirmAction = canRestore ? ConfirmAction::Restore : ConfirmAction::Archive;
-                }
-                if (!state.isAdmin || !canArchiveAction) ImGui::EndDisabled();
-
-                ImGui::TableNextColumn();
-                if (!state.isAdmin) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Статистика", ImVec2(-1.0f, actionHeight))) {
-                    state.showAdminStats = true;
-                    state.workspaceTabRequest = static_cast<int>(UiWindowId::AdminStats);
-                }
-                if (!state.isAdmin) ImGui::EndDisabled();
-                ImGui::EndTable();
-            }
-        }
-        EndCard();
-        ImGui::Spacing();
-
-        if (BeginCard("main_service_card")) {
-            DrawCardHeader(u8"Сервис");
-            const bool stackService = ImGui::GetContentRegionAvail().x < 420.0f;
-            if (stackService) {
-                if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, actionHeight))) {
-                    RefreshProfiles(state, storage, catalog);
-                }
-                if (!state.isAdmin || !canDelete) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, actionHeight))) {
-                    state.confirmPopupRequest = true;
-                    state.confirmAction = ConfirmAction::Delete;
-                }
-                if (!state.isAdmin || !canDelete) ImGui::EndDisabled();
-                if (ImGui::Button(u8"Выход", ImVec2(-1.0f, actionHeight))) {
-                    state.requestExit = true;
-                }
-            } else if (ImGui::BeginTable("service_actions", 3, ImGuiTableFlags_SizingStretchSame)) {
-                ImGui::TableSetupColumn("service_left", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("service_mid", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("service_right", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableNextRow(0, actionHeight);
-                ImGui::TableNextColumn();
-                if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, actionHeight))) {
-                    RefreshProfiles(state, storage, catalog);
-                }
-                ImGui::TableNextColumn();
-                if (!state.isAdmin || !canDelete) ImGui::BeginDisabled();
-                if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, actionHeight))) {
-                    state.confirmPopupRequest = true;
-                    state.confirmAction = ConfirmAction::Delete;
-                }
-                if (!state.isAdmin || !canDelete) ImGui::EndDisabled();
-                ImGui::TableNextColumn();
-                if (ImGui::Button(u8"Выход", ImVec2(-1.0f, actionHeight))) {
-                    state.requestExit = true;
-                }
-                ImGui::EndTable();
-            }
-        }
-        EndCard();
-
-        if (state.cloudConfig.enabled) {
+        if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
             auto refreshCloudState = [&]() {
                 state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
                 state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
             };
-            if (BeginCard("main_cloud_card")) {
-                DrawCardHeader(u8"Облако");
-                if (ImGui::Button(u8"Обновить из облака", ImVec2(-1.0f, actionHeight))) {
-                    CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
-                    CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
-                    RefreshProfiles(state, storage, catalog);
-                    refreshCloudState();
-                    if (result.ok) {
-                        SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
-                    } else {
-                        SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
-                    }
+
+            if (ImGui::MenuItem(u8"Обновить из облака")) {
+                CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
+                CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
+                RefreshProfiles(state, storage, catalog);
+                refreshCloudState();
+                if (result.ok) {
+                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
                 }
-                if (state.isAdmin) {
-                    if (ImGui::Button(u8"Выгрузить в облако", ImVec2(-1.0f, actionHeight))) {
-                        CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
-                        refreshCloudState();
-                        if (result.ok) {
-                            SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
-                        }
-                    }
+            }
+
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(u8"Выгрузить в облако")) {
+                CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
+                refreshCloudState();
+                if (result.ok) {
+                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
                 }
-                if (!state.cloudManifest.appVersion.empty()) {
-                    ImGui::TextDisabled(u8"Версия в облаке: %s", state.cloudManifest.appVersion.c_str());
-                    if (state.cloudManifest.dataUpdatedAt > 0) {
-                        std::string stamp = FormatTimestamp(state.cloudManifest.dataUpdatedAt, "%Y-%m-%d %H:%M");
-                        ImGui::TextDisabled(u8"Данные обновлены: %s", stamp.c_str());
-                    }
-                    if (!state.cloudManifest.notes.empty()) {
-                        ImGui::TextWrapped(u8"Примечание: %s", state.cloudManifest.notes.c_str());
-                    }
-                    if (state.cloudUpdateAvailable) {
-                        ImGui::TextColored(accent, u8"Доступно обновление клиента.");
-                        if (state.cloudManifest.releaseFile.empty()) {
-                            ImGui::TextDisabled(u8"Файл обновления не указан.");
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+
+            if (!state.cloudManifest.appVersion.empty()) {
+                ImGui::Separator();
+                ImGui::TextDisabled(u8"Версия в облаке: %s", state.cloudManifest.appVersion.c_str());
+                if (state.cloudManifest.dataUpdatedAt > 0) {
+                    std::string stamp = FormatTimestamp(state.cloudManifest.dataUpdatedAt, "%Y-%m-%d %H:%M");
+                    ImGui::TextDisabled(u8"Данные обновлены: %s", stamp.c_str());
+                }
+                if (!state.cloudManifest.notes.empty()) {
+                    ImGui::TextWrapped(u8"Примечание: %s", state.cloudManifest.notes.c_str());
+                }
+            }
+
+            if (state.cloudUpdateAvailable) {
+                ImGui::Separator();
+                ImGui::TextColored(accent, u8"Доступно обновление клиента.");
+                if (state.cloudManifest.releaseFile.empty()) {
+                    ImGui::TextDisabled(u8"Файл обновления не указан.");
+                } else {
+                    if (ImGui::MenuItem(u8"Скачать обновление")) {
+                        std::filesystem::path outPath;
+                        CloudSyncResult dl = DownloadCloudRelease(state.cloudConfig, state.storageDir,
+                            state.cloudManifest, outPath);
+                        if (dl.ok) {
+                            std::string msg = dl.message;
+                            msg += u8" Файл: ";
+                            msg += outPath.string();
+                            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
                         } else {
-                            if (ImGui::Button(u8"Скачать обновление", ImVec2(-1.0f, actionHeight))) {
-                                std::filesystem::path outPath;
-                                CloudSyncResult dl = DownloadCloudRelease(state.cloudConfig, state.storageDir,
-                                    state.cloudManifest, outPath);
-                                if (dl.ok) {
-                                    std::string msg = dl.message;
-                                    msg += u8" Файл: ";
-                                    msg += outPath.string();
-                                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-                                } else {
-                                    SetStatus(state, dl.message, 1.0f, 0.75f, 0.35f);
-                                }
-                            }
+                            SetStatus(state, dl.message, 1.0f, 0.75f, 0.35f);
                         }
                     }
                 }
             }
-            EndCard();
-            ImGui::Spacing();
+
+            ImGui::EndMenu();
         }
 
-        if (BeginCard("main_profiles_card")) {
+        if (ImGui::MenuItem(u8"Выход")) {
+            state.requestExit = true;
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+    ImGui::PopStyleColor();
+}
+
+void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    if (!state.showProfilesWindow) return;
+    ImGui::Begin(u8"Профили", &state.showProfilesWindow);
+    EnsureWindowVisible();
+    DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
+
+    if (BeginCard("profiles_list_card")) {
         DrawCardHeader(u8"Профили");
         const float filtersWidth = ImGui::GetContentRegionAvail().x;
         const bool stackFilters = filtersWidth < 520.0f;
@@ -331,8 +306,8 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             return pa.id < pb.id;
         });
 
-        const float minListHeight = ImGui::GetTextLineHeightWithSpacing() * 8.0f;
-        const float listHeight = std::max(140.0f, minListHeight);
+        const float minListHeight = ImGui::GetTextLineHeightWithSpacing() * 10.0f;
+        const float listHeight = std::max(220.0f, minListHeight);
         if (ImGui::BeginChild("profiles", ImVec2(0.0f, listHeight), false)) {
             ImGui::TextDisabled(u8"Показано: %d из %d",
             static_cast<int>(visibleIndices.size()),
@@ -352,9 +327,9 @@ void DrawMainMenuPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             }
         }
         ImGui::EndChild();
-        }
-        EndCard();
-        ImGui::End();
     }
+    EndCard();
 
+    ImGui::End();
 }
+

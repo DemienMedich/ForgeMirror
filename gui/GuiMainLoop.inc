@@ -7,8 +7,9 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         UpdateUiFrame(state, window, style, io, layoutPath);
+        DrawMainMenuBar(state, storage, catalog);
         DrawNavigationPanel(state);
-        DrawMainMenuPanel(state, storage, catalog);
+        DrawProfilesPanel(state, storage, catalog);
         DrawProfilePanel(state, storage, catalog);
         DrawWorkspacePanel(state, storage, catalog, style);
         DrawAdminLoginModal(state);

@@ -4,8 +4,10 @@ void DrawNavigationPanel(GuiState& state) {
     ImGuiWindowFlags_NoCollapse;
     if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
         const float navWidth = 240.0f;
-        ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(navWidth, viewport->WorkSize.y), ImGuiCond_Always);
+        ImGuiViewportP* viewportP = (ImGuiViewportP*)(void*)viewport;
+        ImRect workRect = viewportP->GetBuildWorkRect();
+        ImGui::SetNextWindowPos(workRect.Min, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(navWidth, workRect.Max.y - workRect.Min.y), ImGuiCond_Always);
     }
     ImGui::Begin(u8"Навигация", nullptr, navFlags);
     DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
@@ -34,9 +36,20 @@ void DrawNavigationPanel(GuiState& state) {
             ImGui::PopStyleColor(3);
         }
     };
-    const bool profileActive = !state.showMainMenu;
+    const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d ||
+    (state.isAdmin && (state.showRules || state.showUiSettings || state.showView3dSettings ||
+    state.showLogs || state.showAdminStats));
+    const bool profileActive = !anyWorkspace;
     navButton(u8"Профиль [F1]", profileActive, [&]() {
-        state.showMainMenu = false;
+        state.showSkillCatalog = false;
+        state.showPipeline = false;
+        state.showView3d = false;
+        state.showRules = false;
+        state.showUiSettings = false;
+        state.showView3dSettings = false;
+        state.showLogs = false;
+        state.showAdminStats = false;
+        state.workspaceTabRequest = -1;
     });
     navButton(u8"Каталог навыков [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
@@ -66,8 +79,8 @@ void DrawNavigationPanel(GuiState& state) {
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
-    navButton(u8"Главное меню", state.showMainMenu, [&]() {
-        state.showMainMenu = !state.showMainMenu;
+    navButton(u8"Профили", state.showProfilesWindow, [&]() {
+        state.showProfilesWindow = !state.showProfilesWindow;
     });
 
     if (state.isAdmin) {

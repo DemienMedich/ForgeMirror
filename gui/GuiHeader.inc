@@ -58,7 +58,15 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showAdminStats = false;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F1)) {
-        state.showMainMenu = false;
+        state.showSkillCatalog = false;
+        state.showPipeline = false;
+        state.showView3d = false;
+        state.showRules = false;
+        state.showUiSettings = false;
+        state.showView3dSettings = false;
+        state.showLogs = false;
+        state.showAdminStats = false;
+        state.workspaceTabRequest = -1;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F2)) {
         state.showSkillCatalog = true;

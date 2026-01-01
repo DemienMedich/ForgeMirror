@@ -3,6 +3,81 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     ImGui::Begin(u8"Профиль");
     EnsureWindowVisible();
     DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
+
+    if (BeginCard("profile_select_card")) {
+        DrawCardHeader(u8"Выбор профиля");
+        const bool hasProfiles = !state.profiles.empty();
+        if (!hasProfiles) {
+            ImGui::TextDisabled(u8"Профили не найдены.");
+        } else {
+            std::string currentLabel = u8"(не выбран)";
+            if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
+                const auto& info = state.profiles[state.selectedIndex];
+                currentLabel = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+            }
+
+            const float avail = ImGui::GetContentRegionAvail().x;
+            const bool stack = avail < 520.0f;
+            if (stack) {
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
+                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                        const auto& info = state.profiles[i];
+                        std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+                        const bool selected = state.selectedIndex == i;
+                        if (ImGui::Selectable(label.c_str(), selected)) {
+                            state.selectedIndex = i;
+                            RefreshActiveProfile(state, storage, catalog);
+                            SyncRankSelection(state);
+                            SetStatus(state, "", 0.6f, 0.7f, 1.0f);
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
+                    state.showProfilesWindow = true;
+                }
+                if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                    RefreshProfiles(state, storage, catalog);
+                }
+            } else if (ImGui::BeginTable("profile_select_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("select", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("open", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+                ImGui::TableSetupColumn("refresh", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
+                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                        const auto& info = state.profiles[i];
+                        std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+                        const bool selected = state.selectedIndex == i;
+                        if (ImGui::Selectable(label.c_str(), selected)) {
+                            state.selectedIndex = i;
+                            RefreshActiveProfile(state, storage, catalog);
+                            SyncRankSelection(state);
+                            SetStatus(state, "", 0.6f, 0.7f, 1.0f);
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
+                    state.showProfilesWindow = true;
+                }
+                ImGui::TableNextColumn();
+                if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                    RefreshProfiles(state, storage, catalog);
+                }
+                ImGui::EndTable();
+            }
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
     if (!state.active) {
         ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
     } else {
