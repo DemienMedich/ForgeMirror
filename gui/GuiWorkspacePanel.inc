@@ -5,6 +5,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
     if (anyWorkspace) {
         ImGui::Begin(u8"Рабочее окно", nullptr, ImGuiWindowFlags_NoCollapse);
         EnsureWindowVisible();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImVec4 tab = BlendColor(style.Colors[ImGuiCol_Tab], accent, 0.20f);
+        ImVec4 tabHover = BlendColor(style.Colors[ImGuiCol_TabHovered], accent, 0.25f);
+        ImVec4 tabActive = BlendColor(style.Colors[ImGuiCol_TabSelected], accent, 0.30f);
+        tab.w = std::max(tab.w, 0.75f);
+        tabHover.w = std::max(tabHover.w, 0.85f);
+        tabActive.w = std::max(tabActive.w, 0.95f);
+        ImGui::PushStyleColor(ImGuiCol_Tab, tab);
+        ImGui::PushStyleColor(ImGuiCol_TabHovered, tabHover);
+        ImGui::PushStyleColor(ImGuiCol_TabSelected, tabActive);
         if (ImGui::BeginTabBar("workspace_tabs")) {
             if (state.showSkillCatalog &&
             ImGui::BeginTabItem(u8"Каталог навыков", &state.showSkillCatalog,
@@ -96,6 +107,7 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             }
             ImGui::EndTabBar();
         }
+        ImGui::PopStyleColor(3);
         ImGui::End();
     }
 

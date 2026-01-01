@@ -15,7 +15,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const float progressRatio = xpNeededThisLevel > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpNeededThisLevel) : 0.0f;
         const std::int64_t nowSec = NowSeconds();
         const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpNeededThisLevel);
-        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
 
         const std::string rankText = DescribeOverallRank(state.active->profile);
@@ -223,6 +224,15 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::Spacing();
 
         state.profileSection = std::clamp(state.ui.profileTab, 0, 4);
+        ImVec4 tab = BlendColor(style.Colors[ImGuiCol_Tab], accent, 0.20f);
+        ImVec4 tabHover = BlendColor(style.Colors[ImGuiCol_TabHovered], accent, 0.25f);
+        ImVec4 tabActive = BlendColor(style.Colors[ImGuiCol_TabSelected], accent, 0.30f);
+        tab.w = std::max(tab.w, 0.75f);
+        tabHover.w = std::max(tabHover.w, 0.85f);
+        tabActive.w = std::max(tabActive.w, 0.95f);
+        ImGui::PushStyleColor(ImGuiCol_Tab, tab);
+        ImGui::PushStyleColor(ImGuiCol_TabHovered, tabHover);
+        ImGui::PushStyleColor(ImGuiCol_TabSelected, tabActive);
         if (ImGui::BeginTabBar("profile_tabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
             auto tabFlagsFor = [&](int index) {
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
@@ -259,6 +269,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             ImGui::EndTabBar();
         }
+        ImGui::PopStyleColor(3);
 
         if (state.profileSection == 0) {
             DrawProfileOverviewSection(state, storage, catalog, profile, overallLevel, nowSec);
