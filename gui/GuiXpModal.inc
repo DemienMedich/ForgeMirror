@@ -204,7 +204,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     if (xpBonus[i] > 0.01) {
                         ImGui::Text("+%.1f%%", xpBonus[i]);
                     } else {
-                        ImGui::TextUnformatted("-");
+                        ImGui::TextDisabled("-");
                     }
                     ImGui::TableSetColumnIndex(3);
                     const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
