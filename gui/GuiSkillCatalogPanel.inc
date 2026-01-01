@@ -162,6 +162,54 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (nameA != nameB) return nameA < nameB;
             return idA < idB;
         });
+
+        std::array<int, 6> weightCounts{};
+        int matchingCount = 0;
+        for (int viewIndex : viewIndices) {
+            const std::string& skillId = catalogSkills[viewIndex];
+            const std::string displayName = catalog.display_name(skillId);
+            if (!MatchesFilter(displayName, state.filters.skill.data())) {
+                continue;
+            }
+            const int weightCategory = WeightCategoryIndex(catalog.weight(skillId));
+            if (state.catalogWeightCategoryFilter > 0 &&
+                weightCategory != state.catalogWeightCategoryFilter) {
+                continue;
+            }
+            matchingCount += 1;
+            if (weightCategory >= 1 && weightCategory <= 5) {
+                weightCounts[static_cast<size_t>(weightCategory)] += 1;
+            }
+        }
+        if (BeginCard("catalog_summary_card")) {
+            DrawCardHeader(u8"Сводка");
+            ImGui::TextDisabled(u8"Показано: %d из %d", matchingCount, static_cast<int>(catalogSkills.size()));
+            if (matchingCount == 0) {
+                ImGui::TextDisabled(u8"Нет навыков по фильтру.");
+            } else if (ImGui::BeginTable("catalog_weights", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("cat", ImGuiTableColumnFlags_WidthFixed, 96.0f);
+                ImGui::TableSetupColumn("count", ImGuiTableColumnFlags_WidthFixed, 64.0f);
+                ImGui::TableSetupColumn("bar", ImGuiTableColumnFlags_WidthStretch);
+                const char* catLabels[] = {"", "A", "B", "C", "D", "E"};
+                for (int cat = 1; cat <= 5; ++cat) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled(u8"Кат. %s", catLabels[cat]);
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", weightCounts[static_cast<size_t>(cat)]);
+                    ImGui::TableNextColumn();
+                    const float share = static_cast<float>(weightCounts[static_cast<size_t>(cat)]) /
+                        static_cast<float>(std::max(1, matchingCount));
+                    ImGui::PushID(cat);
+                    DrawMiniBar("##w_bar", share, ChartPaletteColor(cat - 1, 5, 0.92f), 8.0f);
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+        }
+        EndCard();
+        ImGui::Separator();
+
         ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
         if (ImGui::BeginTable("catalog_table", 2, tableFlags)) {
