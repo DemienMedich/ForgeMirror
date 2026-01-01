@@ -118,14 +118,14 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 if (hasRecovery) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f), u8"Прогрев");
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Прогрев");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text(u8"осталось: %d", profile.recovery_tasks_remaining());
                 }
                 if (categoriesBelow > 0) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), u8"Категории < 10/10");
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Категории < 10/10");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text(u8"шт: %d", categoriesBelow);
                 }
@@ -136,7 +136,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     : 0;
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextColored(ImVec4(0.95f, 0.7f, 0.3f, 1.0f), u8"Нет активности");
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Нет активности");
                     ImGui::TableSetColumnIndex(1);
                     if (staleDays > 0) {
                         ImGui::Text(u8"> %d дн.", staleDays);
@@ -196,7 +196,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TextDisabled(u8"Прогрев");
             ImGui::TableSetColumnIndex(1);
             if (recoveryLeft > 0) {
-                ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.45f, 1.0f), u8"активен");
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"активен");
                 ImGui::TableSetColumnIndex(2);
                 ImGui::Text(u8"задач: %d", recoveryLeft);
             } else {
@@ -209,7 +209,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TextDisabled(u8"Категории");
             ImGui::TableSetColumnIndex(1);
             if (categoriesBelow > 0) {
-                ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.3f, 1.0f), u8"ниже 10/10");
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"ниже 10/10");
                 ImGui::TableSetColumnIndex(2);
                 ImGui::Text(u8"шт: %d", categoriesBelow);
                 if (ImGui::IsItemHovered()) {

@@ -113,7 +113,7 @@ void DrawView3dPanel(GuiState& state) {
         }
     }
     if (!state.viewMeshError.empty()) {
-        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", state.viewMeshError.c_str());
+        ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", state.viewMeshError.c_str());
     }
 
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
