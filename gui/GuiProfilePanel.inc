@@ -43,8 +43,16 @@ static void DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
 
 void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     // Profile details window
-    ImGui::Begin(u8"Профиль");
-    EnsureWindowVisible();
+    ImGuiWindowFlags profileFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+    if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
+        ImGuiViewportP* viewportP = (ImGuiViewportP*)(void*)viewport;
+        ImRect workRect = viewportP->GetBuildWorkRect();
+        const float navWidth = kNavigationPanelWidth;
+        const float width = std::max(0.0f, (workRect.Max.x - workRect.Min.x) - navWidth);
+        ImGui::SetNextWindowPos(ImVec2(workRect.Min.x + navWidth, workRect.Min.y), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(width, workRect.Max.y - workRect.Min.y), ImGuiCond_Always);
+    }
+    ImGui::Begin(u8"Профиль", nullptr, profileFlags);
     DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
 
     if (BeginCard("profile_select_card")) {

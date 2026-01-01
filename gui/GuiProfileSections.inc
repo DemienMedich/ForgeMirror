@@ -181,9 +181,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
         if (ImGui::BeginTable("profile_status", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
-            ImGui::TableSetupColumn(u8"Параметр");
-            ImGui::TableSetupColumn(u8"Статус");
-            ImGui::TableSetupColumn(u8"Детали");
+            ImGui::TableSetupColumn(u8"Параметр", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+            ImGui::TableSetupColumn(u8"Детали", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);

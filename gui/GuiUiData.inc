@@ -13,6 +13,7 @@ enum class UiWindowId {
 };
 
 constexpr size_t kUiWindowCount = static_cast<size_t>(UiWindowId::Count);
+constexpr float kNavigationPanelWidth = 240.0f;
 
 struct UiWindowInfo {
     UiWindowId id;

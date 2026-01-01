@@ -3,7 +3,7 @@ void DrawNavigationPanel(GuiState& state) {
     ImGuiWindowFlags navFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
     ImGuiWindowFlags_NoCollapse;
     if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
-        const float navWidth = 240.0f;
+        const float navWidth = kNavigationPanelWidth;
         ImGuiViewportP* viewportP = (ImGuiViewportP*)(void*)viewport;
         ImRect workRect = viewportP->GetBuildWorkRect();
         ImGui::SetNextWindowPos(workRect.Min, ImGuiCond_Always);

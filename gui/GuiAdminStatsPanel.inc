@@ -249,26 +249,49 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
 
     ImGui::Spacing();
     DrawCardHeader(u8"Средние категории");
-    if (ImGui::BeginTable("avg_categories", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-                                            ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn(u8"Категория");
-        ImGui::TableSetupColumn(u8"Средняя оценка", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableHeadersRow();
+    {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        std::array<float, Profile::kCategoryCount> avgs{};
         for (size_t i = 0; i < Profile::kCategoryCount; ++i) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[i];
-            ImGui::TextUnformatted(label.c_str());
-            ImGui::TableSetColumnIndex(1);
             if (stats.categoryCounts[i] > 0) {
-                double avg = static_cast<double>(stats.categoryTotals[i]) /
-                    static_cast<double>(stats.categoryCounts[i]);
-                ImGui::Text("%.2f", avg);
+                avgs[i] = static_cast<float>(static_cast<double>(stats.categoryTotals[i]) /
+                                             static_cast<double>(stats.categoryCounts[i]));
             } else {
-                ImGui::TextDisabled("-");
+                avgs[i] = 0.0f;
             }
         }
-        ImGui::EndTable();
+        DrawSparkline("##avg_categories_spark", avgs.data(),
+                      static_cast<int>(avgs.size()), 10.0f, accent, 56.0f);
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+        if (ImGui::BeginTable("avg_categories", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                                ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn(u8"Категория", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn(u8"Среднее", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn(u8"График", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+            for (size_t i = 0; i < Profile::kCategoryCount; ++i) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[i];
+                ImGui::TextUnformatted(label.c_str());
+                ImGui::TableSetColumnIndex(1);
+                if (stats.categoryCounts[i] > 0) {
+                    ImGui::Text("%.1f/10", avgs[i]);
+                } else {
+                    ImGui::TextDisabled("-");
+                }
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID(static_cast<int>(i));
+                DrawMiniBar("##avg_cat_bar", avgs[i] / 10.0f,
+                            ChartPaletteColor(static_cast<int>(i), static_cast<int>(Profile::kCategoryCount), 0.92f),
+                            8.0f);
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
     }
 
     ImGui::Spacing();
@@ -281,19 +304,31 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             rankCounts[idx] += 1;
         }
     }
-    if (ImGui::BeginTable("rank_dist", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-                                           ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn(u8"Ранг");
-        ImGui::TableSetupColumn(u8"Профилей", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-        ImGui::TableHeadersRow();
-        for (size_t i = 0; i < opts.size(); ++i) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(opts[i].label);
-            ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%d", rankCounts[i]);
+    {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        const int total = std::max(1, static_cast<int>(filtered.size()));
+        if (ImGui::BeginTable("rank_dist", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                               ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn(u8"Ранг", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn(u8"Профилей", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn(u8"Доля", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+            for (size_t i = 0; i < opts.size(); ++i) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(opts[i].label);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%d", rankCounts[i]);
+                ImGui::TableSetColumnIndex(2);
+                const float share = static_cast<float>(rankCounts[i]) / static_cast<float>(total);
+                ImGui::PushID(static_cast<int>(i));
+                DrawMiniBar("##rank_share", share, ChartPaletteColor(static_cast<int>(i), static_cast<int>(opts.size()), 0.92f), 8.0f);
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
         }
-        ImGui::EndTable();
     }
 
     ImGui::Spacing();
