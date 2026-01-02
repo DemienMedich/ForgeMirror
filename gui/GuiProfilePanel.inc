@@ -137,6 +137,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         accent.w = 1.0f;
 
         const std::string rankText = DescribeOverallRank(profile);
+        const char* rankLabel = RankLabelForLevel(overallLevel);
         const auto& catScores = profile.category_best_scores();
         std::string categoriesLine;
         {
@@ -148,6 +149,20 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             categoriesLine = catStream.str();
         }
         if (BeginCard("profile_header_card")) {
+        if (ImGui::BeginTable("profile_header_summary", 3, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Уровень");
+            ImGui::TextColored(accent, "%d", overallLevel);
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Ранг");
+            ImGui::TextColored(accent, "%s", rankLabel ? rankLabel : u8"-");
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Прогресс");
+            ImGui::TextColored(accent, "%s", progressLabel.c_str());
+            ImGui::EndTable();
+        }
+        ImGui::Separator();
         const float headerAvail = ImGui::GetContentRegionAvail().x;
         const float spacingX = ImGui::GetStyle().ItemSpacing.x;
         const float minLeftWidth = 240.0f;
@@ -276,15 +291,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             const ImVec2 pctPos(center.x - pctSize.x * 0.5f, center.y + levelSize.y * 0.05f);
             drawList->AddText(font, bigFont, levelPos, ImGui::GetColorU32(accent), levelText.c_str());
             drawList->AddText(font, smallFont, pctPos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]), pctText.c_str());
-
-            ImGui::Dummy(ImVec2(0.0f, 4.0f));
-            auto centeredTextDisabled = [&](const std::string& text) {
-                const float w = ImGui::CalcTextSize(text.c_str()).x;
-                ImGui::SetCursorPosX(baseX + std::max(0.0f, (ringAvail - w) * 0.5f));
-                ImGui::TextDisabled("%s", text.c_str());
-            };
-            centeredTextDisabled(std::string(u8"Всего XP: ") + std::to_string(totalXp));
-            centeredTextDisabled(std::string(u8"Прогресс: ") + progressLabel);
         } else {
             ImGui::SetWindowFontScale(1.25f);
             ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
