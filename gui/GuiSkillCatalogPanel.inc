@@ -344,11 +344,22 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
 
         ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
-        if (ImGui::BeginTable("catalog_table", 2, tableFlags)) {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+        ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
+        topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
+        const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
+        const char* catShort[] = {"", "A", "B", "C", "D", "E"};
+        if (ImGui::BeginTable("catalog_table", 4, tableFlags)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn(u8"Навык");
-            ImGui::TableSetupColumn(u8"Вес", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn(u8"Кат.", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+            ImGui::TableSetupColumn(u8"Вес", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableHeadersRow();
             int lastGroup = -1;
+            int rowRank = 0;
             for (int viewIndex : viewIndices) {
                 const std::string& skillId = catalogSkills[viewIndex];
                 const std::string displayName = catalog.display_name(skillId);
@@ -371,8 +382,14 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     lastGroup = weightCategory;
                 }
                 ++visibleCount;
+                if (sortMode == 1 && rowRank < 3) {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, topRowBgU32);
+                }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("%d", rowRank + 1);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 bool selected = state.selectedCatalogIndex == viewIndex;
                 if (ImGui::Selectable(displayName.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
                     state.selectedCatalogIndex = viewIndex;
@@ -387,8 +404,17 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         ImGui::EndTooltip();
                     }
                 }
-                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetColumnIndex(2);
+                const int clampedCat = std::clamp(weightCategory, 0, 5);
+                ImVec4 catColor = ChartPaletteColor(std::max(0, clampedCat - 1), 5, 0.85f);
+                if (clampedCat > 0) {
+                    ImGui::TextColored(catColor, "%s", catShort[clampedCat]);
+                } else {
+                    ImGui::TextDisabled("-");
+                }
+                ImGui::TableSetColumnIndex(3);
                 ImGui::Text("%.2f", catalog.weight(skillId));
+                ++rowRank;
             }
             ImGui::EndTable();
         }
