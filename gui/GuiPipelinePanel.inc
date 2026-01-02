@@ -7,6 +7,7 @@ void DrawPipelinePanel(GuiState& state) {
         return;
     }
     DrawCardHeader(u8"Пайплайн");
+    ImGui::TextDisabled(u8"Пайплайн — последовательность шагов развития.");
     ImGui::TextDisabled(u8"Выберите этап, чтобы увидеть детали.");
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilter = filterWidth < 360.0f;
