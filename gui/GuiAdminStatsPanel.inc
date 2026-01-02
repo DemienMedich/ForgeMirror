@@ -58,12 +58,18 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
         ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
-    } else if (ImGui::BeginTable("admin_refresh", 4, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("admin_refresh", 5, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("admin_refresh_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("admin_refresh_btn", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("admin_refresh_auto", ImGuiTableColumnFlags_WidthStretch, 0.8f);
         ImGui::TableSetupColumn("admin_refresh_secs", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn("admin_refresh_stamp", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
             refresh = true;
@@ -71,6 +77,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::TableNextColumn();
         ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
         ImGui::TableNextColumn();
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
         ImGui::TableNextColumn();
@@ -117,14 +124,21 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
             exportStats();
         }
-    } else if (ImGui::BeginTable("admin_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("admin_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("admin_filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("admin_filter_search", ImGuiTableColumnFlags_WidthStretch, 2.0f);
         ImGui::TableSetupColumn("admin_filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("admin_filter_rank", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthStretch, 0.7f);
-        ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
+        DrawAnchorIcon(UiIcon::List);
+        ImGui::TableNextColumn();
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Поиск");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
