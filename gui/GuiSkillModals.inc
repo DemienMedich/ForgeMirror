@@ -44,13 +44,22 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 addSkillOpen = false;
             }
-        } else if (ImGui::BeginTable("add_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+        } else if (ImGui::BeginTable("add_skill_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
                 saveSkill();
             }
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                 ImGui::CloseCurrentPopup();
                 addSkillOpen = false;
@@ -105,13 +114,22 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     deleteSkillOpen = false;
                     state.pendingSkillDelete.clear();
                 }
-            } else if (ImGui::BeginTable("delete_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+            } else if (ImGui::BeginTable("delete_skill_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+                ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+                ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+                keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+                const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
                 ImGui::TableNextRow();
-                ImGui::TableNextColumn();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("1");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
                     deleteSkill();
                 }
-                ImGui::TableNextColumn();
+                ImGui::TableSetColumnIndex(2);
                 if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                     ImGui::CloseCurrentPopup();
                     deleteSkillOpen = false;
@@ -192,13 +210,22 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     ImGui::CloseCurrentPopup();
                     mergeSkillOpen = false;
                 }
-            } else if (ImGui::BeginTable("merge_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+            } else if (ImGui::BeginTable("merge_skill_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+                ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+                ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+                keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+                const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
                 ImGui::TableNextRow();
-                ImGui::TableNextColumn();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("1");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 if (ImGui::Button(u8"Слить", ImVec2(-1.0f, 0.0f))) {
                     mergeSkills();
                 }
-                ImGui::TableNextColumn();
+                ImGui::TableSetColumnIndex(2);
                 if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                     state.pendingMergeFromId.clear();
                     state.pendingMergeToId.clear();

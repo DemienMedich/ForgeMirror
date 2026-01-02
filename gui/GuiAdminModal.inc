@@ -32,13 +32,22 @@ void DrawAdminLoginModal(GuiState& state) {
                 ImGui::CloseCurrentPopup();
                 adminPopupOpen = false;
             }
-        } else if (ImGui::BeginTable("admin_login_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+        } else if (ImGui::BeginTable("admin_login_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             if (ImGui::Button(u8"Войти", ImVec2(-1.0f, 0.0f))) {
                 handleLogin();
             }
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                 ImGui::CloseCurrentPopup();
                 adminPopupOpen = false;
@@ -127,13 +136,22 @@ void DrawAdminPasswordModal(GuiState& state) {
                 ImGui::CloseCurrentPopup();
                 popupOpen = false;
             }
-        } else if (ImGui::BeginTable("admin_password_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+        } else if (ImGui::BeginTable("admin_password_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             if (!envOverride && ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
                 handleSave();
             }
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                 ImGui::CloseCurrentPopup();
                 popupOpen = false;
