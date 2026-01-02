@@ -210,14 +210,21 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
             state.appLogs.clear();
         }
-    } else if (ImGui::BeginTable("log_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("log_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("log_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("log_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-        ImGui::TableSetupColumn("log_reset", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+        ImGui::TableSetupColumn("log_reset", ImGuiTableColumnFlags_WidthFixed, 110.0f);
         ImGui::TableSetupColumn("log_source", ImGuiTableColumnFlags_WidthStretch, 1.4f);
-        ImGui::TableSetupColumn("log_export", ImGuiTableColumnFlags_WidthStretch, 0.8f);
-        ImGui::TableSetupColumn("log_clear", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableSetupColumn("log_export", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("log_clear", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
+        DrawAnchorIcon(UiIcon::List);
+        ImGui::TableNextColumn();
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Поиск");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
