@@ -116,6 +116,57 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     }
     EndCard();
 
+    if (BeginCard("profile_balance_card")) {
+        DrawCardHeader(u8"Зоны перекоса");
+        ImGui::TextDisabled(u8"Три самые слабые категории по оценке.");
+        const auto& catScores = profile.category_best_scores();
+        struct CatRow { int idx; int score; };
+        std::vector<CatRow> rows;
+        rows.reserve(catScores.size());
+        for (size_t i = 0; i < catScores.size(); ++i) {
+            rows.push_back({static_cast<int>(i), catScores[i]});
+        }
+        std::sort(rows.begin(), rows.end(), [](const CatRow& a, const CatRow& b) {
+            if (a.score != b.score) return a.score < b.score;
+            return a.idx < b.idx;
+        });
+        if (rows.empty()) {
+            ImGui::TextDisabled(u8"Нет данных по категориям.");
+        } else {
+            const int showCount = std::min<int>(3, static_cast<int>(rows.size()));
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+            ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            if (ImGui::BeginTable("profile_balance_table", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH)) {
+                ImGui::TableSetupColumn(u8"Категория", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+                ImGui::TableSetupColumn(u8"Оценка", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn(u8"Прогресс", ImGuiTableColumnFlags_WidthStretch);
+                for (int i = 0; i < showCount; ++i) {
+                    const auto& row = rows[i];
+                    const float ratio = static_cast<float>(row.score) / static_cast<float>(Profile::kMaxCategoryScore);
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                    ImGui::TextUnformatted(Profile::kCategoryLabels[row.idx]);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%d/10", row.score);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::PushID(i);
+                    DrawMiniBar("##balance_bar", ratio,
+                                ChartPaletteColor(row.idx, static_cast<int>(catScores.size()), 0.92f), 8.0f);
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            ImGui::PopStyleVar();
+            if (showCount < static_cast<int>(rows.size())) {
+                ImGui::TextDisabled(u8"Остальные категории >= %d/10.", rows[showCount - 1].score);
+            }
+        }
+    }
+    EndCard();
+
     if (ImGui::CollapsingHeader(u8"Топ навыков")) {
         const char* topModes[] = {u8"По XP", u8"По уровню", u8"По весу"};
         const float topWidth = ImGui::GetContentRegionAvail().x;
