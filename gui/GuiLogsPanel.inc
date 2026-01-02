@@ -283,21 +283,37 @@ void DrawLogsPanel(GuiState& state) {
     }
 
     ImVec2 tableSize(0.0f, 260.0f);
+    ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+    keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+    const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+    auto rowAccent = [](AppLogLevel level) {
+        ImVec4 row = LogLevelColor(level);
+        row.w = std::clamp(row.w * 0.14f, 0.04f, 0.12f);
+        return ImGui::GetColorU32(row);
+    };
     ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                             ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
                             ImGuiTableFlags_SizingStretchProp;
     if (state.logCompactView) {
-        if (ImGui::BeginTable("app_logs_compact", 2, flags, tableSize)) {
-            ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        if (ImGui::BeginTable("app_logs_compact", 3, flags, tableSize)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 34.0f);
+            ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 110.0f);
             ImGui::TableSetupColumn(u8"Сообщение", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
+            int rowIndex = 0;
             for (const auto& entry : state.appLogs) {
                 if (!MatchesLogFilters(state, entry)) continue;
+                if (entry.level != AppLogLevel::Info) {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowAccent(entry.level));
+                }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("%d", rowIndex + 1);
+                ImGui::TableSetColumnIndex(1);
                 ImVec4 levelColor = LogLevelColor(entry.level);
                 ImGui::TextColored(levelColor, "%s", LogLevelLabel(entry.level));
-                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 std::string ts = FormatTimestamp(entry.timestamp, "%H:%M:%S");
                 std::string line;
                 if (!ts.empty()) {
@@ -310,6 +326,7 @@ void DrawLogsPanel(GuiState& state) {
                 }
                 line += entry.message;
                 ImGui::TextWrapped("%s", line.c_str());
+                ++rowIndex;
             }
             if (state.logAutoScroll) {
                 float maxScroll = ImGui::GetScrollMaxY();
@@ -320,33 +337,42 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::EndTable();
         }
     } else {
-        if (ImGui::BeginTable("app_logs", 4, flags, tableSize)) {
-            ImGui::TableSetupColumn(u8"Время", ImGuiTableColumnFlags_WidthFixed, 160.0f);
-            ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn(u8"Источник", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+        if (ImGui::BeginTable("app_logs", 5, flags, tableSize)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 34.0f);
+            ImGui::TableSetupColumn(u8"Время", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+            ImGui::TableSetupColumn(u8"Источник", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableSetupColumn(u8"Сообщение", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
+            int rowIndex = 0;
             for (const auto& entry : state.appLogs) {
                 if (!MatchesLogFilters(state, entry)) continue;
+                if (entry.level != AppLogLevel::Info) {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowAccent(entry.level));
+                }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("%d", rowIndex + 1);
+                ImGui::TableSetColumnIndex(1);
                 std::string ts = FormatTimestamp(entry.timestamp, "%Y-%m-%d %H:%M:%S");
                 if (ts.empty()) {
                     ImGui::TextDisabled("-");
                 } else {
                     ImGui::TextUnformatted(ts.c_str());
                 }
-                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetColumnIndex(2);
                 ImVec4 levelColor = LogLevelColor(entry.level);
                 ImGui::TextColored(levelColor, "%s", LogLevelLabel(entry.level));
-                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetColumnIndex(3);
                 if (entry.source.empty()) {
                     ImGui::TextDisabled("-");
                 } else {
                     ImGui::TextUnformatted(entry.source.c_str());
                 }
-                ImGui::TableSetColumnIndex(3);
+                ImGui::TableSetColumnIndex(4);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextWrapped("%s", entry.message.c_str());
+                ++rowIndex;
             }
             if (state.logAutoScroll) {
                 float maxScroll = ImGui::GetScrollMaxY();
