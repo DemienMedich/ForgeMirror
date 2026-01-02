@@ -1,5 +1,7 @@
 void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
+    DrawCardHeader(u8"Настройки интерфейса");
+    ImGui::TextDisabled(u8"Соберите тему, выберите фон и сохраните пресет.");
     DrawCardHeader(u8"Тема и стиль");
     const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
     const float headerWidth = ImGui::GetContentRegionAvail().x;
@@ -425,6 +427,14 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     }
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         visibleBackgrounds, static_cast<int>(backgrounds.size()));
+    if (backgrounds.empty()) {
+        ImGui::TextDisabled(u8"Фоны не найдены. Положите изображения в data/backgrounds.");
+    } else if (visibleBackgrounds == 0) {
+        ImGui::TextDisabled(u8"Нет фонов по фильтру.");
+        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+            state.filters.background.fill('\0');
+        }
+    }
     for (size_t i = 0; i < windows.size(); ++i) {
         ImGui::PushID(static_cast<int>(i));
         std::string current = state.ui.backgrounds[i];
