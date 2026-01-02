@@ -2,9 +2,12 @@ void DrawPipelinePanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pipeline, state.storageDir);
     const int stepCount = static_cast<int>(kPipelineSteps.size());
     if (stepCount == 0) {
+        DrawCardHeader(u8"Пайплайн");
         ImGui::TextDisabled(u8"Пайплайн пуст.");
         return;
     }
+    DrawCardHeader(u8"Пайплайн");
+    ImGui::TextDisabled(u8"Выберите этап, чтобы увидеть детали.");
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilter = filterWidth < 360.0f;
     if (stackFilter) {
@@ -36,6 +39,12 @@ void DrawPipelinePanel(GuiState& state) {
         }
     }
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, stepCount);
+    if (visibleCount == 0) {
+        ImGui::TextDisabled(u8"Нет этапов по фильтру.");
+        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+            state.filters.pipeline.fill('\0');
+        }
+    }
     if (state.selectedPipelineIndex < 0 || state.selectedPipelineIndex >= stepCount) {
         state.selectedPipelineIndex = 0;
     }
@@ -70,7 +79,7 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::TextUnformatted(step.description);
         ImGui::PopTextWrapPos();
     } else {
-        ImGui::TextDisabled(u8"Нет этапов по фильтру.");
+        ImGui::TextDisabled(u8"Выберите фильтр или сбросьте его, чтобы увидеть этапы.");
     }
 }
 
