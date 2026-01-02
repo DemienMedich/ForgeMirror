@@ -33,6 +33,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             }
             maxScore = std::max(maxScore, catScores[i]);
         }
+        const bool hasImbalance = (maxScore - minScore >= 3);
         const std::int64_t lastTaskTs = profile.last_task_timestamp();
         const int daysSince = lastTaskTs > 0
             ? static_cast<int>((nowSec - lastTaskTs) / (24 * 3600))
@@ -63,7 +64,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 
         std::string imbalanceText = u8"Баланс";
         ImVec4 imbalanceColor = accentSoft;
-        if (maxScore - minScore >= 3) {
+        if (hasImbalance) {
             imbalanceText = std::string(u8"Категория ") + Profile::kCategoryLabels[minIdx] +
                 u8" (" + std::to_string(minScore) + u8"/10)";
             imbalanceColor = LogLevelColor(AppLogLevel::Warning);
@@ -102,6 +103,11 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextDisabled(u8"Перекос");
             ImGui::TableSetColumnIndex(1);
+            if (hasImbalance) {
+                ImVec4 warnBg = LogLevelColor(AppLogLevel::Warning);
+                warnBg.w = std::clamp(warnBg.w * 0.16f, 0.06f, 0.16f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, ImGui::GetColorU32(warnBg));
+            }
             ImGui::TextColored(imbalanceColor, "%s", imbalanceText.c_str());
 
             ImGui::TableNextRow();
@@ -138,6 +144,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
             const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+            ImVec4 warnRow = warnText;
+            warnRow.w = std::clamp(warnRow.w * 0.16f, 0.06f, 0.16f);
             if (ImGui::BeginTable("profile_balance_table", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH)) {
                 ImGui::TableSetupColumn(u8"Категория", ImGuiTableColumnFlags_WidthFixed, 120.0f);
                 ImGui::TableSetupColumn(u8"Оценка", ImGuiTableColumnFlags_WidthFixed, 70.0f);
@@ -145,16 +154,25 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 for (int i = 0; i < showCount; ++i) {
                     const auto& row = rows[i];
                     const float ratio = static_cast<float>(row.score) / static_cast<float>(Profile::kMaxCategoryScore);
+                    const bool isWeakest = (i == 0);
                     ImGui::TableNextRow();
+                    if (isWeakest) {
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(warnRow));
+                    }
                     ImGui::TableSetColumnIndex(0);
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                    ImGui::TextUnformatted(Profile::kCategoryLabels[row.idx]);
+                    if (isWeakest) {
+                        ImGui::TextColored(warnText, "%s", Profile::kCategoryLabels[row.idx]);
+                    } else {
+                        ImGui::TextUnformatted(Profile::kCategoryLabels[row.idx]);
+                    }
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text("%d/10", row.score);
                     ImGui::TableSetColumnIndex(2);
                     ImGui::PushID(i);
+                    const float barAlpha = isWeakest ? 1.0f : 0.82f;
                     DrawMiniBar("##balance_bar", ratio,
-                                ChartPaletteColor(row.idx, static_cast<int>(catScores.size()), 0.92f), 8.0f);
+                                ChartPaletteColor(row.idx, static_cast<int>(catScores.size()), barAlpha), 8.0f);
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
