@@ -73,6 +73,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::BeginChild("catalog_list_panel", ImVec2(0.0f, panelHeight), false);
 
         DrawCardHeader(u8"Каталог навыков");
+        ImGui::TextDisabled(u8"Выберите навык слева — детали и редактирование справа.");
         const float listWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = listWidth < 320.0f;
         const bool canDeleteSkill = state.selectedCatalogIndex >= 0 &&
@@ -177,6 +178,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::EndTable();
         }
         ImGui::TextDisabled(u8"Всего: %d", static_cast<int>(catalogSkills.size()));
+        if (catalogSkills.empty()) {
+            ImGui::TextDisabled(u8"Каталог пуст. Добавьте первый навык.");
+        }
         ImGui::Separator();
 
         int visibleCount = 0;
@@ -622,7 +626,17 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 }
             }
         } else {
-            ImGui::TextDisabled(u8"Выберите навык, чтобы увидеть описание.");
+            ImGui::TextDisabled(u8"Выберите навык, чтобы увидеть детали.");
+            if (state.isAdmin) {
+                if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
+                    state.addSkillPopupRequest = true;
+                    std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
+                    std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                    state.newSkillWeight = 1.0f;
+                }
+            } else {
+                ImGui::TextDisabled(u8"Добавление навыков доступно администратору.");
+            }
         }
         ImGui::EndChild();
         ImGui::EndTable();
