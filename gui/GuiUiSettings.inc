@@ -149,6 +149,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "profileTab") settings.profileTab = ParseInt(value, settings.profileTab);
         } else if (section == "profile") {
             if (key == "lastProfileId") settings.lastProfileId = value;
+            else if (key == "viewMode") settings.profileViewMode = ParseInt(value, settings.profileViewMode);
         } else if (section == "logs") {
             if (key == "filter") settings.logFilter = value;
             else if (key == "source") settings.logSourceFilter = value;
@@ -200,6 +201,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
     settings.backgroundAlpha = ClampFinite(settings.backgroundAlpha, 0.0f, 1.0f, 0.25f);
     settings.backgroundTileScale = ClampFinite(settings.backgroundTileScale, 0.25f, 4.0f, 1.0f);
     settings.profileTab = std::clamp(settings.profileTab, 0, 4);
+    settings.profileViewMode = std::clamp(settings.profileViewMode, 0, 1);
     settings.adminStatsRankFilter = std::max(0, settings.adminStatsRankFilter);
     settings.adminStatsRefreshSeconds = std::clamp(settings.adminStatsRefreshSeconds, 5, 120);
     settings.inactivityThresholdDays = std::clamp(settings.inactivityThresholdDays, 1, 365);
@@ -257,7 +259,8 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "profileTab=" << settings.profileTab << "\n\n";
 
     out << "[profile]\n";
-    out << "lastProfileId=" << SanitizeLogLine(settings.lastProfileId) << "\n\n";
+    out << "lastProfileId=" << SanitizeLogLine(settings.lastProfileId) << "\n";
+    out << "viewMode=" << settings.profileViewMode << "\n\n";
 
     out << "[logs]\n";
     out << "filter=" << SanitizeLogLine(settings.logFilter) << "\n";

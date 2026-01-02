@@ -142,6 +142,36 @@ ImVec4 BlendColor(const ImVec4& a, const ImVec4& b, float t) {
     );
 }
 
+struct UiLayoutTokens {
+    float cardPaddingX = 12.0f;
+    float cardPaddingY = 10.0f;
+    float cardSpacingY = 10.0f;
+    float sectionSpacingY = 8.0f;
+    ImVec2 tableCellPadding = ImVec2(8.0f, 6.0f);
+};
+
+const UiLayoutTokens& LayoutTokens() {
+    static UiLayoutTokens tokens;
+    return tokens;
+}
+
+ImVec2 CardPadding() {
+    const auto& tokens = LayoutTokens();
+    return ImVec2(tokens.cardPaddingX, tokens.cardPaddingY);
+}
+
+float CardSpacing() {
+    return LayoutTokens().cardSpacingY;
+}
+
+float SectionSpacing() {
+    return LayoutTokens().sectionSpacingY;
+}
+
+ImVec2 TableCellPadding() {
+    return LayoutTokens().tableCellPadding;
+}
+
 ImVec4 CardBackgroundColor() {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 base = style.Colors[ImGuiCol_WindowBg];
@@ -183,7 +213,7 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
     ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, CardRounding());
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, CardPadding());
     const bool open = ImGui::BeginChild(id, size, flags | ImGuiChildFlags_Border,
                                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if (open) {

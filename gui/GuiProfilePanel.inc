@@ -180,7 +180,37 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextColored(accent, "%s", progressLabel.c_str());
             ImGui::EndTable();
         }
-        ImGui::TextDisabled(u8"XP — опыт: начисляется навыкам и повышает уровень.");
+        ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
+        ImGui::TextDisabled(u8"Режим");
+        ImGui::SameLine();
+        auto drawModeButton = [&](const char* label, int mode, const char* tooltip) {
+            const bool selected = (state.ui.profileViewMode == mode);
+            if (selected) {
+                ImVec4 base = BlendColor(style.Colors[ImGuiCol_ButtonActive], accent, 0.35f);
+                ImVec4 hover = BlendColor(style.Colors[ImGuiCol_ButtonHovered], accent, 0.30f);
+                ImVec4 active = BlendColor(base, accent, 0.20f);
+                base.w = std::max(base.w, 0.85f);
+                hover.w = std::max(hover.w, 0.90f);
+                active.w = std::max(active.w, 0.95f);
+                ImGui::PushStyleColor(ImGuiCol_Button, base);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, active);
+            }
+            if (ImGui::Button(label)) {
+                state.ui.profileViewMode = mode;
+                state.uiDirty = true;
+            }
+            if (selected) {
+                ImGui::PopStyleColor(3);
+            }
+            if (tooltip && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", tooltip);
+            }
+        };
+        drawModeButton(u8"Обзор", 0, u8"Быстрый обзор состояния.");
+        ImGui::SameLine();
+        drawModeButton(u8"Аналитика", 1, u8"Детали, фильтры и история.");
+        ImGui::TextDisabled(u8"XP - опыт: начисляется навыкам и повышает уровень.");
         ImGui::Separator();
         const float headerAvail = ImGui::GetContentRegionAvail().x;
         const float spacingX = ImGui::GetStyle().ItemSpacing.x;
@@ -450,6 +480,11 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         EndCard();
         ImGui::Spacing();
 
+        const bool overviewMode = (state.ui.profileViewMode == 0);
+        if (overviewMode && state.ui.profileTab != 0 && state.ui.profileTab != 3) {
+            state.ui.profileTab = 0;
+            state.profileTabRequest = -1;
+        }
         state.profileSection = std::clamp(state.ui.profileTab, 0, 4);
         ImVec4 tab = BlendColor(style.Colors[ImGuiCol_Tab], accent, 0.20f);
         ImVec4 tabHover = BlendColor(style.Colors[ImGuiCol_TabHovered], accent, 0.25f);
@@ -461,38 +496,31 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::PushStyleColor(ImGuiCol_TabHovered, tabHover);
         ImGui::PushStyleColor(ImGuiCol_TabSelected, tabActive);
         if (ImGui::BeginTabBar("profile_tabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+            struct ProfileTabInfo {
+                const char* label;
+                int index;
+                bool allowOverview;
+            };
+            static const ProfileTabInfo tabs[] = {
+                {u8"Обзор", 0, true},
+                {u8"Ачивки", 1, false},
+                {u8"Навыки", 2, false},
+                {u8"Диаграмма", 3, true},
+                {u8"Действия", 4, false}
+            };
             auto tabFlagsFor = [&](int index) {
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
             };
-            if (ImGui::BeginTabItem(u8"Обзор", nullptr, tabFlagsFor(0))) {
-                state.profileSection = 0;
-                state.ui.profileTab = 0;
-                state.profileTabRequest = -1;
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem(u8"Ачивки", nullptr, tabFlagsFor(1))) {
-                state.profileSection = 1;
-                state.ui.profileTab = 1;
-                state.profileTabRequest = -1;
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem(u8"Навыки", nullptr, tabFlagsFor(2))) {
-                state.profileSection = 2;
-                state.ui.profileTab = 2;
-                state.profileTabRequest = -1;
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem(u8"Диаграмма", nullptr, tabFlagsFor(3))) {
-                state.profileSection = 3;
-                state.ui.profileTab = 3;
-                state.profileTabRequest = -1;
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem(u8"Действия", nullptr, tabFlagsFor(4))) {
-                state.profileSection = 4;
-                state.ui.profileTab = 4;
-                state.profileTabRequest = -1;
-                ImGui::EndTabItem();
+            for (const auto& tabInfo : tabs) {
+                const bool disableTab = overviewMode && !tabInfo.allowOverview;
+                if (disableTab) ImGui::BeginDisabled();
+                if (ImGui::BeginTabItem(tabInfo.label, nullptr, tabFlagsFor(tabInfo.index))) {
+                    state.profileSection = tabInfo.index;
+                    state.ui.profileTab = tabInfo.index;
+                    state.profileTabRequest = -1;
+                    ImGui::EndTabItem();
+                }
+                if (disableTab) ImGui::EndDisabled();
             }
             ImGui::EndTabBar();
         }

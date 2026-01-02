@@ -83,7 +83,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             focusText = u8"Поддержание формы";
         }
 
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -140,7 +140,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TextDisabled(u8"Нет данных по категориям.");
         } else {
             const int showCount = std::min<int>(3, static_cast<int>(rows.size()));
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
             ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
             const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -231,7 +231,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 return a.level > b.level;
             });
             if (skills.size() > 5) skills.resize(5);
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
             ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
             const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -290,7 +290,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             if (signals == 0) {
                 ImGui::TextColored(accentSoft, u8"Все в норме.");
             } else {
-                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
                 ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
                 keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -382,7 +382,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             categoryAttention = u8"все освоены";
         }
 
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -581,7 +581,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             if (expiringSoon.size() > limit) {
                 ImGui::TextDisabled(u8"И ещё: %d", static_cast<int>(expiringSoon.size() - limit));
             }
-            ImGui::Spacing();
+            ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
         }
 
         constexpr int kIconsPerRow = 6;
@@ -743,7 +743,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     int rowRank = 0;
     ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
     ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.06f, 0.16f);
@@ -829,11 +829,22 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
         accent.w = 1.0f;
 
         const auto& catScores = profile.category_best_scores();
+        int weakestIdx = -1;
+        int minScore = Profile::kMaxCategoryScore;
+        for (size_t i = 0; i < catScores.size(); ++i) {
+            if (catScores[i] <= minScore) {
+                minScore = catScores[i];
+                weakestIdx = static_cast<int>(i);
+            }
+        }
         if (BeginCard("profile_chart_categories")) {
             DrawCardHeader(u8"Категории");
             if (catScores.empty()) {
                 ImGui::TextDisabled(u8"Нет данных по категориям.");
             } else {
+                ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                ImVec4 warnRow = warnText;
+                warnRow.w = std::clamp(warnRow.w * 0.14f, 0.05f, 0.14f);
                 std::vector<float> values;
                 values.reserve(catScores.size());
                 for (size_t i = 0; i < catScores.size(); ++i) {
@@ -846,15 +857,24 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                     ImGui::TableSetupColumn("cat_value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
                     ImGui::TableSetupColumn("cat_bar", ImGuiTableColumnFlags_WidthStretch);
                     for (int i = 0; i < static_cast<int>(catScores.size()); ++i) {
+                        const bool isWeakest = (i == weakestIdx);
                         ImGui::TableNextRow();
+                        if (isWeakest) {
+                            ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(warnRow));
+                        }
                         ImGui::TableNextColumn();
-                        ImGui::TextDisabled("%s", Profile::kCategoryLabels[i]);
+                        if (isWeakest) {
+                            ImGui::TextColored(warnText, "%s", Profile::kCategoryLabels[i]);
+                        } else {
+                            ImGui::TextDisabled("%s", Profile::kCategoryLabels[i]);
+                        }
                         ImGui::TableNextColumn();
                         ImGui::Text("%d/10", catScores[i]);
                         ImGui::TableNextColumn();
                         ImGui::PushID(i);
+                        const float barAlpha = isWeakest ? 1.0f : 0.82f;
                         DrawMiniBar("##cat_bar", static_cast<float>(catScores[i]) / 10.0f,
-                                    ChartPaletteColor(i, static_cast<int>(catScores.size()), 0.92f), 8.0f);
+                                    ChartPaletteColor(i, static_cast<int>(catScores.size()), barAlpha), 8.0f);
                         ImGui::PopID();
                     }
                     ImGui::EndTable();
@@ -862,7 +882,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
             }
         }
         EndCard();
-        ImGui::Spacing();
+        ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
 
         auto skills = profile.list_skills();
         if (BeginCard("profile_chart_top_skills")) {
@@ -923,7 +943,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
             }
         }
         EndCard();
-        ImGui::Spacing();
+        ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
 
         if (BeginCard("profile_chart_radar")) {
             DrawCardHeader(u8"Радар навыков");
@@ -936,7 +956,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                 ImGui::SetNextItemWidth(std::min(260.0f, ImGui::GetContentRegionAvail().x));
                 ImGui::SliderInt(u8"Навыков на диаграмме", &radarCount, 3, maxRadar);
                 ImGui::TextDisabled(u8"Показано: %d из %d", radarCount, static_cast<int>(skills.size()));
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
 
                 std::vector<Skill> top;
                 top.reserve(static_cast<size_t>(radarCount));
@@ -969,7 +989,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
             }
         }
         EndCard();
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
     }
 }
 
