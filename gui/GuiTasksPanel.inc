@@ -277,6 +277,55 @@ void DrawTasksPanel(GuiState& state) {
         filtered.push_back(task);
     }
 
+    if (BeginCard("tasks_summary_card")) {
+        DrawCardHeader(u8"Сводка");
+        if (filtered.empty()) {
+            ImGui::TextDisabled(u8"Нет задач по текущим фильтрам.");
+        } else {
+            const int totalFiltered = static_cast<int>(filtered.size());
+            const std::string lastStamp = FormatTimestamp(filtered.front()->createdAt, "%Y-%m-%d %H:%M");
+            std::array<int, Profile::kCategoryCount> categoryCounts{};
+            int topIdx = 0;
+            int topCount = 0;
+            for (const TaskEntry* task : filtered) {
+                int idx = std::clamp(task->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
+                categoryCounts[idx] += 1;
+                if (categoryCounts[idx] >= topCount) {
+                    topCount = categoryCounts[idx];
+                    topIdx = idx;
+                }
+            }
+            std::ostringstream focusStream;
+            focusStream.imbue(std::locale::classic());
+            float pct = totalFiltered > 0 ? (static_cast<float>(topCount) / static_cast<float>(totalFiltered)) * 100.0f : 0.0f;
+            focusStream << std::fixed << std::setprecision(0) << pct;
+            std::string focusText = std::string(ClassificationLabel(topIdx)) +
+                " (" + std::to_string(topCount) + ", " + focusStream.str() + "%)";
+
+            if (ImGui::BeginTable("tasks_summary_table", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+                ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+                ImGui::TableSetupColumn("sum_last", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableSetupColumn("sum_focus", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextDisabled(u8"Всего");
+                ImGui::Text("%d", totalFiltered);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextDisabled(u8"Последняя");
+                ImGui::Text("%s", lastStamp.empty() ? "-" : lastStamp.c_str());
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextDisabled(u8"Фокус");
+                ImGui::Text("%s", focusText.c_str());
+                ImGui::EndTable();
+            }
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
     int visibleCount = 0;
     if (ImGui::BeginTable("tasks_table", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                               ImGuiTableFlags_SizingStretchProp)) {
