@@ -14,6 +14,7 @@ void DrawNavigationPanel(GuiState& state) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
+    ImGui::TextDisabled(u8"Разделы и быстрые переходы.");
     DrawCardHeader(u8"Разделы");
     const float navItemHeight = std::max(34.0f, ImGui::GetFrameHeight() * 1.15f);
     auto navButton = [&](const char* id, UiIcon icon, const char* label, bool active, auto onClick) {
@@ -61,6 +62,8 @@ void DrawNavigationPanel(GuiState& state) {
         navButton("nav_view3d_settings", UiIcon::Cube, u8"3D настройки", state.showView3dSettings, [&]() {
             OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
         });
+    } else {
+        ImGui::TextDisabled(u8"Админ-разделы скрыты.");
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
