@@ -127,7 +127,11 @@ void DrawNavigationPanel(GuiState& state) {
     } else {
         ImGui::TextDisabled(u8"Не запущен");
     }
-    const float clockSize = std::min(110.0f, ImGui::GetContentRegionAvail().x);
+    const float clockAvail = ImGui::GetContentRegionAvail().x;
+    const float clockSize = std::min(96.0f, clockAvail);
+    const float clockOffsetX = std::max(0.0f, (clockAvail - clockSize) * 0.5f);
+    const float clockBaseX = ImGui::GetCursorPosX();
+    ImGui::SetCursorPosX(clockBaseX + clockOffsetX);
     ImGui::Dummy(ImVec2(clockSize, clockSize));
     const ImVec2 clockMin = ImGui::GetItemRectMin();
     const ImVec2 clockMax = ImGui::GetItemRectMax();
@@ -144,7 +148,11 @@ void DrawNavigationPanel(GuiState& state) {
 #endif
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
-    ImGui::TextDisabled("%s", buf);
+    ImVec2 textSize = ImGui::CalcTextSize(buf);
+    ImGui::SetCursorPosX(clockBaseX + std::max(0.0f, (clockAvail - textSize.x) * 0.5f));
+    ImVec4 timeColor = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], accent, 0.35f);
+    timeColor.w = std::max(timeColor.w, 0.85f);
+    ImGui::TextColored(timeColor, "%s", buf);
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
     navButton("nav_profiles", UiIcon::Users, u8"Профили", state.showProfilesWindow, [&]() {
