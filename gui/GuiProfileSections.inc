@@ -498,10 +498,18 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         return nameA < nameB;
     });
     int visibleCount = 0;
+    int rowRank = 0;
     ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
     ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
-    if (ImGui::BeginTable("skill_table", 5, tableFlags)) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+    keyBg.w = std::clamp(keyBg.w * 0.35f, 0.06f, 0.16f);
+    const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+    const float importantRowHeight = ImGui::GetTextLineHeightWithSpacing() + 6.0f;
+    const char* weightShort[] = {"", "A", "B", "C", "D", "E"};
+    if (ImGui::BeginTable("skill_table", 6, tableFlags)) {
+        ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn(u8"Навык");
         ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn("XP", ImGuiTableColumnFlags_WidthFixed, 140.0f);
@@ -521,9 +529,13 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
                 const int categoryIdx = WeightCategoryIndex(skill.weight);
                 if (categoryIdx != state.profileSkillCategoryFilter) continue;
             }
+            const bool importantRow = (sortMode != 0 && rowRank < 3);
             ++visibleCount;
-            ImGui::TableNextRow();
+            ImGui::TableNextRow(ImGuiTableRowFlags_None, importantRow ? importantRowHeight : 0.0f);
             ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("%d", rowRank + 1);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextUnformatted(displayName.c_str());
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
@@ -547,14 +559,16 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
                 }
                 ImGui::EndTooltip();
             }
-            ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%d", skill.level);
             ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%d / %d", skill.xp, skill.xpToNext);
+            ImGui::Text("%d", skill.level);
             ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%d", TotalSkillXpGui(skill));
+            ImGui::Text("%d / %d", skill.xp, skill.xpToNext);
             ImGui::TableSetColumnIndex(4);
-            ImGui::Text("%.2f", skill.weight);
+            ImGui::Text("%d", TotalSkillXpGui(skill));
+            ImGui::TableSetColumnIndex(5);
+            const int weightCat = std::clamp(WeightCategoryIndex(skill.weight), 0, 5);
+            ImGui::Text("%s %.2f", weightShort[weightCat], skill.weight);
+            ++rowRank;
         }
         ImGui::EndTable();
     }
