@@ -66,23 +66,38 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             });
             if (skills.size() > 5) skills.resize(5);
             ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
-            if (ImGui::BeginTable("top_skills", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+            ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
+            topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
+            const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
+            if (ImGui::BeginTable("top_skills", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Навык");
                 ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                 ImGui::TableSetupColumn(u8"Всего XP", ImGuiTableColumnFlags_WidthFixed, 120.0f);
                 ImGui::TableSetupColumn(u8"Вес", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                 ImGui::TableHeadersRow();
+                int rowRank = 0;
                 for (const auto& skill : skills) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(catalog.display_name(skill.name).c_str());
+                    if (rowRank < 3) {
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, topRowBgU32);
+                    }
+                    ImGui::TextDisabled("%d", rowRank + 1);
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%d", skill.level);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                    ImGui::TextUnformatted(catalog.display_name(skill.name).c_str());
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%d", TotalSkillXpGui(skill));
+                    ImGui::Text("%d", skill.level);
                     ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%d", TotalSkillXpGui(skill));
+                    ImGui::TableSetColumnIndex(4);
                     ImGui::Text("%.2f", skill.weight);
+                    ++rowRank;
                 }
                 ImGui::EndTable();
             }
