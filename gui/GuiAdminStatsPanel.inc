@@ -43,6 +43,8 @@ static void DrawAdminKpiCardIcon(const char* id, UiIcon icon, const char* title,
 
 void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::AdminStats, state.storageDir);
+    DrawCardHeader(u8"Статистика");
+    ImGui::TextDisabled(u8"Сводка по профилям. Клик по строке открывает профиль.");
     const std::int64_t nowSec = NowSeconds();
     bool refresh = false;
     const float headerWidth = ImGui::GetContentRegionAvail().x;
@@ -154,11 +156,26 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
 
     const auto& stats = state.adminStats;
     const auto filtered = FilterAdminProfiles(state);
+    const bool hasFilters = state.filters.adminStats[0] != '\0' ||
+                            !state.adminStatsIncludeArchived ||
+                            state.adminStatsRankFilter != 0;
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         static_cast<int>(filtered.size()),
                         static_cast<int>(stats.profiles.size()));
     if (filtered.empty()) {
-        ImGui::TextDisabled(u8"Нет данных для отображения.");
+        if (stats.profiles.empty()) {
+            ImGui::TextDisabled(u8"Нет профилей для статистики.");
+            ImGui::TextDisabled(u8"Создайте профиль или импортируйте данные.");
+        } else {
+            ImGui::TextDisabled(u8"Нет данных по фильтрам.");
+        }
+        if (hasFilters && ImGui::SmallButton(u8"Сбросить фильтры")) {
+            resetFilters();
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Обновить")) {
+            RefreshAdminStats(state, storage);
+        }
         SyncFiltersToUi(state);
         return;
     }
