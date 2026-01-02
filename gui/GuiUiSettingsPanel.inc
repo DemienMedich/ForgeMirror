@@ -94,6 +94,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Пресеты интерфейса");
+    ImGui::TextDisabled(u8"Пресеты сохраняют стиль, масштаб и фон.");
     const bool stackUiPresets = headerWidth < 520.0f;
     auto applyGlassUiPreset = [&]() {
         ApplyThemePreset(3, state.ui, style);
@@ -358,6 +359,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
 
     ImGui::Spacing();
     DrawCardHeader(u8"Фоны окон");
+    ImGui::TextDisabled(u8"Фон применяется ко всем окнам, если выбран общий.");
     ImGui::Checkbox(u8"Замостить фон", &state.ui.backgroundTiled);
     ImGui::SliderFloat(u8"Масштаб плитки", &state.ui.backgroundTileScale, 0.25f, 3.0f, "%.2f");
     const auto backgrounds = LoadUiBackgroundChoices(state.storageDir);
