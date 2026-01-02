@@ -271,6 +271,34 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
 
     if (BeginCard("profiles_list_card")) {
         DrawCardHeader(u8"Профили");
+        ImGui::TextDisabled(u8"Главное меню: выберите профиль или создайте новый.");
+        const float actionsWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActions = actionsWidth < 360.0f;
+        if (stackActions) {
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Создать профиль", ImVec2(-1.0f, 0.0f))) {
+                state.modalBuffer.fill('\0');
+                state.createPopupRequest = true;
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+            if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                RefreshProfiles(state, storage, catalog);
+            }
+        } else if (ImGui::BeginTable("profile_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Создать профиль", ImVec2(-1.0f, 0.0f))) {
+                state.modalBuffer.fill('\0');
+                state.createPopupRequest = true;
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+            ImGui::TableNextColumn();
+            if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                RefreshProfiles(state, storage, catalog);
+            }
+            ImGui::EndTable();
+        }
         const float filtersWidth = ImGui::GetContentRegionAvail().x;
         const bool stackFilters = filtersWidth < 520.0f;
         const char* archiveLabels[] = {u8"Все", u8"Активные", u8"Архив"};
@@ -341,8 +369,21 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::TextDisabled(u8"Показано: %d из %d",
             static_cast<int>(visibleIndices.size()),
             static_cast<int>(state.profiles.size()));
-            if (visibleIndices.empty()) {
+            if (state.profiles.empty()) {
+                ImGui::TextDisabled(u8"Профили не найдены.");
+                if (state.isAdmin) {
+                    if (ImGui::Button(u8"Создать первый профиль", ImVec2(-1.0f, 0.0f))) {
+                        state.modalBuffer.fill('\0');
+                        state.createPopupRequest = true;
+                    }
+                } else {
+                    ImGui::TextDisabled(u8"Создание профилей доступно администратору.");
+                }
+            } else if (visibleIndices.empty()) {
                 ImGui::TextDisabled(u8"Нет профилей по фильтру.");
+                if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+                    state.filters.profile.fill('\0');
+                }
             }
             for (int i : visibleIndices) {
                 const auto& info = state.profiles[i];
