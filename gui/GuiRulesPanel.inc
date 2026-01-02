@@ -29,27 +29,40 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Квадратичный прирост за уровень");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##level_quad", &draft.levelQuadraticXp);
-    } else if (ImGui::BeginTable("level_rules", 2, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("level_rules", 3, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupColumn("level_label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("level_value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("level_hint", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImVec4 labelBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        labelBg.w = std::clamp(labelBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 labelBgU32 = ImGui::GetColorU32(labelBg);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Базовый XP (уровень 1)");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##level_base", &draft.levelBaseXp);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"база");
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Линейный прирост за уровень");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##level_linear", &draft.levelLinearXp);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"линия");
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Квадратичный прирост за уровень");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##level_quad", &draft.levelQuadraticXp);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"квадр.");
         ImGui::EndTable();
     }
     ImGui::Spacing();
@@ -64,20 +77,27 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 draft.categoryBaseXp[idx] = value;
             }
         }
-    } else if (ImGui::BeginTable("category_rules", 2, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("category_rules", 3, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupColumn("cat_label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("cat_value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("cat_hint", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImVec4 labelBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        labelBg.w = std::clamp(labelBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 labelBgU32 = ImGui::GetColorU32(labelBg);
         for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
             std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
             int value = draft.categoryBaseXp[idx];
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
             ImGui::TextDisabled("%s", label.c_str());
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::InputInt(("##cat_xp_" + std::to_string(idx)).c_str(), &value)) {
                 draft.categoryBaseXp[idx] = value;
             }
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextDisabled("C%s", Profile::kCategoryLabels[idx]);
         }
         ImGui::EndTable();
     }
@@ -99,39 +119,58 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Задач прогрева");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##recovery_tasks", &draft.recoveryWarmupTasks);
-    } else if (ImGui::BeginTable("bonus_rules", 2, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("bonus_rules", 3, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupColumn("bonus_label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("bonus_value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("bonus_hint", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImVec4 labelBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        labelBg.w = std::clamp(labelBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 labelBgU32 = ImGui::GetColorU32(labelBg);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Базовый фокус-бонус");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputFloat(u8"##focus_base", &draft.focusBaseBonus, 0.05f, 0.5f, "%.2f");
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"%");
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Доп. фокус-бонус");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputFloat(u8"##focus_extra", &draft.focusAdditionalBonus, 0.05f, 0.5f, "%.2f");
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"%");
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Коэффициент награды при повторе");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderFloat(u8"##repeat_factor", &draft.repeatRewardFactor, 0.0f, 1.0f, "%.2f");
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"x");
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Коэффициент награды при прогреве");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderFloat(u8"##recovery_factor", &draft.recoveryRewardFactor, 0.0f, 1.0f, "%.2f");
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"x");
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
         ImGui::TextDisabled(u8"Задач прогрева");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##recovery_tasks", &draft.recoveryWarmupTasks);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"шт");
         ImGui::EndTable();
     }
     ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
