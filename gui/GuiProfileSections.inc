@@ -4,20 +4,117 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     accent.w = 1.0f;
     ImVec4 accentSoft = accent;
     accentSoft.w = 0.75f;
-    {
-        RankSpan span = ComputeRankSpan(overallLevel);
-        if (span.hasNext && span.nextLevel > span.currentLevel) {
-            const int levelsLeft = span.nextLevel - overallLevel;
-            std::string nextRankText = std::string(u8"След. ранг: ") + span.nextLabel;
-            std::string rankProgressText = u8"До следующего ранга: " + std::to_string(levelsLeft) + u8" ур.";
-            const float rankProgress = static_cast<float>(overallLevel - span.currentLevel) /
-            static_cast<float>(span.nextLevel - span.currentLevel);
-            ImGui::TextUnformatted(nextRankText.c_str());
-            ImGui::ProgressBar(std::clamp(rankProgress, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f), rankProgressText.c_str());
-        } else {
-            ImGui::TextUnformatted(u8"Ранг: максимум");
-        }
+    RankSpan span = ComputeRankSpan(overallLevel);
+    const int levelsLeft = (span.hasNext && span.nextLevel > span.currentLevel)
+        ? (span.nextLevel - overallLevel)
+        : 0;
+    if (span.hasNext && span.nextLevel > span.currentLevel) {
+        std::string nextRankText = std::string(u8"След. ранг: ") + span.nextLabel;
+        std::string rankProgressText = u8"До следующего ранга: " + std::to_string(levelsLeft) + u8" ур.";
+        const float rankProgress = static_cast<float>(overallLevel - span.currentLevel) /
+        static_cast<float>(span.nextLevel - span.currentLevel);
+        ImGui::TextUnformatted(nextRankText.c_str());
+        ImGui::ProgressBar(std::clamp(rankProgress, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f), rankProgressText.c_str());
+    } else {
+        ImGui::TextUnformatted(u8"Ранг: максимум");
     }
+
+    if (BeginCard("profile_state_card")) {
+        DrawCardHeader(u8"Сводка состояния");
+        ImGui::TextDisabled(u8"Где вы сейчас и что проседает.");
+        const auto& catScores = profile.category_best_scores();
+        int minScore = Profile::kMaxCategoryScore;
+        int maxScore = 0;
+        int minIdx = 0;
+        for (size_t i = 0; i < catScores.size(); ++i) {
+            if (catScores[i] <= minScore) {
+                minScore = catScores[i];
+                minIdx = static_cast<int>(i);
+            }
+            maxScore = std::max(maxScore, catScores[i]);
+        }
+        const std::int64_t lastTaskTs = profile.last_task_timestamp();
+        const int daysSince = lastTaskTs > 0
+            ? static_cast<int>((nowSec - lastTaskTs) / (24 * 3600))
+            : -1;
+        const bool penaltiesEnabled = profile.penalties_enabled();
+        const int recoveryLeft = penaltiesEnabled ? profile.recovery_tasks_remaining() : 0;
+
+        std::string stateText;
+        ImVec4 stateColor = accentSoft;
+        if (lastTaskTs <= 0) {
+            stateText = u8"Нет активности";
+            stateColor = LogLevelColor(AppLogLevel::Warning);
+        } else if (recoveryLeft > 0) {
+            stateText = u8"Прогрев";
+            stateColor = LogLevelColor(AppLogLevel::Error);
+        } else if (daysSince <= 7) {
+            stateText = u8"Рост";
+            stateColor = accent;
+        } else if (daysSince <= 21) {
+            stateText = u8"Плато";
+        } else {
+            stateText = u8"Спад";
+            stateColor = LogLevelColor(AppLogLevel::Warning);
+        }
+        if (daysSince >= 0) {
+            stateText += u8" (" + std::to_string(daysSince) + u8" дн. назад)";
+        }
+
+        std::string imbalanceText = u8"Баланс";
+        ImVec4 imbalanceColor = accentSoft;
+        if (maxScore - minScore >= 3) {
+            imbalanceText = std::string(u8"Категория ") + Profile::kCategoryLabels[minIdx] +
+                u8" (" + std::to_string(minScore) + u8"/10)";
+            imbalanceColor = LogLevelColor(AppLogLevel::Warning);
+        }
+
+        std::string focusText;
+        if (recoveryLeft > 0) {
+            focusText = u8"Прогрев: осталось " + std::to_string(recoveryLeft) + u8" задач";
+        } else if (minScore < Profile::kMaxCategoryScore) {
+            focusText = std::string(u8"Категория ") + Profile::kCategoryLabels[minIdx] +
+                u8" (" + std::to_string(minScore) + u8"/10)";
+        } else if (span.hasNext && levelsLeft > 0) {
+            focusText = std::string(u8"До ранга ") + span.nextLabel + u8": " +
+                std::to_string(levelsLeft) + u8" ур.";
+        } else {
+            focusText = u8"Поддержание формы";
+        }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+        ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+        if (ImGui::BeginTable("profile_state_summary", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("state_label", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("state_value", ImGuiTableColumnFlags_WidthStretch);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Состояние");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(stateColor, "%s", stateText.c_str());
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Перекос");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(imbalanceColor, "%s", imbalanceText.c_str());
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Фокус");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(accent, "%s", focusText.c_str());
+            ImGui::EndTable();
+        }
+        ImGui::PopStyleVar();
+    }
+    EndCard();
 
     if (ImGui::CollapsingHeader(u8"Топ навыков")) {
         const char* topModes[] = {u8"По XP", u8"По уровню", u8"По весу"};
