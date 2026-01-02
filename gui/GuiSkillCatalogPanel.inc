@@ -74,6 +74,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
 
         DrawCardHeader(u8"Каталог навыков");
         ImGui::TextDisabled(u8"Выберите навык слева - детали и редактирование справа.");
+        ImGui::TextDisabled(u8"Вес влияет на долю XP при распределении.");
         const float listWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = listWidth < 320.0f;
         ImVec4 actionKeyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];

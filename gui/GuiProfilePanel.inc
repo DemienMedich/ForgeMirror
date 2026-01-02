@@ -180,6 +180,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextColored(accent, "%s", progressLabel.c_str());
             ImGui::EndTable();
         }
+        ImGui::TextDisabled(u8"XP — опыт: начисляется навыкам и повышает уровень.");
         ImGui::Separator();
         const float headerAvail = ImGui::GetContentRegionAvail().x;
         const float spacingX = ImGui::GetStyle().ItemSpacing.x;
