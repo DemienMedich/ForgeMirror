@@ -1,6 +1,7 @@
 void DrawView3dSettingsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::View3DSettings, state.storageDir);
     DrawCardHeader(u8"Модели");
+    ImGui::TextDisabled(u8"Выберите модель и настройте вращение/цвет линий.");
     const auto models = LoadModelChoices(state.storageDir);
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilter = filterWidth < 360.0f;
@@ -33,6 +34,14 @@ void DrawView3dSettingsPanel(GuiState& state) {
     }
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         visibleModels, static_cast<int>(models.size()));
+    if (models.empty()) {
+        ImGui::TextDisabled(u8"Нет моделей в папке data/models.");
+    } else if (visibleModels == 0) {
+        ImGui::TextDisabled(u8"Нет моделей по фильтру.");
+        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+            state.filters.model.fill('\0');
+        }
+    }
     std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
     ImGui::TextDisabled(u8"Модель");
     if (ImGui::BeginCombo(u8"##model_combo", modelLabel.c_str())) {
@@ -41,9 +50,6 @@ void DrawView3dSettingsPanel(GuiState& state) {
             state.ui.modelPath.clear();
             std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", "");
             state.viewMeshPath.clear();
-        }
-        if (visibleModels == 0) {
-            ImGui::TextDisabled(u8"Нет моделей по фильтру.");
         }
         for (const auto& model : models) {
             if (!MatchesFilter(model.label, state.filters.model.data())) continue;
