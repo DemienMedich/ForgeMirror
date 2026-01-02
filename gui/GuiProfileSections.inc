@@ -347,12 +347,19 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
                 state.filters.achievement.fill('\0');
                 state.showExpiredAchievements = true;
             }
-        } else if (ImGui::BeginTable("ach_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else if (ImGui::BeginTable("ach_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("ach_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("ach_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableSetupColumn("ach_toggle", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+            ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableNextColumn();
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##ach_filter", u8"Фильтр ачивок",
             state.filters.achievement.data(), state.filters.achievement.size());
@@ -516,12 +523,19 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
             state.profileSkillWeightRange[0] = 0.0f;
             state.profileSkillWeightRange[1] = 2.0f;
         }
-    } else if (ImGui::BeginTable("profile_skill_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("profile_skill_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("profile_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("profile_sort", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn("profile_category", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("profile_reset", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+        ImGui::TableSetupColumn("profile_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
+        DrawAnchorIcon(UiIcon::List);
+        ImGui::TableNextColumn();
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"Сортировка", &state.profileSkillSort, sortLabels, IM_ARRAYSIZE(sortLabels));
         ImGui::TableNextColumn();
@@ -833,13 +847,20 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
                 exportActivity();
             }
-        } else if (ImGui::BeginTable("activity_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+        } else if (ImGui::BeginTable("activity_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("activity_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("activity_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-            ImGui::TableSetupColumn("activity_reset", ImGuiTableColumnFlags_WidthStretch, 0.6f);
-            ImGui::TableSetupColumn("activity_count", ImGuiTableColumnFlags_WidthStretch, 0.8f);
-            ImGui::TableSetupColumn("activity_export", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("activity_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("activity_count", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn("activity_export", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableNextColumn();
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
             state.filters.activity.data(), state.filters.activity.size());
