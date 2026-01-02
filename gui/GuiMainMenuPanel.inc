@@ -294,7 +294,7 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("1");
+            DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             if (!state.isAdmin) ImGui::BeginDisabled();
@@ -333,7 +333,7 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 0.95f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("1");
+            DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextDisabled(u8"Поиск");

@@ -26,7 +26,7 @@ void DrawPipelinePanel(GuiState& state) {
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("1");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Фильтр");

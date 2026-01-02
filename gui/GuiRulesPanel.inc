@@ -208,7 +208,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("1");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
             draft = state.rulesConfig;

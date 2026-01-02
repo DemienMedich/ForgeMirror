@@ -102,7 +102,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetupColumn("action_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("1");
+            DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             if (!state.isAdmin) ImGui::BeginDisabled();
@@ -160,7 +160,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetupColumn("filter_right", ImGuiTableColumnFlags_WidthStretch, 0.95f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("1");
+            DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Поиск");
@@ -177,7 +177,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::Combo(u8"##catalog_sort", &state.catalogSortMode, sortLabels, IM_ARRAYSIZE(sortLabels));
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("2");
+            DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Группировка");

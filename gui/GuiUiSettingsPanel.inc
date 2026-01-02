@@ -29,7 +29,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         ImGui::TableSetupColumn("theme_reset", ImGuiTableColumnFlags_WidthFixed, 160.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("1");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
@@ -227,7 +227,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         ImGui::TableSetupColumn("preset_save", ImGuiTableColumnFlags_WidthFixed, 160.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("1");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
@@ -282,7 +282,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             ImGui::TableSetupColumn("preset_delete", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("1");
+            DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::SetNextItemWidth(-1.0f);
@@ -425,7 +425,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         ImGui::TableSetupColumn("bg_clear", ImGuiTableColumnFlags_WidthFixed, 140.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("1");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);

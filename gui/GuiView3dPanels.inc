@@ -21,7 +21,7 @@ void DrawView3dSettingsPanel(GuiState& state) {
         ImGui::TableSetupColumn("model_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("1");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Фильтр моделей");
@@ -85,7 +85,7 @@ void DrawView3dSettingsPanel(GuiState& state) {
         ImGui::TableSetupColumn("model_load", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("2");
+        DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Путь к модели");

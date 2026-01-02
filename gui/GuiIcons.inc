@@ -210,6 +210,18 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
     }
 }
 
+static void DrawAnchorIcon(UiIcon icon, float size = 12.0f) {
+    const float cellWidth = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    const float cellHeight = ImGui::GetTextLineHeightWithSpacing();
+    const ImVec2 cellPos = ImGui::GetCursorScreenPos();
+    const float iconSize = std::min(size, cellHeight * 0.85f);
+    const ImVec2 center(cellPos.x + cellWidth * 0.5f, cellPos.y + cellHeight * 0.5f);
+    ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+    color.w = std::max(color.w, 0.65f);
+    DrawIconGlyph(ImGui::GetWindowDrawList(), icon, center, iconSize, ImGui::GetColorU32(color));
+    ImGui::Dummy(ImVec2(cellWidth, cellHeight));
+}
+
 static void DrawIconBadge(ImDrawList* drawList, UiIcon icon, ImVec2 center, float radius, const ImVec4& accent,
                           bool filled = true) {
     if (!drawList || radius <= 0.0f) return;

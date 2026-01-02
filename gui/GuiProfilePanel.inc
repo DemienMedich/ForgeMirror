@@ -92,7 +92,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextDisabled("1");
+                DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::SetNextItemWidth(-1.0f);
@@ -535,7 +535,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextDisabled("1");
+                DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::SetNextItemWidth(-1.0f);
@@ -593,7 +593,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextDisabled("1");
+                DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {

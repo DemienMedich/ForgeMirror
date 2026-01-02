@@ -104,17 +104,24 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TextDisabled(u8"Сортировка");
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo(u8"##xp_sort", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
-            } else if (ImGui::BeginTable("xp_controls", 4, ImGuiTableFlags_SizingStretchSame)) {
-                ImGui::TableSetupColumn("xp_btn", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("xp_filter", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("xp_reset", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("xp_sort", ImGuiTableColumnFlags_WidthStretch);
+            } else if (ImGui::BeginTable("xp_controls", 5, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("xp_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+                ImGui::TableSetupColumn("xp_btn", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("xp_filter", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+                ImGui::TableSetupColumn("xp_reset", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                ImGui::TableSetupColumn("xp_sort", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+                keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+                const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
                 ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                DrawAnchorIcon(UiIcon::List);
                 ImGui::TableNextColumn();
                 if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
                     PrepareXpEntries(state, catalog);
                 }
                 ImGui::TableNextColumn();
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Фильтр");
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextWithHint(u8"##xp_filter", u8"Фильтр навыков",
@@ -177,20 +184,36 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             const int visibleXpCount = static_cast<int>(xpOrder.size());
             ImGui::TextDisabled(u8"Показано: %d из %d",
             visibleXpCount, static_cast<int>(catalogSkills.size()));
-            if (ImGui::BeginTable("xp_sheet", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                ImGui::TableSetupColumn(u8"Навык");
-                ImGui::TableSetupColumn(u8"Доля (%)");
-                ImGui::TableSetupColumn(u8"Ачивки");
-                ImGui::TableSetupColumn("XP");
+            const ImGuiStyle& style = ImGui::GetStyle();
+            ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
+            topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
+            const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
+            const float shareColumnWidth = sliderWidth + 28.0f;
+            if (ImGui::BeginTable("xp_sheet", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                                  ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+                ImGui::TableSetupColumn(u8"Навык", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+                ImGui::TableSetupColumn(u8"Доля (%)", ImGuiTableColumnFlags_WidthFixed, shareColumnWidth);
+                ImGui::TableSetupColumn(u8"Ачивки", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn("XP", ImGuiTableColumnFlags_WidthFixed, 110.0f);
                 ImGui::TableHeadersRow();
                 for (int orderIdx = 0; orderIdx < static_cast<int>(xpOrder.size()); ++orderIdx) {
                     int i = xpOrder[orderIdx];
+                    if (orderIdx < 3) {
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, topRowBgU32);
+                    }
                     ImGui::TableNextRow();
                     const std::string& skillId = catalogSkills[i];
                     const std::string& displayName = xpNames[i];
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(displayName.c_str());
+                    DrawAnchorIcon(UiIcon::List);
                     ImGui::TableSetColumnIndex(1);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                    ImGui::TextUnformatted(displayName.c_str());
+                    ImGui::TableSetColumnIndex(2);
                     ImGui::PushID(i);
                     int percent = state.xpEntries[i].percent;
                     ImGui::PushItemWidth(sliderWidth);
@@ -200,13 +223,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     }
                     ImGui::PopItemWidth();
                     ImGui::PopID();
-                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TableSetColumnIndex(3);
                     if (xpBonus[i] > 0.01) {
                         ImGui::Text("+%.1f%%", xpBonus[i]);
                     } else {
                         ImGui::TextDisabled("-");
                     }
-                    ImGui::TableSetColumnIndex(3);
+                    ImGui::TableSetColumnIndex(4);
                     const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
                     if (xpPreview[i] != previewXp) {
                         ImGui::Text("%d -> %d", previewXp, xpPreview[i]);
