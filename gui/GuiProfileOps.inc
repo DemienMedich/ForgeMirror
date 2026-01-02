@@ -1,9 +1,25 @@
+namespace {
+static void ReportProfileError(GuiState& state, std::string message) {
+    state.profileLoadError = std::move(message);
+    state.profileLoading = false;
+    SetStatus(state, state.profileLoadError, 1.0f, 0.45f, 0.45f, 1.0f, AppLogLevel::Error, u8"Профиль");
+}
+}
+
 // Load the currently selected profile from storage and synchronise its skills.
 void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    state.profileLoading = true;
+    state.profileLoadError.clear();
     state.active.reset();
-    if (state.selectedIndex < 0 || state.selectedIndex >= static_cast<int>(state.profiles.size())) return;
+    if (state.selectedIndex < 0 || state.selectedIndex >= static_cast<int>(state.profiles.size())) {
+        state.profileLoading = false;
+        return;
+    }
     const auto& info = state.profiles[state.selectedIndex];
-    if (!storage.set_active_profile(info.id)) return;
+    if (!storage.set_active_profile(info.id)) {
+        ReportProfileError(state, u8"Не удалось активировать профиль.");
+        return;
+    }
     if (auto loaded = storage.load_profile()) {
         SyncProfileWithCatalog(*loaded, catalog);
         storage.save_profile(*loaded);
@@ -11,6 +27,10 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
         state.ui.lastProfileId = info.id;
         state.activityLogs[state.active->id];
         PrepareXpEntries(state, catalog);
+        state.profileLoadError.clear();
+        state.profileLoading = false;
+    } else {
+        ReportProfileError(state, std::string(u8"Не удалось загрузить профиль [") + info.id + u8"].");
     }
 }
 
@@ -72,9 +92,12 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
     state.profiles = LoadProfiles(storage);
     state.adminStatsDirty = true;
+    state.profileLoading = false;
+    state.profileLoadError.clear();
     if (state.profiles.empty()) {
         state.selectedIndex = -1;
         state.active.reset();
+        state.profileLoadError = u8"Профили не найдены.";
         return;
     }
 

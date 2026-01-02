@@ -121,7 +121,18 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     ImGui::Spacing();
 
     if (!state.active) {
-        ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
+        if (state.profileLoading) {
+            ImGui::TextDisabled(u8"Загружаем профиль...");
+            const float pulse = ImFmod(static_cast<float>(ImGui::GetTime() * 0.35f), 1.0f);
+            ImGui::ProgressBar(pulse, ImVec2(-1.0f, 0.0f));
+        } else if (!state.profileLoadError.empty()) {
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", state.profileLoadError.c_str());
+            ImGui::TextDisabled(u8"Обновите список профилей или выберите другой.");
+        } else if (state.profiles.empty()) {
+            ImGui::TextDisabled(u8"Профили не найдены.");
+        } else {
+            ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
+        }
     } else {
         Profile& profile = state.active->profile;
         const int overallLevel = profile.overall_level();

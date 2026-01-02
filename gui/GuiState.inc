@@ -17,6 +17,8 @@ struct GuiDataState {
 
 struct GuiRuntimeState {
     int selectedIndex = -1;
+    bool profileLoading = false;
+    std::string profileLoadError;
     std::string statusMessage;
     float statusColor[4] = {0.6f, 0.7f, 1.0f, 1.0f};
     UiSettings ui;
