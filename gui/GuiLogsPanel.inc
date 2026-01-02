@@ -43,6 +43,8 @@ static void DrawLogKpiCard(const char* id, UiIcon icon, const char* title, const
 
 void DrawLogsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Logs, state.storageDir);
+    DrawCardHeader(u8"Логи");
+    ImGui::TextDisabled(u8"Фиксируют действия и ошибки. Используйте фильтры для поиска.");
     int infoCount = 0;
     int warnCount = 0;
     int errorCount = 0;
@@ -270,6 +272,15 @@ void DrawLogsPanel(GuiState& state) {
     }
     int filteredCount = CountFilteredLogs(state);
     ImGui::TextDisabled(u8"Показано: %d из %d", filteredCount, static_cast<int>(state.appLogs.size()));
+    const bool hasTextFilter = state.filters.logs[0] != '\0';
+    const bool hasSourceFilter = state.filters.logSource[0] != '\0';
+    if (filteredCount == 0 && (hasTextFilter || hasSourceFilter)) {
+        ImGui::TextDisabled(u8"По фильтрам ничего не найдено.");
+        if (ImGui::SmallButton(u8"Сбросить фильтры")) {
+            state.filters.logs.fill('\0');
+            state.filters.logSource.fill('\0');
+        }
+    }
 
     ImVec2 tableSize(0.0f, 260.0f);
     ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
@@ -347,7 +358,11 @@ void DrawLogsPanel(GuiState& state) {
         }
     }
     if (filteredCount == 0) {
-        ImGui::TextDisabled(u8"Нет записей по фильтру.");
+        if (totalCount == 0) {
+            ImGui::TextDisabled(u8"Пока нет записей. Они появятся после действий в приложении.");
+        } else {
+            ImGui::TextDisabled(u8"Нет записей по фильтру.");
+        }
     }
     SyncFiltersToUi(state);
 }
