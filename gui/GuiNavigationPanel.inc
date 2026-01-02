@@ -63,7 +63,7 @@ void DrawNavigationPanel(GuiState& state) {
         navButton("nav_logs", UiIcon::List, u8"Логи [F6]", state.showLogs, [&]() {
             OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
         });
-        navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки интерфейса", state.showUiSettings, [&]() {
+        navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки UI", state.showUiSettings, [&]() {
             OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
         });
         navButton("nav_view3d_settings", UiIcon::Cube, u8"3D настройки", state.showView3dSettings, [&]() {
