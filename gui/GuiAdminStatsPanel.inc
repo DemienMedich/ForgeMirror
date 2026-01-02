@@ -86,6 +86,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Фильтры");
+    ImGui::TextDisabled(u8"Архив — профили, скрытые из основного списка.");
     const float filtersWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilters = filtersWidth < 740.0f;
     const auto& rankOptions = RankOptions();
@@ -532,6 +533,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
 
     ImGui::Spacing();
     DrawCardHeader(u8"Профили на прогреве");
+    ImGui::TextDisabled(u8"Прогрев: временный штраф после длительного простоя.");
     std::vector<AdminStatsProfile> byRecovery;
     byRecovery.reserve(filtered.size());
     for (const auto& item : filtered) {
