@@ -195,42 +195,67 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
-        if (ImGui::BeginTable("profile_status", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+        ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+        auto rowTint = [](AppLogLevel level) {
+            ImVec4 tint = LogLevelColor(level);
+            tint.w = std::clamp(tint.w * 0.12f, 0.04f, 0.12f);
+            return ImGui::GetColorU32(tint);
+        };
+        if (ImGui::BeginTable("profile_status", 4, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn(u8"Параметр", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+            ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 180.0f);
             ImGui::TableSetupColumn(u8"Детали", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
+            int rowRank = 0;
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Активность");
+            ImGui::TextDisabled("%d", ++rowRank);
             ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Активность");
+            ImGui::TableSetColumnIndex(2);
             if (hasLastTask) {
                 ImGui::TextColored(accentSoft, "%s", lastTaskLabel.c_str());
             } else {
                 ImGui::TextDisabled("%s", lastTaskLabel.c_str());
             }
-            ImGui::TableSetColumnIndex(2);
+            ImGui::TableSetColumnIndex(3);
             ImGui::TextDisabled(u8"%s назад", elapsedLabel.c_str());
             ImGui::TableNextRow();
+            if (recoveryLeft > 0) {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowTint(AppLogLevel::Error));
+            }
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Прогрев");
+            ImGui::TextDisabled("%d", ++rowRank);
             ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Прогрев");
+            ImGui::TableSetColumnIndex(2);
             if (recoveryLeft > 0) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"активен");
-                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetColumnIndex(3);
                 ImGui::Text(u8"задач: %d", recoveryLeft);
             } else {
                 ImGui::TextColored(accentSoft, u8"нет");
-                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetColumnIndex(3);
                 ImGui::TextDisabled(u8"-");
             }
             ImGui::TableNextRow();
+            if (categoriesBelow > 0) {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowTint(AppLogLevel::Warning));
+            }
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Категории");
+            ImGui::TextDisabled("%d", ++rowRank);
             ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Категории");
+            ImGui::TableSetColumnIndex(2);
             if (categoriesBelow > 0) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"ниже 10/10");
-                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetColumnIndex(3);
                 ImGui::Text(u8"шт: %d", categoriesBelow);
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
@@ -239,7 +264,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 }
             } else {
                 ImGui::TextColored(accentSoft, u8"все 10/10");
-                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetColumnIndex(3);
                 ImGui::TextDisabled(u8"-");
             }
             ImGui::EndTable();
