@@ -5,6 +5,9 @@ void DrawView3dSettingsPanel(GuiState& state) {
     const auto models = LoadModelChoices(state.storageDir);
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilter = filterWidth < 360.0f;
+    ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+    keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+    const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
     if (stackFilter) {
         ImGui::TextDisabled(u8"Фильтр моделей");
         ImGui::InputTextWithHint(u8"##model_filter", u8"Фильтр моделей",
@@ -12,16 +15,20 @@ void DrawView3dSettingsPanel(GuiState& state) {
         if (ImGui::SmallButton(u8"Сброс##model_filter")) {
             state.filters.model.fill('\0');
         }
-    } else if (ImGui::BeginTable("model_filter_row", 2, ImGuiTableFlags_SizingStretchSame)) {
-        ImGui::TableSetupColumn("model_filter", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("model_reset", ImGuiTableColumnFlags_WidthStretch);
+    } else if (ImGui::BeginTable("model_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("model_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("model_filter", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+        ImGui::TableSetupColumn("model_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("1");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Фильтр моделей");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint(u8"##model_filter", u8"Фильтр моделей",
                                  state.filters.model.data(), state.filters.model.size());
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
         if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
             state.filters.model.fill('\0');
         }
@@ -72,17 +79,21 @@ void DrawView3dSettingsPanel(GuiState& state) {
         if (ImGui::Button(u8"Загрузить", ImVec2(-1.0f, 0.0f))) {
             state.viewMeshPath.clear();
         }
-    } else if (ImGui::BeginTable("model_path_row", 2, ImGuiTableFlags_SizingStretchSame)) {
-        ImGui::TableSetupColumn("model_path", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("model_load", ImGuiTableColumnFlags_WidthStretch);
+    } else if (ImGui::BeginTable("model_path_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("model_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("model_path", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+        ImGui::TableSetupColumn("model_load", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("2");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Путь к модели");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::InputText(u8"##model_path", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
             state.ui.modelPath = state.modelPathBuffer.data();
         }
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
         if (ImGui::Button(u8"Загрузить", ImVec2(-1.0f, 0.0f))) {
             state.viewMeshPath.clear();
         }

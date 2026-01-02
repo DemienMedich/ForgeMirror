@@ -3,6 +3,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawCardHeader(u8"Настройки интерфейса");
     ImGui::TextDisabled(u8"Соберите тему, выберите фон и сохраните пресет.");
     DrawCardHeader(u8"Тема и стиль");
+    ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+    keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+    const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
     const char* themes[] = {u8"Тёмная", u8"Светлая", u8"Классика"};
     const float headerWidth = ImGui::GetContentRegionAvail().x;
     const bool stackTheme = headerWidth < 520.0f;
@@ -20,16 +23,20 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.ui.customColors = false;
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("theme_row", 2, ImGuiTableFlags_SizingStretchSame)) {
-        ImGui::TableSetupColumn("theme_combo", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("theme_reset", ImGuiTableColumnFlags_WidthStretch);
+    } else if (ImGui::BeginTable("theme_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("theme_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("theme_combo", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+        ImGui::TableSetupColumn("theme_reset", ImGuiTableColumnFlags_WidthFixed, 160.0f);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("1");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"Тема", &state.ui.theme, themes, IM_ARRAYSIZE(themes))) {
             state.uiDirty = true;
         }
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
         if (ImGui::Button(u8"Сбросить тему", ImVec2(-1.0f, 0.0f))) {
             ApplyUiTheme(state.ui.theme, style);
             const auto& entries = UiColorEntries();
@@ -214,12 +221,15 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             std::snprintf(state.uiPresetName.data(), state.uiPresetName.size(), "%s", presetName.c_str());
             SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
         }
-    } else if (ImGui::BeginTable("ui_preset_save", 2, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("ui_preset_save", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("1");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputText(u8"Имя пресета", state.uiPresetName.data(), state.uiPresetName.size());
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
         if (ImGui::Button(u8"Сохранить пресет", ImVec2(-1.0f, 0.0f))) {
             const std::string rawName = TrimStringGui(state.uiPresetName.data());
             const std::string presetName = SanitizePresetName(rawName);
@@ -262,13 +272,16 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 std::filesystem::remove(presetPath, ec);
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
-        } else if (ImGui::BeginTable("ui_preset_list", 3, ImGuiTableFlags_SizingStretchSame)) {
+        } else if (ImGui::BeginTable("ui_preset_list", 4, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"Список пресетов", &state.uiPresetIndex, presetLabels.data(),
                          static_cast<int>(presetLabels.size()));
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             if (ImGui::Button(u8"Загрузить пресет", ImVec2(-1.0f, 0.0f))) {
                 const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
                 state.ui = LoadUiSettingsFromPath(presetPath, style);
@@ -280,7 +293,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 ApplyUiFiltersToState(state);
                 SetStatus(state, u8"Пресет загружен.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(3);
             if (ImGui::Button(u8"Удалить пресет", ImVec2(-1.0f, 0.0f))) {
                 const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
                 std::error_code ec;
@@ -398,20 +411,24 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         if (ImGui::SmallButton(u8"Сброс##bg_filter")) {
             state.filters.background.fill('\0');
         }
-    } else if (ImGui::BeginTable("bg_controls", 3, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("bg_controls", 4, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("bg_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("bg_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-        ImGui::TableSetupColumn("bg_reset", ImGuiTableColumnFlags_WidthStretch, 0.8f);
-        ImGui::TableSetupColumn("bg_clear", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("bg_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("bg_clear", ImGuiTableColumnFlags_WidthFixed, 140.0f);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("1");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint(u8"##bg_filter", u8"Фильтр фонов",
                                  state.filters.background.data(), state.filters.background.size());
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
         if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
             state.filters.background.fill('\0');
         }
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(3);
         if (ImGui::Button(u8"Очистить все", ImVec2(-1.0f, 0.0f))) {
             for (auto& bg : state.ui.backgrounds) {
                 bg.clear();
