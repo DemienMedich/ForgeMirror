@@ -15,7 +15,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         const float rankProgress = static_cast<float>(overallLevel - span.currentLevel) /
         static_cast<float>(span.nextLevel - span.currentLevel);
         ImGui::TextUnformatted(nextRankText.c_str());
-        ImGui::ProgressBar(std::clamp(rankProgress, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f), nullptr);
+        ImGui::ProgressBar(std::clamp(rankProgress, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f), rankProgressText.c_str());
     } else {
         ImGui::TextUnformatted(u8"Ранг: максимум");
     }
