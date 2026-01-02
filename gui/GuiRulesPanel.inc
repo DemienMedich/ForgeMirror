@@ -17,6 +17,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return true;
     };
     DrawCardHeader(u8"Кривая уровней");
+    ImGui::TextDisabled(u8"База, линия и квадрат задают скорость роста XP.");
     const float avail = ImGui::GetContentRegionAvail().x;
     const bool stackRules = avail < 420.0f;
     if (stackRules) {
@@ -103,6 +104,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Бонусы и штрафы");
+    ImGui::TextDisabled(u8"Фокус растёт при высокой доле одного навыка.");
     if (stackRules) {
         ImGui::TextDisabled(u8"Базовый фокус-бонус");
         ImGui::SetNextItemWidth(-1.0f);
