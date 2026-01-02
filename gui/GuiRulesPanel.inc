@@ -1,5 +1,7 @@
 void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Rules, state.storageDir);
+    DrawCardHeader(u8"Правила");
+    ImGui::TextDisabled(u8"Настройка формулы уровней и наград. Изменения влияют на весь прогресс.");
     GameplayConfig& draft = state.rulesDraft;
     auto rulesMatch = [](const GameplayConfig& a, const GameplayConfig& b) {
         auto closeEnough = [](float lhs, float rhs) { return std::fabs(lhs - rhs) < 0.0001f; };
@@ -133,6 +135,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::EndTable();
     }
     ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
+    ImGui::TextDisabled(u8"Рекомендуется пересчитать профили после изменения правил.");
     const bool hasChanges = !rulesMatch(draft, state.rulesConfig);
     if (stackRules) {
         if (!hasChanges) ImGui::BeginDisabled();
