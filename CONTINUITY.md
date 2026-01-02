@@ -1,218 +1,205 @@
 Goal (incl. success criteria):
-- Keep JobSkill CLI/GUI stable while fixing gameplay/UX issues (Russian locale-friendly text, correct XP logic, editable skill catalog); builds in Release must succeed.
+- Полный редизайн UI в техно-стекло (без градиентов) с приоритетом: главное меню -> профиль -> рабочие панели; главное меню - фиксированная верхняя плашка; профили в отдельной вкладке; выбор профиля доступен в окне профиля.
+- Дальше улучшать UI по референсу: аккуратные иконки, графики/диаграммы (без градиентов), не ломая текущие сценарии.
+- Сборки Release (CLI + GUI) проходят после правок UI.
+- UX: запоминать последний профиль, окно "Профили" по умолчанию закрыто, диаграмма уровня центрирована.
+- Layout: все панели/окна справа как вкладки (единая область), навигация слева.
+- Версия APP_VERSION инкрементируется при заметных изменениях UI/UX.
 
 Constraints/Assumptions:
-- Locale/formatting: force classic/UTF-8 to avoid garbled numbers/strings; GUI/CLI must stay Russian-friendly.
-- Degradation system currently disabled (kDecayEnabled=false) and should stay off unless explicitly re-enabled.
-- Skill catalog persists to data/skills.txt; profiles stored in data/*.ini via FileStorage.
-- Achievements durations are specified in days only; countdown timer still displays hours/minutes.
-- Tests should be run after UI restyle changes (user request).
+- Ответы на русском; обновлять CONTINUITY.md в начале каждого ответа и при смене цели/решений/состояния.
+- Ответы кратко.
+- Без градиентов; плашка окна равна фону окна (даже при фоне/текстуре).
+- После правок UI запускать `cmake --build build --config Release` и `cmake --build build-gui --config Release --target JobSkillGui`.
+- Вести контроль версий; не коммитить CONTINUITY.md; без разрушительных git-команд.
+- kDecayEnabled=false остаётся выключенным, если не сказано иначе.
+- Локаль classic/UTF-8 для стабильных чисел/строк.
 
 Key decisions:
-- Disabled category decay/buffer recomputation (both CLI and GUI) via kDecayEnabled=false.
-- Gameplay rules parsing uses classic locale and sanitized numbers; penalties remain active.
-- GUI/CLI logs use classic locale to avoid non-ASCII separators.
-- GUI supports adding/removing skills (persists catalog and cleans profiles on delete).
-- Skill IDs are stable internal identifiers; GUI/CLI show display names (incl. Cyrillic).
-- UI restyle target: desktop dashboard with left sidebar; prioritize main menu and profile; external assets allowed.
+- Визуальный язык: техно-стекло, тёмная база, закруглённые карточки, лёгкое свечение, без градиентов.
+- Приоритет редизайна: главное меню -> профиль -> рабочие панели.
+- Верх экрана трактуется как верх профиля (не глобальная плашка).
+- Двигаемся строго по этапам плана, без UI-героизма; старт с профиля.
+- Плашка окна не отделяется от фона.
+- Разрешены изменения компоновки ради удобства.
+- Тёмная базовая палитра подтверждена.
+- Главное меню: фиксированная верхняя плашка (ImGui main menu bar) вместо отдельного окна.
+- Профили: отдельная вкладка в рабочей области + быстрый выбор в окне профиля.
+- Иконки: встроенные векторные (ImDrawList) + компактные icon-button'ы (без внешних шрифтов/паков).
+- Диаграммы: добавить кольцевые/прогресс-диаграммы (без градиентов) для ключевых метрик профиля.
+- Последний профиль: сохранять ID в `meta/ui.ini` и восстанавливать при запуске (если найден).
+- Окно "Профили": по умолчанию закрыто.
+- Layout: отказаться от отдельных окон (Профиль/Профили/Рабочее окно) в пользу единого окна справа с TabBar.
+- Версионирование: APP_VERSION хранится в `CMakeLists.txt` и увеличивается при UI-изменениях.
+- Этап 2.1 начинаем с таблицы профиля "Навыки".
 
 State:
-- Builds: Release targets JobSkill.exe and JobSkillGui.exe compile clean (re-verified after UI asset changes).
-- Storage: FileStorage now writes/reads numbers locale-independently; recoveryTasks preserved across restarts.
-- Documentation: Added docs/USER_GUIDE.md (RU) describing gameplay rules, XP system, skill catalog management, storage, and CLI/GUI usage.
-- Access control: Admin profile seeded as "Admin" (admin flag persisted); admin access requires authorization. CLI/GUI default to read-only until admin login.
-- Localization: Gameplay rules and GUI controls translated to Russian; user-facing statuses/logs/messages now predominantly RU (XP labels remain).
-- Achievements: stored per-profile in data/achievements/*.json with bonus applied to skill XP; GUI shows icons + tooltip (expiry/remaining time); icon textures cached in GUI; JSON parsing is now order-agnostic.
-- Skill catalog: admin can add/remove skills and rename/edit descriptions; catalog now stores stable skill IDs with display names; rename uses confirmation before merging XP.
-- UI customization: added `data/meta/ui.ini` with theme/style controls, per-window background textures from `data/ui/backgrounds`, and a 3D preview window that loads `.obj`/`.fbx` from `data/models` (wireframe + orbit controls).
-- UI restyle assets: added Rubik font and `data/ui/backgrounds/dashboard-gradient.png`.
-- UI recovery: clamps invalid UI settings and enforces min window sizes; `F10` resets UI settings + clears layout.
-- Workspace: main menu now toggles visibility of auxiliary windows; profile stays always visible.
+- Последние UI-правки: disabled-стили для пустых состояний/плейсхолдеров, hint в правилах, логи с пустым состоянием, общая техно-стекло-стилизация и единая верхняя плашка.
+- Добавлен индикатор состояния сохранения в настройках UI; сборки Release (CLI + GUI) успешны.
+- Сделано: главное меню перенесено в фиксированную верхнюю плашку; профили вынесены в отдельную вкладку; выбор профиля добавлен в окно профиля.
+- Тестовые сборки Release (CLI + GUI) после правок успешны; изменения закоммичены (без CONTINUITY.md).
+- Новый запрос: продолжать улучшать UI по референсу (иконки, графики, диаграммы).
+- Добавлены: векторные иконки/икон-кнопки в верхней плашке; кольцевая диаграмма прогресса/категорий в профиле; KPI-карточки с иконками. Release-сборки (CLI+GUI) успешны после правок; изменения закоммичены (без CONTINUITY.md).
+- Добавлено: иконки в навигации (компактные nav-кнопки); новые мини-диаграммы (sparklines/mini-bars) в табе профиля "Диаграммы"; Release-сборки (CLI+GUI) успешны после правок; изменения закоммичены (без CONTINUITY.md).
+- Сделано: диаграмма уровня центрирована; окно "Профили" по умолчанию закрыто; последний профиль сохраняется/восстанавливается через `meta/ui.ini`. Release-сборки (CLI+GUI) успешны после правок; изменения закоммичены (без CONTINUITY.md).
+- Сделано: убран warning Dear ImGui (SetCursorPos) в заголовке профиля; в каталоге навыков добавлена карточка "Сводка" с mini-bars по категориям веса. Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: улучшена "Статистика" (sparklines/mini-bars для категорий и рангов); окно "Профиль" зафиксировано в рабочей области; таблица "Состояние" стабилизирована (нет дрожания от таймера). Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: APP_VERSION обновлён до 0.2.6; все панели справа объединены в единый TabBar (профиль + прочие вкладки). Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: панель "Логи" получила сводку с KPI/иконками и спарклайном активности; APP_VERSION обновлён до 0.2.7. Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: панель "Каталог навыков" получила сводку с KPI/иконками, спарклайном веса и расширенной статистикой; APP_VERSION обновлён до 0.2.8. Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: панель "Админ-статистика" получила KPI-карточки с иконками; APP_VERSION обновлён до 0.2.9. Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: в профиле добавлена кнопка "Добавить опыт" (открывает модал XP); APP_VERSION обновлён до 0.2.10. Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Сделано: кнопка "Добавить опыт" перенесена под имя/ID в профиле; программа переименована в ForgeMirror (UI/доки/окно/выходные файлы); APP_VERSION обновлён до 0.2.11. Release-сборки (CLI+GUI) успешны; изменения закоммичены (без CONTINUITY.md).
+- Новый запрос: следовать плану развития UI/UX (этапы 1-5) с фокусом на направляющий интерфейс.
+- Этап 1.2 (профиль): верхняя зона уплотнена - добавлена краткая сводка (уровень/ранг/прогресс), убраны дубли под диаграммой; APP_VERSION обновлён до 0.2.12; изменения закоммичены.
+- Этап 1.3 (профиль): добавлены признаки загрузки и ошибки при выборе профиля; UI показывает состояние загрузки, ошибку и пустые списки; изменения закоммичены; APP_VERSION=0.2.13.
+- Этап 1.1 (каталог навыков): добавлены подсказки действий и пустой стейт, CTA для добавления при пустом выборе; APP_VERSION=0.2.14; Release-сборки успешны.
+- Этап 1.1 (пайплайн): добавлены подсказки действий и понятный empty-state для фильтра; APP_VERSION=0.2.15; Release-сборки успешны.
+- Этап 1.1 (логи): добавлены подсказки действий, empty-state и быстрый сброс фильтров; APP_VERSION=0.2.16; Release-сборки успешны.
+- Этап 1.1 (статистика): добавлены подсказки назначения и сценариев при пустых данных/фильтрах; APP_VERSION=0.2.17; Release-сборки успешны.
+- Этап 1.1 (правила): добавлены подсказки назначения и контекста изменений; APP_VERSION=0.2.18; Release-сборки успешны.
+- Этап 1.1 (3D просмотр): добавлены подсказки управления и контекст ошибки; APP_VERSION=0.2.19; Release-сборки успешны.
+- Этап 1.1 (3D настройки): добавлены подсказки назначения и empty-state моделей; APP_VERSION=0.2.20; Release-сборки успешны.
+- Этап 1.1 (настройки интерфейса): добавлены подсказки назначения и empty-state фонов; APP_VERSION=0.2.21; Release-сборки успешны.
+- Этап 1.1 (главное меню): добавлены подсказки назначения, быстрые действия и empty-state профилей; APP_VERSION=0.2.22; Release-сборки успешны.
+- Этап 1.1 (навигация): добавлены подсказка назначения и статус видимости админ-разделов; APP_VERSION=0.2.23; Release-сборки успешны.
+- UI: все сворачиваемые секции теперь по умолчанию свернуты; APP_VERSION=0.2.24; Release-сборки успешны.
+- Идея на будущее: добавить функционал task-менеджера.
+- Этап 2.1 (логи): ключевой столбец выделен, добавлены микро-якоря и акцент для важных строк; APP_VERSION=0.2.26; Release-сборки успешны.
+- Этап 2.1 (профиль/навыки): ключевой столбец выделен, добавлены микро-якоря и ритм топ-строк; APP_VERSION=0.2.25; Release-сборки успешны.
+- Этап 2.1 (каталог навыков): ключевой столбец выделен, добавлены микро-якоря и ритм топ-строк; APP_VERSION=0.2.27; Release-сборки успешны.
+- Этап 2.1 (админ-статистика): ключевой столбец выделен, добавлены микро-якоря и ритм топ-строк; APP_VERSION=0.2.28; Release-сборки успешны.
+- Этап 2.1 (профиль/топ навыков): ключевой столбец выделен, добавлены микро-якоря и ритм топ-строк; APP_VERSION=0.2.29; Release-сборки успешны.
+- Этап 2.1 (пайплайн): список усилен (ключевой столбец, микро-якоря); APP_VERSION=0.2.30; Release-сборки успешны.
+- Этап 2.1 (профиль/состояние): ключевой столбец выделен, добавлены микро-якоря и акцент проблемных строк; APP_VERSION=0.2.31; Release-сборки успешны.
+- Этап 2.1 (правила): ключевой столбец выделен, добавлены микро-якоря и единицы; APP_VERSION=0.2.32; Release-сборки успешны.
+- Этап 2.1 (3D/настройки UI): табличные фильтры усилены (микро-якоря, ключевой столбец); APP_VERSION=0.2.33; Release-сборки успешны.
+- Этап 2.1 (профиль/индикаторы): ключевой столбец выделен, добавлены микро-якоря и акцент проблемных строк; APP_VERSION=0.2.34; Release-сборки успешны.
+- Этап 2.1 (модальные окна): табличные блоки действий усилены (микро-якоря, ключевой столбец); APP_VERSION=0.2.35; Release-сборки успешны.
+- Этап 2.1 (прочие фильтры/экшены): добавлены микро-якоря и ключевой столбец в фильтрах/экшенах; APP_VERSION=0.2.36; Release-сборки успешны.
+- Обратная связь: появились числовые якоря в таблицах; в "Пользовательских пресетах" кнопки визуально сжались.
+- Исправлено: кнопки в "Пользовательских пресетах" восстановлены (заданы ширины колонок); APP_VERSION=0.2.37; Release-сборки успешны.
+- Новый запрос: заменить числовые микро-якоря на иконки и продолжать задачи по списку.
+- Сделано: якоря заменены на иконки; XP-модал усилен (якоря, ключевой столбец, ритм топ-строк); APP_VERSION=0.2.38; Release-сборки (CLI + GUI) успешны.
+- Подтверждение: иконки устраивают, двигаться дальше по этапам.
+- Сделано: фильтры профиля (ачивки/навыки/активность) усилены якорями и ключевыми колонками; APP_VERSION=0.2.39; Release-сборки успешны.
+- Сделано: фильтры логов усилены якорем и ключевой колонкой; APP_VERSION=0.2.40; Release-сборки успешны.
+- Сделано: админ-статистика (строки обновления/фильтров) усилена якорем и ключевой колонкой; APP_VERSION=0.2.41; Release-сборки успешны.
+- Новый запрос: продолжать по порядку.
+- Сделано: добавлены микро-пояснения терминов (XP в профиле, вес в каталоге навыков); APP_VERSION=0.2.42; Release-сборки успешны.
+- Новый запрос: продолжать по порядку (этап 2.2).
+- Сделано: добавлено пояснение термина "Источник" в логах; APP_VERSION=0.2.43; Release-сборки успешны.
+- Сделано: добавлены пояснения "Архив" и "Прогрев" в админ-статистике; APP_VERSION=0.2.44; Release-сборки успешны.
+- Сделано: добавлены пояснения про пресеты и фон в настройках интерфейса; APP_VERSION=0.2.45; Release-сборки успешны.
+- Сделано: добавлено пояснение термина "Пайплайн"; APP_VERSION=0.2.46; Release-сборки успешны.
+- Сделано: добавлены пояснения про кривую уровней и фокус-бонус в правилах; APP_VERSION=0.2.47; Release-сборки успешны.
+- Сделано: добавлено пояснение параметров вращения/масштаба в 3D настройках; APP_VERSION=0.2.48; Release-сборки успешны.
+- Сделано: проверены оставшиеся панели; начат этап 3.1 (смысловая сводка профиля); APP_VERSION=0.2.49; Release-сборки успешны.
+- Сделано: добавлена карточка "Зоны перекоса" в профиле; APP_VERSION=0.2.50; Release-сборки успешны; изменения закоммичены.
+- Сделано: мягкая подсветка перекоса в профиле (акцент на слабейшей категории + фон строки перекоса); APP_VERSION=0.2.51; Release-сборки успешны; изменения закоммичены.
+- Сделано: мягкие акценты в диаграммах категорий, режимы профиля (обзор/аналитика), токены отступов и табы через декларацию; APP_VERSION=0.2.52; Release-сборки успешны; изменения закоммичены.
 
 Done:
-- Fixed level progress bar math (uses total needed XP).
-- Applied gameplay bonuses/penalties from saved rules.
-- Stopped resetting levels when rules saved.
-- Prevented recoveryTasks reset; sanitized FileStorage numeric parsing.
-- Disabled degradation system.
-- Added skill catalog add/delete UI and catalog removal from profiles.
-- Normalized log formatting to ASCII/classic locale.
-- Added admin gating: CLI command `admin` to toggle admin mode; non-admin users can только смотреть. GUI adds admin login/logout, disables mutations (profiles, XP, rules, skills) until authenticated.
-- Added achievements system with JSON persistence, skill XP bonus, admin issue/edit/delete UI, profile icon grid with tooltip timer; fixed icon loading.
-- Added admin-only skill rename/description edit in GUI with merge confirmation and XP merge logic.
-- Switched skill persistence to stable IDs with display names; SyncProfileWithCatalog migrates legacy name-based data.
-- Achievements JSON now escapes strings; parser decodes `\\`/`\u` and keeps Windows paths intact.
-- CLI now applies achievement XP bonuses (task/addxp) and reports bonus percent.
-- GUI “Последние действия” uses configured repeat/recovery percentages.
-- Profile delete/ID normalization cleans up achievement JSON files.
-- UI settings window with theme/color/spacing controls and per-window backgrounds; saved to `data/meta/ui.ini`.
-- 3D preview window with OBJ/FBX loading (wireframe) and default cube fallback.
-- Added background tiling option for UI backgrounds; split 3D view and 3D settings into separate windows; added borderless-window toggle, fullscreen mode (F11), and Alt+drag window movement for borderless mode.
-- Added admin-only app log panel with severity filtering; key operations now emit structured logs (profiles, rules, catalog, achievements, UI settings).
-- UI settings now include presentation/compact presets; app logs support text search and export to `data/meta/logs`.
-- Added admin-only statistics panel (summary KPIs + top profiles by level/XP) in the workspace tabs.
-- Profile view now includes a "Состояние" block with last activity, recovery status, and categories needing attention.
-- Added category mini-report in profile (progress bars), admin export reports (TXT/CSV) to `data/meta/reports`, and skill table filters by weight category/range with hover tooltips.
-- Admin stats now include rank distribution and least-active profiles list (based on last activity + recovery tasks).
-- Admin stats tables are now clickable to jump to a profile; centralized rank-selection sync added.
-- Added admin stats CSV export and profile activity log filtering/export in the profile view.
-- Added profile indicators (recovery, categories below 10/10, stale activity), copy-ID button, and inactivity threshold slider in admin stats.
-- Admin stats now support ID/name filtering and archive toggle; exports respect filters. Activity export respects the current filter.
-- Added achievements KPIs in admin stats, profile KPI now shows active/total achievements, and a "Топ навыков" block in profile.
-- Admin stats KPI now includes count of profiles with active recovery (penalty) tasks.
-- Profile overview now shows progress to the next rank; profile list shows filtered count.
-- "Топ навыков" now supports sorting by XP/level/weight.
-- Admin stats now track profiles without activity/achievements and include a top achievements table.
-- Admin stats now include average category scores across profiles.
-- Achievements section now lists expiring-soon badges; profile skill table shows total XP column.
-- Achievements section now supports filtering and hiding expired items with counts.
-- Add Experience modal now previews global XP after repeat/recovery penalties.
-- Added copy-name button in profile details and a "profiles on recovery" table in admin stats.
-- Added exit button in main menu.
-- F10 toggles borderless mode; Ctrl+F10 resets UI/layout.
-- Added window controls (fullscreen/borderless) in main menu; removed auto-fullscreen on borderless.
-- Added reset buttons for profile/skill/activity/achievement/admin/log filters.
-- Admin stats now support auto-refresh with configurable interval.
-- Logs panel now has a compact view toggle.
-- Add Experience modal now has a quick "Равномерно" distribution button and color-coded 100% indicator.
-- Add Experience modal now supports skill filtering and sorting, with visible count.
-- Profile panel now uses tabs (overview/achievements/skills/chart/activity) to reduce clutter.
-- Expired achievement icons render dimmer in the profile grid.
-- Achievements grid now uses a fixed column table for consistent rows/spacing.
-- Profile summary now labels the level progress bar and shows top-skill count.
-- Admin stats toolbar is split into refresh/status and filter/export rows for cleaner layout.
-- Skill catalog list now supports sort by name/weight with a filter reset and consistent shown counts.
-- Profile indicators are now compacted into a status table with a signal count.
-- Admin stats tables now use tighter cell padding and unified top table heights.
-- Admin stats inactive/recovery tables now use the same fixed height with scroll for consistency.
-- Skill catalog now includes a weight-category filter.
-- Profile "Состояние" block uses a compact 3-column table with colored status markers and tooltip details.
-- Profile list now filters by a compact "Все/Активные/Архив" selector.
-- Admin login shows current keyboard layout under the input field.
-- Skill achievements list now has status/filter controls and shown count.
-- Pipeline list now has a quick filter with shown count.
-- Logs panel now supports a source filter dropdown.
-- Admin stats now support filtering by rank.
-- Activity log now shows a visible count alongside the filter.
-- Icon picker now supports filtering by name with a visible count.
-- 3D model picker and UI background picker now support name filters with visible counts.
-- Add Experience skill list now shows the visible count near the filter (before the table).
-- Add Experience now shows an empty-state message when no skills match the filter.
-- Admin stats inactive/recovery sections now show "Показано X из Y" counts.
-- Workspace tabs now auto-focus newly opened tabs.
-- UI settings now expose all ImGui colors grouped by category, and support user presets.
-- Profile now shows the 5 most recent achievements centered under the level progress bar.
-- UI settings auto-save on exit to preserve background alpha and other changes.
-- Fixed float parsing to use classic locale for UI settings, preventing background alpha reset on reload.
-- Main menu now includes a compact "Быстрые действия" panel (create/add XP/archive/restore/stats) plus a separate service row.
-- Skill catalog now uses a two-panel layout with a right-side editor and optional weight-category grouping.
-- Profile summary now highlights level/rank/total XP/active bonus; last selected profile tab is persisted in UI settings.
-- Logs/admin stats filters now persist between sessions and use a unified "Фильтры" header.
-- UI settings now include theme presets, a theme reset button, and quick background application to all windows.
-- Added fixed left navigation sidebar with hotkeys F1-F6 for primary sections (profile/catalog/pipeline/rules/stats/logs).
-- Split panel rendering code into `gui/GuiPanels.inc` to reduce `gui/GuiApp.cpp` size and isolate UI panels.
-- Refactored GUI filter buffers into `UiFilters` (stored in `GuiState.filters`) with syncing to persistent UI settings.
-- Extracted UI settings/preset load-save and window-mode helpers into `gui/GuiUiSettings.inc` to shrink `gui/GuiApp.cpp`.
-- Split `GuiState` into `GuiDataState` and `GuiRuntimeState` (via public inheritance) to separate loaded data vs UI runtime without changing call sites.
-- Extracted log/text/format helpers into `gui/GuiTextUtils.inc` to declutter `gui/GuiApp.cpp`.
-- Extracted icon cache/chooser utilities into `gui/GuiAssets.inc` and 3D mesh helpers into `gui/GuiMesh.inc`.
-- Extracted reporting/export helpers (logs/profile/admin CSV/TXT) into `gui/GuiReports.inc`.
-- Extracted admin statistics refresh logic into `gui/GuiAdminStats.inc`.
-- Extracted UI window helpers (backgrounds, window mode toggles, visibility clamps) into `gui/GuiUiHelpers.inc`.
-- Extracted profile selection/refresh helpers into `gui/GuiProfileOps.inc`.
-- Extracted UI status/log helper routines (SetStatus, KPI cards, log banner) into `gui/GuiStatus.inc`.
-- Extracted XP/skill helper routines (XP totals, distribution balancing, category labels) into `gui/GuiXpUtils.inc`.
-- Moved XP share balancing helpers (IncreaseOthers/BalancePercentages/AdjustSkillShare) into `gui/GuiXpUtils.inc`.
-- Extracted skill radar chart rendering into `gui/GuiCharts.inc`.
-- Extracted rank definitions/helpers into `gui/GuiRanks.inc`.
-- Extracted pipeline step descriptions into `gui/GuiPipeline.inc`.
-- Extracted UI window metadata, settings, and color grouping helpers into `gui/GuiUiData.inc`.
-- Extracted core GUI types (profile wrapper, log types, confirmation enums, pipeline step struct) into `gui/GuiTypes.inc`.
-- Extracted admin stats data structures into `gui/GuiAdminTypes.inc`.
-- Extracted storage helpers (asset search + profile list load) into `gui/GuiStorageUtils.inc`.
-- Extracted GUI state structs into `gui/GuiState.inc`.
-- Extracted startup helpers (locale + font loading) into `gui/GuiStartup.inc`.
-- Moved string normalization helpers (skill name + trim) into `gui/GuiTextUtils.inc`.
-- Extracted window-creation hints into `gui/GuiWindowInit.inc`.
-- Extracted GUI state initialization into `gui/GuiStateInit.inc`.
-- Added layout-path setup helper in `gui/GuiStartup.inc` to keep main init compact.
-- Added ImGui backend init helper in `gui/GuiStartup.inc`.
-- Added ImGui context init helper in `gui/GuiStartup.inc`.
-- `RunGuiLoop` now consistently uses `IJobStorage&` (no pointer deref) and reformatted `gui/GuiMainLoop.inc` for readability.
-- Профильные вкладки: убран постоянный `SetSelected`, добавлен одноразовый `profileTabRequest` для корректного переключения без дерганья; сброс UI теперь пересинхронизирует вкладку.
-- Профильный интерфейс вынесен в `DrawProfilePanel` в `gui/GuiPanels.inc`, чтобы разгрузить `gui/GuiMainLoop.inc`.
-- Блок рабочего окна вынесен в `DrawWorkspacePanel` в `gui/GuiPanels.inc` (включая вкладки каталога/пайплайна/настроек).
-- Модальные окна (админ‑логин, каталог, XP, создание/подтверждение) вынесены в `gui/GuiModals.inc`.
-- Обновление UI‑кадра (горячие клавиши, темы, окно) вынесено в `UpdateUiFrame` в `gui/GuiHeader.inc`.
-- Навигация и главное меню вынесены в `DrawNavigationPanel`/`DrawMainMenuPanel` в `gui/GuiPanels.inc`.
-- Финализация кадра (закрытие, render, swap) вынесена в `FinalizeFrame` в `gui/GuiRender.inc`.
-- Панель правил вынесена в `gui/GuiRulesPanel.inc` (подключена после зависимостей).
-- Панель настроек интерфейса вынесена в `gui/GuiUiSettingsPanel.inc`.
-- Панель каталога навыков вынесена в `gui/GuiSkillCatalogPanel.inc`.
-- Панель логов вынесена в `gui/GuiLogsPanel.inc`.
-- Панель статистики администратора вынесена в `gui/GuiAdminStatsPanel.inc`.
-- Панели 3D просмотра/настроек вынесены в `gui/GuiView3dPanels.inc`.
-- Панель профиля вынесена в `gui/GuiProfilePanel.inc`.
-- Рабочее окно (таб‑контейнер) вынесено в `gui/GuiWorkspacePanel.inc`.
-- Навигация и главное меню вынесены в `gui/GuiNavigationPanel.inc` и `gui/GuiMainMenuPanel.inc`.
-- Панель пайплайна вынесена в `gui/GuiPipelinePanel.inc`; вспомогательные меню‑хелперы — в `gui/GuiMenuHelpers.inc`.
-- Модальные окна разделены по файлам: `gui/GuiAdminModal.inc`, `gui/GuiSkillModals.inc`, `gui/GuiXpModal.inc`, `gui/GuiProfileModals.inc`.
-- Удалены пустые заглушки `gui/GuiPanels.inc` и `gui/GuiModals.inc` после разбиения.
-- `UpdateUiFrame` разбит на небольшие хелперы в `gui/GuiHeader.inc` (hotkeys/theme/window state/guards).
-- Moved storage/bootstrap wiring into `InitStorageContext` in `gui/GuiStorageUtils.inc`.
-- Started service-layer extraction: created `GuiActions` for profile/rules/skill/achievement operations and wired GUI to use it.
-- Added `SanitizeGameplayConfig` for centralized validation; used on load/save and GUI rule saves.
-- Profile UI: added "Обзор" section and grouped achievements/skills/chart/activity into collapsible sections for cleaner navigation.
-- Профильные секции вынесены в `gui/GuiProfileSections.inc`; исправлен баланс скобок после разбиения.
-- Workspace UI: consolidated tools into a single tabbed "Рабочее окно"; added profile/skill search filters (incl. profile skill search), KPI cards in profile overview, uniform toolbar layout in main menu, a scrollable activity section, and a table-based profile skills view.
-- Skill catalog list now uses a table with weight column and filtered result count.
-- Profile skills table supports sorting (name/level/XP/weight).
-- Profile list: added archive toggle and sorting by ID/name with filter-aware display.
-- CLI: локализованы оставшиеся англоязычные подсказки (format/empty/cancel), добавлены русские алиасы для распределения XP (`равномерно/поровну`, `отмена`), метки времени теперь "нет данных/неизвестно".
-- CLI: введён нормальный парсер команд (чтение строки, поддержка кавычек и пробелов), унифицированы подсказки и обработка аргументов.
-- Главное меню: кнопкам "Быстрые действия" и "Сервис" задана фиксированная высота для читаемости (исправлено сжатие).
-- Профиль: верхний блок переразложен в 2 колонки (инфо + уровень/XP), прогресс перенесён в шапку, строка статуса очищена от мусорного символа.
-- Профиль: шапка закреплена через левые/правые блоки с минимальными ширинами, чтобы не ломалась верстка.
-- Профиль: шапка переведена на auto-resize child-блоки, чтобы вкладки не пропадали.
-- Задачи: добавлен счётчик выполненных задач (хранится в профиле, отображается в профиле и CLI).
-- Штрафы: повтор/прогрев теперь включаются только после ранга "Сеньор" (уровень >=150 и все категории 10/10).
-- UI: главное меню стало более отзывчивым к ресайзу (стек кнопок и фильтров при узкой ширине).
-- UI: кнопки блока "Окно" переведены на таблицу/стек, чтобы не уплывали при ресайзе.
-- UI: таблицы кнопок в главном меню переведены на StretchSame с явными колонками, чтобы ширина не схлопывалась.
-- UI: фильтры главного меню переведены на безлейбловые поля с подписями сверху и таблицей, чтобы подписи не выходили за границы.
-- Облако: манифест теперь может хранить файл релиза; добавлена загрузка обновления в `data/meta/updates`.
-- UI: каталог навыков получил адаптивные кнопки/фильтры (стек на узкой ширине, таблицы на широкой).
-- UI: правила и модалка добавления XP переведены на адаптивные таблицы/стек, чтобы лейблы не уплывали при ресайзе.
-- Облако: добавлен манифест версии/времени данных; при админ-пуше он обновляется, клиент умеет показывать доступность обновления.
-- UI: KPI карточки стали выше и крупнее по числам, визуальная иерархия усилена.
-- UI: добавлена тема "Тёплая Pro" и задана как направление по умолчанию.
-- Навигация: версия отображается в нижней части боковой панели для админа.
-- Облако: добавлена базовая синхронизация (cloud.ini, локальный снимок push/pull), админ может выгружать, пользователи обновлять.
-- Профиль: таблицы (топ навыков/индикаторы/состояние/навыки) теперь с единым padding для ровных строк.
-- UI: панель 3D-настроек получила адаптивные фильтры/путь (стек на узкой ширине, таблицы на широкой).
-- UI: логи/админ-статистика/пайплайн переведены на адаптивные фильтры и тулбары без схлопывания при ресайзе.
-- UI: настройки интерфейса переведены на адаптивные ряды (тема/пресеты/фон/действия) без SameLine-сжатий.
-- UI: модалки профиля/админа/каталога переведены на адаптивные кнопки и растянутые поля (без узких полос).
-- UI: профильные секции (топ навыков/ачивки/навыки/активность/админ-отчет) переведены на адаптивные фильтры и кнопки.
+- Исправлена видимость списка профилей в главном меню.
+- Внедрён техно-стекло-пак стилей без градиентов + синхрон плашки окна и фона.
+- Смягчены пустые состояния/плейсхолдеры (TextDisabled), добавлены подсказки в правилах и логах.
+- Отключено сохранение без изменений в правилах и настройках UI.
+- В настройках UI добавлен индикатор "есть/нет несохранённых изменений".
+- Главное меню переведено в верхнюю плашку; профили вынесены в отдельную вкладку; добавлен выбор профиля в окне профиля.
+- В верхней плашке добавлены компактные icon-button'ы (профили/обновить/статистика/настройки/выход).
+- В профиле: кольцевая диаграмма прогресса и сегменты категорий; KPI-карточки с иконками.
+- Навигация: компактные кнопки с иконками (Home/Book/Flow/Cube/Lock/List и т.д.).
+- Профиль → "Диаграммы": карточка категорий (sparkline + бары), карточка топ-навыков (бары), радар ограничен топ-N (регулируется слайдером).
+- Профиль: диаграмма уровня центрирована в области.
+- UX: окно "Профили" закрыто по умолчанию; последний профиль сохраняется/восстанавливается.
+- Профиль: убран warning Dear ImGui (SetCursorPos) в заголовке.
+- Каталог навыков: карточка "Сводка" (распределение категорий веса + mini-bars).
+- Профиль: окно закреплено справа от навигации.
+- Профиль → "Состояние": фиксированы ширины колонок, таймер не дрожит.
+- Статистика: средние категории и ранги с mini-bars/sparkline.
+- Layout: единая правая область с вкладками (Профиль/Профили/рабочие панели).
+- Логи: сводка с KPI/иконками и спарклайном активности.
+- Каталог навыков: сводка с KPI/иконками и спарклайном веса.
+- Админ-статистика: KPI-карточки с иконками.
+- Профиль: добавлена кнопка "Добавить опыт".
+- Профиль: кнопка "Добавить опыт" перенесена под имя/ID.
+- Название программы: ForgeMirror (UI/документация/окно/выходные файлы).
+- Этап 1.2 (профиль): краткая сводка в верхней зоне, без дублей под диаграммой.
+- Этап 1.3 (профиль): добавлены признаки загрузки и ошибки при выборе профиля; UI показывает состояние загрузки, ошибку и пустые списки; изменения закоммичены; APP_VERSION=0.2.13.
+- Этап 1.1 (каталог навыков): подсказки действий, пустой стейт каталога, CTA для добавления при пустом выборе.
+- Этап 1.1 (пайплайн): подсказки действий и empty-state фильтра.
+- Этап 1.1 (логи): подсказки действий, empty-state и сброс фильтров.
+- Этап 1.1 (статистика): подсказки назначения и empty-state с быстрым сбросом фильтров.
+- Этап 1.1 (правила): подсказки назначения и контекста влияния на прогресс.
+- Этап 1.1 (3D просмотр): подсказки управления и контекст ошибки.
+- Этап 1.1 (3D настройки): подсказки назначения, empty-state и сброс фильтра.
+- Этап 1.1 (настройки интерфейса): подсказки назначения и empty-state фонов.
+- Этап 1.1 (главное меню): подсказки назначения, быстрые действия и empty-state профилей.
+- Этап 1.1 (навигация): подсказка назначения и статус админ-разделов.
+- UI: сворачиваемые секции по умолчанию свернуты.
+- Этап 2.1: таблица "Навыки" профиля усилена (ключевой столбец, микро-якоря, ритм топ-строк).
+- Этап 2.1: таблица "Логи" усилена (ключевой столбец, микро-якоря, акцент важного).
+- Этап 2.1: таблица "Каталог навыков" усилена (ключевой столбец, микро-якоря, ритм топ-строк).
+- Этап 2.1: таблицы "Админ-статистика" усилены (ключевой столбец, микро-якоря, ритм топ-строк).
+- Этап 2.1: таблица "Топ навыков" профиля усилена (ключевой столбец, микро-якоря, ритм топ-строк).
+- Этап 2.1: список "Пайплайн" усилен (ключевой столбец, микро-якоря).
+- Этап 2.1: таблица "Состояние" профиля усилена (ключевой столбец, микро-якоря, акцент проблемных строк).
+- Этап 2.1: таблицы "Правила" усилены (ключевой столбец, микро-якоря, единицы).
+- Этап 2.1: табличные фильтры "3D/Настройки UI" усилены (микро-якоря, ключевой столбец).
+- Этап 2.1: таблица "Индикаторы" профиля усилена (ключевой столбец, микро-якоря, акцент проблемных строк).
+- Этап 2.1: табличные блоки действий в модальных окнах усилены (микро-якоря, ключевой столбец).
+- Этап 2.1: прочие табличные фильтры/экшены усилены (микро-якоря, ключевой столбец).
+- UI: исправлена компоновка кнопок в "Пользовательских пресетах".
+- Якоря: числовые микро-якоря заменены на иконки.
+- XP-модал: таблица распределения навыков усилена (якоря, ключевой столбец, ритм топ-строк).
+- Профиль: фильтры ачивок/навыков/активности усилены (икон-якоря, ключевой столбец).
+- Логи: фильтр-строка усилена (икон-якорь, ключевая колонка).
+- Админ: строки обновления/фильтров усилены (икон-якорь, ключевая колонка).
+- Терминология: добавлены короткие пояснения XP (профиль) и веса (каталог навыков).
+- Терминология: добавлено пояснение источника в логах.
+- Терминология: добавлены пояснения архив/прогрев в админ-статистике.
+- Терминология: добавлены пояснения пресетов и фона в настройках интерфейса.
+- Терминология: добавлено пояснение пайплайна.
+- Терминология: добавлены пояснения кривой уровней и фокуса в правилах.
+- Терминология: добавлено пояснение параметров Yaw/Pitch/Zoom в 3D настройках.
+- Этап 3.1: добавлена карточка "Сводка состояния" в профиле (состояние/перекос/фокус).
+- Этап 3.1: добавлена карточка "Зоны перекоса" (топ-3 слабые категории).
+- Этап 3.2: мягкий акцент слабейшей категории в профиле (фон/цвет).
+- Этап 3.2: мягкий акцент слабейшей категории в диаграммах категорий.
+- Этап 4.1: режимы интерфейса в профиле (обзор/аналитика).
+- Этап 5.1: зафиксированы базовые токены отступов/карточек.
+- Этап 5.2: табы профиля вынесены в декларацию для расширения.
 
 Now:
-- Restyle in progress toward dark, soft, card-based desktop dashboard with left sidebar; focus on main menu and profile first.
-- User requested to continue and run tests after changes.
-- User requested a code review.
+- Этап 4.1 (опционально): добавить фокусный режим профиля.
 
 Next:
-- Implement theme/preset + card styling for main menu and profile; add fonts/icons/background assets.
-- Review current code changes and report findings.
+- Уточнить следующий приоритет после добавления фокусного режима.
 
-Open questions:
-- Need confirmation if decay should ever return and under what rules (UNCONFIRMED).
-- Should achievement XP bonuses apply in CLI flows (`task`/`addxp`) the same way as GUI?
-- Should repeat/recovery penalties affect skill XP or only global XP?
-- When adding new skills to the catalog, should existing profiles auto-add them at level 1/0 XP?
-- When deleting a profile, should its achievements JSON be removed too?
-
-UI customization notes:
-- User wants all three: theme/style switching, background/plates customization, and ability to show 3D objects.
+Open questions (UNCONFIRMED if needed):
+- Нет.
 
 Working set (files/ids/commands):
-- gui/GuiApp.cpp, src/SkillCatalog.cpp, include/SkillCatalog.h, src/FileStorage.cpp, main.cpp; data/skills.txt; builds via `cmake --build build --config Release` and `cmake --build build-gui --config Release --target JobSkillGui`.
+- `gui/GuiMainMenuPanel.inc`
+- `gui/GuiIcons.inc`
+- `gui/GuiCharts.inc`
+- `gui/GuiApp.cpp`
+- `gui/GuiHeader.inc`
+- `gui/GuiMainLoop.inc`
+- `gui/GuiAdminStatsPanel.inc`
+- `gui/GuiNavigationPanel.inc`
+- `gui/GuiProfilePanel.inc`
+- `gui/GuiProfileSections.inc`
+- `gui/GuiSkillCatalogPanel.inc`
+- `gui/GuiWorkspacePanel.inc`
+- `gui/GuiProfileOps.inc`
+- `gui/GuiState.inc`
+- `gui/GuiStateInit.inc`
+- `gui/GuiUiData.inc`
+- `gui/GuiUiHelpers.inc`
+- `gui/GuiUiSettings.inc`
+- `gui/GuiXpModal.inc`
+- `gui/GuiIcons.inc`
+- `gui/GuiProfileSections.inc`
+- `cmake --build build --config Release`
+- `cmake --build build-gui --config Release --target JobSkillGui`

@@ -4,6 +4,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     accent.w = 1.0f;
     ImVec4 accentSoft = accent;
     accentSoft.w = 0.75f;
+    const bool focusMode = (state.ui.profileViewMode == 2);
     RankSpan span = ComputeRankSpan(overallLevel);
     const int levelsLeft = (span.hasNext && span.nextLevel > span.currentLevel)
         ? (span.nextLevel - overallLevel)
@@ -184,6 +185,11 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
     }
     EndCard();
+
+    if (focusMode) {
+        ImGui::TextDisabled(u8"Фокусный режим: детали скрыты.");
+        return;
+    }
 
     if (ImGui::CollapsingHeader(u8"Топ навыков")) {
         const char* topModes[] = {u8"По XP", u8"По уровню", u8"По весу"};

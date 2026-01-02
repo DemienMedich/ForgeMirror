@@ -201,7 +201,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
     settings.backgroundAlpha = ClampFinite(settings.backgroundAlpha, 0.0f, 1.0f, 0.25f);
     settings.backgroundTileScale = ClampFinite(settings.backgroundTileScale, 0.25f, 4.0f, 1.0f);
     settings.profileTab = std::clamp(settings.profileTab, 0, 4);
-    settings.profileViewMode = std::clamp(settings.profileViewMode, 0, 1);
+    settings.profileViewMode = std::clamp(settings.profileViewMode, 0, 2);
     settings.adminStatsRankFilter = std::max(0, settings.adminStatsRankFilter);
     settings.adminStatsRefreshSeconds = std::clamp(settings.adminStatsRefreshSeconds, 5, 120);
     settings.inactivityThresholdDays = std::clamp(settings.inactivityThresholdDays, 1, 365);

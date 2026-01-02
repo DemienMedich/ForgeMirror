@@ -210,6 +210,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         drawModeButton(u8"Обзор", 0, u8"Быстрый обзор состояния.");
         ImGui::SameLine();
         drawModeButton(u8"Аналитика", 1, u8"Детали, фильтры и история.");
+        ImGui::SameLine();
+        drawModeButton(u8"Фокус", 2, u8"Только ключевые блоки.");
         ImGui::TextDisabled(u8"XP - опыт: начисляется навыкам и повышает уровень.");
         ImGui::Separator();
         const float headerAvail = ImGui::GetContentRegionAvail().x;
@@ -223,7 +225,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         }
         ImGui::BeginChild("profile_header_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_AutoResizeY,
             ImGuiWindowFlags_NoScrollbar);
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
         if (ImGui::BeginTable("profile_info", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
             ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
@@ -480,8 +482,15 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         EndCard();
         ImGui::Spacing();
 
-        const bool overviewMode = (state.ui.profileViewMode == 0);
-        if (overviewMode && state.ui.profileTab != 0 && state.ui.profileTab != 3) {
+        const int viewMode = state.ui.profileViewMode;
+        const bool overviewMode = (viewMode == 0);
+        const bool focusMode = (viewMode == 2);
+        auto tabAllowed = [&](int index) {
+            if (focusMode) return index == 0;
+            if (overviewMode) return index == 0 || index == 3;
+            return true;
+        };
+        if (!tabAllowed(state.ui.profileTab)) {
             state.ui.profileTab = 0;
             state.profileTabRequest = -1;
         }
@@ -512,7 +521,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
             };
             for (const auto& tabInfo : tabs) {
-                const bool disableTab = overviewMode && !tabInfo.allowOverview;
+                const bool disableTab = !tabAllowed(tabInfo.index);
                 if (disableTab) ImGui::BeginDisabled();
                 if (ImGui::BeginTabItem(tabInfo.label, nullptr, tabFlagsFor(tabInfo.index))) {
                     state.profileSection = tabInfo.index;
