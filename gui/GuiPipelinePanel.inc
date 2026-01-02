@@ -56,16 +56,40 @@ void DrawPipelinePanel(GuiState& state) {
             }
         }
     }
-    if (ImGui::BeginChild("pipeline_list", ImVec2(0, 140), true)) {
-        for (int i = 0; i < stepCount; ++i) {
-            if (!MatchesFilter(kPipelineSteps[i].title, state.filters.pipeline.data())) {
-                continue;
+    if (ImGui::BeginChild("pipeline_list", ImVec2(0, 160), true)) {
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
+        ImGuiTableFlags listFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                    ImGuiTableFlags_SizingStretchProp;
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+        if (ImGui::BeginTable("pipeline_table", 2, listFlags)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+            int rowRank = 0;
+            for (int i = 0; i < stepCount; ++i) {
+                if (!MatchesFilter(kPipelineSteps[i].title, state.filters.pipeline.data())) {
+                    continue;
+                }
+                bool selected = state.selectedPipelineIndex == i;
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                const std::string rowId = std::string("##pipeline_") + std::to_string(i);
+                if (ImGui::Selectable(rowId.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                    state.selectedPipelineIndex = i;
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%d", rowRank + 1);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextUnformatted(kPipelineSteps[i].title);
+                ++rowRank;
             }
-            bool selected = state.selectedPipelineIndex == i;
-            if (ImGui::Selectable(kPipelineSteps[i].title, selected)) {
-                state.selectedPipelineIndex = i;
-            }
+            ImGui::EndTable();
         }
+        ImGui::PopStyleVar();
     }
     ImGui::EndChild();
     ImGui::Separator();
