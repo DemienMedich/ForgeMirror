@@ -272,6 +272,10 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
     if (BeginCard("profiles_list_card")) {
         DrawCardHeader(u8"Профили");
         ImGui::TextDisabled(u8"Главное меню: выберите профиль или создайте новый.");
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         const float actionsWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = actionsWidth < 360.0f;
         if (stackActions) {
@@ -284,16 +288,22 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
                 RefreshProfiles(state, storage, catalog);
             }
-        } else if (ImGui::BeginTable("profile_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+        } else if (ImGui::BeginTable("profile_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             if (!state.isAdmin) ImGui::BeginDisabled();
             if (ImGui::Button(u8"Создать профиль", ImVec2(-1.0f, 0.0f))) {
                 state.modalBuffer.fill('\0');
                 state.createPopupRequest = true;
             }
             if (!state.isAdmin) ImGui::EndDisabled();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
                 RefreshProfiles(state, storage, catalog);
             }
@@ -316,12 +326,16 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_sort", &state.profileSort, profileSortLabels, IM_ARRAYSIZE(profileSortLabels));
-        } else if (ImGui::BeginTable("profile_filters", 3, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("filter_archive", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch);
+        } else if (ImGui::BeginTable("profile_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.95f);
+            ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 0.95f);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextDisabled(u8"Поиск");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##profile_search", u8"Поиск профиля",
@@ -329,11 +343,11 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             if (ImGui::SmallButton(u8"Сброс##profile_filter")) {
                 state.filters.profile.fill('\0');
             }
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"Профили");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_archive", &state.profileArchiveFilter, archiveLabels, IM_ARRAYSIZE(archiveLabels));
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(3);
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_sort", &state.profileSort, profileSortLabels, IM_ARRAYSIZE(profileSortLabels));

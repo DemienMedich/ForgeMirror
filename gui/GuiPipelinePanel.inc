@@ -17,16 +17,23 @@ void DrawPipelinePanel(GuiState& state) {
         if (ImGui::SmallButton(u8"Сброс##pipeline_filter")) {
             state.filters.pipeline.fill('\0');
         }
-    } else if (ImGui::BeginTable("pipeline_filter_row", 2, ImGuiTableFlags_SizingStretchSame)) {
-        ImGui::TableSetupColumn("pipeline_filter", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("pipeline_reset", ImGuiTableColumnFlags_WidthStretch);
+    } else if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("pipeline_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("pipeline_filter", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+        ImGui::TableSetupColumn("pipeline_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("1");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         ImGui::TextDisabled(u8"Фильтр");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Фильтр пайплайна",
                                  state.filters.pipeline.data(), state.filters.pipeline.size());
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
         if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
             state.filters.pipeline.fill('\0');
         }

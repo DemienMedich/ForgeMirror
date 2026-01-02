@@ -198,16 +198,23 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
         }
         if (!hasChanges) ImGui::EndDisabled();
-    } else if (ImGui::BeginTable("rules_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+    } else if (ImGui::BeginTable("rules_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
         if (!hasChanges) ImGui::BeginDisabled();
-        ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("rules_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled("1");
+        ImGui::TableSetColumnIndex(1);
         if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
             draft = state.rulesConfig;
         }
-        ImGui::TableNextColumn();
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
         if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {

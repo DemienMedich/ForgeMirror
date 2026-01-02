@@ -73,9 +73,12 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::BeginChild("catalog_list_panel", ImVec2(0.0f, panelHeight), false);
 
         DrawCardHeader(u8"Каталог навыков");
-        ImGui::TextDisabled(u8"Выберите навык слева — детали и редактирование справа.");
+        ImGui::TextDisabled(u8"Выберите навык слева - детали и редактирование справа.");
         const float listWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = listWidth < 320.0f;
+        ImVec4 actionKeyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        actionKeyBg.w = std::clamp(actionKeyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 actionKeyBgU32 = ImGui::GetColorU32(actionKeyBg);
         const bool canDeleteSkill = state.selectedCatalogIndex >= 0 &&
             state.selectedCatalogIndex < static_cast<int>(catalogSkills.size());
         if (stackActions) {
@@ -93,11 +96,15 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
             }
             if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
-        } else if (ImGui::BeginTable("catalog_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableSetupColumn("action_left", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("action_right", ImGuiTableColumnFlags_WidthStretch);
+        } else if (ImGui::BeginTable("catalog_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("action_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             if (!state.isAdmin) ImGui::BeginDisabled();
             if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
                 state.addSkillPopupRequest = true;
@@ -106,7 +113,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.newSkillWeight = 1.0f;
             }
             if (!state.isAdmin) ImGui::EndDisabled();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
             if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
                 state.deleteSkillPopupRequest = true;
@@ -147,11 +154,15 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
                          weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
-        } else if (ImGui::BeginTable("catalog_filters", 2, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableSetupColumn("filter_left", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("filter_right", ImGuiTableColumnFlags_WidthStretch);
+        } else if (ImGui::BeginTable("catalog_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("filter_left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("filter_right", ImGuiTableColumnFlags_WidthStretch, 0.95f);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("1");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Поиск");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
@@ -160,17 +171,20 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.filters.skill.fill('\0');
                 state.catalogWeightCategoryFilter = 0;
             }
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_sort", &state.catalogSortMode, sortLabels, IM_ARRAYSIZE(sortLabels));
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("2");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Группировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_group", &state.catalogGroupMode,
                          groupLabels, IM_ARRAYSIZE(groupLabels));
-            ImGui::TableNextColumn();
+            ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"Категория веса");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
@@ -389,7 +403,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TextDisabled("%d", rowRank + 1);
                 ImGui::TableSetColumnIndex(1);
-                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
                 bool selected = state.selectedCatalogIndex == viewIndex;
                 if (ImGui::Selectable(displayName.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
                     state.selectedCatalogIndex = viewIndex;
