@@ -19,7 +19,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
     }
 
-    if (ImGui::CollapsingHeader(u8"Топ навыков", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Топ навыков")) {
         const char* topModes[] = {u8"По XP", u8"По уровню", u8"По весу"};
         const float topWidth = ImGui::GetContentRegionAvail().x;
         const bool stackTop = topWidth < 420.0f;
@@ -103,7 +103,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
         const bool penaltiesEnabled = profile.penalties_enabled();
         bool hasRecovery = penaltiesEnabled && profile.recovery_tasks_remaining() > 0;
-        if (ImGui::CollapsingHeader(u8"Индикаторы", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader(u8"Индикаторы")) {
             const int signals = (hasRecovery ? 1 : 0) + (categoriesBelow > 0 ? 1 : 0) + (isStale ? 1 : 0);
             ImGui::TextDisabled(u8"Активных сигналов: %d", signals);
             if (signals == 0) {
@@ -151,7 +151,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
     }
 
-    if (ImGui::CollapsingHeader(u8"Состояние", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Состояние")) {
         const std::int64_t lastTask = profile.last_task_timestamp();
         const bool hasLastTask = lastTask > 0;
         std::string lastTaskLabel = hasLastTask
@@ -232,7 +232,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         ImGui::PopStyleVar();
     }
 
-    if (ImGui::CollapsingHeader(u8"Категории", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Категории")) {
         const auto& catScores = profile.category_best_scores();
         for (size_t i = 0; i < catScores.size(); ++i) {
             const int score = catScores[i];
@@ -246,7 +246,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     }
 
 static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
-    if (ImGui::CollapsingHeader(u8"Ачивки", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Ачивки")) {
     if (profile.achievements().empty()) {
         ImGui::TextDisabled(u8"Ачивок нет.");
     } else {
@@ -427,7 +427,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
 }
 
 static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
-    if (ImGui::CollapsingHeader(u8"Навыки", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Навыки")) {
     DrawCardHeader(u8"Фильтры");
     const float skillFilterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackSkillFilters = skillFilterWidth < 620.0f;
@@ -567,7 +567,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
 }
 
 static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Profile& profile) {
-    if (ImGui::CollapsingHeader(u8"Диаграммы", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Диаграммы")) {
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
@@ -718,7 +718,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
 }
 
 static void DrawProfileActivitySection(GuiState& state, const std::string& profileId) {
-    if (ImGui::CollapsingHeader(u8"Последние действия", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(u8"Последние действия")) {
     if (ImGui::BeginChild("profile_activity", ImVec2(0, 140), true)) {
         DrawCardHeader(u8"Фильтры");
         const auto logIt = state.activityLogs.find(profileId);

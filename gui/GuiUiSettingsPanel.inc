@@ -328,7 +328,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         const auto& groups = UiColorGroups();
         for (const auto& group : groups) {
             if (group.indices.empty()) continue;
-            if (ImGui::CollapsingHeader(group.label, ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader(group.label)) {
                 for (int idx : group.indices) {
                     ImGui::ColorEdit4(entries[idx].name, &state.ui.colors[idx].x);
                 }

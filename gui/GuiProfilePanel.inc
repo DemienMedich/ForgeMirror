@@ -498,7 +498,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             DrawProfileAchievementsSection(state, catalog, profile, nowSec);
         }
 
-        if (state.isAdmin && ImGui::CollapsingHeader(u8"Администрирование", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (state.isAdmin && ImGui::CollapsingHeader(u8"Администрирование")) {
             const auto& opts = RankOptions();
             std::vector<const char*> labels;
             labels.reserve(opts.size());
@@ -538,7 +538,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
         }
 
-        if (state.isAdmin && ImGui::CollapsingHeader(u8"Отчет", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (state.isAdmin && ImGui::CollapsingHeader(u8"Отчет")) {
             auto exportTxt = [&]() {
                 std::filesystem::path outPath;
                 if (ExportProfileReportTxt(state, catalog, profile, state.active->id, outPath)) {
