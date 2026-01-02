@@ -94,6 +94,8 @@ void DrawView3dSettingsPanel(GuiState& state) {
 
 void DrawView3dPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::View3D, state.storageDir);
+    DrawCardHeader(u8"3D просмотр");
+    ImGui::TextDisabled(u8"ЛКМ — вращение, колесо — масштаб. Автовращение включается в настройках.");
     auto resolved = state.ui.modelPath.empty()
         ? std::optional<std::filesystem::path>()
         : ResolveIconPath(state.ui.modelPath, state.storageDir);
@@ -114,6 +116,7 @@ void DrawView3dPanel(GuiState& state) {
     }
     if (!state.viewMeshError.empty()) {
         ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", state.viewMeshError.c_str());
+        ImGui::TextDisabled(u8"Проверьте путь к файлу или формат модели.");
     }
 
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
