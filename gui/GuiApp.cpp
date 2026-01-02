@@ -83,6 +83,7 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 const char* RankLabelForLevel(int level);
 int RankIndexForLevel(int level);
 const std::vector<RankOption>& RankOptions();
+const char* ClassificationLabel(int categoryIndex);
 
 #include "GuiTextUtils.inc"
 #include "GuiAssets.inc"
@@ -93,6 +94,7 @@ const std::vector<RankOption>& RankOptions();
 #include "GuiUiSettings.inc"
 #include "GuiUiHelpers.inc"
 #include "GuiTasks.inc"
+#include "GuiPomodoro.inc"
 #include "GuiIcons.inc"
 #include "GuiXpUtils.inc"
 
@@ -109,6 +111,7 @@ const std::vector<RankOption>& RankOptions();
 #include "GuiAdminStatsPanel.inc"
 #include "GuiSkillCatalogPanel.inc"
 #include "GuiTasksPanel.inc"
+#include "GuiPomodoroPanel.inc"
 #include "GuiView3dPanels.inc"
 #include "GuiProfilePanel.inc"
 

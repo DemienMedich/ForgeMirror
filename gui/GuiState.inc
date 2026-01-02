@@ -44,6 +44,7 @@ struct GuiRuntimeState {
     bool showAdminStats = false;
     bool showProfilesWindow = false;
     bool showTasks = false;
+    bool showPomodoro = false;
     int workspaceTabRequest = -1;
 
     bool createPopupRequest = false;
@@ -83,6 +84,16 @@ struct GuiRuntimeState {
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
     std::vector<TaskProfileShare> taskShares;
+    int tasksFilterProfile = 0;
+    int tasksFilterCategory = 0;
+    int tasksFilterDays = 0;
+    int pomodoroPhase = 0;
+    int pomodoroNextPhase = 0;
+    int pomodoroRemainingSeconds = 0;
+    int pomodoroCyclesCompleted = 0;
+    float pomodoroAccumulator = 0.0f;
+    bool pomodoroRunning = false;
+    bool pomodoroAwaitConfirm = false;
     UiFilters filters;
     std::array<float, 2> profileSkillWeightRange{0.0f, 2.0f};
     int profileSkillCategoryFilter = 0;

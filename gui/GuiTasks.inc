@@ -305,6 +305,76 @@ static std::string BuildParticipantLabel(const TaskEntry& task,
     return out.str();
 }
 
+static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEntry*>& tasks,
+                           const std::unordered_map<std::string, std::string>& names,
+                           std::filesystem::path& outPath, int& exportedCount) {
+    exportedCount = 0;
+    if (tasks.empty()) return false;
+    std::error_code ec;
+    auto reportDir = state.storageDir / "meta" / "reports";
+    std::filesystem::create_directories(reportDir, ec);
+    if (ec) return false;
+    std::string stamp = FormatTimestamp(NowSeconds(), "%Y%m%d-%H%M%S");
+    if (stamp.empty()) stamp = std::to_string(NowSeconds());
+    outPath = reportDir / ("tasks-" + stamp + ".csv");
+    std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out.imbue(std::locale::classic());
+    out << "Date,Project,Task,Description,Category,Score,Participants,BaseXP,BasePool\n";
+    for (const TaskEntry* task : tasks) {
+        if (!task) continue;
+        ++exportedCount;
+        std::string stampText = FormatTimestamp(task->createdAt, "%Y-%m-%d %H:%M");
+        if (stampText.empty()) stampText = "-";
+        const std::string participants = BuildParticipantLabel(*task, names);
+        out << CsvEscape(stampText) << ","
+            << CsvEscape(task->project) << ","
+            << CsvEscape(task->title) << ","
+            << CsvEscape(task->description) << ","
+            << CsvEscape(ClassificationLabel(task->category)) << ","
+            << task->score << ","
+            << CsvEscape(participants) << ","
+            << task->baseXp << ","
+            << task->basePool << "\n";
+    }
+    return exportedCount > 0;
+}
+
+static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEntry*>& tasks,
+                           const std::unordered_map<std::string, std::string>& names,
+                           std::filesystem::path& outPath, int& exportedCount) {
+    exportedCount = 0;
+    if (tasks.empty()) return false;
+    std::error_code ec;
+    auto reportDir = state.storageDir / "meta" / "reports";
+    std::filesystem::create_directories(reportDir, ec);
+    if (ec) return false;
+    std::string stamp = FormatTimestamp(NowSeconds(), "%Y%m%d-%H%M%S");
+    if (stamp.empty()) stamp = std::to_string(NowSeconds());
+    outPath = reportDir / ("tasks-" + stamp + ".txt");
+    std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out.imbue(std::locale::classic());
+    out << "Выполненные задачи\n";
+    for (const TaskEntry* task : tasks) {
+        if (!task) continue;
+        ++exportedCount;
+        std::string stampText = FormatTimestamp(task->createdAt, "%Y-%m-%d %H:%M");
+        if (stampText.empty()) stampText = "-";
+        const std::string participants = BuildParticipantLabel(*task, names);
+        out << "- " << stampText << " | "
+            << SanitizeLogLine(task->project) << " | "
+            << SanitizeLogLine(task->title) << " | "
+            << SanitizeLogLine(ClassificationLabel(task->category)) << " | "
+            << task->score << "/10 | "
+            << SanitizeLogLine(participants) << "\n";
+        if (!task->description.empty()) {
+            out << "  " << SanitizeLogLine(task->description) << "\n";
+        }
+    }
+    return exportedCount > 0;
+}
+
 static std::string GenerateTaskId(std::int64_t nowSeconds, size_t index) {
     std::ostringstream out;
     out.imbue(std::locale::classic());

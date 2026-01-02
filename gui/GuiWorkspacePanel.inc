@@ -87,6 +87,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
+        if (state.showPomodoro &&
+            ImGui::BeginTabItem(u8"Помодоро", &state.showPomodoro, tabFlagsFor(UiWindowId::Pomodoro))) {
+            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::Pomodoro)) {
+                state.workspaceTabRequest = -1;
+            }
+            if (beginTabBody("##tab_pomodoro")) {
+                DrawPomodoroPanel(state);
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
         if (state.showView3d &&
             ImGui::BeginTabItem(u8"3D просмотр", &state.showView3d, tabFlagsFor(UiWindowId::View3D))) {
             if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3D)) {

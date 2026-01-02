@@ -91,6 +91,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
             DrawCardHeader(u8"Описание задачи");
+            ImGui::TextDisabled(u8"Все поля обязательны для сохранения.");
             ImGui::TextDisabled(u8"Проект");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputText(u8"##task_project", state.taskProject.data(), state.taskProject.size());

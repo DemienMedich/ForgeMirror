@@ -10,6 +10,7 @@ enum class UiWindowId {
     AdminStats,
     Logs,
     Tasks,
+    Pomodoro,
     Count
 };
 
@@ -33,7 +34,8 @@ const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
         {UiWindowId::View3DSettings, "3D настройки"},
         {UiWindowId::AdminStats, "Статистика"},
         {UiWindowId::Logs, "Логи"},
-        {UiWindowId::Tasks, "Задачи"}
+        {UiWindowId::Tasks, "Задачи"},
+        {UiWindowId::Pomodoro, "Помодоро"}
     }};
     return windows;
 }
@@ -71,6 +73,11 @@ struct UiSettings {
     bool adminStatsAutoRefresh = true;
     int adminStatsRefreshSeconds = 30;
     int inactivityThresholdDays = 30;
+    int pomodoroWorkMinutes = 25;
+    int pomodoroBreakMinutes = 5;
+    int pomodoroLongBreakMinutes = 15;
+    int pomodoroCyclesBeforeLong = 4;
+    bool pomodoroSoundEnabled = true;
     std::array<ImVec4, ImGuiCol_COUNT> colors{};
     std::array<std::string, kUiWindowCount> backgrounds{};
 

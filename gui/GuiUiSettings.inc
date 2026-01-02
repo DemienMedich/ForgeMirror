@@ -165,6 +165,12 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "autoRefresh") settings.adminStatsAutoRefresh = ParseBool(value, settings.adminStatsAutoRefresh);
             else if (key == "refreshSeconds") settings.adminStatsRefreshSeconds = ParseInt(value, settings.adminStatsRefreshSeconds);
             else if (key == "inactivityDays") settings.inactivityThresholdDays = ParseInt(value, settings.inactivityThresholdDays);
+        } else if (section == "pomodoro") {
+            if (key == "workMinutes") settings.pomodoroWorkMinutes = ParseInt(value, settings.pomodoroWorkMinutes);
+            else if (key == "breakMinutes") settings.pomodoroBreakMinutes = ParseInt(value, settings.pomodoroBreakMinutes);
+            else if (key == "longBreakMinutes") settings.pomodoroLongBreakMinutes = ParseInt(value, settings.pomodoroLongBreakMinutes);
+            else if (key == "cyclesBeforeLong") settings.pomodoroCyclesBeforeLong = ParseInt(value, settings.pomodoroCyclesBeforeLong);
+            else if (key == "soundEnabled") settings.pomodoroSoundEnabled = ParseBool(value, settings.pomodoroSoundEnabled);
         } else if (section == "colors") {
             for (size_t i = 0; i < entries.size(); ++i) {
                 if (key == entries[i].name) {
@@ -205,6 +211,10 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
     settings.adminStatsRankFilter = std::max(0, settings.adminStatsRankFilter);
     settings.adminStatsRefreshSeconds = std::clamp(settings.adminStatsRefreshSeconds, 5, 120);
     settings.inactivityThresholdDays = std::clamp(settings.inactivityThresholdDays, 1, 365);
+    settings.pomodoroWorkMinutes = std::clamp(settings.pomodoroWorkMinutes, 5, 120);
+    settings.pomodoroBreakMinutes = std::clamp(settings.pomodoroBreakMinutes, 3, 60);
+    settings.pomodoroLongBreakMinutes = std::clamp(settings.pomodoroLongBreakMinutes, 5, 90);
+    settings.pomodoroCyclesBeforeLong = std::clamp(settings.pomodoroCyclesBeforeLong, 1, 8);
     settings.windowPadding.x = ClampFinite(settings.windowPadding.x, 0.0f, 32.0f, style.WindowPadding.x);
     settings.windowPadding.y = ClampFinite(settings.windowPadding.y, 0.0f, 32.0f, style.WindowPadding.y);
     settings.framePadding.x = ClampFinite(settings.framePadding.x, 0.0f, 24.0f, style.FramePadding.x);
@@ -278,6 +288,13 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "autoRefresh=" << (settings.adminStatsAutoRefresh ? 1 : 0) << "\n";
     out << "refreshSeconds=" << settings.adminStatsRefreshSeconds << "\n";
     out << "inactivityDays=" << settings.inactivityThresholdDays << "\n\n";
+
+    out << "[pomodoro]\n";
+    out << "workMinutes=" << settings.pomodoroWorkMinutes << "\n";
+    out << "breakMinutes=" << settings.pomodoroBreakMinutes << "\n";
+    out << "longBreakMinutes=" << settings.pomodoroLongBreakMinutes << "\n";
+    out << "cyclesBeforeLong=" << settings.pomodoroCyclesBeforeLong << "\n";
+    out << "soundEnabled=" << (settings.pomodoroSoundEnabled ? 1 : 0) << "\n\n";
 
     out << "[colors]\n";
     const auto& entries = UiColorEntries();

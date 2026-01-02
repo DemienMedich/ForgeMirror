@@ -62,6 +62,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showPipeline = false;
         state.showView3d = false;
         state.showTasks = false;
+        state.showPomodoro = false;
         state.showRules = false;
         state.showUiSettings = false;
         state.showView3dSettings = false;
@@ -97,4 +98,5 @@ void UpdateUiFrame(GuiState& state, GLFWwindow* window, ImGuiStyle& style, ImGui
     SyncUiTheme(state, style);
     ApplyUiWindowState(state, window, style, io);
     ApplyAccessGuardsAndHotkeys(state);
+    UpdatePomodoro(state, io);
 }

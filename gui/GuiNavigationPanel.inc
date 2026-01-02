@@ -23,6 +23,7 @@ void DrawNavigationPanel(GuiState& state) {
         }
     };
     const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d || state.showTasks ||
+    state.showPomodoro ||
     (state.isAdmin && (state.showRules || state.showUiSettings || state.showView3dSettings ||
     state.showLogs || state.showAdminStats));
     const bool profileActive = !anyWorkspace;
@@ -46,6 +47,9 @@ void DrawNavigationPanel(GuiState& state) {
     navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
         OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
     });
+    navButton("nav_pomodoro", UiIcon::Bell, u8"Помодоро", state.showPomodoro, [&]() {
+        OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
+    });
     navButton("nav_view3d", UiIcon::Cube, u8"3D просмотр", state.showView3d, [&]() {
         OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
     });
@@ -67,6 +71,20 @@ void DrawNavigationPanel(GuiState& state) {
         });
     } else {
         ImGui::TextDisabled(u8"Админ-разделы скрыты.");
+    }
+    ImGui::Spacing();
+    DrawCardHeader(u8"Таймер");
+    if (state.pomodoroRunning) {
+        const std::string remaining = FormatPomodoroTime(state.pomodoroRemainingSeconds);
+        ImGui::Text(u8"%s · %s", PomodoroPhaseLabel(state.pomodoroPhase), remaining.c_str());
+    } else if (state.pomodoroAwaitConfirm) {
+        ImGui::TextDisabled(u8"Интервал завершён");
+        ImGui::TextDisabled(u8"Ждёт подтверждения");
+    } else if (state.pomodoroRemainingSeconds > 0) {
+        const std::string remaining = FormatPomodoroTime(state.pomodoroRemainingSeconds);
+        ImGui::TextDisabled(u8"Пауза · %s", remaining.c_str());
+    } else {
+        ImGui::TextDisabled(u8"Не запущен");
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
