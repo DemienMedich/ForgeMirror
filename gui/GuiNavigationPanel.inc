@@ -78,6 +78,43 @@ void DrawNavigationPanel(GuiState& state) {
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Таймер");
+    auto drawAnalogClock = [&](ImDrawList* drawList, ImVec2 center, float radius, const ImVec4& accent,
+                               const ImVec4& dim) {
+        if (!drawList || radius <= 0.0f) return;
+        constexpr float kPi = 3.14159265358979323846f;
+        ImU32 dimCol = ImGui::GetColorU32(dim);
+        ImU32 accentCol = ImGui::GetColorU32(accent);
+        drawList->AddCircle(center, radius, dimCol, 64, 1.5f);
+        for (int i = 0; i < 60; ++i) {
+            float a = (kPi * 2.0f) * (static_cast<float>(i) / 60.0f) - kPi * 0.5f;
+            float tickLen = (i % 5 == 0) ? radius * 0.12f : radius * 0.06f;
+            float x0 = center.x + std::cos(a) * (radius - tickLen);
+            float y0 = center.y + std::sin(a) * (radius - tickLen);
+            float x1 = center.x + std::cos(a) * radius;
+            float y1 = center.y + std::sin(a) * radius;
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), dimCol, (i % 5 == 0) ? 1.8f : 1.0f);
+        }
+
+        std::time_t t = std::time(nullptr);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &t);
+#else
+        localtime_r(&t, &tm);
+#endif
+        float sec = static_cast<float>(tm.tm_sec);
+        float min = static_cast<float>(tm.tm_min) + sec / 60.0f;
+        float hour = static_cast<float>(tm.tm_hour % 12) + min / 60.0f;
+        auto hand = [&](float value, float maxValue, float length, float thickness, ImU32 col) {
+            float a = (kPi * 2.0f) * (value / maxValue) - kPi * 0.5f;
+            ImVec2 p(center.x + std::cos(a) * length, center.y + std::sin(a) * length);
+            drawList->AddLine(center, p, col, thickness);
+        };
+        hand(hour, 12.0f, radius * 0.45f, 3.0f, accentCol);
+        hand(min, 60.0f, radius * 0.65f, 2.2f, accentCol);
+        hand(sec, 60.0f, radius * 0.75f, 1.4f, ImGui::GetColorU32(BlendColor(accent, dim, 0.35f)));
+        drawList->AddCircleFilled(center, radius * 0.06f, accentCol, 12);
+    };
     if (state.pomodoroRunning) {
         const std::string remaining = FormatPomodoroTime(state.pomodoroRemainingSeconds);
         ImGui::Text(u8"%s · %s", PomodoroPhaseLabel(state.pomodoroPhase), remaining.c_str());
@@ -90,6 +127,24 @@ void DrawNavigationPanel(GuiState& state) {
     } else {
         ImGui::TextDisabled(u8"Не запущен");
     }
+    const float clockSize = std::min(110.0f, ImGui::GetContentRegionAvail().x);
+    ImGui::Dummy(ImVec2(clockSize, clockSize));
+    const ImVec2 clockMin = ImGui::GetItemRectMin();
+    const ImVec2 clockMax = ImGui::GetItemRectMax();
+    const ImVec2 clockCenter((clockMin.x + clockMax.x) * 0.5f, (clockMin.y + clockMax.y) * 0.5f);
+    ImVec4 dim = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+    dim.w = std::max(dim.w, 0.6f);
+    drawAnalogClock(ImGui::GetWindowDrawList(), clockCenter, clockSize * 0.45f, accent, dim);
+    std::time_t t = std::time(nullptr);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
+    ImGui::TextDisabled("%s", buf);
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
     navButton("nav_profiles", UiIcon::Users, u8"Профили", state.showProfilesWindow, [&]() {
