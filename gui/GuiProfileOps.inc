@@ -75,6 +75,7 @@ bool SelectProfileById(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             state.selectedIndex = i;
             RefreshActiveProfile(state, storage, catalog);
             SyncRankSelection(state);
+            PrepareTaskShares(state);
             return true;
         }
     }
@@ -107,6 +108,7 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             if (state.profiles[i].id == targetId) {
                 state.selectedIndex = i;
                 RefreshActiveProfile(state, storage, catalog);
+                PrepareTaskShares(state);
                 return;
             }
         }
@@ -114,4 +116,5 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
     state.selectedIndex = 0;
     RefreshActiveProfile(state, storage, catalog);
+    PrepareTaskShares(state);
 }

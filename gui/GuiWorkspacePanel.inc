@@ -76,6 +76,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
+        if (state.showTasks &&
+            ImGui::BeginTabItem(u8"Задачи", &state.showTasks, tabFlagsFor(UiWindowId::Tasks))) {
+            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::Tasks)) {
+                state.workspaceTabRequest = -1;
+            }
+            if (beginTabBody("##tab_tasks")) {
+                DrawTasksPanel(state);
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
         if (state.showView3d &&
             ImGui::BeginTabItem(u8"3D просмотр", &state.showView3d, tabFlagsFor(UiWindowId::View3D))) {
             if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3D)) {

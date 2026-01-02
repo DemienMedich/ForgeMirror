@@ -2,6 +2,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showSkillCatalog = false;
     state.showPipeline = false;
     state.showView3d = false;
+    state.showTasks = false;
     state.showRules = false;
     state.showUiSettings = false;
     state.showView3dSettings = false;
@@ -96,6 +97,9 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             }
             if (ImGui::MenuItem(u8"Пайплайн", "F3")) {
                 OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
+            }
+            if (ImGui::MenuItem(u8"Задачи")) {
+                OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
             }
             if (ImGui::MenuItem(u8"3D просмотр")) {
                 OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);

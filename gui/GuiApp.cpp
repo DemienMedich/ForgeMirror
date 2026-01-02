@@ -92,6 +92,7 @@ const std::vector<RankOption>& RankOptions();
 #include "GuiStatus.inc"
 #include "GuiUiSettings.inc"
 #include "GuiUiHelpers.inc"
+#include "GuiTasks.inc"
 #include "GuiIcons.inc"
 #include "GuiXpUtils.inc"
 
@@ -107,6 +108,7 @@ const std::vector<RankOption>& RankOptions();
 #include "GuiLogsPanel.inc"
 #include "GuiAdminStatsPanel.inc"
 #include "GuiSkillCatalogPanel.inc"
+#include "GuiTasksPanel.inc"
 #include "GuiView3dPanels.inc"
 #include "GuiProfilePanel.inc"
 

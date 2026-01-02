@@ -11,6 +11,7 @@ struct GuiDataState {
     bool cloudUpdateAvailable = false;
     std::unordered_map<std::string, std::deque<std::string>> activityLogs;
     std::deque<AppLogEntry> appLogs;
+    std::vector<TaskEntry> tasks;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;
 };
@@ -42,6 +43,7 @@ struct GuiRuntimeState {
     bool showView3dSettings = false;
     bool showAdminStats = false;
     bool showProfilesWindow = false;
+    bool showTasks = false;
     int workspaceTabRequest = -1;
 
     bool createPopupRequest = false;
@@ -77,6 +79,10 @@ struct GuiRuntimeState {
     int achDurationDays = 0;
     int selectedAchievementIndex = -1;
     std::vector<XpEntry> xpEntries;
+    std::array<char, 128> taskProject{};
+    std::array<char, 128> taskTitle{};
+    std::array<char, 256> taskDescription{};
+    std::vector<TaskProfileShare> taskShares;
     UiFilters filters;
     std::array<float, 2> profileSkillWeightRange{0.0f, 2.0f};
     int profileSkillCategoryFilter = 0;

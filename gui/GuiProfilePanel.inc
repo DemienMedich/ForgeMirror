@@ -494,7 +494,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             state.ui.profileTab = 0;
             state.profileTabRequest = -1;
         }
-        state.profileSection = std::clamp(state.ui.profileTab, 0, 4);
+        state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
         ImVec4 tab = BlendColor(style.Colors[ImGuiCol_Tab], accent, 0.20f);
         ImVec4 tabHover = BlendColor(style.Colors[ImGuiCol_TabHovered], accent, 0.25f);
         ImVec4 tabActive = BlendColor(style.Colors[ImGuiCol_TabSelected], accent, 0.30f);
@@ -515,7 +515,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 {u8"Ачивки", 1, false},
                 {u8"Навыки", 2, false},
                 {u8"Диаграмма", 3, true},
-                {u8"Действия", 4, false}
+                {u8"Действия", 4, false},
+                {u8"Задачи", 5, false}
             };
             auto tabFlagsFor = [&](int index) {
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
@@ -656,6 +657,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
         if (state.profileSection == 4) {
             DrawProfileActivitySection(state, state.active->id);
+        }
+
+        if (state.profileSection == 5) {
+            DrawProfileTasksSection(state, state.active->id);
         }
 
         ShowStatus(state);

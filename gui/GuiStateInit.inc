@@ -12,9 +12,10 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     ApplyUiTheme(state.ui.theme, style);
     ApplyUiSettings(state.ui, style, io);
     state.uiLastTheme = state.ui.theme;
-    state.profileSection = std::clamp(state.ui.profileTab, 0, 4);
+    state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
     state.profileTabRequest = state.profileSection;
     ApplyUiFiltersToState(state);
+    state.tasks = LoadTasks(storageDir);
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
     state.windowFullscreenLast = state.ui.windowFullscreen;

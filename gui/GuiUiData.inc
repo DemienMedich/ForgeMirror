@@ -9,6 +9,7 @@ enum class UiWindowId {
     View3DSettings,
     AdminStats,
     Logs,
+    Tasks,
     Count
 };
 
@@ -31,7 +32,8 @@ const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
         {UiWindowId::View3D, "3D просмотр"},
         {UiWindowId::View3DSettings, "3D настройки"},
         {UiWindowId::AdminStats, "Статистика"},
-        {UiWindowId::Logs, "Логи"}
+        {UiWindowId::Logs, "Логи"},
+        {UiWindowId::Tasks, "Задачи"}
     }};
     return windows;
 }
@@ -96,6 +98,7 @@ struct UiFilters {
     std::array<char, 64> model{};
     std::array<char, 96> logs{};
     std::array<char, 64> logSource{};
+    std::array<char, 96> tasks{};
 };
 
 struct UiColorEntry {

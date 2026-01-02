@@ -1084,3 +1084,66 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
     ImGui::EndChild();
     }
 }
+
+static void DrawProfileTasksSection(GuiState& state, const std::string& profileId) {
+    if (ImGui::CollapsingHeader(u8"Выполненные задачи")) {
+        std::vector<const TaskEntry*> items;
+        items.reserve(state.tasks.size());
+        for (const auto& task : state.tasks) {
+            if (FindTaskParticipant(task, profileId)) {
+                items.push_back(&task);
+            }
+        }
+        if (items.empty()) {
+            ImGui::TextDisabled(u8"Нет задач.");
+            return;
+        }
+        std::sort(items.begin(), items.end(), [](const TaskEntry* a, const TaskEntry* b) {
+            return a->createdAt > b->createdAt;
+        });
+        if (items.size() > 5) {
+            items.resize(5);
+        }
+        ImGui::TextDisabled(u8"Последние 5 задач.");
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
+        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+        if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                                 ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn(u8"Вклад", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableHeadersRow();
+            for (const TaskEntry* task : items) {
+                const TaskParticipant* participant = FindTaskParticipant(*task, profileId);
+                if (!participant) continue;
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
+                ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextUnformatted(task->project.c_str());
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextUnformatted(task->title.c_str());
+                if (!task->description.empty() && ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    ImGui::TextWrapped("%s", task->description.c_str());
+                    ImGui::EndTooltip();
+                }
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%d%%", participant->percent);
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("%d", participant->globalXp);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Навыки: %d XP", participant->skillXp);
+                }
+            }
+            ImGui::EndTable();
+        }
+        ImGui::TextDisabled(u8"Показано: %d", static_cast<int>(items.size()));
+    }
+}

@@ -22,7 +22,7 @@ void DrawNavigationPanel(GuiState& state) {
             onClick();
         }
     };
-    const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d ||
+    const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d || state.showTasks ||
     (state.isAdmin && (state.showRules || state.showUiSettings || state.showView3dSettings ||
     state.showLogs || state.showAdminStats));
     const bool profileActive = !anyWorkspace;
@@ -42,6 +42,9 @@ void DrawNavigationPanel(GuiState& state) {
     });
     navButton("nav_pipeline", UiIcon::Flow, u8"Пайплайн [F3]", state.showPipeline, [&]() {
         OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
+    });
+    navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
+        OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
     });
     navButton("nav_view3d", UiIcon::Cube, u8"3D просмотр", state.showView3d, [&]() {
         OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);

@@ -178,3 +178,154 @@ void AdjustSkillShare(GuiState& state, int index, int desiredPercent) {
     state.xpEntries[index].percent = desiredPercent;
     BalancePercentages(state.xpEntries, index);
 }
+
+int SumSelectedProfileShares(const std::vector<TaskProfileShare>& shares) {
+    int total = 0;
+    for (const auto& share : shares) {
+        if (share.selected) total += share.percent;
+    }
+    return total;
+}
+
+int CountSelectedProfileShares(const std::vector<TaskProfileShare>& shares) {
+    int count = 0;
+    for (const auto& share : shares) {
+        if (share.selected) ++count;
+    }
+    return count;
+}
+
+void NormalizeProfileShares(std::vector<TaskProfileShare>& shares) {
+    const int selectedCount = CountSelectedProfileShares(shares);
+    if (selectedCount <= 0) {
+        for (auto& share : shares) share.percent = 0;
+        return;
+    }
+    const int base = 100 / selectedCount;
+    int remainder = 100 - base * selectedCount;
+    for (auto& share : shares) {
+        if (!share.selected) {
+            share.percent = 0;
+            continue;
+        }
+        share.percent = base;
+        if (remainder > 0) {
+            share.percent += 1;
+            --remainder;
+        }
+    }
+}
+
+void ReduceSelectedShares(std::vector<TaskProfileShare>& shares, int fixedIndex, int overflow) {
+    if (overflow <= 0) return;
+    const int size = static_cast<int>(shares.size());
+    if (size == 0) return;
+    std::vector<int> indices;
+    indices.reserve(size);
+    for (int i = 0; i < size; ++i) {
+        if (i == fixedIndex) continue;
+        if (shares[i].selected && shares[i].percent > 0) indices.push_back(i);
+    }
+    if (indices.empty()) {
+        if (fixedIndex >= 0 && fixedIndex < size) {
+            shares[fixedIndex].percent = std::max(0, shares[fixedIndex].percent - overflow);
+        }
+        return;
+    }
+    while (overflow > 0) {
+        bool changed = false;
+        int positiveCount = 0;
+        for (int idx : indices) {
+            if (shares[idx].percent > 0) ++positiveCount;
+        }
+        if (positiveCount == 0) {
+            if (fixedIndex >= 0 && fixedIndex < size) {
+                shares[fixedIndex].percent = std::max(0, shares[fixedIndex].percent - overflow);
+            }
+            break;
+        }
+        int share = std::max(1, overflow / positiveCount);
+        for (int idx : indices) {
+            if (overflow <= 0) break;
+            if (shares[idx].percent <= 0) continue;
+            int delta = std::min(shares[idx].percent, share);
+            if (delta <= 0) continue;
+            shares[idx].percent -= delta;
+            overflow -= delta;
+            changed = true;
+        }
+        if (!changed) {
+            for (int idx : indices) {
+                if (overflow <= 0) break;
+                if (shares[idx].percent <= 0) continue;
+                shares[idx].percent -= 1;
+                --overflow;
+                changed = true;
+            }
+        }
+        if (!changed) {
+            if (fixedIndex >= 0 && fixedIndex < size) {
+                shares[fixedIndex].percent = std::max(0, shares[fixedIndex].percent - overflow);
+            }
+            break;
+        }
+    }
+}
+
+void IncreaseSelectedShares(std::vector<TaskProfileShare>& shares, int fixedIndex, int deficit) {
+    if (deficit <= 0) return;
+    const int size = static_cast<int>(shares.size());
+    if (size == 0) return;
+    std::vector<int> indices;
+    indices.reserve(size);
+    for (int i = 0; i < size; ++i) {
+        if (i == fixedIndex) continue;
+        if (shares[i].selected) indices.push_back(i);
+    }
+    if (indices.empty()) {
+        if (fixedIndex >= 0 && fixedIndex < size) {
+            shares[fixedIndex].percent = ClampToRange(shares[fixedIndex].percent + deficit, 0, 100);
+        }
+        return;
+    }
+    int idxPos = 0;
+    while (deficit > 0 && !indices.empty()) {
+        int idx = indices[idxPos % indices.size()];
+        shares[idx].percent += 1;
+        --deficit;
+        ++idxPos;
+    }
+}
+
+void BalanceProfileShares(std::vector<TaskProfileShare>& shares, int fixedIndex) {
+    if (CountSelectedProfileShares(shares) == 0) return;
+    int total = SumSelectedProfileShares(shares);
+    if (total > 100) {
+        ReduceSelectedShares(shares, fixedIndex, total - 100);
+    } else if (total < 100) {
+        IncreaseSelectedShares(shares, fixedIndex, 100 - total);
+    }
+    int adjustedTotal = SumSelectedProfileShares(shares);
+    if (adjustedTotal != 100) {
+        int diff = adjustedTotal - 100;
+        if (fixedIndex >= 0 && fixedIndex < static_cast<int>(shares.size()) && shares[fixedIndex].selected) {
+            shares[fixedIndex].percent = ClampToRange(shares[fixedIndex].percent - diff, 0, 100);
+        }
+        adjustedTotal = SumSelectedProfileShares(shares);
+        if (adjustedTotal != 100) {
+            for (auto& share : shares) {
+                if (!share.selected) continue;
+                share.percent = ClampToRange(share.percent + (100 - adjustedTotal), 0, 100);
+                break;
+            }
+        }
+    }
+}
+
+void AdjustProfileShare(std::vector<TaskProfileShare>& shares, int index, int desiredPercent) {
+    if (index < 0 || index >= static_cast<int>(shares.size())) return;
+    if (!shares[index].selected) return;
+    desiredPercent = ClampToRange(desiredPercent, 0, 100);
+    shares[index].percent = desiredPercent;
+    BalanceProfileShares(shares, index);
+}
