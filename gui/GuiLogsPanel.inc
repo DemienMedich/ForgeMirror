@@ -147,6 +147,7 @@ void DrawLogsPanel(GuiState& state) {
     ImGui::Spacing();
 
     DrawCardHeader(u8"Фильтры");
+    ImGui::TextDisabled(u8"Источник — модуль, который записал сообщение.");
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilters = filterWidth < 720.0f;
     std::vector<const char*> logSourceLabels;
