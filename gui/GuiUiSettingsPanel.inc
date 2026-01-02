@@ -222,6 +222,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
         }
     } else if (ImGui::BeginTable("ui_preset_save", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("preset_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("preset_name", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+        ImGui::TableSetupColumn("preset_save", ImGuiTableColumnFlags_WidthFixed, 160.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::TextDisabled("1");
@@ -273,6 +276,10 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
         } else if (ImGui::BeginTable("ui_preset_list", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("preset_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("preset_list", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+            ImGui::TableSetupColumn("preset_load", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn("preset_delete", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("1");
