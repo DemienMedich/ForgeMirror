@@ -54,6 +54,18 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             ImGui::EndTabItem();
         }
 
+        if (state.showTasks &&
+            ImGui::BeginTabItem(u8"Задачи", &state.showTasks, tabFlagsFor(UiWindowId::Tasks))) {
+            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::Tasks)) {
+                state.workspaceTabRequest = -1;
+            }
+            if (beginTabBody("##tab_tasks")) {
+                DrawTasksPanel(state);
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+
         if (state.showSkillCatalog &&
             ImGui::BeginTabItem(u8"Каталог навыков", &state.showSkillCatalog, tabFlagsFor(UiWindowId::SkillCatalog))) {
             if (state.workspaceTabRequest == static_cast<int>(UiWindowId::SkillCatalog)) {
@@ -72,17 +84,6 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             }
             if (beginTabBody("##tab_pipeline")) {
                 DrawPipelinePanel(state);
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-        if (state.showTasks &&
-            ImGui::BeginTabItem(u8"Задачи", &state.showTasks, tabFlagsFor(UiWindowId::Tasks))) {
-            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::Tasks)) {
-                state.workspaceTabRequest = -1;
-            }
-            if (beginTabBody("##tab_tasks")) {
-                DrawTasksPanel(state);
             }
             ImGui::EndChild();
             ImGui::EndTabItem();
@@ -109,13 +110,13 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
-        if (state.isAdmin && state.showView3dSettings &&
-            ImGui::BeginTabItem(u8"3D настройки", &state.showView3dSettings, tabFlagsFor(UiWindowId::View3DSettings))) {
-            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3DSettings)) {
+        if (state.isAdmin && state.showAdminStats &&
+            ImGui::BeginTabItem(u8"Статистика", &state.showAdminStats, tabFlagsFor(UiWindowId::AdminStats))) {
+            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::AdminStats)) {
                 state.workspaceTabRequest = -1;
             }
-            if (beginTabBody("##tab_view3d_settings")) {
-                DrawView3dSettingsPanel(state);
+            if (beginTabBody("##tab_admin_stats")) {
+                DrawAdminStatsPanel(state, storage, catalog);
             }
             ImGui::EndChild();
             ImGui::EndTabItem();
@@ -127,17 +128,6 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             }
             if (beginTabBody("##tab_logs")) {
                 DrawLogsPanel(state);
-            }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-        if (state.isAdmin && state.showAdminStats &&
-            ImGui::BeginTabItem(u8"Статистика", &state.showAdminStats, tabFlagsFor(UiWindowId::AdminStats))) {
-            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::AdminStats)) {
-                state.workspaceTabRequest = -1;
-            }
-            if (beginTabBody("##tab_admin_stats")) {
-                DrawAdminStatsPanel(state, storage, catalog);
             }
             ImGui::EndChild();
             ImGui::EndTabItem();
@@ -160,6 +150,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
             }
             if (beginTabBody("##tab_ui_settings")) {
                 DrawUiSettingsPanel(state, style);
+            }
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        if (state.isAdmin && state.showView3dSettings &&
+            ImGui::BeginTabItem(u8"3D настройки", &state.showView3dSettings, tabFlagsFor(UiWindowId::View3DSettings))) {
+            if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3DSettings)) {
+                state.workspaceTabRequest = -1;
+            }
+            if (beginTabBody("##tab_view3d_settings")) {
+                DrawView3dSettingsPanel(state);
             }
             ImGui::EndChild();
             ImGui::EndTabItem();

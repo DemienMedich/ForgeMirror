@@ -93,14 +93,14 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             if (ImGui::MenuItem(u8"Профиль", "F1")) {
                 CloseWorkspaceWindows(state);
             }
+            if (ImGui::MenuItem(u8"Задачи")) {
+                OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
+            }
             if (ImGui::MenuItem(u8"Каталог навыков", "F2")) {
                 OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
             }
             if (ImGui::MenuItem(u8"Пайплайн", "F3")) {
                 OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
-            }
-            if (ImGui::MenuItem(u8"Задачи")) {
-                OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
             }
             if (ImGui::MenuItem(u8"Помодоро")) {
                 OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
@@ -110,14 +110,14 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             }
             if (state.isAdmin) {
                 ImGui::Separator();
-                if (ImGui::MenuItem(u8"Правила", "F4")) {
-                    OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
-                }
                 if (ImGui::MenuItem(u8"Статистика", "F5")) {
                     OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
                 }
                 if (ImGui::MenuItem(u8"Логи", "F6")) {
                     OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
+                }
+                if (ImGui::MenuItem(u8"Правила", "F4")) {
+                    OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
                 }
                 if (ImGui::MenuItem(u8"Настройки интерфейса")) {
                     OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);

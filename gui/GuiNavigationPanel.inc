@@ -15,7 +15,7 @@ void DrawNavigationPanel(GuiState& state) {
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
     ImGui::TextDisabled(u8"Разделы и быстрые переходы.");
-    DrawCardHeader(u8"Разделы");
+    DrawCardHeader(u8"Главное");
     const float navItemHeight = std::max(34.0f, ImGui::GetFrameHeight() * 1.15f);
     auto navButton = [&](const char* id, UiIcon icon, const char* label, bool active, auto onClick) {
         if (NavIconButtonGui(id, icon, label, accent, navItemHeight, true, active)) {
@@ -31,6 +31,8 @@ void DrawNavigationPanel(GuiState& state) {
         state.showSkillCatalog = false;
         state.showPipeline = false;
         state.showView3d = false;
+        state.showTasks = false;
+        state.showPomodoro = false;
         state.showRules = false;
         state.showUiSettings = false;
         state.showView3dSettings = false;
@@ -38,14 +40,14 @@ void DrawNavigationPanel(GuiState& state) {
         state.showAdminStats = false;
         state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     });
+    navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
+        OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
+    });
     navButton("nav_catalog", UiIcon::Book, u8"Каталог навыков [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
     });
     navButton("nav_pipeline", UiIcon::Flow, u8"Пайплайн [F3]", state.showPipeline, [&]() {
         OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
-    });
-    navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
-        OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
     });
     navButton("nav_pomodoro", UiIcon::Bell, u8"Помодоро", state.showPomodoro, [&]() {
         OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
@@ -53,15 +55,17 @@ void DrawNavigationPanel(GuiState& state) {
     navButton("nav_view3d", UiIcon::Cube, u8"3D просмотр", state.showView3d, [&]() {
         OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
     });
+    ImGui::Spacing();
+    DrawCardHeader(u8"Админ");
     if (state.isAdmin) {
-        navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
-            OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
-        });
         navButton("nav_stats", UiIcon::Chart, u8"Статистика [F5]", state.showAdminStats, [&]() {
             OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
         });
         navButton("nav_logs", UiIcon::List, u8"Логи [F6]", state.showLogs, [&]() {
             OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
+        });
+        navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
+            OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
         });
         navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки UI", state.showUiSettings, [&]() {
             OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
