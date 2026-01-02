@@ -321,6 +321,31 @@ void DrawTasksPanel(GuiState& state) {
                 ImGui::Text("%s", focusText.c_str());
                 ImGui::EndTable();
             }
+
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            ImGui::TextDisabled(u8"Активность за 14 дней");
+            constexpr int kDays = 14;
+            std::array<float, kDays> dayCounts{};
+            const std::int64_t nowSec = NowSeconds();
+            const std::int64_t today = nowSec / 86400;
+            const std::int64_t startDay = today - (kDays - 1);
+            int maxCount = 0;
+            for (const TaskEntry* task : filtered) {
+                if (!task) continue;
+                const std::int64_t day = task->createdAt / 86400;
+                const int idx = static_cast<int>(day - startDay);
+                if (idx < 0 || idx >= kDays) continue;
+                dayCounts[idx] += 1.0f;
+                maxCount = std::max(maxCount, static_cast<int>(dayCounts[idx]));
+            }
+            if (maxCount == 0) {
+                ImGui::TextDisabled(u8"Нет активности за период.");
+            } else {
+                ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+                accent.w = 1.0f;
+                DrawSparkline("tasks_activity", dayCounts.data(), kDays,
+                              static_cast<float>(maxCount), accent, 36.0f);
+            }
         }
     }
     EndCard();
