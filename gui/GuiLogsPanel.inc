@@ -290,6 +290,29 @@ void DrawLogsPanel(GuiState& state) {
         }
     }
 
+    std::unordered_map<std::string, int> sourceCounts;
+    sourceCounts.reserve(logSources.size());
+    int topSourceCount = 0;
+    std::string topSource;
+    if (filteredCount > 0) {
+        for (const auto& entry : state.appLogs) {
+            if (!MatchesLogFilters(state, entry)) continue;
+            if (entry.source.empty()) continue;
+            int count = ++sourceCounts[entry.source];
+            if (count > topSourceCount) {
+                topSourceCount = count;
+                topSource = entry.source;
+            }
+        }
+    }
+    const bool hasFocusSource = !topSource.empty() && topSourceCount >= 3;
+
+    if (hasFocusSource) {
+        ImGui::TextDisabled(u8"Зона внимания");
+        ImGui::SameLine();
+        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s (%d)", topSource.c_str(), topSourceCount);
+    }
+
     ImVec2 tableSize(0.0f, 260.0f);
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
@@ -297,6 +320,11 @@ void DrawLogsPanel(GuiState& state) {
     auto rowAccent = [](AppLogLevel level) {
         ImVec4 row = LogLevelColor(level);
         row.w = std::clamp(row.w * 0.14f, 0.04f, 0.12f);
+        return ImGui::GetColorU32(row);
+    };
+    auto focusAccent = [&]() {
+        ImVec4 row = LogLevelColor(AppLogLevel::Warning);
+        row.w = std::clamp(row.w * 0.12f, 0.04f, 0.12f);
         return ImGui::GetColorU32(row);
     };
     ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
@@ -313,6 +341,8 @@ void DrawLogsPanel(GuiState& state) {
                 if (!MatchesLogFilters(state, entry)) continue;
                 if (entry.level != AppLogLevel::Info) {
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowAccent(entry.level));
+                } else if (hasFocusSource && !entry.source.empty() && entry.source == topSource) {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, focusAccent());
                 }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -357,6 +387,8 @@ void DrawLogsPanel(GuiState& state) {
                 if (!MatchesLogFilters(state, entry)) continue;
                 if (entry.level != AppLogLevel::Info) {
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowAccent(entry.level));
+                } else if (hasFocusSource && !entry.source.empty() && entry.source == topSource) {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, focusAccent());
                 }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -375,7 +407,13 @@ void DrawLogsPanel(GuiState& state) {
                 if (entry.source.empty()) {
                     ImGui::TextDisabled("-");
                 } else {
-                    ImGui::TextUnformatted(entry.source.c_str());
+                    if (hasFocusSource && entry.source == topSource) {
+                        ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                        warnText.w = 0.95f;
+                        ImGui::TextColored(warnText, "%s", entry.source.c_str());
+                    } else {
+                        ImGui::TextUnformatted(entry.source.c_str());
+                    }
                 }
                 ImGui::TableSetColumnIndex(4);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
