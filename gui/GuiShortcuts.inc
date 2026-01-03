@@ -227,6 +227,180 @@ static bool PickShortcutFile(std::string& outPath) {
 #endif
 }
 
+static void shortcut_append_utf8(std::string& out, std::uint32_t cp) {
+    if (cp <= 0x7F) {
+        out.push_back(static_cast<char>(cp));
+    } else if (cp <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+}
+
+static bool shortcut_next_codepoint(const std::string& text, size_t& i, std::uint32_t& outCp) {
+    if (i >= text.size()) return false;
+    unsigned char c = static_cast<unsigned char>(text[i]);
+    if (c < 0x80) {
+        outCp = c;
+        ++i;
+        return true;
+    }
+    if ((c & 0xE0) == 0xC0 && i + 1 < text.size()) {
+        outCp = (static_cast<std::uint32_t>(c & 0x1F) << 6) |
+            (static_cast<std::uint32_t>(text[i + 1] & 0x3F));
+        i += 2;
+        return true;
+    }
+    if ((c & 0xF0) == 0xE0 && i + 2 < text.size()) {
+        outCp = (static_cast<std::uint32_t>(c & 0x0F) << 12) |
+            (static_cast<std::uint32_t>(text[i + 1] & 0x3F) << 6) |
+            (static_cast<std::uint32_t>(text[i + 2] & 0x3F));
+        i += 3;
+        return true;
+    }
+    if ((c & 0xF8) == 0xF0 && i + 3 < text.size()) {
+        outCp = (static_cast<std::uint32_t>(c & 0x07) << 18) |
+            (static_cast<std::uint32_t>(text[i + 1] & 0x3F) << 12) |
+            (static_cast<std::uint32_t>(text[i + 2] & 0x3F) << 6) |
+            (static_cast<std::uint32_t>(text[i + 3] & 0x3F));
+        i += 4;
+        return true;
+    }
+    outCp = c;
+    ++i;
+    return true;
+}
+
+static bool shortcut_is_vowel(std::uint32_t cp) {
+    switch (cp) {
+        case 'A': case 'E': case 'I': case 'O': case 'U': case 'Y':
+        case 'a': case 'e': case 'i': case 'o': case 'u': case 'y':
+            return true;
+        case 0x410: case 0x415: case 0x401: case 0x418: case 0x41E:
+        case 0x423: case 0x42B: case 0x42D: case 0x42E: case 0x42F:
+        case 0x430: case 0x435: case 0x451: case 0x438: case 0x43E:
+        case 0x443: case 0x44B: case 0x44D: case 0x44E: case 0x44F:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static std::string shortcut_first_two_vowels(const std::string& text) {
+    std::string out;
+    size_t pos = 0;
+    std::uint32_t cp = 0;
+    int count = 0;
+    while (shortcut_next_codepoint(text, pos, cp)) {
+        if (shortcut_is_vowel(cp)) {
+            shortcut_append_utf8(out, cp);
+            count += 1;
+            if (count >= 2) break;
+        }
+    }
+    return out;
+}
+
+static std::string shortcut_first_two_letters(const std::string& text) {
+    std::string out;
+    size_t pos = 0;
+    std::uint32_t cp = 0;
+    int count = 0;
+    while (shortcut_next_codepoint(text, pos, cp)) {
+        if (cp <= 0x7F && std::isspace(static_cast<unsigned char>(cp))) {
+            continue;
+        }
+        shortcut_append_utf8(out, cp);
+        count += 1;
+        if (count >= 2) break;
+    }
+    return out;
+}
+
+static int shortcut_count_codepoints(const std::string& text) {
+    int count = 0;
+    size_t pos = 0;
+    std::uint32_t cp = 0;
+    while (shortcut_next_codepoint(text, pos, cp)) {
+        count += 1;
+    }
+    return count;
+}
+
+static std::string ShortcutBadgeText(const ShortcutEntry& entry) {
+    std::string source = entry.label;
+    if (source.empty()) {
+        source = std::filesystem::path(entry.path).stem().string();
+    }
+    std::string vowels = shortcut_first_two_vowels(source);
+    if (shortcut_count_codepoints(vowels) >= 2) {
+        return vowels;
+    }
+    std::string fallback = shortcut_first_two_letters(source);
+    if (!fallback.empty()) {
+        return fallback;
+    }
+    return "??";
+}
+
+static bool ShortcutBadgeButton(const char* id, const std::string& badge, const char* tooltip,
+                                const ImVec4& accent, float size, bool enabled = true) {
+    if (size <= 0.0f) return false;
+    ImGui::PushID(id);
+    if (!enabled) ImGui::BeginDisabled();
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float rounding = std::max(6.0f, style.FrameRounding + 4.0f);
+    const ImVec2 buttonSize(size, size);
+    const bool pressed = ImGui::InvisibleButton("##shortcut_badge", buttonSize);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    const ImVec2 pMin = ImGui::GetItemRectMin();
+    const ImVec2 pMax = ImGui::GetItemRectMax();
+    const ImVec2 center((pMin.x + pMax.x) * 0.5f, (pMin.y + pMax.y) * 0.5f);
+    const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+    const bool active = ImGui::IsItemActive();
+
+    ImVec4 base = style.Colors[ImGuiCol_Button];
+    ImVec4 hover = style.Colors[ImGuiCol_ButtonHovered];
+    ImVec4 down = style.Colors[ImGuiCol_ButtonActive];
+    ImVec4 border = style.Colors[ImGuiCol_Border];
+    ImVec4 glow = accent;
+    glow.w = 0.10f;
+
+    ImVec4 bg = base;
+    if (active) bg = down;
+    else if (hovered) bg = hover;
+    bg.w = std::max(bg.w, 0.55f);
+    border.w = std::max(border.w, 0.22f);
+
+    drawList->AddRectFilled(pMin, pMax, ImGui::GetColorU32(bg), rounding);
+    drawList->AddRect(pMin, pMax, ImGui::GetColorU32(border), rounding, 0, 1.0f);
+    drawList->AddRect(pMin, pMax, ImGui::GetColorU32(glow), rounding, 0, 1.5f);
+
+    ImVec4 textColor = accent;
+    if (!enabled) textColor = style.Colors[ImGuiCol_TextDisabled];
+    textColor.w = 1.0f;
+    const ImVec2 textSize = ImGui::CalcTextSize(badge.c_str());
+    const ImVec2 textPos(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f);
+    drawList->AddText(textPos, ImGui::GetColorU32(textColor), badge.c_str());
+
+    if (hovered && tooltip && tooltip[0] != '\0') {
+        ImGui::SetTooltip("%s", tooltip);
+    }
+
+    if (!enabled) ImGui::EndDisabled();
+    ImGui::PopID();
+    return pressed;
+}
+
 static void DrawShortcutsSidebar(GuiState& state) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
@@ -240,8 +414,9 @@ static void DrawShortcutsSidebar(GuiState& state) {
         } else {
             for (size_t i = 0; i < state.shortcuts.size(); ++i) {
                 const auto& entry = state.shortcuts[i];
+                const std::string badge = ShortcutBadgeText(entry);
                 ImGui::PushID(static_cast<int>(i));
-                if (IconButtonGui("shortcut_launch", UiIcon::Launch, entry.label.c_str(), accent, iconSize, true, false)) {
+                if (ShortcutBadgeButton("shortcut_launch", badge, entry.label.c_str(), accent, iconSize, true)) {
                     if (!LaunchShortcut(entry.path)) {
                         SetStatus(state, u8"Не удалось открыть ярлык.", 1.0f, 0.75f, 0.35f);
                     }
