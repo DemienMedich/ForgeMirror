@@ -294,13 +294,27 @@ static bool shortcut_is_vowel(std::uint32_t cp) {
     }
 }
 
-static std::string shortcut_first_two_vowels(const std::string& text) {
+static bool shortcut_is_letter(std::uint32_t cp) {
+    if (cp <= 0x7F) {
+        return std::isalpha(static_cast<unsigned char>(cp)) != 0;
+    }
+    if ((cp >= 0x410 && cp <= 0x42F) || (cp >= 0x430 && cp <= 0x44F) || cp == 0x401 || cp == 0x451) {
+        return true;
+    }
+    return false;
+}
+
+static bool shortcut_is_consonant(std::uint32_t cp) {
+    return shortcut_is_letter(cp) && !shortcut_is_vowel(cp);
+}
+
+static std::string shortcut_first_two_consonants(const std::string& text) {
     std::string out;
     size_t pos = 0;
     std::uint32_t cp = 0;
     int count = 0;
     while (shortcut_next_codepoint(text, pos, cp)) {
-        if (shortcut_is_vowel(cp)) {
+        if (shortcut_is_consonant(cp)) {
             shortcut_append_utf8(out, cp);
             count += 1;
             if (count >= 2) break;
@@ -340,9 +354,9 @@ static std::string ShortcutBadgeText(const ShortcutEntry& entry) {
     if (source.empty()) {
         source = std::filesystem::path(entry.path).stem().string();
     }
-    std::string vowels = shortcut_first_two_vowels(source);
-    if (shortcut_count_codepoints(vowels) >= 2) {
-        return vowels;
+    std::string consonants = shortcut_first_two_consonants(source);
+    if (shortcut_count_codepoints(consonants) >= 2) {
+        return consonants;
     }
     std::string fallback = shortcut_first_two_letters(source);
     if (!fallback.empty()) {
@@ -476,9 +490,11 @@ static void DrawShortcutsPanel(GuiState& state) {
                                                   ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn(u8"Название", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn(u8"Путь", ImGuiTableColumnFlags_WidthStretch, 1.9f);
-        ImGui::TableSetupColumn(u8"Действия", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+        ImGui::TableSetupColumn(u8"Действия", ImGuiTableColumnFlags_WidthFixed, 230.0f);
         ImGui::TableHeadersRow();
         int removeIndex = -1;
+        int moveFrom = -1;
+        int moveTo = -1;
         for (int i = 0; i < static_cast<int>(state.shortcuts.size()); ++i) {
             const auto& entry = state.shortcuts[i];
             ImGui::TableNextRow();
@@ -488,6 +504,22 @@ static void DrawShortcutsPanel(GuiState& state) {
             ImGui::TextDisabled("%s", entry.path.c_str());
             ImGui::TableSetColumnIndex(2);
             ImGui::PushID(i);
+            const bool canMoveUp = i > 0;
+            const bool canMoveDown = i + 1 < static_cast<int>(state.shortcuts.size());
+            if (!canMoveUp) ImGui::BeginDisabled();
+            if (ImGui::SmallButton(u8"Вверх")) {
+                moveFrom = i;
+                moveTo = i - 1;
+            }
+            if (!canMoveUp) ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (!canMoveDown) ImGui::BeginDisabled();
+            if (ImGui::SmallButton(u8"Вниз")) {
+                moveFrom = i;
+                moveTo = i + 1;
+            }
+            if (!canMoveDown) ImGui::EndDisabled();
+            ImGui::SameLine();
             if (ImGui::Button(u8"Открыть", ImVec2(72.0f, 0.0f))) {
                 if (!LaunchShortcut(entry.path)) {
                     SetStatus(state, u8"Не удалось открыть ярлык.", 1.0f, 0.75f, 0.35f);
@@ -500,6 +532,12 @@ static void DrawShortcutsPanel(GuiState& state) {
             ImGui::PopID();
         }
         ImGui::EndTable();
+        if (moveFrom >= 0 && moveTo >= 0 &&
+            moveFrom < static_cast<int>(state.shortcuts.size()) &&
+            moveTo < static_cast<int>(state.shortcuts.size())) {
+            std::swap(state.shortcuts[moveFrom], state.shortcuts[moveTo]);
+            SaveShortcuts(state.storageDir, state.shortcuts);
+        }
         if (removeIndex >= 0 && removeIndex < static_cast<int>(state.shortcuts.size())) {
             state.shortcuts.erase(state.shortcuts.begin() + removeIndex);
             SaveShortcuts(state.storageDir, state.shortcuts);
