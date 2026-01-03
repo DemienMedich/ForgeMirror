@@ -277,54 +277,59 @@ void DrawTasksPanel(GuiState& state) {
         filtered.push_back(task);
     }
 
+    std::array<int, Profile::kCategoryCount> categoryCounts{};
+    int totalFiltered = static_cast<int>(filtered.size());
+    int topIdx = 0;
+    int topCount = 0;
+    int minIdx = -1;
+    int minCount = 0;
+    int activeCategories = 0;
+    int scoreSum = 0;
+    int poolSum = 0;
+    std::unordered_set<std::string> uniqueProfiles;
+    std::string lastStamp;
+    if (!filtered.empty()) {
+        lastStamp = FormatTimestamp(filtered.front()->createdAt, "%Y-%m-%d %H:%M");
+        uniqueProfiles.reserve(state.profiles.size());
+        for (const TaskEntry* task : filtered) {
+            int idx = std::clamp(task->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
+            categoryCounts[idx] += 1;
+            if (categoryCounts[idx] >= topCount) {
+                topCount = categoryCounts[idx];
+                topIdx = idx;
+            }
+            scoreSum += task->score;
+            poolSum += task->basePool;
+            for (const auto& participant : task->participants) {
+                uniqueProfiles.insert(participant.profileId);
+            }
+        }
+        minIdx = topIdx;
+        minCount = topCount;
+        for (size_t i = 0; i < categoryCounts.size(); ++i) {
+            if (categoryCounts[i] <= 0) {
+                continue;
+            }
+            activeCategories += 1;
+            if (categoryCounts[i] < minCount) {
+                minCount = categoryCounts[i];
+                minIdx = static_cast<int>(i);
+            }
+        }
+    }
+    const bool hasAttention = (activeCategories >= 2) && (topCount - minCount >= 2) && (minIdx >= 0);
+
     if (BeginCard("tasks_summary_card")) {
         DrawCardHeader(u8"Сводка");
         if (filtered.empty()) {
             ImGui::TextDisabled(u8"Нет задач по текущим фильтрам.");
         } else {
-            const int totalFiltered = static_cast<int>(filtered.size());
-            const std::string lastStamp = FormatTimestamp(filtered.front()->createdAt, "%Y-%m-%d %H:%M");
-            std::array<int, Profile::kCategoryCount> categoryCounts{};
-            int topIdx = 0;
-            int topCount = 0;
-            int scoreSum = 0;
-            int poolSum = 0;
-            std::unordered_set<std::string> uniqueProfiles;
-            uniqueProfiles.reserve(state.profiles.size());
-            for (const TaskEntry* task : filtered) {
-                int idx = std::clamp(task->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
-                categoryCounts[idx] += 1;
-                if (categoryCounts[idx] >= topCount) {
-                    topCount = categoryCounts[idx];
-                    topIdx = idx;
-                }
-                scoreSum += task->score;
-                poolSum += task->basePool;
-                for (const auto& participant : task->participants) {
-                    uniqueProfiles.insert(participant.profileId);
-                }
-            }
             std::ostringstream focusStream;
             focusStream.imbue(std::locale::classic());
             float pct = totalFiltered > 0 ? (static_cast<float>(topCount) / static_cast<float>(totalFiltered)) * 100.0f : 0.0f;
             focusStream << std::fixed << std::setprecision(0) << pct;
             std::string focusText = std::string(ClassificationLabel(topIdx)) +
                 " (" + std::to_string(topCount) + ", " + focusStream.str() + "%)";
-            int minIdx = topIdx;
-            int minCount = topCount;
-            int activeCategories = 0;
-            for (size_t i = 0; i < categoryCounts.size(); ++i) {
-                if (categoryCounts[i] <= 0) {
-                    continue;
-                }
-                activeCategories += 1;
-                if (categoryCounts[i] < minCount) {
-                    minCount = categoryCounts[i];
-                    minIdx = static_cast<int>(i);
-                }
-            }
-            const bool hasAttention = (activeCategories >= 2) && (topCount - minCount >= 2);
-
             const float avgScore = totalFiltered > 0
                 ? static_cast<float>(scoreSum) / static_cast<float>(totalFiltered)
                 : 0.0f;
@@ -413,6 +418,11 @@ void DrawTasksPanel(GuiState& state) {
         for (const TaskEntry* task : filtered) {
             ++visibleCount;
             ImGui::TableNextRow();
+            if (hasAttention && task->category == minIdx) {
+                ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+            }
             ImGui::TableSetColumnIndex(0);
             const bool isExpanded = (state.tasksExpandedId == task->id);
             const std::string rowId = std::string("##task_row_") + task->id;
@@ -438,7 +448,13 @@ void DrawTasksPanel(GuiState& state) {
             const std::string participants = BuildParticipantLabel(*task, nameById);
             ImGui::TextUnformatted(participants.c_str());
             ImGui::TableSetColumnIndex(4);
-            ImGui::TextUnformatted(ClassificationLabel(task->category));
+            if (hasAttention && task->category == minIdx) {
+                ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                warnText.w = 0.95f;
+                ImGui::TextColored(warnText, "%s", ClassificationLabel(task->category));
+            } else {
+                ImGui::TextUnformatted(ClassificationLabel(task->category));
+            }
             ImGui::TableSetColumnIndex(5);
             ImGui::Text("%d/10", task->score);
         }
