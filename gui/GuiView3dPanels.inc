@@ -49,6 +49,11 @@ void DrawView3dSettingsPanel(GuiState& state) {
             state.filters.model.fill('\0');
         }
     }
+    const bool hasModelPath = !state.ui.modelPath.empty();
+    const auto resolvedModel = hasModelPath
+        ? ResolveIconPath(state.ui.modelPath, state.storageDir)
+        : std::optional<std::filesystem::path>();
+    const bool modelResolved = hasModelPath && resolvedModel.has_value();
     std::string modelLabel = state.ui.modelPath.empty() ? u8"(не выбран)" : std::filesystem::path(state.ui.modelPath).filename().string();
     ImGui::TextDisabled(u8"Модель");
     if (ImGui::BeginCombo(u8"##model_combo", modelLabel.c_str())) {
@@ -72,6 +77,10 @@ void DrawView3dSettingsPanel(GuiState& state) {
     const float pathWidth = ImGui::GetContentRegionAvail().x;
     const bool stackPath = pathWidth < 420.0f;
     if (stackPath) {
+        if (!modelResolved) {
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                               hasModelPath ? u8"Файл модели не найден." : u8"Модель не выбрана.");
+        }
         ImGui::TextDisabled(u8"Путь к модели");
         if (ImGui::InputText(u8"##model_path", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
             state.ui.modelPath = state.modelPathBuffer.data();
@@ -83,11 +92,14 @@ void DrawView3dSettingsPanel(GuiState& state) {
         ImGui::TableSetupColumn("model_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("model_path", ImGuiTableColumnFlags_WidthStretch, 1.6f);
         ImGui::TableSetupColumn("model_load", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImVec4 warnBg = LogLevelColor(AppLogLevel::Warning);
+        warnBg.w = std::clamp(warnBg.w * 0.12f, 0.05f, 0.14f);
+        const ImU32 warnBgU32 = ImGui::GetColorU32(warnBg);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, modelResolved ? keyBgU32 : warnBgU32);
         ImGui::TextDisabled(u8"Путь к модели");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::InputText(u8"##model_path", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
@@ -118,6 +130,8 @@ void DrawView3dPanel(GuiState& state) {
         ? std::optional<std::filesystem::path>()
         : ResolveIconPath(state.ui.modelPath, state.storageDir);
     if (!resolved) {
+        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Модель не выбрана.");
+        ImGui::TextDisabled(u8"Откройте \"3D настройки\" и выберите модель.");
         if (state.viewMeshPath != "<cube>") {
             state.viewMesh = MakeCubeMesh();
             state.viewMeshPath = "<cube>";
