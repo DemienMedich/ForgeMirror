@@ -1,3 +1,7 @@
+#if defined(_WIN32)
+#include <tlhelp32.h>
+#endif
+
 static std::filesystem::path ShortcutsStoragePath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "shortcuts.json";
 }
@@ -204,6 +208,56 @@ static bool LaunchShortcut(const std::string& path) {
     (void)path;
     return false;
 #endif
+}
+
+static std::string shortcut_lower_ascii(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return text;
+}
+
+enum class ShortcutRunStatus {
+    Unknown,
+    Running,
+    NotRunning
+};
+
+struct ShortcutRunCache {
+    std::unordered_set<std::string> exeNames;
+    std::int64_t lastUpdate = 0;
+    bool available = false;
+};
+
+static void RefreshShortcutRunCache(ShortcutRunCache& cache) {
+    cache.exeNames.clear();
+    cache.available = false;
+#if defined(_WIN32)
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+    if (Process32First(snapshot, &entry)) {
+        do {
+            std::filesystem::path exePath(entry.szExeFile);
+            std::string stem = shortcut_lower_ascii(exePath.stem().string());
+            if (!stem.empty()) {
+                cache.exeNames.insert(std::move(stem));
+            }
+        } while (Process32Next(snapshot, &entry));
+        cache.available = true;
+    }
+    CloseHandle(snapshot);
+#endif
+}
+
+static ShortcutRunStatus ShortcutStatusFor(const ShortcutEntry& entry, ShortcutRunCache& cache) {
+    if (!cache.available) return ShortcutRunStatus::Unknown;
+    std::filesystem::path path(entry.path);
+    std::string ext = shortcut_lower_ascii(path.extension().string());
+    if (ext != ".exe") return ShortcutRunStatus::Unknown;
+    std::string stem = shortcut_lower_ascii(path.stem().string());
+    if (stem.empty()) return ShortcutRunStatus::Unknown;
+    return cache.exeNames.count(stem) ? ShortcutRunStatus::Running : ShortcutRunStatus::NotRunning;
 }
 
 static bool PickShortcutFile(std::string& outPath) {
@@ -438,21 +492,51 @@ static void DrawShortcutsSidebar(GuiState& state) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
+    static ShortcutRunCache runCache;
+    const std::int64_t nowSec = NowSeconds();
+    if (nowSec != runCache.lastUpdate) {
+        RefreshShortcutRunCache(runCache);
+        runCache.lastUpdate = nowSec;
+    }
     if (ImGui::BeginChild("shortcuts_sidebar", ImVec2(0.0f, 0.0f), true,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         DrawCardHeader(u8"Ярлыки");
         const float iconSize = std::max(52.0f, ImGui::GetFrameHeight() * 1.45f);
+        const float dotSize = std::max(10.0f, iconSize * 0.28f);
         if (state.shortcuts.empty()) {
             ImGui::TextDisabled(u8"Нет ярлыков.");
         } else {
             for (size_t i = 0; i < state.shortcuts.size(); ++i) {
                 const auto& entry = state.shortcuts[i];
                 const std::string badge = ShortcutBadgeText(entry);
+                ShortcutRunStatus status = ShortcutStatusFor(entry, runCache);
                 ImGui::PushID(static_cast<int>(i));
                 if (ShortcutBadgeButton("shortcut_launch", badge, entry.label.c_str(), accent, iconSize, true)) {
                     if (!LaunchShortcut(entry.path)) {
                         SetStatus(state, u8"Не удалось открыть ярлык.", 1.0f, 0.75f, 0.35f);
                     }
+                }
+                ImGui::SameLine(0.0f, style.ItemSpacing.x * 0.6f);
+                ImGui::InvisibleButton("##shortcut_status", ImVec2(dotSize, iconSize));
+                ImVec2 pMin = ImGui::GetItemRectMin();
+                ImVec2 pMax = ImGui::GetItemRectMax();
+                ImVec2 center(pMin.x + dotSize * 0.5f, (pMin.y + pMax.y) * 0.5f);
+                float radius = dotSize * 0.36f;
+                ImVec4 runColor = ImVec4(0.35f, 0.9f, 0.45f, 0.95f);
+                ImVec4 stopColor = ImVec4(1.0f, 0.45f, 0.45f, 0.95f);
+                ImVec4 unknownColor = style.Colors[ImGuiCol_TextDisabled];
+                ImVec4 dotColor = unknownColor;
+                const char* tooltip = u8"Статус недоступен.";
+                if (status == ShortcutRunStatus::Running) {
+                    dotColor = runColor;
+                    tooltip = u8"Запущена.";
+                } else if (status == ShortcutRunStatus::NotRunning) {
+                    dotColor = stopColor;
+                    tooltip = u8"Не запущена.";
+                }
+                ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, ImGui::GetColorU32(dotColor));
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", tooltip);
                 }
                 ImGui::PopID();
             }
