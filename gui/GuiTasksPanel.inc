@@ -287,12 +287,21 @@ void DrawTasksPanel(GuiState& state) {
             std::array<int, Profile::kCategoryCount> categoryCounts{};
             int topIdx = 0;
             int topCount = 0;
+            int scoreSum = 0;
+            int poolSum = 0;
+            std::unordered_set<std::string> uniqueProfiles;
+            uniqueProfiles.reserve(state.profiles.size());
             for (const TaskEntry* task : filtered) {
                 int idx = std::clamp(task->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
                 categoryCounts[idx] += 1;
                 if (categoryCounts[idx] >= topCount) {
                     topCount = categoryCounts[idx];
                     topIdx = idx;
+                }
+                scoreSum += task->score;
+                poolSum += task->basePool;
+                for (const auto& participant : task->participants) {
+                    uniqueProfiles.insert(participant.profileId);
                 }
             }
             std::ostringstream focusStream;
@@ -316,10 +325,18 @@ void DrawTasksPanel(GuiState& state) {
             }
             const bool hasAttention = (activeCategories >= 2) && (topCount - minCount >= 2);
 
-            if (ImGui::BeginTable("tasks_summary_table", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
-                ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            const float avgScore = totalFiltered > 0
+                ? static_cast<float>(scoreSum) / static_cast<float>(totalFiltered)
+                : 0.0f;
+            const float avgPool = totalFiltered > 0
+                ? static_cast<float>(poolSum) / static_cast<float>(totalFiltered)
+                : 0.0f;
+            if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+                ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.7f);
                 ImGui::TableSetupColumn("sum_last", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                 ImGui::TableSetupColumn("sum_focus", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableSetupColumn("sum_score", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+                ImGui::TableSetupColumn("sum_people", ImGuiTableColumnFlags_WidthStretch, 0.8f);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
@@ -333,6 +350,14 @@ void DrawTasksPanel(GuiState& state) {
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Фокус");
                 ImGui::Text("%s", focusText.c_str());
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextDisabled(u8"Оценка ср.");
+                ImGui::Text("%.1f", avgScore);
+                ImGui::TableSetColumnIndex(4);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::TextDisabled(u8"Участники");
+                ImGui::Text("%d", static_cast<int>(uniqueProfiles.size()));
                 ImGui::EndTable();
             }
             if (hasAttention) {
@@ -342,6 +367,9 @@ void DrawTasksPanel(GuiState& state) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s (%d)",
                                    ClassificationLabel(minIdx), minCount);
             }
+
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::TextDisabled(u8"Средний пул XP: %.0f", avgPool);
 
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::TextDisabled(u8"Активность за 14 дней");
@@ -386,6 +414,12 @@ void DrawTasksPanel(GuiState& state) {
             ++visibleCount;
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            const bool isExpanded = (state.tasksExpandedId == task->id);
+            const std::string rowId = std::string("##task_row_") + task->id;
+            if (ImGui::Selectable(rowId.c_str(), isExpanded, ImGuiSelectableFlags_SpanAllColumns)) {
+                state.tasksExpandedId = isExpanded ? std::string() : task->id;
+            }
+            ImGui::SameLine();
             const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
             ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
             ImGui::TableSetColumnIndex(1);
@@ -395,7 +429,9 @@ void DrawTasksPanel(GuiState& state) {
             ImGui::TextUnformatted(task->title.c_str());
             if (!task->description.empty() && ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
-                ImGui::TextWrapped("%s", task->description.c_str());
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                ImGui::TextUnformatted(task->description.c_str());
+                ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
             ImGui::TableSetColumnIndex(3);
@@ -411,5 +447,75 @@ void DrawTasksPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(state.tasks.size()));
     if (visibleCount == 0) {
         ImGui::TextDisabled(u8"Нет задач по фильтру.");
+    }
+
+    const TaskEntry* expanded = nullptr;
+    if (!state.tasksExpandedId.empty()) {
+        for (const TaskEntry* task : filtered) {
+            if (task && task->id == state.tasksExpandedId) {
+                expanded = task;
+                break;
+            }
+        }
+        if (!expanded) {
+            state.tasksExpandedId.clear();
+        }
+    }
+    if (expanded) {
+        if (BeginCard("tasks_detail_card")) {
+            DrawCardHeader(u8"Детали задачи");
+            ImGui::TextDisabled(u8"Клик по строке задачи раскрывает детали.");
+            std::string title = TaskDisplayTitle(*expanded);
+            if (!title.empty()) {
+                ImGui::TextUnformatted(title.c_str());
+            }
+            ImGui::TextDisabled(u8"Категория: %s", ClassificationLabel(expanded->category));
+            ImGui::TextDisabled(u8"Оценка: %d/10", expanded->score);
+            ImGui::TextDisabled(u8"Базовый XP: %d", expanded->baseXp);
+            ImGui::TextDisabled(u8"Базовый пул: %d", expanded->basePool);
+            if (!expanded->description.empty()) {
+                ImGui::Spacing();
+                ImGui::TextDisabled(u8"Описание");
+                ImGui::TextWrapped("%s", expanded->description.c_str());
+            }
+
+            int totalGlobalXp = 0;
+            int totalSkillXp = 0;
+            for (const auto& participant : expanded->participants) {
+                totalGlobalXp += participant.globalXp;
+                totalSkillXp += participant.skillXp;
+            }
+            ImGui::Spacing();
+            ImGui::TextDisabled(u8"Итоговый XP: %d", totalGlobalXp);
+            ImGui::TextDisabled(u8"Навыки (суммарно): %d XP", totalSkillXp);
+
+            ImGui::Spacing();
+            ImGui::TextDisabled(u8"Участники");
+            if (expanded->participants.empty()) {
+                ImGui::TextDisabled(u8"Нет участников.");
+            } else if (ImGui::BeginTable("tasks_detail_participants", 4,
+                                         ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH)) {
+                ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.3f);
+                ImGui::TableSetupColumn(u8"Вклад", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn(u8"Навыки", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                ImGui::TableHeadersRow();
+                for (const auto& participant : expanded->participants) {
+                    auto it = nameById.find(participant.profileId);
+                    const std::string name = (it == nameById.end()) ? participant.profileId : it->second;
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(name.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%d%%", participant.percent);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%d", participant.globalXp);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%d", participant.skillXp);
+                }
+                ImGui::EndTable();
+            }
+        }
+        EndCard();
     }
 }

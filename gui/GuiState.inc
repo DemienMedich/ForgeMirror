@@ -87,6 +87,7 @@ struct GuiRuntimeState {
     int tasksFilterProfile = 0;
     int tasksFilterCategory = 0;
     int tasksFilterDays = 0;
+    std::string tasksExpandedId;
     int pomodoroPhase = 0;
     int pomodoroNextPhase = 0;
     int pomodoroRemainingSeconds = 0;

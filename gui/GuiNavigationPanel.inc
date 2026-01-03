@@ -23,9 +23,8 @@ void DrawNavigationPanel(GuiState& state) {
         }
     };
     const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d || state.showTasks ||
-    state.showPomodoro ||
-    (state.isAdmin && (state.showRules || state.showUiSettings || state.showView3dSettings ||
-    state.showLogs || state.showAdminStats));
+    state.showPomodoro || state.showUiSettings ||
+    (state.isAdmin && (state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats));
     const bool profileActive = !anyWorkspace;
     navButton("nav_profile", UiIcon::Home, u8"Профиль [F1]", profileActive, [&]() {
         state.showSkillCatalog = false;
@@ -66,9 +65,6 @@ void DrawNavigationPanel(GuiState& state) {
         });
         navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
             OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
-        });
-        navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки UI", state.showUiSettings, [&]() {
-            OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
         });
         navButton("nav_view3d_settings", UiIcon::Cube, u8"3D настройки", state.showView3dSettings, [&]() {
             OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
@@ -160,6 +156,9 @@ void DrawNavigationPanel(GuiState& state) {
         if (state.showProfilesWindow) {
             state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
         }
+    });
+    navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки UI", state.showUiSettings, [&]() {
+        OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
     });
 
     if (state.isAdmin) {

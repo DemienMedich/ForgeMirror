@@ -108,6 +108,9 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             if (ImGui::MenuItem(u8"3D просмотр")) {
                 OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
             }
+            if (ImGui::MenuItem(u8"Настройки интерфейса")) {
+                OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
+            }
             if (state.isAdmin) {
                 ImGui::Separator();
                 if (ImGui::MenuItem(u8"Статистика", "F5")) {
@@ -118,9 +121,6 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
                 }
                 if (ImGui::MenuItem(u8"Правила", "F4")) {
                     OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
-                }
-                if (ImGui::MenuItem(u8"Настройки интерфейса")) {
-                    OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
                 }
                 if (ImGui::MenuItem(u8"3D настройки")) {
                     OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
@@ -150,7 +150,6 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
                 if (state.isAdmin) {
                     state.isAdmin = false;
                     state.showRules = false;
-                    state.showUiSettings = false;
                     state.showView3dSettings = false;
                     state.showLogs = false;
                     state.showAdminStats = false;
@@ -261,7 +260,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
         }
         ImGui::SameLine(0.0f, iconGap);
-        if (IconButtonGui("top_settings", UiIcon::Settings, u8"Настройки интерфейса", accent, iconSize, state.isAdmin, state.showUiSettings)) {
+        if (IconButtonGui("top_settings", UiIcon::Settings, u8"Настройки интерфейса", accent, iconSize, true, state.showUiSettings)) {
             OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
         }
         ImGui::SameLine(0.0f, iconGap);

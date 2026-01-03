@@ -2,6 +2,39 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
     DrawCardHeader(u8"Настройки интерфейса");
     ImGui::TextDisabled(u8"Соберите тему, выберите фон и сохраните пресет.");
+    if (!state.isAdmin) {
+        ImGui::Spacing();
+        ImGui::TextDisabled(u8"Доступны только базовые параметры окна.");
+        DrawCardHeader(u8"Окно");
+        bool borderless = !state.ui.windowDecorated;
+        if (ImGui::Checkbox(u8"Без рамки окна", &borderless)) {
+            state.ui.windowDecorated = !borderless;
+            state.uiDirty = true;
+        }
+        if (ImGui::Checkbox(u8"Полноэкранный режим (F11)", &state.ui.windowFullscreen)) {
+            state.uiDirty = true;
+        }
+        ImGui::Spacing();
+        DrawCardHeader(u8"Действия");
+        const bool hasPendingChanges = state.uiDirty;
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImVec4 accentSoft = accent;
+        accentSoft.w = 0.75f;
+        if (!hasPendingChanges) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Сохранить настройки")) {
+            SaveUiSettings(state.storageDir, state.ui);
+            state.uiDirty = false;
+            AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
+        }
+        if (!hasPendingChanges) ImGui::EndDisabled();
+        if (hasPendingChanges) {
+            ImGui::TextColored(accentSoft, u8"Есть несохранённые изменения.");
+        } else {
+            ImGui::TextDisabled(u8"Нет несохранённых изменений.");
+        }
+        return;
+    }
     DrawCardHeader(u8"Тема и стиль");
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);

@@ -146,45 +146,49 @@ void DrawPomodoroPanel(GuiState& state) {
                 cycles = std::clamp(cycles, 1, 8);
                 changed = true;
             }
-            if (ImGui::Checkbox(u8"Звук окончания интервала", &soundEnabled)) {
-                changed = true;
-            }
+            if (state.isAdmin) {
+                if (ImGui::Checkbox(u8"Звук окончания интервала", &soundEnabled)) {
+                    changed = true;
+                }
 
-            static std::vector<PomodoroSoundChoice> soundChoices;
-            static std::filesystem::path soundDir;
-            static bool soundLoaded = false;
-            if (!soundLoaded) {
-                soundChoices = LoadPomodoroSoundChoices(state.storageDir, soundDir);
-                soundLoaded = true;
-            }
-            ImGui::TextDisabled(u8"Сигналы берутся из папки music.");
-            if (!soundDir.empty()) {
-                ImGui::TextDisabled(u8"Папка: %s", soundDir.string().c_str());
-            }
-            if (ImGui::Button(u8"Обновить список")) {
-                soundChoices = LoadPomodoroSoundChoices(state.storageDir, soundDir);
-            }
-            if (soundChoices.size() <= 1) {
-                ImGui::TextDisabled(u8"Файлы .wav/.mp3 не найдены.");
-            }
+                static std::vector<PomodoroSoundChoice> soundChoices;
+                static std::filesystem::path soundDir;
+                static bool soundLoaded = false;
+                if (!soundLoaded) {
+                    soundChoices = LoadPomodoroSoundChoices(state.storageDir, soundDir);
+                    soundLoaded = true;
+                }
+                ImGui::TextDisabled(u8"Сигналы берутся из папки music.");
+                if (!soundDir.empty()) {
+                    ImGui::TextDisabled(u8"Папка: %s", soundDir.string().c_str());
+                }
+                if (ImGui::Button(u8"Обновить список")) {
+                    soundChoices = LoadPomodoroSoundChoices(state.storageDir, soundDir);
+                }
+                if (soundChoices.size() <= 1) {
+                    ImGui::TextDisabled(u8"Файлы .wav/.mp3 не найдены.");
+                }
 
-            std::vector<const char*> soundLabels;
-            soundLabels.reserve(soundChoices.size());
-            for (const auto& choice : soundChoices) {
-                soundLabels.push_back(choice.label.c_str());
-            }
+                std::vector<const char*> soundLabels;
+                soundLabels.reserve(soundChoices.size());
+                for (const auto& choice : soundChoices) {
+                    soundLabels.push_back(choice.label.c_str());
+                }
 
-            int focusSoundIndex = FindPomodoroSoundIndex(soundChoices, state.ui.pomodoroSoundFocus);
-            int breakSoundIndex = FindPomodoroSoundIndex(soundChoices, state.ui.pomodoroSoundBreak);
-            if (ImGui::Combo(u8"Сигнал фокуса", &focusSoundIndex,
-                             soundLabels.data(), static_cast<int>(soundLabels.size()))) {
-                state.ui.pomodoroSoundFocus = soundChoices[focusSoundIndex].value;
-                changed = true;
-            }
-            if (ImGui::Combo(u8"Сигнал перерыва", &breakSoundIndex,
-                             soundLabels.data(), static_cast<int>(soundLabels.size()))) {
-                state.ui.pomodoroSoundBreak = soundChoices[breakSoundIndex].value;
-                changed = true;
+                int focusSoundIndex = FindPomodoroSoundIndex(soundChoices, state.ui.pomodoroSoundFocus);
+                int breakSoundIndex = FindPomodoroSoundIndex(soundChoices, state.ui.pomodoroSoundBreak);
+                if (ImGui::Combo(u8"Сигнал фокуса", &focusSoundIndex,
+                                 soundLabels.data(), static_cast<int>(soundLabels.size()))) {
+                    state.ui.pomodoroSoundFocus = soundChoices[focusSoundIndex].value;
+                    changed = true;
+                }
+                if (ImGui::Combo(u8"Сигнал перерыва", &breakSoundIndex,
+                                 soundLabels.data(), static_cast<int>(soundLabels.size()))) {
+                    state.ui.pomodoroSoundBreak = soundChoices[breakSoundIndex].value;
+                    changed = true;
+                }
+            } else {
+                ImGui::TextDisabled(u8"Настройки звуков доступны администратору.");
             }
 
             if (changed) {

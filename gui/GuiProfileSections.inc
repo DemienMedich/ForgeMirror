@@ -1131,7 +1131,9 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 ImGui::TextUnformatted(task->title.c_str());
                 if (!task->description.empty() && ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
-                    ImGui::TextWrapped("%s", task->description.c_str());
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                    ImGui::TextUnformatted(task->description.c_str());
+                    ImGui::PopTextWrapPos();
                     ImGui::EndTooltip();
                 }
                 ImGui::TableSetColumnIndex(3);
