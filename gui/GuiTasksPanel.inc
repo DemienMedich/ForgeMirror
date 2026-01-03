@@ -301,6 +301,20 @@ void DrawTasksPanel(GuiState& state) {
             focusStream << std::fixed << std::setprecision(0) << pct;
             std::string focusText = std::string(ClassificationLabel(topIdx)) +
                 " (" + std::to_string(topCount) + ", " + focusStream.str() + "%)";
+            int minIdx = topIdx;
+            int minCount = topCount;
+            int activeCategories = 0;
+            for (size_t i = 0; i < categoryCounts.size(); ++i) {
+                if (categoryCounts[i] <= 0) {
+                    continue;
+                }
+                activeCategories += 1;
+                if (categoryCounts[i] < minCount) {
+                    minCount = categoryCounts[i];
+                    minIdx = static_cast<int>(i);
+                }
+            }
+            const bool hasAttention = (activeCategories >= 2) && (topCount - minCount >= 2);
 
             if (ImGui::BeginTable("tasks_summary_table", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
                 ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.8f);
@@ -320,6 +334,13 @@ void DrawTasksPanel(GuiState& state) {
                 ImGui::TextDisabled(u8"Фокус");
                 ImGui::Text("%s", focusText.c_str());
                 ImGui::EndTable();
+            }
+            if (hasAttention) {
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                ImGui::TextDisabled(u8"Зона внимания");
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s (%d)",
+                                   ClassificationLabel(minIdx), minCount);
             }
 
             ImGui::Dummy(ImVec2(0.0f, 6.0f));

@@ -26,10 +26,60 @@ static int PomodoroPhaseMinutes(const UiSettings& settings, int phase) {
     }
 }
 
-static void PlayPomodoroSound(const UiSettings& settings) {
-    if (!settings.pomodoroSoundEnabled) return;
+static bool PomodoroIsBreakPhase(int phase) {
+    const int clamped = PomodoroClampPhase(phase);
+    return clamped == static_cast<int>(PomodoroPhase::Break) ||
+        clamped == static_cast<int>(PomodoroPhase::LongBreak);
+}
+
+static std::string ResolvePomodoroSoundPath(const GuiState& state, int phase) {
+    const std::string& relative = PomodoroIsBreakPhase(phase)
+        ? state.ui.pomodoroSoundBreak
+        : state.ui.pomodoroSoundFocus;
+    if (relative.empty()) return {};
+    std::filesystem::path path(relative);
+    if (path.is_absolute()) return path.string();
+    std::filesystem::path candidate = state.storageDir / path;
+    std::error_code ec;
+    if (std::filesystem::exists(candidate, ec)) return candidate.string();
+    std::filesystem::path legacy = std::filesystem::path("data") / path;
+    if (auto resolved = FindAssetUpwards(legacy)) {
+        return resolved->string();
+    }
+    if (auto resolved = FindAssetUpwards(path)) {
+        return resolved->string();
+    }
+    return candidate.string();
+}
+
+static bool PlayPomodoroSoundFile(const std::string& path) {
 #if defined(_WIN32)
-    MessageBeep(MB_OK);
+    if (path.empty()) return false;
+    std::filesystem::path audioPath(path);
+    std::error_code ec;
+    if (!std::filesystem::exists(audioPath, ec)) return false;
+    std::string ext = ToLowerAscii(audioPath.extension().string());
+    if (ext == ".wav") {
+        return PlaySoundA(audioPath.string().c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT) != 0;
+    }
+    mciSendStringA("close pomodoro_sound", nullptr, 0, nullptr);
+    std::string openCmd = "open \"" + audioPath.string() + "\" type mpegvideo alias pomodoro_sound";
+    if (mciSendStringA(openCmd.c_str(), nullptr, 0, nullptr) != 0) return false;
+    mciSendStringA("play pomodoro_sound from 0", nullptr, 0, nullptr);
+    return true;
+#else
+    (void)path;
+    return false;
+#endif
+}
+
+static void PlayPomodoroSound(const GuiState& state, int phase) {
+    if (!state.ui.pomodoroSoundEnabled) return;
+    const std::string soundPath = ResolvePomodoroSoundPath(state, phase);
+#if defined(_WIN32)
+    if (!PlayPomodoroSoundFile(soundPath)) {
+        MessageBeep(MB_OK);
+    }
 #else
     std::fputc('\a', stderr);
     std::fflush(stderr);
@@ -78,7 +128,7 @@ static void FinishPomodoroInterval(GuiState& state) {
     state.pomodoroAwaitConfirm = true;
     state.pomodoroRemainingSeconds = 0;
     state.pomodoroAccumulator = 0.0f;
-    PlayPomodoroSound(state.ui);
+    PlayPomodoroSound(state, phase);
 }
 
 static void UpdatePomodoro(GuiState& state, const ImGuiIO& io) {

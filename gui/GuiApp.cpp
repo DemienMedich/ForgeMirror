@@ -12,6 +12,7 @@
 #    define NOMINMAX
 #  endif
 #  include <windows.h>
+#  include <mmsystem.h>
 #  include <GL/gl.h>
 #elif defined(__APPLE__)
 #  include <OpenGL/gl3.h>

@@ -78,6 +78,8 @@ struct UiSettings {
     int pomodoroLongBreakMinutes = 15;
     int pomodoroCyclesBeforeLong = 4;
     bool pomodoroSoundEnabled = true;
+    std::string pomodoroSoundFocus;
+    std::string pomodoroSoundBreak;
     std::array<ImVec4, ImGuiCol_COUNT> colors{};
     std::array<std::string, kUiWindowCount> backgrounds{};
 

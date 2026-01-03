@@ -171,6 +171,8 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "longBreakMinutes") settings.pomodoroLongBreakMinutes = ParseInt(value, settings.pomodoroLongBreakMinutes);
             else if (key == "cyclesBeforeLong") settings.pomodoroCyclesBeforeLong = ParseInt(value, settings.pomodoroCyclesBeforeLong);
             else if (key == "soundEnabled") settings.pomodoroSoundEnabled = ParseBool(value, settings.pomodoroSoundEnabled);
+            else if (key == "soundFocus") settings.pomodoroSoundFocus = value;
+            else if (key == "soundBreak") settings.pomodoroSoundBreak = value;
         } else if (section == "colors") {
             for (size_t i = 0; i < entries.size(); ++i) {
                 if (key == entries[i].name) {
@@ -294,7 +296,9 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "breakMinutes=" << settings.pomodoroBreakMinutes << "\n";
     out << "longBreakMinutes=" << settings.pomodoroLongBreakMinutes << "\n";
     out << "cyclesBeforeLong=" << settings.pomodoroCyclesBeforeLong << "\n";
-    out << "soundEnabled=" << (settings.pomodoroSoundEnabled ? 1 : 0) << "\n\n";
+    out << "soundEnabled=" << (settings.pomodoroSoundEnabled ? 1 : 0) << "\n";
+    out << "soundFocus=" << SanitizeLogLine(settings.pomodoroSoundFocus) << "\n";
+    out << "soundBreak=" << SanitizeLogLine(settings.pomodoroSoundBreak) << "\n\n";
 
     out << "[colors]\n";
     const auto& entries = UiColorEntries();

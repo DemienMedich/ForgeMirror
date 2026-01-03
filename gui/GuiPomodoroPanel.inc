@@ -1,3 +1,46 @@
+struct PomodoroSoundChoice {
+    std::string label;
+    std::string value;
+};
+
+static std::vector<PomodoroSoundChoice> LoadPomodoroSoundChoices(const std::filesystem::path& storageDir,
+                                                                 std::filesystem::path& outDir) {
+    std::vector<PomodoroSoundChoice> out;
+    out.push_back({u8"Системный сигнал", ""});
+    std::filesystem::path musicDir = storageDir / "music";
+    std::error_code ec;
+    if (!std::filesystem::exists(musicDir, ec)) {
+        if (auto resolved = FindAssetUpwards("data/music")) {
+            musicDir = *resolved;
+        }
+    }
+    outDir = musicDir;
+    if (!std::filesystem::exists(musicDir, ec)) return out;
+    for (const auto& entry : std::filesystem::directory_iterator(musicDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::string ext = ToLowerAscii(entry.path().extension().string());
+        if (ext != ".wav" && ext != ".mp3") continue;
+        const auto filename = entry.path().filename();
+        PomodoroSoundChoice choice;
+        choice.label = filename.string();
+        choice.value = (std::filesystem::path("music") / filename).generic_string();
+        out.push_back(std::move(choice));
+    }
+    if (out.size() > 1) {
+        std::sort(out.begin() + 1, out.end(), [](const PomodoroSoundChoice& a, const PomodoroSoundChoice& b) {
+            return a.label < b.label;
+        });
+    }
+    return out;
+}
+
+static int FindPomodoroSoundIndex(const std::vector<PomodoroSoundChoice>& choices, const std::string& value) {
+    for (size_t i = 0; i < choices.size(); ++i) {
+        if (choices[i].value == value) return static_cast<int>(i);
+    }
+    return 0;
+}
+
 void DrawPomodoroPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pomodoro, state.storageDir);
     DrawCardHeader(u8"Помодоро");
@@ -106,6 +149,44 @@ void DrawPomodoroPanel(GuiState& state) {
             if (ImGui::Checkbox(u8"Звук окончания интервала", &soundEnabled)) {
                 changed = true;
             }
+
+            static std::vector<PomodoroSoundChoice> soundChoices;
+            static std::filesystem::path soundDir;
+            static bool soundLoaded = false;
+            if (!soundLoaded) {
+                soundChoices = LoadPomodoroSoundChoices(state.storageDir, soundDir);
+                soundLoaded = true;
+            }
+            ImGui::TextDisabled(u8"Сигналы берутся из папки music.");
+            if (!soundDir.empty()) {
+                ImGui::TextDisabled(u8"Папка: %s", soundDir.string().c_str());
+            }
+            if (ImGui::Button(u8"Обновить список")) {
+                soundChoices = LoadPomodoroSoundChoices(state.storageDir, soundDir);
+            }
+            if (soundChoices.size() <= 1) {
+                ImGui::TextDisabled(u8"Файлы .wav/.mp3 не найдены.");
+            }
+
+            std::vector<const char*> soundLabels;
+            soundLabels.reserve(soundChoices.size());
+            for (const auto& choice : soundChoices) {
+                soundLabels.push_back(choice.label.c_str());
+            }
+
+            int focusSoundIndex = FindPomodoroSoundIndex(soundChoices, state.ui.pomodoroSoundFocus);
+            int breakSoundIndex = FindPomodoroSoundIndex(soundChoices, state.ui.pomodoroSoundBreak);
+            if (ImGui::Combo(u8"Сигнал фокуса", &focusSoundIndex,
+                             soundLabels.data(), static_cast<int>(soundLabels.size()))) {
+                state.ui.pomodoroSoundFocus = soundChoices[focusSoundIndex].value;
+                changed = true;
+            }
+            if (ImGui::Combo(u8"Сигнал перерыва", &breakSoundIndex,
+                             soundLabels.data(), static_cast<int>(soundLabels.size()))) {
+                state.ui.pomodoroSoundBreak = soundChoices[breakSoundIndex].value;
+                changed = true;
+            }
+
             if (changed) {
                 state.ui.pomodoroWorkMinutes = workMinutes;
                 state.ui.pomodoroBreakMinutes = breakMinutes;
