@@ -41,9 +41,13 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::EndTable();
     }
     int visibleCount = 0;
+    int focusIndex = -1;
     for (int i = 0; i < stepCount; ++i) {
         if (MatchesFilter(kPipelineSteps[i].title, state.filters.pipeline.data())) {
             visibleCount += 1;
+            if (focusIndex == -1) {
+                focusIndex = i;
+            }
         }
     }
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, stepCount);
@@ -82,6 +86,11 @@ void DrawPipelinePanel(GuiState& state) {
                     continue;
                 }
                 bool selected = state.selectedPipelineIndex == i;
+                if (focusIndex == i) {
+                    ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                    rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+                }
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 const std::string rowId = std::string("##pipeline_") + std::to_string(i);
@@ -92,7 +101,13 @@ void DrawPipelinePanel(GuiState& state) {
                 ImGui::TextDisabled("%d", rowRank + 1);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                ImGui::TextUnformatted(kPipelineSteps[i].title);
+                if (focusIndex == i) {
+                    ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                    warnText.w = 0.95f;
+                    ImGui::TextColored(warnText, "%s", kPipelineSteps[i].title);
+                } else {
+                    ImGui::TextUnformatted(kPipelineSteps[i].title);
+                }
                 ++rowRank;
             }
             ImGui::EndTable();
@@ -100,6 +115,12 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::PopStyleVar();
     }
     ImGui::EndChild();
+    if (focusIndex >= 0) {
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::TextDisabled(u8"Зона внимания");
+        ImGui::SameLine();
+        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", kPipelineSteps[focusIndex].title);
+    }
     ImGui::Separator();
     if (visibleCount > 0) {
         const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
