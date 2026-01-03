@@ -129,7 +129,8 @@ void DrawPipelinePanel(GuiState& state) {
             accent.w = 1.0f;
             ImGui::TextColored(accent, "%s", step.title);
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
-            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
+            const float wrapPos = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+            ImGui::PushTextWrapPos(wrapPos);
             ImGui::TextUnformatted(step.description);
             ImGui::PopTextWrapPos();
         } else {
