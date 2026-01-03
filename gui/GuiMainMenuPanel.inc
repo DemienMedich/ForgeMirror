@@ -4,6 +4,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showView3d = false;
     state.showTasks = false;
     state.showPomodoro = false;
+    state.showShortcuts = false;
     state.showRules = false;
     state.showUiSettings = false;
     state.showView3dSettings = false;
@@ -104,6 +105,9 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             }
             if (ImGui::MenuItem(u8"Помодоро")) {
                 OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
+            }
+            if (ImGui::MenuItem(u8"Ярлыки")) {
+                OpenWorkspaceTab(state, state.showShortcuts, UiWindowId::Shortcuts);
             }
             if (ImGui::MenuItem(u8"3D просмотр")) {
                 OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);

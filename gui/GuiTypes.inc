@@ -42,6 +42,12 @@ struct TaskEntry {
     std::vector<TaskParticipant> participants;
 };
 
+struct ShortcutEntry {
+    std::string id;
+    std::string label;
+    std::string path;
+};
+
 // Simple description struct for pipeline hints shown in the UI sidebar.
 struct PipelineStep {
     const char* title;

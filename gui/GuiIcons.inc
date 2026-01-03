@@ -13,7 +13,8 @@ enum class UiIcon {
     Book,
     Flow,
     Cube,
-    List
+    List,
+    Launch
 };
 
 static ImVec2 IconPoint(ImVec2 center, float x, float y, float size) {
@@ -189,6 +190,20 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             drawList->AddTriangleFilled(IconPoint(center, 0.62f, 0.0f, s),
                                         IconPoint(center, 0.42f, -0.18f, s),
                                         IconPoint(center, 0.42f, 0.18f, s), color);
+            return;
+        }
+        case UiIcon::Launch: {
+            ImVec2 boxA = IconPoint(center, -0.55f, -0.55f, s);
+            ImVec2 boxB = IconPoint(center, 0.35f, 0.35f, s);
+            drawList->AddRect(boxA, boxB, color, s * 0.12f, 0, stroke);
+            ImVec2 a = IconPoint(center, -0.10f, -0.10f, s);
+            ImVec2 b = IconPoint(center, 0.60f, -0.60f, s);
+            drawList->AddLine(a, b, color, stroke);
+            ImVec2 head0 = IconPoint(center, 0.60f, -0.60f, s);
+            ImVec2 head1 = IconPoint(center, 0.28f, -0.60f, s);
+            ImVec2 head2 = IconPoint(center, 0.60f, -0.28f, s);
+            drawList->AddLine(head0, head1, color, stroke);
+            drawList->AddLine(head0, head2, color, stroke);
             return;
         }
         case UiIcon::LockClosed:

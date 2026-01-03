@@ -12,6 +12,7 @@ struct GuiDataState {
     std::unordered_map<std::string, std::deque<std::string>> activityLogs;
     std::deque<AppLogEntry> appLogs;
     std::vector<TaskEntry> tasks;
+    std::vector<ShortcutEntry> shortcuts;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;
 };
@@ -45,6 +46,7 @@ struct GuiRuntimeState {
     bool showProfilesWindow = false;
     bool showTasks = false;
     bool showPomodoro = false;
+    bool showShortcuts = false;
     int workspaceTabRequest = -1;
 
     bool createPopupRequest = false;
@@ -88,6 +90,8 @@ struct GuiRuntimeState {
     int tasksFilterCategory = 0;
     int tasksFilterDays = 0;
     std::string tasksExpandedId;
+    std::array<char, 128> shortcutLabel{};
+    std::array<char, 260> shortcutPath{};
     int pomodoroPhase = 0;
     int pomodoroNextPhase = 0;
     int pomodoroRemainingSeconds = 0;

@@ -12,6 +12,8 @@
 #    define NOMINMAX
 #  endif
 #  include <windows.h>
+#  include <shellapi.h>
+#  include <commdlg.h>
 #  include <mmsystem.h>
 #  include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -97,6 +99,7 @@ const char* ClassificationLabel(int categoryIndex);
 #include "GuiTasks.inc"
 #include "GuiPomodoro.inc"
 #include "GuiIcons.inc"
+#include "GuiShortcuts.inc"
 #include "GuiXpUtils.inc"
 
 #include "GuiCharts.inc"

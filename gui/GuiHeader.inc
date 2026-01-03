@@ -52,7 +52,6 @@ static void ApplyUiWindowState(GuiState& state, GLFWwindow* window, ImGuiStyle& 
 static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
     if (!state.isAdmin) {
         state.showRules = false;
-        state.showUiSettings = false;
         state.showView3dSettings = false;
         state.showLogs = false;
         state.showAdminStats = false;
@@ -63,6 +62,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showView3d = false;
         state.showTasks = false;
         state.showPomodoro = false;
+        state.showShortcuts = false;
         state.showRules = false;
         state.showUiSettings = false;
         state.showView3dSettings = false;

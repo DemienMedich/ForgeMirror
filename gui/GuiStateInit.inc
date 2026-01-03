@@ -16,6 +16,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.profileTabRequest = state.profileSection;
     ApplyUiFiltersToState(state);
     state.tasks = LoadTasks(storageDir);
+    state.shortcuts = LoadShortcuts(storageDir);
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
     state.windowFullscreenLast = state.ui.windowFullscreen;
