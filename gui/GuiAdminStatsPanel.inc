@@ -354,14 +354,25 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
         std::array<float, Profile::kCategoryCount> avgs{};
+        int minIdx = -1;
+        float minAvg = 0.0f;
+        float maxAvg = 0.0f;
+        int activeCategories = 0;
         for (size_t i = 0; i < Profile::kCategoryCount; ++i) {
             if (stats.categoryCounts[i] > 0) {
                 avgs[i] = static_cast<float>(static_cast<double>(stats.categoryTotals[i]) /
                                              static_cast<double>(stats.categoryCounts[i]));
+                activeCategories += 1;
+                if (minIdx == -1 || avgs[i] < minAvg) {
+                    minIdx = static_cast<int>(i);
+                    minAvg = avgs[i];
+                }
+                maxAvg = std::max(maxAvg, avgs[i]);
             } else {
                 avgs[i] = 0.0f;
             }
         }
+        const bool hasAttention = (activeCategories >= 2) && (maxAvg - minAvg >= 1.0f) && (minIdx >= 0);
         DrawSparkline("##avg_categories_spark", avgs.data(),
                       static_cast<int>(avgs.size()), 10.0f, accent, 56.0f);
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -374,9 +385,20 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < Profile::kCategoryCount; ++i) {
                 ImGui::TableNextRow();
+                if (hasAttention && static_cast<int>(i) == minIdx) {
+                    ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                    rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+                }
                 ImGui::TableSetColumnIndex(0);
                 std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[i];
-                ImGui::TextUnformatted(label.c_str());
+                if (hasAttention && static_cast<int>(i) == minIdx) {
+                    ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                    warnText.w = 0.95f;
+                    ImGui::TextColored(warnText, "%s", label.c_str());
+                } else {
+                    ImGui::TextUnformatted(label.c_str());
+                }
                 ImGui::TableSetColumnIndex(1);
                 if (stats.categoryCounts[i] > 0) {
                     ImGui::Text("%.1f/10", avgs[i]);
@@ -391,6 +413,13 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
                 ImGui::PopID();
             }
             ImGui::EndTable();
+        }
+        if (hasAttention && minIdx >= 0) {
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::TextDisabled(u8"Зона внимания");
+            ImGui::SameLine();
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s (%.1f/10)",
+                               Profile::kCategoryLabels[minIdx], minAvg);
         }
     }
 
