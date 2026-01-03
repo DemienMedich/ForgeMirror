@@ -13,6 +13,7 @@ struct GuiDataState {
     std::deque<AppLogEntry> appLogs;
     std::vector<TaskEntry> tasks;
     std::vector<ShortcutEntry> shortcuts;
+    std::vector<PipelineStep> pipelineSteps;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;
 };
@@ -92,6 +93,9 @@ struct GuiRuntimeState {
     std::string tasksExpandedId;
     std::array<char, 128> shortcutLabel{};
     std::array<char, 260> shortcutPath{};
+    std::array<char, 128> pipelineTitle{};
+    std::array<char, 4096> pipelineDescription{};
+    int pipelineEditIndex = -1;
     int pomodoroPhase = 0;
     int pomodoroNextPhase = 0;
     int pomodoroRemainingSeconds = 0;

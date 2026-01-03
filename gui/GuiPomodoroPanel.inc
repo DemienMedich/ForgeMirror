@@ -69,7 +69,13 @@ void DrawPomodoroPanel(GuiState& state) {
         if (BeginCard("pomodoro_hero")) {
             DrawCardHeader(u8"Сессия");
             ImGui::TextDisabled(u8"Фаза");
-            ImGui::TextUnformatted(PomodoroPhaseLabel(state.pomodoroPhase));
+            ImVec4 phaseColor = accent;
+            if (awaiting) {
+                phaseColor = LogLevelColor(AppLogLevel::Warning);
+            } else if (paused) {
+                phaseColor = style.Colors[ImGuiCol_TextDisabled];
+            }
+            ImGui::TextColored(phaseColor, "%s", PomodoroPhaseLabel(state.pomodoroPhase));
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::TextDisabled(u8"Осталось");
             ImGui::SetWindowFontScale(1.35f);

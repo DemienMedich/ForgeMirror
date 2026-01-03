@@ -50,8 +50,8 @@ struct ShortcutEntry {
 
 // Simple description struct for pipeline hints shown in the UI sidebar.
 struct PipelineStep {
-    const char* title;
-    const char* description;
+    std::string title;
+    std::string description;
 };
 
 // Actions supported by the confirmation modal.
