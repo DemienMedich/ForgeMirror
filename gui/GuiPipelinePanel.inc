@@ -68,7 +68,13 @@ void DrawPipelinePanel(GuiState& state) {
             }
         }
     }
-    if (ImGui::BeginChild("pipeline_list", ImVec2(0, 160), true)) {
+    const float listHeight = std::max(220.0f, ImGui::GetTextLineHeightWithSpacing() * 12.0f);
+    if (ImGui::BeginTable("pipeline_split", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("pipeline_list", ImGuiTableColumnFlags_WidthStretch, 0.45f);
+        ImGui::TableSetupColumn("pipeline_detail", ImGuiTableColumnFlags_WidthStretch, 0.55f);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        if (ImGui::BeginChild("pipeline_list", ImVec2(0, listHeight), true)) {
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
         ImGuiTableFlags listFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                     ImGuiTableFlags_SizingStretchProp;
@@ -113,26 +119,29 @@ void DrawPipelinePanel(GuiState& state) {
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
-    }
-    ImGui::EndChild();
-    if (focusIndex >= 0) {
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        ImGui::TextDisabled(u8"Зона внимания");
-        ImGui::SameLine();
-        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", kPipelineSteps[focusIndex].title);
-    }
-    ImGui::Separator();
-    if (visibleCount > 0) {
-        const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
-        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-        accent.w = 1.0f;
-        ImGui::TextColored(accent, "%s", step.title);
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
-        ImGui::TextUnformatted(step.description);
-        ImGui::PopTextWrapPos();
-    } else {
-        ImGui::TextDisabled(u8"Выберите фильтр или сбросьте его, чтобы увидеть этапы.");
+        }
+        ImGui::EndChild();
+        ImGui::TableSetColumnIndex(1);
+        DrawCardHeader(u8"Описание этапа");
+        if (visibleCount > 0) {
+            const PipelineStep& step = kPipelineSteps[state.selectedPipelineIndex];
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImGui::TextColored(accent, "%s", step.title);
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 45.0f);
+            ImGui::TextUnformatted(step.description);
+            ImGui::PopTextWrapPos();
+        } else {
+            ImGui::TextDisabled(u8"Выберите фильтр или сбросьте его, чтобы увидеть этапы.");
+        }
+        if (focusIndex >= 0) {
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::TextDisabled(u8"Зона внимания");
+            ImGui::SameLine();
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", kPipelineSteps[focusIndex].title);
+        }
+        ImGui::EndTable();
     }
 }
 

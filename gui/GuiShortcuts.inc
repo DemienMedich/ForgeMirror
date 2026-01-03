@@ -354,6 +354,25 @@ static std::string ShortcutBadgeText(const ShortcutEntry& entry) {
     if (source.empty()) {
         source = std::filesystem::path(entry.path).stem().string();
     }
+    std::string initials;
+    bool newWord = true;
+    size_t pos = 0;
+    std::uint32_t cp = 0;
+    while (shortcut_next_codepoint(source, pos, cp)) {
+        if (cp <= 0x7F && std::isspace(static_cast<unsigned char>(cp))) {
+            newWord = true;
+            continue;
+        }
+        if (newWord && shortcut_is_letter(cp)) {
+            shortcut_append_utf8(initials, cp);
+            newWord = false;
+            if (shortcut_count_codepoints(initials) >= 2) {
+                return initials;
+            }
+        } else {
+            newWord = false;
+        }
+    }
     std::string consonants = shortcut_first_two_consonants(source);
     if (shortcut_count_codepoints(consonants) >= 2) {
         return consonants;
