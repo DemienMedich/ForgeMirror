@@ -68,10 +68,30 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Базовый XP категорий");
+    int minCategory = -1;
+    int minValue = 0;
+    int maxValue = 0;
+    int activeCategories = 0;
+    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+        int value = draft.categoryBaseXp[idx];
+        if (minCategory == -1 || value < minValue) {
+            minCategory = static_cast<int>(idx);
+            minValue = value;
+        }
+        maxValue = std::max(maxValue, value);
+        activeCategories += 1;
+    }
+    const bool hasAttention = (activeCategories >= 2) && (maxValue - minValue >= 2) && (minCategory >= 0);
     if (stackRules) {
         for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
             std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
-            ImGui::TextDisabled("%s", label.c_str());
+            if (hasAttention && static_cast<int>(idx) == minCategory) {
+                ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                warnText.w = 0.95f;
+                ImGui::TextColored(warnText, "%s", label.c_str());
+            } else {
+                ImGui::TextDisabled("%s", label.c_str());
+            }
             int value = draft.categoryBaseXp[idx];
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::InputInt(("##cat_xp_" + std::to_string(idx)).c_str(), &value)) {
@@ -89,9 +109,20 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[idx] + " XP";
             int value = draft.categoryBaseXp[idx];
             ImGui::TableNextRow();
+            if (hasAttention && static_cast<int>(idx) == minCategory) {
+                ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+            }
             ImGui::TableSetColumnIndex(0);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, labelBgU32);
-            ImGui::TextDisabled("%s", label.c_str());
+            if (hasAttention && static_cast<int>(idx) == minCategory) {
+                ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                warnText.w = 0.95f;
+                ImGui::TextColored(warnText, "%s", label.c_str());
+            } else {
+                ImGui::TextDisabled("%s", label.c_str());
+            }
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::InputInt(("##cat_xp_" + std::to_string(idx)).c_str(), &value)) {
@@ -101,6 +132,13 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextDisabled("C%s", Profile::kCategoryLabels[idx]);
         }
         ImGui::EndTable();
+    }
+    if (hasAttention) {
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::TextDisabled(u8"Зона внимания");
+        ImGui::SameLine();
+        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s (%d XP)",
+                           Profile::kCategoryLabels[minCategory], minValue);
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Бонусы и штрафы");
