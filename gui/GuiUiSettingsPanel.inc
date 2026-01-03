@@ -22,10 +22,24 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         ImVec4 accentSoft = accent;
         accentSoft.w = 0.75f;
         if (!hasPendingChanges) ImGui::BeginDisabled();
+        if (hasPendingChanges) {
+            ImVec4 saveBg = accent;
+            saveBg.w = 0.18f;
+            ImVec4 saveHover = accent;
+            saveHover.w = 0.28f;
+            ImVec4 saveActive = accent;
+            saveActive.w = 0.38f;
+            ImGui::PushStyleColor(ImGuiCol_Button, saveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saveHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, saveActive);
+        }
         if (ImGui::Button(u8"Сохранить настройки")) {
             SaveUiSettings(state.storageDir, state.ui);
             state.uiDirty = false;
             AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
+        }
+        if (hasPendingChanges) {
+            ImGui::PopStyleColor(3);
         }
         if (!hasPendingChanges) ImGui::EndDisabled();
         if (hasPendingChanges) {
@@ -534,10 +548,24 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImVec4 accentSoft = accent;
     accentSoft.w = 0.75f;
     if (!hasPendingChanges) ImGui::BeginDisabled();
+    if (hasPendingChanges) {
+        ImVec4 saveBg = accent;
+        saveBg.w = 0.18f;
+        ImVec4 saveHover = accent;
+        saveHover.w = 0.28f;
+        ImVec4 saveActive = accent;
+        saveActive.w = 0.38f;
+        ImGui::PushStyleColor(ImGuiCol_Button, saveBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saveHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, saveActive);
+    }
     if (ImGui::Button(u8"Сохранить настройки")) {
         SaveUiSettings(state.storageDir, state.ui);
         state.uiDirty = false;
         AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
+    }
+    if (hasPendingChanges) {
+        ImGui::PopStyleColor(3);
     }
     if (!hasPendingChanges) ImGui::EndDisabled();
     if (stackTheme) {

@@ -43,7 +43,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
                 std::string label = "[" + state.active->id + "] " + state.active->profile.name();
                 ImGui::TextDisabled(u8"Активный: %s", label.c_str());
             } else {
-                ImGui::TextDisabled(u8"Активный: (не выбран)");
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Активный: (не выбран)");
             }
             ImGui::Separator();
 
@@ -397,10 +397,21 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             if (state.profiles.empty()) {
                 ImGui::TextDisabled(u8"Профили не найдены.");
                 if (state.isAdmin) {
+                    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+                    ImVec4 softBg = accent;
+                    softBg.w = 0.18f;
+                    ImVec4 softHover = accent;
+                    softHover.w = 0.28f;
+                    ImVec4 softActive = accent;
+                    softActive.w = 0.38f;
+                    ImGui::PushStyleColor(ImGuiCol_Button, softBg);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, softHover);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, softActive);
                     if (ImGui::Button(u8"Создать первый профиль", ImVec2(-1.0f, 0.0f))) {
                         state.modalBuffer.fill('\0');
                         state.createPopupRequest = true;
                     }
+                    ImGui::PopStyleColor(3);
                 } else {
                     ImGui::TextDisabled(u8"Создание профилей доступно администратору.");
                 }
