@@ -422,7 +422,7 @@ static void DrawShortcutsSidebar(GuiState& state) {
     if (ImGui::BeginChild("shortcuts_sidebar", ImVec2(0.0f, 0.0f), true,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         DrawCardHeader(u8"Ярлыки");
-        const float iconSize = std::max(44.0f, ImGui::GetFrameHeight() * 1.35f);
+        const float iconSize = std::max(52.0f, ImGui::GetFrameHeight() * 1.45f);
         if (state.shortcuts.empty()) {
             ImGui::TextDisabled(u8"Нет ярлыков.");
         } else {
@@ -490,7 +490,7 @@ static void DrawShortcutsPanel(GuiState& state) {
                                                   ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn(u8"Название", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn(u8"Путь", ImGuiTableColumnFlags_WidthStretch, 1.9f);
-        ImGui::TableSetupColumn(u8"Действия", ImGuiTableColumnFlags_WidthFixed, 230.0f);
+        ImGui::TableSetupColumn(u8"Действия", ImGuiTableColumnFlags_WidthFixed, 190.0f);
         ImGui::TableHeadersRow();
         int removeIndex = -1;
         int moveFrom = -1;
@@ -519,14 +519,12 @@ static void DrawShortcutsPanel(GuiState& state) {
                 moveTo = i + 1;
             }
             if (!canMoveDown) ImGui::EndDisabled();
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Открыть", ImVec2(72.0f, 0.0f))) {
+            if (ImGui::Button(u8"Открыть", ImVec2(-1.0f, 0.0f))) {
                 if (!LaunchShortcut(entry.path)) {
                     SetStatus(state, u8"Не удалось открыть ярлык.", 1.0f, 0.75f, 0.35f);
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Удалить", ImVec2(72.0f, 0.0f))) {
+            if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
                 removeIndex = i;
             }
             ImGui::PopID();

@@ -33,7 +33,7 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
     if (ImGui::BeginTable("workspace_layout", 2,
                           ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoPadOuterX)) {
         ImGui::TableSetupColumn("workspace_main", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("workspace_shortcuts", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("workspace_shortcuts", ImGuiTableColumnFlags_WidthFixed, 128.0f);
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         if (ImGui::BeginChild("workspace_main", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_NoBackground)) {
