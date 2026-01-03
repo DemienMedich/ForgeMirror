@@ -265,6 +265,21 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             const int totalCount = static_cast<int>(catalogSkills.size());
             ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
             accent.w = 1.0f;
+            int minCategory = -1;
+            int minCategoryCount = 0;
+            int maxCategoryCount = 0;
+            int activeCategories = 0;
+            for (int cat = 1; cat <= 5; ++cat) {
+                const int count = weightCounts[static_cast<size_t>(cat)];
+                if (count <= 0) continue;
+                activeCategories += 1;
+                if (minCategory == -1 || count < minCategoryCount) {
+                    minCategory = cat;
+                    minCategoryCount = count;
+                }
+                maxCategoryCount = std::max(maxCategoryCount, count);
+            }
+            const bool hasAttention = (activeCategories >= 2) && (maxCategoryCount - minCategoryCount >= 2);
             std::ostringstream avgStream;
             avgStream.imbue(std::locale::classic());
             if (matchingCount > 0) {
@@ -332,15 +347,26 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 if (maxSeries <= 0.0f) maxSeries = 1.0f;
                 DrawSparkline("##catalog_weight_series", series.data(), kSamples, maxSeries, accent, 54.0f);
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                const char* catLabels[] = {"", "A", "B", "C", "D", "E"};
                 if (ImGui::BeginTable("catalog_weights", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("cat", ImGuiTableColumnFlags_WidthFixed, 96.0f);
                 ImGui::TableSetupColumn("count", ImGuiTableColumnFlags_WidthFixed, 64.0f);
                 ImGui::TableSetupColumn("bar", ImGuiTableColumnFlags_WidthStretch);
-                const char* catLabels[] = {"", "A", "B", "C", "D", "E"};
                 for (int cat = 1; cat <= 5; ++cat) {
                     ImGui::TableNextRow();
+                    if (hasAttention && cat == minCategory) {
+                        ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                        rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+                    }
                     ImGui::TableNextColumn();
-                    ImGui::TextDisabled(u8"Кат. %s", catLabels[cat]);
+                    if (hasAttention && cat == minCategory) {
+                        ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
+                        warnText.w = 0.95f;
+                        ImGui::TextColored(warnText, u8"Кат. %s", catLabels[cat]);
+                    } else {
+                        ImGui::TextDisabled(u8"Кат. %s", catLabels[cat]);
+                    }
                     ImGui::TableNextColumn();
                     ImGui::Text("%d", weightCounts[static_cast<size_t>(cat)]);
                     ImGui::TableNextColumn();
@@ -351,6 +377,13 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
+                }
+                if (hasAttention && minCategory > 0) {
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                    ImGui::TextDisabled(u8"Зона внимания");
+                    ImGui::SameLine();
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Кат. %s (%d)",
+                                       catLabels[minCategory], minCategoryCount);
                 }
             }
         }
