@@ -15,6 +15,11 @@ void DrawNavigationPanel(GuiState& state) {
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
     ImGui::TextDisabled(u8"Разделы и быстрые переходы.");
+    if (!state.active) {
+        ImVec4 warn = LogLevelColor(AppLogLevel::Warning);
+        warn.w = std::max(warn.w, 0.9f);
+        ImGui::TextColored(warn, u8"Выберите профиль для работы.");
+    }
     DrawCardHeader(u8"Главное");
     const float navItemHeight = std::max(34.0f, ImGui::GetFrameHeight() * 1.15f);
     auto navButton = [&](const char* id, UiIcon icon, const char* label, bool active, auto onClick) {
