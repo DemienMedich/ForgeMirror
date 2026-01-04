@@ -31,7 +31,7 @@ const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
         {UiWindowId::SkillCatalog, "Навыки"},
         {UiWindowId::Pipeline, "Пайплайн"},
         {UiWindowId::Rules, "Правила"},
-        {UiWindowId::UiSettings, "Настройки интерфейса"},
+        {UiWindowId::UiSettings, "Настройки"},
         {UiWindowId::View3D, "3D просмотр"},
         {UiWindowId::View3DSettings, "3D настройки"},
         {UiWindowId::AdminStats, "Статистика"},
@@ -84,6 +84,8 @@ struct UiSettings {
     bool pomodoroSoundEnabled = true;
     std::string pomodoroSoundFocus;
     std::string pomodoroSoundBreak;
+    int pomodoroSoundVolume = 80;
+    bool pomodoroAutoAdvance = false;
     std::array<ImVec4, ImGuiCol_COUNT> colors{};
     std::array<std::string, kUiWindowCount> backgrounds{};
 

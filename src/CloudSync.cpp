@@ -227,8 +227,31 @@ CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
         else if (key == "manifest") config.manifest = value;
         else if (key == "releasesDir") config.releasesDir = value;
         else if (key == "updateManifestOnPush") config.updateManifestOnPush = ParseBool(value, config.updateManifestOnPush);
+        else if (key == "autoSyncEnabled") config.autoSyncEnabled = ParseBool(value, config.autoSyncEnabled);
+        else if (key == "autoSyncMinutes") config.autoSyncMinutes = static_cast<int>(ParseInt64(value, config.autoSyncMinutes));
     }
     return config;
+}
+
+bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config) {
+    const auto path = CloudConfigPath(storageDir);
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) return false;
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << "[cloud]\n";
+    out << "enabled=" << (config.enabled ? 1 : 0) << "\n";
+    out << "autoPull=" << (config.autoPull ? 1 : 0) << "\n";
+    out << "autoPush=" << (config.autoPush ? 1 : 0) << "\n";
+    out << "includeAdminProfiles=" << (config.includeAdminProfiles ? 1 : 0) << "\n";
+    out << "root=" << config.root.string() << "\n";
+    out << "manifest=" << config.manifest.string() << "\n";
+    out << "releasesDir=" << config.releasesDir.string() << "\n";
+    out << "updateManifestOnPush=" << (config.updateManifestOnPush ? 1 : 0) << "\n";
+    out << "autoSyncEnabled=" << (config.autoSyncEnabled ? 1 : 0) << "\n";
+    out << "autoSyncMinutes=" << config.autoSyncMinutes << "\n";
+    return true;
 }
 
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir) {
@@ -338,9 +361,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     std::unordered_set<std::string> skipIds;
     CopyProfiles(cloudRoot, storageDir, role, config, result.stats, skipIds, true);
     CopyProfiles(cloudRoot / "archive", storageDir / "archive", role, config, result.stats, skipIds, true);
-    CopyAchievements(cloudRoot / "achievements", storageDir / "achievements", skipIds, result.stats, true);
-    CopyFileIfExists(cloudRoot / "skills.txt", storageDir / "skills.txt", result.stats, true);
-    CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true);
+    CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true);
     result.ok = true;
     result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0;
     if (result.changed) {
@@ -367,9 +388,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     std::unordered_set<std::string> skipIds;
     CopyProfiles(storageDir, cloudRoot, role, config, result.stats, skipIds, false);
     CopyProfiles(storageDir / "archive", cloudRoot / "archive", role, config, result.stats, skipIds, false);
-    CopyAchievements(storageDir / "achievements", cloudRoot / "achievements", skipIds, result.stats, false);
-    CopyFileIfExistsPush(storageDir / "skills.txt", cloudRoot / "skills.txt", result.stats);
-    CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats);
+    CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats);
     if (config.updateManifestOnPush) {
         CloudManifest manifest = LoadCloudManifest(config, storageDir);
         manifest.appVersion = APP_VERSION;

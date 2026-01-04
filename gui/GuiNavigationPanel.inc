@@ -167,7 +167,7 @@ void DrawNavigationPanel(GuiState& state) {
     navButton("nav_shortcuts", UiIcon::Launch, u8"Ярлыки", state.showShortcuts, [&]() {
         OpenWorkspaceTab(state, state.showShortcuts, UiWindowId::Shortcuts);
     });
-    navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки UI", state.showUiSettings, [&]() {
+    navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки", state.showUiSettings, [&]() {
         OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
     });
 

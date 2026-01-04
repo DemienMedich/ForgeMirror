@@ -33,6 +33,8 @@ struct CloudSyncConfig {
     std::filesystem::path manifest;
     std::filesystem::path releasesDir;
     bool updateManifestOnPush = true;
+    bool autoSyncEnabled = false;
+    int autoSyncMinutes = 15;
 };
 
 struct CloudManifest {
@@ -43,6 +45,7 @@ struct CloudManifest {
 };
 
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir);
+bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config);
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
 bool SaveCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir, const CloudManifest& manifest);
 bool IsUpdateAvailable(const CloudManifest& manifest, const std::string& currentVersion);

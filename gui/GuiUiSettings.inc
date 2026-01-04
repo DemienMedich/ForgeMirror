@@ -173,6 +173,8 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "soundEnabled") settings.pomodoroSoundEnabled = ParseBool(value, settings.pomodoroSoundEnabled);
             else if (key == "soundFocus") settings.pomodoroSoundFocus = value;
             else if (key == "soundBreak") settings.pomodoroSoundBreak = value;
+            else if (key == "soundVolume") settings.pomodoroSoundVolume = ParseInt(value, settings.pomodoroSoundVolume);
+            else if (key == "autoAdvance") settings.pomodoroAutoAdvance = ParseBool(value, settings.pomodoroAutoAdvance);
         } else if (section == "colors") {
             for (size_t i = 0; i < entries.size(); ++i) {
                 if (key == entries[i].name) {
@@ -217,6 +219,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
     settings.pomodoroBreakMinutes = std::clamp(settings.pomodoroBreakMinutes, 3, 60);
     settings.pomodoroLongBreakMinutes = std::clamp(settings.pomodoroLongBreakMinutes, 5, 90);
     settings.pomodoroCyclesBeforeLong = std::clamp(settings.pomodoroCyclesBeforeLong, 1, 8);
+    settings.pomodoroSoundVolume = std::clamp(settings.pomodoroSoundVolume, 0, 100);
     settings.windowPadding.x = ClampFinite(settings.windowPadding.x, 0.0f, 32.0f, style.WindowPadding.x);
     settings.windowPadding.y = ClampFinite(settings.windowPadding.y, 0.0f, 32.0f, style.WindowPadding.y);
     settings.framePadding.x = ClampFinite(settings.framePadding.x, 0.0f, 24.0f, style.FramePadding.x);
@@ -298,7 +301,9 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "cyclesBeforeLong=" << settings.pomodoroCyclesBeforeLong << "\n";
     out << "soundEnabled=" << (settings.pomodoroSoundEnabled ? 1 : 0) << "\n";
     out << "soundFocus=" << SanitizeLogLine(settings.pomodoroSoundFocus) << "\n";
-    out << "soundBreak=" << SanitizeLogLine(settings.pomodoroSoundBreak) << "\n\n";
+    out << "soundBreak=" << SanitizeLogLine(settings.pomodoroSoundBreak) << "\n";
+    out << "soundVolume=" << settings.pomodoroSoundVolume << "\n";
+    out << "autoAdvance=" << (settings.pomodoroAutoAdvance ? 1 : 0) << "\n\n";
 
     out << "[colors]\n";
     const auto& entries = UiColorEntries();

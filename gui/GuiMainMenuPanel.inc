@@ -14,6 +14,87 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
 }
 
+static void RefreshCloudState(GuiState& state) {
+    state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
+    state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+}
+
+static void ApplyCloudResultStatus(GuiState& state, const CloudSyncResult& result) {
+    if (result.ok) {
+        SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
+    } else {
+        SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
+    }
+}
+
+static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
+    CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
+    if (result.ok) {
+        RefreshProfiles(state, storage, catalog);
+        state.tasks = LoadTasks(state.storageDir);
+    }
+    RefreshCloudState(state);
+    ApplyCloudResultStatus(state, result);
+    state.lastCloudSyncAt = NowSeconds();
+}
+
+static void RunCloudPush(GuiState& state) {
+    CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
+    RefreshCloudState(state);
+    ApplyCloudResultStatus(state, result);
+    state.lastCloudSyncAt = NowSeconds();
+}
+
+static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, bool showStatus) {
+    if (!state.cloudConfig.enabled) {
+        if (showStatus) {
+            SetStatus(state, u8"Облако отключено.", 1.0f, 0.75f, 0.35f);
+        }
+        return;
+    }
+    const bool doPull = state.cloudConfig.autoPull;
+    const bool doPush = state.isAdmin && state.cloudConfig.autoPush;
+    CloudSyncResult pullResult;
+    CloudSyncResult pushResult;
+    bool anyAction = false;
+    if (doPull) {
+        pullResult = PullCloudSnapshot(state.cloudConfig, state.storageDir,
+                                       state.isAdmin ? CloudRole::Admin : CloudRole::Viewer);
+        anyAction = true;
+        if (pullResult.ok) {
+            RefreshProfiles(state, storage, catalog);
+            state.tasks = LoadTasks(state.storageDir);
+        }
+    }
+    if (doPush) {
+        pushResult = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
+        anyAction = true;
+    }
+    RefreshCloudState(state);
+
+    const bool okPull = !doPull || pullResult.ok;
+    const bool okPush = !doPush || pushResult.ok;
+    const bool ok = okPull && okPush;
+    const bool changed = (doPull && pullResult.changed) || (doPush && pushResult.changed);
+    std::string message;
+    if (!anyAction) {
+        message = u8"Действия синхронизации отключены.";
+    } else if (!ok) {
+        message = doPull && !pullResult.ok ? pullResult.message : pushResult.message;
+    } else {
+        message = changed ? u8"Синхронизация завершена." : u8"Данные синхронизированы.";
+    }
+    if (showStatus || !ok) {
+        if (ok) {
+            SetStatus(state, message, 0.45f, 0.9f, 0.45f);
+        } else {
+            SetStatus(state, message, 1.0f, 0.75f, 0.35f);
+        }
+    }
+    state.lastCloudSyncAt = NowSeconds();
+}
+
 void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
@@ -113,7 +194,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             if (ImGui::MenuItem(u8"3D просмотр")) {
                 OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
             }
-            if (ImGui::MenuItem(u8"Настройки интерфейса")) {
+            if (ImGui::MenuItem(u8"Настройки")) {
                 OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
             }
             if (state.isAdmin) {
@@ -179,32 +260,13 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         }
 
         if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
-            auto refreshCloudState = [&]() {
-                state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
-                state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
-            };
-
             if (ImGui::MenuItem(u8"Обновить из облака")) {
-                CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
-                CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
-                RefreshProfiles(state, storage, catalog);
-                refreshCloudState();
-                if (result.ok) {
-                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
-                } else {
-                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
-                }
+                RunCloudPull(state, storage, catalog);
             }
 
             if (!state.isAdmin) ImGui::BeginDisabled();
             if (ImGui::MenuItem(u8"Выгрузить в облако")) {
-                CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
-                refreshCloudState();
-                if (result.ok) {
-                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
-                } else {
-                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
-                }
+                RunCloudPush(state);
             }
             if (!state.isAdmin) ImGui::EndDisabled();
 
@@ -247,7 +309,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
         const float iconSize = ImGui::GetFrameHeight();
         const float iconGap = style.ItemSpacing.x * 0.75f;
-        const int iconCount = 6;
+        const int iconCount = 7;
         const float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
         float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - iconsWidth;
         if (rightX > ImGui::GetCursorPosX()) {
@@ -265,11 +327,15 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             RefreshProfiles(state, storage, catalog);
         }
         ImGui::SameLine(0.0f, iconGap);
+        if (IconButtonGui("top_sync", UiIcon::Launch, u8"Синхронизировать", accent, iconSize)) {
+            RunCloudQuickSync(state, storage, catalog, true);
+        }
+        ImGui::SameLine(0.0f, iconGap);
         if (IconButtonGui("top_chart", UiIcon::Chart, u8"Статистика", accent, iconSize, state.isAdmin, state.showAdminStats)) {
             OpenWorkspaceTab(state, state.showAdminStats, UiWindowId::AdminStats);
         }
         ImGui::SameLine(0.0f, iconGap);
-        if (IconButtonGui("top_settings", UiIcon::Settings, u8"Настройки интерфейса", accent, iconSize, true, state.showUiSettings)) {
+        if (IconButtonGui("top_settings", UiIcon::Settings, u8"Настройки", accent, iconSize, true, state.showUiSettings)) {
             OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
         }
         ImGui::SameLine(0.0f, iconGap);

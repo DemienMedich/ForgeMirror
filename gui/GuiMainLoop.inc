@@ -7,6 +7,15 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         UpdateUiFrame(state, window, style, io, layoutPath);
+        if (state.cloudConfig.enabled && state.cloudConfig.autoSyncEnabled) {
+            const int intervalMinutes = std::clamp(state.cloudConfig.autoSyncMinutes, 1, 120);
+            const std::int64_t now = NowSeconds();
+            if (state.lastCloudSyncAt <= 0) {
+                state.lastCloudSyncAt = now;
+            } else if (now - state.lastCloudSyncAt >= static_cast<std::int64_t>(intervalMinutes) * 60) {
+                RunCloudQuickSync(state, storage, catalog, false);
+            }
+        }
         DrawMainMenuBar(state, storage, catalog);
         DrawNavigationPanel(state);
         DrawWorkspacePanel(state, storage, catalog, style);

@@ -44,7 +44,7 @@ static int FindPomodoroSoundIndex(const std::vector<PomodoroSoundChoice>& choice
 void DrawPomodoroPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pomodoro, state.storageDir);
     DrawCardHeader(u8"Помодоро");
-    ImGui::TextDisabled(u8"Фокус-сессии с подтверждением перехода между интервалами.");
+    ImGui::TextDisabled(u8"Фокус-сессии с ручным или авто переходом между интервалами.");
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
@@ -164,7 +164,19 @@ void DrawPomodoroPanel(GuiState& state) {
             int longBreakMinutes = state.ui.pomodoroLongBreakMinutes;
             int cycles = state.ui.pomodoroCyclesBeforeLong;
             bool soundEnabled = state.ui.pomodoroSoundEnabled;
+            int soundVolume = state.ui.pomodoroSoundVolume;
+            bool autoAdvance = state.ui.pomodoroAutoAdvance;
             bool changed = false;
+            const char* modeLabels[] = {u8"Ручной", u8"Авто"};
+            int modeIndex = autoAdvance ? 1 : 0;
+            ImGui::TextDisabled(u8"Режим перехода");
+            if (ImGui::Combo(u8"##pomodoro_mode", &modeIndex, modeLabels, IM_ARRAYSIZE(modeLabels))) {
+                autoAdvance = (modeIndex == 1);
+                changed = true;
+            }
+            ImGui::TextDisabled(autoAdvance
+                ? u8"Авто: интервал запускается сразу после сигнала."
+                : u8"Ручной: требуется подтверждение следующего интервала.");
             if (ImGui::SliderInt(u8"Фокус (мин)", &workMinutes, 5, 120)) {
                 workMinutes = std::clamp(workMinutes, 5, 120);
                 changed = true;
@@ -183,6 +195,10 @@ void DrawPomodoroPanel(GuiState& state) {
             }
             if (state.isAdmin) {
                 if (ImGui::Checkbox(u8"Звук окончания интервала", &soundEnabled)) {
+                    changed = true;
+                }
+                if (ImGui::SliderInt(u8"Громкость (0-100)", &soundVolume, 0, 100)) {
+                    soundVolume = std::clamp(soundVolume, 0, 100);
                     changed = true;
                 }
 
@@ -232,6 +248,8 @@ void DrawPomodoroPanel(GuiState& state) {
                 state.ui.pomodoroLongBreakMinutes = longBreakMinutes;
                 state.ui.pomodoroCyclesBeforeLong = cycles;
                 state.ui.pomodoroSoundEnabled = soundEnabled;
+                state.ui.pomodoroSoundVolume = soundVolume;
+                state.ui.pomodoroAutoAdvance = autoAdvance;
                 state.uiDirty = true;
                 state.pomodoroCyclesCompleted = std::min(state.pomodoroCyclesCompleted, state.ui.pomodoroCyclesBeforeLong);
             }

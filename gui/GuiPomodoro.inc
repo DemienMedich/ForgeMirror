@@ -52,23 +52,26 @@ static std::string ResolvePomodoroSoundPath(const GuiState& state, int phase) {
     return candidate.string();
 }
 
-static bool PlayPomodoroSoundFile(const std::string& path) {
+static bool PlayPomodoroSoundFile(const std::string& path, int volumePercent) {
 #if defined(_WIN32)
     if (path.empty()) return false;
+    if (volumePercent <= 0) return true;
     std::filesystem::path audioPath(path);
     std::error_code ec;
     if (!std::filesystem::exists(audioPath, ec)) return false;
     std::string ext = ToLowerAscii(audioPath.extension().string());
-    if (ext == ".wav") {
-        return PlaySoundA(audioPath.string().c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT) != 0;
-    }
     mciSendStringA("close pomodoro_sound", nullptr, 0, nullptr);
-    std::string openCmd = "open \"" + audioPath.string() + "\" type mpegvideo alias pomodoro_sound";
+    const char* typeName = (ext == ".wav") ? "waveaudio" : "mpegvideo";
+    std::string openCmd = "open \"" + audioPath.string() + "\" type " + typeName + " alias pomodoro_sound";
     if (mciSendStringA(openCmd.c_str(), nullptr, 0, nullptr) != 0) return false;
+    int volume = std::clamp(volumePercent, 0, 100) * 10;
+    std::string volumeCmd = "setaudio pomodoro_sound volume to " + std::to_string(volume);
+    mciSendStringA(volumeCmd.c_str(), nullptr, 0, nullptr);
     mciSendStringA("play pomodoro_sound from 0", nullptr, 0, nullptr);
     return true;
 #else
     (void)path;
+    (void)volumePercent;
     return false;
 #endif
 }
@@ -77,7 +80,7 @@ static void PlayPomodoroSound(const GuiState& state, int phase) {
     if (!state.ui.pomodoroSoundEnabled) return;
     const std::string soundPath = ResolvePomodoroSoundPath(state, phase);
 #if defined(_WIN32)
-    if (!PlayPomodoroSoundFile(soundPath)) {
+    if (!PlayPomodoroSoundFile(soundPath, state.ui.pomodoroSoundVolume)) {
         MessageBeep(MB_OK);
     }
 #else
@@ -125,10 +128,14 @@ static void FinishPomodoroInterval(GuiState& state) {
     }
     state.pomodoroNextPhase = NextPomodoroPhase(state);
     state.pomodoroRunning = false;
-    state.pomodoroAwaitConfirm = true;
     state.pomodoroRemainingSeconds = 0;
     state.pomodoroAccumulator = 0.0f;
     PlayPomodoroSound(state, phase);
+    if (state.ui.pomodoroAutoAdvance) {
+        StartPomodoroPhase(state, state.pomodoroNextPhase);
+    } else {
+        state.pomodoroAwaitConfirm = true;
+    }
 }
 
 static void UpdatePomodoro(GuiState& state, const ImGuiIO& io) {

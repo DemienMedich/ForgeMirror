@@ -1,7 +1,71 @@
 void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
-    DrawCardHeader(u8"Настройки интерфейса");
-    ImGui::TextDisabled(u8"Соберите тему, выберите фон и сохраните пресет.");
+    DrawCardHeader(u8"Настройки");
+    ImGui::TextDisabled(u8"Тема, окно и синхронизация.");
+    ImGui::Spacing();
+    DrawCardHeader(u8"Синхронизация");
+    ImGui::TextDisabled(u8"Админ создаёт папку, пользователи указывают путь.");
+    bool syncEnabled = state.cloudConfig.enabled;
+    bool autoSyncEnabled = state.cloudConfig.autoSyncEnabled;
+    int autoSyncMinutes = state.cloudConfig.autoSyncMinutes;
+    bool syncChanged = false;
+    if (ImGui::Checkbox(u8"Включить синхронизацию", &syncEnabled)) {
+        syncChanged = true;
+    }
+    bool rootEdited = false;
+    if (ImGui::InputTextWithHint(u8"Папка синхронизации", u8"C:\\\\ForgeMirror\\Sync",
+                                 state.cloudRootBuffer.data(), state.cloudRootBuffer.size())) {
+        syncChanged = true;
+        rootEdited = true;
+    }
+    ImGui::TextDisabled(u8"Можно указать абсолютный путь или путь относительно папки данных.");
+    if (state.isAdmin) {
+        if (ImGui::Button(u8"Создать папку синхронизации")) {
+            std::string rawPath = TrimStringGui(state.cloudRootBuffer.data());
+            if (rawPath.empty()) {
+                SetStatus(state, u8"Укажите путь для папки синхронизации.", 1.0f, 0.75f, 0.35f);
+            } else {
+                std::filesystem::path folder = rawPath;
+                if (!folder.is_absolute()) folder = state.storageDir / folder;
+                std::error_code ec;
+                std::filesystem::create_directories(folder, ec);
+                if (ec) {
+                    SetStatus(state, u8"Не удалось создать папку синхронизации.", 1.0f, 0.75f, 0.35f);
+                } else {
+                    SetStatus(state, u8"Папка синхронизации создана.", 0.45f, 0.9f, 0.45f);
+                }
+            }
+        }
+    }
+    if (ImGui::Checkbox(u8"Автосинхронизация", &autoSyncEnabled)) {
+        syncChanged = true;
+    }
+    if (!autoSyncEnabled) ImGui::BeginDisabled();
+    if (ImGui::SliderInt(u8"Интервал (мин)", &autoSyncMinutes, 1, 120)) {
+        autoSyncMinutes = std::clamp(autoSyncMinutes, 1, 120);
+        syncChanged = true;
+    }
+    if (!autoSyncEnabled) ImGui::EndDisabled();
+    if (syncChanged) {
+        state.cloudConfig.enabled = syncEnabled;
+        state.cloudConfig.autoSyncEnabled = autoSyncEnabled;
+        state.cloudConfig.autoSyncMinutes = std::clamp(autoSyncMinutes, 1, 120);
+    }
+    if (rootEdited) {
+        std::string rawPath = TrimStringGui(state.cloudRootBuffer.data());
+        state.cloudConfig.root = rawPath.empty() ? std::filesystem::path() : std::filesystem::path(rawPath);
+    }
+    if (ImGui::Button(u8"Сохранить синхронизацию")) {
+        std::string rawPath = TrimStringGui(state.cloudRootBuffer.data());
+        state.cloudConfig.root = rawPath.empty() ? std::filesystem::path() : std::filesystem::path(rawPath);
+        SaveCloudSyncConfig(state.storageDir, state.cloudConfig);
+        state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
+        state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+        std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s",
+                      state.cloudConfig.root.string().c_str());
+        state.lastCloudSyncAt = NowSeconds();
+        SetStatus(state, u8"Настройки синхронизации сохранены.", 0.45f, 0.9f, 0.45f);
+    }
     if (!state.isAdmin) {
         ImGui::Spacing();
         ImGui::TextDisabled(u8"Доступны только базовые параметры окна.");
@@ -36,7 +100,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         if (ImGui::Button(u8"Сохранить настройки")) {
             SaveUiSettings(state.storageDir, state.ui);
             state.uiDirty = false;
-            AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
+            AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки сохранены.");
         }
         if (hasPendingChanges) {
             ImGui::PopStyleColor(3);
@@ -562,7 +626,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     if (ImGui::Button(u8"Сохранить настройки")) {
         SaveUiSettings(state.storageDir, state.ui);
         state.uiDirty = false;
-        AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки интерфейса сохранены.");
+        AppendAppLog(state, AppLogLevel::Info, u8"Интерфейс", u8"Настройки сохранены.");
     }
     if (hasPendingChanges) {
         ImGui::PopStyleColor(3);
