@@ -85,8 +85,22 @@ void DrawView3dSettingsPanel(GuiState& state) {
         if (ImGui::InputText(u8"##model_path", state.modelPathBuffer.data(), state.modelPathBuffer.size())) {
             state.ui.modelPath = state.modelPathBuffer.data();
         }
+        if (!modelResolved) {
+            ImVec4 warn = LogLevelColor(AppLogLevel::Warning);
+            warn.w = 0.18f;
+            ImVec4 warnHover = LogLevelColor(AppLogLevel::Warning);
+            warnHover.w = 0.28f;
+            ImVec4 warnActive = LogLevelColor(AppLogLevel::Warning);
+            warnActive.w = 0.38f;
+            ImGui::PushStyleColor(ImGuiCol_Button, warn);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, warnHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, warnActive);
+        }
         if (ImGui::Button(u8"Загрузить", ImVec2(-1.0f, 0.0f))) {
             state.viewMeshPath.clear();
+        }
+        if (!modelResolved) {
+            ImGui::PopStyleColor(3);
         }
     } else if (ImGui::BeginTable("model_path_row", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("model_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
@@ -106,8 +120,22 @@ void DrawView3dSettingsPanel(GuiState& state) {
             state.ui.modelPath = state.modelPathBuffer.data();
         }
         ImGui::TableSetColumnIndex(2);
+        if (!modelResolved) {
+            ImVec4 warn = LogLevelColor(AppLogLevel::Warning);
+            warn.w = 0.18f;
+            ImVec4 warnHover = LogLevelColor(AppLogLevel::Warning);
+            warnHover.w = 0.28f;
+            ImVec4 warnActive = LogLevelColor(AppLogLevel::Warning);
+            warnActive.w = 0.38f;
+            ImGui::PushStyleColor(ImGuiCol_Button, warn);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, warnHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, warnActive);
+        }
         if (ImGui::Button(u8"Загрузить", ImVec2(-1.0f, 0.0f))) {
             state.viewMeshPath.clear();
+        }
+        if (!modelResolved) {
+            ImGui::PopStyleColor(3);
         }
         ImGui::EndTable();
     }
