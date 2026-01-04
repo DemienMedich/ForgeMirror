@@ -256,10 +256,25 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextDisabled(u8"Опыт");
             ImGui::TableSetColumnIndex(1);
             const bool xpEnabled = state.isAdmin;
+            const bool emphasizeAddXp = xpEnabled && totalXp <= 0;
             if (!xpEnabled) ImGui::BeginDisabled();
+            if (emphasizeAddXp) {
+                ImVec4 addBg = accent;
+                addBg.w = 0.18f;
+                ImVec4 addHover = addBg;
+                addHover.w = 0.28f;
+                ImVec4 addActive = addBg;
+                addActive.w = 0.38f;
+                ImGui::PushStyleColor(ImGuiCol_Button, addBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
+            }
             if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
                 PrepareXpEntries(state, catalog);
                 state.xpPopupRequest = true;
+            }
+            if (emphasizeAddXp) {
+                ImGui::PopStyleColor(3);
             }
             if (!xpEnabled) {
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
