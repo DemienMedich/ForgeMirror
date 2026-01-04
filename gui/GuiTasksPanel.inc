@@ -4,6 +4,26 @@ void DrawTasksPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Все выполненные задачи с распределением вклада.");
     if (state.tasks.empty()) {
         ImGui::TextDisabled(u8"Задач пока нет.");
+        if (state.isAdmin) {
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImVec4 addBg = accent;
+            addBg.w = 0.18f;
+            ImVec4 addHover = addBg;
+            addHover.w = 0.28f;
+            ImVec4 addActive = addBg;
+            addActive.w = 0.38f;
+            ImGui::PushStyleColor(ImGuiCol_Button, addBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
+            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+                state.xpPopupRequest = true;
+            }
+            ImGui::PopStyleColor(3);
+        } else {
+            ImGui::TextDisabled(u8"Добавление опыта доступно администратору.");
+        }
         return;
     }
 
