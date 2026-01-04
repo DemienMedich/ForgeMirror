@@ -74,7 +74,7 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                 }
 
                 if (state.showSkillCatalog &&
-                    ImGui::BeginTabItem(u8"Каталог навыков", &state.showSkillCatalog, tabFlagsFor(UiWindowId::SkillCatalog))) {
+                    ImGui::BeginTabItem(u8"Навыки", &state.showSkillCatalog, tabFlagsFor(UiWindowId::SkillCatalog))) {
                     if (state.workspaceTabRequest == static_cast<int>(UiWindowId::SkillCatalog)) {
                         state.workspaceTabRequest = -1;
                     }

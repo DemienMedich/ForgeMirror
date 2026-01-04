@@ -97,7 +97,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             if (ImGui::MenuItem(u8"Задачи")) {
                 OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
             }
-            if (ImGui::MenuItem(u8"Каталог навыков", "F2")) {
+            if (ImGui::MenuItem(u8"Навыки", "F2")) {
                 OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
             }
             if (ImGui::MenuItem(u8"Пайплайн", "F3")) {

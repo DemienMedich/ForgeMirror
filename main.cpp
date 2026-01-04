@@ -547,7 +547,7 @@ static void print_profile(const Profile& p, const SkillCatalog& catalog) {
 
 // Dump available skills and their weights so the user knows what exists.
 static void show_skill_catalog(const SkillCatalog& catalog) {
-    std::cout << "\nКаталог навыков:\n";
+    std::cout << "\nНавыки:\n";
     for (const auto& skill : catalog.skills()) {
         std::cout << " - " << catalog.display_name(skill) << " (вес "
                   << std::fixed << std::setprecision(2) << catalog.weight(skill) << std::defaultfloat

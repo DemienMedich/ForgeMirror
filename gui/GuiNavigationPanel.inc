@@ -48,7 +48,7 @@ void DrawNavigationPanel(GuiState& state) {
     navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
         OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
     });
-    navButton("nav_catalog", UiIcon::Book, u8"Каталог навыков [F2]", state.showSkillCatalog, [&]() {
+    navButton("nav_catalog", UiIcon::Book, u8"Навыки [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
     });
     navButton("nav_pipeline", UiIcon::Flow, u8"Пайплайн [F3]", state.showPipeline, [&]() {

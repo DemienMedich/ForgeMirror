@@ -26,8 +26,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
         if (state.taskShares.size() != state.profiles.size()) {
             PrepareTaskShares(state);
         }
-        if (catalogSkills.empty()) {
-            ImGui::TextDisabled(u8"Каталог пуст.");
+            if (catalogSkills.empty()) {
+                ImGui::TextDisabled(u8"Навыков пока нет.");
         } else if (!state.active) {
             ImGui::TextDisabled(u8"Нет активного профиля.");
         } else {

@@ -16,7 +16,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             state.newSkillDesc.data());
             AppLogLevel level = LogLevelForResult(result);
             SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
-            result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Каталог");
+            result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
             if (result.ok) {
                 PrepareXpEntries(state, catalog);
                 std::string keepId = state.active ? state.active->id : std::string{};
@@ -90,7 +90,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 removedFromProfiles);
                 AppLogLevel level = LogLevelForResult(result);
                 SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
-                result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Каталог");
+                result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
                 if (result.ok) {
                     PrepareXpEntries(state, catalog);
                     std::string keepId = state.active ? state.active->id : std::string{};
@@ -173,7 +173,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 state.active ? state.active->id : std::string{});
                 AppLogLevel level = LogLevelForResult(result);
                 SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
-                result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Каталог");
+                result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
                 if (result.ok) {
                     PrepareXpEntries(state, catalog);
                     std::string keepId = state.active ? state.active->id : std::string{};

@@ -72,7 +72,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::TableSetColumnIndex(0);
         ImGui::BeginChild("catalog_list_panel", ImVec2(0.0f, panelHeight), false);
 
-        DrawCardHeader(u8"Каталог навыков");
+        DrawCardHeader(u8"Навыки");
         ImGui::TextDisabled(u8"Выберите навык слева - детали и редактирование справа.");
         ImGui::TextDisabled(u8"Вес влияет на долю XP при распределении.");
         const float listWidth = ImGui::GetContentRegionAvail().x;
@@ -218,7 +218,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         }
         ImGui::TextDisabled(u8"Всего: %d", static_cast<int>(catalogSkills.size()));
         if (catalogSkills.empty()) {
-            ImGui::TextDisabled(u8"Каталог пуст. Добавьте первый навык.");
+            ImGui::TextDisabled(u8"Навыков пока нет. Добавьте первый навык.");
         }
         ImGui::Separator();
 
@@ -524,7 +524,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ActionResult result = UpdateSkillWeightAction(catalog, skillId, newW, displayName, desc);
                     AppLogLevel level = LogLevelForResult(result);
                     SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
-                              result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Каталог");
+                              result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
                     if (result.ok) {
                         PrepareXpEntries(state, catalog);
                         RefreshProfiles(state, storage, catalog, state.active ? state.active->id : std::string{});
@@ -552,7 +552,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         AppLogLevel level = LogLevelForResult(result);
                         SetStatus(state, result.message, result.ok ? 0.45f : 1.0f,
                                   result.ok ? 0.9f : 0.45f, result.ok ? 0.45f : 0.45f, 1.0f,
-                                  level, u8"Каталог");
+                                  level, u8"Навыки");
                         if (result.ok) {
                             PrepareXpEntries(state, catalog);
                             RefreshProfiles(state, storage, catalog, state.active ? state.active->id : std::string{});

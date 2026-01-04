@@ -52,6 +52,7 @@ void DrawPomodoroPanel(GuiState& state) {
     const bool running = state.pomodoroRunning;
     const bool awaiting = state.pomodoroAwaitConfirm;
     const bool paused = !running && !awaiting && state.pomodoroRemainingSeconds > 0;
+    const bool emphasizeStart = awaiting || (!running && !paused);
     const int phaseSeconds = std::max(1, PomodoroPhaseMinutes(state.ui, state.pomodoroPhase) * 60);
     int remainingSeconds = running || paused ? state.pomodoroRemainingSeconds : phaseSeconds;
     if (awaiting) remainingSeconds = 0;
@@ -97,8 +98,22 @@ void DrawPomodoroPanel(GuiState& state) {
         if (BeginCard("pomodoro_controls")) {
             DrawCardHeader(u8"Управление");
             if (awaiting) {
+                if (emphasizeStart) {
+                    ImVec4 startBg = accent;
+                    startBg.w = 0.18f;
+                    ImVec4 startHover = startBg;
+                    startHover.w = 0.28f;
+                    ImVec4 startActive = startBg;
+                    startActive.w = 0.38f;
+                    ImGui::PushStyleColor(ImGuiCol_Button, startBg);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, startHover);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, startActive);
+                }
                 if (ImGui::Button(u8"Начать следующий", ImVec2(-1.0f, 0.0f))) {
                     StartPomodoroPhase(state, state.pomodoroNextPhase);
+                }
+                if (emphasizeStart) {
+                    ImGui::PopStyleColor(3);
                 }
                 if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
                     ResetPomodoroState(state);
@@ -119,8 +134,22 @@ void DrawPomodoroPanel(GuiState& state) {
                     ResetPomodoroState(state);
                 }
             } else {
+                if (emphasizeStart) {
+                    ImVec4 startBg = accent;
+                    startBg.w = 0.18f;
+                    ImVec4 startHover = startBg;
+                    startHover.w = 0.28f;
+                    ImVec4 startActive = startBg;
+                    startActive.w = 0.38f;
+                    ImGui::PushStyleColor(ImGuiCol_Button, startBg);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, startHover);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, startActive);
+                }
                 if (ImGui::Button(u8"Старт фокуса", ImVec2(-1.0f, 0.0f))) {
                     StartPomodoroPhase(state, static_cast<int>(PomodoroPhase::Work));
+                }
+                if (emphasizeStart) {
+                    ImGui::PopStyleColor(3);
                 }
             }
         }

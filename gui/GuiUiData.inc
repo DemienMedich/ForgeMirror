@@ -27,7 +27,7 @@ const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
     static const std::array<UiWindowInfo, kUiWindowCount> windows = {{
         {UiWindowId::MainMenu, "Главное меню"},
         {UiWindowId::Profile, "Профиль"},
-        {UiWindowId::SkillCatalog, "Каталог навыков"},
+        {UiWindowId::SkillCatalog, "Навыки"},
         {UiWindowId::Pipeline, "Пайплайн"},
         {UiWindowId::Rules, "Правила"},
         {UiWindowId::UiSettings, "Настройки интерфейса"},
