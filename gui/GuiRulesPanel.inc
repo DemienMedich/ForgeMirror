@@ -221,6 +221,19 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
             draft = state.rulesConfig;
         }
+        if (hasChanges) {
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImVec4 saveBg = accent;
+            saveBg.w = 0.18f;
+            ImVec4 saveHover = accent;
+            saveHover.w = 0.28f;
+            ImVec4 saveActive = accent;
+            saveActive.w = 0.38f;
+            ImGui::PushStyleColor(ImGuiCol_Button, saveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saveHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, saveActive);
+        }
         if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {
@@ -236,6 +249,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
                           AppLogLevel::Error, u8"Правила");
             }
+        }
+        if (hasChanges) {
+            ImGui::PopStyleColor(3);
         }
         if (!hasChanges) ImGui::EndDisabled();
     } else if (ImGui::BeginTable("rules_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
@@ -255,6 +271,19 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::TableSetColumnIndex(2);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+        if (hasChanges) {
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            ImVec4 saveBg = accent;
+            saveBg.w = 0.18f;
+            ImVec4 saveHover = accent;
+            saveHover.w = 0.28f;
+            ImVec4 saveActive = accent;
+            saveActive.w = 0.38f;
+            ImGui::PushStyleColor(ImGuiCol_Button, saveBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saveHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, saveActive);
+        }
         if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {
@@ -270,6 +299,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
                           AppLogLevel::Error, u8"Правила");
             }
+        }
+        if (hasChanges) {
+            ImGui::PopStyleColor(3);
         }
         if (!hasChanges) ImGui::EndDisabled();
         ImGui::EndTable();
