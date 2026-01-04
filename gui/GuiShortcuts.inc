@@ -563,6 +563,18 @@ static void DrawShortcutsPanel(GuiState& state) {
             std::snprintf(state.shortcutPath.data(), state.shortcutPath.size(), "%s", picked.c_str());
         }
     }
+    const bool emphasizeAdd = state.shortcuts.empty();
+    ImVec4 addBg = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    addBg.w = 0.18f;
+    ImVec4 addHover = addBg;
+    addHover.w = 0.28f;
+    ImVec4 addActive = addBg;
+    addActive.w = 0.38f;
+    if (emphasizeAdd) {
+        ImGui::PushStyleColor(ImGuiCol_Button, addBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
+    }
     if (ImGui::Button(u8"Добавить", ImVec2(-1.0f, 0.0f))) {
         std::string path = TrimStringGui(state.shortcutPath.data());
         std::string label = TrimStringGui(state.shortcutLabel.data());
@@ -582,6 +594,9 @@ static void DrawShortcutsPanel(GuiState& state) {
             state.shortcutPath.fill('\0');
             SetStatus(state, u8"Ярлык добавлен.", 0.45f, 0.9f, 0.45f);
         }
+    }
+    if (emphasizeAdd) {
+        ImGui::PopStyleColor(3);
     }
 
     DrawCardHeader(u8"Список");
