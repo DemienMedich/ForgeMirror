@@ -122,9 +122,21 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         if (ImGui::SmallButton(u8"Сброс##admin_stats_filter")) {
             resetFilters();
         }
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImVec4 exportBg = accent;
+        exportBg.w = 0.18f;
+        ImVec4 exportHover = accent;
+        exportHover.w = 0.28f;
+        ImVec4 exportActive = accent;
+        exportActive.w = 0.38f;
+        ImGui::PushStyleColor(ImGuiCol_Button, exportBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, exportHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, exportActive);
         if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
             exportStats();
         }
+        ImGui::PopStyleColor(3);
     } else if (ImGui::BeginTable("admin_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("admin_filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("admin_filter_search", ImGuiTableColumnFlags_WidthStretch, 2.0f);
@@ -156,9 +168,21 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             resetFilters();
         }
         ImGui::TableNextColumn();
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        ImVec4 exportBg = accent;
+        exportBg.w = 0.18f;
+        ImVec4 exportHover = accent;
+        exportHover.w = 0.28f;
+        ImVec4 exportActive = accent;
+        exportActive.w = 0.38f;
+        ImGui::PushStyleColor(ImGuiCol_Button, exportBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, exportHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, exportActive);
         if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
             exportStats();
         }
+        ImGui::PopStyleColor(3);
         ImGui::EndTable();
     }
     SyncFiltersToUi(state);
