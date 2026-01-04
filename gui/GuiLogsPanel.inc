@@ -208,9 +208,19 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
             exportLogs();
         }
+        ImVec4 dangerBg = LogLevelColor(AppLogLevel::Warning);
+        dangerBg.w = 0.18f;
+        ImVec4 dangerHover = LogLevelColor(AppLogLevel::Warning);
+        dangerHover.w = 0.28f;
+        ImVec4 dangerActive = LogLevelColor(AppLogLevel::Warning);
+        dangerActive.w = 0.38f;
+        ImGui::PushStyleColor(ImGuiCol_Button, dangerBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, dangerHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, dangerActive);
         if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
             state.appLogs.clear();
         }
+        ImGui::PopStyleColor(3);
     } else if (ImGui::BeginTable("log_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("log_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("log_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
@@ -247,9 +257,19 @@ void DrawLogsPanel(GuiState& state) {
             exportLogs();
         }
         ImGui::TableNextColumn();
+        ImVec4 dangerBg = LogLevelColor(AppLogLevel::Warning);
+        dangerBg.w = 0.18f;
+        ImVec4 dangerHover = LogLevelColor(AppLogLevel::Warning);
+        dangerHover.w = 0.28f;
+        ImVec4 dangerActive = LogLevelColor(AppLogLevel::Warning);
+        dangerActive.w = 0.38f;
+        ImGui::PushStyleColor(ImGuiCol_Button, dangerBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, dangerHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, dangerActive);
         if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
             state.appLogs.clear();
         }
+        ImGui::PopStyleColor(3);
         ImGui::EndTable();
     }
 
