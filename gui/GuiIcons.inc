@@ -14,7 +14,8 @@ enum class UiIcon {
     Flow,
     Cube,
     List,
-    Launch
+    Launch,
+    Info
 };
 
 static ImVec2 IconPoint(ImVec2 center, float x, float y, float size) {
@@ -204,6 +205,15 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             ImVec2 head2 = IconPoint(center, 0.60f, -0.28f, s);
             drawList->AddLine(head0, head1, color, stroke);
             drawList->AddLine(head0, head2, color, stroke);
+            return;
+        }
+        case UiIcon::Info: {
+            drawList->AddCircle(center, s * 0.62f, color, 20, stroke);
+            ImVec2 dot = IconPoint(center, 0.0f, -0.28f, s);
+            drawList->AddCircleFilled(dot, s * 0.10f, color, 12);
+            ImVec2 stemA = IconPoint(center, 0.0f, -0.08f, s);
+            ImVec2 stemB = IconPoint(center, 0.0f, 0.38f, s);
+            drawList->AddLine(stemA, stemB, color, stroke);
             return;
         }
         case UiIcon::LockClosed:

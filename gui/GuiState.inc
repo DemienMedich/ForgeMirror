@@ -48,6 +48,7 @@ struct GuiRuntimeState {
     bool showTasks = false;
     bool showPomodoro = false;
     bool showShortcuts = false;
+    bool showAbout = false;
     int workspaceTabRequest = -1;
 
     bool createPopupRequest = false;

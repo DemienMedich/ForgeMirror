@@ -63,6 +63,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showTasks = false;
         state.showPomodoro = false;
         state.showShortcuts = false;
+        state.showAbout = false;
         state.showRules = false;
         state.showUiSettings = false;
         state.showView3dSettings = false;

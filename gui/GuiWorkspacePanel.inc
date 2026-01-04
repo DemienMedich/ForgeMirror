@@ -172,6 +172,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
+                if (state.showAbout &&
+                    ImGui::BeginTabItem(u8"О программе", &state.showAbout, tabFlagsFor(UiWindowId::About))) {
+                    if (state.workspaceTabRequest == static_cast<int>(UiWindowId::About)) {
+                        state.workspaceTabRequest = -1;
+                    }
+                    if (beginTabBody("##tab_about")) {
+                        DrawAboutPanel(state);
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
                 if (state.isAdmin && state.showView3dSettings &&
                     ImGui::BeginTabItem(u8"3D настройки", &state.showView3dSettings, tabFlagsFor(UiWindowId::View3DSettings))) {
                     if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3DSettings)) {

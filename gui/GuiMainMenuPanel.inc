@@ -5,6 +5,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showTasks = false;
     state.showPomodoro = false;
     state.showShortcuts = false;
+    state.showAbout = false;
     state.showRules = false;
     state.showUiSettings = false;
     state.showView3dSettings = false;
@@ -144,6 +145,10 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
                 state.ui.windowDecorated = !borderless;
                 state.uiDirty = true;
             }
+            ImGui::Separator();
+            if (ImGui::MenuItem(u8"О программе")) {
+                OpenWorkspaceTab(state, state.showAbout, UiWindowId::About);
+            }
             ImGui::EndMenu();
         }
 
@@ -242,7 +247,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
         const float iconSize = ImGui::GetFrameHeight();
         const float iconGap = style.ItemSpacing.x * 0.75f;
-        const int iconCount = 5;
+        const int iconCount = 6;
         const float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
         float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - iconsWidth;
         if (rightX > ImGui::GetCursorPosX()) {
@@ -266,6 +271,10 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         ImGui::SameLine(0.0f, iconGap);
         if (IconButtonGui("top_settings", UiIcon::Settings, u8"Настройки интерфейса", accent, iconSize, true, state.showUiSettings)) {
             OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
+        }
+        ImGui::SameLine(0.0f, iconGap);
+        if (IconButtonGui("top_about", UiIcon::Info, u8"О программе", accent, iconSize, true, state.showAbout)) {
+            OpenWorkspaceTab(state, state.showAbout, UiWindowId::About);
         }
         ImGui::SameLine(0.0f, iconGap);
         if (IconButtonGui("top_exit", UiIcon::Exit, u8"Выход", accent, iconSize)) {
