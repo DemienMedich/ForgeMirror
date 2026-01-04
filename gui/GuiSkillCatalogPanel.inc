@@ -77,18 +77,34 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::TextDisabled(u8"Вес влияет на долю XP при распределении.");
         const float listWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = listWidth < 320.0f;
-        ImVec4 actionKeyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        const ImGuiStyle& listStyle = ImGui::GetStyle();
+        ImVec4 actionKeyBg = listStyle.Colors[ImGuiCol_FrameBg];
         actionKeyBg.w = std::clamp(actionKeyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 actionKeyBgU32 = ImGui::GetColorU32(actionKeyBg);
         const bool canDeleteSkill = state.selectedCatalogIndex >= 0 &&
             state.selectedCatalogIndex < static_cast<int>(catalogSkills.size());
+        const bool emphasizeAddSkill = state.isAdmin && catalogSkills.empty();
+        ImVec4 addSkillBg = listStyle.Colors[ImGuiCol_CheckMark];
+        addSkillBg.w = 0.18f;
+        ImVec4 addSkillHover = addSkillBg;
+        addSkillHover.w = 0.28f;
+        ImVec4 addSkillActive = addSkillBg;
+        addSkillActive.w = 0.38f;
         if (stackActions) {
             if (!state.isAdmin) ImGui::BeginDisabled();
+            if (emphasizeAddSkill) {
+                ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addSkillHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addSkillActive);
+            }
             if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
                 state.addSkillPopupRequest = true;
                 std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
                 std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
                 state.newSkillWeight = 1.0f;
+            }
+            if (emphasizeAddSkill) {
+                ImGui::PopStyleColor(3);
             }
             if (!state.isAdmin) ImGui::EndDisabled();
             if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
@@ -107,11 +123,19 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             if (!state.isAdmin) ImGui::BeginDisabled();
+            if (emphasizeAddSkill) {
+                ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addSkillHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addSkillActive);
+            }
             if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
                 state.addSkillPopupRequest = true;
                 std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
                 std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
                 state.newSkillWeight = 1.0f;
+            }
+            if (emphasizeAddSkill) {
+                ImGui::PopStyleColor(3);
             }
             if (!state.isAdmin) ImGui::EndDisabled();
             ImGui::TableSetColumnIndex(2);

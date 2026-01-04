@@ -473,7 +473,7 @@ static TaskOutcome apply_task_to_profile(const TaskDetails& details, Profile& pr
         }
     }
 
-    constexpr bool kDecayEnabled = false;
+    constexpr bool kDecayEnabled = true;
     if (kDecayEnabled) {
         profile.reset_category_cooldown(static_cast<size_t>(details.categoryIndex));
         for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {

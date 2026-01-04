@@ -567,7 +567,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             }
                         }
 
-                        constexpr bool kDecayEnabled = false;
+                        constexpr bool kDecayEnabled = true;
                         if (kDecayEnabled) {
                             profile.reset_category_cooldown(static_cast<size_t>(readyCategory));
                             for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
