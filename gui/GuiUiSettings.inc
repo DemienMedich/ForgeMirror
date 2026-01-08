@@ -450,82 +450,90 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return;
     out.imbue(std::locale::classic());
+    UiSettings local = settings;
+    if (!local.customColors) {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const auto& entries = UiColorEntries();
+        for (size_t i = 0; i < entries.size(); ++i) {
+            local.colors[i] = style.Colors[entries[i].col];
+        }
+    }
     out << "{\n";
     out << "  \"style\": {\n";
-    out << "    \"theme\": " << settings.theme << ",\n";
-    out << "    \"fontScale\": " << settings.fontScale << ",\n";
-    out << "    \"alpha\": " << settings.alpha << ",\n";
-    out << "    \"windowRounding\": " << settings.windowRounding << ",\n";
-    out << "    \"frameRounding\": " << settings.frameRounding << ",\n";
-    out << "    \"scrollbarRounding\": " << settings.scrollbarRounding << ",\n";
-    out << "    \"grabRounding\": " << settings.grabRounding << ",\n";
-    out << "    \"windowPadding\": [" << settings.windowPadding.x << ", " << settings.windowPadding.y << "],\n";
-    out << "    \"framePadding\": [" << settings.framePadding.x << ", " << settings.framePadding.y << "],\n";
-    out << "    \"itemSpacing\": [" << settings.itemSpacing.x << ", " << settings.itemSpacing.y << "],\n";
-    out << "    \"customColors\": " << (settings.customColors ? "true" : "false") << ",\n";
-    out << "    \"backgroundAlpha\": " << settings.backgroundAlpha << ",\n";
-    out << "    \"backgroundTiled\": " << (settings.backgroundTiled ? "true" : "false") << ",\n";
-    out << "    \"backgroundTileScale\": " << settings.backgroundTileScale << ",\n";
-    out << "    \"windowDecorated\": " << (settings.windowDecorated ? "true" : "false") << ",\n";
-    out << "    \"windowFullscreen\": " << (settings.windowFullscreen ? "true" : "false") << ",\n";
-    out << "    \"profileTab\": " << settings.profileTab << "\n";
+    out << "    \"theme\": " << local.theme << ",\n";
+    out << "    \"fontScale\": " << local.fontScale << ",\n";
+    out << "    \"alpha\": " << local.alpha << ",\n";
+    out << "    \"windowRounding\": " << local.windowRounding << ",\n";
+    out << "    \"frameRounding\": " << local.frameRounding << ",\n";
+    out << "    \"scrollbarRounding\": " << local.scrollbarRounding << ",\n";
+    out << "    \"grabRounding\": " << local.grabRounding << ",\n";
+    out << "    \"windowPadding\": [" << local.windowPadding.x << ", " << local.windowPadding.y << "],\n";
+    out << "    \"framePadding\": [" << local.framePadding.x << ", " << local.framePadding.y << "],\n";
+    out << "    \"itemSpacing\": [" << local.itemSpacing.x << ", " << local.itemSpacing.y << "],\n";
+    out << "    \"customColors\": " << (local.customColors ? "true" : "false") << ",\n";
+    out << "    \"backgroundAlpha\": " << local.backgroundAlpha << ",\n";
+    out << "    \"backgroundTiled\": " << (local.backgroundTiled ? "true" : "false") << ",\n";
+    out << "    \"backgroundTileScale\": " << local.backgroundTileScale << ",\n";
+    out << "    \"windowDecorated\": " << (local.windowDecorated ? "true" : "false") << ",\n";
+    out << "    \"windowFullscreen\": " << (local.windowFullscreen ? "true" : "false") << ",\n";
+    out << "    \"profileTab\": " << local.profileTab << "\n";
     out << "  },\n";
     out << "  \"profile\": {\n";
-    out << "    \"lastProfileId\": \"" << JsonLite::Escape(SanitizeLogLine(settings.lastProfileId)) << "\",\n";
-    out << "    \"viewMode\": " << settings.profileViewMode << "\n";
+    out << "    \"lastProfileId\": \"" << JsonLite::Escape(SanitizeLogLine(local.lastProfileId)) << "\",\n";
+    out << "    \"viewMode\": " << local.profileViewMode << "\n";
     out << "  },\n";
     out << "  \"logs\": {\n";
-    out << "    \"filter\": \"" << JsonLite::Escape(SanitizeLogLine(settings.logFilter)) << "\",\n";
-    out << "    \"source\": \"" << JsonLite::Escape(SanitizeLogLine(settings.logSourceFilter)) << "\",\n";
-    out << "    \"showInfo\": " << (settings.logShowInfo ? "true" : "false") << ",\n";
-    out << "    \"showWarning\": " << (settings.logShowWarning ? "true" : "false") << ",\n";
-    out << "    \"showError\": " << (settings.logShowError ? "true" : "false") << ",\n";
-    out << "    \"autoScroll\": " << (settings.logAutoScroll ? "true" : "false") << ",\n";
-    out << "    \"compactView\": " << (settings.logCompactView ? "true" : "false") << "\n";
+    out << "    \"filter\": \"" << JsonLite::Escape(SanitizeLogLine(local.logFilter)) << "\",\n";
+    out << "    \"source\": \"" << JsonLite::Escape(SanitizeLogLine(local.logSourceFilter)) << "\",\n";
+    out << "    \"showInfo\": " << (local.logShowInfo ? "true" : "false") << ",\n";
+    out << "    \"showWarning\": " << (local.logShowWarning ? "true" : "false") << ",\n";
+    out << "    \"showError\": " << (local.logShowError ? "true" : "false") << ",\n";
+    out << "    \"autoScroll\": " << (local.logAutoScroll ? "true" : "false") << ",\n";
+    out << "    \"compactView\": " << (local.logCompactView ? "true" : "false") << "\n";
     out << "  },\n";
     out << "  \"adminStats\": {\n";
-    out << "    \"filter\": \"" << JsonLite::Escape(SanitizeLogLine(settings.adminStatsFilter)) << "\",\n";
-    out << "    \"includeArchived\": " << (settings.adminStatsIncludeArchived ? "true" : "false") << ",\n";
-    out << "    \"rankFilter\": " << settings.adminStatsRankFilter << ",\n";
-    out << "    \"autoRefresh\": " << (settings.adminStatsAutoRefresh ? "true" : "false") << ",\n";
-    out << "    \"refreshSeconds\": " << settings.adminStatsRefreshSeconds << ",\n";
-    out << "    \"inactivityDays\": " << settings.inactivityThresholdDays << "\n";
+    out << "    \"filter\": \"" << JsonLite::Escape(SanitizeLogLine(local.adminStatsFilter)) << "\",\n";
+    out << "    \"includeArchived\": " << (local.adminStatsIncludeArchived ? "true" : "false") << ",\n";
+    out << "    \"rankFilter\": " << local.adminStatsRankFilter << ",\n";
+    out << "    \"autoRefresh\": " << (local.adminStatsAutoRefresh ? "true" : "false") << ",\n";
+    out << "    \"refreshSeconds\": " << local.adminStatsRefreshSeconds << ",\n";
+    out << "    \"inactivityDays\": " << local.inactivityThresholdDays << "\n";
     out << "  },\n";
     out << "  \"pomodoro\": {\n";
-    out << "    \"workMinutes\": " << settings.pomodoroWorkMinutes << ",\n";
-    out << "    \"breakMinutes\": " << settings.pomodoroBreakMinutes << ",\n";
-    out << "    \"longBreakMinutes\": " << settings.pomodoroLongBreakMinutes << ",\n";
-    out << "    \"cyclesBeforeLong\": " << settings.pomodoroCyclesBeforeLong << ",\n";
-    out << "    \"soundEnabled\": " << (settings.pomodoroSoundEnabled ? "true" : "false") << ",\n";
-    out << "    \"soundFocus\": \"" << JsonLite::Escape(SanitizeLogLine(settings.pomodoroSoundFocus)) << "\",\n";
-    out << "    \"soundBreak\": \"" << JsonLite::Escape(SanitizeLogLine(settings.pomodoroSoundBreak)) << "\",\n";
-    out << "    \"soundVolume\": " << settings.pomodoroSoundVolume << ",\n";
-    out << "    \"autoAdvance\": " << (settings.pomodoroAutoAdvance ? "true" : "false") << "\n";
+    out << "    \"workMinutes\": " << local.pomodoroWorkMinutes << ",\n";
+    out << "    \"breakMinutes\": " << local.pomodoroBreakMinutes << ",\n";
+    out << "    \"longBreakMinutes\": " << local.pomodoroLongBreakMinutes << ",\n";
+    out << "    \"cyclesBeforeLong\": " << local.pomodoroCyclesBeforeLong << ",\n";
+    out << "    \"soundEnabled\": " << (local.pomodoroSoundEnabled ? "true" : "false") << ",\n";
+    out << "    \"soundFocus\": \"" << JsonLite::Escape(SanitizeLogLine(local.pomodoroSoundFocus)) << "\",\n";
+    out << "    \"soundBreak\": \"" << JsonLite::Escape(SanitizeLogLine(local.pomodoroSoundBreak)) << "\",\n";
+    out << "    \"soundVolume\": " << local.pomodoroSoundVolume << ",\n";
+    out << "    \"autoAdvance\": " << (local.pomodoroAutoAdvance ? "true" : "false") << "\n";
     out << "  },\n";
     out << "  \"colors\": {\n";
     const auto& entries = UiColorEntries();
     for (size_t i = 0; i < entries.size(); ++i) {
-        out << "    \"" << entries[i].name << "\": [" << settings.colors[i].x << ", " << settings.colors[i].y
-            << ", " << settings.colors[i].z << ", " << settings.colors[i].w << "]";
+        out << "    \"" << entries[i].name << "\": [" << local.colors[i].x << ", " << local.colors[i].y
+            << ", " << local.colors[i].z << ", " << local.colors[i].w << "]";
         out << (i + 1 < entries.size() ? ",\n" : "\n");
     }
     out << "  },\n";
     out << "  \"backgrounds\": {\n";
     const auto& windows = UiWindows();
     for (size_t i = 0; i < windows.size(); ++i) {
-        out << "    \"" << windows[i].label << "\": \"" << JsonLite::Escape(settings.backgrounds[i]) << "\"";
+        out << "    \"" << windows[i].label << "\": \"" << JsonLite::Escape(local.backgrounds[i]) << "\"";
         out << (i + 1 < windows.size() ? ",\n" : "\n");
     }
     out << "  },\n";
     out << "  \"view3d\": {\n";
-    out << "    \"modelPath\": \"" << JsonLite::Escape(settings.modelPath) << "\",\n";
-    out << "    \"yaw\": " << settings.modelYaw << ",\n";
-    out << "    \"pitch\": " << settings.modelPitch << ",\n";
-    out << "    \"zoom\": " << settings.modelZoom << ",\n";
-    out << "    \"autoRotate\": " << (settings.modelAutoRotate ? "true" : "false") << ",\n";
-    out << "    \"autoSpeed\": " << settings.modelAutoSpeed << ",\n";
-    out << "    \"color\": [" << settings.modelColor.x << ", " << settings.modelColor.y << ", "
-        << settings.modelColor.z << ", " << settings.modelColor.w << "]\n";
+    out << "    \"modelPath\": \"" << JsonLite::Escape(local.modelPath) << "\",\n";
+    out << "    \"yaw\": " << local.modelYaw << ",\n";
+    out << "    \"pitch\": " << local.modelPitch << ",\n";
+    out << "    \"zoom\": " << local.modelZoom << ",\n";
+    out << "    \"autoRotate\": " << (local.modelAutoRotate ? "true" : "false") << ",\n";
+    out << "    \"autoSpeed\": " << local.modelAutoSpeed << ",\n";
+    out << "    \"color\": [" << local.modelColor.x << ", " << local.modelColor.y << ", "
+        << local.modelColor.z << ", " << local.modelColor.w << "]\n";
     out << "  }\n";
     out << "}\n";
 }
