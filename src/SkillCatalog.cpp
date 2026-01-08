@@ -1,4 +1,5 @@
 #include "SkillCatalog.h"
+#include "JsonLite.h"
 
 #include <algorithm>
 #include <cctype>
@@ -281,6 +282,79 @@ void SkillCatalog::load() {
 
     std::ifstream in(file_path());
     if (!in) {
+        auto legacyPath = baseDir_ / "skills.txt";
+        std::ifstream legacy(legacyPath);
+        if (!legacy) {
+            for (const auto& entry : kDefaultSkills) {
+                add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
+            }
+            save();
+            return;
+        }
+        std::string line;
+        while (std::getline(legacy, line)) {
+            auto trimmed = trim(line);
+            if (trimmed.empty() || trimmed[0] == '#') continue;
+
+            std::vector<std::string> parts;
+            std::string part;
+            std::istringstream ss(trimmed);
+            while (std::getline(ss, part, '|')) {
+                parts.push_back(trim(part));
+            }
+            std::string id;
+            std::string name;
+            std::string desc;
+            double weight = 1.0;
+
+            if (parts.size() >= 4) {
+                id = parts[0];
+                name = parts[1];
+                weight = parse_weight(parts[2], 1.0);
+                desc = parts[3];
+                if (parts.size() > 4) {
+                    for (size_t i = 4; i < parts.size(); ++i) {
+                        if (!desc.empty()) desc += "|";
+                        desc += parts[i];
+                    }
+                }
+            } else if (parts.size() >= 3) {
+                name = parts[0];
+                weight = parse_weight(parts[1], 1.0);
+                desc = parts[2];
+                if (parts.size() > 3) {
+                    for (size_t i = 3; i < parts.size(); ++i) {
+                        if (!desc.empty()) desc += "|";
+                        desc += parts[i];
+                    }
+                }
+            } else if (parts.size() >= 2) {
+                name = parts[0];
+                weight = parse_weight(parts[1], 1.0);
+            } else if (!parts.empty()) {
+                name = parts[0];
+            }
+            name = trim(name);
+            if (name.empty()) continue;
+            if (id.empty()) id = make_id(name);
+            add_internal(id, name, clamp_weight(weight), desc, false);
+        }
+
+        if (orderedIds_.empty()) {
+            for (const auto& entry : kDefaultSkills) {
+                add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
+            }
+        }
+        save();
+        std::error_code ec;
+        std::filesystem::remove(legacyPath, ec);
+        return;
+    }
+
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    JsonLite::Value root;
+    if (!JsonLite::Parse(ss.str(), root, nullptr)) {
         for (const auto& entry : kDefaultSkills) {
             add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
         }
@@ -288,53 +362,22 @@ void SkillCatalog::load() {
         return;
     }
 
-    std::string line;
-    while (std::getline(in, line)) {
-        auto trimmed = trim(line);
-        if (trimmed.empty() || trimmed[0] == '#') continue;
-
-        std::vector<std::string> parts;
-        std::string part;
-        std::istringstream ss(trimmed);
-        while (std::getline(ss, part, '|')) {
-            parts.push_back(trim(part));
+    auto get_value = [](const JsonLite::Value& obj, const char* key) -> const JsonLite::Value* {
+        return JsonLite::GetObjectValue(obj, key);
+    };
+    const auto* skills = JsonLite::GetObjectValue(root, "skills");
+    if (skills && skills->type == JsonLite::Type::Array) {
+        for (const auto& item : skills->arrayValue) {
+            if (item.type != JsonLite::Type::Object) continue;
+            std::string id = get_value(item, "id") ? JsonLite::GetString(*get_value(item, "id"), "") : "";
+            std::string name = get_value(item, "name") ? JsonLite::GetString(*get_value(item, "name"), "") : "";
+            double weight = get_value(item, "weight") ? JsonLite::GetDouble(*get_value(item, "weight"), 1.0) : 1.0;
+            std::string desc = get_value(item, "description") ? JsonLite::GetString(*get_value(item, "description"), "") : "";
+            name = trim(name);
+            if (name.empty()) continue;
+            if (id.empty()) id = make_id(name);
+            add_internal(id, name, clamp_weight(weight), desc, false);
         }
-        std::string id;
-        std::string name;
-        std::string desc;
-        double weight = 1.0;
-
-        if (parts.size() >= 4) {
-            id = parts[0];
-            name = parts[1];
-            weight = parse_weight(parts[2], 1.0);
-            desc = parts[3];
-            if (parts.size() > 4) {
-                for (size_t i = 4; i < parts.size(); ++i) {
-                    if (!desc.empty()) desc += "|";
-                    desc += parts[i];
-                }
-            }
-        } else if (parts.size() >= 3) {
-            name = parts[0];
-            weight = parse_weight(parts[1], 1.0);
-            desc = parts[2];
-            if (parts.size() > 3) {
-                for (size_t i = 3; i < parts.size(); ++i) {
-                    if (!desc.empty()) desc += "|";
-                    desc += parts[i];
-                }
-            }
-        } else if (parts.size() >= 2) {
-            name = parts[0];
-            weight = parse_weight(parts[1], 1.0);
-        } else if (!parts.empty()) {
-            name = parts[0];
-        }
-        name = trim(name);
-        if (name.empty()) continue;
-        if (id.empty()) id = make_id(name);
-        add_internal(id, name, clamp_weight(weight), desc, false);
     }
 
     if (orderedIds_.empty()) {
@@ -377,22 +420,29 @@ void SkillCatalog::save() const {
     auto path = file_path();
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return;
     out.imbue(std::locale::classic());
-    for (const auto& id : orderedIds_) {
+    out << "{\n  \"skills\": [\n";
+    for (size_t i = 0; i < orderedIds_.size(); ++i) {
+        const auto& id = orderedIds_[i];
         auto nameIt = namesById_.find(id);
         if (nameIt == namesById_.end()) continue;
         const double w = weight(id);
-        out << id << "|" << nameIt->second << "|" << w;
+        out << "    {\"id\":\"" << JsonLite::Escape(id)
+            << "\",\"name\":\"" << JsonLite::Escape(nameIt->second)
+            << "\",\"weight\":" << w;
         auto it = descriptionsById_.find(id);
         if (it != descriptionsById_.end() && !it->second.empty()) {
-            out << "|" << it->second;
+            out << ",\"description\":\"" << JsonLite::Escape(it->second) << "\"";
         }
-        out << "\n";
+        out << "}";
+        out << (i + 1 < orderedIds_.size() ? ",\n" : "\n");
     }
+    out << "  ]\n}\n";
 }
 
 std::filesystem::path SkillCatalog::file_path() const {
-    return baseDir_ / "skills.txt";
+    return baseDir_ / "skills.json";
 }
 
 std::string SkillCatalog::trim(std::string s) {

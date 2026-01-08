@@ -1,4 +1,5 @@
 #include "CloudSync.h"
+#include "JsonLite.h"
 
 #include <algorithm>
 #include <cctype>
@@ -57,7 +58,7 @@ std::int64_t NowSeconds() {
 }
 
 std::filesystem::path CloudConfigPath(const std::filesystem::path& storageDir) {
-    return storageDir / "meta" / "cloud.ini";
+    return storageDir / "meta" / "cloud.json";
 }
 
 std::filesystem::path ResolveCloudRoot(const CloudSyncConfig& config, const std::filesystem::path& storageDir) {
@@ -72,6 +73,50 @@ std::filesystem::path ResolveCloudManifestPath(const CloudSyncConfig& config,
                                                const std::filesystem::path& storageDir) {
     const auto root = ResolveCloudRoot(config, storageDir);
     if (config.manifest.empty()) {
+        return root / "meta" / "manifest.json";
+    }
+    if (config.manifest.is_absolute()) return config.manifest;
+    return root / config.manifest;
+}
+
+std::string read_all(const std::filesystem::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    if (!in) return {};
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+bool write_all(const std::filesystem::path& p, const std::string& data) {
+    auto parent = p.parent_path();
+    if (!parent.empty()) {
+        std::filesystem::create_directories(parent);
+    }
+    auto tmp = p;
+    tmp += ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        out << data;
+        if (!out.good()) return false;
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp, p, ec);
+    if (ec) {
+        std::filesystem::remove(p, ec);
+        std::filesystem::rename(tmp, p, ec);
+    }
+    return !ec;
+}
+
+std::filesystem::path LegacyCloudConfigPath(const std::filesystem::path& storageDir) {
+    return storageDir / "meta" / "cloud.ini";
+}
+
+std::filesystem::path LegacyCloudManifestPath(const CloudSyncConfig& config,
+                                              const std::filesystem::path& storageDir) {
+    const auto root = ResolveCloudRoot(config, storageDir);
+    if (config.manifest.empty()) {
         return root / "meta" / "manifest.ini";
     }
     if (config.manifest.is_absolute()) return config.manifest;
@@ -79,6 +124,21 @@ std::filesystem::path ResolveCloudManifestPath(const CloudSyncConfig& config,
 }
 
 bool IsAdminProfileFile(const std::filesystem::path& path) {
+    if (path.extension() == ".json") {
+        std::string content = read_all(path);
+        if (content.empty()) return false;
+        JsonLite::Value root;
+        if (!JsonLite::Parse(content, root, nullptr)) return false;
+        if (const auto* profile = JsonLite::GetObjectValue(root, "profile")) {
+            if (const auto* admin = JsonLite::GetObjectValue(*profile, "admin")) {
+                return JsonLite::GetBool(*admin, false);
+            }
+        }
+        if (const auto* admin = JsonLite::GetObjectValue(root, "admin")) {
+            return JsonLite::GetBool(*admin, false);
+        }
+        return false;
+    }
     std::ifstream in(path);
     if (!in) return false;
     std::string line;
@@ -130,7 +190,8 @@ void CopyProfiles(const std::filesystem::path& srcRoot, const std::filesystem::p
     std::error_code ec;
     for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
         if (!entry.is_regular_file()) continue;
-        if (entry.path().extension() != ".ini") continue;
+        const auto ext = entry.path().extension();
+        if (ext != ".json" && ext != ".ini") continue;
         const std::string id = entry.path().stem().string();
         const bool isAdmin = IsAdminProfileFile(entry.path());
         if (role == CloudRole::Viewer && isAdmin && !config.includeAdminProfiles) {
@@ -202,8 +263,47 @@ int CompareVersions(const std::string& a, const std::string& b) {
 
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
     CloudSyncConfig config;
-    auto path = CloudConfigPath(storageDir);
-    std::ifstream in(path);
+    const auto path = CloudConfigPath(storageDir);
+    std::string json = read_all(path);
+    if (!json.empty()) {
+        JsonLite::Value root;
+        if (JsonLite::Parse(json, root, nullptr)) {
+            if (const auto* v = JsonLite::GetObjectValue(root, "enabled")) {
+                config.enabled = JsonLite::GetBool(*v, config.enabled);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "autoPull")) {
+                config.autoPull = JsonLite::GetBool(*v, config.autoPull);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "autoPush")) {
+                config.autoPush = JsonLite::GetBool(*v, config.autoPush);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "includeAdminProfiles")) {
+                config.includeAdminProfiles = JsonLite::GetBool(*v, config.includeAdminProfiles);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "root")) {
+                config.root = JsonLite::GetString(*v, config.root.string());
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "manifest")) {
+                config.manifest = JsonLite::GetString(*v, config.manifest.string());
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "releasesDir")) {
+                config.releasesDir = JsonLite::GetString(*v, config.releasesDir.string());
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "updateManifestOnPush")) {
+                config.updateManifestOnPush = JsonLite::GetBool(*v, config.updateManifestOnPush);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "autoSyncEnabled")) {
+                config.autoSyncEnabled = JsonLite::GetBool(*v, config.autoSyncEnabled);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "autoSyncMinutes")) {
+                config.autoSyncMinutes = static_cast<int>(JsonLite::GetInt64(*v, config.autoSyncMinutes));
+            }
+            return config;
+        }
+    }
+
+    auto legacyPath = LegacyCloudConfigPath(storageDir);
+    std::ifstream in(legacyPath);
     if (!in) return config;
     std::string section;
     std::string line;
@@ -230,34 +330,56 @@ CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
         else if (key == "autoSyncEnabled") config.autoSyncEnabled = ParseBool(value, config.autoSyncEnabled);
         else if (key == "autoSyncMinutes") config.autoSyncMinutes = static_cast<int>(ParseInt64(value, config.autoSyncMinutes));
     }
+    if (SaveCloudSyncConfig(storageDir, config)) {
+        std::error_code ec;
+        std::filesystem::remove(legacyPath, ec);
+    }
     return config;
 }
 
 bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config) {
     const auto path = CloudConfigPath(storageDir);
-    std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
-    if (ec) return false;
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return false;
-    out << "[cloud]\n";
-    out << "enabled=" << (config.enabled ? 1 : 0) << "\n";
-    out << "autoPull=" << (config.autoPull ? 1 : 0) << "\n";
-    out << "autoPush=" << (config.autoPush ? 1 : 0) << "\n";
-    out << "includeAdminProfiles=" << (config.includeAdminProfiles ? 1 : 0) << "\n";
-    out << "root=" << config.root.string() << "\n";
-    out << "manifest=" << config.manifest.string() << "\n";
-    out << "releasesDir=" << config.releasesDir.string() << "\n";
-    out << "updateManifestOnPush=" << (config.updateManifestOnPush ? 1 : 0) << "\n";
-    out << "autoSyncEnabled=" << (config.autoSyncEnabled ? 1 : 0) << "\n";
-    out << "autoSyncMinutes=" << config.autoSyncMinutes << "\n";
-    return true;
+    std::ostringstream out;
+    out << "{\n";
+    out << "  \"enabled\": " << (config.enabled ? "true" : "false") << ",\n";
+    out << "  \"autoPull\": " << (config.autoPull ? "true" : "false") << ",\n";
+    out << "  \"autoPush\": " << (config.autoPush ? "true" : "false") << ",\n";
+    out << "  \"includeAdminProfiles\": " << (config.includeAdminProfiles ? "true" : "false") << ",\n";
+    out << "  \"root\": \"" << JsonLite::Escape(config.root.string()) << "\",\n";
+    out << "  \"manifest\": \"" << JsonLite::Escape(config.manifest.string()) << "\",\n";
+    out << "  \"releasesDir\": \"" << JsonLite::Escape(config.releasesDir.string()) << "\",\n";
+    out << "  \"updateManifestOnPush\": " << (config.updateManifestOnPush ? "true" : "false") << ",\n";
+    out << "  \"autoSyncEnabled\": " << (config.autoSyncEnabled ? "true" : "false") << ",\n";
+    out << "  \"autoSyncMinutes\": " << config.autoSyncMinutes << "\n";
+    out << "}\n";
+    return write_all(path, out.str());
 }
 
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir) {
     CloudManifest manifest;
     const auto path = ResolveCloudManifestPath(config, storageDir);
-    std::ifstream in(path);
+    std::string json = read_all(path);
+    if (!json.empty()) {
+        JsonLite::Value root;
+        if (JsonLite::Parse(json, root, nullptr)) {
+            if (const auto* v = JsonLite::GetObjectValue(root, "appVersion")) {
+                manifest.appVersion = JsonLite::GetString(*v, manifest.appVersion);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "dataUpdatedAt")) {
+                manifest.dataUpdatedAt = JsonLite::GetInt64(*v, manifest.dataUpdatedAt);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "releaseFile")) {
+                manifest.releaseFile = JsonLite::GetString(*v, manifest.releaseFile);
+            }
+            if (const auto* v = JsonLite::GetObjectValue(root, "notes")) {
+                manifest.notes = JsonLite::GetString(*v, manifest.notes);
+            }
+            return manifest;
+        }
+    }
+
+    const auto legacyPath = LegacyCloudManifestPath(config, storageDir);
+    std::ifstream in(legacyPath);
     if (!in) return manifest;
     std::string line;
     while (std::getline(in, line)) {
@@ -273,16 +395,15 @@ CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesy
         else if (key == "releaseFile") manifest.releaseFile = value;
         else if (key == "notes") manifest.notes = value;
     }
+    if (SaveCloudManifest(config, storageDir, manifest)) {
+        std::error_code ec;
+        std::filesystem::remove(legacyPath, ec);
+    }
     return manifest;
 }
 
 bool SaveCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir, const CloudManifest& manifest) {
     const auto path = ResolveCloudManifestPath(config, storageDir);
-    std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
-    if (ec) return false;
-    std::ofstream out(path);
-    if (!out) return false;
     CloudManifest merged = manifest;
     if (merged.notes.empty()) {
         CloudManifest existing = LoadCloudManifest(config, storageDir);
@@ -291,15 +412,18 @@ bool SaveCloudManifest(const CloudSyncConfig& config, const std::filesystem::pat
             merged.releaseFile = existing.releaseFile;
         }
     }
-    out << "appVersion=" << merged.appVersion << "\n";
-    out << "dataUpdatedAt=" << merged.dataUpdatedAt << "\n";
+    std::ostringstream out;
+    out << "{\n";
+    out << "  \"appVersion\": \"" << JsonLite::Escape(merged.appVersion) << "\",\n";
+    out << "  \"dataUpdatedAt\": " << merged.dataUpdatedAt;
     if (!merged.releaseFile.empty()) {
-        out << "releaseFile=" << merged.releaseFile << "\n";
+        out << ",\n  \"releaseFile\": \"" << JsonLite::Escape(merged.releaseFile) << "\"";
     }
     if (!merged.notes.empty()) {
-        out << "notes=" << merged.notes << "\n";
+        out << ",\n  \"notes\": \"" << JsonLite::Escape(merged.notes) << "\"";
     }
-    return true;
+    out << "\n}\n";
+    return write_all(path, out.str());
 }
 
 bool IsUpdateAvailable(const CloudManifest& manifest, const std::string& currentVersion) {

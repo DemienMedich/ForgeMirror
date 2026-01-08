@@ -10,6 +10,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
     state.lastCloudSyncAt = NowSeconds();
     state.ui = LoadUiSettings(storageDir, style);
+    MigrateUiPresets(storageDir, style);
     ApplyUiTheme(state.ui.theme, style);
     ApplyUiSettings(state.ui, style, io);
     state.uiLastTheme = state.ui.theme;

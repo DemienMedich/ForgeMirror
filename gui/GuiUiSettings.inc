@@ -1,5 +1,5 @@
 std::string UiSettingsPath(const std::filesystem::path& storageDir) {
-    return (storageDir / "meta" / "ui.ini").string();
+    return (storageDir / "meta" / "ui.json").string();
 }
 
 std::filesystem::path UiPresetsDir(const std::filesystem::path& storageDir) {
@@ -25,8 +25,11 @@ std::string SanitizePresetName(std::string name) {
 
 std::filesystem::path UiPresetPath(const std::filesystem::path& storageDir, const std::string& name) {
     auto dir = UiPresetsDir(storageDir);
-    return dir / (SanitizePresetName(name) + ".ini");
+    return dir / (SanitizePresetName(name) + ".json");
 }
+
+UiSettings LoadUiSettingsFromIniPath(const std::filesystem::path& path, const ImGuiStyle& style);
+void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& settings);
 
 std::vector<std::string> LoadUiPresetNames(const std::filesystem::path& storageDir) {
     std::vector<std::string> out;
@@ -35,11 +38,33 @@ std::vector<std::string> LoadUiPresetNames(const std::filesystem::path& storageD
     if (!std::filesystem::exists(dir, ec)) return out;
     for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file()) continue;
-        if (entry.path().extension() != ".ini") continue;
+        if (entry.path().extension() != ".json") continue;
         out.push_back(entry.path().stem().string());
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".ini") continue;
+        const std::string name = entry.path().stem().string();
+        if (std::find(out.begin(), out.end(), name) != out.end()) continue;
+        out.push_back(name);
     }
     std::sort(out.begin(), out.end());
     return out;
+}
+
+void MigrateUiPresets(const std::filesystem::path& storageDir, const ImGuiStyle& style) {
+    std::error_code ec;
+    auto dir = UiPresetsDir(storageDir);
+    if (!std::filesystem::exists(dir, ec)) return;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".ini") continue;
+        UiSettings settings = LoadUiSettingsFromIniPath(entry.path(), style);
+        auto jsonPath = entry.path();
+        jsonPath.replace_extension(".json");
+        SaveUiSettingsToPath(jsonPath, settings);
+        std::filesystem::remove(entry.path(), ec);
+    }
 }
 
 std::string NormalizeFloatList(const std::string& value) {
@@ -107,7 +132,68 @@ std::string Vec4ToString(const ImVec4& v) {
     return ss.str();
 }
 
-UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGuiStyle& style) {
+bool ParseVec2Json(const JsonLite::Value* value, ImVec2& out) {
+    if (!value || value->type != JsonLite::Type::Array || value->arrayValue.size() < 2) return false;
+    out.x = static_cast<float>(JsonLite::GetDouble(value->arrayValue[0], out.x));
+    out.y = static_cast<float>(JsonLite::GetDouble(value->arrayValue[1], out.y));
+    return true;
+}
+
+bool ParseVec4Json(const JsonLite::Value* value, ImVec4& out) {
+    if (!value || value->type != JsonLite::Type::Array || value->arrayValue.size() < 4) return false;
+    out.x = static_cast<float>(JsonLite::GetDouble(value->arrayValue[0], out.x));
+    out.y = static_cast<float>(JsonLite::GetDouble(value->arrayValue[1], out.y));
+    out.z = static_cast<float>(JsonLite::GetDouble(value->arrayValue[2], out.z));
+    out.w = static_cast<float>(JsonLite::GetDouble(value->arrayValue[3], out.w));
+    return true;
+}
+
+void SanitizeUiSettings(UiSettings& settings, const ImGuiStyle& style) {
+    settings.theme = std::clamp(settings.theme, 0, 2);
+    settings.fontScale = ClampFinite(settings.fontScale, 0.6f, 2.0f, 1.0f);
+    settings.alpha = ClampFinite(settings.alpha, 0.4f, 1.0f, 1.0f);
+    settings.windowRounding = ClampFinite(settings.windowRounding, 0.0f, 24.0f, style.WindowRounding);
+    settings.frameRounding = ClampFinite(settings.frameRounding, 0.0f, 24.0f, style.FrameRounding);
+    settings.scrollbarRounding = ClampFinite(settings.scrollbarRounding, 0.0f, 24.0f, style.ScrollbarRounding);
+    settings.grabRounding = ClampFinite(settings.grabRounding, 0.0f, 24.0f, style.GrabRounding);
+    settings.backgroundAlpha = ClampFinite(settings.backgroundAlpha, 0.0f, 1.0f, 0.25f);
+    settings.backgroundTileScale = ClampFinite(settings.backgroundTileScale, 0.25f, 4.0f, 1.0f);
+    settings.profileTab = std::clamp(settings.profileTab, 0, 5);
+    settings.profileViewMode = std::clamp(settings.profileViewMode, 0, 2);
+    settings.adminStatsRankFilter = std::max(0, settings.adminStatsRankFilter);
+    settings.adminStatsRefreshSeconds = std::clamp(settings.adminStatsRefreshSeconds, 5, 120);
+    settings.inactivityThresholdDays = std::clamp(settings.inactivityThresholdDays, 1, 365);
+    settings.pomodoroWorkMinutes = std::clamp(settings.pomodoroWorkMinutes, 5, 120);
+    settings.pomodoroBreakMinutes = std::clamp(settings.pomodoroBreakMinutes, 3, 60);
+    settings.pomodoroLongBreakMinutes = std::clamp(settings.pomodoroLongBreakMinutes, 5, 90);
+    settings.pomodoroCyclesBeforeLong = std::clamp(settings.pomodoroCyclesBeforeLong, 1, 8);
+    settings.pomodoroSoundVolume = std::clamp(settings.pomodoroSoundVolume, 0, 100);
+    settings.windowPadding.x = ClampFinite(settings.windowPadding.x, 0.0f, 32.0f, style.WindowPadding.x);
+    settings.windowPadding.y = ClampFinite(settings.windowPadding.y, 0.0f, 32.0f, style.WindowPadding.y);
+    settings.framePadding.x = ClampFinite(settings.framePadding.x, 0.0f, 24.0f, style.FramePadding.x);
+    settings.framePadding.y = ClampFinite(settings.framePadding.y, 0.0f, 24.0f, style.FramePadding.y);
+    settings.itemSpacing.x = ClampFinite(settings.itemSpacing.x, 0.0f, 32.0f, style.ItemSpacing.x);
+    settings.itemSpacing.y = ClampFinite(settings.itemSpacing.y, 0.0f, 32.0f, style.ItemSpacing.y);
+    settings.modelYaw = ClampFinite(settings.modelYaw, -50.0f, 50.0f, 0.0f);
+    settings.modelPitch = ClampFinite(settings.modelPitch, -5.0f, 5.0f, 0.0f);
+    settings.modelZoom = ClampFinite(settings.modelZoom, 0.3f, 3.0f, 1.0f);
+    settings.modelAutoSpeed = ClampFinite(settings.modelAutoSpeed, 0.0f, 5.0f, 0.6f);
+    settings.modelColor.x = ClampFinite(settings.modelColor.x, 0.0f, 1.0f, settings.modelColor.x);
+    settings.modelColor.y = ClampFinite(settings.modelColor.y, 0.0f, 1.0f, settings.modelColor.y);
+    settings.modelColor.z = ClampFinite(settings.modelColor.z, 0.0f, 1.0f, settings.modelColor.z);
+    settings.modelColor.w = ClampFinite(settings.modelColor.w, 0.0f, 1.0f, settings.modelColor.w);
+    if (settings.customColors) {
+        const auto& entries = UiColorEntries();
+        for (size_t i = 0; i < settings.colors.size(); ++i) {
+            settings.colors[i].x = ClampFinite(settings.colors[i].x, 0.0f, 1.0f, style.Colors[entries[i].col].x);
+            settings.colors[i].y = ClampFinite(settings.colors[i].y, 0.0f, 1.0f, style.Colors[entries[i].col].y);
+            settings.colors[i].z = ClampFinite(settings.colors[i].z, 0.0f, 1.0f, style.Colors[entries[i].col].z);
+            settings.colors[i].w = ClampFinite(settings.colors[i].w, 0.0f, 1.0f, style.Colors[entries[i].col].w);
+        }
+    }
+}
+
+UiSettings LoadUiSettingsFromIniPath(const std::filesystem::path& path, const ImGuiStyle& style) {
     UiSettings settings;
     const auto& entries = UiColorEntries();
     for (size_t i = 0; i < entries.size(); ++i) {
@@ -201,52 +287,141 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "color") settings.modelColor = ParseVec4(value, settings.modelColor);
         }
     }
-    settings.theme = std::clamp(settings.theme, 0, 2);
-    settings.fontScale = ClampFinite(settings.fontScale, 0.6f, 2.0f, 1.0f);
-    settings.alpha = ClampFinite(settings.alpha, 0.4f, 1.0f, 1.0f);
-    settings.windowRounding = ClampFinite(settings.windowRounding, 0.0f, 24.0f, style.WindowRounding);
-    settings.frameRounding = ClampFinite(settings.frameRounding, 0.0f, 24.0f, style.FrameRounding);
-    settings.scrollbarRounding = ClampFinite(settings.scrollbarRounding, 0.0f, 24.0f, style.ScrollbarRounding);
-    settings.grabRounding = ClampFinite(settings.grabRounding, 0.0f, 24.0f, style.GrabRounding);
-    settings.backgroundAlpha = ClampFinite(settings.backgroundAlpha, 0.0f, 1.0f, 0.25f);
-    settings.backgroundTileScale = ClampFinite(settings.backgroundTileScale, 0.25f, 4.0f, 1.0f);
-    settings.profileTab = std::clamp(settings.profileTab, 0, 5);
-    settings.profileViewMode = std::clamp(settings.profileViewMode, 0, 2);
-    settings.adminStatsRankFilter = std::max(0, settings.adminStatsRankFilter);
-    settings.adminStatsRefreshSeconds = std::clamp(settings.adminStatsRefreshSeconds, 5, 120);
-    settings.inactivityThresholdDays = std::clamp(settings.inactivityThresholdDays, 1, 365);
-    settings.pomodoroWorkMinutes = std::clamp(settings.pomodoroWorkMinutes, 5, 120);
-    settings.pomodoroBreakMinutes = std::clamp(settings.pomodoroBreakMinutes, 3, 60);
-    settings.pomodoroLongBreakMinutes = std::clamp(settings.pomodoroLongBreakMinutes, 5, 90);
-    settings.pomodoroCyclesBeforeLong = std::clamp(settings.pomodoroCyclesBeforeLong, 1, 8);
-    settings.pomodoroSoundVolume = std::clamp(settings.pomodoroSoundVolume, 0, 100);
-    settings.windowPadding.x = ClampFinite(settings.windowPadding.x, 0.0f, 32.0f, style.WindowPadding.x);
-    settings.windowPadding.y = ClampFinite(settings.windowPadding.y, 0.0f, 32.0f, style.WindowPadding.y);
-    settings.framePadding.x = ClampFinite(settings.framePadding.x, 0.0f, 24.0f, style.FramePadding.x);
-    settings.framePadding.y = ClampFinite(settings.framePadding.y, 0.0f, 24.0f, style.FramePadding.y);
-    settings.itemSpacing.x = ClampFinite(settings.itemSpacing.x, 0.0f, 32.0f, style.ItemSpacing.x);
-    settings.itemSpacing.y = ClampFinite(settings.itemSpacing.y, 0.0f, 32.0f, style.ItemSpacing.y);
-    settings.modelYaw = ClampFinite(settings.modelYaw, -50.0f, 50.0f, 0.0f);
-    settings.modelPitch = ClampFinite(settings.modelPitch, -5.0f, 5.0f, 0.0f);
-    settings.modelZoom = ClampFinite(settings.modelZoom, 0.3f, 3.0f, 1.0f);
-    settings.modelAutoSpeed = ClampFinite(settings.modelAutoSpeed, 0.0f, 5.0f, 0.6f);
-    settings.modelColor.x = ClampFinite(settings.modelColor.x, 0.0f, 1.0f, settings.modelColor.x);
-    settings.modelColor.y = ClampFinite(settings.modelColor.y, 0.0f, 1.0f, settings.modelColor.y);
-    settings.modelColor.z = ClampFinite(settings.modelColor.z, 0.0f, 1.0f, settings.modelColor.z);
-    settings.modelColor.w = ClampFinite(settings.modelColor.w, 0.0f, 1.0f, settings.modelColor.w);
-    if (settings.customColors) {
-        for (size_t i = 0; i < settings.colors.size(); ++i) {
-            settings.colors[i].x = ClampFinite(settings.colors[i].x, 0.0f, 1.0f, style.Colors[entries[i].col].x);
-            settings.colors[i].y = ClampFinite(settings.colors[i].y, 0.0f, 1.0f, style.Colors[entries[i].col].y);
-            settings.colors[i].z = ClampFinite(settings.colors[i].z, 0.0f, 1.0f, style.Colors[entries[i].col].z);
-            settings.colors[i].w = ClampFinite(settings.colors[i].w, 0.0f, 1.0f, style.Colors[entries[i].col].w);
-        }
-    }
+    SanitizeUiSettings(settings, style);
     return settings;
 }
 
+UiSettings LoadUiSettingsFromJsonPath(const std::filesystem::path& path, const ImGuiStyle& style) {
+    UiSettings settings;
+    const auto& entries = UiColorEntries();
+    for (size_t i = 0; i < entries.size(); ++i) {
+        settings.colors[i] = style.Colors[entries[i].col];
+    }
+    std::ifstream in(path);
+    if (!in) return settings;
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    JsonLite::Value root;
+    if (!JsonLite::Parse(ss.str(), root, nullptr)) {
+        return settings;
+    }
+    auto get_obj = [&](const JsonLite::Value& obj, const char* key) -> const JsonLite::Value* {
+        return JsonLite::GetObjectValue(obj, key);
+    };
+    if (const auto* styleObj = get_obj(root, "style")) {
+        if (const auto* v = get_obj(*styleObj, "theme")) settings.theme = JsonLite::GetInt(*v, settings.theme);
+        if (const auto* v = get_obj(*styleObj, "fontScale")) settings.fontScale = static_cast<float>(JsonLite::GetDouble(*v, settings.fontScale));
+        if (const auto* v = get_obj(*styleObj, "alpha")) settings.alpha = static_cast<float>(JsonLite::GetDouble(*v, settings.alpha));
+        if (const auto* v = get_obj(*styleObj, "windowRounding")) settings.windowRounding = static_cast<float>(JsonLite::GetDouble(*v, settings.windowRounding));
+        if (const auto* v = get_obj(*styleObj, "frameRounding")) settings.frameRounding = static_cast<float>(JsonLite::GetDouble(*v, settings.frameRounding));
+        if (const auto* v = get_obj(*styleObj, "scrollbarRounding")) settings.scrollbarRounding = static_cast<float>(JsonLite::GetDouble(*v, settings.scrollbarRounding));
+        if (const auto* v = get_obj(*styleObj, "grabRounding")) settings.grabRounding = static_cast<float>(JsonLite::GetDouble(*v, settings.grabRounding));
+        ParseVec2Json(get_obj(*styleObj, "windowPadding"), settings.windowPadding);
+        ParseVec2Json(get_obj(*styleObj, "framePadding"), settings.framePadding);
+        ParseVec2Json(get_obj(*styleObj, "itemSpacing"), settings.itemSpacing);
+        if (const auto* v = get_obj(*styleObj, "customColors")) settings.customColors = JsonLite::GetBool(*v, settings.customColors);
+        if (const auto* v = get_obj(*styleObj, "backgroundAlpha")) settings.backgroundAlpha = static_cast<float>(JsonLite::GetDouble(*v, settings.backgroundAlpha));
+        if (const auto* v = get_obj(*styleObj, "backgroundTiled")) settings.backgroundTiled = JsonLite::GetBool(*v, settings.backgroundTiled);
+        if (const auto* v = get_obj(*styleObj, "backgroundTileScale")) settings.backgroundTileScale = static_cast<float>(JsonLite::GetDouble(*v, settings.backgroundTileScale));
+        if (const auto* v = get_obj(*styleObj, "windowDecorated")) settings.windowDecorated = JsonLite::GetBool(*v, settings.windowDecorated);
+        if (const auto* v = get_obj(*styleObj, "windowFullscreen")) settings.windowFullscreen = JsonLite::GetBool(*v, settings.windowFullscreen);
+        if (const auto* v = get_obj(*styleObj, "profileTab")) settings.profileTab = JsonLite::GetInt(*v, settings.profileTab);
+    }
+    if (const auto* profileObj = get_obj(root, "profile")) {
+        if (const auto* v = get_obj(*profileObj, "lastProfileId")) settings.lastProfileId = JsonLite::GetString(*v, settings.lastProfileId);
+        if (const auto* v = get_obj(*profileObj, "viewMode")) settings.profileViewMode = JsonLite::GetInt(*v, settings.profileViewMode);
+    }
+    if (const auto* logs = get_obj(root, "logs")) {
+        if (const auto* v = get_obj(*logs, "filter")) settings.logFilter = JsonLite::GetString(*v, settings.logFilter);
+        if (const auto* v = get_obj(*logs, "source")) settings.logSourceFilter = JsonLite::GetString(*v, settings.logSourceFilter);
+        if (const auto* v = get_obj(*logs, "showInfo")) settings.logShowInfo = JsonLite::GetBool(*v, settings.logShowInfo);
+        if (const auto* v = get_obj(*logs, "showWarning")) settings.logShowWarning = JsonLite::GetBool(*v, settings.logShowWarning);
+        if (const auto* v = get_obj(*logs, "showError")) settings.logShowError = JsonLite::GetBool(*v, settings.logShowError);
+        if (const auto* v = get_obj(*logs, "autoScroll")) settings.logAutoScroll = JsonLite::GetBool(*v, settings.logAutoScroll);
+        if (const auto* v = get_obj(*logs, "compactView")) settings.logCompactView = JsonLite::GetBool(*v, settings.logCompactView);
+    }
+    if (const auto* adminStats = get_obj(root, "adminStats")) {
+        if (const auto* v = get_obj(*adminStats, "filter")) settings.adminStatsFilter = JsonLite::GetString(*v, settings.adminStatsFilter);
+        if (const auto* v = get_obj(*adminStats, "includeArchived")) settings.adminStatsIncludeArchived = JsonLite::GetBool(*v, settings.adminStatsIncludeArchived);
+        if (const auto* v = get_obj(*adminStats, "rankFilter")) settings.adminStatsRankFilter = JsonLite::GetInt(*v, settings.adminStatsRankFilter);
+        if (const auto* v = get_obj(*adminStats, "autoRefresh")) settings.adminStatsAutoRefresh = JsonLite::GetBool(*v, settings.adminStatsAutoRefresh);
+        if (const auto* v = get_obj(*adminStats, "refreshSeconds")) settings.adminStatsRefreshSeconds = JsonLite::GetInt(*v, settings.adminStatsRefreshSeconds);
+        if (const auto* v = get_obj(*adminStats, "inactivityDays")) settings.inactivityThresholdDays = JsonLite::GetInt(*v, settings.inactivityThresholdDays);
+    }
+    if (const auto* pomodoro = get_obj(root, "pomodoro")) {
+        if (const auto* v = get_obj(*pomodoro, "workMinutes")) settings.pomodoroWorkMinutes = JsonLite::GetInt(*v, settings.pomodoroWorkMinutes);
+        if (const auto* v = get_obj(*pomodoro, "breakMinutes")) settings.pomodoroBreakMinutes = JsonLite::GetInt(*v, settings.pomodoroBreakMinutes);
+        if (const auto* v = get_obj(*pomodoro, "longBreakMinutes")) settings.pomodoroLongBreakMinutes = JsonLite::GetInt(*v, settings.pomodoroLongBreakMinutes);
+        if (const auto* v = get_obj(*pomodoro, "cyclesBeforeLong")) settings.pomodoroCyclesBeforeLong = JsonLite::GetInt(*v, settings.pomodoroCyclesBeforeLong);
+        if (const auto* v = get_obj(*pomodoro, "soundEnabled")) settings.pomodoroSoundEnabled = JsonLite::GetBool(*v, settings.pomodoroSoundEnabled);
+        if (const auto* v = get_obj(*pomodoro, "soundFocus")) settings.pomodoroSoundFocus = JsonLite::GetString(*v, settings.pomodoroSoundFocus);
+        if (const auto* v = get_obj(*pomodoro, "soundBreak")) settings.pomodoroSoundBreak = JsonLite::GetString(*v, settings.pomodoroSoundBreak);
+        if (const auto* v = get_obj(*pomodoro, "soundVolume")) settings.pomodoroSoundVolume = JsonLite::GetInt(*v, settings.pomodoroSoundVolume);
+        if (const auto* v = get_obj(*pomodoro, "autoAdvance")) settings.pomodoroAutoAdvance = JsonLite::GetBool(*v, settings.pomodoroAutoAdvance);
+    }
+    if (const auto* colors = get_obj(root, "colors")) {
+        if (colors->type == JsonLite::Type::Object) {
+            for (size_t i = 0; i < entries.size(); ++i) {
+                if (const auto* v = get_obj(*colors, entries[i].name)) {
+                    ParseVec4Json(v, settings.colors[i]);
+                    settings.customColors = true;
+                }
+            }
+        }
+    }
+    if (const auto* backgrounds = get_obj(root, "backgrounds")) {
+        if (backgrounds->type == JsonLite::Type::Object) {
+            const auto& windows = UiWindows();
+            for (size_t i = 0; i < windows.size(); ++i) {
+                if (const auto* v = get_obj(*backgrounds, windows[i].label)) {
+                    settings.backgrounds[i] = JsonLite::GetString(*v, settings.backgrounds[i]);
+                }
+            }
+        }
+    }
+    if (const auto* view3d = get_obj(root, "view3d")) {
+        if (const auto* v = get_obj(*view3d, "modelPath")) settings.modelPath = JsonLite::GetString(*v, settings.modelPath);
+        if (const auto* v = get_obj(*view3d, "yaw")) settings.modelYaw = static_cast<float>(JsonLite::GetDouble(*v, settings.modelYaw));
+        if (const auto* v = get_obj(*view3d, "pitch")) settings.modelPitch = static_cast<float>(JsonLite::GetDouble(*v, settings.modelPitch));
+        if (const auto* v = get_obj(*view3d, "zoom")) settings.modelZoom = static_cast<float>(JsonLite::GetDouble(*v, settings.modelZoom));
+        if (const auto* v = get_obj(*view3d, "autoRotate")) settings.modelAutoRotate = JsonLite::GetBool(*v, settings.modelAutoRotate);
+        if (const auto* v = get_obj(*view3d, "autoSpeed")) settings.modelAutoSpeed = static_cast<float>(JsonLite::GetDouble(*v, settings.modelAutoSpeed));
+        ParseVec4Json(get_obj(*view3d, "color"), settings.modelColor);
+    }
+    SanitizeUiSettings(settings, style);
+    return settings;
+}
+
+UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGuiStyle& style) {
+    if (path.extension() == ".json") {
+        if (std::ifstream in(path); in.good()) {
+            return LoadUiSettingsFromJsonPath(path, style);
+        }
+        auto legacy = path;
+        legacy.replace_extension(".ini");
+        if (std::ifstream legacyIn(legacy); legacyIn.good()) {
+            UiSettings settings = LoadUiSettingsFromIniPath(legacy, style);
+            SaveUiSettingsToPath(path, settings);
+            std::error_code ec;
+            std::filesystem::remove(legacy, ec);
+            return settings;
+        }
+        return UiSettings{};
+    }
+    if (path.extension() == ".ini") {
+        UiSettings settings = LoadUiSettingsFromIniPath(path, style);
+        auto jsonPath = path;
+        jsonPath.replace_extension(".json");
+        SaveUiSettingsToPath(jsonPath, settings);
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        return settings;
+    }
+    return LoadUiSettingsFromJsonPath(path, style);
+}
+
 UiSettings LoadUiSettings(const std::filesystem::path& storageDir, const ImGuiStyle& style) {
-    return LoadUiSettingsFromPath(UiSettingsPath(storageDir), style);
+    return LoadUiSettingsFromPath(std::filesystem::path(UiSettingsPath(storageDir)), style);
 }
 
 void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& settings) {
@@ -254,79 +429,90 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return;
     out.imbue(std::locale::classic());
-    out << "[style]\n";
-    out << "theme=" << settings.theme << "\n";
-    out << "fontScale=" << settings.fontScale << "\n";
-    out << "alpha=" << settings.alpha << "\n";
-    out << "windowRounding=" << settings.windowRounding << "\n";
-    out << "frameRounding=" << settings.frameRounding << "\n";
-    out << "scrollbarRounding=" << settings.scrollbarRounding << "\n";
-    out << "grabRounding=" << settings.grabRounding << "\n";
-    out << "windowPadding=" << settings.windowPadding.x << " " << settings.windowPadding.y << "\n";
-    out << "framePadding=" << settings.framePadding.x << " " << settings.framePadding.y << "\n";
-    out << "itemSpacing=" << settings.itemSpacing.x << " " << settings.itemSpacing.y << "\n";
-    out << "customColors=" << (settings.customColors ? 1 : 0) << "\n";
-    out << "backgroundAlpha=" << settings.backgroundAlpha << "\n\n";
-    out << "backgroundTiled=" << (settings.backgroundTiled ? 1 : 0) << "\n";
-    out << "backgroundTileScale=" << settings.backgroundTileScale << "\n\n";
-    out << "windowDecorated=" << (settings.windowDecorated ? 1 : 0) << "\n\n";
-    out << "windowFullscreen=" << (settings.windowFullscreen ? 1 : 0) << "\n\n";
-    out << "profileTab=" << settings.profileTab << "\n\n";
-
-    out << "[profile]\n";
-    out << "lastProfileId=" << SanitizeLogLine(settings.lastProfileId) << "\n";
-    out << "viewMode=" << settings.profileViewMode << "\n\n";
-
-    out << "[logs]\n";
-    out << "filter=" << SanitizeLogLine(settings.logFilter) << "\n";
-    out << "source=" << SanitizeLogLine(settings.logSourceFilter) << "\n";
-    out << "showInfo=" << (settings.logShowInfo ? 1 : 0) << "\n";
-    out << "showWarning=" << (settings.logShowWarning ? 1 : 0) << "\n";
-    out << "showError=" << (settings.logShowError ? 1 : 0) << "\n";
-    out << "autoScroll=" << (settings.logAutoScroll ? 1 : 0) << "\n";
-    out << "compactView=" << (settings.logCompactView ? 1 : 0) << "\n\n";
-
-    out << "[admin_stats]\n";
-    out << "filter=" << SanitizeLogLine(settings.adminStatsFilter) << "\n";
-    out << "includeArchived=" << (settings.adminStatsIncludeArchived ? 1 : 0) << "\n";
-    out << "rankFilter=" << settings.adminStatsRankFilter << "\n";
-    out << "autoRefresh=" << (settings.adminStatsAutoRefresh ? 1 : 0) << "\n";
-    out << "refreshSeconds=" << settings.adminStatsRefreshSeconds << "\n";
-    out << "inactivityDays=" << settings.inactivityThresholdDays << "\n\n";
-
-    out << "[pomodoro]\n";
-    out << "workMinutes=" << settings.pomodoroWorkMinutes << "\n";
-    out << "breakMinutes=" << settings.pomodoroBreakMinutes << "\n";
-    out << "longBreakMinutes=" << settings.pomodoroLongBreakMinutes << "\n";
-    out << "cyclesBeforeLong=" << settings.pomodoroCyclesBeforeLong << "\n";
-    out << "soundEnabled=" << (settings.pomodoroSoundEnabled ? 1 : 0) << "\n";
-    out << "soundFocus=" << SanitizeLogLine(settings.pomodoroSoundFocus) << "\n";
-    out << "soundBreak=" << SanitizeLogLine(settings.pomodoroSoundBreak) << "\n";
-    out << "soundVolume=" << settings.pomodoroSoundVolume << "\n";
-    out << "autoAdvance=" << (settings.pomodoroAutoAdvance ? 1 : 0) << "\n\n";
-
-    out << "[colors]\n";
+    out << "{\n";
+    out << "  \"style\": {\n";
+    out << "    \"theme\": " << settings.theme << ",\n";
+    out << "    \"fontScale\": " << settings.fontScale << ",\n";
+    out << "    \"alpha\": " << settings.alpha << ",\n";
+    out << "    \"windowRounding\": " << settings.windowRounding << ",\n";
+    out << "    \"frameRounding\": " << settings.frameRounding << ",\n";
+    out << "    \"scrollbarRounding\": " << settings.scrollbarRounding << ",\n";
+    out << "    \"grabRounding\": " << settings.grabRounding << ",\n";
+    out << "    \"windowPadding\": [" << settings.windowPadding.x << ", " << settings.windowPadding.y << "],\n";
+    out << "    \"framePadding\": [" << settings.framePadding.x << ", " << settings.framePadding.y << "],\n";
+    out << "    \"itemSpacing\": [" << settings.itemSpacing.x << ", " << settings.itemSpacing.y << "],\n";
+    out << "    \"customColors\": " << (settings.customColors ? "true" : "false") << ",\n";
+    out << "    \"backgroundAlpha\": " << settings.backgroundAlpha << ",\n";
+    out << "    \"backgroundTiled\": " << (settings.backgroundTiled ? "true" : "false") << ",\n";
+    out << "    \"backgroundTileScale\": " << settings.backgroundTileScale << ",\n";
+    out << "    \"windowDecorated\": " << (settings.windowDecorated ? "true" : "false") << ",\n";
+    out << "    \"windowFullscreen\": " << (settings.windowFullscreen ? "true" : "false") << ",\n";
+    out << "    \"profileTab\": " << settings.profileTab << "\n";
+    out << "  },\n";
+    out << "  \"profile\": {\n";
+    out << "    \"lastProfileId\": \"" << JsonLite::Escape(SanitizeLogLine(settings.lastProfileId)) << "\",\n";
+    out << "    \"viewMode\": " << settings.profileViewMode << "\n";
+    out << "  },\n";
+    out << "  \"logs\": {\n";
+    out << "    \"filter\": \"" << JsonLite::Escape(SanitizeLogLine(settings.logFilter)) << "\",\n";
+    out << "    \"source\": \"" << JsonLite::Escape(SanitizeLogLine(settings.logSourceFilter)) << "\",\n";
+    out << "    \"showInfo\": " << (settings.logShowInfo ? "true" : "false") << ",\n";
+    out << "    \"showWarning\": " << (settings.logShowWarning ? "true" : "false") << ",\n";
+    out << "    \"showError\": " << (settings.logShowError ? "true" : "false") << ",\n";
+    out << "    \"autoScroll\": " << (settings.logAutoScroll ? "true" : "false") << ",\n";
+    out << "    \"compactView\": " << (settings.logCompactView ? "true" : "false") << "\n";
+    out << "  },\n";
+    out << "  \"adminStats\": {\n";
+    out << "    \"filter\": \"" << JsonLite::Escape(SanitizeLogLine(settings.adminStatsFilter)) << "\",\n";
+    out << "    \"includeArchived\": " << (settings.adminStatsIncludeArchived ? "true" : "false") << ",\n";
+    out << "    \"rankFilter\": " << settings.adminStatsRankFilter << ",\n";
+    out << "    \"autoRefresh\": " << (settings.adminStatsAutoRefresh ? "true" : "false") << ",\n";
+    out << "    \"refreshSeconds\": " << settings.adminStatsRefreshSeconds << ",\n";
+    out << "    \"inactivityDays\": " << settings.inactivityThresholdDays << "\n";
+    out << "  },\n";
+    out << "  \"pomodoro\": {\n";
+    out << "    \"workMinutes\": " << settings.pomodoroWorkMinutes << ",\n";
+    out << "    \"breakMinutes\": " << settings.pomodoroBreakMinutes << ",\n";
+    out << "    \"longBreakMinutes\": " << settings.pomodoroLongBreakMinutes << ",\n";
+    out << "    \"cyclesBeforeLong\": " << settings.pomodoroCyclesBeforeLong << ",\n";
+    out << "    \"soundEnabled\": " << (settings.pomodoroSoundEnabled ? "true" : "false") << ",\n";
+    out << "    \"soundFocus\": \"" << JsonLite::Escape(SanitizeLogLine(settings.pomodoroSoundFocus)) << "\",\n";
+    out << "    \"soundBreak\": \"" << JsonLite::Escape(SanitizeLogLine(settings.pomodoroSoundBreak)) << "\",\n";
+    out << "    \"soundVolume\": " << settings.pomodoroSoundVolume << ",\n";
+    out << "    \"autoAdvance\": " << (settings.pomodoroAutoAdvance ? "true" : "false") << "\n";
+    out << "  },\n";
+    out << "  \"colors\": {\n";
     const auto& entries = UiColorEntries();
     for (size_t i = 0; i < entries.size(); ++i) {
-        out << entries[i].name << "=" << Vec4ToString(settings.colors[i]) << "\n";
+        out << "    \"" << entries[i].name << "\": [" << settings.colors[i].x << ", " << settings.colors[i].y
+            << ", " << settings.colors[i].z << ", " << settings.colors[i].w << "]";
+        out << (i + 1 < entries.size() ? ",\n" : "\n");
     }
-    out << "\n[backgrounds]\n";
-                const auto& windows = UiWindows();
-                for (size_t i = 0; i < windows.size(); ++i) {
-        out << windows[i].label << "=" << settings.backgrounds[i] << "\n";
+    out << "  },\n";
+    out << "  \"backgrounds\": {\n";
+    const auto& windows = UiWindows();
+    for (size_t i = 0; i < windows.size(); ++i) {
+        out << "    \"" << windows[i].label << "\": \"" << JsonLite::Escape(settings.backgrounds[i]) << "\"";
+        out << (i + 1 < windows.size() ? ",\n" : "\n");
     }
-    out << "\n[view3d]\n";
-    out << "modelPath=" << settings.modelPath << "\n";
-    out << "yaw=" << settings.modelYaw << "\n";
-    out << "pitch=" << settings.modelPitch << "\n";
-    out << "zoom=" << settings.modelZoom << "\n";
-    out << "autoRotate=" << (settings.modelAutoRotate ? 1 : 0) << "\n";
-    out << "autoSpeed=" << settings.modelAutoSpeed << "\n";
-    out << "color=" << Vec4ToString(settings.modelColor) << "\n";
+    out << "  },\n";
+    out << "  \"view3d\": {\n";
+    out << "    \"modelPath\": \"" << JsonLite::Escape(settings.modelPath) << "\",\n";
+    out << "    \"yaw\": " << settings.modelYaw << ",\n";
+    out << "    \"pitch\": " << settings.modelPitch << ",\n";
+    out << "    \"zoom\": " << settings.modelZoom << ",\n";
+    out << "    \"autoRotate\": " << (settings.modelAutoRotate ? "true" : "false") << ",\n";
+    out << "    \"autoSpeed\": " << settings.modelAutoSpeed << ",\n";
+    out << "    \"color\": [" << settings.modelColor.x << ", " << settings.modelColor.y << ", "
+        << settings.modelColor.z << ", " << settings.modelColor.w << "]\n";
+    out << "  }\n";
+    out << "}\n";
 }
 
 void SaveUiSettings(const std::filesystem::path& storageDir, const UiSettings& settings) {
     SaveUiSettingsToPath(std::filesystem::path(UiSettingsPath(storageDir)), settings);
+    std::error_code ec;
+    std::filesystem::remove(storageDir / "meta" / "ui.ini", ec);
 }
 
 std::int64_t NowSeconds() {

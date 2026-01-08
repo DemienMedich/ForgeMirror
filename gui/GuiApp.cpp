@@ -5,6 +5,7 @@
 #include "GameplayConfig.h"
 #include "CloudSync.h"
 #include "GuiActions.h"
+#include "JsonLite.h"
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -14,6 +15,7 @@
 #  include <windows.h>
 #  include <shellapi.h>
 #  include <commdlg.h>
+#  include <shlobj.h>
 #  include <mmsystem.h>
 #  include <GL/gl.h>
 #elif defined(__APPLE__)

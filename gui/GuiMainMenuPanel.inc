@@ -95,6 +95,18 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
     state.lastCloudSyncAt = NowSeconds();
 }
 
+static std::string FormatSyncPathLabel(const GuiState& state, size_t maxChars = 48) {
+    std::string path = state.cloudConfig.root.string();
+    if (path.empty()) {
+        return u8"Путь: (не задан)";
+    }
+    if (path.size() <= maxChars) {
+        return u8"Путь: " + path;
+    }
+    std::string tail = path.substr(path.size() - maxChars);
+    return u8"Путь: ..." + tail;
+}
+
 void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
@@ -312,7 +324,15 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         const int iconCount = 7;
         const float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
         float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - iconsWidth;
-        if (rightX > ImGui::GetCursorPosX()) {
+        const std::string syncPathLabel = FormatSyncPathLabel(state);
+        const ImVec2 syncPathSize = ImGui::CalcTextSize(syncPathLabel.c_str());
+        const float pathGap = iconGap * 1.2f;
+        float pathX = rightX - pathGap - syncPathSize.x;
+        if (pathX > ImGui::GetCursorPosX()) {
+            ImGui::SetCursorPosX(pathX);
+            ImGui::TextDisabled("%s", syncPathLabel.c_str());
+            ImGui::SameLine(0.0f, pathGap);
+        } else if (rightX > ImGui::GetCursorPosX()) {
             ImGui::SetCursorPosX(rightX);
         }
 

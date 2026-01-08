@@ -6,6 +6,7 @@
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
 #include "Profile.h"
+#include "JsonLite.h"
 
 #include <algorithm>
 #include <cctype>
@@ -192,15 +193,23 @@ bool EnsureDirectory(const std::filesystem::path& dir) {
 bool HasStorageData(const std::filesystem::path& dir) {
     std::error_code ec;
     if (!std::filesystem::exists(dir, ec)) return false;
+    if (std::filesystem::exists(dir / "skills.json", ec)) return true;
     if (std::filesystem::exists(dir / "skills.txt", ec)) return true;
+    if (std::filesystem::exists(dir / "meta" / "gameplay.json", ec)) return true;
     if (std::filesystem::exists(dir / "meta" / "gameplay.ini", ec)) return true;
     for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+        if (entry.is_regular_file() &&
+            (entry.path().extension() == ".json" || entry.path().extension() == ".ini")) {
+            return true;
+        }
     }
     auto archiveDir = dir / "archive";
     if (std::filesystem::exists(archiveDir, ec)) {
         for (const auto& entry : std::filesystem::directory_iterator(archiveDir, ec)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+            if (entry.is_regular_file() &&
+                (entry.path().extension() == ".json" || entry.path().extension() == ".ini")) {
+                return true;
+            }
         }
     }
     return false;
@@ -296,16 +305,17 @@ std::filesystem::path AdminPasswordPath(const std::filesystem::path& storageDir)
     std::error_code ec;
     std::filesystem::create_directories(metaDir, ec);
     (void)ec;
-    return metaDir / "admin.ini";
+    return metaDir / "admin.json";
 }
 
 bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
     auto path = AdminPasswordPath(storageDir);
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return false;
-    out << "# ForgeMirror admin password\n";
-    out << "password=" << password << "\n";
-    return out.good();
+    std::ostringstream out;
+    out << "{\n  \"password\": \"" << JsonLite::Escape(password) << "\"\n}\n";
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) return false;
+    file << out.str();
+    return file.good();
 }
 
 } // namespace
@@ -319,7 +329,20 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
     }
 
     auto path = AdminPasswordPath(storageDir);
-    std::ifstream in(path);
+    if (std::ifstream jsonFile(path); jsonFile) {
+        std::ostringstream ss;
+        ss << jsonFile.rdbuf();
+        JsonLite::Value root;
+        if (JsonLite::Parse(ss.str(), root, nullptr)) {
+            if (const auto* v = JsonLite::GetObjectValue(root, "password")) {
+                std::string value = JsonLite::GetString(*v);
+                if (!value.empty()) return value;
+            }
+        }
+    }
+
+    auto legacyPath = storageDir / "meta" / "admin.ini";
+    std::ifstream in(legacyPath);
     if (in) {
         std::string line;
         while (std::getline(in, line)) {
@@ -327,8 +350,16 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
             if (t.empty() || t[0] == '#' || t[0] == ';') continue;
             if (t.rfind("password=", 0) == 0) {
                 std::string value = TrimCopy(t.substr(9));
-                if (!value.empty()) return value;
-            } else {
+                if (!value.empty()) {
+                    SaveAdminPassword(storageDir, value);
+                    std::error_code ec;
+                    std::filesystem::remove(legacyPath, ec);
+                    return value;
+                }
+            } else if (!t.empty()) {
+                SaveAdminPassword(storageDir, t);
+                std::error_code ec;
+                std::filesystem::remove(legacyPath, ec);
                 return t;
             }
         }

@@ -1,4 +1,5 @@
 #include "IJobStorage.h"
+#include "JsonLite.h"
 
 #include <algorithm>
 #include <array>
@@ -14,6 +15,7 @@
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -21,7 +23,21 @@ namespace {
 constexpr const char* kArchiveFolder = "archive";
 
 bool is_profile_file(const std::filesystem::directory_entry& entry) {
-    return entry.is_regular_file() && entry.path().extension() == ".ini";
+    if (!entry.is_regular_file()) return false;
+    const auto ext = entry.path().extension();
+    return ext == ".json" || ext == ".ini";
+}
+
+bool is_profile_json_path(const std::filesystem::path& path) {
+    return path.extension() == ".json";
+}
+
+bool is_profile_ini_path(const std::filesystem::path& path) {
+    return path.extension() == ".ini";
+}
+
+std::filesystem::path profile_json_path_for(const std::filesystem::path& path) {
+    return path.parent_path() / (path.stem().string() + ".json");
 }
 
 std::string trim(std::string s) {
@@ -397,6 +413,25 @@ std::string generate_id(int value, int width = 4) {
 }
 
 std::string file_profile_name(const std::filesystem::path& file) {
+    if (is_profile_json_path(file)) {
+        std::string content = read_all(file);
+        if (!content.empty()) {
+            JsonLite::Value root;
+            if (JsonLite::Parse(content, root, nullptr)) {
+                if (const auto* profile = JsonLite::GetObjectValue(root, "profile")) {
+                    if (const auto* name = JsonLite::GetObjectValue(*profile, "name")) {
+                        std::string value = JsonLite::GetString(*name);
+                        if (!value.empty()) return value;
+                    }
+                }
+                if (const auto* name = JsonLite::GetObjectValue(root, "name")) {
+                    std::string value = JsonLite::GetString(*name);
+                    if (!value.empty()) return value;
+                }
+            }
+        }
+        return file.stem().string();
+    }
     std::ifstream in(file);
     if (!in) return file.stem().string();
     std::string line;
@@ -428,6 +463,8 @@ public:
         normalize_directory(baseDir_);
         normalize_directory(archive_dir());
         nextId_ = compute_next_id();
+        migrate_legacy_profiles();
+        nextId_ = compute_next_id();
     }
 
     bool set_active_profile(const std::string& id) override {
@@ -456,6 +493,141 @@ public:
 
         auto txt = read_all(activePath_);
         if (txt.empty()) return std::nullopt;
+
+        if (is_profile_json_path(activePath_)) {
+            JsonLite::Value root;
+            if (!JsonLite::Parse(txt, root, nullptr)) return std::nullopt;
+
+            auto get_obj = [&](const JsonLite::Value& obj, const char* key) -> const JsonLite::Value* {
+                return JsonLite::GetObjectValue(obj, key);
+            };
+            const JsonLite::Value* profileObj = get_obj(root, "profile");
+            if (!profileObj || profileObj->type != JsonLite::Type::Object) {
+                profileObj = &root;
+            }
+
+            std::string name;
+            int storedOverall = -1;
+            int storedTotalXp = -1;
+            int storedProgress = -1;
+            bool storedAdmin = false;
+            std::int64_t storedLastTask = 0;
+            int storedInertiaTasks = 0;
+            int storedRecoveryTasks = 0;
+            int storedTasksCompleted = 0;
+
+            if (const auto* v = get_obj(*profileObj, "name")) name = JsonLite::GetString(*v);
+            if (const auto* v = get_obj(*profileObj, "overall")) storedOverall = JsonLite::GetInt(*v, storedOverall);
+            if (const auto* v = get_obj(*profileObj, "totalXp")) storedTotalXp = JsonLite::GetInt(*v, storedTotalXp);
+            if (const auto* v = get_obj(*profileObj, "progress")) storedProgress = JsonLite::GetInt(*v, storedProgress);
+            if (const auto* v = get_obj(*profileObj, "admin")) storedAdmin = JsonLite::GetBool(*v, storedAdmin);
+            if (const auto* v = get_obj(*profileObj, "lastTaskTs")) storedLastTask = JsonLite::GetInt64(*v, storedLastTask);
+            if (const auto* v = get_obj(*profileObj, "inertiaTasks")) storedInertiaTasks = JsonLite::GetInt(*v, storedInertiaTasks);
+            if (const auto* v = get_obj(*profileObj, "recoveryTasks")) storedRecoveryTasks = JsonLite::GetInt(*v, storedRecoveryTasks);
+            if (const auto* v = get_obj(*profileObj, "tasksCompleted")) storedTasksCompleted = JsonLite::GetInt(*v, storedTasksCompleted);
+
+            std::optional<std::string> token;
+            if (const auto* authObj = get_obj(root, "auth")) {
+                if (const auto* v = get_obj(*authObj, "token")) {
+                    token = JsonLite::GetString(*v);
+                }
+            } else if (const auto* v = get_obj(root, "token")) {
+                token = JsonLite::GetString(*v);
+            }
+
+            std::vector<XpEvent> queue;
+            if (const auto* q = get_obj(root, "queue")) {
+                if (q->type == JsonLite::Type::Array) {
+                    for (const auto& item : q->arrayValue) {
+                        if (item.type != JsonLite::Type::Object) continue;
+                        const auto* skill = get_obj(item, "skill");
+                        const auto* amount = get_obj(item, "amount");
+                        if (!skill || !amount) continue;
+                        std::string skillId = JsonLite::GetString(*skill);
+                        int amt = JsonLite::GetInt(*amount, 0);
+                        if (!skillId.empty() && amt > 0) queue.push_back({skillId, amt});
+                    }
+                }
+            }
+
+            std::array<int, Profile::kCategoryCount> categoryScores{};
+            categoryScores.fill(0);
+            std::array<int, Profile::kCategoryCount> categoryCooldowns{};
+            categoryCooldowns.fill(10);
+            if (const auto* cats = get_obj(root, "categories")) {
+                if (const auto* scores = get_obj(*cats, "scores")) {
+                    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                        if (const auto* v = get_obj(*scores, Profile::kCategoryLabels[idx])) {
+                            int score = JsonLite::GetInt(*v, 0);
+                            score = std::clamp(score, 0, Profile::kMaxCategoryScore);
+                            categoryScores[idx] = score;
+                        }
+                    }
+                }
+                if (const auto* cooldowns = get_obj(*cats, "cooldowns")) {
+                    for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                        if (const auto* v = get_obj(*cooldowns, Profile::kCategoryLabels[idx])) {
+                            categoryCooldowns[idx] = JsonLite::GetInt(*v, categoryCooldowns[idx]);
+                        }
+                    }
+                }
+            }
+
+            std::vector<Skill> restored;
+            if (const auto* skills = get_obj(root, "skills")) {
+                if (skills->type == JsonLite::Type::Array) {
+                    for (const auto& item : skills->arrayValue) {
+                        if (item.type != JsonLite::Type::Object) continue;
+                        std::string skillId;
+                        if (const auto* v = get_obj(item, "id")) {
+                            skillId = JsonLite::GetString(*v);
+                        } else if (const auto* v = get_obj(item, "name")) {
+                            skillId = JsonLite::GetString(*v);
+                        }
+                        if (skillId.empty()) continue;
+                        int level = 1;
+                        if (const auto* v = get_obj(item, "level")) level = std::max(1, JsonLite::GetInt(*v, 1));
+                        double weight = 1.0;
+                        if (const auto* v = get_obj(item, "weight")) weight = JsonLite::GetDouble(*v, 1.0);
+                        Skill skill(skillId, level, weight);
+                        if (const auto* v = get_obj(item, "xp")) skill.xp = std::max(0, JsonLite::GetInt(*v, 0));
+                        if (const auto* v = get_obj(item, "xpToNext")) {
+                            int next = JsonLite::GetInt(*v, 0);
+                            skill.xpToNext = next > 0 ? next : Skill::required_xp_for(skill.level + 1);
+                        } else {
+                            skill.xpToNext = Skill::required_xp_for(skill.level + 1);
+                        }
+                        restored.push_back(skill);
+                    }
+                }
+            }
+
+            if (name.empty()) name = file_profile_name(activePath_);
+            if (name.empty()) name = activeId_;
+
+            Profile profile(name);
+            profile.set_skills(restored);
+            if (storedTotalXp >= 0) {
+                profile.set_total_xp(storedTotalXp);
+            } else if (storedOverall > 0 && storedProgress >= 0) {
+                profile.set_level_and_progress(storedOverall, storedProgress);
+            } else {
+                if (storedOverall > 0) profile.set_overall_level(storedOverall);
+                if (storedProgress >= 0) profile.set_level_progress(storedProgress);
+            }
+            profile.set_category_best_scores(categoryScores);
+            profile.set_category_cooldowns(categoryCooldowns);
+            profile.set_last_task_timestamp(storedLastTask);
+            profile.set_inactivity_tasks(storedInertiaTasks);
+            profile.start_penalty_recovery(storedRecoveryTasks);
+            profile.set_tasks_completed(storedTasksCompleted);
+            profile.set_admin(storedAdmin);
+            profile.set_achievements(load_achievements(baseDir_, activeId_));
+
+            token_ = token;
+            queue_ = std::move(queue);
+            return profile;
+        }
 
         std::istringstream in(txt);
         std::string line;
@@ -623,63 +795,82 @@ public:
 
         token_ = token;
         queue_ = std::move(queue);
+
+        const std::filesystem::path legacyPath = activePath_;
+        activePath_ = profile_json_path_for(activePath_);
+        save_profile(profile);
+        std::error_code ec;
+        std::filesystem::remove(legacyPath, ec);
         return profile;
     }
 
     bool save_profile(const Profile& profile) override {
         if (!is_active()) return false;
 
+        const std::filesystem::path jsonPath = is_profile_json_path(activePath_)
+            ? activePath_
+            : profile_json_path_for(activePath_);
         std::ostringstream ss;
         ss.imbue(std::locale::classic());
-        ss << "[auth]\n";
-        if (token_) ss << "token=" << *token_ << "\n";
-
-        ss << "\n[profile]\n";
-        ss << "id=" << activeId_ << "\n";
-        ss << "name=" << profile.name() << "\n";
-        ss << "overall=" << profile.overall_level() << "\n";
-        ss << "progress=" << profile.level_progress() << "\n";
-        ss << "totalXp=" << profile.total_xp() << "\n";
-        ss << "admin=" << (profile.is_admin() ? 1 : 0) << "\n";
-        ss << "lastTaskTs=" << profile.last_task_timestamp() << "\n";
-        ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
-        ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
-        ss << "tasksCompleted=" << profile.tasks_completed() << "\n";
-
-        ss << "\n[skills]\n";
+        ss << "{\n";
+        ss << "  \"profile\": {";
+        ss << "\"id\":\"" << JsonLite::Escape(activeId_) << "\",";
+        ss << "\"name\":\"" << JsonLite::Escape(profile.name()) << "\",";
+        ss << "\"overall\":" << profile.overall_level() << ",";
+        ss << "\"progress\":" << profile.level_progress() << ",";
+        ss << "\"totalXp\":" << profile.total_xp() << ",";
+        ss << "\"admin\":" << (profile.is_admin() ? "true" : "false") << ",";
+        ss << "\"lastTaskTs\":" << profile.last_task_timestamp() << ",";
+        ss << "\"inertiaTasks\":" << profile.inactivity_tasks() << ",";
+        ss << "\"recoveryTasks\":" << profile.recovery_tasks_remaining() << ",";
+        ss << "\"tasksCompleted\":" << profile.tasks_completed();
+        ss << "},\n";
+        ss << "  \"auth\": {\"token\": \"";
+        if (token_) ss << JsonLite::Escape(*token_);
+        ss << "\"},\n";
+        ss << "  \"skills\": [\n";
         auto skills = profile.list_skills();
-        ss << "names=";
         for (size_t i = 0; i < skills.size(); ++i) {
-            if (i) ss << ",";
-            ss << skills[i].name;
+            const auto& s = skills[i];
+            ss << "    {\"id\":\"" << JsonLite::Escape(s.name)
+               << "\",\"level\":" << s.level
+               << ",\"xp\":" << s.xp
+               << ",\"xpToNext\":" << s.xpToNext
+               << ",\"weight\":" << s.weight << "}";
+            ss << (i + 1 < skills.size() ? ",\n" : "\n");
         }
-        ss << "\n";
-        for (const auto& s : skills) {
-            ss << "level_" << s.name << "=" << s.level << "\n";
-            ss << "xp_" << s.name << "=" << s.xp << "\n";
-            ss << "xpToNext_" << s.name << "=" << s.xpToNext << "\n";
-            ss << "weight_" << s.name << "=" << s.weight << "\n";
-        }
-
-        ss << "\n[categories]\n";
+        ss << "  ],\n";
+        ss << "  \"categories\": {\n";
+        ss << "    \"scores\": {";
         const auto& catScores = profile.category_best_scores();
-        const auto& cooldowns = profile.category_cooldowns();
         for (size_t idx = 0; idx < catScores.size(); ++idx) {
-            ss << "score_" << Profile::kCategoryLabels[idx] << "=" << catScores[idx] << "\n";
+            ss << "\"" << Profile::kCategoryLabels[idx] << "\":" << catScores[idx];
+            if (idx + 1 < catScores.size()) ss << ",";
         }
+        ss << "},\n";
+        ss << "    \"cooldowns\": {";
+        const auto& cooldowns = profile.category_cooldowns();
         for (size_t idx = 0; idx < cooldowns.size(); ++idx) {
-            ss << "cooldown_" << Profile::kCategoryLabels[idx] << "=" << cooldowns[idx] << "\n";
+            ss << "\"" << Profile::kCategoryLabels[idx] << "\":" << cooldowns[idx];
+            if (idx + 1 < cooldowns.size()) ss << ",";
         }
-
-        ss << "\n[queue]\n";
-        ss << "items=";
+        ss << "}\n";
+        ss << "  },\n";
+        ss << "  \"queue\": [";
         for (size_t i = 0; i < queue_.size(); ++i) {
-            if (i) ss << ",";
-            ss << queue_[i].skill << ":" << queue_[i].amount;
+            ss << "{\"skill\":\"" << JsonLite::Escape(queue_[i].skill)
+               << "\",\"amount\":" << queue_[i].amount << "}";
+            if (i + 1 < queue_.size()) ss << ",";
         }
-        ss << "\n";
+        ss << "]\n";
+        ss << "}\n";
 
-        bool ok = write_all(activePath_, ss.str());
+        bool ok = write_all(jsonPath, ss.str());
+        if (ok && is_profile_ini_path(activePath_)) {
+            std::error_code ec;
+            std::filesystem::remove(activePath_, ec);
+            activePath_ = jsonPath;
+        }
         save_achievements(baseDir_, activeId_, profile.achievements());
         return ok;
     }
@@ -687,7 +878,7 @@ public:
     std::optional<ProfileInfo> create_profile(const Profile& profile) override {
         const std::string id = generate_id(nextId_++);
         activeId_ = id;
-        activePath_ = baseDir_ / (id + ".ini");
+        activePath_ = baseDir_ / (id + ".json");
         token_.reset();
         queue_.clear();
         if (!save_profile(profile)) {
@@ -731,6 +922,8 @@ public:
         if (!current) return false;
         std::error_code ec;
         std::filesystem::remove(*current, ec);
+        std::filesystem::remove(current->parent_path() / (id + ".json"), ec);
+        std::filesystem::remove(current->parent_path() / (id + ".ini"), ec);
         if (ec) return false;
         std::error_code achEc;
         auto achPath = baseDir_ / "achievements" / (id + ".json");
@@ -781,10 +974,19 @@ public:
             return save_profile(*profile);
         }
         std::ostringstream ss;
-        ss << "[auth]\n";
-        ss << "token=" << token << "\n\n[profile]\nid=" << activeId_ << "\nname=" << activeId_
-           << "\noverall=1\n\n[skills]\nnames=\n\n[queue]\nitems=\n";
-        return write_all(activePath_, ss.str());
+        ss << "{\n";
+        ss << "  \"auth\": {\"token\": \"" << JsonLite::Escape(token) << "\"},\n";
+        ss << "  \"profile\": {\"id\": \"" << JsonLite::Escape(activeId_) << "\",\"name\": \""
+           << JsonLite::Escape(activeId_) << "\",\"overall\": 1}\n";
+        ss << "}\n";
+        auto target = is_profile_json_path(activePath_) ? activePath_ : profile_json_path_for(activePath_);
+        const bool ok = write_all(target, ss.str());
+        if (ok && is_profile_ini_path(activePath_)) {
+            std::error_code ec;
+            std::filesystem::remove(activePath_, ec);
+            activePath_ = target;
+        }
+        return ok;
     }
 
     std::vector<XpEvent> load_queue() override {
@@ -804,19 +1006,33 @@ private:
     void list_dir(const std::filesystem::path& dir, bool archived, std::vector<ProfileInfo>& out) const {
         std::error_code ec;
         if (!std::filesystem::exists(dir, ec)) return;
+        std::unordered_set<std::string> jsonIds;
         for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
             if (!is_profile_file(entry)) continue;
+            if (!is_profile_json_path(entry.path())) continue;
             auto id = entry.path().stem().string();
+            jsonIds.insert(id);
+            out.push_back(ProfileInfo{id, file_profile_name(entry.path()), archived});
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (!is_profile_file(entry)) continue;
+            if (!is_profile_ini_path(entry.path())) continue;
+            auto id = entry.path().stem().string();
+            if (jsonIds.count(id)) continue;
             out.push_back(ProfileInfo{id, file_profile_name(entry.path()), archived});
         }
     }
 
     std::optional<std::filesystem::path> find_profile_path(const std::string& id, bool includeArchived) const {
-        auto path = baseDir_ / (id + ".ini");
+        auto path = baseDir_ / (id + ".json");
         if (std::filesystem::exists(path)) return path;
+        auto legacy = baseDir_ / (id + ".ini");
+        if (std::filesystem::exists(legacy)) return legacy;
         if (includeArchived) {
-            auto arch = archive_dir() / (id + ".ini");
+            auto arch = archive_dir() / (id + ".json");
             if (std::filesystem::exists(arch)) return arch;
+            auto legacyArch = archive_dir() / (id + ".ini");
+            if (std::filesystem::exists(legacyArch)) return legacyArch;
         }
         return std::nullopt;
     }
@@ -844,7 +1060,7 @@ private:
                 continue;
             }
             const std::string newId = generate_id(++maxId);
-            auto target = entry.path().parent_path() / (newId + ".ini");
+            auto target = entry.path().parent_path() / (newId + entry.path().extension().string());
             rename_achievement(stem, newId);
             std::filesystem::rename(entry.path(), target, ec);
         }
@@ -874,6 +1090,40 @@ private:
             }
         }
         return maxId + 1;
+    }
+
+    void migrate_legacy_profiles() {
+        std::vector<std::filesystem::path> legacy;
+        auto collect = [&](const std::filesystem::path& dir) {
+            std::error_code ec;
+            if (!std::filesystem::exists(dir, ec)) return;
+            for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+                if (!entry.is_regular_file()) continue;
+                if (entry.path().extension() != ".ini") continue;
+                legacy.push_back(entry.path());
+            }
+        };
+        collect(baseDir_);
+        collect(archive_dir());
+        if (legacy.empty()) return;
+
+        const std::string prevId = activeId_;
+        const std::filesystem::path prevPath = activePath_;
+        const std::optional<std::string> prevToken = token_;
+        const std::vector<XpEvent> prevQueue = queue_;
+
+        for (const auto& path : legacy) {
+            activeId_ = path.stem().string();
+            activePath_ = path;
+            token_.reset();
+            queue_.clear();
+            load_profile();
+        }
+
+        activeId_ = prevId;
+        activePath_ = prevPath;
+        token_ = prevToken;
+        queue_ = prevQueue;
     }
 
     std::filesystem::path baseDir_;

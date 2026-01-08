@@ -1,4 +1,5 @@
 #include "GameplayConfig.h"
+#include "JsonLite.h"
 
 #include <algorithm>
 #include <cctype>
@@ -97,7 +98,7 @@ std::filesystem::path GameplayConfigPath(const std::filesystem::path& storageDir
     std::error_code ec;
     std::filesystem::create_directories(metaDir, ec);
     (void)ec;
-    return metaDir / "gameplay.ini";
+    return metaDir / "gameplay.json";
 }
 
 static GameplayConfig Defaults() {
@@ -107,7 +108,52 @@ static GameplayConfig Defaults() {
 GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir) {
     GameplayConfig config = Defaults();
     auto path = GameplayConfigPath(storageDir);
-    std::ifstream in(path);
+    if (std::ifstream jsonIn(path); jsonIn) {
+        std::ostringstream ss;
+        ss << jsonIn.rdbuf();
+        JsonLite::Value root;
+        if (JsonLite::Parse(ss.str(), root, nullptr)) {
+            if (const auto* leveling = JsonLite::GetObjectValue(root, "leveling")) {
+                if (const auto* v = JsonLite::GetObjectValue(*leveling, "base")) {
+                    config.levelBaseXp = std::max(1, JsonLite::GetInt(*v, config.levelBaseXp));
+                }
+                if (const auto* v = JsonLite::GetObjectValue(*leveling, "linear")) {
+                    config.levelLinearXp = std::max(0, JsonLite::GetInt(*v, config.levelLinearXp));
+                }
+                if (const auto* v = JsonLite::GetObjectValue(*leveling, "quadratic")) {
+                    config.levelQuadraticXp = std::max(0, JsonLite::GetInt(*v, config.levelQuadraticXp));
+                }
+            }
+            if (const auto* categories = JsonLite::GetObjectValue(root, "categories")) {
+                for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                    if (const auto* v = JsonLite::GetObjectValue(*categories, Profile::kCategoryLabels[idx])) {
+                        config.categoryBaseXp[idx] = std::max(0, JsonLite::GetInt(*v, config.categoryBaseXp[idx]));
+                    }
+                }
+            }
+            if (const auto* rewards = JsonLite::GetObjectValue(root, "rewards")) {
+                if (const auto* v = JsonLite::GetObjectValue(*rewards, "focus_base")) {
+                    config.focusBaseBonus = std::clamp(JsonLite::GetDouble(*v, config.focusBaseBonus), 0.0, 10.0);
+                }
+                if (const auto* v = JsonLite::GetObjectValue(*rewards, "focus_bonus")) {
+                    config.focusAdditionalBonus = std::clamp(JsonLite::GetDouble(*v, config.focusAdditionalBonus), 0.0, 10.0);
+                }
+                if (const auto* v = JsonLite::GetObjectValue(*rewards, "repeat_factor")) {
+                    config.repeatRewardFactor = std::clamp(JsonLite::GetDouble(*v, config.repeatRewardFactor), 0.0, 10.0);
+                }
+                if (const auto* v = JsonLite::GetObjectValue(*rewards, "recovery_factor")) {
+                    config.recoveryRewardFactor = std::clamp(JsonLite::GetDouble(*v, config.recoveryRewardFactor), 0.0, 10.0);
+                }
+                if (const auto* v = JsonLite::GetObjectValue(*rewards, "recovery_tasks")) {
+                    config.recoveryWarmupTasks = std::max(0, JsonLite::GetInt(*v, config.recoveryWarmupTasks));
+                }
+            }
+            return SanitizeGameplayConfig(config);
+        }
+    }
+
+    auto legacyPath = storageDir / "meta" / "gameplay.ini";
+    std::ifstream in(legacyPath);
     if (!in) {
         SaveGameplayConfig(config, storageDir);
         return config;
@@ -158,31 +204,42 @@ GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir) {
             } catch (...) {}
         }
     }
-    return SanitizeGameplayConfig(config);
+    config = SanitizeGameplayConfig(config);
+    if (SaveGameplayConfig(config, storageDir)) {
+        std::error_code ec;
+        std::filesystem::remove(legacyPath, ec);
+    }
+    return config;
 }
 
 bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::path& storageDir) {
     GameplayConfig sanitized = SanitizeGameplayConfig(config);
     auto path = GameplayConfigPath(storageDir);
     std::filesystem::create_directories(path.parent_path());
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return false;
+    std::ostringstream out;
     out.imbue(std::locale::classic());
-    out << "# Gameplay rules for ForgeMirror\n";
-    out << "[leveling]\n";
-    out << "base=" << sanitized.levelBaseXp << "\n";
-    out << "linear=" << sanitized.levelLinearXp << "\n";
-    out << "quadratic=" << sanitized.levelQuadraticXp << "\n\n";
-
-    out << "[categories]\n";
+    out << "{\n";
+    out << "  \"leveling\": {\n";
+    out << "    \"base\": " << sanitized.levelBaseXp << ",\n";
+    out << "    \"linear\": " << sanitized.levelLinearXp << ",\n";
+    out << "    \"quadratic\": " << sanitized.levelQuadraticXp << "\n";
+    out << "  },\n";
+    out << "  \"categories\": {\n";
     for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
-        out << Profile::kCategoryLabels[idx] << "=" << sanitized.categoryBaseXp[idx] << "\n";
+        out << "    \"" << Profile::kCategoryLabels[idx] << "\": " << sanitized.categoryBaseXp[idx];
+        out << (idx + 1 < Profile::kCategoryCount ? ",\n" : "\n");
     }
-    out << "\n[rewards]\n";
-    out << "focus_base=" << sanitized.focusBaseBonus << "\n";
-    out << "focus_bonus=" << sanitized.focusAdditionalBonus << "\n";
-    out << "repeat_factor=" << sanitized.repeatRewardFactor << "\n";
-    out << "recovery_factor=" << sanitized.recoveryRewardFactor << "\n";
-    out << "recovery_tasks=" << sanitized.recoveryWarmupTasks << "\n";
-    return true;
+    out << "  },\n";
+    out << "  \"rewards\": {\n";
+    out << "    \"focus_base\": " << sanitized.focusBaseBonus << ",\n";
+    out << "    \"focus_bonus\": " << sanitized.focusAdditionalBonus << ",\n";
+    out << "    \"repeat_factor\": " << sanitized.repeatRewardFactor << ",\n";
+    out << "    \"recovery_factor\": " << sanitized.recoveryRewardFactor << ",\n";
+    out << "    \"recovery_tasks\": " << sanitized.recoveryWarmupTasks << "\n";
+    out << "  }\n";
+    out << "}\n";
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) return false;
+    file << out.str();
+    return file.good();
 }

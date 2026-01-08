@@ -9,6 +9,25 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     bool autoSyncEnabled = state.cloudConfig.autoSyncEnabled;
     int autoSyncMinutes = state.cloudConfig.autoSyncMinutes;
     bool syncChanged = false;
+    auto pickFolder = [&](std::string& outPath) -> bool {
+#if defined(_WIN32)
+        BROWSEINFOA bi{};
+        bi.lpszTitle = "Выберите папку синхронизации";
+        bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+        LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
+        if (!pidl) return false;
+        char buffer[MAX_PATH] = {0};
+        bool ok = SHGetPathFromIDListA(pidl, buffer) == TRUE;
+        CoTaskMemFree(pidl);
+        if (ok) {
+            outPath = buffer;
+        }
+        return ok;
+#else
+        (void)outPath;
+        return false;
+#endif
+    };
     if (ImGui::Checkbox(u8"Включить синхронизацию", &syncEnabled)) {
         syncChanged = true;
     }
@@ -17,6 +36,14 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                                  state.cloudRootBuffer.data(), state.cloudRootBuffer.size())) {
         syncChanged = true;
         rootEdited = true;
+    }
+    if (ImGui::Button(u8"Выбрать папку")) {
+        std::string picked;
+        if (pickFolder(picked)) {
+            std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s", picked.c_str());
+            syncChanged = true;
+            rootEdited = true;
+        }
     }
     ImGui::TextDisabled(u8"Можно указать абсолютный путь или путь относительно папки данных.");
     if (state.isAdmin) {
@@ -385,6 +412,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
                 std::error_code ec;
                 std::filesystem::remove(presetPath, ec);
+                auto legacyPath = presetPath;
+                legacyPath.replace_extension(".ini");
+                std::filesystem::remove(legacyPath, ec);
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
         } else if (ImGui::BeginTable("ui_preset_list", 4, ImGuiTableFlags_SizingStretchProp)) {
@@ -417,6 +447,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
                 std::error_code ec;
                 std::filesystem::remove(presetPath, ec);
+                auto legacyPath = presetPath;
+                legacyPath.replace_extension(".ini");
+                std::filesystem::remove(legacyPath, ec);
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
             ImGui::EndTable();
