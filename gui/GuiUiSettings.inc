@@ -376,10 +376,11 @@ UiSettings LoadUiSettingsFromJsonPath(const std::filesystem::path& path, const I
     }
     if (const auto* colors = get_obj(root, "colors")) {
         if (colors->type == JsonLite::Type::Object) {
+            const bool allowCustom = settings.customColors;
             for (size_t i = 0; i < entries.size(); ++i) {
                 if (const auto* v = get_obj(*colors, entries[i].name)) {
                     ParseVec4Json(v, settings.colors[i]);
-                    settings.customColors = true;
+                    if (allowCustom) settings.customColors = true;
                 }
             }
         }
