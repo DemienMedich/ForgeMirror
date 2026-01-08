@@ -148,6 +148,21 @@ bool ParseVec4Json(const JsonLite::Value* value, ImVec4& out) {
     return true;
 }
 
+bool IsZeroColor(const ImVec4& color) {
+    return std::fabs(color.x) <= 0.001f && std::fabs(color.y) <= 0.001f
+        && std::fabs(color.z) <= 0.001f && std::fabs(color.w) <= 0.001f;
+}
+
+bool AreColorsMostlyZero(const UiSettings& settings) {
+    size_t zeros = 0;
+    for (const auto& color : settings.colors) {
+        if (IsZeroColor(color)) {
+            ++zeros;
+        }
+    }
+    return !settings.colors.empty() && zeros >= settings.colors.size() * 3 / 5;
+}
+
 void SanitizeUiSettings(UiSettings& settings, const ImGuiStyle& style) {
     settings.theme = std::clamp(settings.theme, 0, 2);
     settings.fontScale = ClampFinite(settings.fontScale, 0.6f, 2.0f, 1.0f);
@@ -367,6 +382,12 @@ UiSettings LoadUiSettingsFromJsonPath(const std::filesystem::path& path, const I
                     settings.customColors = true;
                 }
             }
+        }
+    }
+    if (settings.customColors && AreColorsMostlyZero(settings)) {
+        settings.customColors = false;
+        for (size_t i = 0; i < entries.size(); ++i) {
+            settings.colors[i] = style.Colors[entries[i].col];
         }
     }
     if (const auto* backgrounds = get_obj(root, "backgrounds")) {
