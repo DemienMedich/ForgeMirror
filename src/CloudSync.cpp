@@ -21,6 +21,15 @@ std::string Trim(std::string s) {
     return s;
 }
 
+void StripUtf8Bom(std::string& s) {
+    if (s.size() >= 3 &&
+        static_cast<unsigned char>(s[0]) == 0xEF &&
+        static_cast<unsigned char>(s[1]) == 0xBB &&
+        static_cast<unsigned char>(s[2]) == 0xBF) {
+        s.erase(0, 3);
+    }
+}
+
 bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& data) {
     std::error_code ec;
     auto parent = path.parent_path();
@@ -33,6 +42,9 @@ bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& d
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
         if (!out) return false;
+        // Write BOM for editors (Notepad) to recognize UTF-8
+        const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
         out << data;
         if (!out.good()) return false;
     }
@@ -324,7 +336,12 @@ CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
     if (!in) return config;
     std::string section;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
         std::string t = Trim(line);
         if (t.empty() || t[0] == '#' || t[0] == ';') continue;
         if (t.front() == '[' && t.back() == ']') {
@@ -374,7 +391,12 @@ CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesy
     std::ifstream in(path);
     if (!in) return manifest;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
         std::string t = Trim(line);
         if (t.empty() || t[0] == '#' || t[0] == ';') continue;
         if (t.front() == '[' && t.back() == ']') continue;
