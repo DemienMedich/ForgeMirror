@@ -524,7 +524,9 @@ static void DrawShortcutsSidebar(GuiState& state) {
                 ImGui::PushID(static_cast<int>(i));
                 if (ShortcutBadgeButton("shortcut_launch", badge, entry.label.c_str(), accent, iconSize, true)) {
                     if (!LaunchShortcut(entry.path)) {
-                        SetStatus(state, u8"Не удалось открыть ярлык.", 1.0f, 0.75f, 0.35f);
+                        std::string msg = u8"Не удалось открыть ярлык: ";
+                        msg += entry.path;
+                        SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
                     }
                 }
                 ImGui::SameLine(0.0f, style.ItemSpacing.x * 0.6f);
@@ -591,6 +593,8 @@ static void DrawShortcutsPanel(GuiState& state) {
         std::string label = TrimStringGui(state.shortcutLabel.data());
         if (path.empty()) {
             SetStatus(state, u8"Укажите путь к ярлыку.", 1.0f, 0.45f, 0.45f);
+        } else if (!std::filesystem::exists(path)) {
+            SetStatus(state, u8"Файл не найден: " + path, 1.0f, 0.75f, 0.35f);
         } else {
             if (label.empty()) {
                 label = std::filesystem::path(path).stem().string();
