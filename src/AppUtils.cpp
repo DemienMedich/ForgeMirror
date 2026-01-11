@@ -206,6 +206,21 @@ bool HasStorageData(const std::filesystem::path& dir) {
     return false;
 }
 
+bool HasAnyProfileIni(const std::filesystem::path& dir) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec)) return false;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+    }
+    auto archiveDir = dir / "archive";
+    if (std::filesystem::exists(archiveDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(archiveDir, ec)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+        }
+    }
+    return false;
+}
+
 bool ShouldSkipSeedCopy(const std::filesystem::path& rel) {
     const std::string relPath = rel.generic_string();
     if (relPath == "meta/ui.ini") return true;
@@ -276,6 +291,28 @@ void MergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesys
     }
 }
 
+void MaybeMergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
+    if (seedRoot.empty() || storageRoot.empty()) return;
+    std::error_code ec;
+    auto flag = storageRoot / "meta" / "seed.merged";
+    if (std::filesystem::exists(flag, ec)) return;
+    const bool hasProfiles = HasAnyProfileIni(storageRoot);
+    if (hasProfiles) {
+        std::filesystem::create_directories(flag.parent_path(), ec);
+        if (!ec) {
+            std::ofstream out(flag, std::ios::binary | std::ios::trunc);
+            if (out) out << "merged";
+        }
+        return;
+    }
+    MergeSeedProfiles(seedRoot, storageRoot);
+    std::filesystem::create_directories(flag.parent_path(), ec);
+    if (!ec) {
+        std::ofstream out(flag, std::ios::binary | std::ios::trunc);
+        if (out) out << "merged";
+    }
+}
+
 } // namespace
 
 std::filesystem::path ResolveStorageDirectory() {
@@ -299,7 +336,7 @@ std::filesystem::path ResolveStorageDirectory() {
     const bool legacyUserHasData = legacyUserReady && HasStorageData(legacyUserDir);
 
     auto finalize = [&](std::filesystem::path chosen) {
-        MergeSeedProfiles(legacyDir, chosen);
+        MaybeMergeSeedProfiles(legacyDir, chosen);
         return chosen;
     };
 
