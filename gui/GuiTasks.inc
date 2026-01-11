@@ -328,6 +328,9 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for spreadsheet tools
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "Date,Project,Task,Description,Category,Score,Participants,BaseXP,BasePool\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
@@ -363,6 +366,9 @@ static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEn
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for editors
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "Выполненные задачи\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
