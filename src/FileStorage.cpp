@@ -337,6 +337,12 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             if (!in) return result;
             const auto nowSec = now_seconds();
             std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            if (content.size() >= 3 &&
+                static_cast<unsigned char>(content[0]) == 0xEF &&
+                static_cast<unsigned char>(content[1]) == 0xBB &&
+                static_cast<unsigned char>(content[2]) == 0xBF) {
+                content.erase(0, 3);
+            }
             const auto objects = parse_object_array(content);
             for (const auto& obj : objects) {
                 Achievement a;
@@ -385,6 +391,9 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             for (auto& a : normalized) {
                 normalize_achievement_times(a, nowSec);
             }
+            // Write BOM for editors (Notepad) to recognize UTF-8
+            const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+            out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
             out << "[\n";
             for (size_t i = 0; i < normalized.size(); ++i) {
                 const auto& a = normalized[i];
