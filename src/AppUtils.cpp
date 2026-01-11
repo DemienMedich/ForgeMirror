@@ -409,6 +409,32 @@ void StripUtf8Bom(std::string& s) {
     }
 }
 
+char CaesarShiftChar(char c, int shift) {
+    // Shift only printable ASCII range [32, 126]
+    const int low = 32;
+    const int high = 126;
+    const int range = high - low + 1;
+    unsigned char uc = static_cast<unsigned char>(c);
+    if (uc < low || uc > high) return c;
+    int pos = static_cast<int>(uc) - low;
+    pos = (pos + shift) % range;
+    if (pos < 0) pos += range;
+    return static_cast<char>(low + pos);
+}
+
+std::string CaesarEncode(const std::string& text, int shift) {
+    std::string out;
+    out.reserve(text.size());
+    for (char c : text) {
+        out.push_back(CaesarShiftChar(c, shift));
+    }
+    return out;
+}
+
+std::string CaesarDecode(const std::string& text, int shift) {
+    return CaesarEncode(text, -shift);
+}
+
 bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
     auto path = AdminPasswordPath(storageDir);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -417,7 +443,8 @@ bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::strin
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "# ForgeMirror admin password\n";
-    out << "password=" << password << "\n";
+    const std::string encoded = CaesarEncode(password, 7);
+    out << "password=caesar:" << encoded << "\n";
     return out.good();
 }
 
@@ -445,7 +472,15 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
             if (t.empty() || t[0] == '#' || t[0] == ';') continue;
             if (t.rfind("password=", 0) == 0) {
                 std::string value = TrimCopy(t.substr(9));
-                if (!value.empty()) return value;
+                if (!value.empty()) {
+                    const std::string prefix = "caesar:";
+                    if (value.rfind(prefix, 0) == 0) {
+                        std::string encoded = value.substr(prefix.size());
+                        std::string decoded = CaesarDecode(encoded, 7);
+                        if (!decoded.empty()) return decoded;
+                    }
+                    return value;
+                }
             } else {
                 return t;
             }
