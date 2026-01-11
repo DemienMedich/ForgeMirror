@@ -319,7 +319,15 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             if (!in) return {};
             std::ostringstream ss;
             ss << in.rdbuf();
-            return ss.str();
+            std::string data = ss.str();
+            // Strip UTF-8 BOM if present
+            if (data.size() >= 3 &&
+                static_cast<unsigned char>(data[0]) == 0xEF &&
+                static_cast<unsigned char>(data[1]) == 0xBB &&
+                static_cast<unsigned char>(data[2]) == 0xBF) {
+                data.erase(0, 3);
+            }
+            return data;
         }
 
         std::vector<Achievement> load_achievements(const std::filesystem::path& baseDir, const std::string& id) {
