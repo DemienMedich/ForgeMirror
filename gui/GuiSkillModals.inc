@@ -5,11 +5,22 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         state.addSkillPopupRequest = false;
     }
     bool addSkillOpen = true;
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    const float minWidth = 360.0f;
+    const float maxWidth = std::max(minWidth, std::min(560.0f, display.x - 80.0f));
+    const float maxHeight = std::max(240.0f, display.y - 80.0f);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(minWidth, 0.0f), ImVec2(maxWidth, maxHeight));
     if (ImGui::BeginPopupModal(u8"Добавить навык", &addSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawCardHeader(u8"Параметры навыка");
-        ImGui::InputText(u8"Название", state.newSkillName.data(), state.newSkillName.size());
-        ImGui::InputFloat(u8"Вес (0.5 - 1.6)", &state.newSkillWeight, 0.05f, 0.2f, "%.2f");
-        ImGui::InputTextMultiline(u8"Описание", state.newSkillDesc.data(), state.newSkillDesc.size(), ImVec2(-1.0f, 120.0f));
+        ImGui::TextDisabled(u8"Название и описание обязательны.");
+        ImGui::TextDisabled(u8"Название");
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputText(u8"##skill_name", state.newSkillName.data(), state.newSkillName.size());
+        ImGui::TextDisabled(u8"Вес (0.5 - 1.6)");
+        ImGui::SetNextItemWidth(160.0f);
+        ImGui::InputFloat(u8"##skill_weight", &state.newSkillWeight, 0.05f, 0.2f, "%.2f");
+        ImGui::TextDisabled(u8"Описание");
+        ImGui::InputTextMultiline(u8"##skill_desc", state.newSkillDesc.data(), state.newSkillDesc.size(), ImVec2(-1.0f, 120.0f));
         auto saveSkill = [&]() {
             AddSkillResult result = AddSkillAction(catalog, state.newSkillName.data(),
             static_cast<double>(state.newSkillWeight),
@@ -247,6 +258,67 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         ImGui::EndPopup();
     }
     if (!mergeSkillOpen && ImGui::IsPopupOpen(u8"Слияние навыков")) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    if (state.clearSkillsPopupRequest) {
+        ImGui::OpenPopup(u8"Очистить навыки");
+        state.clearSkillsPopupRequest = false;
+    }
+    bool clearSkillsOpen = true;
+    if (ImGui::BeginPopupModal(u8"Очистить навыки", &clearSkillsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImVec4 warn = LogLevelColor(AppLogLevel::Warning);
+        warn.w = 1.0f;
+        ImGui::TextColored(warn, u8"Удалить все навыки из каталога и профилей?");
+        ImGui::TextDisabled(u8"Действие нельзя отменить.");
+        auto clearAll = [&]() {
+            std::string keepId = state.active ? state.active->id : std::string{};
+            ActionResult result = ClearAllSkillsAction(storage, catalog, state.storageDir, keepId);
+            AppLogLevel level = LogLevelForResult(result);
+            SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
+                      result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
+            PrepareXpEntries(state, catalog);
+            RefreshProfiles(state, storage, catalog, keepId);
+            state.selectedCatalogIndex = -1;
+            state.lastCatalogSelection = -1;
+            ImGui::CloseCurrentPopup();
+            clearSkillsOpen = false;
+        };
+        const float actionWidth = ImGui::GetContentRegionAvail().x;
+        const bool stackActions = actionWidth < 300.0f;
+        if (stackActions) {
+            if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+                clearAll();
+            }
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+                clearSkillsOpen = false;
+            }
+        } else if (ImGui::BeginTable("clear_skills_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+                clearAll();
+            }
+            ImGui::TableSetColumnIndex(2);
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+                clearSkillsOpen = false;
+            }
+            ImGui::EndTable();
+        }
+        ImGui::EndPopup();
+    }
+    if (!clearSkillsOpen && ImGui::IsPopupOpen(u8"Очистить навыки")) {
         ImGui::CloseCurrentPopup();
     }
 

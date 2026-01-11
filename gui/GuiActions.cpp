@@ -201,6 +201,11 @@ AddSkillResult AddSkillAction(SkillCatalog& catalog, const std::string& name, do
         result.message = u8"Название навыка не может быть пустым.";
         return result;
     }
+    if (trimmedDesc.empty()) {
+        result.userError = true;
+        result.message = u8"Описание навыка не может быть пустым.";
+        return result;
+    }
     result.ok = catalog.add_skill(trimmedName, weight, trimmedDesc);
     if (result.ok) {
         if (auto id = catalog.id_for_name(trimmedName)) {
@@ -235,6 +240,11 @@ ActionResult UpdateSkillDetailsAction(SkillCatalog& catalog, const std::string& 
     if (trimmedName.empty()) {
         result.userError = true;
         result.message = u8"Название не может быть пустым.";
+        return result;
+    }
+    if (trimmedDesc.empty()) {
+        result.userError = true;
+        result.message = u8"Описание не может быть пустым.";
         return result;
     }
     result.changed = catalog.update_skill(skillId, trimmedName, weight, trimmedDesc);
@@ -280,6 +290,37 @@ ActionResult MergeSkillAction(IJobStorage& storage, SkillCatalog& catalog, const
     catalog.update_skill(toId, newName, newWeight, newDesc);
     result.ok = true;
     result.message = u8"Навыки объединены.";
+    return result;
+}
+
+ActionResult ClearAllSkillsAction(IJobStorage& storage, SkillCatalog& catalog,
+                                  const std::filesystem::path& storageDir,
+                                  const std::string& restoreId) {
+    ActionResult result;
+    bool changedAny = false;
+    auto list = storage.list_profiles();
+    for (const auto& info : list) {
+        bool wasArchived = false;
+        if (!ActivateProfileForEdit(storage, info, wasArchived)) continue;
+        if (auto profile = storage.load_profile()) {
+            if (!profile->list_skills().empty()) {
+                profile->set_skills({});
+                storage.save_profile(*profile);
+                changedAny = true;
+            }
+        }
+        RestoreArchiveState(storage, info.id, wasArchived);
+    }
+    if (!restoreId.empty()) {
+        storage.set_active_profile(restoreId);
+    }
+    std::error_code ec;
+    const auto skillsPath = storageDir / "skills.txt";
+    const bool removedFile = std::filesystem::remove(skillsPath, ec);
+    catalog.reload();
+    result.ok = true;
+    result.changed = changedAny || removedFile;
+    result.message = result.changed ? u8"Навыки очищены." : u8"Каталог навыков уже пустой.";
     return result;
 }
 

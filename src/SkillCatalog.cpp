@@ -1,5 +1,4 @@
 #include "SkillCatalog.h"
-#include "JsonLite.h"
 
 #include <algorithm>
 #include <cctype>
@@ -18,23 +17,9 @@ struct SkillEntry {
     const char* description;
 };
 
-const std::vector<SkillEntry> kDefaultSkills = {
-    {"Modeling", 1.2, "Building clean base meshes for further detailing or animation."},
-    {"Sculpting", 1.2, "High-resolution sculpting for characters, creatures, and props."},
-    {"Texturing", 1.0, "Creating texture maps that add color and detail to models."},
-    {"Shading", 1.0, "Authoring material networks that react believably to light."},
-    {"Rigging", 1.4, "Setting up skeletons and controls to animate characters or props."},
-    {"Lighting", 1.1, "Placing lights and balancing exposure for mood and readability."},
-    {"UV Mapping", 0.8, "Preparing UV layouts that minimize seams and distortion."},
-    {"Retopology", 1.2, "Converting dense sculpts into animation-friendly low-poly meshes."},
-    {"Materials", 0.8, "Authoring reusable material presets with consistent PBR values."},
-    {"Rendering", 0.9, "Configuring render settings and output passes for final frames."},
-    {"Animation", 1.4, "Bringing characters, props, or cameras to life over time."},
-    {"Simulation", 1.3, "Driving cloth, hair, fluids, or rigid bodies with dynamic solvers."},
-    {"Hard Surface", 1.2, "Designing mechanical or industrial assets with crisp detail."},
-    {"Environment", 1.1, "Building large-scale scenes and set dressing for worlds."},
-    {"Props", 0.9, "Creating supporting assets that tell stories and fill environments."}
-};
+void append_utf8(std::string& out, uint32_t cp);
+
+const std::vector<SkillEntry> kDefaultSkills = {};
 
 double clamp_weight(double value) {
     const double minW = 0.5;
@@ -44,24 +29,123 @@ double clamp_weight(double value) {
     return value;
 }
 
+bool parse_double_ascii(const std::string& value, double& outValue) {
+    if (value.empty()) return false;
+    size_t i = 0;
+    bool neg = false;
+    if (value[i] == '-') {
+        neg = true;
+        ++i;
+    }
+    double intPart = 0.0;
+    bool hasDigit = false;
+    while (i < value.size() && value[i] >= '0' && value[i] <= '9') {
+        intPart = intPart * 10.0 + static_cast<double>(value[i] - '0');
+        ++i;
+        hasDigit = true;
+    }
+    double fracPart = 0.0;
+    double fracScale = 1.0;
+    if (i < value.size() && value[i] == '.') {
+        ++i;
+        while (i < value.size() && value[i] >= '0' && value[i] <= '9') {
+            fracPart = fracPart * 10.0 + static_cast<double>(value[i] - '0');
+            fracScale *= 10.0;
+            ++i;
+            hasDigit = true;
+        }
+    }
+    if (!hasDigit) return false;
+    double result = intPart + (fracPart / fracScale);
+    outValue = neg ? -result : result;
+    return true;
+}
+
 double parse_weight(const std::string& value, double fallback) {
     std::string out;
     out.reserve(value.size());
+    bool hasDigit = false;
     for (unsigned char ch : value) {
-        if (std::isdigit(ch)) {
+        if (ch >= '0' && ch <= '9') {
             out.push_back(static_cast<char>(ch));
+            hasDigit = true;
         } else if (ch == '.' || ch == ',') {
             out.push_back('.');
         } else if (ch == '-' && out.empty()) {
             out.push_back('-');
         }
     }
-    if (out.empty()) return fallback;
-    try {
-        return std::stod(out);
-    } catch (...) {
-        return fallback;
+    if (!hasDigit) return fallback;
+    double parsed = fallback;
+    if (!parse_double_ascii(out, parsed)) return fallback;
+    return parsed;
+}
+
+bool try_parse_weight(const std::string& value, double& outValue) {
+    std::string out;
+    out.reserve(value.size());
+    bool hasDigit = false;
+    for (unsigned char ch : value) {
+        if (ch >= '0' && ch <= '9') {
+            out.push_back(static_cast<char>(ch));
+            hasDigit = true;
+        } else if (ch == '.' || ch == ',') {
+            out.push_back('.');
+        } else if (ch == '-' && out.empty()) {
+            out.push_back('-');
+        }
     }
+    if (!hasDigit) return false;
+    return parse_double_ascii(out, outValue);
+}
+
+std::string DecodeUtf16Bytes(const std::string& bytes, bool bigEndian) {
+    std::string out;
+    out.reserve(bytes.size());
+    size_t i = 0;
+    const size_t size = bytes.size() - (bytes.size() % 2);
+    while (i + 1 < size) {
+        uint16_t unit = 0;
+        unsigned char b0 = static_cast<unsigned char>(bytes[i]);
+        unsigned char b1 = static_cast<unsigned char>(bytes[i + 1]);
+        unit = bigEndian ? static_cast<uint16_t>((b0 << 8) | b1)
+                         : static_cast<uint16_t>((b1 << 8) | b0);
+        i += 2;
+        if (unit >= 0xD800 && unit <= 0xDBFF && i + 1 < size) {
+            unsigned char c0 = static_cast<unsigned char>(bytes[i]);
+            unsigned char c1 = static_cast<unsigned char>(bytes[i + 1]);
+            uint16_t lo = bigEndian ? static_cast<uint16_t>((c0 << 8) | c1)
+                                    : static_cast<uint16_t>((c1 << 8) | c0);
+            if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                uint32_t cp = 0x10000u + (((unit - 0xD800u) << 10) | (lo - 0xDC00u));
+                append_utf8(out, cp);
+                i += 2;
+                continue;
+            }
+        }
+        append_utf8(out, unit);
+    }
+    return out;
+}
+
+std::string DecodeTextFileContent(const std::string& bytes) {
+    if (bytes.size() >= 3 &&
+        static_cast<unsigned char>(bytes[0]) == 0xEF &&
+        static_cast<unsigned char>(bytes[1]) == 0xBB &&
+        static_cast<unsigned char>(bytes[2]) == 0xBF) {
+        return bytes.substr(3);
+    }
+    if (bytes.size() >= 2) {
+        unsigned char b0 = static_cast<unsigned char>(bytes[0]);
+        unsigned char b1 = static_cast<unsigned char>(bytes[1]);
+        if (b0 == 0xFF && b1 == 0xFE) {
+            return DecodeUtf16Bytes(bytes.substr(2), false);
+        }
+        if (b0 == 0xFE && b1 == 0xFF) {
+            return DecodeUtf16Bytes(bytes.substr(2), true);
+        }
+    }
+    return bytes;
 }
 
 bool decode_utf8(const std::string& s, size_t& i, uint32_t& out) {
@@ -116,11 +200,202 @@ void append_utf8(std::string& out, uint32_t cp) {
     }
 }
 
+bool encode_cp1251(uint32_t cp, unsigned char& out) {
+    if (cp <= 0x7F) {
+        out = static_cast<unsigned char>(cp);
+        return true;
+    }
+    if (cp >= 0x0410 && cp <= 0x044F) {
+        out = static_cast<unsigned char>(0xC0 + (cp - 0x0410));
+        return true;
+    }
+    switch (cp) {
+        case 0x0401: out = 0xA8; return true;
+        case 0x0451: out = 0xB8; return true;
+        case 0x0402: out = 0x80; return true;
+        case 0x0403: out = 0x81; return true;
+        case 0x201A: out = 0x82; return true;
+        case 0x0453: out = 0x83; return true;
+        case 0x201E: out = 0x84; return true;
+        case 0x2026: out = 0x85; return true;
+        case 0x2020: out = 0x86; return true;
+        case 0x2021: out = 0x87; return true;
+        case 0x20AC: out = 0x88; return true;
+        case 0x2030: out = 0x89; return true;
+        case 0x0409: out = 0x8A; return true;
+        case 0x2039: out = 0x8B; return true;
+        case 0x040A: out = 0x8C; return true;
+        case 0x040C: out = 0x8D; return true;
+        case 0x040B: out = 0x8E; return true;
+        case 0x040F: out = 0x8F; return true;
+        case 0x0452: out = 0x90; return true;
+        case 0x2018: out = 0x91; return true;
+        case 0x2019: out = 0x92; return true;
+        case 0x201C: out = 0x93; return true;
+        case 0x201D: out = 0x94; return true;
+        case 0x2022: out = 0x95; return true;
+        case 0x2013: out = 0x96; return true;
+        case 0x2014: out = 0x97; return true;
+        case 0x2122: out = 0x99; return true;
+        case 0x0459: out = 0x9A; return true;
+        case 0x203A: out = 0x9B; return true;
+        case 0x045A: out = 0x9C; return true;
+        case 0x045C: out = 0x9D; return true;
+        case 0x045B: out = 0x9E; return true;
+        case 0x045F: out = 0x9F; return true;
+        case 0x00A0: out = 0xA0; return true;
+        case 0x040E: out = 0xA1; return true;
+        case 0x045E: out = 0xA2; return true;
+        case 0x0408: out = 0xA3; return true;
+        case 0x00A4: out = 0xA4; return true;
+        case 0x0490: out = 0xA5; return true;
+        case 0x00A6: out = 0xA6; return true;
+        case 0x00A7: out = 0xA7; return true;
+        case 0x00A9: out = 0xA9; return true;
+        case 0x0404: out = 0xAA; return true;
+        case 0x00AB: out = 0xAB; return true;
+        case 0x00AC: out = 0xAC; return true;
+        case 0x00AD: out = 0xAD; return true;
+        case 0x00AE: out = 0xAE; return true;
+        case 0x0407: out = 0xAF; return true;
+        case 0x00B0: out = 0xB0; return true;
+        case 0x00B1: out = 0xB1; return true;
+        case 0x0406: out = 0xB2; return true;
+        case 0x0456: out = 0xB3; return true;
+        case 0x0491: out = 0xB4; return true;
+        case 0x00B5: out = 0xB5; return true;
+        case 0x00B6: out = 0xB6; return true;
+        case 0x00B7: out = 0xB7; return true;
+        case 0x2116: out = 0xB9; return true;
+        case 0x0454: out = 0xBA; return true;
+        case 0x00BB: out = 0xBB; return true;
+        case 0x0458: out = 0xBC; return true;
+        case 0x0405: out = 0xBD; return true;
+        case 0x0455: out = 0xBE; return true;
+        case 0x0457: out = 0xBF; return true;
+        default: break;
+    }
+    return false;
+}
+
 uint32_t lower_codepoint(uint32_t cp) {
     if (cp >= 'A' && cp <= 'Z') return cp + 32;
     if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;
     if (cp == 0x0401) return 0x0451;
     return cp;
+}
+
+bool is_cyrillic(uint32_t cp) {
+    return (cp >= 0x0410 && cp <= 0x044F) || cp == 0x0401 || cp == 0x0451;
+}
+
+bool is_mojibake_marker(uint32_t cp) {
+    switch (cp) {
+        case 0x00A0:
+        case 0x00B1:
+        case 0x00B5:
+        case 0x201A:
+        case 0x201E:
+        case 0x2026:
+        case 0x2022:
+        case 0x0402:
+        case 0x0403:
+        case 0x0408:
+        case 0x0409:
+        case 0x040A:
+        case 0x040B:
+        case 0x040C:
+        case 0x040E:
+        case 0x040F:
+        case 0x0452:
+        case 0x0453:
+        case 0x0455:
+        case 0x0458:
+        case 0x0459:
+        case 0x045A:
+        case 0x045B:
+        case 0x045C:
+        case 0x045E:
+        case 0x045F:
+        case 0x0490:
+        case 0x0491:
+            return true;
+        default:
+            return false;
+    }
+}
+
+struct TextQuality {
+    int cyrillic = 0;
+    int markers = 0;
+    int invalid = 0;
+};
+
+TextQuality MeasureTextQuality(const std::string& text) {
+    TextQuality q;
+    size_t i = 0;
+    while (i < text.size()) {
+        uint32_t cp = 0;
+        size_t next = i;
+        if (!decode_utf8(text, next, cp)) {
+            q.invalid += 1;
+            i += 1;
+            continue;
+        }
+        i = next;
+        if (is_cyrillic(cp)) q.cyrillic += 1;
+        if (is_mojibake_marker(cp)) q.markers += 1;
+    }
+    return q;
+}
+
+int MojibakeScore(const TextQuality& q) {
+    return q.markers * 2 + q.invalid * 3 - q.cyrillic;
+}
+
+bool LooksLikeMojibake(const TextQuality& q) {
+    return q.markers > 0 && q.cyrillic > 0;
+}
+
+std::string FixMojibakeCp1251Utf8(const std::string& text) {
+    std::string bytes;
+    bytes.reserve(text.size());
+    size_t i = 0;
+    while (i < text.size()) {
+        uint32_t cp = 0;
+        size_t next = i;
+        if (!decode_utf8(text, next, cp)) {
+            return text;
+        }
+        i = next;
+        unsigned char b = 0;
+        if (!encode_cp1251(cp, b)) {
+            return text;
+        }
+        bytes.push_back(static_cast<char>(b));
+    }
+    std::string out;
+    out.reserve(bytes.size());
+    size_t j = 0;
+    while (j < bytes.size()) {
+        uint32_t cp = 0;
+        if (!decode_utf8(bytes, j, cp)) {
+            return text;
+        }
+        append_utf8(out, cp);
+    }
+    return out;
+}
+
+std::string MaybeFixMojibake(const std::string& text) {
+    if (text.empty()) return text;
+    const TextQuality before = MeasureTextQuality(text);
+    if (!LooksLikeMojibake(before)) return text;
+    const std::string fixed = FixMojibakeCp1251Utf8(text);
+    if (fixed == text) return text;
+    const TextQuality after = MeasureTextQuality(fixed);
+    if (MojibakeScore(after) < MojibakeScore(before)) return fixed;
+    return text;
 }
 
 std::string lowercase_utf8(const std::string& value) {
@@ -129,7 +404,13 @@ std::string lowercase_utf8(const std::string& value) {
     size_t i = 0;
     while (i < value.size()) {
         uint32_t cp = 0;
-        if (!decode_utf8(value, i, cp)) break;
+        size_t next = i;
+        if (!decode_utf8(value, next, cp)) {
+            out.push_back(value[i]);
+            ++i;
+            continue;
+        }
+        i = next;
         append_utf8(out, lower_codepoint(cp));
     }
     return out;
@@ -185,6 +466,29 @@ std::string SkillCatalog::description(const std::string& id) const {
         if (it != descriptionsById_.end()) return it->second;
     }
     return {};
+}
+
+bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& data) {
+    std::error_code ec;
+    auto parent = path.parent_path();
+    if (!parent.empty()) {
+        std::filesystem::create_directories(parent, ec);
+        if (ec) return false;
+    }
+    auto tmp = path;
+    tmp += ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        out << data;
+        if (!out.good()) return false;
+    }
+    std::filesystem::rename(tmp, path, ec);
+    return !ec;
+}
+
+void SkillCatalog::reload() {
+    load();
 }
 
 bool SkillCatalog::add_skill(const std::string& skill, double weight, const std::string& description) {
@@ -279,105 +583,102 @@ void SkillCatalog::load() {
     namesById_.clear();
     weightsById_.clear();
     descriptionsById_.clear();
+    bool repaired = false;
 
-    std::ifstream in(file_path());
+    std::ifstream in(file_path(), std::ios::binary);
     if (!in) {
-        auto legacyPath = baseDir_ / "skills.txt";
-        std::ifstream legacy(legacyPath);
-        if (!legacy) {
-            for (const auto& entry : kDefaultSkills) {
-                add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
-            }
-            save();
-            return;
-        }
-        std::string line;
-        while (std::getline(legacy, line)) {
-            auto trimmed = trim(line);
-            if (trimmed.empty() || trimmed[0] == '#') continue;
-
-            std::vector<std::string> parts;
-            std::string part;
-            std::istringstream ss(trimmed);
-            while (std::getline(ss, part, '|')) {
-                parts.push_back(trim(part));
-            }
-            std::string id;
-            std::string name;
-            std::string desc;
-            double weight = 1.0;
-
-            if (parts.size() >= 4) {
-                id = parts[0];
-                name = parts[1];
-                weight = parse_weight(parts[2], 1.0);
-                desc = parts[3];
-                if (parts.size() > 4) {
-                    for (size_t i = 4; i < parts.size(); ++i) {
-                        if (!desc.empty()) desc += "|";
-                        desc += parts[i];
-                    }
-                }
-            } else if (parts.size() >= 3) {
-                name = parts[0];
-                weight = parse_weight(parts[1], 1.0);
-                desc = parts[2];
-                if (parts.size() > 3) {
-                    for (size_t i = 3; i < parts.size(); ++i) {
-                        if (!desc.empty()) desc += "|";
-                        desc += parts[i];
-                    }
-                }
-            } else if (parts.size() >= 2) {
-                name = parts[0];
-                weight = parse_weight(parts[1], 1.0);
-            } else if (!parts.empty()) {
-                name = parts[0];
-            }
-            name = trim(name);
-            if (name.empty()) continue;
-            if (id.empty()) id = make_id(name);
-            add_internal(id, name, clamp_weight(weight), desc, false);
-        }
-
-        if (orderedIds_.empty()) {
-            for (const auto& entry : kDefaultSkills) {
-                add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
-            }
-        }
-        save();
-        std::error_code ec;
-        std::filesystem::remove(legacyPath, ec);
-        return;
-    }
-
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    JsonLite::Value root;
-    if (!JsonLite::Parse(ss.str(), root, nullptr)) {
         for (const auto& entry : kDefaultSkills) {
             add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
         }
         save();
         return;
     }
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    const std::string content = DecodeTextFileContent(buffer.str());
+    std::istringstream stream(content);
+    std::string line;
+    while (std::getline(stream, line)) {
+        auto trimmed = trim(line);
+        if (trimmed.empty() || trimmed[0] == '#') continue;
 
-    auto get_value = [](const JsonLite::Value& obj, const char* key) -> const JsonLite::Value* {
-        return JsonLite::GetObjectValue(obj, key);
-    };
-    const auto* skills = JsonLite::GetObjectValue(root, "skills");
-    if (skills && skills->type == JsonLite::Type::Array) {
-        for (const auto& item : skills->arrayValue) {
-            if (item.type != JsonLite::Type::Object) continue;
-            std::string id = get_value(item, "id") ? JsonLite::GetString(*get_value(item, "id"), "") : "";
-            std::string name = get_value(item, "name") ? JsonLite::GetString(*get_value(item, "name"), "") : "";
-            double weight = get_value(item, "weight") ? JsonLite::GetDouble(*get_value(item, "weight"), 1.0) : 1.0;
-            std::string desc = get_value(item, "description") ? JsonLite::GetString(*get_value(item, "description"), "") : "";
-            name = trim(name);
-            if (name.empty()) continue;
-            if (id.empty()) id = make_id(name);
-            add_internal(id, name, clamp_weight(weight), desc, false);
+        std::vector<std::string> parts;
+        std::string part;
+        std::istringstream ss(trimmed);
+        while (std::getline(ss, part, '|')) {
+            parts.push_back(trim(part));
         }
+        std::string id;
+        std::string name;
+        std::string desc;
+        double weight = 1.0;
+        auto append_desc = [&](size_t start) {
+            if (start >= parts.size()) return;
+            desc = parts[start];
+            for (size_t i = start + 1; i < parts.size(); ++i) {
+                if (!desc.empty()) desc += "|";
+                desc += parts[i];
+            }
+        };
+
+        if (parts.size() >= 4) {
+            id = parts[0];
+            name = parts[1];
+            double parsed = 1.0;
+            if (try_parse_weight(parts[2], parsed)) {
+                weight = parsed;
+                append_desc(3);
+            } else if (try_parse_weight(parts[3], parsed)) {
+                weight = parsed;
+                desc = parts[2];
+                if (parts.size() > 4) {
+                    for (size_t i = 4; i < parts.size(); ++i) {
+                        if (!desc.empty()) desc += "|";
+                        desc += parts[i];
+                    }
+                }
+            } else {
+                weight = parse_weight(parts[2], 1.0);
+                append_desc(3);
+            }
+        } else if (parts.size() >= 3) {
+            name = parts[0];
+            double parsed = 1.0;
+            if (try_parse_weight(parts[1], parsed)) {
+                weight = parsed;
+                desc = parts[2];
+            } else if (try_parse_weight(parts[2], parsed)) {
+                weight = parsed;
+                desc = parts[1];
+            } else {
+                weight = parse_weight(parts[1], 1.0);
+                desc = parts[2];
+            }
+        } else if (parts.size() >= 2) {
+            name = parts[0];
+            weight = parse_weight(parts[1], 1.0);
+        } else if (!parts.empty()) {
+            name = parts[0];
+        }
+        if (!name.empty()) {
+            std::string fixedName = MaybeFixMojibake(name);
+            if (fixedName != name) {
+                name = std::move(fixedName);
+                repaired = true;
+            }
+        }
+        if (!desc.empty()) {
+            std::string fixedDesc = MaybeFixMojibake(desc);
+            if (fixedDesc != desc) {
+                desc = std::move(fixedDesc);
+                repaired = true;
+            }
+        }
+        name = trim(name);
+        desc = trim(desc);
+        if (name.empty()) continue;
+        if (id.empty()) id = make_id(name);
+        add_internal(id, name, clamp_weight(weight), desc, false);
     }
 
     if (orderedIds_.empty()) {
@@ -386,7 +687,7 @@ void SkillCatalog::load() {
         }
         save();
     } else {
-        bool changed = false;
+        bool changed = repaired;
         std::unordered_set<std::string> existing(orderedIds_.begin(), orderedIds_.end());
         for (const auto& entry : kDefaultSkills) {
             const std::string name(entry.name);
@@ -418,35 +719,34 @@ void SkillCatalog::load() {
 
 void SkillCatalog::save() const {
     auto path = file_path();
-    std::filesystem::create_directories(path.parent_path());
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return;
+    std::ostringstream out;
     out.imbue(std::locale::classic());
-    out << "{\n  \"skills\": [\n";
-    for (size_t i = 0; i < orderedIds_.size(); ++i) {
-        const auto& id = orderedIds_[i];
+    for (const auto& id : orderedIds_) {
         auto nameIt = namesById_.find(id);
         if (nameIt == namesById_.end()) continue;
         const double w = weight(id);
-        out << "    {\"id\":\"" << JsonLite::Escape(id)
-            << "\",\"name\":\"" << JsonLite::Escape(nameIt->second)
-            << "\",\"weight\":" << w;
+        out << id << "|" << nameIt->second << "|" << w;
         auto it = descriptionsById_.find(id);
         if (it != descriptionsById_.end() && !it->second.empty()) {
-            out << ",\"description\":\"" << JsonLite::Escape(it->second) << "\"";
+            out << "|" << it->second;
         }
-        out << "}";
-        out << (i + 1 < orderedIds_.size() ? ",\n" : "\n");
+        out << "\n";
     }
-    out << "  ]\n}\n";
+    std::string data = out.str();
+    data.insert(data.begin(), static_cast<char>(0xEF));
+    data.insert(data.begin() + 1, static_cast<char>(0xBB));
+    data.insert(data.begin() + 2, static_cast<char>(0xBF));
+    WriteTextFileAtomic(path, data);
 }
 
 std::filesystem::path SkillCatalog::file_path() const {
-    return baseDir_ / "skills.json";
+    return baseDir_ / "skills.txt";
 }
 
 std::string SkillCatalog::trim(std::string s) {
-    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+    auto is_space = [](unsigned char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+    };
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c){ return !is_space(c); }));
     s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c){ return !is_space(c); }).base(), s.end());
     return s;
@@ -458,7 +758,7 @@ std::string SkillCatalog::normalize(const std::string& s) {
     std::string out;
     out.reserve(lower.size());
     for (char c : lower) {
-        if (!std::isspace(static_cast<unsigned char>(c))) {
+        if (!(c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v')) {
             out.push_back(c);
         }
     }
@@ -472,6 +772,7 @@ std::string SkillCatalog::make_id(const std::string& displayName) const {
         hash *= 1099511628211ULL;
     }
     std::ostringstream ss;
+    ss.imbue(std::locale::classic());
     ss << "sk_" << std::hex << std::setw(16) << std::setfill('0') << hash;
     std::string base = ss.str();
     std::string candidate = base;
