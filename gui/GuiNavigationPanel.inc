@@ -1,3 +1,7 @@
+void PomodoroQuickStart(GuiState& state);
+void PomodoroQuickReset(GuiState& state);
+void PomodoroQuickNext(GuiState& state);
+
 void DrawNavigationPanel(GuiState& state) {
     // Sidebar window
     ImGuiWindowFlags navFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -156,6 +160,28 @@ void DrawNavigationPanel(GuiState& state) {
     ImVec4 timeColor = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], accent, 0.35f);
     timeColor.w = std::max(timeColor.w, 0.85f);
     ImGui::TextColored(timeColor, "%s", buf);
+    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+    DrawCardHeader(u8"Помодоро · быстрые действия");
+    const float actionSize = 34.0f;
+    const float actionSpacing = 10.0f;
+    const float totalWidth = actionSize * 3.0f + actionSpacing * 2.0f;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float offsetX = std::max(0.0f, (avail - totalWidth) * 0.5f);
+    ImGui::BeginGroup();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+    const bool nextEnabled = !state.ui.pomodoroAutoAdvance || state.pomodoroAwaitConfirm;
+    if (IconButtonGui("pom_quick_start", UiIcon::Play, u8"Старт/продолжить", accent, actionSize, true)) {
+        PomodoroQuickStart(state);
+    }
+    ImGui::SameLine(0.0f, actionSpacing);
+    if (IconButtonGui("pom_quick_reset", UiIcon::Stop, u8"Сбросить", accent, actionSize, true)) {
+        PomodoroQuickReset(state);
+    }
+    ImGui::SameLine(0.0f, actionSpacing);
+    if (IconButtonGui("pom_quick_next", UiIcon::Next, u8"Следующий этап (ручной режим)", accent, actionSize, nextEnabled)) {
+        PomodoroQuickNext(state);
+    }
+    ImGui::EndGroup();
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
     navButton("nav_profiles", UiIcon::Users, u8"Профили", state.showProfilesWindow, [&]() {

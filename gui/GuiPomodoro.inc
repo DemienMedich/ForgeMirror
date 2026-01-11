@@ -162,3 +162,31 @@ static std::string FormatPomodoroTime(int seconds) {
     std::snprintf(buf, sizeof(buf), "%02d:%02d", minutes, secs);
     return buf;
 }
+
+// Quick control helpers (used outside this file)
+void PomodoroQuickReset(GuiState& state) {
+    ResetPomodoroState(state);
+}
+
+void PomodoroQuickStart(GuiState& state) {
+    if (state.pomodoroAwaitConfirm) {
+        StartPomodoroPhase(state, state.pomodoroNextPhase);
+        return;
+    }
+    if (state.pomodoroRemainingSeconds > 0 && !state.pomodoroRunning) {
+        state.pomodoroRunning = true;
+        state.pomodoroAccumulator = 0.0f;
+        return;
+    }
+    StartPomodoroPhase(state, static_cast<int>(PomodoroPhase::Work));
+}
+
+void PomodoroQuickNext(GuiState& state) {
+    if (state.pomodoroAwaitConfirm) {
+        StartPomodoroPhase(state, state.pomodoroNextPhase);
+    } else if (state.pomodoroRunning) {
+        FinishPomodoroInterval(state);
+    } else {
+        StartPomodoroPhase(state, NextPomodoroPhase(state));
+    }
+}
