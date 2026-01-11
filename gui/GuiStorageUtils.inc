@@ -27,5 +27,4 @@ void InitStorageContext(const std::filesystem::path& storageDir, SkillCatalog& c
     gameplayConfig = LoadGameplayConfig(storageDir);
     SetGameplayConfig(gameplayConfig);
     storage.reset(CreateFileStorage(storageDir));
-    EnsureAdminProfile(*storage, catalog);
 }

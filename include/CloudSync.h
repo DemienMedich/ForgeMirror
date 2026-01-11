@@ -15,6 +15,7 @@ struct CloudSyncStats {
     int filesPulled = 0;
     int filesPushed = 0;
     int adminSkipped = 0;
+    int ioErrors = 0;
 };
 
 struct CloudSyncResult {

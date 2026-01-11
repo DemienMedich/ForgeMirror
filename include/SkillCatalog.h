@@ -14,6 +14,7 @@ public:
     bool contains_id(const std::string& id) const;
     bool contains_name(const std::string& name) const;
     std::optional<std::string> id_for_name(const std::string& name) const;
+    void reload();
     double weight(const std::string& skill) const;
     std::string display_name(const std::string& id) const;
     std::string description(const std::string& id) const;

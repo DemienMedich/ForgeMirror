@@ -905,7 +905,6 @@ int main() {
     std::string adminPassword = LoadAdminPassword(storageDir);
 
     std::unique_ptr<IJobStorage> storage(CreateFileStorage(storageDir));
-    EnsureAdminProfile(*storage, catalog);
 
     std::unique_ptr<IApiClient> api(CreateFakeApi());
 
@@ -1094,7 +1093,7 @@ int main() {
             if (!activeProfile) {
                 continue;
             }
-            const bool adminMode = adminAuthed && activeProfile->profile.is_admin();
+            const bool adminMode = adminAuthed;
 
             auto authToken = api->login(activeProfile->profile.name(), "default");
             if (authToken) {

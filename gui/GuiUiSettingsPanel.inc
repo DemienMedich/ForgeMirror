@@ -1,3 +1,26 @@
+static std::filesystem::path PathFromUtf8(const std::string& value) {
+    return std::filesystem::u8path(value);
+}
+
+static std::string PathToUtf8(const std::filesystem::path& value) {
+    return value.u8string();
+}
+
+static std::vector<std::filesystem::path> CloudPickerDrives() {
+    std::vector<std::filesystem::path> drives;
+#if defined(_WIN32)
+    const DWORD mask = GetLogicalDrives();
+    for (int i = 0; i < 26; ++i) {
+        if ((mask & (1u << i)) == 0) continue;
+        char root[4] = {static_cast<char>('A' + i), ':', '\\', '\0'};
+        drives.emplace_back(root);
+    }
+#else
+    drives.emplace_back("/");
+#endif
+    return drives;
+}
+
 void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawWindowBackground(state.ui, UiWindowId::UiSettings, state.storageDir);
     DrawCardHeader(u8"Настройки");
@@ -9,61 +32,51 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     bool autoSyncEnabled = state.cloudConfig.autoSyncEnabled;
     int autoSyncMinutes = state.cloudConfig.autoSyncMinutes;
     bool syncChanged = false;
-    auto pickFolder = [&](std::string& outPath) -> bool {
-#if defined(_WIN32)
-        BROWSEINFOA bi{};
-        bi.lpszTitle = "Выберите папку синхронизации";
-        bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-        LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
-        if (!pidl) return false;
-        char buffer[MAX_PATH] = {0};
-        bool ok = SHGetPathFromIDListA(pidl, buffer) == TRUE;
-        CoTaskMemFree(pidl);
-        if (ok) {
-            outPath = buffer;
-        }
-        return ok;
-#else
-        (void)outPath;
-        return false;
-#endif
-    };
     if (ImGui::Checkbox(u8"Включить синхронизацию", &syncEnabled)) {
         syncChanged = true;
     }
     bool rootEdited = false;
-    if (ImGui::InputTextWithHint(u8"Папка синхронизации", u8"C:\\\\ForgeMirror\\Sync",
-                                 state.cloudRootBuffer.data(), state.cloudRootBuffer.size())) {
-        syncChanged = true;
-        rootEdited = true;
-    }
-    if (ImGui::Button(u8"Выбрать папку")) {
-        std::string picked;
-        if (pickFolder(picked)) {
-            std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s", picked.c_str());
+    ImGui::TextDisabled(u8"Папка синхронизации");
+    const float browseWidth = ImGui::CalcTextSize(u8"Обзор...").x + style.FramePadding.x * 2.0f;
+    if (ImGui::BeginTable("cloud_root_row", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("cloud_path", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("cloud_browse", ImGuiTableColumnFlags_WidthFixed, browseWidth);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::InputTextWithHint(u8"##cloud_root", u8"C:\\\\ForgeMirror\\Sync",
+                                     state.cloudRootBuffer.data(), state.cloudRootBuffer.size())) {
             syncChanged = true;
             rootEdited = true;
         }
-    }
-    ImGui::TextDisabled(u8"Можно указать абсолютный путь или путь относительно папки данных.");
-    if (state.isAdmin) {
-        if (ImGui::Button(u8"Создать папку синхронизации")) {
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button(u8"Обзор...")) {
             std::string rawPath = TrimStringGui(state.cloudRootBuffer.data());
-            if (rawPath.empty()) {
-                SetStatus(state, u8"Укажите путь для папки синхронизации.", 1.0f, 0.75f, 0.35f);
-            } else {
-                std::filesystem::path folder = rawPath;
-                if (!folder.is_absolute()) folder = state.storageDir / folder;
-                std::error_code ec;
-                std::filesystem::create_directories(folder, ec);
-                if (ec) {
-                    SetStatus(state, u8"Не удалось создать папку синхронизации.", 1.0f, 0.75f, 0.35f);
-                } else {
-                    SetStatus(state, u8"Папка синхронизации создана.", 0.45f, 0.9f, 0.45f);
-                }
+            std::filesystem::path startPath = rawPath.empty() ? state.cloudConfig.root : PathFromUtf8(rawPath);
+            if (startPath.empty()) {
+                startPath = state.storageDir / "cloud";
+            } else if (!startPath.is_absolute()) {
+                startPath = state.storageDir / startPath;
             }
+            std::error_code ec;
+            if (!std::filesystem::exists(startPath, ec)) {
+                startPath = state.storageDir;
+            }
+            state.cloudPickerPath = startPath;
+            state.cloudPickerSelectedPath.clear();
+            state.cloudPickerRequest = true;
         }
+        ImGui::EndTable();
     }
+    std::string rawRoot = TrimStringGui(state.cloudRootBuffer.data());
+    std::filesystem::path resolvedRoot = rawRoot.empty() ? state.cloudConfig.root : PathFromUtf8(rawRoot);
+    if (resolvedRoot.empty()) {
+        resolvedRoot = state.storageDir / "cloud";
+    } else if (!resolvedRoot.is_absolute()) {
+        resolvedRoot = state.storageDir / resolvedRoot;
+    }
+    ImGui::TextDisabled(u8"Текущий путь: %s", PathToUtf8(resolvedRoot).c_str());
+    ImGui::TextDisabled(u8"Можно указать абсолютный путь или путь относительно папки данных.");
     if (ImGui::Checkbox(u8"Автосинхронизация", &autoSyncEnabled)) {
         syncChanged = true;
     }
@@ -80,18 +93,125 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     }
     if (rootEdited) {
         std::string rawPath = TrimStringGui(state.cloudRootBuffer.data());
-        state.cloudConfig.root = rawPath.empty() ? std::filesystem::path() : std::filesystem::path(rawPath);
+        state.cloudConfig.root = rawPath.empty() ? std::filesystem::path() : PathFromUtf8(rawPath);
     }
     if (ImGui::Button(u8"Сохранить синхронизацию")) {
         std::string rawPath = TrimStringGui(state.cloudRootBuffer.data());
-        state.cloudConfig.root = rawPath.empty() ? std::filesystem::path() : std::filesystem::path(rawPath);
-        SaveCloudSyncConfig(state.storageDir, state.cloudConfig);
-        state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
-        state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
-        std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s",
-                      state.cloudConfig.root.string().c_str());
-        state.lastCloudSyncAt = NowSeconds();
-        SetStatus(state, u8"Настройки синхронизации сохранены.", 0.45f, 0.9f, 0.45f);
+        state.cloudConfig.root = rawPath.empty() ? std::filesystem::path() : PathFromUtf8(rawPath);
+        if (SaveCloudSyncConfig(state.storageDir, state.cloudConfig)) {
+            state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
+            state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+            std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s",
+                          PathToUtf8(state.cloudConfig.root).c_str());
+            state.lastCloudSyncAt = NowSeconds();
+            SetStatus(state, u8"Настройки синхронизации сохранены.", 0.45f, 0.9f, 0.45f);
+        } else {
+            SetStatus(state, u8"Не удалось сохранить настройки синхронизации.", 1.0f, 0.75f, 0.35f);
+        }
+    }
+    if (state.cloudPickerRequest) {
+        ImGui::OpenPopup(u8"Выбор папки синхронизации");
+        state.cloudPickerRequest = false;
+    }
+    bool pickerOpen = true;
+    ImGui::SetNextWindowSize(ImVec2(560.0f, 420.0f), ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal(u8"Выбор папки синхронизации", &pickerOpen,
+                               ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse)) {
+        std::error_code ec;
+        const bool hasPath = !state.cloudPickerPath.empty();
+        const bool exists = hasPath && std::filesystem::exists(state.cloudPickerPath, ec);
+        std::string currentPath = hasPath ? PathToUtf8(state.cloudPickerPath) : std::string();
+        ImGui::TextDisabled(u8"Текущая папка:");
+        ImGui::TextWrapped("%s", currentPath.empty() ? "-" : currentPath.c_str());
+        ImGui::Spacing();
+        const auto drives = CloudPickerDrives();
+        if (!drives.empty()) {
+            ImGui::TextDisabled(u8"Диски");
+            const int cols = std::max(1, std::min<int>(6, static_cast<int>(drives.size())));
+            if (ImGui::BeginTable("cloud_picker_drives", cols, ImGuiTableFlags_SizingStretchSame)) {
+                for (const auto& drive : drives) {
+                    ImGui::TableNextColumn();
+                    const std::string label = PathToUtf8(drive);
+                    if (ImGui::Button(label.c_str())) {
+                        state.cloudPickerPath = drive;
+                        state.cloudPickerSelectedPath.clear();
+                    }
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Spacing();
+        }
+        std::filesystem::path parentPath;
+        if (hasPath) {
+            parentPath = state.cloudPickerPath.parent_path();
+        }
+        const bool canGoUp = hasPath && !parentPath.empty() && parentPath != state.cloudPickerPath;
+        if (!canGoUp) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Вверх")) {
+            state.cloudPickerPath = parentPath;
+            state.cloudPickerSelectedPath.clear();
+        }
+        if (!canGoUp) ImGui::EndDisabled();
+        ImGui::SameLine();
+        const bool canOpen = !state.cloudPickerSelectedPath.empty();
+        if (!canOpen) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Открыть")) {
+            state.cloudPickerPath = state.cloudPickerSelectedPath;
+            state.cloudPickerSelectedPath.clear();
+        }
+        if (!canOpen) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button(u8"Выбрать эту папку")) {
+            std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s", currentPath.c_str());
+            syncChanged = true;
+            rootEdited = true;
+            ImGui::CloseCurrentPopup();
+            pickerOpen = false;
+        }
+        ImGui::Spacing();
+        if (!exists) {
+            ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.35f, 1.0f), u8"Папка не найдена.");
+        }
+        ImGui::BeginChild("cloud_picker_list", ImVec2(0.0f, 220.0f), true);
+        if (exists) {
+            std::vector<std::filesystem::path> entries;
+            for (std::filesystem::directory_iterator it(state.cloudPickerPath, ec), end;
+                 it != end && !ec; it.increment(ec)) {
+                std::error_code entryEc;
+                if (it->is_directory(entryEc)) {
+                    entries.push_back(it->path());
+                }
+            }
+            std::sort(entries.begin(), entries.end(),
+                      [](const std::filesystem::path& a, const std::filesystem::path& b) {
+                          return a.filename().u8string() < b.filename().u8string();
+                      });
+            if (entries.empty()) {
+                ImGui::TextDisabled(u8"Нет подпапок.");
+            } else {
+                for (const auto& entry : entries) {
+                    const std::string name = PathToUtf8(entry.filename());
+                    const bool selected = (state.cloudPickerSelectedPath == entry);
+                    if (ImGui::Selectable(name.c_str(), selected)) {
+                        state.cloudPickerSelectedPath = entry;
+                    }
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                        state.cloudPickerPath = entry;
+                        state.cloudPickerSelectedPath.clear();
+                    }
+                }
+            }
+        }
+        ImGui::EndChild();
+        ImGui::Spacing();
+        if (ImGui::Button(u8"Отмена")) {
+            ImGui::CloseCurrentPopup();
+            pickerOpen = false;
+        }
+        ImGui::EndPopup();
+    }
+    if (!pickerOpen && ImGui::IsPopupOpen(u8"Выбор папки синхронизации")) {
+        ImGui::CloseCurrentPopup();
     }
     if (!state.isAdmin) {
         ImGui::Spacing();
@@ -234,28 +354,10 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     DrawCardHeader(u8"Пресеты интерфейса");
     ImGui::TextDisabled(u8"Пресеты сохраняют стиль, масштаб и фон.");
     const bool stackUiPresets = headerWidth < 520.0f;
-    auto applyGlassUiPreset = [&]() {
-        ApplyThemePreset(3, state.ui, style);
-        state.ui.fontScale = 1.05f;
-        state.ui.alpha = 0.96f;
-        state.ui.windowRounding = 14.0f;
-        state.ui.frameRounding = 10.0f;
-        state.ui.scrollbarRounding = 12.0f;
-        state.ui.grabRounding = 10.0f;
-        state.ui.windowPadding = ImVec2(14.0f, 12.0f);
-        state.ui.framePadding = ImVec2(10.0f, 7.0f);
-        state.ui.itemSpacing = ImVec2(10.0f, 8.0f);
-        state.ui.backgroundAlpha = 0.20f;
-        state.ui.backgroundTiled = false;
-        for (auto& bg : state.ui.backgrounds) {
-            bg.clear();
-        }
-        state.ui.windowDecorated = false;
-        state.uiDirty = true;
-    };
     if (stackUiPresets) {
         if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
-            applyGlassUiPreset();
+            ApplyGlassUiPreset(state.ui, style);
+            state.uiDirty = true;
         }
         if (ImGui::Button(u8"Минимализм", ImVec2(-1.0f, 0.0f))) {
             state.ui.fontScale = 1.0f;
@@ -300,7 +402,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
-            applyGlassUiPreset();
+            ApplyGlassUiPreset(state.ui, style);
+            state.uiDirty = true;
         }
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Минимализм", ImVec2(-1.0f, 0.0f))) {
@@ -412,9 +515,6 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
                 std::error_code ec;
                 std::filesystem::remove(presetPath, ec);
-                auto legacyPath = presetPath;
-                legacyPath.replace_extension(".ini");
-                std::filesystem::remove(legacyPath, ec);
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
         } else if (ImGui::BeginTable("ui_preset_list", 4, ImGuiTableFlags_SizingStretchProp)) {
@@ -447,9 +547,6 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 const auto presetPath = UiPresetPath(state.storageDir, presets[state.uiPresetIndex]);
                 std::error_code ec;
                 std::filesystem::remove(presetPath, ec);
-                auto legacyPath = presetPath;
-                legacyPath.replace_extension(".ini");
-                std::filesystem::remove(legacyPath, ec);
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
             ImGui::EndTable();

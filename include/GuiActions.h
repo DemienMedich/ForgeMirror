@@ -44,6 +44,9 @@ ActionResult RemoveSkillAction(IJobStorage& storage, SkillCatalog& catalog, cons
 ActionResult MergeSkillAction(IJobStorage& storage, SkillCatalog& catalog, const std::string& fromId,
                               const std::string& toId, const std::string& newName, double newWeight,
                               const std::string& newDesc, const std::string& restoreId);
+ActionResult ClearAllSkillsAction(IJobStorage& storage, SkillCatalog& catalog,
+                                  const std::filesystem::path& storageDir,
+                                  const std::string& restoreId);
 
 ActionResult GrantAchievementAction(Profile& profile, IJobStorage& storage, const std::string& title,
                                     const std::string& skillId, double bonusPercent, const std::string& icon,

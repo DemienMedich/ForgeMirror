@@ -6,7 +6,6 @@
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
 #include "Profile.h"
-#include "JsonLite.h"
 
 #include <algorithm>
 #include <cctype>
@@ -193,25 +192,25 @@ bool EnsureDirectory(const std::filesystem::path& dir) {
 bool HasStorageData(const std::filesystem::path& dir) {
     std::error_code ec;
     if (!std::filesystem::exists(dir, ec)) return false;
-    if (std::filesystem::exists(dir / "skills.json", ec)) return true;
     if (std::filesystem::exists(dir / "skills.txt", ec)) return true;
-    if (std::filesystem::exists(dir / "meta" / "gameplay.json", ec)) return true;
     if (std::filesystem::exists(dir / "meta" / "gameplay.ini", ec)) return true;
     for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
-        if (entry.is_regular_file() &&
-            (entry.path().extension() == ".json" || entry.path().extension() == ".ini")) {
-            return true;
-        }
+        if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
     }
     auto archiveDir = dir / "archive";
     if (std::filesystem::exists(archiveDir, ec)) {
         for (const auto& entry : std::filesystem::directory_iterator(archiveDir, ec)) {
-            if (entry.is_regular_file() &&
-                (entry.path().extension() == ".json" || entry.path().extension() == ".ini")) {
-                return true;
-            }
+            if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
         }
     }
+    return false;
+}
+
+bool ShouldSkipSeedCopy(const std::filesystem::path& rel) {
+    const std::string relPath = rel.generic_string();
+    if (relPath == "meta/ui.ini") return true;
+    if (relPath == "meta/gui-layout.ini") return true;
+    if (relPath.rfind("meta/ui-presets", 0) == 0) return true;
     return false;
 }
 
@@ -227,6 +226,12 @@ bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::pa
         const auto& entry = *it;
         auto rel = std::filesystem::relative(entry.path(), src, ec);
         if (ec) return false;
+        if (ShouldSkipSeedCopy(rel)) {
+            if (entry.is_directory()) {
+                it.disable_recursion_pending();
+            }
+            continue;
+        }
         auto target = dst / rel;
         if (entry.is_directory()) {
             std::filesystem::create_directories(target, ec);
@@ -242,6 +247,33 @@ bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::pa
         }
     }
     return true;
+}
+
+void MergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
+    if (seedRoot.empty() || storageRoot.empty()) return;
+    std::error_code ec;
+    if (!std::filesystem::exists(seedRoot, ec)) return;
+    if (std::filesystem::equivalent(seedRoot, storageRoot, ec)) return;
+    auto copy_missing_profile = [&](const std::filesystem::path& srcFile, const std::filesystem::path& dstDir) {
+        if (srcFile.extension() != ".ini") return;
+        std::filesystem::path dstFile = dstDir / srcFile.filename();
+        if (std::filesystem::exists(dstFile, ec)) return;
+        std::filesystem::create_directories(dstDir, ec);
+        if (ec) return;
+        std::filesystem::copy_file(srcFile, dstFile, std::filesystem::copy_options::overwrite_existing, ec);
+    };
+    for (const auto& entry : std::filesystem::directory_iterator(seedRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        copy_missing_profile(entry.path(), storageRoot);
+    }
+    auto seedArchive = seedRoot / "archive";
+    if (std::filesystem::exists(seedArchive, ec)) {
+        auto dstArchive = storageRoot / "archive";
+        for (const auto& entry : std::filesystem::directory_iterator(seedArchive, ec)) {
+            if (!entry.is_regular_file()) continue;
+            copy_missing_profile(entry.path(), dstArchive);
+        }
+    }
 }
 
 } // namespace
@@ -266,29 +298,34 @@ std::filesystem::path ResolveStorageDirectory() {
     const bool userHasData = userReady && HasStorageData(userDir);
     const bool legacyUserHasData = legacyUserReady && HasStorageData(legacyUserDir);
 
+    auto finalize = [&](std::filesystem::path chosen) {
+        MergeSeedProfiles(legacyDir, chosen);
+        return chosen;
+    };
+
     if (legacyHasData && userReady && !userHasData) {
         if (CopyStorageTree(legacyDir, userDir)) {
-            return userDir;
+            return finalize(userDir);
         }
-        return legacyDir;
+        return finalize(legacyDir);
     }
     if (userHasData) {
-        return userDir;
+        return finalize(userDir);
     }
     if (legacyUserHasData) {
-        return legacyUserDir;
+        return finalize(legacyUserDir);
     }
     if (legacyHasData) {
-        return legacyDir;
+        return finalize(legacyDir);
     }
     if (userReady) {
-        return userDir;
+        return finalize(userDir);
     }
     if (legacyUserReady) {
-        return legacyUserDir;
+        return finalize(legacyUserDir);
     }
     EnsureDirectory(legacyDir);
-    return legacyDir;
+    return finalize(legacyDir);
 }
 
 namespace {
@@ -305,17 +342,16 @@ std::filesystem::path AdminPasswordPath(const std::filesystem::path& storageDir)
     std::error_code ec;
     std::filesystem::create_directories(metaDir, ec);
     (void)ec;
-    return metaDir / "admin.json";
+    return metaDir / "admin.ini";
 }
 
 bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
     auto path = AdminPasswordPath(storageDir);
-    std::ostringstream out;
-    out << "{\n  \"password\": \"" << JsonLite::Escape(password) << "\"\n}\n";
-    std::ofstream file(path, std::ios::binary | std::ios::trunc);
-    if (!file) return false;
-    file << out.str();
-    return file.good();
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << "# ForgeMirror admin password\n";
+    out << "password=" << password << "\n";
+    return out.good();
 }
 
 } // namespace
@@ -329,20 +365,7 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
     }
 
     auto path = AdminPasswordPath(storageDir);
-    if (std::ifstream jsonFile(path); jsonFile) {
-        std::ostringstream ss;
-        ss << jsonFile.rdbuf();
-        JsonLite::Value root;
-        if (JsonLite::Parse(ss.str(), root, nullptr)) {
-            if (const auto* v = JsonLite::GetObjectValue(root, "password")) {
-                std::string value = JsonLite::GetString(*v);
-                if (!value.empty()) return value;
-            }
-        }
-    }
-
-    auto legacyPath = storageDir / "meta" / "admin.ini";
-    std::ifstream in(legacyPath);
+    std::ifstream in(path);
     if (in) {
         std::string line;
         while (std::getline(in, line)) {
@@ -350,16 +373,8 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
             if (t.empty() || t[0] == '#' || t[0] == ';') continue;
             if (t.rfind("password=", 0) == 0) {
                 std::string value = TrimCopy(t.substr(9));
-                if (!value.empty()) {
-                    SaveAdminPassword(storageDir, value);
-                    std::error_code ec;
-                    std::filesystem::remove(legacyPath, ec);
-                    return value;
-                }
-            } else if (!t.empty()) {
-                SaveAdminPassword(storageDir, t);
-                std::error_code ec;
-                std::filesystem::remove(legacyPath, ec);
+                if (!value.empty()) return value;
+            } else {
                 return t;
             }
         }

@@ -1,3 +1,22 @@
+#if defined(_WIN32)
+#include <shellapi.h>
+#include <windows.h>
+#endif
+
+static bool LaunchPath(const std::filesystem::path& path) {
+    if (path.empty()) return false;
+#if defined(_WIN32)
+    std::filesystem::path full(path);
+    std::error_code ec;
+    if (!full.is_absolute()) {
+        full = std::filesystem::absolute(full, ec);
+    }
+    return ShellExecuteA(nullptr, "open", full.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL) > (HINSTANCE)32;
+#else
+    return false;
+#endif
+}
+
 static void CloseWorkspaceWindows(GuiState& state) {
     state.showSkillCatalog = false;
     state.showPipeline = false;
@@ -31,12 +50,19 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
     CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
     if (result.ok) {
+        catalog.reload();
+        state.lastCatalogSelection = -1;
         RefreshProfiles(state, storage, catalog);
         state.tasks = LoadTasks(state.storageDir);
+        state.pipelineSteps = LoadPipeline(state.storageDir);
     }
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
     state.lastCloudSyncAt = NowSeconds();
+    state.lastCloudSyncOk = result.ok;
+    if (result.ok) {
+        state.lastCloudSyncOkAt = state.lastCloudSyncAt;
+    }
 }
 
 static void RunCloudPush(GuiState& state) {
@@ -44,6 +70,10 @@ static void RunCloudPush(GuiState& state) {
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
     state.lastCloudSyncAt = NowSeconds();
+    state.lastCloudSyncOk = result.ok;
+    if (result.ok) {
+        state.lastCloudSyncOkAt = state.lastCloudSyncAt;
+    }
 }
 
 static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, bool showStatus) {
@@ -55,6 +85,7 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
     }
     const bool doPull = state.cloudConfig.autoPull;
     const bool doPush = state.isAdmin && state.cloudConfig.autoPush;
+    const bool viewerMode = !state.isAdmin;
     CloudSyncResult pullResult;
     CloudSyncResult pushResult;
     bool anyAction = false;
@@ -63,8 +94,11 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
                                        state.isAdmin ? CloudRole::Admin : CloudRole::Viewer);
         anyAction = true;
         if (pullResult.ok) {
+            catalog.reload();
+            state.lastCatalogSelection = -1;
             RefreshProfiles(state, storage, catalog);
             state.tasks = LoadTasks(state.storageDir);
+            state.pipelineSteps = LoadPipeline(state.storageDir);
         }
     }
     if (doPush) {
@@ -84,6 +118,9 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
         message = doPull && !pullResult.ok ? pullResult.message : pushResult.message;
     } else {
         message = changed ? u8"Синхронизация завершена." : u8"Данные синхронизированы.";
+        if (viewerMode) {
+            message += u8" Вы в режиме просмотра: выгрузка доступна администратору.";
+        }
     }
     if (showStatus || !ok) {
         if (ok) {
@@ -93,24 +130,86 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
         }
     }
     state.lastCloudSyncAt = NowSeconds();
+    if (anyAction) {
+        state.lastCloudSyncOk = ok;
+        if (ok) {
+            state.lastCloudSyncOkAt = state.lastCloudSyncAt;
+        }
+    }
 }
 
-static std::string FormatSyncPathLabel(const GuiState& state, size_t maxChars = 48) {
-    std::string path = state.cloudConfig.root.string();
-    if (path.empty()) {
-        return u8"Путь: (не задан)";
+static std::int64_t ToUnixSeconds(std::filesystem::file_time_type time) {
+    using namespace std::chrono;
+    const auto sys = time_point_cast<seconds>(time - std::filesystem::file_time_type::clock::now()
+                                              + system_clock::now());
+    return sys.time_since_epoch().count();
+}
+
+static std::int64_t ComputeStorageStamp(const std::filesystem::path& storageDir) {
+    std::error_code ec;
+    std::int64_t latest = 0;
+    if (!std::filesystem::exists(storageDir, ec)) return latest;
+    for (const auto& entry : std::filesystem::directory_iterator(storageDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".ini") continue;
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(entry.path(), ec));
+        if (ec) continue;
+        latest = std::max(latest, stamp);
     }
-    if (path.size() <= maxChars) {
-        return u8"Путь: " + path;
+    auto archiveDir = storageDir / "archive";
+    if (std::filesystem::exists(archiveDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(archiveDir, ec)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".ini") continue;
+            auto stamp = ToUnixSeconds(std::filesystem::last_write_time(entry.path(), ec));
+            if (ec) continue;
+            latest = std::max(latest, stamp);
+        }
     }
-    std::string tail = path.substr(path.size() - maxChars);
-    return u8"Путь: ..." + tail;
+    auto tasksPath = storageDir / "meta" / "tasks.json";
+    if (std::filesystem::exists(tasksPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(tasksPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
+    auto skillsPath = storageDir / "skills.txt";
+    if (std::filesystem::exists(skillsPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(skillsPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
+    auto pipelinePath = storageDir / "meta" / "pipeline.json";
+    if (std::filesystem::exists(pipelinePath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(pipelinePath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
+    return latest;
+}
+
+static std::int64_t GetStorageStamp(GuiState& state) {
+    const std::int64_t now = NowSeconds();
+    if (state.lastStorageScanAt <= 0 || now - state.lastStorageScanAt >= 2) {
+        state.lastStorageScanAt = now;
+        state.lastStorageDataAt = ComputeStorageStamp(state.storageDir);
+    }
+    return state.lastStorageDataAt;
 }
 
 void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
+    std::filesystem::path resolvedCloudRoot = state.cloudConfig.root;
+    if (resolvedCloudRoot.empty()) {
+        resolvedCloudRoot = state.storageDir / "cloud";
+    } else if (!resolvedCloudRoot.is_absolute()) {
+        resolvedCloudRoot = state.storageDir / resolvedCloudRoot;
+    }
+    const std::string cloudRootLabel = resolvedCloudRoot.u8string();
 
     const bool canArchive = state.selectedIndex >= 0 &&
     state.selectedIndex < static_cast<int>(state.profiles.size()) &&
@@ -272,6 +371,8 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         }
 
         if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
+            ImGui::TextDisabled(u8"Папка: %s", cloudRootLabel.c_str());
+            ImGui::Separator();
             if (ImGui::MenuItem(u8"Обновить из облака")) {
                 RunCloudPull(state, storage, catalog);
             }
@@ -297,20 +398,38 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             if (state.cloudUpdateAvailable) {
                 ImGui::Separator();
                 ImGui::TextColored(accent, u8"Доступно обновление клиента.");
+                std::filesystem::path updateFile;
+                bool updateReady = false;
                 if (state.cloudManifest.releaseFile.empty()) {
                     ImGui::TextDisabled(u8"Файл обновления не указан.");
                 } else {
+                    updateFile = state.storageDir / "meta" / "updates" / state.cloudManifest.releaseFile;
+                    std::error_code ec;
+                    updateReady = std::filesystem::exists(updateFile, ec);
                     if (ImGui::MenuItem(u8"Скачать обновление")) {
                         std::filesystem::path outPath;
                         CloudSyncResult dl = DownloadCloudRelease(state.cloudConfig, state.storageDir,
                             state.cloudManifest, outPath);
                         if (dl.ok) {
+                            updateFile = outPath;
+                            updateReady = true;
                             std::string msg = dl.message;
                             msg += u8" Файл: ";
-                            msg += outPath.string();
+                            msg += outPath.u8string();
                             SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
                         } else {
                             SetStatus(state, dl.message, 1.0f, 0.75f, 0.35f);
+                        }
+                    }
+                }
+                if (updateReady) {
+                    ImGui::Separator();
+                    if (ImGui::MenuItem(u8"Запустить установщик")) {
+                        if (LaunchPath(updateFile)) {
+                            SetStatus(state, u8"Установщик запущен. Закройте приложение на время обновления.",
+                                      0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state, u8"Не удалось запустить установщик.", 1.0f, 0.75f, 0.35f);
                         }
                     }
                 }
@@ -324,15 +443,7 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         const int iconCount = 7;
         const float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
         float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - iconsWidth;
-        const std::string syncPathLabel = FormatSyncPathLabel(state);
-        const ImVec2 syncPathSize = ImGui::CalcTextSize(syncPathLabel.c_str());
-        const float pathGap = iconGap * 1.2f;
-        float pathX = rightX - pathGap - syncPathSize.x;
-        if (pathX > ImGui::GetCursorPosX()) {
-            ImGui::SetCursorPosX(pathX);
-            ImGui::TextDisabled("%s", syncPathLabel.c_str());
-            ImGui::SameLine(0.0f, pathGap);
-        } else if (rightX > ImGui::GetCursorPosX()) {
+        if (rightX > ImGui::GetCursorPosX()) {
             ImGui::SetCursorPosX(rightX);
         }
 
@@ -347,8 +458,56 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             RefreshProfiles(state, storage, catalog);
         }
         ImGui::SameLine(0.0f, iconGap);
-        if (IconButtonGui("top_sync", UiIcon::Launch, u8"Синхронизировать", accent, iconSize)) {
+        std::string syncTooltip = u8"Синхронизировать";
+        if (!state.cloudConfig.enabled) {
+            syncTooltip += u8"\nОблако отключено";
+        } else {
+            syncTooltip += u8"\nПапка: ";
+            syncTooltip += cloudRootLabel;
+            if (!state.isAdmin) {
+                syncTooltip += u8"\nРежим просмотра: только загрузка";
+            }
+        }
+        if (IconButtonGui("top_sync", UiIcon::Launch, syncTooltip.c_str(), accent, iconSize,
+                          state.cloudConfig.enabled)) {
             RunCloudQuickSync(state, storage, catalog, true);
+        }
+        ImGui::SameLine(0.0f, style.ItemSpacing.x * 0.35f);
+        const float dotSize = std::max(10.0f, iconSize * 0.28f);
+        ImGui::InvisibleButton("##sync_status", ImVec2(dotSize, iconSize));
+        ImVec2 pMin = ImGui::GetItemRectMin();
+        ImVec2 pMax = ImGui::GetItemRectMax();
+        ImVec2 center(pMin.x + dotSize * 0.5f, (pMin.y + pMax.y) * 0.5f);
+        float radius = dotSize * 0.36f;
+        ImVec4 okColor = ImVec4(0.35f, 0.9f, 0.45f, 0.95f);
+        ImVec4 warnColor = ImVec4(1.0f, 0.75f, 0.35f, 0.95f);
+        ImVec4 offColor = style.Colors[ImGuiCol_TextDisabled];
+        ImVec4 dotColor = offColor;
+        std::string tooltip;
+        if (!state.cloudConfig.enabled) {
+            tooltip = u8"Облако отключено.";
+        } else {
+            const std::int64_t storageStamp = GetStorageStamp(state);
+            const bool hasOk = state.lastCloudSyncOk && state.lastCloudSyncOkAt > 0;
+            const bool synced = hasOk && storageStamp <= state.lastCloudSyncOkAt;
+            if (!hasOk) {
+                dotColor = warnColor;
+                tooltip = u8"Синхронизация ещё не выполнялась.";
+            } else if (synced) {
+                dotColor = okColor;
+                tooltip = u8"Синхронизировано.";
+            } else {
+                dotColor = warnColor;
+                tooltip = u8"Есть несинхронизированные данные.";
+            }
+            if (state.lastCloudSyncOkAt > 0) {
+                tooltip += u8"\nПоследняя синхронизация: ";
+                tooltip += FormatTimestamp(state.lastCloudSyncOkAt, "%Y-%m-%d %H:%M");
+            }
+        }
+        ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, ImGui::GetColorU32(dotColor));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", tooltip.c_str());
         }
         ImGui::SameLine(0.0f, iconGap);
         if (IconButtonGui("top_chart", UiIcon::Chart, u8"Статистика", accent, iconSize, state.isAdmin, state.showAdminStats)) {

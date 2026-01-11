@@ -9,8 +9,14 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
     state.lastCloudSyncAt = NowSeconds();
+    std::error_code ec;
+    const auto uiPath = UiSettingsPath(storageDir);
+    const bool uiMissing = !std::filesystem::exists(uiPath, ec);
     state.ui = LoadUiSettings(storageDir, style);
-    MigrateUiPresets(storageDir, style);
+    if (uiMissing) {
+        ApplyGlassUiPreset(state.ui, style);
+        SaveUiSettings(storageDir, state.ui);
+    }
     ApplyUiTheme(state.ui.theme, style);
     ApplyUiSettings(state.ui, style, io);
     state.uiLastTheme = state.ui.theme;
@@ -31,6 +37,6 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     }
     std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
     std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s",
-                  state.cloudConfig.root.string().c_str());
+                  state.cloudConfig.root.u8string().c_str());
     RefreshProfiles(state, storage, catalog, state.ui.lastProfileId);
 }

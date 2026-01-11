@@ -149,6 +149,12 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         }
 
         ImGui::Separator();
+        if (!state.isAdmin) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Очистить все навыки", ImVec2(-1.0f, 0.0f))) {
+            state.clearSkillsPopupRequest = true;
+        }
+        if (!state.isAdmin) ImGui::EndDisabled();
+        ImGui::Separator();
         const char* sortLabels[] = {u8"По названию", u8"По весу (убыв.)"};
         const char* groupLabels[] = {u8"Без группировки", u8"По категории веса"};
         const char* weightCategoryLabels[] = {

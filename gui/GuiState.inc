@@ -25,6 +25,10 @@ struct GuiRuntimeState {
     std::string statusMessage;
     float statusColor[4] = {0.6f, 0.7f, 1.0f, 1.0f};
     std::int64_t lastCloudSyncAt = 0;
+    std::int64_t lastCloudSyncOkAt = 0;
+    bool lastCloudSyncOk = false;
+    std::int64_t lastStorageScanAt = 0;
+    std::int64_t lastStorageDataAt = 0;
     UiSettings ui;
     bool uiDirty = false;
     int uiLastTheme = -1;
@@ -58,6 +62,7 @@ struct GuiRuntimeState {
     bool addSkillPopupRequest = false;
     bool deleteSkillPopupRequest = false;
     bool mergeSkillPopupRequest = false;
+    bool clearSkillsPopupRequest = false;
     bool adminPopupRequest = false;
     bool adminChangePopupRequest = false;
     bool isAdmin = false;
@@ -96,6 +101,9 @@ struct GuiRuntimeState {
     std::array<char, 128> shortcutLabel{};
     std::array<char, 260> shortcutPath{};
     std::array<char, 260> cloudRootBuffer{};
+    bool cloudPickerRequest = false;
+    std::filesystem::path cloudPickerPath;
+    std::filesystem::path cloudPickerSelectedPath;
     std::array<char, 128> pipelineTitle{};
     std::array<char, 4096> pipelineDescription{};
     int pipelineEditIndex = -1;

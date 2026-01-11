@@ -5,7 +5,6 @@
 #include "GameplayConfig.h"
 #include "CloudSync.h"
 #include "GuiActions.h"
-#include "JsonLite.h"
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
@@ -15,7 +14,6 @@
 #  include <windows.h>
 #  include <shellapi.h>
 #  include <commdlg.h>
-#  include <shlobj.h>
 #  include <mmsystem.h>
 #  include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -165,8 +163,10 @@ int main() {
 
     auto storageDir = ResolveStorageDirectory();
     CloudSyncConfig cloudConfig = LoadCloudSyncConfig(storageDir);
+    bool initialCloudPullOk = false;
     if (cloudConfig.enabled && cloudConfig.autoPull) {
-        PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
+        CloudSyncResult pullResult = PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
+        initialCloudPullOk = pullResult.ok;
     }
     static std::string layoutPath;
     ConfigureLayoutPath(io, storageDir, layoutPath);
@@ -185,6 +185,10 @@ int main() {
     state.cloudConfig = cloudConfig;
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+    if (initialCloudPullOk) {
+        state.lastCloudSyncOk = true;
+        state.lastCloudSyncOkAt = NowSeconds();
+    }
 
     RunGuiLoop(window, state, *storage, catalog, style, io, layoutPath);
 
