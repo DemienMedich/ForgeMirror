@@ -10,7 +10,14 @@ static std::string tasks_read_all(const std::filesystem::path& p) {
     if (!in) return {};
     std::ostringstream ss;
     ss << in.rdbuf();
-    return ss.str();
+    std::string data = ss.str();
+    if (data.size() >= 3 &&
+        static_cast<unsigned char>(data[0]) == 0xEF &&
+        static_cast<unsigned char>(data[1]) == 0xBB &&
+        static_cast<unsigned char>(data[2]) == 0xBF) {
+        data.erase(0, 3);
+    }
+    return data;
 }
 
 static bool tasks_write_all(const std::filesystem::path& p, const std::string& data) {
