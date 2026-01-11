@@ -27,6 +27,36 @@ void DrawTasksPanel(GuiState& state) {
         return;
     }
 
+    auto ComputeFilteredTasks = [&state]() {
+        std::vector<const TaskEntry*> ordered;
+        ordered.reserve(state.tasks.size());
+        for (const auto& task : state.tasks) {
+            ordered.push_back(&task);
+        }
+        std::sort(ordered.begin(), ordered.end(), [](const TaskEntry* a, const TaskEntry* b) {
+            return a->createdAt > b->createdAt;
+        });
+        const std::int64_t nowSec = NowSeconds();
+        const std::int64_t minTs = state.tasksFilterDays > 0
+            ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
+            : 0;
+        const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
+            state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
+            ? state.profiles[state.tasksFilterProfile - 1].id
+            : std::string();
+        std::vector<const TaskEntry*> filtered;
+        filtered.reserve(ordered.size());
+        for (const TaskEntry* task : ordered) {
+            const std::string filterText = task->project + " " + task->title + " " + task->description;
+            if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
+            if (state.tasksFilterCategory > 0 && task->category != state.tasksFilterCategory - 1) continue;
+            if (!filterProfileId.empty() && !FindTaskParticipant(*task, filterProfileId)) continue;
+            if (minTs > 0 && task->createdAt < minTs) continue;
+            filtered.push_back(task);
+        }
+        return filtered;
+    };
+
     std::unordered_map<std::string, std::string> nameById;
     nameById.reserve(state.profiles.size());
     for (const auto& info : state.profiles) {
@@ -102,24 +132,7 @@ void DrawTasksPanel(GuiState& state) {
         if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
             std::filesystem::path outPath;
             int exported = 0;
-            std::vector<const TaskEntry*> filtered;
-            filtered.reserve(state.tasks.size());
-            const std::int64_t nowSec = NowSeconds();
-            const std::int64_t minTs = state.tasksFilterDays > 0
-                ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                : 0;
-            const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                ? state.profiles[state.tasksFilterProfile - 1].id
-                : std::string();
-            for (const auto& task : state.tasks) {
-                const std::string filterText = task.project + " " + task.title + " " + task.description;
-                if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                if (minTs > 0 && task.createdAt < minTs) continue;
-                filtered.push_back(&task);
-            }
+            std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
             if (!ExportTasksCsv(state, filtered, nameById, outPath, exported)) {
                 SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
             } else {
@@ -132,24 +145,7 @@ void DrawTasksPanel(GuiState& state) {
         if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
             std::filesystem::path outPath;
             int exported = 0;
-            std::vector<const TaskEntry*> filtered;
-            filtered.reserve(state.tasks.size());
-            const std::int64_t nowSec = NowSeconds();
-            const std::int64_t minTs = state.tasksFilterDays > 0
-                ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                : 0;
-            const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                ? state.profiles[state.tasksFilterProfile - 1].id
-                : std::string();
-            for (const auto& task : state.tasks) {
-                const std::string filterText = task.project + " " + task.title + " " + task.description;
-                if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                if (minTs > 0 && task.createdAt < minTs) continue;
-                filtered.push_back(&task);
-            }
+            std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
             if (!ExportTasksTxt(state, filtered, nameById, outPath, exported)) {
                 SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
             } else {
@@ -207,24 +203,7 @@ void DrawTasksPanel(GuiState& state) {
             if (ImGui::Button(u8"CSV", ImVec2(-1.0f, 0.0f))) {
                 std::filesystem::path outPath;
                 int exported = 0;
-                std::vector<const TaskEntry*> filtered;
-                filtered.reserve(state.tasks.size());
-                const std::int64_t nowSec = NowSeconds();
-                const std::int64_t minTs = state.tasksFilterDays > 0
-                    ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                    : 0;
-                const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                    state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                    ? state.profiles[state.tasksFilterProfile - 1].id
-                    : std::string();
-                for (const auto& task : state.tasks) {
-                    const std::string filterText = task.project + " " + task.title + " " + task.description;
-                    if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                    if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                    if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                    if (minTs > 0 && task.createdAt < minTs) continue;
-                    filtered.push_back(&task);
-                }
+                std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
                 if (!ExportTasksCsv(state, filtered, nameById, outPath, exported)) {
                     SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
                 } else {
@@ -237,24 +216,7 @@ void DrawTasksPanel(GuiState& state) {
             if (ImGui::Button(u8"TXT", ImVec2(-1.0f, 0.0f))) {
                 std::filesystem::path outPath;
                 int exported = 0;
-                std::vector<const TaskEntry*> filtered;
-                filtered.reserve(state.tasks.size());
-                const std::int64_t nowSec = NowSeconds();
-                const std::int64_t minTs = state.tasksFilterDays > 0
-                    ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                    : 0;
-                const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                    state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                    ? state.profiles[state.tasksFilterProfile - 1].id
-                    : std::string();
-                for (const auto& task : state.tasks) {
-                    const std::string filterText = task.project + " " + task.title + " " + task.description;
-                    if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                    if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                    if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                    if (minTs > 0 && task.createdAt < minTs) continue;
-                    filtered.push_back(&task);
-                }
+                std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
                 if (!ExportTasksTxt(state, filtered, nameById, outPath, exported)) {
                     SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
                 } else {
@@ -268,34 +230,7 @@ void DrawTasksPanel(GuiState& state) {
         }
     }
 
-    std::vector<const TaskEntry*> ordered;
-    ordered.reserve(state.tasks.size());
-    for (const auto& task : state.tasks) {
-        ordered.push_back(&task);
-    }
-    std::sort(ordered.begin(), ordered.end(), [](const TaskEntry* a, const TaskEntry* b) {
-        return a->createdAt > b->createdAt;
-    });
-
-    const std::int64_t nowSec = NowSeconds();
-    const std::int64_t minTs = state.tasksFilterDays > 0
-        ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-        : 0;
-    const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-        state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-        ? state.profiles[state.tasksFilterProfile - 1].id
-        : std::string();
-
-    std::vector<const TaskEntry*> filtered;
-    filtered.reserve(ordered.size());
-    for (const TaskEntry* task : ordered) {
-        const std::string filterText = task->project + " " + task->title + " " + task->description;
-        if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-        if (state.tasksFilterCategory > 0 && task->category != state.tasksFilterCategory - 1) continue;
-        if (!filterProfileId.empty() && !FindTaskParticipant(*task, filterProfileId)) continue;
-        if (minTs > 0 && task->createdAt < minTs) continue;
-        filtered.push_back(task);
-    }
+    std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
     std::array<int, Profile::kCategoryCount> categoryCounts{};
     int totalFiltered = static_cast<int>(filtered.size());
