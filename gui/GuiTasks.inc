@@ -11,6 +11,7 @@ static std::string tasks_read_all(const std::filesystem::path& p) {
     std::ostringstream ss;
     ss << in.rdbuf();
     std::string data = ss.str();
+    // Strip UTF-8 BOM if present
     if (data.size() >= 3 &&
         static_cast<unsigned char>(data[0]) == 0xEF &&
         static_cast<unsigned char>(data[1]) == 0xBB &&
