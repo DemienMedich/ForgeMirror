@@ -345,10 +345,22 @@ std::filesystem::path AdminPasswordPath(const std::filesystem::path& storageDir)
     return metaDir / "admin.ini";
 }
 
+void StripUtf8Bom(std::string& s) {
+    if (s.size() >= 3 &&
+        static_cast<unsigned char>(s[0]) == 0xEF &&
+        static_cast<unsigned char>(s[1]) == 0xBB &&
+        static_cast<unsigned char>(s[2]) == 0xBF) {
+        s.erase(0, 3);
+    }
+}
+
 bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
     auto path = AdminPasswordPath(storageDir);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return false;
+    // Write BOM for editors (Notepad) to recognize UTF-8
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "# ForgeMirror admin password\n";
     out << "password=" << password << "\n";
     return out.good();
@@ -368,7 +380,12 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
     std::ifstream in(path);
     if (in) {
         std::string line;
+        bool firstLine = true;
         while (std::getline(in, line)) {
+            if (firstLine) {
+                StripUtf8Bom(line);
+                firstLine = false;
+            }
             std::string t = TrimCopy(line);
             if (t.empty() || t[0] == '#' || t[0] == ';') continue;
             if (t.rfind("password=", 0) == 0) {
