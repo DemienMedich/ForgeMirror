@@ -609,7 +609,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     if (!participants.empty()) {
                         task.participants = std::move(participants);
                         state.tasks.push_back(std::move(task));
-                        SaveTasks(state.storageDir, state.tasks);
+                        const bool saveOk = SaveTasks(state.storageDir, state.tasks);
                         if (!activeId.empty()) {
                             storage.set_active_profile(activeId);
                             RefreshActiveProfile(state, storage, catalog);
@@ -620,7 +620,12 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         state.taskProject.fill('\0');
                         state.taskTitle.fill('\0');
                         state.taskDescription.fill('\0');
-                        SetStatus(state, u8"Задача сохранена и опыт начислен.", 0.45f, 0.9f, 0.45f);
+                        if (saveOk) {
+                            SetStatus(state, u8"Задача сохранена и опыт начислен.", 0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state, u8"Опыт начислен, но не удалось записать файл задач.", 1.0f, 0.75f, 0.35f,
+                                      1.0f, AppLogLevel::Warning, u8"Задачи");
+                        }
                         ImGui::CloseCurrentPopup();
                         xpPopupOpen = false;
                     } else {
