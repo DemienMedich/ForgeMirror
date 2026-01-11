@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.15)
-project(JobSkill LANGUAGES CXX)
+project(ForgeMirror LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if (MSVC)
+    # Ensure UTF-8 string literals so Russian text renders correctly in both CLI and GUI.
+    add_compile_options(/utf-8)
+endif()
 
 add_executable(JobSkill
     src/Skill.cpp
@@ -13,13 +18,16 @@ add_executable(JobSkill
     src/FileStorage.cpp
     src/SkillCatalog.cpp
     src/AppUtils.cpp
+    src/CloudSync.cpp
+    src/GameplayConfig.cpp
     main.cpp
 )
 
 target_include_directories(JobSkill PRIVATE include)
 
 # Версия приложения
-target_compile_definitions(JobSkill PRIVATE APP_VERSION="0.1.0")
+target_compile_definitions(JobSkill PRIVATE APP_VERSION="0.2.95")
+set_target_properties(JobSkill PROPERTIES OUTPUT_NAME "ForgeMirror")
 
 # Для Windows корректно установить кодировку консоли при необходимости вручную в приложении
 
@@ -43,19 +51,26 @@ if(BUILD_IMGUI_GUI)
         ${IMGUI_DIR}/backends/imgui_impl_opengl2.cpp)
 
     add_executable(JobSkillGui
+        gui/ForgeMirrorGui.rc
         gui/GuiApp.cpp
+        gui/GuiActions.cpp
+        libs/ufbx/ufbx.c
         src/Skill.cpp
         src/Profile.cpp
         src/FileStorage.cpp
         src/SkillCatalog.cpp
         src/AppUtils.cpp
+        src/CloudSync.cpp
+        src/GameplayConfig.cpp
     )
 
     target_sources(JobSkillGui PRIVATE ${IMGUI_SOURCES})
-    target_include_directories(JobSkillGui PRIVATE include ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+    target_include_directories(JobSkillGui PRIVATE include libs/ufbx ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+    target_compile_definitions(JobSkillGui PRIVATE APP_VERSION="0.2.95")
+    set_target_properties(JobSkillGui PROPERTIES OUTPUT_NAME "ForgeMirrorGui")
     target_link_libraries(JobSkillGui PRIVATE glfw OpenGL::GL)
     if (WIN32)
-        target_link_libraries(JobSkillGui PRIVATE opengl32)
+        target_link_libraries(JobSkillGui PRIVATE opengl32 winmm comdlg32 shell32)
     endif()
 
     add_custom_command(TARGET JobSkillGui POST_BUILD

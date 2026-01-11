@@ -1,4 +1,0 @@
-Z:/CPP/JobSkill/build-gui/CMakeFiles/JobSkill.dir
-Z:/CPP/JobSkill/build-gui/CMakeFiles/JobSkillGui.dir
-Z:/CPP/JobSkill/build-gui/CMakeFiles/ALL_BUILD.dir
-Z:/CPP/JobSkill/build-gui/CMakeFiles/ZERO_CHECK.dir

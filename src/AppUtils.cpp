@@ -1,12 +1,15 @@
 #include "AppUtils.h"
 
 #include <iostream>
+#include <fstream>
 
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
 #include "Profile.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -42,68 +45,384 @@ std::string BuildRank(const char* base, int startLevel, int substep, int level) 
 
 } // namespace
 
-std::string DescribeOverallRank(int overallLevel) {
-    if (overallLevel < 10) return "Intern";
-    if (overallLevel < 50) return BuildRank("Junior", 10, 10, overallLevel);
-    if (overallLevel < 150) return BuildRank("Middle", 50, 10, overallLevel);
-    return BuildRank("Senior", 150, 10, overallLevel);
-}
+std::string DescribeOverallRank(const Profile& profile) {
+    const int overallLevel = profile.overall_level();
+    std::string base;
+    if (overallLevel < 10) base = "Стажёр";
+    else if (overallLevel < 50) base = BuildRank("Джуниор", 10, 10, overallLevel);
+    else if (overallLevel < 150) base = BuildRank("Мидл", 50, 10, overallLevel);
+    else base = BuildRank("Сеньор", 150, 10, overallLevel);
 
-void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
-    constexpr const char* kAdminName = "Roman";
-    auto stored = storage.list_profiles();
-    bool exists = std::any_of(stored.begin(), stored.end(), [&](const IJobStorage::ProfileInfo& info) {
-        return info.name == kAdminName && !info.archived;
-    });
-    if (exists) return;
-
-    Profile admin(kAdminName);
-    if (auto skill = catalog.canonical("Modeling")) {
-        admin.add_skill(*skill, 1, catalog.weight(*skill));
-    } else {
-        admin.add_skill("Modeling", 1, catalog.weight("Modeling"));
+    std::ostringstream details;
+    bool hasDetail = false;
+    if (overallLevel >= 150 && !profile.all_categories_mastered()) {
+        details << "Сеньор заблокирован: ";
+        bool first = true;
+        for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+            if (profile.is_category_mastered(idx)) continue;
+            if (!first) details << ", ";
+            details << Profile::kCategoryLabels[idx] << "=" << profile.category_best_score(idx) << "/10";
+            const int cooldown = profile.category_cooldown(idx);
+            if (cooldown <= 0) details << " (!)";
+            else details << " (кулдаун " << cooldown << ")";
+            first = false;
+        }
+        if (first) details << "закончите испытания категорий";
+        hasDetail = true;
     }
-    if (auto skill = catalog.canonical("Lighting")) {
-        admin.add_skill(*skill, 1, catalog.weight(*skill));
-    } else {
-        admin.add_skill("Lighting", 1, catalog.weight("Lighting"));
+    if (profile.penalties_enabled() && profile.penalty_active()) {
+        if (hasDetail) details << " | ";
+        details << "штрафных задач осталось: " << profile.recovery_tasks_remaining();
+        hasDetail = true;
     }
-    if (auto skill = catalog.canonical("Materials")) {
-        admin.add_skill(*skill, 1, catalog.weight(*skill));
-    } else {
-        admin.add_skill("Materials", 1, catalog.weight("Materials"));
+    if (profile.inactivity_tasks() > 0) {
+        if (hasDetail) details << " | ";
+        details << "буфер деградации: " << profile.inactivity_tasks() << " задач";
+        hasDetail = true;
     }
-
-    SyncProfileWithCatalog(admin, catalog);
-
-    auto info = storage.create_profile(admin);
-    if (info) {
-        storage.save_profile(admin);
-        std::cout << "Created default admin profile '" << admin.name() << "' with ID " << info->id << ".\n";
-    } else {
-        std::cout << "Warning: failed to create default admin profile.\n";
-    }
-}
-
-std::filesystem::path ResolveStorageDirectory() {
-    auto base = std::filesystem::current_path() / "data";
-    std::error_code ec;
-    std::filesystem::create_directories(base, ec);
-    if (ec) {
-        return std::filesystem::current_path();
+    if (hasDetail) {
+        return base + " (" + details.str() + ")";
     }
     return base;
 }
 
+void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog) {
+    constexpr const char* kAdminName = "Admin";
+    auto stored = storage.list_profiles();
+    bool exists = false;
+    for (const auto& info : stored) {
+        if (info.name == kAdminName && !info.archived) {
+            exists = true;
+            // Ensure admin flag is set on the stored profile.
+            if (storage.set_active_profile(info.id)) {
+                if (auto prof = storage.load_profile()) {
+                    if (!prof->is_admin()) {
+                        prof->set_admin(true);
+                        storage.save_profile(*prof);
+                    }
+                }
+            }
+            break;
+        }
+    }
+    if (exists) return;
+
+    Profile admin(kAdminName);
+    if (auto skill = catalog.id_for_name("Modeling")) {
+        admin.add_skill(*skill, 1, catalog.weight(*skill));
+    }
+    if (auto skill = catalog.id_for_name("Lighting")) {
+        admin.add_skill(*skill, 1, catalog.weight(*skill));
+    }
+    if (auto skill = catalog.id_for_name("Materials")) {
+        admin.add_skill(*skill, 1, catalog.weight(*skill));
+    }
+
+    SyncProfileWithCatalog(admin, catalog);
+    admin.set_admin(true);
+
+    auto info = storage.create_profile(admin);
+    if (info) {
+        storage.save_profile(admin);
+        std::cout << "Создан профиль администратора '" << admin.name() << "' с ID " << info->id << ".\n";
+    } else {
+        std::cout << "Внимание: не удалось создать профиль администратора.\n";
+    }
+}
+
+namespace {
+
+std::filesystem::path GuessProjectRoot() {
+    std::error_code ec;
+    auto path = std::filesystem::current_path();
+    while (!path.empty()) {
+        const bool hasMain = std::filesystem::exists(path / "main.cpp", ec);
+        const bool hasCMake = std::filesystem::exists(path / "CMakeLists.txt", ec);
+        if (!ec && hasMain && hasCMake) {
+            return path;
+        }
+        auto parent = path.parent_path();
+        if (parent == path) break;
+        path = std::move(parent);
+    }
+    return std::filesystem::current_path();
+}
+
+std::filesystem::path DefaultUserStorageDir() {
+#if defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA")) {
+        return std::filesystem::path(appdata) / "ForgeMirror";
+    }
+#elif defined(__APPLE__)
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / "Library" / "Application Support" / "ForgeMirror";
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / ".forgemirror";
+    }
+#endif
+    return {};
+}
+
+std::filesystem::path LegacyUserStorageDir() {
+#if defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA")) {
+        return std::filesystem::path(appdata) / "JobSkill";
+    }
+#elif defined(__APPLE__)
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / "Library" / "Application Support" / "JobSkill";
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / ".jobskill";
+    }
+#endif
+    return {};
+}
+
+bool EnsureDirectory(const std::filesystem::path& dir) {
+    if (dir.empty()) return false;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return !ec;
+}
+
+bool HasStorageData(const std::filesystem::path& dir) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec)) return false;
+    if (std::filesystem::exists(dir / "skills.txt", ec)) return true;
+    if (std::filesystem::exists(dir / "meta" / "gameplay.ini", ec)) return true;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+    }
+    auto archiveDir = dir / "archive";
+    if (std::filesystem::exists(archiveDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(archiveDir, ec)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".ini") return true;
+        }
+    }
+    return false;
+}
+
+bool ShouldSkipSeedCopy(const std::filesystem::path& rel) {
+    const std::string relPath = rel.generic_string();
+    if (relPath == "meta/ui.ini") return true;
+    if (relPath == "meta/gui-layout.ini") return true;
+    if (relPath.rfind("meta/ui-presets", 0) == 0) return true;
+    return false;
+}
+
+bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::path& dst) {
+    if (src.empty() || dst.empty() || src == dst) return false;
+    std::error_code ec;
+    if (!std::filesystem::exists(src, ec)) return false;
+    std::filesystem::create_directories(dst, ec);
+    if (ec) return false;
+    for (auto it = std::filesystem::recursive_directory_iterator(src, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) return false;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), src, ec);
+        if (ec) return false;
+        if (ShouldSkipSeedCopy(rel)) {
+            if (entry.is_directory()) {
+                it.disable_recursion_pending();
+            }
+            continue;
+        }
+        auto target = dst / rel;
+        if (entry.is_directory()) {
+            std::filesystem::create_directories(target, ec);
+            if (ec) return false;
+            continue;
+        }
+        if (entry.is_regular_file()) {
+            std::filesystem::create_directories(target.parent_path(), ec);
+            if (ec) return false;
+            std::filesystem::copy_file(entry.path(), target,
+                                       std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec) return false;
+        }
+    }
+    return true;
+}
+
+void MergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
+    if (seedRoot.empty() || storageRoot.empty()) return;
+    std::error_code ec;
+    if (!std::filesystem::exists(seedRoot, ec)) return;
+    if (std::filesystem::equivalent(seedRoot, storageRoot, ec)) return;
+    auto copy_missing_profile = [&](const std::filesystem::path& srcFile, const std::filesystem::path& dstDir) {
+        if (srcFile.extension() != ".ini") return;
+        std::filesystem::path dstFile = dstDir / srcFile.filename();
+        if (std::filesystem::exists(dstFile, ec)) return;
+        std::filesystem::create_directories(dstDir, ec);
+        if (ec) return;
+        std::filesystem::copy_file(srcFile, dstFile, std::filesystem::copy_options::overwrite_existing, ec);
+    };
+    for (const auto& entry : std::filesystem::directory_iterator(seedRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        copy_missing_profile(entry.path(), storageRoot);
+    }
+    auto seedArchive = seedRoot / "archive";
+    if (std::filesystem::exists(seedArchive, ec)) {
+        auto dstArchive = storageRoot / "archive";
+        for (const auto& entry : std::filesystem::directory_iterator(seedArchive, ec)) {
+            if (!entry.is_regular_file()) continue;
+            copy_missing_profile(entry.path(), dstArchive);
+        }
+    }
+}
+
+} // namespace
+
+std::filesystem::path ResolveStorageDirectory() {
+    auto root = GuessProjectRoot();
+    auto legacyDir = root / "data";
+    if (const char* env = std::getenv("FORGEMIRROR_STORAGE_DIR")) {
+        std::filesystem::path custom(env);
+        if (EnsureDirectory(custom)) return custom;
+    }
+    if (const char* env = std::getenv("JOBSKILL_STORAGE_DIR")) {
+        std::filesystem::path custom(env);
+        if (EnsureDirectory(custom)) return custom;
+    }
+
+    const bool legacyHasData = HasStorageData(legacyDir);
+    auto userDir = DefaultUserStorageDir();
+    auto legacyUserDir = LegacyUserStorageDir();
+    const bool userReady = EnsureDirectory(userDir);
+    const bool legacyUserReady = EnsureDirectory(legacyUserDir);
+    const bool userHasData = userReady && HasStorageData(userDir);
+    const bool legacyUserHasData = legacyUserReady && HasStorageData(legacyUserDir);
+
+    auto finalize = [&](std::filesystem::path chosen) {
+        MergeSeedProfiles(legacyDir, chosen);
+        return chosen;
+    };
+
+    if (legacyHasData && userReady && !userHasData) {
+        if (CopyStorageTree(legacyDir, userDir)) {
+            return finalize(userDir);
+        }
+        return finalize(legacyDir);
+    }
+    if (userHasData) {
+        return finalize(userDir);
+    }
+    if (legacyUserHasData) {
+        return finalize(legacyUserDir);
+    }
+    if (legacyHasData) {
+        return finalize(legacyDir);
+    }
+    if (userReady) {
+        return finalize(userDir);
+    }
+    if (legacyUserReady) {
+        return finalize(legacyUserDir);
+    }
+    EnsureDirectory(legacyDir);
+    return finalize(legacyDir);
+}
+
+namespace {
+
+std::string TrimCopy(std::string s) {
+    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c) { return !is_space(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c) { return !is_space(c); }).base(), s.end());
+    return s;
+}
+
+std::filesystem::path AdminPasswordPath(const std::filesystem::path& storageDir) {
+    auto metaDir = storageDir / "meta";
+    std::error_code ec;
+    std::filesystem::create_directories(metaDir, ec);
+    (void)ec;
+    return metaDir / "admin.ini";
+}
+
+bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
+    auto path = AdminPasswordPath(storageDir);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << "# ForgeMirror admin password\n";
+    out << "password=" << password << "\n";
+    return out.good();
+}
+
+} // namespace
+
+std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
+    if (const char* env = std::getenv("FORGEMIRROR_ADMIN_PASSWORD")) {
+        if (*env != '\0') return env;
+    }
+    if (const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD")) {
+        if (*env != '\0') return env;
+    }
+
+    auto path = AdminPasswordPath(storageDir);
+    std::ifstream in(path);
+    if (in) {
+        std::string line;
+        while (std::getline(in, line)) {
+            std::string t = TrimCopy(line);
+            if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+            if (t.rfind("password=", 0) == 0) {
+                std::string value = TrimCopy(t.substr(9));
+                if (!value.empty()) return value;
+            } else {
+                return t;
+            }
+        }
+    }
+
+    const std::string fallback = "admin123";
+    SaveAdminPassword(storageDir, fallback);
+    return fallback;
+}
+
+bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
+    std::string trimmed = TrimCopy(password);
+    if (trimmed.empty()) return false;
+    return SaveAdminPassword(storageDir, trimmed);
+}
+
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
     auto skills = profile.list_skills();
-    if (skills.empty()) return;
+    bool changed = false;
     for (auto& skill : skills) {
-        if (auto canonical = catalog.canonical(skill.name)) {
-            skill.name = *canonical;
+        if (!catalog.contains_id(skill.name)) {
+            if (auto id = catalog.id_for_name(skill.name)) {
+                skill.name = *id;
+                changed = true;
+            }
         }
-        skill.weight = catalog.weight(skill.name);
+        const double newWeight = catalog.weight(skill.name);
+        if (std::abs(skill.weight - newWeight) > 1e-6) {
+            skill.weight = newWeight;
+            changed = true;
+        }
     }
-    profile.set_skills(skills);
+
+    auto ach = profile.achievements();
+    bool achChanged = false;
+    for (auto& a : ach) {
+        if (!catalog.contains_id(a.skill)) {
+            if (auto id = catalog.id_for_name(a.skill)) {
+                a.skill = *id;
+                achChanged = true;
+            }
+        }
+    }
+    if (achChanged) {
+        profile.set_achievements(ach);
+    }
+    if (changed || achChanged) {
+        profile.set_skills(skills);
+    }
 }
 

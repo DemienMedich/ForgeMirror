@@ -2,10 +2,19 @@
 #include "IJobStorage.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
+#include "GameplayConfig.h"
+#include "CloudSync.h"
+#include "GuiActions.h"
 
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #  include <windows.h>
+#  include <shellapi.h>
+#  include <commdlg.h>
+#  include <mmsystem.h>
 #  include <GL/gl.h>
 #elif defined(__APPLE__)
 #  include <OpenGL/gl3.h>
@@ -14,143 +23,134 @@
 #endif
 #include <GLFW/glfw3.h>
 
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
+
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl2.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <clocale>
+#include <cstdint>
+#include <locale>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <deque>
+#include <iomanip>
+#include <fstream>
+#include <iostream>
+#include <limits>
 #include <optional>
 #include <string>
+#include <sstream>
+#include <ctime>
+#include <unordered_map>
+#include <unordered_set>
+#include <numeric>
 #include <vector>
+#include <chrono>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#include "ufbx.h"
+
+IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
 
 namespace {
 
-struct GuiProfile {
-    Profile profile;
-    std::string id;
-};
+#include "GuiTypes.inc"
 
-struct XpEntry {
-    int add = 0;
-    int sub = 0;
-};
+#include "GuiUiData.inc"
 
-enum class ConfirmAction {
-    None,
-    Archive,
-    Restore,
-    Delete
-};
 
-struct GuiState {
-    std::vector<IJobStorage::ProfileInfo> profiles;
-    int selectedIndex = -1;
-    std::optional<GuiProfile> active;
-    int xpSkillIndex = 0;
-    int addSkillIndex = 0;
-    int xpAmount = 10;
-    std::string statusMessage;
-    float statusColor[4] = {0.6f, 0.7f, 1.0f, 1.0f};
+#include "GuiMesh.inc"
 
-    bool createPopupRequest = false;
-    bool confirmPopupRequest = false;
-    ConfirmAction confirmAction = ConfirmAction::None;
-    std::array<char, 128> modalBuffer{};
-    std::vector<XpEntry> xpEntries;
-    bool xpPopupRequest = false;
-};
+#include "GuiAdminTypes.inc"
 
-std::vector<IJobStorage::ProfileInfo> LoadProfiles(IJobStorage& storage) {
-    auto list = storage.list_profiles();
-    std::sort(list.begin(), list.end(), [](const auto& a, const auto& b) {
-        return a.id < b.id;
-    });
-    return list;
-}
+#include "GuiState.inc"
 
-void SetStatus(GuiState& state, const std::string& msg, float r, float g, float b, float a = 1.0f) {
-    state.statusMessage = msg;
-    state.statusColor[0] = r;
-    state.statusColor[1] = g;
-    state.statusColor[2] = b;
-    state.statusColor[3] = a;
-}
+// Walk parent directories trying to locate an asset (fonts, ini, etc.).
+#include "GuiStorageUtils.inc"
 
-void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
-    state.xpEntries.assign(catalog.skills().size(), {});
-}
 
-void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
-    state.active.reset();
-    if (state.selectedIndex < 0 || state.selectedIndex >= static_cast<int>(state.profiles.size())) return;
-    const auto& info = state.profiles[state.selectedIndex];
-    if (!storage.set_active_profile(info.id)) return;
-    if (auto loaded = storage.load_profile()) {
-        SyncProfileWithCatalog(*loaded, catalog);
-        storage.save_profile(*loaded);
-        state.active = GuiProfile{*loaded, info.id};
-    }
-}
+std::int64_t NowSeconds();
+std::string TrimStringGui(std::string s);
+int TotalSkillXpGui(const Skill& skill);
+void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId = {});
+const char* RankLabelForLevel(int level);
+int RankIndexForLevel(int level);
+const std::vector<RankOption>& RankOptions();
+const char* ClassificationLabel(int categoryIndex);
 
-void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId = {}) {
-    std::string currentId;
-    if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
-        currentId = state.profiles[state.selectedIndex].id;
-    }
+#include "GuiTextUtils.inc"
+#include "GuiAssets.inc"
+#include "GuiRanks.inc"
+#include "GuiReports.inc"
+#include "GuiAdminStats.inc"
+#include "GuiStatus.inc"
+#include "GuiUiSettings.inc"
+#include "GuiUiHelpers.inc"
+#include "GuiTasks.inc"
+#include "GuiPomodoro.inc"
+#include "GuiIcons.inc"
+#include "GuiShortcuts.inc"
+#include "GuiXpUtils.inc"
 
-    state.profiles = LoadProfiles(storage);
-    if (state.profiles.empty()) {
-        state.selectedIndex = -1;
-        state.active.reset();
-        return;
-    }
+#include "GuiCharts.inc"
+#include "GuiProfileSections.inc"
+#include "GuiProfileOps.inc"
 
-    std::string targetId = preferredId.empty() ? currentId : preferredId;
-    if (!targetId.empty()) {
-        for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
-            if (state.profiles[i].id == targetId) {
-                state.selectedIndex = i;
-                RefreshActiveProfile(state, storage, catalog);
-                return;
-            }
-        }
-    }
+#include "GuiPipeline.inc"
+#include "GuiPipelinePanel.inc"
 
-    state.selectedIndex = 0;
-    RefreshActiveProfile(state, storage, catalog);
-}
+#include "GuiRulesPanel.inc"
+#include "GuiUiSettingsPanel.inc"
+#include "GuiLogsPanel.inc"
+#include "GuiAdminStatsPanel.inc"
+#include "GuiSkillCatalogPanel.inc"
+#include "GuiTasksPanel.inc"
+#include "GuiPomodoroPanel.inc"
+#include "GuiAboutPanel.inc"
+#include "GuiView3dPanels.inc"
+#include "GuiProfilePanel.inc"
 
-void ShowStatus(const GuiState& state) {
-    if (state.statusMessage.empty()) return;
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(state.statusColor[0], state.statusColor[1], state.statusColor[2], state.statusColor[3]));
-    ImGui::TextWrapped("%s", state.statusMessage.c_str());
-    ImGui::PopStyleColor();
-}
+#include "GuiMenuHelpers.inc"
+#include "GuiNavigationPanel.inc"
+#include "GuiMainMenuPanel.inc"
+#include "GuiWorkspacePanel.inc"
+
+#include "GuiAdminModal.inc"
+#include "GuiSkillModals.inc"
+#include "GuiXpModal.inc"
+#include "GuiProfileModals.inc"
+#include "GuiHeader.inc"
+#include "GuiRender.inc"
+
+#include "GuiStateInit.inc"
+#include "GuiMainLoop.inc"
+
+
+#include "GuiStartup.inc"
+#include "GuiWindowInit.inc"
+
 
 } // namespace
 
+// GUI entry point: configure locale, init GLFW/ImGui, then run main loop.
 int main() {
+    ConfigureLocale();
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialise GLFW\n");
         return 1;
     }
 
-#if defined(__APPLE__)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#else
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-#endif
-
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "JobSkill GUI", nullptr, nullptr);
+    GLFWwindow* window = CreateMainWindow();
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
         glfwTerminate();
@@ -159,381 +159,41 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    (void)io;
-    ImGui::StyleColorsDark();
+    ImGuiIO& io = InitImGuiContext();
 
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL2_Init();
-
-    extern IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
     auto storageDir = ResolveStorageDirectory();
+    CloudSyncConfig cloudConfig = LoadCloudSyncConfig(storageDir);
+    bool initialCloudPullOk = false;
+    if (cloudConfig.enabled && cloudConfig.autoPull) {
+        CloudSyncResult pullResult = PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
+        initialCloudPullOk = pullResult.ok;
+    }
+    static std::string layoutPath;
+    ConfigureLayoutPath(io, storageDir, layoutPath);
+    LoadGuiFonts(io);
+
+    InitImGuiBackend(window);
+
     SkillCatalog catalog(storageDir);
-    std::unique_ptr<IJobStorage> storage(CreateFileStorage(storageDir));
-    EnsureAdminProfile(*storage, catalog);
+    GameplayConfig gameplayConfig;
+    std::unique_ptr<IJobStorage> storage;
+    InitStorageContext(storageDir, catalog, gameplayConfig, storage);
 
+    ImGuiStyle& style = ImGui::GetStyle();
     GuiState state;
-    RefreshProfiles(state, *storage, catalog);
-
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-        ImGui_ImplOpenGL2_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // Main menu window
-        ImGui::Begin("Main Menu");
-        if (ImGui::Button("Refresh")) {
-            RefreshProfiles(state, *storage, catalog);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Create")) {
-            state.createPopupRequest = true;
-            state.modalBuffer.fill('\0');
-        }
-        ImGui::SameLine();
-        bool canArchive = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && !state.profiles[state.selectedIndex].archived;
-        if (!canArchive) ImGui::BeginDisabled();
-        if (ImGui::Button("Archive")) {
-            state.confirmPopupRequest = true;
-            state.confirmAction = ConfirmAction::Archive;
-        }
-        if (!canArchive) ImGui::EndDisabled();
-        ImGui::SameLine();
-        bool canRestore = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size()) && state.profiles[state.selectedIndex].archived;
-        if (!canRestore) ImGui::BeginDisabled();
-        if (ImGui::Button("Restore")) {
-            state.confirmPopupRequest = true;
-            state.confirmAction = ConfirmAction::Restore;
-        }
-        if (!canRestore) ImGui::EndDisabled();
-        ImGui::SameLine();
-        bool canDelete = state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size());
-        if (!canDelete) ImGui::BeginDisabled();
-        if (ImGui::Button("Delete")) {
-            state.confirmPopupRequest = true;
-            state.confirmAction = ConfirmAction::Delete;
-        }
-        if (!canDelete) ImGui::EndDisabled();
-        ImGui::SameLine();
-        bool hasActive = state.active.has_value();
-        if (!hasActive) ImGui::BeginDisabled();
-        if (ImGui::Button("Add Experience")) {
-            PrepareXpEntries(state, catalog);
-            state.xpPopupRequest = true;
-        }
-        if (!hasActive) ImGui::EndDisabled();
-
-        ImGui::Separator();
-        if (ImGui::BeginChild("profiles", ImVec2(0, 0), false)) {
-            for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
-                const auto& info = state.profiles[i];
-                std::string label = "[" + info.id + "] " + info.name + (info.archived ? " (archived)" : "");
-                if (ImGui::Selectable(label.c_str(), state.selectedIndex == i)) {
-                    state.selectedIndex = i;
-                    RefreshActiveProfile(state, *storage, catalog);
-                    SetStatus(state, "", 0.6f, 0.7f, 1.0f);
-                }
-            }
-        }
-        ImGui::EndChild();
-        ImGui::End();
-
-        // Profile details window
-        ImGui::Begin("Profile Details");
-        if (!state.active) {
-            ImGui::TextUnformatted("Select a profile to view details.");
-        } else {
-            ImGui::Text("Name: %s", state.active->profile.name().c_str());
-            ImGui::Text("ID: %s", state.active->id.c_str());
-            ImGui::Text("Overall Level: %d (%s)", state.active->profile.overall_level(), DescribeOverallRank(state.active->profile.overall_level()).c_str());
-            ImGui::Separator();
-
-            ImGui::TextUnformatted("Skills");
-            ImGui::Columns(4, "skill_table");
-            ImGui::TextUnformatted("Skill");
-            ImGui::NextColumn();
-            ImGui::TextUnformatted("Level");
-            ImGui::NextColumn();
-            ImGui::TextUnformatted("XP");
-            ImGui::NextColumn();
-            ImGui::TextUnformatted("Weight");
-            ImGui::NextColumn();
-            ImGui::Separator();
-
-            auto skills = state.active->profile.list_skills();
-            for (const auto& skill : skills) {
-                ImGui::TextUnformatted(skill.name.c_str());
-                ImGui::NextColumn();
-                ImGui::Text("%d", skill.level);
-                ImGui::NextColumn();
-                ImGui::Text("%d / %d", skill.xp, skill.xpToNext);
-                ImGui::NextColumn();
-                ImGui::Text("%.2f", skill.weight);
-                ImGui::NextColumn();
-            }
-            ImGui::Columns(1);
-
-            ImGui::Separator();
-            const auto& catalogSkills = catalog.skills();
-
-            ImGui::TextUnformatted("Grant XP");
-            if (!catalogSkills.empty()) {
-                if (state.xpSkillIndex >= static_cast<int>(catalogSkills.size())) state.xpSkillIndex = 0;
-                const char* preview = catalogSkills[state.xpSkillIndex].c_str();
-                if (ImGui::BeginCombo("Skill##grant", preview)) {
-                    for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                        bool selected = (state.xpSkillIndex == i);
-                        if (ImGui::Selectable(catalogSkills[i].c_str(), selected)) {
-                            state.xpSkillIndex = i;
-                        }
-                        if (selected) ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
-                }
-            } else {
-                ImGui::TextUnformatted("Catalog is empty.");
-            }
-            ImGui::InputInt("Amount", &state.xpAmount);
-            if (ImGui::Button("Add XP")) {
-                if (catalogSkills.empty()) {
-                    SetStatus(state, "Catalog is empty.", 1.0f, 0.45f, 0.45f);
-                } else if (state.xpAmount <= 0) {
-                    SetStatus(state, "Amount must be positive.", 1.0f, 0.45f, 0.45f);
-                } else {
-                    const std::string& skillName = catalogSkills[state.xpSkillIndex];
-                    double weight = catalog.weight(skillName);
-                    state.active->profile.add_skill(skillName, 1, weight);
-                    bool leveled = state.active->profile.grant_xp(skillName, state.xpAmount);
-                    storage->save_profile(state.active->profile);
-                    SetStatus(state, leveled ? "Level up!" : "XP added.", 0.45f, 0.9f, 0.45f);
-                }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Save")) {
-                if (storage->save_profile(state.active->profile)) {
-                    SetStatus(state, "Profile saved.", 0.45f, 0.9f, 0.45f);
-                } else {
-                    SetStatus(state, "Failed to save profile.", 1.0f, 0.45f, 0.45f);
-                }
-            }
-
-            ImGui::Separator();
-            ImGui::TextUnformatted("Add Skill (level 0)");
-            if (!catalogSkills.empty()) {
-                if (state.addSkillIndex >= static_cast<int>(catalogSkills.size())) state.addSkillIndex = 0;
-                const char* preview = catalogSkills[state.addSkillIndex].c_str();
-                if (ImGui::BeginCombo("Skill##add", preview)) {
-                    for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                        bool selected = (state.addSkillIndex == i);
-                        if (ImGui::Selectable(catalogSkills[i].c_str(), selected)) {
-                            state.addSkillIndex = i;
-                        }
-                        if (selected) ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
-                }
-                if (ImGui::Button("Add Skill")) {
-                    const std::string& skillName = catalogSkills[state.addSkillIndex];
-                    double weight = catalog.weight(skillName);
-                    state.active->profile.add_skill(skillName, 0, weight);
-                    storage->save_profile(state.active->profile);
-                    SetStatus(state, "Skill added with level 0.", 0.45f, 0.9f, 0.45f);
-                }
-            } else {
-                ImGui::TextUnformatted("Catalog is empty.");
-            }
-
-            ShowStatus(state);
-        }
-        ImGui::End();
-
-        ImGui::Begin("Skill Catalog");
-        for (const auto& skill : catalog.skills()) {
-            ImGui::Text("%s (%.2f)", skill.c_str(), catalog.weight(skill));
-        }
-        ImGui::End();
-
-                ImGui::Begin("Skill Catalog");
-        for (const auto& skill : catalog.skills()) {
-            ImGui::Text("%s (%.2f)", skill.c_str(), catalog.weight(skill));
-        }
-        ImGui::End();
-
-        // XP sheet modal
-        if (state.xpPopupRequest) {
-            ImGui::OpenPopup("Add Experience");
-            state.xpPopupRequest = false;
-        }
-        bool xpPopupOpen = true;
-        if (ImGui::BeginPopupModal("Add Experience", &xpPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
-            const auto& catalogSkills = catalog.skills();
-            if (state.xpEntries.size() != catalogSkills.size()) {
-                PrepareXpEntries(state, catalog);
-            }
-            if (catalogSkills.empty()) {
-                ImGui::TextUnformatted("Catalog is empty.");
-            } else if (!state.active) {
-                ImGui::TextUnformatted("No active profile.");
-            } else if (ImGui::BeginTable("xp_sheet", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                ImGui::TableSetupColumn("Skill");
-                ImGui::TableSetupColumn("Plus");
-                ImGui::TableSetupColumn("Minus");
-                ImGui::TableSetupColumn("Result");
-                ImGui::TableHeadersRow();
-                int total = 0;
-                for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(catalogSkills[i].c_str());
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::PushID(i * 2);
-                    if (ImGui::InputInt("##plus", &state.xpEntries[i].add, 1, 10)) {
-                        if (state.xpEntries[i].add < 0) state.xpEntries[i].add = 0;
-                    }
-                    ImGui::PopID();
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::PushID(i * 2 + 1);
-                    if (ImGui::InputInt("##minus", &state.xpEntries[i].sub, 1, 10)) {
-                        if (state.xpEntries[i].sub < 0) state.xpEntries[i].sub = 0;
-                    }
-                    ImGui::PopID();
-                    ImGui::TableSetColumnIndex(3);
-                    int delta = state.xpEntries[i].add - state.xpEntries[i].sub;
-                    if (delta < 0) delta = 0;
-                    total += delta;
-                    ImGui::Text("%d", delta);
-                }
-                ImGui::EndTable();
-                ImGui::Separator();
-                ImGui::Text("Total XP: %d", total);
-
-                if (ImGui::Button("Apply")) {
-                    int applied = 0;
-                    for (int i = 0; i < static_cast<int>(catalogSkills.size()); ++i) {
-                        int delta = state.xpEntries[i].add - state.xpEntries[i].sub;
-                        if (delta <= 0) continue;
-                        const std::string& skillName = catalogSkills[i];
-                        double weight = catalog.weight(skillName);
-                        state.active->profile.add_skill(skillName, 1, weight);
-                        state.active->profile.grant_xp(skillName, delta);
-                        applied += delta;
-                    }
-                    storage->save_profile(state.active->profile);
-                    SetStatus(state, applied > 0 ? "XP sheet applied." : "Nothing to apply.",
-                              applied > 0 ? 0.45f : 1.0f,
-                              applied > 0 ? 0.9f : 0.45f,
-                              applied > 0 ? 0.45f : 0.45f);
-                    xpPopupOpen = false;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel")) {
-                    xpPopupOpen = false;
-                }
-            }
-            ImGui::EndPopup();
-        }
-        if (!xpPopupOpen && ImGui::IsPopupOpen("Add Experience")) {
-            ImGui::CloseCurrentPopup();
-        }
-
-        // Create profile modal
-        if (state.createPopupRequest) {
-            ImGui::OpenPopup("Create Profile");
-            state.createPopupRequest = false;
-        }
-        bool createPopupOpen = true;
-        if (ImGui::BeginPopupModal("Create Profile", &createPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::InputText("Name", state.modalBuffer.data(), state.modalBuffer.size());
-            if (ImGui::Button("Create")) {
-                std::string name(state.modalBuffer.data());
-                name.erase(name.begin(), std::find_if(name.begin(), name.end(), [](unsigned char c){ return !std::isspace(c); }));
-                name.erase(std::find_if(name.rbegin(), name.rend(), [](unsigned char c){ return !std::isspace(c); }).base(), name.end());
-                if (name.empty()) {
-                    SetStatus(state, "Name cannot be empty.", 1.0f, 0.45f, 0.45f);
-                } else {
-                    Profile profile(name);
-                    SyncProfileWithCatalog(profile, catalog);
-                    if (auto info = storage->create_profile(profile)) {
-                        storage->save_profile(profile);
-                        SetStatus(state, "Profile created.", 0.45f, 0.9f, 0.45f);
-                        RefreshProfiles(state, *storage, catalog, info->id);
-                        createPopupOpen = false;
-                    } else {
-                        SetStatus(state, "Failed to create profile.", 1.0f, 0.45f, 0.45f);
-                    }
-                }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                createPopupOpen = false;
-            }
-            ImGui::EndPopup();
-        }
-        if (!createPopupOpen && ImGui::IsPopupOpen("Create Profile")) {
-            ImGui::CloseCurrentPopup();
-        }
-
-        // Confirm modal
-        if (state.confirmPopupRequest) {
-            ImGui::OpenPopup("Confirm Action");
-            state.confirmPopupRequest = false;
-        }
-        bool confirmPopupOpen = true;
-        if (ImGui::BeginPopupModal("Confirm Action", &confirmPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
-            if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
-                const auto& info = state.profiles[state.selectedIndex];
-                std::string action;
-                switch (state.confirmAction) {
-                    case ConfirmAction::Archive: action = "archive"; break;
-                    case ConfirmAction::Restore: action = "restore"; break;
-                    case ConfirmAction::Delete: action = "delete"; break;
-                    default: action = ""; break;
-                }
-                ImGui::Text("Confirm %s of profile [%s] %s?", action.c_str(), info.id.c_str(), info.name.c_str());
-                if (ImGui::Button("Yes")) {
-                    bool ok = false;
-                    if (state.confirmAction == ConfirmAction::Archive) {
-                        ok = storage->set_archived(info.id, true);
-                    } else if (state.confirmAction == ConfirmAction::Restore) {
-                        ok = storage->set_archived(info.id, false);
-                    } else if (state.confirmAction == ConfirmAction::Delete) {
-                        ok = storage->delete_profile(info.id);
-                    }
-                    if (ok) {
-                        SetStatus(state, "Operation complete.", 0.45f, 0.9f, 0.45f);
-                        std::string newFocus;
-                        if (state.confirmAction != ConfirmAction::Delete) {
-                            newFocus = info.id;
-                        }
-                        RefreshProfiles(state, *storage, catalog, newFocus);
-                    } else {
-                        SetStatus(state, "Operation failed.", 1.0f, 0.45f, 0.45f);
-                    }
-                    confirmPopupOpen = false;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("No")) {
-                    confirmPopupOpen = false;
-                }
-            } else {
-                ImGui::TextUnformatted("No profile selected.");
-                if (ImGui::Button("Close")) {
-                    confirmPopupOpen = false;
-                }
-            }
-            ImGui::EndPopup();
-        }
-        if (!confirmPopupOpen && ImGui::IsPopupOpen("Confirm Action")) {
-            ImGui::CloseCurrentPopup();
-            state.confirmAction = ConfirmAction::None;
-        }    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
-        glfwSwapBuffers(window);
+    InitGuiState(state, *storage, catalog, gameplayConfig, storageDir, style, io, window);
+    state.cloudConfig = cloudConfig;
+    state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
+    state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+    if (initialCloudPullOk) {
+        state.lastCloudSyncOk = true;
+        state.lastCloudSyncOkAt = NowSeconds();
     }
 
+    RunGuiLoop(window, state, *storage, catalog, style, io, layoutPath);
+
+    SaveUiSettings(storageDir, state.ui);
+    ReleaseIconTextures();
     ImGui_ImplOpenGL2_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

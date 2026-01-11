@@ -1,144 +1,134 @@
-# JobSkill
+# ForgeMirror
 
-Console application in C++ for gamified skill profiles. Models team members, their skills, experience gain, and levels with a simple interactive CLI.
+Геймифицированный трекер профилей навыков на C++ с консольным клиентом и дополнительным десктопным GUI на ImGui. Отслеживайте навыки, фиксируйте результаты задач и повышайте общий ранг, пока система следит за выполнением требований по категориям.
 
-## Features
-- Skill model with levels and experience, progressive XP curve.
-- Profiles that aggregate skills and compute overall level.
-- Profile issuing system (predefined blueprints) with login-based sessions.
-- Auto-sync to local storage on every change, optional manual sync.
-- Overall rank titles (Intern, Junior, Middle, Senior (+n)) derived from average level.
+## Highlights
+- Взвешенная модель навыков с прогрессивной квадратичной кривой XP и жёсткими ранговыми порогами.
+- Оценка задач по категориям (E-A) и баллам (1-10): базовый XP растёт с классом, балл даёт нелинейный множитель, а повторные значения режут глобальный XP до 35% (XP навыков остаётся полным).
+- Таблица распределения XP по навыкам в процентах с автосбалансированием до 100% и бонусом фокуса (до +40%) за концентрацию.
+- Кулдауны категорий и деградация включены; Senior открывается только после 10/10 во всех категориях.
+- Механика восстановления после долгого простоя (глобальный XP ограничен 60% до прогрева) и история по каждому профилю.
+- Локальное хранилище с авто-синхронизацией, ручным `sync` и общими данными между CLI и GUI.
 
-## Build
-Use CMake (recommended) or the provided Makefile wrapper.
-
-```bash
-# Configure & build (Linux/macOS)
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
-
-# Windows (PowerShell, MSVC)
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-```
-
-Artifacts appear in `build/JobSkill` (or `build/Release/JobSkill.exe` for MSVC).
-
-Clean the build directory:
-
-```bash
-cmake -E rm -rf build
-```
-
-### Makefile wrapper
-
-```bash
-make              # Release build
-make debug        # Debug build
-make run          # Build + run
-make clean        # Remove build directory
-make rebuild      # Clean + configure + build (Release by default)
-make rebuild BUILD_DIR=build CONFIG=Debug  # Example for Debug rebuild
-
-# Override directory/config
-make BUILD_DIR=out CONFIG=Debug build
-```
-
-## Run
-
-```bash
-./build/JobSkill              # Linux/macOS
-./build/Release/JobSkill.exe  # Windows (MSVC)
-```
-
-### Profile storage
-- Windows: `%APPDATA%\JobSkill\*.ini`
-- Linux/macOS: `~/.jobskill/*.ini`
-
-The files sit outside the build tree, so progress survives rebuilds.
-
-### Windows encoding note
-PowerShell/cmd use a legacy code page by default. Either switch to UTF-8 before running:
+## Сборка
+Используйте CMake (предпочтительно). CLI не требует внешних зависимостей; GUI дополнительно использует OpenGL, GLFW и Dear ImGui (на Windows рекомендуется vcpkg).
 
 ```powershell
-chcp 65001
-$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
+# CLI (MSVC)
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+
+# Дополнительный GUI (MSVC + vcpkg)
+cmake -S . -B build-gui `
+  -DBUILD_IMGUI_GUI=ON `
+  -DIMGUI_DIR="Z:/CPP/JobSkill/libs/imgui" `
+  -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=x64-windows `
+  -DVCPKG_PWSH_PATH="C:/Program Files/PowerShell/7/pwsh.exe"
+cmake --build build-gui --config Release --target JobSkillGui
 ```
 
-or run inside Windows Terminal/VS Code (UTF-8) — the app already sets UTF-8 via `SetConsoleOutputCP/SetConsoleCP`.
+На Linux/macOS замените строку с генератором на `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` и уберите Windows-флаги для GUI.
 
-## Workflow
+Исполняемые файлы оказываются в `build/Release/ForgeMirror.exe` (CLI) и `build-gui/Release/ForgeMirrorGui.exe` (GUI). Очистка: `cmake -E rm -rf build build-gui`.
 
-### Main menu commands
-- `list` - show saved profiles with their numeric IDs and issued blueprints
-- `skills` - display the global 3D skill catalog
-- `archive <id>` / `restore <id>` - move a profile between active storage and the archive
-- `delete <id>` - permanently remove a profile (confirmation required)
-- `login <id|name>` - open an existing profile by ID or create/select by name
-- `help` - quick reminder of commands
-- `quit` - exit the application
+### Makefile-обёртка (CLI)
+```bash
+make              # Release-сборка
+make debug        # Debug-сборка
+make run          # Сборка + запуск
+make rebuild      # Очистка + конфигурация + Release
+```
 
-### In-session commands (after login)
-- `addxp <skill> <amount>` — grant XP to a skill (auto-sync afterwards)
-- `show` — display the current profile
-- `sync` - manual sync if auto-sync fails
-- `logout` - return to the main menu
-- `quit` - exit the application immediately
+## Запуск
+```bash
+./build/Release/ForgeMirror.exe        # CLI под Windows
+./build-gui/Release/ForgeMirrorGui.exe # GUI под Windows
+```
+Под Linux/macOS бинарники лежат в `build/ForgeMirror` и `build-gui/ForgeMirrorGui`.
 
-### Skill weights
-- Support skills (e.g., Materials, UV Mapping, Props) carry weights around 0.8–0.9.
-- Pipeline skills (Texturing, Shading, Lighting, Rendering) are near 1.0–1.1.
-- Asset creation skills (Modeling, Sculpting, Hard Surface, Retopology, Environment) weigh ~1.2.
-- Advanced production skills (Rigging, Animation, Simulation) weigh 1.3–1.4.
-- Weights feed into a weighted average for the overall level and задаются по умолчанию (изменение не предусмотрено).
+### Хранилище
+- По умолчанию: Windows `%APPDATA%\\ForgeMirror`, macOS `~/Library/Application Support/ForgeMirror`, Linux `~/.forgemirror`.
+- Можно переопределить каталог через `FORGEMIRROR_STORAGE_DIR` (поддерживается и `JOBSKILL_STORAGE_DIR`).
+- Если в корне проекта есть `data/` с данными, при первом запуске они копируются в пользовательский каталог (если он пуст).
+- Чтобы продолжать использовать локальный `data/`, задайте `FORGEMIRROR_STORAGE_DIR=./data`.
+- Внутри каталога хранения:
+  - профили: `*.ini`
+  - архив: `archive/*.ini`
+  - правила: `meta/gameplay.ini`
+  - каталог навыков: `skills.txt`
+  - пароль администратора: `meta/admin.ini` (или `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`)
+  - layout GUI: `meta/gui-layout.ini`
 
-### Default profile
-- Roman (Admin) - Modeling, Lighting, Materials (all start at level 1)
+Профили лежат вне папок сборки (`build/`), поэтому прогресс переживает пересборки. Лучшие оценки категорий сохраняются в секции `[categories]` каждого профиля.
 
-### Rank system
-- 0–9: `Intern`
-- 10–49: `Junior` (sub-levels every 10: 20→Junior (I), 30→Junior (II), ...)
-- 50–149: `Middle` (sub-levels every 10: 60→Middle (I), 70→Middle (II), ...)
-- 150+: `Senior` (sub-levels every 10: 160→Senior (I), 170→Senior (II), ...)
+### Кодировка (Windows)
+Консоль переключает кодовую страницу на UTF-8 через `SetConsoleOutputCP/SetConsoleCP`, но можно вручную выполнить `chcp 65001`, если терминал показывает кракозябры.
 
-## Roadmap ideas
-- Real storage format (e.g., JSON with nlohmann/json) or DB backend
-- HTTP/gRPC server for real online sync and leaderboards
-- Achievements, badges, specialization trees
-- CLI polish (multi-word skill names, richer menus) or GUI front-end
+## Процесс в CLI
+### Главное меню
+- `list` - показать сохранённые профили и доступные шаблоны.
+- `skills` - вывести каталог навыков и веса.
+- `admin` - вход/выход из режима администратора.
+- `archive <id>` / `restore <id>` - отправить профиль в архив или вернуть его.
+- `delete <id>` - удалить профиль навсегда (с подтверждением).
+- `passwd` - сменить пароль администратора (только в админ-режиме).
+- `login <id|name>` - войти по ID или создать/выбрать по имени.
+- `quit` - выйти из приложения.
 
-## Admin notes
-- The skill catalog is stored in `skills.txt` inside the profile directory (`%APPDATA%\JobSkill` / `~/.jobskill`).
-- Default admin password is `admin123` (see `main.cpp`, constant `kAdminPassword`). Change it before using in production.
-- Archived profiles are moved to the `archive/` subfolder under the same directory; use the CLI commands to restore or delete them.
-- Profiles are persisted as `<id>.ini` files (e.g., `0001.ini`). IDs are auto-generated sequentially.
+### Команды сессии
+- `addxp <skill> <amount>` — добавить XP конкретному навыку (целое число).
+- `task` — интерактивный мастер записи задачи: выберите категорию (E-A),
+  оценку (1-10) и распределите 100% между навыками (команда `even` для автоделения).
+  Применяется бонус фокуса, штрафы за повторы/восстановление, обновляется глобальный XP,
+  ранговые блокировки, лучшие оценки и буферы кулдаунов/деградации — так же, как в GUI.
+- `show` — вывести активный профиль и лучшие оценки по категориям.
+- `sync` — принудительно сохранить профиль, если авто-синхронизация не вышла.
+- `logout` — вернуться в главное меню.
 
-### ImGui GUI (optional)
-To build the experimental ImGui-based desktop UI:
-1. Install [GLFW](https://www.glfw.org/) and OpenGL development headers.
-2. Clone [Dear ImGui](https://github.com/ocornut/imgui) and note the path (set `IMGUI_DIR`).
-3. Configure with GUI support (vcpkg toolchain optional but recommended):
-   ```bash
-   make rebuild-gui GUI_BUILD_DIR=build-gui IMGUI_DIR=/path/to/imgui \
-        VCPKG_CHAINFILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake
-   ```
-4. Run `JobSkillGui` to launch the graphical interface (profiles list, details, XP actions).
+## Процесс в GUI
+ImGui-фронтенд отображает те же данные, что и CLI, но добавляет панели:
+- Список профилей с переключателем архивации.
+- Детальный просмотр профиля с уровнями, лучшими оценками, кулдаунами, состоянием восстановления и блокировками ранга.
+- Модальное окно Add Experience:
+  1. Выберите категорию (E-A) и оценку (1-10). UI показывает базовый XP, множитель оценки, бонус фокуса, кулдаун и предупреждения о восстановлении.
+  2. Ползунки автоматически перераспределяют проценты между навыками, чтобы сумма была 100%.
+  3. После Apply лист распределяет XP навыков, применяет штрафы к глобальному XP, сбрасывает кулдаун выбранной категории, старит остальные и логирует каждый шаг.
+- Отдельное окно **Gameplay Rules** позволяет на лету настраивать XP-кривую, базовый XP категорий, бонус фокуса и штрафы за повторы/восстановление. Кнопка *Save & Apply* сохраняет настройки и мгновенно пересчитывает все открытые профили.
+- Позиции и размеры всех окон ImGui сохраняются в `meta/gui-layout.ini` в каталоге хранения, поэтому после пересборки интерфейс остаётся в прежнем виде.
+- Смена пароля администратора доступна из главного меню после входа в админ-режим.
 
-The GUI uses the same storage/catalog data as the CLI and shows skill weights and ranks.
+## Настройка правил XP
+- Глобальные параметры прокачки живут в `meta/gameplay.ini` в каталоге хранения (создаётся автоматически). CLI и GUI читают эти значения при запуске.
+- Значения можно редактировать вручную или через окно **Gameplay Rules** в GUI. Доступны поля:
+  - базовый/линейный/квадратичный вклад XP на уровень;
+  - базовый XP для каждой категории E-A;
+  - множители бонуса фокуса, коэффициент награды за повторную оценку, штраф за задачи восстановления и длина «прогрева».
+- После сохранения файл переиспользуется всеми клиентами, а текущая сессия GUI/CLI сразу применяет новые правила.
 
+## Система уровней и рангов
+- `Intern` (<10), `Junior` (10-49), `Middle` (50-149), `Senior` (>=150). Каждый ранг имеет подпороги (I/II/...) каждые 10 уровней.
+- Для Senior требуются 10/10 во всех категориях; иначе показывается `Senior locked` и список отстающих категорий с кулдаунами.
+- XP до следующего уровня растёт по формуле `XP(n) = 1500 + 250*t + 50*t^2` (t = n - 1), поэтому высокие ранги требуют длительной работы.
+- Штрафы за повтор/простои включаются только после ранга `Senior` (уровень >=150 и все категории 10/10).
 
-### ImGui GUI (optional)
-To build the experimental ImGui-based desktop UI:
-1. Install [GLFW](https://www.glfw.org/) and OpenGL development headers.
-2. Clone [Dear ImGui](https://github.com/ocornut/imgui) and note the path (set `IMGUI_DIR`).
-3. Configure with GUI support:
-   ```bash
-   cmake -S . -B build-gui -DBUILD_IMGUI_GUI=ON -DIMGUI_DIR=/path/to/imgui
-   cmake --build build-gui --config Release --target JobSkillGui
-   ```
-4. Run `JobSkillGui` to launch the graphical interface (profiles list, details, XP actions).
+### Правила XP
+- Базовый XP на категорию: E=500, D=800, C=1200, B=1700, A=2300.
+- Множитель оценки: `(score / 10)^1.35`.
+- Бонус фокуса: `0.6 + 0.4 * maxSkillShare`.
+- Штраф за повтор: глобальный XP * 0.35 (XP навыков сохраняется); применяется только после `Senior`.
+- Штраф восстановления: после долгого простоя следующие 3 задачи дают глобальный XP * 0.6 до завершения серии; применяется только после `Senior`.
+- Кулдауны и деградация: включены (kDecayEnabled=true).
 
-The GUI uses the same storage/catalog data as the CLI and shows skill weights and ranks.
+## Заметки администратора
+- Профиль администратора создаётся автоматически с базовыми навыками; доступ администратора включается отдельно.
+- Навыки хранятся в `skills.txt` в каталоге хранения.
+- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`).
+- Архивные профили лежат в `archive/`.
+- Профили - INI-файлы (`0001.ini`, `0002.ini`, ...); ID увеличиваются автоматически.
 
-
-### ImGui GUI설 파이
+## Идеи для Roadmap
+- Хранилище на JSON или базе данных.
+- Сетевой API для синхронизации и таблиц лидеров.
+- Система достижений и значков.
+- Более гибкий CLI-ввод (многословные навыки) и расширенные панели GUI.
