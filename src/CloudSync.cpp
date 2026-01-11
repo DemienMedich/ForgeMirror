@@ -256,6 +256,21 @@ void CopyAchievements(const std::filesystem::path& srcRoot, const std::filesyste
     }
 }
 
+void CopyAchievementIcons(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot,
+                          CloudSyncStats& stats, bool pulling, std::string* errorMessage) {
+    std::error_code ec;
+    if (!std::filesystem::exists(srcRoot, ec)) return;
+    for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::filesystem::path dst = dstRoot / entry.path().filename();
+        if (pulling) {
+            CopyFileIfExists(entry.path(), dst, stats, true, errorMessage);
+        } else {
+            CopyFileIfExistsPush(entry.path(), dst, stats, errorMessage);
+        }
+    }
+}
+
 bool RemoveOrphanedProfiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot, int& removed) {
     std::error_code ec;
     if (!std::filesystem::exists(dstRoot, ec)) return false;
@@ -292,6 +307,36 @@ bool RemoveFileIfMissing(const std::filesystem::path& srcPath, const std::filesy
     if (ec) return false;
     removed += 1;
     return true;
+}
+
+bool RemoveOrphanedAchievements(const std::filesystem::path& srcRoot, const std::filesystem::path& srcArchive,
+                                const std::filesystem::path& dstRoot, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dstRoot, ec)) return false;
+    std::unordered_set<std::string> keep;
+    auto collect = [&](const std::filesystem::path& dir) {
+        if (!std::filesystem::exists(dir, ec)) return;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".ini") continue;
+            keep.insert(entry.path().stem().string());
+        }
+    };
+    collect(srcRoot);
+    collect(srcArchive);
+    bool removedAny = false;
+    for (const auto& entry : std::filesystem::directory_iterator(dstRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".json") continue;
+        const std::string id = entry.path().stem().string();
+        if (keep.find(id) != keep.end()) continue;
+        std::filesystem::remove(entry.path(), ec);
+        if (!ec) {
+            removed += 1;
+            removedAny = true;
+        }
+    }
+    return removedAny;
 }
 
 std::vector<int> ParseVersion(const std::string& value) {
@@ -499,6 +544,8 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     std::unordered_set<std::string> skipIds;
     CopyProfiles(cloudRoot, storageDir, role, config, result.stats, skipIds, true, &ioError);
     CopyProfiles(cloudRoot / "archive", storageDir / "archive", role, config, result.stats, skipIds, true, &ioError);
+    CopyAchievements(cloudRoot / "achievements", storageDir / "achievements", skipIds, result.stats, true, &ioError);
+    CopyAchievementIcons(cloudRoot / "achievements" / "icons", storageDir / "achievements" / "icons", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "skills.txt", storageDir / "skills.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
@@ -535,12 +582,15 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     std::unordered_set<std::string> skipIds;
     CopyProfiles(storageDir, cloudRoot, role, config, result.stats, skipIds, false, &ioError);
     CopyProfiles(storageDir / "archive", cloudRoot / "archive", role, config, result.stats, skipIds, false, &ioError);
+    CopyAchievements(storageDir / "achievements", cloudRoot / "achievements", skipIds, result.stats, false, &ioError);
+    CopyAchievementIcons(storageDir / "achievements" / "icons", cloudRoot / "achievements" / "icons", result.stats, false, &ioError);
     CopyFileIfExistsPush(storageDir / "skills.txt", cloudRoot / "skills.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
     int removed = 0;
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
         || RemoveOrphanedProfiles(storageDir / "archive", cloudRoot / "archive", removed)
+        || RemoveOrphanedAchievements(storageDir, storageDir / "archive", cloudRoot / "achievements", removed)
         || RemoveFileIfMissing(storageDir / "skills.txt", cloudRoot / "skills.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed);
