@@ -233,7 +233,7 @@ void DrawTasksPanel(GuiState& state) {
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
     std::array<int, Profile::kCategoryCount> categoryCounts{};
-    int totalFiltered = static_cast<int>(filtered.size());
+    const int filteredCount = static_cast<int>(filtered.size());
     int topIdx = 0;
     int topCount = 0;
     int minIdx = -1;
@@ -281,15 +281,15 @@ void DrawTasksPanel(GuiState& state) {
         } else {
             std::ostringstream focusStream;
             focusStream.imbue(std::locale::classic());
-            float pct = totalFiltered > 0 ? (static_cast<float>(topCount) / static_cast<float>(totalFiltered)) * 100.0f : 0.0f;
+            float pct = filteredCount > 0 ? (static_cast<float>(topCount) / static_cast<float>(filteredCount)) * 100.0f : 0.0f;
             focusStream << std::fixed << std::setprecision(0) << pct;
             std::string focusText = std::string(ClassificationLabel(topIdx)) +
                 " (" + std::to_string(topCount) + ", " + focusStream.str() + "%)";
-            const float avgScore = totalFiltered > 0
-                ? static_cast<float>(scoreSum) / static_cast<float>(totalFiltered)
+            const float avgScore = filteredCount > 0
+                ? static_cast<float>(scoreSum) / static_cast<float>(filteredCount)
                 : 0.0f;
-            const float avgPool = totalFiltered > 0
-                ? static_cast<float>(poolSum) / static_cast<float>(totalFiltered)
+            const float avgPool = filteredCount > 0
+                ? static_cast<float>(poolSum) / static_cast<float>(filteredCount)
                 : 0.0f;
             if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
                 ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.7f);
@@ -301,7 +301,7 @@ void DrawTasksPanel(GuiState& state) {
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Всего");
-                ImGui::Text("%d", totalFiltered);
+                ImGui::Text("%d", filteredCount);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Последняя");
@@ -415,8 +415,9 @@ void DrawTasksPanel(GuiState& state) {
         }
         ImGui::EndTable();
     }
-    ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(state.tasks.size()));
-    if (visibleCount == 0) {
+    const int totalTasks = static_cast<int>(state.tasks.size());
+    ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
+    if (filteredCount == 0) {
         ImGui::TextDisabled(u8"Нет задач по фильтру.");
         ImGui::SameLine();
         if (ImGui::SmallButton(u8"Сбросить фильтр")) {
