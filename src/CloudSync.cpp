@@ -40,6 +40,31 @@ bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& d
     return !ec;
 }
 
+std::filesystem::path CanonicalSafe(const std::filesystem::path& p) {
+    std::error_code ec;
+    auto c = std::filesystem::weakly_canonical(p, ec);
+    if (ec) return {};
+    return c;
+}
+
+bool PathsOverlap(const std::filesystem::path& a, const std::filesystem::path& b) {
+    auto ca = CanonicalSafe(a);
+    auto cb = CanonicalSafe(b);
+    if (ca.empty() || cb.empty()) return false;
+    std::error_code ec;
+    if (std::filesystem::equivalent(ca, cb, ec)) return true;
+    if (ec) ec.clear();
+    auto norm = [](std::string s) {
+        if (!s.empty() && s.back() != '/') s.push_back('/');
+        return s;
+    };
+    const std::string sa = norm(ca.generic_string());
+    const std::string sb = norm(cb.generic_string());
+    if (sa.rfind(sb, 0) == 0) return true; // a inside b
+    if (sb.rfind(sa, 0) == 0) return true; // b inside a
+    return false;
+}
+
 bool ParseBool(const std::string& text, bool fallback) {
     std::string v = Trim(text);
     std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -439,6 +464,10 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
         return result;
     }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    if (PathsOverlap(cloudRoot, storageDir)) {
+        result.message = u8"Путь облака не должен совпадать или быть вложенным в локальное хранилище.";
+        return result;
+    }
     std::error_code ec;
     if (!std::filesystem::exists(cloudRoot, ec)) {
         result.message = u8"Облачное хранилище не найдено.";
@@ -474,6 +503,10 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         return result;
     }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    if (PathsOverlap(cloudRoot, storageDir)) {
+        result.message = u8"Путь облака не должен совпадать или быть вложенным в локальное хранилище.";
+        return result;
+    }
     std::error_code ec;
     std::filesystem::create_directories(cloudRoot, ec);
     std::string ioError;
