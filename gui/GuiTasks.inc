@@ -280,7 +280,11 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
         out << "\n";
     }
     out << "]";
-    return tasks_write_all(TasksStoragePath(storageDir), out.str());
+    std::string data = out.str();
+    // Write BOM for editors (Notepad) to recognize UTF-8
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    data.insert(0, reinterpret_cast<const char*>(bom), sizeof(bom));
+    return tasks_write_all(TasksStoragePath(storageDir), data);
 }
 
 static const TaskParticipant* FindTaskParticipant(const TaskEntry& task, const std::string& profileId) {
