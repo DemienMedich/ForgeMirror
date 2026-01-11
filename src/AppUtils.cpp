@@ -313,6 +313,23 @@ void MaybeMergeSeedProfiles(const std::filesystem::path& seedRoot, const std::fi
     }
 }
 
+void CopySeedAchievementIcons(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
+    if (seedRoot.empty() || storageRoot.empty()) return;
+    std::error_code ec;
+    auto srcIcons = seedRoot / "achievements" / "icons";
+    if (!std::filesystem::exists(srcIcons, ec)) return;
+    auto dstIcons = storageRoot / "achievements" / "icons";
+    for (const auto& entry : std::filesystem::directory_iterator(srcIcons, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".png") continue;
+        auto dstFile = dstIcons / entry.path().filename();
+        if (std::filesystem::exists(dstFile, ec)) continue;
+        std::filesystem::create_directories(dstIcons, ec);
+        if (ec) continue;
+        std::filesystem::copy_file(entry.path(), dstFile, std::filesystem::copy_options::overwrite_existing, ec);
+    }
+}
+
 } // namespace
 
 std::filesystem::path ResolveStorageDirectory() {
@@ -337,6 +354,7 @@ std::filesystem::path ResolveStorageDirectory() {
 
     auto finalize = [&](std::filesystem::path chosen) {
         MaybeMergeSeedProfiles(legacyDir, chosen);
+        CopySeedAchievementIcons(legacyDir, chosen);
         return chosen;
     };
 
