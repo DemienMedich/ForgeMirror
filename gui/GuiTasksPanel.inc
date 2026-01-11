@@ -483,6 +483,13 @@ void DrawTasksPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(state.tasks.size()));
     if (visibleCount == 0) {
         ImGui::TextDisabled(u8"Нет задач по фильтру.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+            state.filters.tasks.fill('\0');
+            state.tasksFilterProfile = 0;
+            state.tasksFilterCategory = 0;
+            state.tasksFilterDays = 0;
+        }
     }
 
     const TaskEntry* expanded = nullptr;
