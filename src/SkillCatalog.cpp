@@ -278,6 +278,80 @@ bool encode_cp1251(uint32_t cp, unsigned char& out) {
     return false;
 }
 
+uint32_t decode_cp1251_byte(unsigned char b) {
+    if (b <= 0x7F) return b;
+    switch (b) {
+        case 0x80: return 0x0402;
+        case 0x81: return 0x0403;
+        case 0x82: return 0x201A;
+        case 0x83: return 0x0453;
+        case 0x84: return 0x201E;
+        case 0x85: return 0x2026;
+        case 0x86: return 0x2020;
+        case 0x87: return 0x2021;
+        case 0x88: return 0x20AC;
+        case 0x89: return 0x2030;
+        case 0x8A: return 0x0409;
+        case 0x8B: return 0x2039;
+        case 0x8C: return 0x040A;
+        case 0x8D: return 0x040C;
+        case 0x8E: return 0x040B;
+        case 0x8F: return 0x040F;
+        case 0x90: return 0x0452;
+        case 0x91: return 0x2018;
+        case 0x92: return 0x2019;
+        case 0x93: return 0x201C;
+        case 0x94: return 0x201D;
+        case 0x95: return 0x2022;
+        case 0x96: return 0x2013;
+        case 0x97: return 0x2014;
+        case 0x99: return 0x2122;
+        case 0x9A: return 0x0459;
+        case 0x9B: return 0x203A;
+        case 0x9C: return 0x045A;
+        case 0x9D: return 0x045C;
+        case 0x9E: return 0x045B;
+        case 0x9F: return 0x045F;
+        case 0xA0: return 0x00A0;
+        case 0xA1: return 0x040E;
+        case 0xA2: return 0x045E;
+        case 0xA3: return 0x0408;
+        case 0xA4: return 0x00A4;
+        case 0xA5: return 0x0490;
+        case 0xA6: return 0x00A6;
+        case 0xA7: return 0x00A7;
+        case 0xA8: return 0x0401;
+        case 0xA9: return 0x00A9;
+        case 0xAA: return 0x0404;
+        case 0xAB: return 0x00AB;
+        case 0xAC: return 0x00AC;
+        case 0xAD: return 0x00AD;
+        case 0xAE: return 0x00AE;
+        case 0xAF: return 0x0407;
+        case 0xB0: return 0x00B0;
+        case 0xB1: return 0x00B1;
+        case 0xB2: return 0x0406;
+        case 0xB3: return 0x0456;
+        case 0xB4: return 0x0491;
+        case 0xB5: return 0x00B5;
+        case 0xB6: return 0x00B6;
+        case 0xB7: return 0x00B7;
+        case 0xB8: return 0x0451;
+        case 0xB9: return 0x2116;
+        case 0xBA: return 0x0454;
+        case 0xBB: return 0x00BB;
+        case 0xBC: return 0x0458;
+        case 0xBD: return 0x0405;
+        case 0xBE: return 0x0455;
+        case 0xBF: return 0x0457;
+        default:
+            if (b >= 0xC0 && b <= 0xFF) {
+                return 0x0410 + (b - 0xC0);
+            }
+            return 0x003F; // '?'
+    }
+}
+
 uint32_t lower_codepoint(uint32_t cp) {
     if (cp >= 'A' && cp <= 'Z') return cp + 32;
     if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;
@@ -387,15 +461,43 @@ std::string FixMojibakeCp1251Utf8(const std::string& text) {
     return out;
 }
 
+std::string DecodeCp1251ToUtf8(const std::string& bytes) {
+    std::string out;
+    out.reserve(bytes.size());
+    for (unsigned char b : bytes) {
+        append_utf8(out, decode_cp1251_byte(b));
+    }
+    return out;
+}
+
 std::string MaybeFixMojibake(const std::string& text) {
     if (text.empty()) return text;
     const TextQuality before = MeasureTextQuality(text);
-    if (!LooksLikeMojibake(before)) return text;
-    const std::string fixed = FixMojibakeCp1251Utf8(text);
-    if (fixed == text) return text;
-    const TextQuality after = MeasureTextQuality(fixed);
-    if (MojibakeScore(after) < MojibakeScore(before)) return fixed;
-    return text;
+    int bestScore = MojibakeScore(before);
+    std::string best = text;
+
+    if (LooksLikeMojibake(before)) {
+        const std::string fixed = FixMojibakeCp1251Utf8(text);
+        if (fixed != text) {
+            const int score = MojibakeScore(MeasureTextQuality(fixed));
+            if (score < bestScore) {
+                bestScore = score;
+                best = fixed;
+            }
+        }
+    }
+
+    // Try full CP1251 decode if text was likely saved as CP1251 bytes.
+    const std::string cpCandidate = DecodeCp1251ToUtf8(text);
+    if (cpCandidate != text) {
+        const int score = MojibakeScore(MeasureTextQuality(cpCandidate));
+        if (score < bestScore) {
+            bestScore = score;
+            best = cpCandidate;
+        }
+    }
+
+    return best;
 }
 
 std::string lowercase_utf8(const std::string& value) {
