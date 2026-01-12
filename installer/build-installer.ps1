@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = "Release",
-    [string]$IssPath = ""
+    [string]$IssPath = "",
+    [string]$IsccPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,18 +36,28 @@ if (-not (Test-Path $iss)) {
 }
 
 $isscc = $null
-$cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-if ($cmd) {
-    $isscc = $cmd.Source
+if ($IsccPath -ne "") {
+    if (-not (Test-Path $IsccPath)) {
+        throw "ISCC.exe override path not found: $IsccPath"
+    }
+    $isscc = $IsccPath
 } else {
-    $fallback = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"
-    if (Test-Path $fallback) {
-        $isscc = $fallback
+    $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $isscc = $cmd.Source
+    } else {
+        $fallbackX86 = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"
+        $fallbackX64 = Join-Path ${env:ProgramFiles} "Inno Setup 6\\ISCC.exe"
+        if (Test-Path $fallbackX86) {
+            $isscc = $fallbackX86
+        } elseif (Test-Path $fallbackX64) {
+            $isscc = $fallbackX64
+        }
     }
 }
 
 if (-not $isscc) {
-    throw "ISCC.exe not found. Install Inno Setup 6 or add ISCC.exe to PATH."
+    throw "ISCC.exe not found. Install Inno Setup 6 or add ISCC.exe to PATH (or pass -IsccPath)."
 }
 
 $outputDir = Join-Path $repoRoot "dist"
