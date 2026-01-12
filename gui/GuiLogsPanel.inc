@@ -236,6 +236,7 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, dangerActive);
         if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
             state.appLogs.clear();
+            SetStatus(state, u8"Логи очищены.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Логи");
         }
         ImGui::PopStyleColor(3);
     } else if (ImGui::BeginTable("log_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
