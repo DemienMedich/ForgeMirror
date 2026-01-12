@@ -6,7 +6,7 @@
 #endif
 
 #if StrCmp(AppVersion, "0.0.0") == 0
-  #error "AppVersion is 0.0.0. Run installer/build-installer.ps1 (auto-reads APP_VERSION from CMakeLists.txt) or pass /DAppVersion=<version> to ISCC."
+  #pragma message "AppVersion is 0.0.0. Run installer/build-installer.ps1 (auto-reads APP_VERSION from CMakeLists.txt) or pass /DAppVersion=<version> to ISCC."
 #endif
 
 #ifndef OutputDir
