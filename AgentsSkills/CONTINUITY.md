@@ -342,6 +342,8 @@ Done:
 - Установщик: fallback версия в .iss выставлена на 0.2.96 (совпадает с CMake), чтобы сборка из IDE без параметров не падала; защита остаётся, если оставить 0.0.0.
 - Установщик: build-installer.ps1 принимает `-IsccPath` и ищет ISCC.exe и в Program Files, и в Program Files (x86); сообщение про отсутствие пути включает подсказку про параметр.
 - Установщик: проверка `AppVersion` в .iss упрощена (строковое сравнение без StrCmp), чтобы Inno не ругался на неизвестную функцию.
+- Установщик: рабочая команда сборки (c явным путём к ISCC.exe):  
+  `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
 
 Now:
 - Разобрать, почему папка синхронизации пустая (роль пользователя/выгрузка/настройки).
