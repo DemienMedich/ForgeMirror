@@ -191,6 +191,11 @@ void DrawLogsPanel(GuiState& state) {
                       AppLogLevel::Error, u8"Логи");
         }
     };
+    auto setLevelPreset = [&](bool showInfo, bool showWarn, bool showError) {
+        state.logShowInfo = showInfo;
+        state.logShowWarning = showWarn;
+        state.logShowError = showError;
+    };
     if (stackFilters) {
         ImGui::TextDisabled(u8"Поиск");
         ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
@@ -204,6 +209,18 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::Combo(u8"##log_source", &sourceIndex, logSourceLabels.data(),
                          static_cast<int>(logSourceLabels.size()))) {
             applySourceFilter();
+        }
+        ImGui::TextDisabled(u8"Уровни");
+        if (ImGui::SmallButton(u8"Все")) {
+            setLevelPreset(true, true, true);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Предупр+Ошибки")) {
+            setLevelPreset(false, true, true);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Только ошибки")) {
+            setLevelPreset(false, false, true);
         }
         if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
             exportLogs();
@@ -251,6 +268,19 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::Combo(u8"##log_source", &sourceIndex, logSourceLabels.data(),
                          static_cast<int>(logSourceLabels.size()))) {
             applySourceFilter();
+        }
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(u8"Уровни");
+        if (ImGui::SmallButton(u8"Все##log_levels_all")) {
+            setLevelPreset(true, true, true);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Предупр+Ошиб##log_levels_warn")) {
+            setLevelPreset(false, true, true);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Ошибки##log_levels_err")) {
+            setLevelPreset(false, false, true);
         }
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
