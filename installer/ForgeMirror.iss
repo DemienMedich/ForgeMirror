@@ -1,7 +1,8 @@
 #define SourceRoot ".."
 
 #ifndef AppVersion
-  #define AppVersion "0.0.0"
+  // Fallback to current app version (kept in CMakeLists.txt). Override via /DAppVersion=... when building.
+  #define AppVersion "0.2.96"
 #endif
 
 #if StrCmp(AppVersion, "0.0.0") == 0
