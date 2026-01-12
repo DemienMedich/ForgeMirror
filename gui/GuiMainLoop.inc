@@ -16,7 +16,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
                 RunCloudQuickSync(state, storage, catalog, false);
             }
         }
-        DrawMainMenuBar(state, storage, catalog);
+        DrawMainMenuBar(window, state, storage, catalog);
         DrawNavigationPanel(state);
         DrawWorkspacePanel(state, storage, catalog, style);
         DrawAdminLoginModal(state);

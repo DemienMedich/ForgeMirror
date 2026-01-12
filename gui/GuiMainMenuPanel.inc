@@ -55,6 +55,8 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         RefreshProfiles(state, storage, catalog);
         state.tasks = LoadTasks(state.storageDir);
         state.pipelineSteps = LoadPipeline(state.storageDir);
+        state.rulesConfig = LoadGameplayConfig(state.storageDir);
+        state.rulesDraft = state.rulesConfig;
     }
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
@@ -99,6 +101,8 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             RefreshProfiles(state, storage, catalog);
             state.tasks = LoadTasks(state.storageDir);
             state.pipelineSteps = LoadPipeline(state.storageDir);
+            state.rulesConfig = LoadGameplayConfig(state.storageDir);
+            state.rulesDraft = state.rulesConfig;
         }
     }
     if (doPush) {
@@ -187,6 +191,13 @@ static std::int64_t ComputeStorageStamp(const std::filesystem::path& storageDir)
             latest = std::max(latest, stamp);
         }
     }
+    auto gameplayPath = storageDir / "meta" / "gameplay.ini";
+    if (std::filesystem::exists(gameplayPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(gameplayPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
     return latest;
 }
 
@@ -199,7 +210,7 @@ static std::int64_t GetStorageStamp(GuiState& state) {
     return state.lastStorageDataAt;
 }
 
-void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
@@ -223,6 +234,8 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
     ImVec4 menuBg = style.Colors[ImGuiCol_WindowBg];
     menuBg.w = std::max(menuBg.w, 0.85f);
+    bool barHovered = false;
+    bool barAnyItemHovered = false;
     ImGui::PushStyleColor(ImGuiCol_MenuBarBg, menuBg);
     if (ImGui::BeginMainMenuBar()) {
 #ifdef APP_VERSION
@@ -526,9 +539,15 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             state.requestExit = true;
         }
 
+        barHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        barAnyItemHovered = ImGui::IsAnyItemHovered();
         ImGui::EndMainMenuBar();
     }
     ImGui::PopStyleColor();
+    const bool canDragBar = window && !state.ui.windowDecorated && !state.ui.windowFullscreen;
+    if (canDragBar && barHovered && !barAnyItemHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        DragWindow(window, ImGui::GetIO().MouseDelta);
+    }
 }
 
 void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {

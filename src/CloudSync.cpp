@@ -549,6 +549,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "skills.txt", storageDir / "skills.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
     result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0;
     if (!result.ok) {
@@ -587,13 +588,15 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "skills.txt", cloudRoot / "skills.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
     int removed = 0;
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
         || RemoveOrphanedProfiles(storageDir / "archive", cloudRoot / "archive", removed)
         || RemoveOrphanedAchievements(storageDir, storageDir / "archive", cloudRoot / "achievements", removed)
         || RemoveFileIfMissing(storageDir / "skills.txt", cloudRoot / "skills.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
-        || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed);
+        || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed);
     if (config.updateManifestOnPush) {
         CloudManifest manifest = LoadCloudManifest(config, storageDir);
         manifest.appVersion = APP_VERSION;
