@@ -17,6 +17,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -550,6 +551,56 @@ ModuleToggles LoadModuleToggles() {
         }
     }
     return toggles;
+}
+
+bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSamples,
+                           std::vector<std::string>& outSamples, int& totalCount) {
+    outSamples.clear();
+    totalCount = 0;
+    std::error_code ec;
+    if (storageDir.empty() || !std::filesystem::exists(storageDir, ec)) return false;
+
+    auto is_allowed = [&](const std::filesystem::path& rel, bool isDir) {
+        const std::string relStr = rel.generic_string();
+        if (relStr.empty()) return true;
+        if (relStr == "archive" || relStr == "achievements" || relStr == "achievements/icons" || relStr == "meta") return true;
+        if (relStr == "logs" || relStr == "cloud") return true; // allow optional folders
+        if (!isDir) {
+            const auto ext = rel.extension().string();
+            const auto parent = rel.parent_path().generic_string();
+            if (parent.empty()) {
+                if (ext == ".ini") return true;
+                if (relStr == "skills.txt") return true;
+            } else if (parent == "archive") {
+                if (ext == ".ini") return true;
+            } else if (parent == "meta") {
+                if (ext == ".ini" || ext == ".json") return true;
+                if (rel.filename() == "seed.merged") return true;
+            } else if (parent == "achievements") {
+                if (ext == ".json") return true;
+            } else if (parent == "achievements/icons") {
+                if (ext == ".png") return true;
+            } else if (parent == "logs") {
+                return true; // allow log files
+            }
+        }
+        return false;
+    };
+
+    for (auto it = std::filesystem::recursive_directory_iterator(storageDir, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), storageDir, ec);
+        if (ec) break;
+        if (!is_allowed(rel, entry.is_directory())) {
+            totalCount++;
+            if (outSamples.size() < maxSamples && entry.is_regular_file()) {
+                outSamples.push_back(rel.generic_string());
+            }
+        }
+    }
+    return true;
 }
 
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {

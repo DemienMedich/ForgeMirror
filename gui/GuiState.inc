@@ -4,6 +4,8 @@ struct GuiDataState {
     std::optional<GuiProfile> active;
     std::filesystem::path storageDir;
     ModuleToggles modules;
+    int strayFileCount = 0;
+    std::vector<std::string> straySamples;
     std::string adminPasswordExpected;
     GameplayConfig rulesConfig;
     GameplayConfig rulesDraft;

@@ -34,3 +34,7 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
 
 // Load module toggles from environment (FORGEMIRROR_DISABLE_MODULES=tasks,pipeline,...).
 ModuleToggles LoadModuleToggles();
+
+// Find non-whitelisted files in storage (relative paths in outSamples, truncated to maxSamples).
+bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSamples,
+                           std::vector<std::string>& outSamples, int& totalCount);

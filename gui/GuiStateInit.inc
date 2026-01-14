@@ -32,6 +32,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.showPipeline = state.modules.pipeline && state.showPipeline;
     state.showView3d = state.modules.view3d && state.showView3d;
     state.showView3dSettings = state.modules.view3d && state.showView3dSettings;
+    FindStrayStorageFiles(storageDir, 5, state.straySamples, state.strayFileCount);
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
     state.windowFullscreenLast = state.ui.windowFullscreen;

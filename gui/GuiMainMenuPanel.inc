@@ -44,6 +44,7 @@ static void ApplyCloudResultStatus(GuiState& state, const CloudSyncResult& resul
     } else {
         SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
     }
+    FindStrayStorageFiles(state.storageDir, 5, state.straySamples, state.strayFileCount);
 }
 
 static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
@@ -516,6 +517,19 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             if (state.lastCloudSyncOkAt > 0) {
                 tooltip += u8"\nПоследняя синхронизация: ";
                 tooltip += FormatTimestamp(state.lastCloudSyncOkAt, "%Y-%m-%d %H:%M");
+            }
+        }
+        if (state.strayFileCount > 0) {
+            tooltip += u8"\nЛишние файлы в хранилище: ";
+            tooltip += std::to_string(state.strayFileCount);
+            if (!state.straySamples.empty()) {
+                tooltip += u8"\nПримеры: ";
+                bool first = true;
+                for (const auto& s : state.straySamples) {
+                    if (!first) tooltip += ", ";
+                    tooltip += s;
+                    first = false;
+                }
             }
         }
         ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, ImGui::GetColorU32(dotColor));
