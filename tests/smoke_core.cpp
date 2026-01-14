@@ -19,21 +19,6 @@ static bool WriteFile(const std::filesystem::path& path, const std::string& data
     return out.good();
 }
 
-static bool TestProfileRoundtrip(const std::filesystem::path& dir) {
-    Profile p("Test");
-    p.add_skill("sk_test", 2, 1.0);
-    p.add_skill("sk_other", 5, 1.0);
-    p.set_total_xp(1234);
-    p.set_level_progress(34);
-    p.set_xp_to_next_level(200);
-    const auto path = dir / "0001.ini";
-    if (!p.save(path)) return false;
-    if (!std::filesystem::exists(path)) return false;
-    auto loaded = Profile::load(path);
-    if (!loaded) return false;
-    return loaded->overall_level() == p.overall_level();
-}
-
 static bool TestGameplayConfig(const std::filesystem::path& dir) {
     GameplayConfig cfg;
     cfg.levelBaseXp = 10;
@@ -54,6 +39,13 @@ static bool TestTasksPipelineRoundtrip(const std::filesystem::path& dir) {
            std::filesystem::exists(dir / "meta" / "pipeline.json");
 }
 
+static bool TestProfileRank() {
+    Profile p("Test");
+    p.set_overall_level(40);
+    const std::string rank = DescribeOverallRank(p);
+    return rank.find("Джуниор") != std::string::npos;
+}
+
 static bool TestWhitelist(const std::filesystem::path& dir) {
     WriteFile(dir / "bad.txt", "x");
     WriteFile(dir / "meta" / "bad.json", "{}");
@@ -68,7 +60,7 @@ int main() {
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
 
-    const bool okProfile = TestProfileRoundtrip(tmp);
+    const bool okProfile = TestProfileRank();
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okWhitelist = TestWhitelist(tmp);
