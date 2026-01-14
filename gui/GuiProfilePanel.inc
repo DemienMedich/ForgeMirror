@@ -450,12 +450,13 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     bool hovered = false;
                     if (iconPath) {
                         if (const auto* iconTex = GetIconTexture(*iconPath)) {
-                            const ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
-                            : ImVec4(0.55f, 0.55f, 0.55f, 0.5f);
+                            ImVec4 activeTint = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                            activeTint.w = 1.0f;
+                            ImVec4 inactiveTint = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], activeTint, 0.25f);
                             ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)iconTex->id),
                             ImVec2(iconSize, iconSize),
                             ImVec2(0, 0), ImVec2(1, 1),
-                            ImVec4(0, 0, 0, 0), tint);
+                            ImVec4(0, 0, 0, 0), active ? activeTint : inactiveTint);
                             hovered = ImGui::IsItemHovered();
                         } else {
                             ImGui::BeginDisabled();

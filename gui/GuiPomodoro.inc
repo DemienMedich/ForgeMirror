@@ -76,11 +76,20 @@ static bool PlayPomodoroSoundFile(const std::string& path, int volumePercent) {
 #endif
 }
 
-static void PlayPomodoroSound(const GuiState& state, int phase) {
+static void PlayPomodoroSound(GuiState& state, int phase) {
     if (!state.ui.pomodoroSoundEnabled) return;
     const std::string soundPath = ResolvePomodoroSoundPath(state, phase);
 #if defined(_WIN32)
+    if (soundPath.empty()) {
+        SetStatus(state, u8"Звук Помодоро не настроен (выберите файл).", 1.0f, 0.75f, 0.35f);
+        return;
+    }
+    if (!std::filesystem::exists(soundPath)) {
+        SetStatus(state, u8"Файл звука Помодоро не найден: " + soundPath, 1.0f, 0.75f, 0.35f);
+        return;
+    }
     if (!PlayPomodoroSoundFile(soundPath, state.ui.pomodoroSoundVolume)) {
+        SetStatus(state, u8"Не удалось воспроизвести звук Помодоро (кодек MCI?): " + soundPath, 1.0f, 0.75f, 0.35f);
         MessageBeep(MB_OK);
     }
 #else
