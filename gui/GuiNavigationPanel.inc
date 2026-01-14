@@ -50,21 +50,29 @@ void DrawNavigationPanel(GuiState& state) {
         state.showAdminStats = false;
         state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     });
-    navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
-        OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
-    });
+    if (state.modules.tasks) {
+        navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
+            OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
+        });
+    }
     navButton("nav_catalog", UiIcon::Book, u8"Навыки [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
     });
-    navButton("nav_pipeline", UiIcon::Flow, u8"Пайплайн [F3]", state.showPipeline, [&]() {
-        OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
-    });
-    navButton("nav_pomodoro", UiIcon::Bell, u8"Помодоро", state.showPomodoro, [&]() {
-        OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
-    });
-    navButton("nav_view3d", UiIcon::Cube, u8"3D просмотр", state.showView3d, [&]() {
-        OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
-    });
+    if (state.modules.pipeline) {
+        navButton("nav_pipeline", UiIcon::Flow, u8"Пайплайн [F3]", state.showPipeline, [&]() {
+            OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
+        });
+    }
+    if (state.modules.pomodoro) {
+        navButton("nav_pomodoro", UiIcon::Bell, u8"Помодоро", state.showPomodoro, [&]() {
+            OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
+        });
+    }
+    if (state.modules.view3d) {
+        navButton("nav_view3d", UiIcon::Cube, u8"3D просмотр", state.showView3d, [&]() {
+            OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
+        });
+    }
     ImGui::Spacing();
     DrawCardHeader(u8"Админ");
     if (state.isAdmin) {
@@ -161,27 +169,32 @@ void DrawNavigationPanel(GuiState& state) {
     timeColor.w = std::max(timeColor.w, 0.85f);
     ImGui::TextColored(timeColor, "%s", buf);
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
-    DrawCardHeader(u8"Помодоро · быстрые действия");
-    const float actionSize = 34.0f;
-    const float actionSpacing = 10.0f;
-    const float totalWidth = actionSize * 3.0f + actionSpacing * 2.0f;
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const float offsetX = std::max(0.0f, (avail - totalWidth) * 0.5f);
-    ImGui::BeginGroup();
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
-    const bool nextEnabled = !state.ui.pomodoroAutoAdvance || state.pomodoroAwaitConfirm;
-    if (IconButtonGui("pom_quick_start", UiIcon::Play, u8"Старт/продолжить", accent, actionSize, true)) {
-        PomodoroQuickStart(state);
+    if (state.modules.pomodoro) {
+        DrawCardHeader(u8"Помодоро · быстрые действия");
+        const float actionSize = 34.0f;
+        const float actionSpacing = 10.0f;
+        const float totalWidth = actionSize * 3.0f + actionSpacing * 2.0f;
+        const float avail = ImGui::GetContentRegionAvail().x;
+        const float offsetX = std::max(0.0f, (avail - totalWidth) * 0.5f);
+        ImGui::BeginGroup();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+        const bool nextEnabled = !state.ui.pomodoroAutoAdvance || state.pomodoroAwaitConfirm;
+        if (IconButtonGui("pom_quick_start", UiIcon::Play, u8"Старт/продолжить", accent, actionSize, true)) {
+            PomodoroQuickStart(state);
+        }
+        ImGui::SameLine(0.0f, actionSpacing);
+        if (IconButtonGui("pom_quick_reset", UiIcon::Stop, u8"Сбросить", accent, actionSize, true)) {
+            PomodoroQuickReset(state);
+        }
+        ImGui::SameLine(0.0f, actionSpacing);
+        if (IconButtonGui("pom_quick_next", UiIcon::Next, u8"Следующий этап (ручной режим)", accent, actionSize, nextEnabled)) {
+            PomodoroQuickNext(state);
+        }
+        ImGui::EndGroup();
+    } else {
+        DrawCardHeader(u8"Помодоро отключен");
+        ImGui::TextDisabled(u8"Модуль таймера выключен (env FORGEMIRROR_DISABLE_MODULES=pomodoro).");
     }
-    ImGui::SameLine(0.0f, actionSpacing);
-    if (IconButtonGui("pom_quick_reset", UiIcon::Stop, u8"Сбросить", accent, actionSize, true)) {
-        PomodoroQuickReset(state);
-    }
-    ImGui::SameLine(0.0f, actionSpacing);
-    if (IconButtonGui("pom_quick_next", UiIcon::Next, u8"Следующий этап (ручной режим)", accent, actionSize, nextEnabled)) {
-        PomodoroQuickNext(state);
-    }
-    ImGui::EndGroup();
     ImGui::Spacing();
     DrawCardHeader(u8"Сервис");
     navButton("nav_profiles", UiIcon::Users, u8"Профили", state.showProfilesWindow, [&]() {
@@ -190,9 +203,11 @@ void DrawNavigationPanel(GuiState& state) {
             state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
         }
     });
-    navButton("nav_shortcuts", UiIcon::Launch, u8"Ярлыки", state.showShortcuts, [&]() {
-        OpenWorkspaceTab(state, state.showShortcuts, UiWindowId::Shortcuts);
-    });
+    if (state.modules.shortcuts) {
+        navButton("nav_shortcuts", UiIcon::Launch, u8"Ярлыки", state.showShortcuts, [&]() {
+            OpenWorkspaceTab(state, state.showShortcuts, UiWindowId::Shortcuts);
+        });
+    }
     navButton("nav_ui_settings", UiIcon::Settings, u8"Настройки", state.showUiSettings, [&]() {
         OpenWorkspaceTab(state, state.showUiSettings, UiWindowId::UiSettings);
     });

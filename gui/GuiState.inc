@@ -3,6 +3,7 @@ struct GuiDataState {
     std::vector<IJobStorage::ProfileInfo> profiles;
     std::optional<GuiProfile> active;
     std::filesystem::path storageDir;
+    ModuleToggles modules;
     std::string adminPasswordExpected;
     GameplayConfig rulesConfig;
     GameplayConfig rulesDraft;

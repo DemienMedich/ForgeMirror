@@ -15,6 +15,7 @@
 #include <sstream>
 #include <system_error>
 #include <unordered_set>
+#include <unordered_map>
 #include <utility>
 
 namespace {
@@ -265,19 +266,14 @@ bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::pa
     return true;
 }
 
-const std::unordered_set<std::string>& SeedProfileWhitelist() {
-    static const std::unordered_set<std::string> ids = {
-        // Add allowed seed profile IDs here (e.g., "0001"). Empty = no seed profiles.
-    };
-    return ids;
-}
-
 void MergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
     if (seedRoot.empty() || storageRoot.empty()) return;
     std::error_code ec;
     if (!std::filesystem::exists(seedRoot, ec)) return;
     if (std::filesystem::equivalent(seedRoot, storageRoot, ec)) return;
-    const auto& allowed = SeedProfileWhitelist();
+    const std::unordered_set<std::string> allowed = {
+        // Add allowed seed profile IDs here (e.g., "0001"). Empty = no seed profiles.
+    };
     auto copy_missing_profile = [&](const std::filesystem::path& srcFile, const std::filesystem::path& dstDir) {
         if (srcFile.extension() != ".ini") return;
         if (!allowed.empty() && allowed.find(srcFile.stem().string()) == allowed.end()) return;
@@ -506,6 +502,54 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
     std::string trimmed = TrimCopy(password);
     if (trimmed.empty()) return false;
     return SaveAdminPassword(storageDir, trimmed);
+}
+
+ModuleToggles LoadModuleToggles() {
+    ModuleToggles toggles;
+    const char* env = std::getenv("FORGEMIRROR_DISABLE_MODULES");
+    if (!env || *env == '\0') {
+        env = std::getenv("JOBSKILL_DISABLE_MODULES");
+    }
+    if (!env || *env == '\0') return toggles;
+
+    std::unordered_map<std::string, bool*> map = {
+        {"tasks", &toggles.tasks},
+        {"pipeline", &toggles.pipeline},
+        {"achievements", &toggles.achievements},
+        {"ach", &toggles.achievements},
+        {"shortcuts", &toggles.shortcuts},
+        {"pomodoro", &toggles.pomodoro},
+        {"timer", &toggles.pomodoro},
+        {"cloud", &toggles.cloud},
+        {"sync", &toggles.cloud},
+        {"view3d", &toggles.view3d},
+        {"3d", &toggles.view3d},
+    };
+
+    auto disable_all = [&]() {
+        for (auto& kv : map) {
+            if (kv.second) *(kv.second) = false;
+        }
+    };
+
+    std::string raw(env);
+    std::replace(raw.begin(), raw.end(), ';', ',');
+    std::stringstream ss(raw);
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+        std::string t = TrimCopy(token);
+        std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (t.empty()) continue;
+        if (t == "all") {
+            disable_all();
+            continue;
+        }
+        auto it = map.find(t);
+        if (it != map.end() && it->second) {
+            *(it->second) = false;
+        }
+    }
+    return toggles;
 }
 
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
