@@ -354,6 +354,30 @@ bool RemoveOrphanedAchievements(const std::filesystem::path& srcRoot, const std:
     return removedAny;
 }
 
+bool RemoveOrphanedFlatFiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dstRoot, ec)) return false;
+    std::unordered_set<std::string> keep;
+    if (std::filesystem::exists(srcRoot, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
+            if (!entry.is_regular_file()) continue;
+            keep.insert(entry.path().filename().string());
+        }
+    }
+    bool removedAny = false;
+    for (const auto& entry : std::filesystem::directory_iterator(dstRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        const std::string name = entry.path().filename().string();
+        if (keep.find(name) != keep.end()) continue;
+        std::filesystem::remove(entry.path(), ec);
+        if (!ec) {
+            removed += 1;
+            removedAny = true;
+        }
+    }
+    return removedAny;
+}
+
 std::vector<int> ParseVersion(const std::string& value) {
     std::vector<int> parts;
     std::stringstream ss(value);
@@ -613,7 +637,8 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         || RemoveFileIfMissing(storageDir / "skills.txt", cloudRoot / "skills.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
-        || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed);
+        || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed)
+        || RemoveOrphanedFlatFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", removed);
     if (config.updateManifestOnPush) {
         CloudManifest manifest = LoadCloudManifest(config, storageDir);
         manifest.appVersion = APP_VERSION;
