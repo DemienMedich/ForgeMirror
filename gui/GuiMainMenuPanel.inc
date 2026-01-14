@@ -387,7 +387,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
         if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
             ImGui::TextDisabled(u8"Папка: %s", cloudRootLabel.c_str());
             ImGui::Separator();
-            if (state.strayFileCount > 0) {
+            if (state.isAdmin && state.strayFileCount > 0) {
                 ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
                 ImGui::Text(u8"Лишние файлы: %d", state.strayFileCount);
                 ImGui::PopStyleColor();
