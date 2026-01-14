@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <sstream>
 #include <system_error>
+#include <unordered_set>
 #include <utility>
 
 namespace {
@@ -264,13 +265,22 @@ bool CopyStorageTree(const std::filesystem::path& src, const std::filesystem::pa
     return true;
 }
 
+const std::unordered_set<std::string>& SeedProfileWhitelist() {
+    static const std::unordered_set<std::string> ids = {
+        // Add allowed seed profile IDs here (e.g., "0001"). Empty = no seed profiles.
+    };
+    return ids;
+}
+
 void MergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
     if (seedRoot.empty() || storageRoot.empty()) return;
     std::error_code ec;
     if (!std::filesystem::exists(seedRoot, ec)) return;
     if (std::filesystem::equivalent(seedRoot, storageRoot, ec)) return;
+    const auto& allowed = SeedProfileWhitelist();
     auto copy_missing_profile = [&](const std::filesystem::path& srcFile, const std::filesystem::path& dstDir) {
         if (srcFile.extension() != ".ini") return;
+        if (!allowed.empty() && allowed.find(srcFile.stem().string()) == allowed.end()) return;
         std::filesystem::path dstFile = dstDir / srcFile.filename();
         if (std::filesystem::exists(dstFile, ec)) return;
         std::filesystem::create_directories(dstDir, ec);

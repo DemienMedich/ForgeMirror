@@ -15,6 +15,7 @@ State (текущее)
 - Облако: добавлены правила (meta/gameplay.ini) в pull/push; удаление orphan файлов (skills/pipeline/tasks/gameplay/profiles/achievements). Штамп данных учитывает правила.
 - UI: drag окна в безрамочном режиме через верхнюю панель; ранги в тексте и бейдже совпадают.
 - Seed: иконка FM подключена; installer ico/rc добавлены; дист/ игнорится.
+- Seed-профили: whitelist пуст (копирование сидов выключено), из `data/` удалены 0002/0003 (Anastasiya/Roman), чтобы установщик не тянул их.
 
 Done recently
 - Исправлен расчёт текстового ранга (BuildRank +1) — не отстаёт от бейджа.
