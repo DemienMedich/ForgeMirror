@@ -36,8 +36,8 @@ std::string ToRoman(int value) {
 }
 
 std::string BuildRank(const char* base, int startLevel, int substep, int level) {
-    int index = (level - startLevel) / substep;
-    if (index <= 0) return std::string(base);
+    int index = (level - startLevel) / substep + 1;
+    if (index <= 1) return std::string(base);
     std::ostringstream ss;
     ss << base << " (" << ToRoman(index) << ")";
     return ss.str();

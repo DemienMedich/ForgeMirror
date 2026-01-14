@@ -344,6 +344,7 @@ Done:
 - Установщик: проверка `AppVersion` в .iss упрощена (строковое сравнение без StrCmp), чтобы Inno не ругался на неизвестную функцию.
 - Установщик: рабочая команда сборки (c явным путём к ISCC.exe):  
   `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
+- Ранги: исправлено отображение — строковое описание теперь совпадает с цветным бейджем (Junior IV на 40 уровне и т.д.).
 
 Now:
 - Разобрать, почему папка синхронизации пустая (роль пользователя/выгрузка/настройки).
