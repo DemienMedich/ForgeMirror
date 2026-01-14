@@ -399,6 +399,15 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 }
                 ImGui::Separator();
             }
+            if (state.isAdmin) {
+#ifdef APP_VERSION
+                ImGui::TextDisabled(u8"Версия приложения: %s", APP_VERSION);
+#endif
+                const std::int64_t dataStamp = GetStorageStamp(state);
+                ImGui::TextDisabled(u8"Штамп данных: %s",
+                    dataStamp > 0 ? FormatTimestamp(dataStamp, "%Y-%m-%d %H:%M").c_str() : u8"(нет данных)");
+                ImGui::Separator();
+            }
             if (ImGui::MenuItem(u8"Обновить из облака")) {
                 RunCloudPull(state, storage, catalog);
             }
