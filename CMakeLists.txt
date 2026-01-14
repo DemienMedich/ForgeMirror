@@ -32,6 +32,7 @@ set_target_properties(JobSkill PROPERTIES OUTPUT_NAME "ForgeMirror")
 # Для Windows корректно установить кодировку консоли при необходимости вручную в приложении
 
 option(BUILD_IMGUI_GUI "Build ImGui-based GUI" OFF)
+option(BUILD_CORE_TESTS "Build core smoke tests" OFF)
 
 if(BUILD_IMGUI_GUI)
     if(NOT IMGUI_DIR)
@@ -77,5 +78,21 @@ if(BUILD_IMGUI_GUI)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:glfw>
             $<TARGET_FILE_DIR:JobSkillGui>)
+endif()
+
+if(BUILD_CORE_TESTS)
+    add_executable(smoke_core
+        tests/smoke_core.cpp
+        src/Profile.cpp
+        src/Skill.cpp
+        src/SkillCatalog.cpp
+        src/AppUtils.cpp
+        src/GameplayConfig.cpp
+        src/CloudSync.cpp
+        src/FileStorage.cpp
+        src/FakeStorage.cpp
+    )
+    target_include_directories(smoke_core PRIVATE include)
+    target_compile_definitions(smoke_core PRIVATE APP_VERSION="0.0.0")
 endif()
 
