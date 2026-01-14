@@ -471,10 +471,6 @@ int CompareVersions(const std::string& a, const std::string& b) {
 
 } // namespace
 
-bool RemoveStrayFiles(const std::filesystem::path& root, int& removed) {
-    return RemoveStrayFilesInternal(root, removed);
-}
-
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
     CloudSyncConfig config;
     auto path = CloudConfigPath(storageDir);

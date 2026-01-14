@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 enum class CloudRole {
     Viewer,
@@ -55,4 +56,62 @@ CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::f
 CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);
 CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);
 // Remove files/dirs outside whitelist in storageDir; returns true if any removed, writes count.
-bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& removed);
+inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& removed) {
+    removed = 0;
+    std::error_code ec;
+    if (!std::filesystem::exists(storageDir, ec)) return false;
+    const std::unordered_set<std::string> allowedDirs = {
+        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes", "logs", "cloud"
+    };
+    const std::unordered_set<std::string> allowedMetaFiles = {
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "seed.merged"
+    };
+    bool any = false;
+    for (auto it = std::filesystem::recursive_directory_iterator(storageDir, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), storageDir, ec);
+        if (ec) break;
+        if (rel.empty()) continue;
+        const bool isDir = entry.is_directory();
+        const std::string dirStr = rel.parent_path().generic_string();
+        const std::string name = rel.filename().string();
+        auto dirAllowed = [&](const std::string& d) { return allowedDirs.find(d) != allowedDirs.end(); };
+        auto fileAllowed = [&]() {
+            if (dirStr.empty()) {
+                if (entry.path().extension() == ".ini") return true;
+                if (name == "skills.txt") return true;
+                return false;
+            }
+            if (dirStr == "archive") return entry.path().extension() == ".ini";
+            if (dirStr == "achievements") return entry.path().extension() == ".json";
+            if (dirStr == "achievements/icons") return entry.path().extension() == ".png";
+            if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
+            if (dirStr == "meta/patch-notes") return entry.path().extension() == ".md";
+            if (dirStr == "logs") return true;
+            if (dirStr == "cloud") return true;
+            return false;
+        };
+
+        if (isDir) {
+            if (!dirAllowed(rel.generic_string())) {
+                std::filesystem::remove_all(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                    it.disable_recursion_pending();
+                }
+            }
+        } else {
+            if (!fileAllowed()) {
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                }
+            }
+        }
+    }
+    return any;
+}
