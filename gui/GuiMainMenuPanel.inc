@@ -413,6 +413,16 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             }
 
             if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(u8"Очистить лишние файлы")) {
+                int removed = 0;
+                removed += RemoveStrayFiles(state.storageDir, removed) ? 0 : 0;
+                FindStrayStorageFiles(state.storageDir, 5, state.straySamples, state.strayFileCount);
+                if (removed > 0) {
+                    SetStatus(state, u8"Лишние данные удалены.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, u8"Лишние данные не найдены.", 0.6f, 0.7f, 1.0f);
+                }
+            }
             if (ImGui::MenuItem(u8"Выгрузить в облако")) {
                 RunCloudPush(state);
             }

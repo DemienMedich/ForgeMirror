@@ -378,6 +378,64 @@ bool RemoveOrphanedFlatFiles(const std::filesystem::path& srcRoot, const std::fi
     return removedAny;
 }
 
+bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec)) return false;
+    const std::unordered_set<std::string> allowedDirs = {
+        "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud"
+    };
+    const std::unordered_set<std::string> allowedMetaFiles = {
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "seed.merged"
+    };
+    bool any = false;
+    for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), root, ec);
+        if (ec) break;
+        if (rel.empty()) continue;
+        const bool isDir = entry.is_directory();
+        const std::string dirStr = rel.parent_path().generic_string();
+        const std::string name = rel.filename().string();
+        auto dirAllowed = [&](const std::string& d) { return allowedDirs.find(d) != allowedDirs.end(); };
+        auto fileAllowed = [&]() {
+            if (dirStr.empty()) {
+                if (entry.path().extension() == ".ini") return true;
+                if (name == "skills.txt") return true;
+                return false;
+            }
+            if (dirStr == "archive") return entry.path().extension() == ".ini";
+            if (dirStr == "achievements") return entry.path().extension() == ".json";
+            if (dirStr == "achievements/icons") return entry.path().extension() == ".png";
+            if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
+            if (dirStr == "logs") return true;
+            if (dirStr == "cloud") return true;
+            return false;
+        };
+
+        if (isDir) {
+            if (!dirAllowed(rel.generic_string())) {
+                std::filesystem::remove_all(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                    it.disable_recursion_pending();
+                }
+            }
+        } else {
+            if (!fileAllowed()) {
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                }
+            }
+        }
+    }
+    return any;
+}
+
 std::vector<int> ParseVersion(const std::string& value) {
     std::vector<int> parts;
     std::stringstream ss(value);
@@ -412,6 +470,10 @@ int CompareVersions(const std::string& a, const std::string& b) {
 }
 
 } // namespace
+
+bool RemoveStrayFiles(const std::filesystem::path& root, int& removed) {
+    return RemoveStrayFilesInternal(root, removed);
+}
 
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
     CloudSyncConfig config;
