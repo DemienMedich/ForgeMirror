@@ -271,6 +271,21 @@ void CopyAchievementIcons(const std::filesystem::path& srcRoot, const std::files
     }
 }
 
+void CopyFlatDirFiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot,
+                      CloudSyncStats& stats, bool pulling, std::string* errorMessage) {
+    std::error_code ec;
+    if (!std::filesystem::exists(srcRoot, ec)) return;
+    for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::filesystem::path dst = dstRoot / entry.path().filename();
+        if (pulling) {
+            CopyFileIfExists(entry.path(), dst, stats, true, errorMessage);
+        } else {
+            CopyFileIfExistsPush(entry.path(), dst, stats, errorMessage);
+        }
+    }
+}
+
 bool RemoveOrphanedProfiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot, int& removed) {
     std::error_code ec;
     if (!std::filesystem::exists(dstRoot, ec)) return false;
@@ -550,6 +565,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
+    CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
     result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0;
     if (!result.ok) {
@@ -589,6 +605,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
+    CopyFlatDirFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", result.stats, false, &ioError);
     int removed = 0;
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
         || RemoveOrphanedProfiles(storageDir / "archive", cloudRoot / "archive", removed)
