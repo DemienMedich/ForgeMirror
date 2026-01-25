@@ -17,6 +17,9 @@ struct GuiDataState {
     std::vector<TaskEntry> tasks;
     std::vector<ShortcutEntry> shortcuts;
     std::vector<PipelineStep> pipelineSteps;
+    std::vector<ProfessionEntry> professions;
+    std::unordered_map<std::string, std::string> profileProfessionCache;
+    bool profileProfessionDirty = true;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;
 };
@@ -46,6 +49,7 @@ struct GuiRuntimeState {
     std::string viewMeshError;
     std::array<char, 260> modelPathBuffer{};
     bool showSkillCatalog = false;
+    bool showProfessions = false;
     bool showPipeline = false;
     bool showRules = false;
     bool showUiSettings = false;
@@ -73,8 +77,15 @@ struct GuiRuntimeState {
     std::array<char, 128> modalBuffer{};
     std::array<char, 128> newSkillName{};
     std::array<char, 256> newSkillDesc{};
+    std::array<char, 128> newSkillCategory{};
+    int newSkillProfessionIndex = 0;
     std::array<char, 128> editSkillName{};
     std::array<char, 256> editSkillDesc{};
+    std::array<char, 128> editSkillCategory{};
+    int editSkillProfessionIndex = 0;
+    std::array<char, 128> newProfessionName{};
+    std::array<char, 256> newProfessionDesc{};
+    int professionEditIndex = -1;
     float newSkillWeight = 1.0f;
     std::array<char, 64> adminPassword{};
     std::array<char, 64> adminPasswordCurrent{};
@@ -85,6 +96,8 @@ struct GuiRuntimeState {
     std::string pendingMergeToId;
     std::string pendingMergeName;
     std::string pendingMergeDesc;
+    std::string pendingMergeCategory;
+    std::string pendingMergeProfession;
     float pendingMergeWeight = 1.0f;
     float editedSkillWeight = 1.0f;
     std::array<char, 128> achTitle{};
@@ -97,6 +110,8 @@ struct GuiRuntimeState {
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
     std::vector<TaskProfileShare> taskShares;
+    bool taskDeletePopupRequest = false;
+    std::string pendingTaskDeleteId;
     int tasksFilterProfile = 0;
     int tasksFilterCategory = 0;
     int tasksFilterDays = 0;
@@ -144,6 +159,7 @@ struct GuiRuntimeState {
     int catalogSortMode = 0;
     int catalogGroupMode = 0;
     int catalogWeightCategoryFilter = 0;
+    int catalogCategoryFilter = 0;
     int profileSort = 0;
     int profileArchiveFilter = 0;
     bool showLogs = false;

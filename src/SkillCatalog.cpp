@@ -21,6 +21,16 @@ void append_utf8(std::string& out, uint32_t cp);
 
 const std::vector<SkillEntry> kDefaultSkills = {};
 
+bool has_prefix_nocase(const std::string& text, const std::string& prefix) {
+    if (text.size() < prefix.size()) return false;
+    for (size_t i = 0; i < prefix.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(text[i])) != std::tolower(static_cast<unsigned char>(prefix[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 double clamp_weight(double value) {
     const double minW = 0.5;
     const double maxW = 1.6;
@@ -554,6 +564,22 @@ double SkillCatalog::weight(const std::string& skill) const {
     return 1.0;
 }
 
+std::string SkillCatalog::category(const std::string& id) const {
+    if (auto resolved = resolve_id(id)) {
+        auto it = categoriesById_.find(*resolved);
+        if (it != categoriesById_.end()) return it->second;
+    }
+    return {};
+}
+
+std::string SkillCatalog::profession(const std::string& id) const {
+    if (auto resolved = resolve_id(id)) {
+        auto it = professionById_.find(*resolved);
+        if (it != professionById_.end()) return it->second;
+    }
+    return {};
+}
+
 std::string SkillCatalog::display_name(const std::string& id) const {
     if (auto resolved = resolve_id(id)) {
         auto it = namesById_.find(*resolved);
@@ -593,11 +619,14 @@ void SkillCatalog::reload() {
     load();
 }
 
-bool SkillCatalog::add_skill(const std::string& skill, double weight, const std::string& description) {
+bool SkillCatalog::add_skill(const std::string& skill, double weight, const std::string& description,
+                             const std::string& category, const std::string& profession) {
     std::string trimmed = trim(skill);
     if (trimmed.empty()) return false;
     weight = clamp_weight(weight);
     std::string desc = trim(description);
+    std::string cat = trim(category);
+    std::string prof = trim(profession);
 
     auto norm = normalize(trimmed);
     auto it = idByName_.find(norm);
@@ -605,6 +634,8 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
         const std::string& id = it->second;
         double& storedWeight = weightsById_[id];
         std::string& storedDesc = descriptionsById_[id];
+        std::string& storedCat = categoriesById_[id];
+        std::string& storedProf = professionById_[id];
         bool changed = false;
         if (std::abs(storedWeight - weight) >= 1e-3) {
             storedWeight = weight;
@@ -614,22 +645,33 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
             storedDesc = std::move(desc);
             changed = true;
         }
+        if (storedCat != cat) {
+            storedCat = std::move(cat);
+            changed = true;
+        }
+        if (storedProf != prof) {
+            storedProf = std::move(prof);
+            changed = true;
+        }
         if (changed) save();
         return changed;
     }
 
     const std::string id = make_id(trimmed);
-    add_internal(id, trimmed, weight, desc, true);
+    add_internal(id, trimmed, weight, desc, cat, prof, true);
     return true;
 }
 
-bool SkillCatalog::update_skill(const std::string& id, const std::string& displayName, double weight, const std::string& description) {
+bool SkillCatalog::update_skill(const std::string& id, const std::string& displayName, double weight,
+                                const std::string& description, const std::string& category, const std::string& profession) {
     auto resolved = resolve_id(id);
     if (!resolved) return false;
     std::string trimmed = trim(displayName);
     if (trimmed.empty()) return false;
     weight = clamp_weight(weight);
     std::string desc = trim(description);
+    std::string cat = trim(category);
+    std::string prof = trim(profession);
 
     const std::string currentId = *resolved;
     const std::string newNorm = normalize(trimmed);
@@ -659,6 +701,16 @@ bool SkillCatalog::update_skill(const std::string& id, const std::string& displa
         storedDesc = std::move(desc);
         changed = true;
     }
+    std::string& storedCat = categoriesById_[currentId];
+    if (storedCat != cat) {
+        storedCat = std::move(cat);
+        changed = true;
+    }
+    std::string& storedProf = professionById_[currentId];
+    if (storedProf != prof) {
+        storedProf = std::move(prof);
+        changed = true;
+    }
     if (changed) save();
     return changed;
 }
@@ -674,6 +726,7 @@ bool SkillCatalog::remove_skill(const std::string& idOrName) {
     namesById_.erase(id);
     weightsById_.erase(id);
     descriptionsById_.erase(id);
+    categoriesById_.erase(id);
     orderedIds_.erase(std::remove(orderedIds_.begin(), orderedIds_.end(), id), orderedIds_.end());
     save();
     return true;
@@ -685,12 +738,13 @@ void SkillCatalog::load() {
     namesById_.clear();
     weightsById_.clear();
     descriptionsById_.clear();
+    categoriesById_.clear();
     bool repaired = false;
 
     std::ifstream in(file_path(), std::ios::binary);
     if (!in) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
+            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, {}, {}, false);
         }
         save();
         return;
@@ -713,48 +767,79 @@ void SkillCatalog::load() {
         std::string id;
         std::string name;
         std::string desc;
+        std::string category;
+        std::string profession;
         double weight = 1.0;
-        auto append_desc = [&](size_t start) {
-            if (start >= parts.size()) return;
-            desc = parts[start];
-            for (size_t i = start + 1; i < parts.size(); ++i) {
-                if (!desc.empty()) desc += "|";
-                desc += parts[i];
+        auto join_rest = [&](size_t start) {
+            std::string out;
+            for (size_t i = start; i < parts.size(); ++i) {
+                if (!out.empty()) out += "|";
+                out += parts[i];
             }
+            return out;
+        };
+        auto is_cat_token = [](const std::string& token) {
+            return has_prefix_nocase(token, "cat=") || has_prefix_nocase(token, "cat:");
+        };
+        auto extract_cat = [&](const std::string& token) {
+            if (has_prefix_nocase(token, "cat=")) return trim(token.substr(4));
+            if (has_prefix_nocase(token, "cat:")) return trim(token.substr(4));
+            return trim(token);
+        };
+        auto is_prof_token = [](const std::string& token) {
+            return has_prefix_nocase(token, "prof=") || has_prefix_nocase(token, "prof:");
+        };
+        auto extract_prof = [&](const std::string& token) {
+            if (has_prefix_nocase(token, "prof=")) return trim(token.substr(5));
+            if (has_prefix_nocase(token, "prof:")) return trim(token.substr(5));
+            return trim(token);
         };
 
         if (parts.size() >= 4) {
             id = parts[0];
             name = parts[1];
             double parsed = 1.0;
-            if (try_parse_weight(parts[2], parsed)) {
-                weight = parsed;
-                append_desc(3);
-            } else if (try_parse_weight(parts[3], parsed)) {
-                weight = parsed;
-                desc = parts[2];
-                if (parts.size() > 4) {
-                    for (size_t i = 4; i < parts.size(); ++i) {
-                        if (!desc.empty()) desc += "|";
-                        desc += parts[i];
+            bool parsedWeight = try_parse_weight(parts[2], parsed);
+            size_t descStart = 3;
+            if (!parsedWeight && try_parse_weight(parts[3], parsed)) {
+                parsedWeight = true;
+                descStart = 2;
+                desc = join_rest(4);
+            }
+            weight = parsedWeight ? parsed : parse_weight(parts[2], 1.0);
+            if (desc.empty()) {
+                if (descStart < parts.size()) {
+                    if (is_cat_token(parts[descStart])) {
+                        category = extract_cat(parts[descStart]);
+                        desc = join_rest(descStart + 1);
+                    } else if (is_prof_token(parts[descStart])) {
+                        profession = extract_prof(parts[descStart]);
+                        desc = join_rest(descStart + 1);
+                    } else {
+                        desc = join_rest(descStart);
                     }
                 }
-            } else {
-                weight = parse_weight(parts[2], 1.0);
-                append_desc(3);
             }
         } else if (parts.size() >= 3) {
             name = parts[0];
             double parsed = 1.0;
-            if (try_parse_weight(parts[1], parsed)) {
-                weight = parsed;
-                desc = parts[2];
-            } else if (try_parse_weight(parts[2], parsed)) {
-                weight = parsed;
-                desc = parts[1];
-            } else {
-                weight = parse_weight(parts[1], 1.0);
-                desc = parts[2];
+            bool parsedWeight = try_parse_weight(parts[1], parsed);
+            size_t descStart = 2;
+            if (!parsedWeight && try_parse_weight(parts[2], parsed)) {
+                parsedWeight = true;
+                descStart = 1;
+            }
+            weight = parsedWeight ? parsed : parse_weight(parts[1], 1.0);
+            if (descStart < parts.size()) {
+                if (is_cat_token(parts[descStart])) {
+                    category = extract_cat(parts[descStart]);
+                    desc = join_rest(descStart + 1);
+                } else if (is_prof_token(parts[descStart])) {
+                    profession = extract_prof(parts[descStart]);
+                    desc = join_rest(descStart + 1);
+                } else {
+                    desc = join_rest(descStart);
+                }
             }
         } else if (parts.size() >= 2) {
             name = parts[0];
@@ -776,16 +861,32 @@ void SkillCatalog::load() {
                 repaired = true;
             }
         }
+        if (!category.empty()) {
+            std::string fixedCat = MaybeFixMojibake(category);
+            if (fixedCat != category) {
+                category = std::move(fixedCat);
+                repaired = true;
+            }
+        }
+        if (!profession.empty()) {
+            std::string fixedProf = MaybeFixMojibake(profession);
+            if (fixedProf != profession) {
+                profession = std::move(fixedProf);
+                repaired = true;
+            }
+        }
         name = trim(name);
         desc = trim(desc);
+        category = trim(category);
+        profession = trim(profession);
         if (name.empty()) continue;
         if (id.empty()) id = make_id(name);
-        add_internal(id, name, clamp_weight(weight), desc, false);
+        add_internal(id, name, clamp_weight(weight), desc, category, profession, false);
     }
 
     if (orderedIds_.empty()) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
+            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, {}, {}, false);
         }
         save();
     } else {
@@ -828,6 +929,20 @@ void SkillCatalog::save() const {
         if (nameIt == namesById_.end()) continue;
         const double w = weight(id);
         out << id << "|" << nameIt->second << "|" << w;
+        std::string cat;
+        if (auto catIt = categoriesById_.find(id); catIt != categoriesById_.end()) {
+            cat = catIt->second;
+        }
+        std::string prof;
+        if (auto profIt = professionById_.find(id); profIt != professionById_.end()) {
+            prof = profIt->second;
+        }
+        if (!cat.empty()) {
+            out << "|cat=" << cat;
+        }
+        if (!prof.empty()) {
+            out << "|prof=" << prof;
+        }
         auto it = descriptionsById_.find(id);
         if (it != descriptionsById_.end() && !it->second.empty()) {
             out << "|" << it->second;
@@ -885,16 +1000,22 @@ std::string SkillCatalog::make_id(const std::string& displayName) const {
     return candidate;
 }
 
-void SkillCatalog::add_internal(const std::string& id, const std::string& displayName, double weight, const std::string& description, bool persist) {
+void SkillCatalog::add_internal(const std::string& id, const std::string& displayName, double weight,
+                                const std::string& description, const std::string& category,
+                                const std::string& profession, bool persist) {
     std::string trimmedName = trim(displayName);
     if (trimmedName.empty()) return;
     const std::string norm = normalize(trimmedName);
+    const std::string trimmedCat = trim(category);
+    const std::string trimmedProf = trim(profession);
     auto existingByName = idByName_.find(norm);
     if (existingByName != idByName_.end()) {
         const std::string existingId = existingByName->second;
         namesById_[existingId] = trimmedName;
         weightsById_[existingId] = clamp_weight(weight);
         descriptionsById_[existingId] = trim(description);
+        categoriesById_[existingId] = trimmedCat;
+        professionById_[existingId] = trimmedProf;
         if (persist) save();
         return;
     }
@@ -911,6 +1032,8 @@ void SkillCatalog::add_internal(const std::string& id, const std::string& displa
     idByName_[norm] = id;
     weightsById_[id] = clamp_weight(weight);
     descriptionsById_[id] = trim(description);
+    categoriesById_[id] = trimmedCat;
+    professionById_[id] = trimmedProf;
 
     if (persist) save();
 }

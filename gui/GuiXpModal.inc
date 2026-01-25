@@ -109,7 +109,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             const float memberWidth = ImGui::GetContentRegionAvail().x;
             const bool stackMembers = memberWidth < 520.0f;
             if (stackMembers) {
-                if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Равномерно##members_stack", ImVec2(-1.0f, 0.0f))) {
                     NormalizeProfileShares(state.taskShares);
                 }
                 if (ImGui::Button(u8"Только активный", ImVec2(-1.0f, 0.0f))) {
@@ -130,7 +130,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableNextColumn();
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Равномерно##members_table", ImVec2(-1.0f, 0.0f))) {
                     NormalizeProfileShares(state.taskShares);
                 }
                 ImGui::TableNextColumn();
@@ -211,7 +211,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             const float controlsWidth = ImGui::GetContentRegionAvail().x;
             const bool stackControls = controlsWidth < 520.0f;
             if (stackControls) {
-                if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Равномерно##skills_stack", ImVec2(-1.0f, 0.0f))) {
                     PrepareXpEntries(state, catalog);
                 }
                 ImGui::TextDisabled(u8"Фильтр навыков");
@@ -237,7 +237,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TableNextColumn();
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableNextColumn();
-                if (ImGui::Button(u8"Равномерно", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Равномерно##skills_table", ImVec2(-1.0f, 0.0f))) {
                     PrepareXpEntries(state, catalog);
                 }
                 ImGui::TableNextColumn();

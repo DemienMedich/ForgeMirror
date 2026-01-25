@@ -192,10 +192,13 @@ SaveRulesResult SaveGameplayRulesAction(const GameplayConfig& draft, const std::
     return result;
 }
 
-AddSkillResult AddSkillAction(SkillCatalog& catalog, const std::string& name, double weight, const std::string& desc) {
+AddSkillResult AddSkillAction(SkillCatalog& catalog, const std::string& name, double weight,
+                              const std::string& desc, const std::string& category, const std::string& profession) {
     AddSkillResult result;
     std::string trimmedName = TrimCopy(name);
     std::string trimmedDesc = TrimCopy(desc);
+    std::string trimmedCategory = TrimCopy(category);
+    std::string trimmedProfession = TrimCopy(profession);
     if (trimmedName.empty()) {
         result.userError = true;
         result.message = u8"Название навыка не может быть пустым.";
@@ -206,7 +209,7 @@ AddSkillResult AddSkillAction(SkillCatalog& catalog, const std::string& name, do
         result.message = u8"Описание навыка не может быть пустым.";
         return result;
     }
-    result.ok = catalog.add_skill(trimmedName, weight, trimmedDesc);
+    result.ok = catalog.add_skill(trimmedName, weight, trimmedDesc, trimmedCategory, trimmedProfession);
     if (result.ok) {
         if (auto id = catalog.id_for_name(trimmedName)) {
             result.id = *id;
@@ -219,9 +222,10 @@ AddSkillResult AddSkillAction(SkillCatalog& catalog, const std::string& name, do
 }
 
 ActionResult UpdateSkillWeightAction(SkillCatalog& catalog, const std::string& skillId, double weight,
-                                     const std::string& displayName, const std::string& desc) {
+                                     const std::string& displayName, const std::string& desc, const std::string& category,
+                                     const std::string& profession) {
     ActionResult result;
-    result.changed = catalog.update_skill(skillId, displayName, weight, desc);
+    result.changed = catalog.update_skill(skillId, displayName, weight, desc, category, profession);
     result.ok = result.changed;
     if (result.changed) {
         result.message = u8"Вес навыка обновлён.";
@@ -233,10 +237,13 @@ ActionResult UpdateSkillWeightAction(SkillCatalog& catalog, const std::string& s
 }
 
 ActionResult UpdateSkillDetailsAction(SkillCatalog& catalog, const std::string& skillId, const std::string& name,
-                                      double weight, const std::string& desc) {
+                                      double weight, const std::string& desc, const std::string& category,
+                                      const std::string& profession) {
     ActionResult result;
     std::string trimmedName = TrimCopy(name);
     std::string trimmedDesc = TrimCopy(desc);
+    std::string trimmedCategory = TrimCopy(category);
+    std::string trimmedProfession = TrimCopy(profession);
     if (trimmedName.empty()) {
         result.userError = true;
         result.message = u8"Название не может быть пустым.";
@@ -247,7 +254,7 @@ ActionResult UpdateSkillDetailsAction(SkillCatalog& catalog, const std::string& 
         result.message = u8"Описание не может быть пустым.";
         return result;
     }
-    result.changed = catalog.update_skill(skillId, trimmedName, weight, trimmedDesc);
+    result.changed = catalog.update_skill(skillId, trimmedName, weight, trimmedDesc, trimmedCategory, trimmedProfession);
     result.ok = result.changed;
     if (result.changed) {
         result.message = u8"Навык обновлён.";
@@ -278,7 +285,8 @@ ActionResult RemoveSkillAction(IJobStorage& storage, SkillCatalog& catalog, cons
 
 ActionResult MergeSkillAction(IJobStorage& storage, SkillCatalog& catalog, const std::string& fromId,
                               const std::string& toId, const std::string& newName, double newWeight,
-                              const std::string& newDesc, const std::string& restoreId) {
+                              const std::string& newDesc, const std::string& newCategory, const std::string& newProfession,
+                              const std::string& restoreId) {
     ActionResult result;
     if (fromId.empty() || toId.empty()) {
         result.userError = true;
@@ -287,7 +295,7 @@ ActionResult MergeSkillAction(IJobStorage& storage, SkillCatalog& catalog, const
     }
     MergeSkillInProfiles(storage, catalog, fromId, toId, restoreId);
     catalog.remove_skill(fromId);
-    catalog.update_skill(toId, newName, newWeight, newDesc);
+    catalog.update_skill(toId, newName, newWeight, newDesc, newCategory, newProfession);
     result.ok = true;
     result.message = u8"Навыки объединены.";
     return result;

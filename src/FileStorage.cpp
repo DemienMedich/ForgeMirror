@@ -527,7 +527,8 @@ public:
         std::int64_t storedLastTask = 0;
         int storedInertiaTasks = 0;
         int storedRecoveryTasks = 0;
-        int storedTasksCompleted = 0;
+    int storedTasksCompleted = 0;
+        std::string storedProfession;
 
         while (std::getline(in, line)) {
             auto t = trim(line);
@@ -545,6 +546,7 @@ public:
                 if (key == "token") token = val;
             } else if (section == "profile") {
                 if (key == "name") name = val;
+                else if (key == "profession") storedProfession = val;
                 else if (key == "overall") {
                     storedOverall = parse_int(val, -1);
                 } else if (key == "totalXp" || key == "totalXP") {
@@ -629,6 +631,7 @@ public:
         if (name.empty()) name = activeId_;
 
         Profile profile(name);
+        profile.set_profession_id(storedProfession);
         std::vector<Skill> restored;
         restored.reserve(skillNames.size());
         for (const auto& skillName : skillNames) {
@@ -685,6 +688,7 @@ public:
         ss << "\n[profile]\n";
         ss << "id=" << activeId_ << "\n";
         ss << "name=" << profile.name() << "\n";
+        if (!profile.profession_id().empty()) ss << "profession=" << profile.profession_id() << "\n";
         ss << "overall=" << profile.overall_level() << "\n";
         ss << "progress=" << profile.level_progress() << "\n";
         ss << "totalXp=" << profile.total_xp() << "\n";

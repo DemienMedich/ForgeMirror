@@ -1,4 +1,33 @@
-void DrawTasksPanel(GuiState& state) {
+static bool RollbackTask(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const TaskEntry& task) {
+    const std::string previousActive = state.active ? state.active->id : std::string{};
+    bool ok = true;
+    for (const auto& participant : task.participants) {
+        if (participant.profileId.empty()) continue;
+        if (!storage.set_active_profile(participant.profileId)) {
+            SetStatus(state, u8"Не удалось активировать профиль для отката XP.", 1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+        auto profileOpt = storage.load_profile();
+        if (!profileOpt) {
+            SetStatus(state, u8"Не удалось загрузить профиль для отката XP.", 1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+        Profile profile = *profileOpt;
+        const int newTotalXp = std::max(0, profile.total_xp() - participant.globalXp);
+        const int newTasks = std::max(0, profile.tasks_completed() - 1);
+        profile.set_total_xp(newTotalXp);
+        profile.set_tasks_completed(newTasks);
+        storage.save_profile(profile);
+    }
+    if (!previousActive.empty()) {
+        SelectProfileById(state, storage, catalog, previousActive);
+    }
+    return ok;
+}
+
+void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Tasks, state.storageDir);
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Все выполненные задачи с распределением вклада.");
@@ -494,7 +523,66 @@ void DrawTasksPanel(GuiState& state) {
                 }
                 ImGui::EndTable();
             }
+            if (state.isAdmin && !expanded->id.empty()) {
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::TextDisabled(u8"Действия");
+                if (ImGui::Button(u8"Удалить задачу и откатить XP", ImVec2(-1.0f, 0.0f))) {
+                    state.pendingTaskDeleteId = expanded->id;
+                    state.taskDeletePopupRequest = true;
+                }
+            }
         }
         EndCard();
+    }
+
+    if (state.taskDeletePopupRequest) {
+        ImGui::OpenPopup(u8"Удалить задачу?");
+        state.taskDeletePopupRequest = false;
+    }
+    bool deleteOpen = true;
+    if (ImGui::BeginPopupModal(u8"Удалить задачу?", &deleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        TaskEntry* target = nullptr;
+        for (auto& task : state.tasks) {
+            if (task.id == state.pendingTaskDeleteId) {
+                target = &task;
+                break;
+            }
+        }
+        if (!target) {
+            ImGui::TextDisabled(u8"Задача не найдена.");
+        } else {
+            std::string title = TaskDisplayTitle(*target);
+            if (title.empty()) title = target->id;
+            ImGui::TextWrapped(u8"Удалить задачу \"%s\" и откатить начисленный XP для участников?", title.c_str());
+            ImGui::Spacing();
+            if (ImGui::Button(u8"Удалить", ImVec2(140.0f, 0.0f))) {
+                TaskEntry copy = *target;
+                bool rollbackOk = RollbackTask(state, storage, catalog, copy);
+                if (rollbackOk) {
+                    state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
+                                                     [&](const TaskEntry& t) { return t.id == copy.id; }),
+                                      state.tasks.end());
+                    SaveTasks(state.storageDir, state.tasks);
+                    if (state.tasksExpandedId == copy.id) {
+                        state.tasksExpandedId.clear();
+                    }
+                    SetStatus(state, u8"Задача удалена, XP откатан.", 0.45f, 0.9f, 0.45f);
+                }
+                state.pendingTaskDeleteId.clear();
+                ImGui::CloseCurrentPopup();
+                deleteOpen = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Отмена", ImVec2(140.0f, 0.0f))) {
+                state.pendingTaskDeleteId.clear();
+                ImGui::CloseCurrentPopup();
+                deleteOpen = false;
+            }
+        }
+        ImGui::EndPopup();
+    }
+    if (!deleteOpen && ImGui::IsPopupOpen(u8"Удалить задачу?")) {
+        ImGui::CloseCurrentPopup();
     }
 }

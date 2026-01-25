@@ -48,6 +48,12 @@ struct ShortcutEntry {
     std::string path;
 };
 
+struct ProfessionEntry {
+    std::string id;
+    std::string name;
+    std::string description;
+};
+
 // Simple description struct for pipeline hints shown in the UI sidebar.
 struct PipelineStep {
     std::string title;

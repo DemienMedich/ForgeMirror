@@ -1,40 +1,22 @@
-Goals (актуально)
-- Стабильность 0.2.96: фикс рангов, техно-стекло тема, безрамочное перетаскивание.
-- Облачная синхронизация: профили/ачивки/иконки, skills.txt, tasks.json, pipeline.json, gameplay.ini; очистка лишних файлов в облаке.
-- Установщик: сборка с актуальной версией, только GUI, иконка FM; рабочая команда сборки под Inno 6.
-- Подготовка к бете: проверить профили/темы между портативом и установщиком, синк статусы, удалить лишние данные из облака при push.
-- Патч-ноуты: для каждой версии файл `meta/patch-notes/<версия>.md`, папка участвует в синхронизации и чистится от лишних файлов при push.
-- Следующий этап (идея): задачи/навыки/профессии
-  - Tasks: удаление задач в меню задач с пересчётом опыта (откат начисленного XP).
-  - Skills: группировка навыков по категориям (UI + хранение/каталог).
-  - Professions: новая сущность “Профессия” (CRUD в админке), назначение профессий профилям.
-  - Категории навыков соотносятся с профессиями (привязка категорий к профессии/профилю).
+# CONTINUITY
 
-Constraints
-- Ответы на русском, кратко.
-- Без градиентов; плашка окна = фон окна.
-- После UI-правок запускать `cmake --build build --config Release` и `cmake --build build-gui --config Release --target JobSkillGui`.
-- Контроль версий; CONTINUITY.md держать непременно в репо, но можно не коммитить вместе с кодом.
+## Текущее состояние
+- Ветка: Beta. Текущая версия 0.3.02 (профессии полностью вынесены в отдельный модуль, профиль очищен; навыки сохраняют привязку к профессии при редактировании/весе; health-check/whitelist/patch-notes актуальны).
+- Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, кнопка очистки лишнего (только админ).
+- Инсталлер: сборка через `installer/build-installer.ps1` (требуется Inno Setup 6 и ISCC.exe).
+- Smoke_core проверяет: загрузку/сохранение профиля и ранга, gameplay.ini, tasks/pipeline файлы, whitelist.
 
-State (текущее)
-- Версия: APP_VERSION=0.2.96 (CMake). Установщик берёт версию из CMake, fallback в .iss также 0.2.96; проверка AppVersion проста (`#if AppVersion == "0.0.0"`). build-installer.ps1 умеет `-IsccPath` и ищет ISCC в Program Files/x86.
-- Облако: добавлены правила (meta/gameplay.ini) в pull/push; удаление orphan файлов (skills/pipeline/tasks/gameplay/profiles/achievements). Штамп данных учитывает правила.
-- UI: drag окна в безрамочном режиме через верхнюю панель; ранги в тексте и бейдже совпадают.
-- Seed: иконка FM подключена; installer ico/rc добавлены; дист/ игнорится.
-- Seed-профили: whitelist пуст (копирование сидов выключено), из `data/` удалены 0002/0003 (Anastasiya/Roman), чтобы установщик не тянул их.
-- Модули: добавлен env-флаг `FORGEMIRROR_DISABLE_MODULES` (или JOBSKILL_...) для отключения модулей (tasks, pipeline, achievements, shortcuts, pomodoro/timer, cloud/sync, view3d); навигация/обновления данных уважают эти флаги.
-- Помодоро: обновление состояния выполняется только при включённом модуле; таймер-заглушка в навигации показывает, что модуль отключён.
+## Команды
+- Сборка: `cmake --build build --config Release`
+- GUI: `cmake --build build-gui --config Release --target JobSkillGui`
+- Smoke-тест: `cmake --build build --config Release --target smoke_core` затем `build/Release/smoke_core.exe`
+- Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe"`
 
-Done recently
-- Исправлен расчёт текстового ранга (BuildRank +1) — не отстаёт от бейджа.
-- Inno: упрощённая проверка версии (без StrCmp), поддержка явного `-IsccPath`.
-
-Next
-- Проверить/устранить дубли уровней/рангов в UI (визуальная вёрстка).
-- Пройтись по синку: пустая папка облака, лишние файлы, статусы.
-- Подготовить инструкцию обновления через облако/установщик для пользователей.
-
-Команды
-- Сборка: `cmake --build build --config Release`  
-          `cmake --build build-gui --config Release --target JobSkillGui`
-- Установщик: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
+## План / бэклог
+- MyIdeas:
+  - [x] Удаление задач в списке задач с откатом начисленного XP и счётчиков.
+  - [x] Группировка навыков по категориям (категории в skills.txt, фильтр/группировка в каталоге).
+  - [x] Профессии: CRUD/админ в отдельном модуле; профили только отображают название; навыки привязываются к профессии.
+- Стабильность ядра / модульность: минимальное ядро (профили, навыки, XP/уровни, правила, storage API); feature-флаги модулей; единые функции чтения/записи с BOM и валидацией.
+- Сиды/профили: не подтягивать удалённые сиды; whitelist профилей для seed/инсталлятора; все данные профиля в одном месте.
+- Обновления/документация: patch-notes на каждую версию в `data/meta/patch-notes`; README/UPDATE_GUIDE для пользователей/облака.

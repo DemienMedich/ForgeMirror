@@ -385,7 +385,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
         "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
-        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "seed.merged"
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "seed.merged"
     };
     bool any = false;
     for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
@@ -647,6 +647,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "professions.txt", storageDir / "meta" / "professions.txt", result.stats, true, &ioError);
     CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
     result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0;
@@ -687,6 +688,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", result.stats, &ioError);
     CopyFlatDirFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", result.stats, false, &ioError);
     int removed = 0;
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
@@ -696,6 +698,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", removed)
         || RemoveOrphanedFlatFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", removed);
     if (config.updateManifestOnPush) {
         CloudManifest manifest = LoadCloudManifest(config, storageDir);

@@ -92,6 +92,7 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
     }
 
     state.profiles = LoadProfiles(storage);
+    state.profileProfessionDirty = true;
     state.adminStatsDirty = true;
     state.profileLoading = false;
     state.profileLoadError.clear();

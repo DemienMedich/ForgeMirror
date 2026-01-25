@@ -16,10 +16,14 @@ public:
     std::optional<std::string> id_for_name(const std::string& name) const;
     void reload();
     double weight(const std::string& skill) const;
+    std::string profession(const std::string& id) const;
+    std::string category(const std::string& id) const;
     std::string display_name(const std::string& id) const;
     std::string description(const std::string& id) const;
-    bool add_skill(const std::string& skill, double weight = 1.0, const std::string& description = {});
-    bool update_skill(const std::string& id, const std::string& displayName, double weight, const std::string& description);
+    bool add_skill(const std::string& skill, double weight = 1.0, const std::string& description = {},
+                   const std::string& category = {}, const std::string& profession = {});
+    bool update_skill(const std::string& id, const std::string& displayName, double weight,
+                      const std::string& description, const std::string& category, const std::string& profession);
     bool remove_skill(const std::string& idOrName);
 
 private:
@@ -28,7 +32,8 @@ private:
     std::filesystem::path file_path() const;
     static std::string trim(std::string s);
     static std::string normalize(const std::string& s);
-    void add_internal(const std::string& id, const std::string& displayName, double weight, const std::string& description, bool persist = false);
+    void add_internal(const std::string& id, const std::string& displayName, double weight,
+                      const std::string& description, const std::string& category, const std::string& profession, bool persist = false);
     std::optional<std::string> resolve_id(const std::string& idOrName) const;
     std::string make_id(const std::string& displayName) const;
 
@@ -38,4 +43,6 @@ private:
     std::unordered_map<std::string, std::string> namesById_;
     std::unordered_map<std::string, double> weightsById_;
     std::unordered_map<std::string, std::string> descriptionsById_;
+    std::unordered_map<std::string, std::string> categoriesById_;
+    std::unordered_map<std::string, std::string> professionById_;
 };

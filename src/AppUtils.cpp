@@ -525,6 +525,9 @@ ModuleToggles LoadModuleToggles() {
         {"sync", &toggles.cloud},
         {"view3d", &toggles.view3d},
         {"3d", &toggles.view3d},
+        {"professions", &toggles.professions},
+        {"profession", &toggles.professions},
+        {"prof", &toggles.professions},
     };
 
     auto disable_all = [&]() {

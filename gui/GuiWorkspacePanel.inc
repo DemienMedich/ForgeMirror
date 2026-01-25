@@ -67,7 +67,7 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                         state.workspaceTabRequest = -1;
                     }
                     if (beginTabBody("##tab_tasks")) {
-                        DrawTasksPanel(state);
+                        DrawTasksPanel(state, storage, catalog);
                     }
                     ImGui::EndChild();
                     ImGui::EndTabItem();
@@ -80,6 +80,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     }
                     if (beginTabBody("##tab_catalog")) {
                         DrawSkillCatalogPanel(state, storage, catalog);
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (state.modules.professions && state.isAdmin &&
+                    ImGui::BeginTabItem(u8"Профессии", &state.showProfessions, tabFlagsFor(UiWindowId::Professions))) {
+                    if (state.workspaceTabRequest == static_cast<int>(UiWindowId::Professions)) {
+                        state.workspaceTabRequest = -1;
+                    }
+                    if (beginTabBody("##tab_professions")) {
+                        DrawProfessionsPanel(state, storage, catalog);
                     }
                     ImGui::EndChild();
                     ImGui::EndTabItem();

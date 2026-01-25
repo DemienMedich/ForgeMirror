@@ -55,6 +55,11 @@ void DrawNavigationPanel(GuiState& state) {
             OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
         });
     }
+    if (state.modules.professions && state.isAdmin) {
+        navButton("nav_professions", UiIcon::User, u8"Профессии", state.showProfessions, [&]() {
+            OpenWorkspaceTab(state, state.showProfessions, UiWindowId::Professions);
+        });
+    }
     navButton("nav_catalog", UiIcon::Book, u8"Навыки [F2]", state.showSkillCatalog, [&]() {
         OpenWorkspaceTab(state, state.showSkillCatalog, UiWindowId::SkillCatalog);
     });

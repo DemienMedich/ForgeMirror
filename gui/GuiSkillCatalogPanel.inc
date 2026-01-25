@@ -43,7 +43,20 @@ static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, c
 
 void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
-    const auto& catalogSkills = catalog.skills();
+    auto catalogSkills = catalog.skills();
+    if (!state.isAdmin && state.active) {
+        const std::string& profId = state.active->profile.profession_id();
+        if (!profId.empty()) {
+            std::vector<std::string> filtered;
+            filtered.reserve(catalogSkills.size());
+            for (const auto& id : catalogSkills) {
+                if (catalog.profession(id) == profId) {
+                    filtered.push_back(id);
+                }
+            }
+            catalogSkills.swap(filtered);
+        }
+    }
     if (state.selectedCatalogIndex >= static_cast<int>(catalogSkills.size())) {
         state.selectedCatalogIndex = -1;
     }
@@ -52,6 +65,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         const std::string& selectedId = catalogSkills[state.selectedCatalogIndex];
         const std::string selectedName = catalog.display_name(selectedId);
         const std::string selectedDesc = catalog.description(selectedId);
+        const std::string selectedCat = catalog.category(selectedId);
+        const std::string selectedProf = catalog.profession(selectedId);
         state.editedSkillWeight = static_cast<float>(catalog.weight(selectedId));
         state.lastCatalogSelection = state.selectedCatalogIndex;
         state.selectedAchievementIndex = -1;
@@ -61,6 +76,16 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         state.achDurationDays = 0;
         std::snprintf(state.editSkillName.data(), state.editSkillName.size(), "%s", selectedName.c_str());
         std::snprintf(state.editSkillDesc.data(), state.editSkillDesc.size(), "%s", selectedDesc.c_str());
+        std::snprintf(state.editSkillCategory.data(), state.editSkillCategory.size(), "%s", selectedCat.c_str());
+        state.editSkillProfessionIndex = 0;
+        if (!selectedProf.empty()) {
+            for (size_t i = 0; i < state.professions.size(); ++i) {
+                if (state.professions[i].id == selectedProf) {
+                    state.editSkillProfessionIndex = static_cast<int>(i) + 1;
+                    break;
+                }
+            }
+        }
     }
 
     const float panelHeight = ImGui::GetContentRegionAvail().y;
@@ -101,6 +126,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.addSkillPopupRequest = true;
                 std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
                 std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                std::fill(state.newSkillCategory.begin(), state.newSkillCategory.end(), 0);
                 state.newSkillWeight = 1.0f;
             }
             if (emphasizeAddSkill) {
@@ -132,6 +158,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.addSkillPopupRequest = true;
                 std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
                 std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                std::fill(state.newSkillCategory.begin(), state.newSkillCategory.end(), 0);
                 state.newSkillWeight = 1.0f;
             }
             if (emphasizeAddSkill) {
@@ -156,7 +183,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         if (!state.isAdmin) ImGui::EndDisabled();
         ImGui::Separator();
         const char* sortLabels[] = {u8"По названию", u8"По весу (убыв.)"};
-        const char* groupLabels[] = {u8"Без группировки", u8"По категории веса"};
+        const char* groupLabels[] = {u8"Без группировки", u8"По категории веса", u8"По категории навыка"};
         const char* weightCategoryLabels[] = {
             u8"Все",
             u8"A (>=1.30)",
@@ -165,7 +192,27 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             u8"D (0.70-0.89)",
             u8"E (<0.70)"
         };
-        const bool stackFilters = listWidth < 360.0f;
+        const bool stackFilters = listWidth < 420.0f;
+        // Собираем уникальные категории навыков
+        std::vector<std::string> categoryLabels;
+        categoryLabels.reserve(catalogSkills.size() + 1);
+        categoryLabels.push_back(u8"Все категории");
+        {
+            std::unordered_set<std::string> catSet;
+            for (const auto& id : catalogSkills) {
+                std::string cat = catalog.category(id);
+                if (cat.empty()) continue;
+                if (catSet.insert(cat).second) {
+                    categoryLabels.push_back(cat);
+                }
+            }
+            std::sort(categoryLabels.begin() + 1, categoryLabels.end());
+        }
+        std::vector<const char*> categoryPtrs;
+        categoryPtrs.reserve(categoryLabels.size());
+        for (const auto& c : categoryLabels) categoryPtrs.push_back(c.c_str());
+        state.catalogCategoryFilter = std::clamp(state.catalogCategoryFilter, 0,
+            static_cast<int>(categoryPtrs.size()) - 1);
         if (stackFilters) {
             ImGui::TextDisabled(u8"Поиск");
             ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
@@ -173,6 +220,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
                 state.filters.skill.fill('\0');
                 state.catalogWeightCategoryFilter = 0;
+                state.catalogCategoryFilter = 0;
             }
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
@@ -181,6 +229,10 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_group", &state.catalogGroupMode,
                          groupLabels, IM_ARRAYSIZE(groupLabels));
+            ImGui::TextDisabled(u8"Категория навыка");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_cat", &state.catalogCategoryFilter,
+                         categoryPtrs.data(), static_cast<int>(categoryPtrs.size()));
             ImGui::TextDisabled(u8"Категория веса");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
@@ -201,6 +253,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
                 state.filters.skill.fill('\0');
                 state.catalogWeightCategoryFilter = 0;
+                state.catalogCategoryFilter = 0;
             }
             ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"Сортировка");
@@ -216,10 +269,21 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::Combo(u8"##catalog_group", &state.catalogGroupMode,
                          groupLabels, IM_ARRAYSIZE(groupLabels));
             ImGui::TableSetColumnIndex(2);
+            ImGui::TextDisabled(u8"Категория навыка");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##catalog_cat", &state.catalogCategoryFilter,
+                         categoryPtrs.data(), static_cast<int>(categoryPtrs.size()));
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawAnchorIcon(UiIcon::Chart);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Категория веса");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
                          weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextDisabled(u8"");
             ImGui::EndTable();
         }
         ImGui::TextDisabled(u8"Всего: %d", static_cast<int>(catalogSkills.size()));
@@ -235,7 +299,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             viewIndices.push_back(i);
         }
         const int sortMode = std::clamp(state.catalogSortMode, 0, 1);
-        const int groupMode = std::clamp(state.catalogGroupMode, 0, 1);
+        const int groupMode = std::clamp(state.catalogGroupMode, 0, 2);
         std::sort(viewIndices.begin(), viewIndices.end(), [&](int a, int b) {
             const std::string& idA = catalogSkills[a];
             const std::string& idB = catalogSkills[b];
@@ -245,6 +309,10 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 const int groupA = WeightCategoryIndex(wA);
                 const int groupB = WeightCategoryIndex(wB);
                 if (groupA != groupB) return groupA < groupB;
+            } else if (groupMode == 2) {
+                const std::string catA = ToLowerUtf8(catalog.category(idA));
+                const std::string catB = ToLowerUtf8(catalog.category(idB));
+                if (catA != catB) return catA < catB;
             }
             if (sortMode == 1) {
                 if (wA != wB) return wA > wB;
@@ -273,6 +341,12 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (state.catalogWeightCategoryFilter > 0 &&
                 weightCategory != state.catalogWeightCategoryFilter) {
                 continue;
+            }
+            std::string cat = catalog.category(skillId);
+            if (state.catalogCategoryFilter > 0) {
+                if (static_cast<size_t>(state.catalogCategoryFilter) >= categoryLabels.size()) continue;
+                const std::string required = categoryLabels[static_cast<size_t>(state.catalogCategoryFilter)];
+                if (cat != required) continue;
             }
             matchingCount += 1;
             sumWeight += weight;
@@ -437,6 +511,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetupColumn(u8"Вес", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableHeadersRow();
             int lastGroup = -1;
+            std::string lastHeading;
             int rowRank = 0;
             for (int viewIndex : viewIndices) {
                 const std::string& skillId = catalogSkills[viewIndex];
@@ -445,9 +520,15 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     continue;
                 }
                 const int weightCategory = WeightCategoryIndex(catalog.weight(skillId));
+                const std::string cat = catalog.category(skillId);
                 if (state.catalogWeightCategoryFilter > 0 &&
                     weightCategory != state.catalogWeightCategoryFilter) {
                     continue;
+                }
+                if (state.catalogCategoryFilter > 0) {
+                    if (static_cast<size_t>(state.catalogCategoryFilter) >= categoryLabels.size()) continue;
+                    const std::string required = categoryLabels[static_cast<size_t>(state.catalogCategoryFilter)];
+                    if (cat != required) continue;
                 }
                 if (groupMode == 1 && weightCategory != lastGroup) {
                     ImGui::TableNextRow();
@@ -458,6 +539,18 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TextUnformatted("");
                     lastGroup = weightCategory;
+                } else if (groupMode == 2) {
+                    std::string heading = cat.empty() ? u8"Без категории" : cat;
+                    if (heading != lastHeading) {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                               ImGui::GetColorU32(ImGuiCol_Header));
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextDisabled("%s", heading.c_str());
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::TextUnformatted("");
+                        lastHeading = heading;
+                    }
                 }
                 ++visibleCount;
                 if (sortMode == 1 && rowRank < 3) {
@@ -491,7 +584,11 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::TextDisabled("-");
                 }
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%.2f", catalog.weight(skillId));
+                if (cat.empty()) {
+                    ImGui::Text("%.2f", catalog.weight(skillId));
+                } else {
+                    ImGui::Text("%s | %.2f", cat.c_str(), catalog.weight(skillId));
+                }
                 ++rowRank;
             }
             ImGui::EndTable();
@@ -510,10 +607,17 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             const std::string& skillId = catalogSkills[state.selectedCatalogIndex];
             const std::string displayName = catalog.display_name(skillId);
             const std::string desc = catalog.description(skillId);
+            const std::string cat = catalog.category(skillId);
             ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
             accent.w = 1.0f;
-            ImGui::TextColored(accent, "%s", displayName.c_str());
-            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::TextColored(accent, "%s", displayName.c_str());
+        ImGui::TextDisabled(u8"Категория: %s", cat.empty() ? u8"нет" : cat.c_str());
+        std::string profName = state.editSkillProfessionIndex > 0 &&
+            state.editSkillProfessionIndex - 1 < static_cast<int>(state.professions.size())
+            ? state.professions[state.editSkillProfessionIndex - 1].name
+            : u8"нет";
+        ImGui::TextDisabled(u8"Профессия: %s", profName.c_str());
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
             if (desc.empty()) {
                 ImGui::TextDisabled(u8"Описание отсутствует.");
@@ -525,9 +629,15 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 DrawCardHeader(u8"Вес навыка");
                 ImGui::SliderFloat("##edit_weight", &state.editedSkillWeight, 0.5f, 1.6f, "%.2f");
+                std::string catInput = TrimStringGui(state.editSkillCategory.data());
                 if (ImGui::Button(u8"Сохранить вес")) {
                     double newW = static_cast<double>(state.editedSkillWeight);
-                    ActionResult result = UpdateSkillWeightAction(catalog, skillId, newW, displayName, desc);
+                    std::string profId;
+                    if (state.editSkillProfessionIndex > 0 &&
+                        state.editSkillProfessionIndex - 1 < static_cast<int>(state.professions.size())) {
+                        profId = state.professions[state.editSkillProfessionIndex - 1].id;
+                    }
+                    ActionResult result = UpdateSkillWeightAction(catalog, skillId, newW, displayName, desc, catInput, profId);
                     AppLogLevel level = LogLevelForResult(result);
                     SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
                               result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
@@ -539,10 +649,29 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 DrawCardHeader(u8"Редактирование навыка");
                 ImGui::InputText(u8"Название", state.editSkillName.data(), state.editSkillName.size());
+                ImGui::InputText(u8"Категория", state.editSkillCategory.data(), state.editSkillCategory.size());
+                ImGui::TextDisabled(u8"Профессия");
+                std::vector<std::string> profLabels;
+                profLabels.reserve(state.professions.size() + 1);
+                profLabels.push_back(u8"[нет]");
+                for (const auto& p : state.professions) profLabels.push_back(p.name);
+                std::vector<const char*> profPtrs;
+                for (auto& s : profLabels) profPtrs.push_back(s.c_str());
+                state.editSkillProfessionIndex = std::clamp(state.editSkillProfessionIndex, 0,
+                    static_cast<int>(profPtrs.size()) - 1);
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##edit_skill_prof", &state.editSkillProfessionIndex,
+                             profPtrs.data(), static_cast<int>(profPtrs.size()));
                 ImGui::InputTextMultiline(u8"Описание", state.editSkillDesc.data(), state.editSkillDesc.size(), ImVec2(-1.0f, 80.0f));
                 if (ImGui::Button(u8"Сохранить навык")) {
                     const std::string newName = TrimStringGui(state.editSkillName.data());
                     const std::string newDesc = TrimStringGui(state.editSkillDesc.data());
+                    catInput = TrimStringGui(state.editSkillCategory.data());
+                    std::string profId;
+                    if (state.editSkillProfessionIndex > 0 &&
+                        state.editSkillProfessionIndex - 1 < static_cast<int>(state.professions.size())) {
+                        profId = state.professions[state.editSkillProfessionIndex - 1].id;
+                    }
                     auto existingId = newName.empty() ? std::optional<std::string>() : catalog.id_for_name(newName);
                     if (existingId && *existingId != skillId) {
                         state.mergeSkillPopupRequest = true;
@@ -550,11 +679,13 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         state.pendingMergeToId = *existingId;
                         state.pendingMergeName = newName;
                         state.pendingMergeDesc = newDesc;
+                        state.pendingMergeCategory = catInput;
+                        state.pendingMergeProfession = profId;
                         state.pendingMergeWeight = state.editedSkillWeight;
                     } else {
                         ActionResult result = UpdateSkillDetailsAction(catalog, skillId, newName,
                                                                       static_cast<double>(state.editedSkillWeight),
-                                                                      newDesc);
+                                                                      newDesc, catInput, profId);
                         AppLogLevel level = LogLevelForResult(result);
                         SetStatus(state, result.message, result.ok ? 0.45f : 1.0f,
                                   result.ok ? 0.9f : 0.45f, result.ok ? 0.45f : 0.45f, 1.0f,

@@ -15,6 +15,7 @@ struct ModuleToggles {
     bool pomodoro = true;
     bool cloud = true;
     bool view3d = true;
+    bool professions = true;
 };
 
 // Convert overall level to human-readable rank (Intern, Junior, etc.).

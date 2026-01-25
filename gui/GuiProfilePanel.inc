@@ -395,15 +395,15 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
-            ImGui::TableSetColumnIndex(1);
-            DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
-            ImGui::EndTable();
-        }
-        ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
-        skillCount, activeAchCount, achCount);
-        ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
+        ImGui::TableSetColumnIndex(1);
+        DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
+        ImGui::EndTable();
+    }
+    ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
+    skillCount, activeAchCount, achCount);
+    ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (!profile.achievements().empty()) {
             auto formatDate = [](std::int64_t ts) -> std::string {
                 if (ts <= 0) return std::string(u8"без срока");
