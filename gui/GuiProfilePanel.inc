@@ -1,5 +1,5 @@
 static bool DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, const std::string& value,
-                            const ImVec4& accent, const char* tooltip = nullptr, float height = 72.0f) {
+                            const ImVec4& accent, const char* tooltip = nullptr, float height = 60.0f) {
     ImGui::PushID(id);
     const ImGuiStyle& style = ImGui::GetStyle();
     const float rounding = std::max(10.0f, style.FrameRounding + 4.0f);
@@ -10,18 +10,18 @@ static bool DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
     ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
     if (ImGui::BeginChild("kpi_card", ImVec2(0.0f, height), ImGuiChildFlags_Border,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
-        const float badgeSize = std::clamp(height - 26.0f, 34.0f, 46.0f);
+        const float badgeSize = std::clamp(height - 18.0f, 26.0f, 38.0f);
         const float badgeRadius = badgeSize * 0.5f;
         const ImVec2 badgePos = ImGui::GetCursorScreenPos();
         const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
         DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, accent, true);
 
-        ImGui::Dummy(ImVec2(badgeSize + 10.0f, 0.0f));
+        ImGui::Dummy(ImVec2(badgeSize + 6.0f, 0.0f));
         ImGui::SameLine(0.0f, 0.0f);
         float y = ImGui::GetCursorPosY();
         float textBlock = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
@@ -30,7 +30,7 @@ static bool DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
         ImGui::BeginGroup();
         ImGui::TextDisabled("%s", title);
         ImGui::PushStyleColor(ImGuiCol_Text, accent);
-        ImGui::SetWindowFontScale(1.15f);
+        ImGui::SetWindowFontScale(1.05f);
         ImGui::TextUnformatted(value.c_str());
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor();
@@ -107,25 +107,25 @@ static SyncStatusInfo BuildSyncStatus(GuiState& state) {
 }
 
 static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const ImVec4& accent) {
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const bool stack = avail < 840.0f;
     const ImGuiStyle& style = ImGui::GetStyle();
     const ImVec4 secondary = ElevatedSecondaryText(style);
 
-    auto drawSelector = [&]() {
-        DrawCardHeader(u8"Профиль");
-        const bool hasProfiles = !state.profiles.empty();
-        if (!hasProfiles) {
-            ImGui::TextColored(secondary, u8"Профили не найдены.");
-            return;
-        }
+    std::string currentLabel = u8"(не выбран)";
+    if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
+        const auto& info = state.profiles[state.selectedIndex];
+        currentLabel = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+    }
 
-        std::string currentLabel = u8"(не выбран)";
-        if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
-            const auto& info = state.profiles[state.selectedIndex];
-            currentLabel = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
-        }
+    const SyncStatusInfo syncInfo = BuildSyncStatus(state);
 
+    if (ImGui::BeginTable("profile_header_row", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("profile_left", ImGuiTableColumnFlags_WidthStretch, 1.7f);
+        ImGui::TableSetupColumn("profile_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled(u8"Профиль:");
+        ImGui::SameLine();
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
             for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
@@ -142,115 +142,93 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
             }
             ImGui::EndCombo();
         }
-        if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
-            state.showProfilesWindow = true;
-            state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
-        }
-        if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
-            RefreshProfiles(state, storage, catalog);
-        }
-    };
 
-    auto drawActions = [&]() {
-        DrawCardHeader(u8"Действия");
-        const bool xpEnabled = state.isAdmin;
-        ImGui::TextColored(secondary, u8"Быстрые действия по профилю.");
-
-        if (!xpEnabled) ImGui::BeginDisabled();
-        ImVec4 addBg = accent;
-        addBg.w = 0.22f;
-        ImVec4 addHover = addBg;
-        addHover.w = 0.32f;
-        ImVec4 addActive = addBg;
-        addActive.w = 0.42f;
-        ImGui::PushStyleColor(ImGuiCol_Button, addBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
-        if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
-            PrepareXpEntries(state, catalog);
-            state.xpPopupRequest = true;
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - 210.0f));
+        ImGui::BeginGroup();
+        ImGui::ColorButton("##sync_dot", syncInfo.color,
+                           ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                           ImVec2(8.0f, 8.0f));
+        ImGui::SameLine(0.0f, 6.0f);
+        ImGui::TextColored(syncInfo.color, "%s", syncInfo.label.c_str());
+        if (ImGui::IsItemHovered() && !syncInfo.tooltip.empty()) {
+            ImGui::SetTooltip("%s", syncInfo.tooltip.c_str());
         }
-        ImGui::PopStyleColor(3);
-        if (!xpEnabled) {
+        ImGui::SameLine(0.0f, 10.0f);
+        const float iconSize = ImGui::GetFrameHeight();
+        bool syncEnabled = state.cloudConfig.enabled;
+        if (!syncEnabled) ImGui::BeginDisabled();
+        if (IconButtonGui("profile_sync", UiIcon::Launch, u8"Синхронизировать", accent, iconSize, syncEnabled)) {
+            RunCloudQuickSync(state, storage, catalog, true);
+        }
+        if (!syncEnabled) {
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip(u8"Доступно только администратору.");
+                ImGui::SetTooltip(u8"Облако отключено.");
             }
             ImGui::EndDisabled();
         }
+        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y * 0.6f));
+        if (ImGui::SmallButton("...##profile_actions_toggle")) {
+            state.profileActionsOpen = !state.profileActionsOpen;
+        }
+        ImGui::PopStyleVar();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(u8"Действия");
+        }
+        ImGui::EndGroup();
+        ImGui::EndTable();
+    }
 
-        const float actionWidth = ImGui::GetContentRegionAvail().x;
-        const bool stackActions = actionWidth < 320.0f;
-        if (stackActions) {
-            if (ImGui::Button(u8"Синхронизировать", ImVec2(-1.0f, 0.0f))) {
-                RunCloudQuickSync(state, storage, catalog, true);
-            }
-            if (ImGui::Button(u8"Сменить профиль", ImVec2(-1.0f, 0.0f))) {
-                state.showProfilesWindow = true;
-                state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
-            }
-        } else if (ImGui::BeginTable("profile_header_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
+    if (state.profileActionsOpen) {
+        ImGui::Spacing();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y * 0.65f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, style.ItemSpacing.y * 0.6f));
+        if (ImGui::BeginTable("profile_actions_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("primary", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("profiles", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn("refresh", ImGuiTableColumnFlags_WidthStretch, 0.9f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            bool syncEnabled = state.cloudConfig.enabled;
-            if (!syncEnabled) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Синхр.", ImVec2(-1.0f, 0.0f))) {
-                RunCloudQuickSync(state, storage, catalog, true);
+            const bool xpEnabled = state.isAdmin;
+            if (!xpEnabled) ImGui::BeginDisabled();
+            ImVec4 addBg = accent;
+            addBg.w = 0.22f;
+            ImVec4 addHover = addBg;
+            addHover.w = 0.32f;
+            ImVec4 addActive = addBg;
+            addActive.w = 0.42f;
+            ImGui::PushStyleColor(ImGuiCol_Button, addBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
+            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+                PrepareXpEntries(state, catalog);
+                state.xpPopupRequest = true;
             }
-            if (!syncEnabled) {
+            ImGui::PopStyleColor(3);
+            if (!xpEnabled) {
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip(u8"Облако отключено.");
+                    ImGui::SetTooltip(u8"Доступно только администратору.");
                 }
                 ImGui::EndDisabled();
             }
             ImGui::TableSetColumnIndex(1);
-            if (ImGui::Button(u8"Сменить", ImVec2(-1.0f, 0.0f))) {
+            ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_FrameBg]);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style.Colors[ImGuiCol_ButtonHovered]);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, style.Colors[ImGuiCol_ButtonActive]);
+            if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
                 state.showProfilesWindow = true;
                 state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
             }
-            ImGui::EndTable();
-        }
-    };
-
-    auto drawSync = [&]() {
-        DrawCardHeader(u8"Синхронизация");
-        const SyncStatusInfo info = BuildSyncStatus(state);
-        ImGui::ColorButton("##sync_dot", info.color,
-                           ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
-                           ImVec2(10.0f, 10.0f));
-        ImGui::SameLine();
-        ImGui::TextColored(info.color, "%s", info.label.c_str());
-        if (!info.timeLabel.empty()) {
-            ImGui::TextColored(secondary, "%s", info.timeLabel.c_str());
-        } else {
-            ImGui::TextColored(secondary, u8"Нет данных о последней синхронизации");
-        }
-        if (ImGui::IsItemHovered() && !info.tooltip.empty()) {
-            ImGui::SetTooltip("%s", info.tooltip.c_str());
-        }
-    };
-
-    if (BeginCard("profile_header_strip")) {
-        if (stack) {
-            drawSelector();
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            drawActions();
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            drawSync();
-        } else if (ImGui::BeginTable("profile_header_strip_table", 3, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("selector", ImGuiTableColumnFlags_WidthStretch, 1.6f);
-            ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("sync", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            drawSelector();
-            ImGui::TableSetColumnIndex(1);
-            drawActions();
             ImGui::TableSetColumnIndex(2);
-            drawSync();
+            if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
+                RefreshProfiles(state, storage, catalog);
+            }
+            ImGui::PopStyleColor(3);
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar(2);
     }
-    EndCard();
 }
 
 static void DrawProfileKpiRow(const ImGuiStyle& style, const ImVec4& accent,
@@ -290,9 +268,6 @@ static void DrawProfileKpiRow(const ImGuiStyle& style, const ImVec4& accent,
             ImGui::TableSetColumnIndex(1);
             DrawKpiCardIcon("kpi_buffer", UiIcon::Refresh, u8"Буфер деградации", bufferLabel, accent, tooltipBuffer.c_str());
             ImGui::TableSetColumnIndex(2);
-            ImGui::PushStyleColor(ImGuiCol_Text, secondary);
-            ImGui::TextUnformatted(u8"KPI обновляются автоматически");
-            ImGui::PopStyleColor();
             ImGui::EndTable();
         }
     } else if (ImGui::BeginTable("profile_kpi_row", 5, ImGuiTableFlags_SizingStretchSame)) {
@@ -371,7 +346,6 @@ static void DrawProfileRecommendations(const ImVec4& accent,
         addItem(std::move(title), u8"Слабая категория ограничивает общий рост.");
     }
 
-    DrawCardHeader(u8"Следующие действия");
     if (count == 0) {
         ImGui::TextDisabled(u8"Рекомендаций пока нет.");
         return;
@@ -389,7 +363,6 @@ static void DrawProfileRecommendations(const ImVec4& accent,
     }
 
     if (overallLevel <= 1 && profile.tasks_completed() == 0) {
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
         ImGui::TextColored(accent, u8"Начните с первой активности, чтобы запустить рост уровня.");
     }
 }
@@ -399,7 +372,7 @@ static void DrawProfileProgressHighlights(const ImGuiStyle& style, const ImVec4&
                                           const std::string& progressLabel, int overallLevel) {
     const auto& catScores = profile.category_best_scores();
     const float ringAvail = ImGui::GetContentRegionAvail().x;
-    const float ringSize = std::min(190.0f, ringAvail);
+    const float ringSize = std::min(170.0f, ringAvail);
     if (ringSize >= 140.0f) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImVec2 chartSize(ringSize, ringSize);
@@ -464,8 +437,8 @@ static void DrawProfileProgressHighlights(const ImGuiStyle& style, const ImVec4&
         ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
     }
 
-    ImGui::Dummy(ImVec2(0.0f, 8.0f));
-    DrawCardHeader(u8"Топ фокуса");
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::TextDisabled(u8"Топ фокуса");
     std::array<int, Profile::kCategoryCount> idxs{};
     for (size_t i = 0; i < idxs.size(); ++i) idxs[i] = static_cast<int>(i);
     std::sort(idxs.begin(), idxs.end(), [&](int a, int b) { return catScores[a] > catScores[b]; });
@@ -636,7 +609,12 @@ static void DrawProfileSummaryCard(GuiState& state, SkillCatalog& catalog, const
 void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
 
-    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec2 origFramePadding = style.FramePadding;
+    ImVec2 origItemSpacing = style.ItemSpacing;
+    style.FramePadding = ImVec2(origFramePadding.x, origFramePadding.y * 0.75f);
+    style.ItemSpacing = ImVec2(origItemSpacing.x, origItemSpacing.y * 0.7f);
+
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
 
@@ -702,21 +680,24 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::TableSetupColumn("right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        if (BeginCard("profile_next_actions")) {
-            DrawProfileRecommendations(accent, profile, state.rulesConfig, xpToNext, overallLevel);
-        }
-        EndCard();
+        ImGui::TextDisabled(u8"Следующие действия");
+        ImGui::Separator();
+        DrawProfileRecommendations(accent, profile, state.rulesConfig, xpToNext, overallLevel);
         ImGui::TableSetColumnIndex(1);
-        if (BeginCard("profile_progress_highlights")) {
-            DrawCardHeader(u8"Прогресс");
-            DrawProfileProgressHighlights(style, accent, profile, progressRatio, progressLabel, overallLevel);
-        }
-        EndCard();
+        ImGui::TextDisabled(u8"Прогресс");
+        ImGui::Separator();
+        DrawProfileProgressHighlights(style, accent, profile, progressRatio, progressLabel, overallLevel);
         ImGui::EndTable();
     }
 
     ImGui::Spacing();
-    if (ImGui::CollapsingHeader(u8"Детали профиля", ImGuiTreeNodeFlags_DefaultOpen)) {
+    const bool detailsOpen = ImGui::CollapsingHeader(u8"Детали профиля");
+    if (!detailsOpen) {
+        std::string summary = std::string(u8"ID: ") + state.active->id +
+            u8" | Ранг: " + rankText + u8" | " + categoriesLine;
+        ImGui::TextDisabled("%s", summary.c_str());
+    }
+    if (detailsOpen) {
         DrawProfileSummaryCard(state, catalog, profile, rankText, categoriesLine, accent, nowSec);
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
@@ -927,5 +908,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     }
 
     ShowStatus(state);
+    style.FramePadding = origFramePadding;
+    style.ItemSpacing = origItemSpacing;
 }
 

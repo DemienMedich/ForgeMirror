@@ -26,7 +26,7 @@ add_executable(JobSkill
 target_include_directories(JobSkill PRIVATE include)
 
 # Версия приложения
-target_compile_definitions(JobSkill PRIVATE APP_VERSION="0.3.04")
+target_compile_definitions(JobSkill PRIVATE APP_VERSION="0.3.05")
 set_target_properties(JobSkill PROPERTIES OUTPUT_NAME "ForgeMirror")
 
 # Для Windows корректно установить кодировку консоли при необходимости вручную в приложении
@@ -67,7 +67,7 @@ if(BUILD_IMGUI_GUI)
 
     target_sources(JobSkillGui PRIVATE ${IMGUI_SOURCES})
     target_include_directories(JobSkillGui PRIVATE include libs/ufbx ${IMGUI_DIR} ${IMGUI_DIR}/backends)
-    target_compile_definitions(JobSkillGui PRIVATE APP_VERSION="0.3.04")
+    target_compile_definitions(JobSkillGui PRIVATE APP_VERSION="0.3.05")
     set_target_properties(JobSkillGui PROPERTIES OUTPUT_NAME "ForgeMirrorGui")
     target_link_libraries(JobSkillGui PRIVATE glfw OpenGL::GL)
     if (WIN32)
