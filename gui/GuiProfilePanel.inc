@@ -118,9 +118,10 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
 
     const SyncStatusInfo syncInfo = BuildSyncStatus(state);
 
-    if (ImGui::BeginTable("profile_header_row", 2, ImGuiTableFlags_SizingStretchProp)) {
+    if (ImGui::BeginTable("profile_header_row", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("profile_left", ImGuiTableColumnFlags_WidthStretch, 1.7f);
-        ImGui::TableSetupColumn("profile_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("profile_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("profile_actions", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::AlignTextToFramePadding();
@@ -144,8 +145,7 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
         }
 
         ImGui::TableSetColumnIndex(1);
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - 170.0f));
-        ImGui::BeginGroup();
+        ImGui::AlignTextToFramePadding();
         ImGui::ColorButton("##sync_dot", syncInfo.color,
                            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
                            ImVec2(8.0f, 8.0f));
@@ -154,7 +154,8 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
         if (ImGui::IsItemHovered() && !syncInfo.tooltip.empty()) {
             ImGui::SetTooltip("%s", syncInfo.tooltip.c_str());
         }
-        ImGui::SameLine(0.0f, 8.0f);
+
+        ImGui::TableSetColumnIndex(2);
         const float iconSize = 26.0f;
         bool syncEnabled = state.cloudConfig.enabled;
         if (!syncEnabled) ImGui::BeginDisabled();
@@ -214,7 +215,6 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
             ImGui::PopStyleVar(2);
             ImGui::EndPopup();
         }
-        ImGui::EndGroup();
         ImGui::EndTable();
     }
 }

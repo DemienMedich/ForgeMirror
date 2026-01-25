@@ -4,13 +4,13 @@
   - Держать Beta стабильной: корректный UI/UX, сборка/инсталлер, синхронизация, версии + patch-notes на каждую версию.
 - Constraints/Assumptions:
   - Следовать AgentsSkills/ForgeMirror_DesignCode.md, AgentsSkills/AGENT_UI_TOKENS.md, AgentsSkills/AGENT_UI_GRID.md, AgentsSkills/PR_UI_CHECKLIST.md.
-  - Версионирование: major.any.minor (minor 2‑значный), текущая версия 0.3.07.
+  - Версионирование: major.any.minor (minor 2‑значный), текущая версия 0.3.08.
 - Key decisions:
   - Профессии вынесены в отдельный админ‑модуль; профиль их не редактирует.
   - Синхронизация по whitelist (profiles/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes), лишнее чистится (админ).
   - Профильный UI уплотнён и подчинён Compact‑токенам (однострочный хедер, один CTA, детали по умолчанию свернуты).
 - State:
-  - Ветка: Beta. Версия: 0.3.07. Последний коммит: compact profile layout.
+  - Ветка: Beta. Версия: 0.3.08. Последний коммит: compact profile layout.
 - Done:
   - Профессии вынесены в отдельный модуль, навыки сохраняют привязку к профессии.
   - Профильный UI: один ряд хедера, компактные KPI, уплотнённый контент, удалена кнопка «Сменить», детали свернуты по умолчанию.
