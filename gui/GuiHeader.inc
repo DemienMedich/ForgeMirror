@@ -4,7 +4,7 @@ static void HandleUiHotkeys(GuiState& state, ImGuiStyle& style, ImGuiIO& io, std
             ResetUiSettings(state.ui, style, io);
             state.uiLastTheme = state.ui.theme;
             state.uiDirty = false;
-            state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
+            state.profileSection = std::clamp(state.ui.profileTab, 0, 3);
             state.profileTabRequest = state.profileSection;
             std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
             ApplyUiFiltersToState(state);

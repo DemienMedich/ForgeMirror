@@ -83,6 +83,8 @@ std::int64_t NowSeconds();
 std::string TrimStringGui(std::string s);
 int TotalSkillXpGui(const Skill& skill);
 void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId = {});
+static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, bool showStatus);
+static std::int64_t GetStorageStamp(GuiState& state);
 const char* RankLabelForLevel(int level);
 int RankIndexForLevel(int level);
 const std::vector<RankOption>& RankOptions();
