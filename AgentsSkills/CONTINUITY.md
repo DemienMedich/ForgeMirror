@@ -1,27 +1,29 @@
 # CONTINUITY
 
-## Текущее состояние
-- Профиль: уплотнённый хедер в одну строку, компактные действия, KPI и основные блоки; детали свернуты по умолчанию.
-
-- Профиль: обновлён UI (хедер с CTA/синком, KPI-ряд, рекомендации, прогресс/фокус, детали в сворачиваемом блоке), убраны дублирующие вкладки, добавлены подсказки по XP/прогреву/повторам/буферу деградации.
-- Ветка: Beta. Текущая версия 0.3.05 (профессии полностью вынесены в отдельный модуль, профиль очищен; навыки сохраняют привязку к профессии при редактировании/весе; health-check/whitelist/patch-notes актуальны).
-- Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, кнопка очистки лишнего (только админ).
-- Инсталлер: сборка через `installer/build-installer.ps1` (требуется Inno Setup 6 и ISCC.exe).
-- Smoke_core проверяет: загрузку/сохранение профиля и ранга, gameplay.ini, tasks/pipeline файлы, whitelist.
-
-## Команды
-- Сборка: `cmake --build build --config Release`
-- GUI: `cmake --build build-gui --config Release --target JobSkillGui`
-- Smoke-тест: `cmake --build build --config Release --target smoke_core` затем `build/Release/smoke_core.exe`
-- Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe"`
-
-## План / бэклог
-- MyIdeas:
-  - [x] Удаление задач в списке задач с откатом начисленного XP и счётчиков.
-  - [x] Группировка навыков по категориям (категории в skills.txt, фильтр/группировка в каталоге).
-  - [x] Профессии: CRUD/админ в отдельном модуле; профили только отображают название; навыки привязываются к профессии.
-- Стабильность ядра / модульность: минимальное ядро (профили, навыки, XP/уровни, правила, storage API); feature-флаги модулей; единые функции чтения/записи с BOM и валидацией.
-- Сиды/профили: не подтягивать удалённые сиды; whitelist профилей для seed/инсталлятора; все данные профиля в одном месте.
-- Обновления/документация: patch-notes на каждую версию в `data/meta/patch-notes`; README/UPDATE_GUIDE для пользователей/облака.
-
-Follow AgentsSkills/ForgeMirror_DESIGN_CODE.md, AgentsSkills/AGENT_UI_TOKENS.md, AgentsSkills/AGENT_UI_GRID.md, AgentsSkills/AGENT_UI_GRID.md strictly. If conflict, the docs win.
+- Goal (incl. success criteria):
+  - Держать Beta стабильной: корректный UI/UX, сборка/инсталлер, синхронизация, версии + patch-notes на каждую версию.
+- Constraints/Assumptions:
+  - Следовать AgentsSkills/ForgeMirror_DesignCode.md, AgentsSkills/AGENT_UI_TOKENS.md, AgentsSkills/AGENT_UI_GRID.md, AgentsSkills/PR_UI_CHECKLIST.md.
+  - Версионирование: major.any.minor (minor 2‑значный), текущая версия 0.3.06.
+- Key decisions:
+  - Профессии вынесены в отдельный админ‑модуль; профиль их не редактирует.
+  - Синхронизация по whitelist (profiles/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes), лишнее чистится (админ).
+  - Профильный UI уплотнён и подчинён Compact‑токенам (однострочный хедер, один CTA, детали по умолчанию свернуты).
+- State:
+  - Ветка: Beta. Версия: 0.3.06. Последний коммит: compact profile layout.
+- Done:
+  - Профессии вынесены в отдельный модуль, навыки сохраняют привязку к профессии.
+  - Профильный UI: один ряд хедера, компактные KPI, уплотнённый контент, удалена кнопка «Сменить», детали свернуты по умолчанию.
+  - README актуализирован; patch-notes ведутся по версиям.
+- Now:
+  - Поддерживать дисциплину UI и стабильность, выполнять следующую задачу пользователя.
+- Next:
+  - Следующий UX/UI пункт по запросу пользователя.
+- Open questions (UNCONFIRMED if needed):
+  - UNCONFIRMED: есть ли ещё приоритетные баги/модули после уплотнения профиля.
+- Working set (files/ids/commands):
+  - gui/GuiProfilePanel.inc
+  - AgentsSkills/CONTINUITY.md
+  - data/meta/patch-notes
+  - Сборка GUI: cmake --build build-gui --config Release
+  - Инсталлер: powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
