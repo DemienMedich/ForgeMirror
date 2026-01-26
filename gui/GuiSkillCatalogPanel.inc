@@ -366,24 +366,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::TextDisabled(u8"Нет навыков по фильтру.");
             } else {
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
-                ImGui::TextDisabled(u8"Вес (выборка)");
-                constexpr int kSamples = 24;
-                std::array<float, kSamples> series{};
-                if (matchingWeights.size() == 1) {
-                    series.fill(matchingWeights.front());
-                } else if (!matchingWeights.empty()) {
-                    const size_t last = matchingWeights.size() - 1;
-                    for (int i = 0; i < kSamples; ++i) {
-                        size_t idx = static_cast<size_t>(std::round((static_cast<double>(i) / (kSamples - 1)) * last));
-                        idx = std::min(idx, last);
-                        series[static_cast<size_t>(i)] = matchingWeights[idx];
-                    }
-                }
-                float maxSeries = 0.0f;
-                for (float v : series) maxSeries = std::max(maxSeries, v);
-                if (maxSeries <= 0.0f) maxSeries = 1.0f;
-                DrawSparkline("##catalog_weight_series", series.data(), kSamples, maxSeries, accent, 54.0f);
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::TextDisabled(u8"Категории веса (A-E)");
                 const char* catLabels[] = {"", "A", "B", "C", "D", "E"};
                 if (ImGui::BeginTable("catalog_weights", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("cat", ImGuiTableColumnFlags_WidthFixed, 96.0f);
