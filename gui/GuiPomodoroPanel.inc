@@ -43,11 +43,27 @@ static int FindPomodoroSoundIndex(const std::vector<PomodoroSoundChoice>& choice
 
 void DrawPomodoroPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pomodoro, state.storageDir);
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec2 origFramePadding = style.FramePadding;
+    ImVec2 origItemSpacing = style.ItemSpacing;
+    ImVec2 origCellPadding = style.CellPadding;
+    ImVec2 origWindowPadding = style.WindowPadding;
+    style.FramePadding = ImVec2(8.0f, 4.0f);
+    style.ItemSpacing = ImVec2(8.0f, 6.0f);
+    style.CellPadding = ImVec2(6.0f, 4.0f);
+    style.WindowPadding = ImVec2(10.0f, 8.0f);
     DrawCardHeader(u8"Помодоро");
     ImGui::TextDisabled(u8"Фокус-сессии с ручным или авто переходом между интервалами.");
-    const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
+
+    auto SecondaryButton = [&style](const char* label, const ImVec2& size) {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                           ImVec2(style.FramePadding.x, std::max(2.0f, style.FramePadding.y * 0.8f)));
+        bool pressed = ImGui::Button(label, size);
+        ImGui::PopStyleVar();
+        return pressed;
+    };
 
     const bool running = state.pomodoroRunning;
     const bool awaiting = state.pomodoroAwaitConfirm;
@@ -77,12 +93,12 @@ void DrawPomodoroPanel(GuiState& state) {
                 phaseColor = style.Colors[ImGuiCol_TextDisabled];
             }
             ImGui::TextColored(phaseColor, "%s", PomodoroPhaseLabel(state.pomodoroPhase));
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::TextDisabled(u8"Осталось");
-            ImGui::SetWindowFontScale(1.35f);
+            ImGui::SetWindowFontScale(1.2f);
             ImGui::Text("%s", remainingText.c_str());
             ImGui::SetWindowFontScale(1.0f);
-            ImGui::ProgressBar(std::clamp(progress, 0.0f, 1.0f), ImVec2(-1.0f, 8.0f), "");
+            ImGui::ProgressBar(std::clamp(progress, 0.0f, 1.0f), ImVec2(-1.0f, 6.0f), "");
             ImGui::TextDisabled(u8"Фокусов: %d / %d",
                                 std::min(state.pomodoroCyclesCompleted, state.ui.pomodoroCyclesBeforeLong),
                                 state.ui.pomodoroCyclesBeforeLong);
@@ -115,7 +131,7 @@ void DrawPomodoroPanel(GuiState& state) {
                 if (emphasizeStart) {
                     ImGui::PopStyleColor(3);
                 }
-                if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+                if (SecondaryButton(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
                     ResetPomodoroState(state);
                 }
             } else if (running) {
@@ -123,14 +139,14 @@ void DrawPomodoroPanel(GuiState& state) {
                     state.pomodoroRunning = false;
                     state.pomodoroAccumulator = 0.0f;
                 }
-                if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+                if (SecondaryButton(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
                     ResetPomodoroState(state);
                 }
             } else if (paused) {
                 if (ImGui::Button(u8"Продолжить", ImVec2(-1.0f, 0.0f))) {
                     state.pomodoroRunning = true;
                 }
-                if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+                if (SecondaryButton(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
                     ResetPomodoroState(state);
                 }
             } else {
@@ -257,4 +273,8 @@ void DrawPomodoroPanel(GuiState& state) {
         EndCard();
         ImGui::EndTable();
     }
+    style.FramePadding = origFramePadding;
+    style.ItemSpacing = origItemSpacing;
+    style.CellPadding = origCellPadding;
+    style.WindowPadding = origWindowPadding;
 }
