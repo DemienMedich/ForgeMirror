@@ -21,7 +21,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     ApplyUiTheme(state.ui.theme, style);
     ApplyUiSettings(state.ui, style, io);
     state.uiLastTheme = state.ui.theme;
-    state.profileSection = std::clamp(state.ui.profileTab, 0, 3);
+    state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
     state.profileTabRequest = state.profileSection;
     ApplyUiFiltersToState(state);
     state.tasks = state.modules.tasks ? LoadTasks(storageDir) : std::vector<TaskEntry>();

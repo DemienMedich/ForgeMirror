@@ -1,12 +1,11 @@
-static bool DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, const std::string& value,
-                            const ImVec4& accent, const char* tooltip = nullptr, float height = 72.0f) {
+static void DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, const std::string& value,
+                            const ImVec4& accent, float height = 72.0f) {
     ImGui::PushID(id);
     const ImGuiStyle& style = ImGui::GetStyle();
     const float rounding = std::max(10.0f, style.FrameRounding + 4.0f);
     ImVec4 bg = CardBackgroundColor();
     ImVec4 border = CardBorderColor();
 
-    bool hovered = false;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
@@ -35,467 +34,254 @@ static bool DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor();
         ImGui::EndGroup();
-        hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-        if (tooltip && hovered) {
-            ImGui::SetTooltip("%s", tooltip);
-        }
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(2);
     ImGui::PopID();
-    return hovered;
 }
 
+void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
 
-struct SyncStatusInfo {
-    ImVec4 color;
-    std::string label;
-    std::string tooltip;
-    std::string timeLabel;
-    bool enabled = false;
-};
-
-static ImVec4 ElevatedSecondaryText(const ImGuiStyle& style) {
-    ImVec4 base = style.Colors[ImGuiCol_Text];
-    ImVec4 dim = style.Colors[ImGuiCol_TextDisabled];
-    return BlendColor(dim, base, 0.25f);
-}
-
-static SyncStatusInfo BuildSyncStatus(GuiState& state) {
-    SyncStatusInfo info;
-    const ImGuiStyle& style = ImGui::GetStyle();
-    ImVec4 okColor = ImVec4(0.35f, 0.9f, 0.45f, 0.95f);
-    ImVec4 warnColor = ImVec4(1.0f, 0.75f, 0.35f, 0.95f);
-    ImVec4 offColor = style.Colors[ImGuiCol_TextDisabled];
-
-    if (!state.cloudConfig.enabled) {
-        info.enabled = false;
-        info.color = offColor;
-        info.label = u8"Облако выключено";
-        info.tooltip = u8"Синхронизация отключена в настройках.";
-        return info;
-    }
-
-    info.enabled = true;
-    const std::int64_t storageStamp = GetStorageStamp(state);
-    const bool hasOk = state.lastCloudSyncOk && state.lastCloudSyncOkAt > 0;
-    const bool synced = hasOk && storageStamp <= state.lastCloudSyncOkAt;
-    if (!hasOk) {
-        info.color = warnColor;
-        info.label = u8"Синхронизации ещё не было";
-        info.tooltip = u8"Данные пока не синхронизировались.";
-    } else if (synced) {
-        info.color = okColor;
-        info.label = u8"Синхронизировано";
-        info.tooltip = u8"Все данные синхронизированы.";
-    } else {
-        info.color = warnColor;
-        info.label = u8"Есть несинхронизированные данные";
-        info.tooltip = u8"В хранилище есть изменения, которые ещё не ушли в облако.";
-    }
-    if (state.lastCloudSyncOkAt > 0) {
-        info.timeLabel = std::string(u8"Последняя: ") + FormatTimestamp(state.lastCloudSyncOkAt, "%Y-%m-%d %H:%M");
-        info.tooltip += u8"\n";
-        info.tooltip += info.timeLabel;
-    }
-    if (state.strayFileCount > 0) {
-        info.tooltip += u8"\nЛишние файлы в хранилище: ";
-        info.tooltip += std::to_string(state.strayFileCount);
-    }
-    return info;
-}
-
-static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const ImVec4& accent) {
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const bool stack = avail < 840.0f;
-    const ImGuiStyle& style = ImGui::GetStyle();
-    const ImVec4 secondary = ElevatedSecondaryText(style);
-
-    auto drawSelector = [&]() {
-        DrawCardHeader(u8"Профиль");
+    if (BeginCard("profile_select_card")) {
+        DrawCardHeader(u8"Выбор профиля");
         const bool hasProfiles = !state.profiles.empty();
         if (!hasProfiles) {
-            ImGui::TextColored(secondary, u8"Профили не найдены.");
-            return;
-        }
-
-        std::string currentLabel = u8"(не выбран)";
-        if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
-            const auto& info = state.profiles[state.selectedIndex];
-            currentLabel = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
-        }
-
-        ImGui::SetNextItemWidth(-1.0f);
-        if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
-            for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
-                const auto& info = state.profiles[i];
-                std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
-                const bool selected = state.selectedIndex == i;
-                if (ImGui::Selectable(label.c_str(), selected)) {
-                    state.selectedIndex = i;
-                    RefreshActiveProfile(state, storage, catalog);
-                    SyncRankSelection(state);
-                    SetStatus(state, "", 0.6f, 0.7f, 1.0f);
-                }
-                if (selected) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-        if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
-            state.showProfilesWindow = true;
-            state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
-        }
-        if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
-            RefreshProfiles(state, storage, catalog);
-        }
-    };
-
-    auto drawActions = [&]() {
-        DrawCardHeader(u8"Действия");
-        const bool xpEnabled = state.isAdmin;
-        ImGui::TextColored(secondary, u8"Быстрые действия по профилю.");
-
-        if (!xpEnabled) ImGui::BeginDisabled();
-        ImVec4 addBg = accent;
-        addBg.w = 0.22f;
-        ImVec4 addHover = addBg;
-        addHover.w = 0.32f;
-        ImVec4 addActive = addBg;
-        addActive.w = 0.42f;
-        ImGui::PushStyleColor(ImGuiCol_Button, addBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
-        if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
-            PrepareXpEntries(state, catalog);
-            state.xpPopupRequest = true;
-        }
-        ImGui::PopStyleColor(3);
-        if (!xpEnabled) {
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip(u8"Доступно только администратору.");
-            }
-            ImGui::EndDisabled();
-        }
-
-        const float actionWidth = ImGui::GetContentRegionAvail().x;
-        const bool stackActions = actionWidth < 320.0f;
-        if (stackActions) {
-            if (ImGui::Button(u8"Синхронизировать", ImVec2(-1.0f, 0.0f))) {
-                RunCloudQuickSync(state, storage, catalog, true);
-            }
-            if (ImGui::Button(u8"Сменить профиль", ImVec2(-1.0f, 0.0f))) {
-                state.showProfilesWindow = true;
-                state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
-            }
-        } else if (ImGui::BeginTable("profile_header_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            bool syncEnabled = state.cloudConfig.enabled;
-            if (!syncEnabled) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Синхр.", ImVec2(-1.0f, 0.0f))) {
-                RunCloudQuickSync(state, storage, catalog, true);
-            }
-            if (!syncEnabled) {
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip(u8"Облако отключено.");
-                }
-                ImGui::EndDisabled();
-            }
-            ImGui::TableSetColumnIndex(1);
-            if (ImGui::Button(u8"Сменить", ImVec2(-1.0f, 0.0f))) {
-                state.showProfilesWindow = true;
-                state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
-            }
-            ImGui::EndTable();
-        }
-    };
-
-    auto drawSync = [&]() {
-        DrawCardHeader(u8"Синхронизация");
-        const SyncStatusInfo info = BuildSyncStatus(state);
-        ImGui::ColorButton("##sync_dot", info.color,
-                           ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
-                           ImVec2(10.0f, 10.0f));
-        ImGui::SameLine();
-        ImGui::TextColored(info.color, "%s", info.label.c_str());
-        if (!info.timeLabel.empty()) {
-            ImGui::TextColored(secondary, "%s", info.timeLabel.c_str());
+            ImGui::TextDisabled(u8"Профили не найдены.");
         } else {
-            ImGui::TextColored(secondary, u8"Нет данных о последней синхронизации");
-        }
-        if (ImGui::IsItemHovered() && !info.tooltip.empty()) {
-            ImGui::SetTooltip("%s", info.tooltip.c_str());
-        }
-    };
+            std::string currentLabel = u8"(не выбран)";
+            if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
+                const auto& info = state.profiles[state.selectedIndex];
+                currentLabel = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+            }
 
-    if (BeginCard("profile_header_strip")) {
-        if (stack) {
-            drawSelector();
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            drawActions();
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            drawSync();
-        } else if (ImGui::BeginTable("profile_header_strip_table", 3, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("selector", ImGuiTableColumnFlags_WidthStretch, 1.6f);
-            ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("sync", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            drawSelector();
-            ImGui::TableSetColumnIndex(1);
-            drawActions();
-            ImGui::TableSetColumnIndex(2);
-            drawSync();
-            ImGui::EndTable();
+            const float avail = ImGui::GetContentRegionAvail().x;
+            const bool stack = avail < 520.0f;
+            if (stack) {
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
+                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                        const auto& info = state.profiles[i];
+                        std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+                        const bool selected = state.selectedIndex == i;
+                        if (ImGui::Selectable(label.c_str(), selected)) {
+                            state.selectedIndex = i;
+                            RefreshActiveProfile(state, storage, catalog);
+                            SyncRankSelection(state);
+                            SetStatus(state, "", 0.6f, 0.7f, 1.0f);
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
+                    state.showProfilesWindow = true;
+                    state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
+                }
+                if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                    RefreshProfiles(state, storage, catalog);
+                }
+            } else if (ImGui::BeginTable("profile_select_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("select_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+                ImGui::TableSetupColumn("select", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableSetupColumn("open", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+                ImGui::TableSetupColumn("refresh", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+                keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+                const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                DrawAnchorIcon(UiIcon::List);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
+                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                        const auto& info = state.profiles[i];
+                        std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+                        const bool selected = state.selectedIndex == i;
+                        if (ImGui::Selectable(label.c_str(), selected)) {
+                            state.selectedIndex = i;
+                            RefreshActiveProfile(state, storage, catalog);
+                            SyncRankSelection(state);
+                            SetStatus(state, "", 0.6f, 0.7f, 1.0f);
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::TableSetColumnIndex(2);
+                if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
+                    state.showProfilesWindow = true;
+                    state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
+                }
+                ImGui::TableSetColumnIndex(3);
+                if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                    RefreshProfiles(state, storage, catalog);
+                }
+                ImGui::EndTable();
+            }
         }
     }
     EndCard();
-}
+    ImGui::Spacing();
 
-static void DrawProfileKpiRow(const ImGuiStyle& style, const ImVec4& accent,
-                              int overallLevel, const std::string& rankText,
-                              const std::string& progressLabel, const std::string& bonusLabel,
-                              int degradationBuffer, const GameplayConfig& rules) {
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const bool compact = avail < 940.0f;
-    const ImVec4 secondary = ElevatedSecondaryText(style);
-    const int repeatPercent = static_cast<int>(std::round(rules.repeatRewardFactor * 100.0f));
-    const int recoveryPercent = static_cast<int>(std::round(rules.recoveryRewardFactor * 100.0f));
+    if (!state.active) {
+        if (state.profileLoading) {
+            ImGui::TextDisabled(u8"Загружаем профиль...");
+            const float pulse = ImFmod(static_cast<float>(ImGui::GetTime() * 0.35f), 1.0f);
+            ImGui::ProgressBar(pulse, ImVec2(-1.0f, 0.0f));
+        } else if (!state.profileLoadError.empty()) {
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", state.profileLoadError.c_str());
+            ImGui::TextDisabled(u8"Обновите список профилей или выберите другой.");
+        } else if (state.profiles.empty()) {
+            ImGui::TextDisabled(u8"Профили не найдены.");
+        } else {
+            ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
+        }
+    } else {
+        Profile& profile = state.active->profile;
+        const int overallLevel = profile.overall_level();
+        const int totalXp = profile.total_xp();
+        const int progressXp = profile.level_progress();
+        const int xpToNext = profile.xp_to_next_level();
+        const int xpNeededThisLevel = progressXp + xpToNext;
+        const float progressRatio = xpNeededThisLevel > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpNeededThisLevel) : 0.0f;
+        const std::int64_t nowSec = NowSeconds();
+        const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpNeededThisLevel);
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
 
-    auto tooltipXp = std::string(u8"Повтор одинаковой оценки снижает общий XP до ") +
-        std::to_string(repeatPercent) + u8"% (навыки без штрафа).";
-    tooltipXp += u8"\nПри прогреве после простоя XP снижается до ";
-    tooltipXp += std::to_string(recoveryPercent) + u8"%.";
-
-    std::string tooltipBonus = u8"Бонус активных ачивок (до +40%).\n";
-    tooltipBonus += u8"Влияет на навыки и распределяется по долям участников.";
-
-    std::string bufferLabel = std::to_string(std::max(0, degradationBuffer)) + u8" задач";
-    std::string tooltipBuffer = u8"Буфер деградации: сколько задач можно пропустить\n";
-    tooltipBuffer += u8"до снижения категорий после простоя.";
-
-    if (compact) {
-        if (ImGui::BeginTable("profile_kpi_row", 3, ImGuiTableFlags_SizingStretchSame)) {
+        const std::string rankText = DescribeOverallRank(profile);
+        const char* rankLabel = RankLabelForLevel(overallLevel);
+        const auto& catScores = profile.category_best_scores();
+        std::string categoriesLine;
+        {
+            std::ostringstream catStream;
+            for (size_t i = 0; i < catScores.size(); ++i) {
+                if (i) catStream << ", ";
+                catStream << Profile::kCategoryLabels[i] << "=" << catScores[i] << "/10";
+            }
+            categoriesLine = catStream.str();
+        }
+        if (BeginCard("profile_header_card")) {
+        if (ImGui::BeginTable("profile_header_summary", 3, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            DrawKpiCardIcon("kpi_level", UiIcon::Chart, u8"Уровень", std::to_string(overallLevel), accent);
-            ImGui::TableSetColumnIndex(1);
-            DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
-            ImGui::TableSetColumnIndex(2);
-            DrawKpiCardIcon("kpi_progress", UiIcon::Chart, u8"Прогресс", progressLabel, accent, tooltipXp.c_str());
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent, tooltipBonus.c_str());
-            ImGui::TableSetColumnIndex(1);
-            DrawKpiCardIcon("kpi_buffer", UiIcon::Refresh, u8"Буфер деградации", bufferLabel, accent, tooltipBuffer.c_str());
-            ImGui::TableSetColumnIndex(2);
-            ImGui::PushStyleColor(ImGuiCol_Text, secondary);
-            ImGui::TextUnformatted(u8"KPI обновляются автоматически");
-            ImGui::PopStyleColor();
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Уровень");
+            ImGui::TextColored(accent, "%d", overallLevel);
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Ранг");
+            ImGui::TextColored(accent, "%s", rankLabel ? rankLabel : u8"-");
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Прогресс");
+            ImGui::TextColored(accent, "%s", progressLabel.c_str());
             ImGui::EndTable();
         }
-    } else if (ImGui::BeginTable("profile_kpi_row", 5, ImGuiTableFlags_SizingStretchSame)) {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        DrawKpiCardIcon("kpi_level", UiIcon::Chart, u8"Уровень", std::to_string(overallLevel), accent);
-        ImGui::TableSetColumnIndex(1);
-        DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
-        ImGui::TableSetColumnIndex(2);
-        DrawKpiCardIcon("kpi_progress", UiIcon::Chart, u8"Прогресс", progressLabel, accent, tooltipXp.c_str());
-        ImGui::TableSetColumnIndex(3);
-        DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent, tooltipBonus.c_str());
-        ImGui::TableSetColumnIndex(4);
-        DrawKpiCardIcon("kpi_buffer", UiIcon::Refresh, u8"Буфер деградации", bufferLabel, accent, tooltipBuffer.c_str());
-        ImGui::EndTable();
-    }
-}
-
-static void DrawProfileRecommendations(const ImVec4& accent,
-                                       const Profile& profile, const GameplayConfig& rules,
-                                       int xpToNext, int overallLevel) {
-    struct RecItem {
-        std::string title;
-        std::string why;
-    };
-    std::array<RecItem, 3> items;
-    int count = 0;
-    auto addItem = [&](std::string title, std::string why = {}) {
-        if (count >= static_cast<int>(items.size())) return;
-        items[count++] = RecItem{std::move(title), std::move(why)};
-    };
-
-    const bool penaltiesEnabled = profile.penalties_enabled();
-    const int recoveryLeft = penaltiesEnabled ? profile.recovery_tasks_remaining() : 0;
-    const int degradationBuffer = profile.inactivity_tasks();
-
-    if (recoveryLeft > 0) {
-        std::string title = u8"Прогрев: осталось ";
-        title += std::to_string(recoveryLeft);
-        title += u8" задач";
-        std::string why = u8"XP снижен до ";
-        why += std::to_string(static_cast<int>(std::round(rules.recoveryRewardFactor * 100.0f)));
-        why += u8"% до завершения прогрева.";
-        addItem(std::move(title), std::move(why));
-    }
-
-    if (degradationBuffer > 0) {
-        std::string title = u8"Буфер деградации: ";
-        title += std::to_string(degradationBuffer);
-        title += u8" задач";
-        addItem(std::move(title), u8"Сколько задач осталось до снижения категорий.");
-    }
-
-    if (xpToNext > 0) {
-        std::string title = u8"До следующего уровня: ";
-        title += std::to_string(xpToNext);
-        title += u8" XP";
-        addItem(std::move(title));
-    }
-
-    const auto& scores = profile.category_best_scores();
-    int minIdx = 0;
-    int minScore = scores[0];
-    for (size_t i = 1; i < scores.size(); ++i) {
-        if (scores[i] < minScore) {
-            minScore = scores[i];
-            minIdx = static_cast<int>(i);
-        }
-    }
-    if (minScore < Profile::kMaxCategoryScore && count < 3) {
-        std::string title = u8"Поднять категорию ";
-        title += Profile::kCategoryLabels[minIdx];
-        title += u8" до ";
-        title += std::to_string(minScore + 1);
-        title += u8"/10";
-        addItem(std::move(title), u8"Слабая категория ограничивает общий рост.");
-    }
-
-    DrawCardHeader(u8"Следующие действия");
-    if (count == 0) {
-        ImGui::TextDisabled(u8"Рекомендаций пока нет.");
-        return;
-    }
-
-    for (int i = 0; i < count; ++i) {
-        ImGui::BulletText("%s", items[i].title.c_str());
-        if (!items[i].why.empty()) {
-            ImGui::SameLine();
-            ImGui::TextDisabled(u8"почему?");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", items[i].why.c_str());
+        ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
+        ImGui::TextDisabled(u8"Режим");
+        ImGui::SameLine();
+        auto drawModeButton = [&](const char* label, int mode, const char* tooltip) {
+            const bool selected = (state.ui.profileViewMode == mode);
+            if (selected) {
+                ImVec4 base = BlendColor(style.Colors[ImGuiCol_ButtonActive], accent, 0.35f);
+                ImVec4 hover = BlendColor(style.Colors[ImGuiCol_ButtonHovered], accent, 0.30f);
+                ImVec4 active = BlendColor(base, accent, 0.20f);
+                base.w = std::max(base.w, 0.85f);
+                hover.w = std::max(hover.w, 0.90f);
+                active.w = std::max(active.w, 0.95f);
+                ImGui::PushStyleColor(ImGuiCol_Button, base);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, active);
             }
-        }
-    }
-
-    if (overallLevel <= 1 && profile.tasks_completed() == 0) {
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
-        ImGui::TextColored(accent, u8"Начните с первой активности, чтобы запустить рост уровня.");
-    }
-}
-
-static void DrawProfileProgressHighlights(const ImGuiStyle& style, const ImVec4& accent,
-                                          const Profile& profile, float progressRatio,
-                                          const std::string& progressLabel, int overallLevel) {
-    const auto& catScores = profile.category_best_scores();
-    const float ringAvail = ImGui::GetContentRegionAvail().x;
-    const float ringSize = std::min(190.0f, ringAvail);
-    if (ringSize >= 140.0f) {
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 chartSize(ringSize, ringSize);
-        const float baseX = ImGui::GetCursorPosX();
-        const float centerX = baseX + std::max(0.0f, (ringAvail - ringSize) * 0.5f);
-        if (centerX > baseX) {
-            ImGui::SetCursorPosX(centerX);
-        }
-        ImGui::Dummy(chartSize);
-        const ImVec2 pMin = ImGui::GetItemRectMin();
-        const ImVec2 pMax = ImGui::GetItemRectMax();
-        const ImVec2 center((pMin.x + pMax.x) * 0.5f, (pMin.y + pMax.y) * 0.5f);
-
-        float outerRadius = ringSize * 0.5f - 6.0f;
-        float outerThickness = std::max(10.0f, outerRadius * 0.16f);
-        float innerRadius = std::max(6.0f, outerRadius - outerThickness - 8.0f);
-        float innerThickness = std::max(8.0f, outerThickness * 0.70f);
-
-        if (!catScores.empty()) {
-            std::vector<float> segValues;
-            segValues.reserve(catScores.size());
-            for (size_t i = 0; i < catScores.size(); ++i) {
-                segValues.push_back(static_cast<float>(catScores[i]));
+            if (ImGui::Button(label)) {
+                state.ui.profileViewMode = mode;
+                state.uiDirty = true;
             }
-            DrawSegmentedRing(drawList, center, outerRadius, outerThickness,
-                              segValues.data(), static_cast<int>(segValues.size()), 10.0f, 0.12f);
+            if (selected) {
+                ImGui::PopStyleColor(3);
+            }
+            if (tooltip && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", tooltip);
+            }
+        };
+        drawModeButton(u8"Обзор", 0, u8"Быстрый обзор состояния.");
+        ImGui::SameLine();
+        drawModeButton(u8"Аналитика", 1, u8"Детали, фильтры и история.");
+        ImGui::SameLine();
+        drawModeButton(u8"Фокус", 2, u8"Только ключевые блоки.");
+        ImGui::TextDisabled(u8"XP - опыт: начисляется навыкам и повышает уровень.");
+        ImGui::Separator();
+        const float headerAvail = ImGui::GetContentRegionAvail().x;
+        const float spacingX = ImGui::GetStyle().ItemSpacing.x;
+        const float minLeftWidth = 240.0f;
+        const float maxLeftWidth = 420.0f;
+        const float minRightWidth = 240.0f;
+        float leftWidth = std::clamp(headerAvail * 0.56f, minLeftWidth, maxLeftWidth);
+        if (headerAvail - leftWidth - spacingX < minRightWidth) {
+            leftWidth = std::max(0.0f, headerAvail - minRightWidth - spacingX);
         }
-
-        ImVec4 track = style.Colors[ImGuiCol_TextDisabled];
-        track.w = 0.18f;
-        ImVec4 fill = accent;
-        fill.w = 0.92f;
-        DrawProgressRing(drawList, center, innerRadius, innerThickness, progressRatio,
-                         ImGui::GetColorU32(track), ImGui::GetColorU32(fill));
-
-        ImVec4 centerBg = style.Colors[ImGuiCol_FrameBg];
-        centerBg.w = std::max(centerBg.w, 0.35f);
-        float fillRadius = std::max(0.0f, innerRadius - innerThickness * 0.55f);
-        drawList->AddCircleFilled(center, fillRadius, ImGui::GetColorU32(centerBg), 32);
-
-        std::string levelText = std::to_string(overallLevel);
-        std::ostringstream pctStream;
-        pctStream.imbue(std::locale::classic());
-        pctStream << std::fixed << std::setprecision(1) << (progressRatio * 100.0f);
-        std::string pctText = pctStream.str() + "%";
-
-        ImFont* font = ImGui::GetFont();
-        const float fontBase = ImGui::GetFontSize();
-        const float bigFont = fontBase * 1.55f;
-        const float smallFont = fontBase * 0.95f;
-        const ImVec2 levelSize = font->CalcTextSizeA(bigFont, std::numeric_limits<float>::max(), 0.0f, levelText.c_str());
-        const ImVec2 pctSize = font->CalcTextSizeA(smallFont, std::numeric_limits<float>::max(), 0.0f, pctText.c_str());
-        const ImVec2 levelPos(center.x - levelSize.x * 0.5f, center.y - levelSize.y * 0.65f);
-        const ImVec2 pctPos(center.x - pctSize.x * 0.5f, center.y + levelSize.y * 0.05f);
-        drawList->AddText(font, bigFont, levelPos, ImGui::GetColorU32(accent), levelText.c_str());
-        drawList->AddText(font, smallFont, pctPos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]), pctText.c_str());
-    } else {
-        ImGui::SetWindowFontScale(1.25f);
-        ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::TextDisabled(u8"Прогресс уровня");
-        ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
-    }
-
-    ImGui::Dummy(ImVec2(0.0f, 8.0f));
-    DrawCardHeader(u8"Топ фокуса");
-    std::array<int, Profile::kCategoryCount> idxs{};
-    for (size_t i = 0; i < idxs.size(); ++i) idxs[i] = static_cast<int>(i);
-    std::sort(idxs.begin(), idxs.end(), [&](int a, int b) { return catScores[a] > catScores[b]; });
-    const int shown = std::min<int>(3, static_cast<int>(idxs.size()));
-    for (int i = 0; i < shown; ++i) {
-        int idx = idxs[i];
-        std::string line = std::string(Profile::kCategoryLabels[idx]) + " = " + std::to_string(catScores[idx]) + "/10";
-        ImGui::BulletText("%s", line.c_str());
-    }
-}
-
-static void DrawProfileSummaryCard(GuiState& state, SkillCatalog& catalog, const Profile& profile,
-                                   const std::string& rankText, const std::string& categoriesLine,
-                                   const ImVec4& accent, std::int64_t nowSec) {
-    if (BeginCard("profile_summary_card")) {
-        DrawCardHeader(u8"Сводка профиля");
-
-        if (ImGui::BeginTable("profile_summary_info", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
-            ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::BeginChild("profile_header_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_AutoResizeY,
+            ImGuiWindowFlags_NoScrollbar);
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
+        if (ImGui::BeginTable("profile_info", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Имя");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(profile.name().c_str());
+            if (ImGui::GetContentRegionAvail().x > 120.0f) {
+                ImGui::SameLine();
+            }
+            if (ImGui::SmallButton(u8"Копировать##profile_name")) {
+                ImGui::SetClipboardText(profile.name().c_str());
+            }
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"ID");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(state.active->id.c_str());
+            if (ImGui::GetContentRegionAvail().x > 120.0f) {
+                ImGui::SameLine();
+            }
+            if (ImGui::SmallButton(u8"Копировать##profile_id")) {
+                ImGui::SetClipboardText(state.active->id.c_str());
+            }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Опыт");
+            ImGui::TableSetColumnIndex(1);
+            const bool xpEnabled = state.isAdmin;
+            const bool emphasizeAddXp = xpEnabled && totalXp <= 0;
+            if (!xpEnabled) ImGui::BeginDisabled();
+            if (emphasizeAddXp) {
+                ImVec4 addBg = accent;
+                addBg.w = 0.18f;
+                ImVec4 addHover = addBg;
+                addHover.w = 0.28f;
+                ImVec4 addActive = addBg;
+                addActive.w = 0.38f;
+                ImGui::PushStyleColor(ImGuiCol_Button, addBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
+            }
+            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+                PrepareXpEntries(state, catalog);
+                state.xpPopupRequest = true;
+            }
+            if (emphasizeAddXp) {
+                ImGui::PopStyleColor(3);
+            }
+            if (!xpEnabled) {
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(u8"Доступно только администратору.");
+                }
+                ImGui::EndDisabled();
+            }
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Ранг");
@@ -508,8 +294,83 @@ static void DrawProfileSummaryCard(GuiState& state, SkillCatalog& catalog, const
             ImGui::TextWrapped("%s", categoriesLine.c_str());
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginChild("profile_header_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+            ImGuiWindowFlags_NoScrollbar);
+        const float ringAvail = ImGui::GetContentRegionAvail().x;
+        const float ringSize = std::min(190.0f, ringAvail);
+        if (ringSize >= 140.0f) {
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            ImVec2 chartSize(ringSize, ringSize);
+            const float baseX = ImGui::GetCursorPosX();
+            const float centerX = baseX + std::max(0.0f, (ringAvail - ringSize) * 0.5f);
+            if (centerX > baseX) {
+                ImGui::SetCursorPosX(centerX);
+            }
+            ImGui::Dummy(chartSize);
+            const ImVec2 pMin = ImGui::GetItemRectMin();
+            const ImVec2 pMax = ImGui::GetItemRectMax();
+            const ImVec2 center((pMin.x + pMax.x) * 0.5f, (pMin.y + pMax.y) * 0.5f);
 
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+            float outerRadius = ringSize * 0.5f - 6.0f;
+            float outerThickness = std::max(10.0f, outerRadius * 0.16f);
+            float innerRadius = std::max(6.0f, outerRadius - outerThickness - 8.0f);
+            float innerThickness = std::max(8.0f, outerThickness * 0.70f);
+
+            if (!catScores.empty()) {
+                std::vector<float> segValues;
+                segValues.reserve(catScores.size());
+                for (size_t i = 0; i < catScores.size(); ++i) {
+                    segValues.push_back(static_cast<float>(catScores[i]));
+                }
+                DrawSegmentedRing(drawList, center, outerRadius, outerThickness,
+                                  segValues.data(), static_cast<int>(segValues.size()), 10.0f, 0.12f);
+            }
+
+            ImVec4 track = style.Colors[ImGuiCol_TextDisabled];
+            track.w = 0.18f;
+            ImVec4 fill = accent;
+            fill.w = 0.92f;
+            DrawProgressRing(drawList, center, innerRadius, innerThickness, progressRatio,
+                             ImGui::GetColorU32(track), ImGui::GetColorU32(fill));
+
+            ImVec4 centerBg = style.Colors[ImGuiCol_FrameBg];
+            centerBg.w = std::max(centerBg.w, 0.35f);
+            float fillRadius = std::max(0.0f, innerRadius - innerThickness * 0.55f);
+            drawList->AddCircleFilled(center, fillRadius, ImGui::GetColorU32(centerBg), 32);
+
+            std::string levelText = std::to_string(overallLevel);
+            std::ostringstream pctStream;
+            pctStream.imbue(std::locale::classic());
+            pctStream << std::fixed << std::setprecision(1) << (progressRatio * 100.0f);
+            std::string pctText = pctStream.str() + "%";
+
+            ImFont* font = ImGui::GetFont();
+            const float fontBase = ImGui::GetFontSize();
+            const float bigFont = fontBase * 1.55f;
+            const float smallFont = fontBase * 0.95f;
+            const ImVec2 levelSize = font->CalcTextSizeA(bigFont, std::numeric_limits<float>::max(), 0.0f, levelText.c_str());
+            const ImVec2 pctSize = font->CalcTextSizeA(smallFont, std::numeric_limits<float>::max(), 0.0f, pctText.c_str());
+            const ImVec2 levelPos(center.x - levelSize.x * 0.5f, center.y - levelSize.y * 0.65f);
+            const ImVec2 pctPos(center.x - pctSize.x * 0.5f, center.y + levelSize.y * 0.05f);
+            drawList->AddText(font, bigFont, levelPos, ImGui::GetColorU32(accent), levelText.c_str());
+            drawList->AddText(font, smallFont, pctPos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]), pctText.c_str());
+        } else {
+            ImGui::SetWindowFontScale(1.25f);
+            ImGui::TextColored(accent, u8"Уровень %d", overallLevel);
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::TextDisabled(u8"Всего XP: %d", totalXp);
+            ImGui::TextDisabled(u8"Прогресс уровня");
+            ImGui::ProgressBar(progressRatio, ImVec2(-1.0f, 0.0f), progressLabel.c_str());
+        }
+        ImGui::EndChild();
+        }
+        EndCard();
+        ImGui::Spacing();
+        if (BeginCard("profile_summary_card")) {
+        DrawCardHeader(u8"Сводка профиля");
         const int skillCount = static_cast<int>(profile.list_skills().size());
         const int achCount = static_cast<int>(profile.achievements().size());
         int activeAchCount = 0;
@@ -523,22 +384,26 @@ static void DrawProfileSummaryCard(GuiState& state, SkillCatalog& catalog, const
         std::ostringstream bonusStream;
         bonusStream.imbue(std::locale::classic());
         bonusStream << std::fixed << std::setprecision(1) << activeBonus;
-        std::string bonusLabel = activeBonus > 0.0 ? ("+" + bonusStream.str() + "%") : std::string("0%");
-
-        if (ImGui::BeginTable("profile_summary_kpi", 2, ImGuiTableFlags_SizingStretchSame)) {
+        std::string bonusLabel = activeBonus > 0.0
+        ? ("+" + bonusStream.str() + "%")
+        : std::string("0%");
+        if (ImGui::BeginTable("profile_kpi", 2, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(profile.total_xp()), accent);
+            DrawKpiCardIcon("kpi_level", UiIcon::Chart, u8"Уровень", std::to_string(overallLevel), accent);
             ImGui::TableSetColumnIndex(1);
-            DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
-            ImGui::EndTable();
-        }
-
-        ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
-            skillCount, activeAchCount, achCount);
-        ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-
+            DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+        DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
+        ImGui::TableSetColumnIndex(1);
+        DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
+        ImGui::EndTable();
+    }
+    ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
+    skillCount, activeAchCount, achCount);
+    ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (!profile.achievements().empty()) {
             auto formatDate = [](std::int64_t ts) -> std::string {
                 if (ts <= 0) return std::string(u8"без срока");
@@ -589,9 +454,9 @@ static void DrawProfileSummaryCard(GuiState& state, SkillCatalog& catalog, const
                             activeTint.w = 1.0f;
                             ImVec4 inactiveTint = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], activeTint, 0.25f);
                             ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)iconTex->id),
-                                ImVec2(iconSize, iconSize),
-                                ImVec2(0, 0), ImVec2(1, 1),
-                                ImVec4(0, 0, 0, 0), active ? activeTint : inactiveTint);
+                            ImVec2(iconSize, iconSize),
+                            ImVec2(0, 0), ImVec2(1, 1),
+                            ImVec4(0, 0, 0, 0), active ? activeTint : inactiveTint);
                             hovered = ImGui::IsItemHovered();
                         } else {
                             ImGui::BeginDisabled();
@@ -629,144 +494,23 @@ static void DrawProfileSummaryCard(GuiState& state, SkillCatalog& catalog, const
                 }
             }
         }
-    }
-    EndCard();
-}
-
-void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
-    DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
-
-    const ImGuiStyle& style = ImGui::GetStyle();
-    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
-    accent.w = 1.0f;
-
-    DrawProfileHeaderStrip(state, storage, catalog, accent);
-    ImGui::Spacing();
-
-    if (!state.active) {
-        if (state.profileLoading) {
-            ImGui::TextDisabled(u8"Загружаем профиль...");
-            const float pulse = ImFmod(static_cast<float>(ImGui::GetTime() * 0.35f), 1.0f);
-            ImGui::ProgressBar(pulse, ImVec2(-1.0f, 0.0f));
-        } else if (!state.profileLoadError.empty()) {
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", state.profileLoadError.c_str());
-            ImGui::TextDisabled(u8"Обновите список профилей или выберите другой.");
-        } else if (state.profiles.empty()) {
-            ImGui::TextDisabled(u8"Профили не найдены.");
-        } else {
-            ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
-        }
-        return;
-    }
-
-    Profile& profile = state.active->profile;
-    const int overallLevel = profile.overall_level();
-    const int totalXp = profile.total_xp();
-    const int progressXp = profile.level_progress();
-    const int xpToNext = profile.xp_to_next_level();
-    const int xpNeededThisLevel = progressXp + xpToNext;
-    const float progressRatio = xpNeededThisLevel > 0 ? static_cast<float>(progressXp) / static_cast<float>(xpNeededThisLevel) : 0.0f;
-    const std::int64_t nowSec = NowSeconds();
-    const std::string progressLabel = std::to_string(progressXp) + " / " + std::to_string(xpNeededThisLevel);
-    const std::string rankText = DescribeOverallRank(profile);
-    const auto& catScores = profile.category_best_scores();
-    std::string categoriesLine;
-    {
-        std::ostringstream catStream;
-        for (size_t i = 0; i < catScores.size(); ++i) {
-            if (i) catStream << ", ";
-            catStream << Profile::kCategoryLabels[i] << "=" << catScores[i] << "/10";
-        }
-        categoriesLine = catStream.str();
-    }
-
-    double activeBonus = 0.0;
-    for (const auto& ach : profile.achievements()) {
-        if (ach.is_active(nowSec)) {
-            activeBonus += ach.bonusPercent;
-        }
-    }
-    std::ostringstream bonusStream;
-    bonusStream.imbue(std::locale::classic());
-    bonusStream << std::fixed << std::setprecision(1) << activeBonus;
-    std::string bonusLabel = activeBonus > 0.0
-        ? ("+" + bonusStream.str() + "%")
-        : std::string("0%");
-
-    DrawProfileKpiRow(style, accent, overallLevel, rankText, progressLabel, bonusLabel,
-                      profile.inactivity_tasks(), state.rulesConfig);
-    ImGui::Spacing();
-
-    if (ImGui::BeginTable("profile_main_split", 2, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-        ImGui::TableSetupColumn("right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        if (BeginCard("profile_next_actions")) {
-            DrawProfileRecommendations(accent, profile, state.rulesConfig, xpToNext, overallLevel);
         }
         EndCard();
-        ImGui::TableSetColumnIndex(1);
-        if (BeginCard("profile_progress_highlights")) {
-            DrawCardHeader(u8"Прогресс");
-            DrawProfileProgressHighlights(style, accent, profile, progressRatio, progressLabel, overallLevel);
-        }
-        EndCard();
-        ImGui::EndTable();
-    }
-
-    ImGui::Spacing();
-    if (ImGui::CollapsingHeader(u8"Детали профиля", ImGuiTreeNodeFlags_DefaultOpen)) {
-        DrawProfileSummaryCard(state, catalog, profile, rankText, categoriesLine, accent, nowSec);
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
-
-        ImGui::TextDisabled(u8"Режим");
-        auto drawModeButton = [&](const char* label, int mode, const char* tooltip) {
-            const bool selected = (state.ui.profileViewMode == mode);
-            if (selected) {
-                ImVec4 base = BlendColor(style.Colors[ImGuiCol_ButtonActive], accent, 0.35f);
-                ImVec4 hover = BlendColor(style.Colors[ImGuiCol_ButtonHovered], accent, 0.30f);
-                ImVec4 active = BlendColor(base, accent, 0.20f);
-                base.w = std::max(base.w, 0.85f);
-                hover.w = std::max(hover.w, 0.90f);
-                active.w = std::max(active.w, 0.95f);
-                ImGui::PushStyleColor(ImGuiCol_Button, base);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, active);
-            }
-            if (ImGui::Button(label)) {
-                state.ui.profileViewMode = mode;
-                state.uiDirty = true;
-            }
-            if (selected) {
-                ImGui::PopStyleColor(3);
-            }
-            if (tooltip && ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", tooltip);
-            }
-        };
-        drawModeButton(u8"Обзор", 0, u8"Быстрый обзор состояния.");
-        ImGui::SameLine();
-        drawModeButton(u8"Аналитика", 1, u8"Детали, фильтры и история.");
-        ImGui::SameLine();
-        drawModeButton(u8"Фокус", 2, u8"Только ключевые блоки.");
-        ImGui::TextColored(ElevatedSecondaryText(style), u8"XP начисляется навыкам и повышает уровень.");
-        ImGui::Separator();
+        ImGui::Spacing();
 
         const int viewMode = state.ui.profileViewMode;
         const bool overviewMode = (viewMode == 0);
         const bool focusMode = (viewMode == 2);
         auto tabAllowed = [&](int index) {
             if (focusMode) return index == 0;
-            if (overviewMode) return index == 0 || index == 2;
+            if (overviewMode) return index == 0 || index == 3;
             return true;
         };
         if (!tabAllowed(state.ui.profileTab)) {
             state.ui.profileTab = 0;
             state.profileTabRequest = -1;
         }
-        state.profileSection = std::clamp(state.ui.profileTab, 0, 3);
-
+        state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
         ImVec4 tab = BlendColor(style.Colors[ImGuiCol_Tab], accent, 0.20f);
         ImVec4 tabHover = BlendColor(style.Colors[ImGuiCol_TabHovered], accent, 0.25f);
         ImVec4 tabActive = BlendColor(style.Colors[ImGuiCol_TabSelected], accent, 0.30f);
@@ -785,8 +529,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             static const ProfileTabInfo tabs[] = {
                 {u8"Обзор", 0, true},
                 {u8"Ачивки", 1, false},
-                {u8"Диаграмма", 2, true},
-                {u8"Действия", 3, false}
+                {u8"Навыки", 2, false},
+                {u8"Диаграмма", 3, true},
+                {u8"Действия", 4, false},
+                {u8"Задачи", 5, false}
             };
             auto tabFlagsFor = [&](int index) {
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
@@ -812,14 +558,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
         if (state.profileSection == 1) {
             DrawProfileAchievementsSection(state, catalog, profile, nowSec);
-        }
-
-        if (state.profileSection == 2) {
-            DrawProfileChartSection(state, catalog, profile);
-        }
-
-        if (state.profileSection == 3) {
-            DrawProfileActivitySection(state, state.active->id);
         }
 
         if (state.isAdmin && ImGui::CollapsingHeader(u8"Администрирование")) {
@@ -924,8 +662,24 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             ImGui::TextDisabled(u8"Отчеты сохраняются в data/meta/reports.");
         }
-    }
 
-    ShowStatus(state);
+        if (state.profileSection == 2) {
+            DrawProfileSkillsSection(state, catalog, profile, nowSec);
+        }
+
+        if (state.profileSection == 3) {
+            DrawProfileChartSection(state, catalog, profile);
+        }
+
+        if (state.profileSection == 4) {
+            DrawProfileActivitySection(state, state.active->id);
+        }
+
+        if (state.profileSection == 5) {
+            DrawProfileTasksSection(state, state.active->id);
+        }
+
+        ShowStatus(state);
+    }
 }
 
