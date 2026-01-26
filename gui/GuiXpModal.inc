@@ -21,7 +21,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
         }
         const auto& catalogSkills = catalog.skills();
         if (state.xpEntries.size() != catalogSkills.size()) {
-            PrepareXpEntries(state, catalog);
+            SetEvenSkillRatings(state.xpEntries);
         }
         if (state.taskShares.size() != state.profiles.size()) {
             PrepareTaskShares(state);
@@ -207,12 +207,12 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
             DrawCardHeader(u8"Распределение навыков");
-            ImGui::TextDisabled(u8"Автоподбор до 100%.");
+            ImGui::TextDisabled(u8"Оцените навыки 1-5, доли считаются автоматически.");
             const float controlsWidth = ImGui::GetContentRegionAvail().x;
             const bool stackControls = controlsWidth < 520.0f;
             if (stackControls) {
                 if (ImGui::Button(u8"Равномерно##skills_stack", ImVec2(-1.0f, 0.0f))) {
-                    PrepareXpEntries(state, catalog);
+                    SetEvenSkillRatings(state.xpEntries);
                 }
                 ImGui::TextDisabled(u8"Фильтр навыков");
                 ImGui::InputTextWithHint(u8"##xp_filter", u8"Фильтр навыков",
@@ -238,7 +238,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableNextColumn();
                 if (ImGui::Button(u8"Равномерно##skills_table", ImVec2(-1.0f, 0.0f))) {
-                    PrepareXpEntries(state, catalog);
+                    SetEvenSkillRatings(state.xpEntries);
                 }
                 ImGui::TableNextColumn();
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
@@ -257,11 +257,14 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::Combo(u8"##xp_sort", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
                 ImGui::EndTable();
             }
-            const float sliderWidth = ImGui::CalcTextSize("000").x + ImGui::GetStyle().FramePadding.x * 6.0f;
+            const float ratingWidth = ImGui::CalcTextSize("5").x + ImGui::GetStyle().FramePadding.x * 6.0f;
+            const float percentWidth = ImGui::CalcTextSize("100%").x + ImGui::GetStyle().FramePadding.x * 4.0f;
             int percentSum = 0;
+            int ratingSum = 0;
             int maxSharePercent = 0;
             for (const auto& entry : state.xpEntries) {
                 percentSum += entry.percent;
+                ratingSum += std::max(0, entry.rating);
                 if (entry.percent > maxSharePercent) {
                     maxSharePercent = entry.percent;
                 }
@@ -311,11 +314,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
             topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
             const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
-            const float shareColumnWidth = sliderWidth + 28.0f;
-            if (ImGui::BeginTable("xp_sheet", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+            const float ratingColumnWidth = ratingWidth + 24.0f;
+            const float shareColumnWidth = percentWidth + 24.0f;
+            if (ImGui::BeginTable("xp_sheet", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                                   ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Навык", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+                ImGui::TableSetupColumn(u8"Оценка", ImGuiTableColumnFlags_WidthFixed, ratingColumnWidth);
                 ImGui::TableSetupColumn(u8"Доля (%)", ImGuiTableColumnFlags_WidthFixed, shareColumnWidth);
                 ImGui::TableSetupColumn(u8"Ачивки", ImGuiTableColumnFlags_WidthFixed, 90.0f);
                 ImGui::TableSetupColumn("XP", ImGuiTableColumnFlags_WidthFixed, 110.0f);
@@ -326,7 +331,6 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, topRowBgU32);
                     }
                     ImGui::TableNextRow();
-                    const std::string& skillId = catalogSkills[i];
                     const std::string& displayName = xpNames[i];
                     ImGui::TableSetColumnIndex(0);
                     DrawAnchorIcon(UiIcon::List);
@@ -335,21 +339,28 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     ImGui::TextUnformatted(displayName.c_str());
                     ImGui::TableSetColumnIndex(2);
                     ImGui::PushID(i);
-                    int percent = state.xpEntries[i].percent;
-                    ImGui::PushItemWidth(sliderWidth);
-                    if (ImGui::SliderInt("##share", &percent, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp)) {
-                        AdjustSkillShare(state, i, percent);
-                        percent = state.xpEntries[i].percent;
+                    int rating = state.xpEntries[i].rating;
+                    const char* ratingLabels[] = {u8"-", "1", "2", "3", "4", "5"};
+                    ImGui::PushItemWidth(ratingWidth);
+                    if (ImGui::Combo("##rating", &rating, ratingLabels, IM_ARRAYSIZE(ratingLabels))) {
+                        AdjustSkillRating(state, i, rating);
+                        rating = state.xpEntries[i].rating;
                     }
                     ImGui::PopItemWidth();
                     ImGui::PopID();
                     ImGui::TableSetColumnIndex(3);
+                    if (state.xpEntries[i].percent > 0) {
+                        ImGui::Text("%d%%", state.xpEntries[i].percent);
+                    } else {
+                        ImGui::TextDisabled("-");
+                    }
+                    ImGui::TableSetColumnIndex(4);
                     if (xpBonus[i] > 0.01) {
                         ImGui::Text("+%.1f%%", xpBonus[i]);
                     } else {
                         ImGui::TextDisabled("-");
                     }
-                    ImGui::TableSetColumnIndex(4);
+                    ImGui::TableSetColumnIndex(5);
                     const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
                     if (xpPreview[i] != previewXp) {
                         ImGui::Text("%d -> %d", previewXp, xpPreview[i]);
@@ -363,7 +374,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TextDisabled(u8"Нет навыков по фильтру.");
             }
 
-            if (percentSum == 100) {
+            if (ratingSum <= 0) {
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Выберите навыки и оценки.");
+            } else if (percentSum == 100) {
                 ImGui::TextColored(accent, u8"Назначено: %d%%", percentSum);
             } else {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Назначено: %d%%", percentSum);
@@ -405,22 +418,23 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 const int memberSum = SumSelectedProfileShares(state.taskShares);
                 const int memberCount = CountSelectedProfileShares(state.taskShares);
                 int percentCheck = 0;
-                bool hasContribution = false;
+                int ratingCheck = 0;
                 for (const auto& entry : state.xpEntries) {
                     int clamped = ClampToRange(entry.percent, 0, 100);
                     percentCheck += clamped;
-                    if (clamped > 0) hasContribution = true;
+                    ratingCheck += std::max(0, entry.rating);
                 }
+                const bool hasContribution = ratingCheck > 0;
                 if (project.empty() || title.empty() || description.empty()) {
                     SetStatus(state, u8"Заполните проект, задачу и описание.", 1.0f, 0.45f, 0.45f);
                 } else if (memberCount <= 0) {
                     SetStatus(state, u8"Выберите хотя бы один профиль.", 1.0f, 0.45f, 0.45f);
                 } else if (memberSum != 100) {
                     SetStatus(state, u8"Сумма вкладов должна быть 100%.", 1.0f, 0.45f, 0.45f);
-                } else if (percentCheck != 100) {
-                    SetStatus(state, u8"Сумма долей навыков должна быть 100%.", 1.0f, 0.45f, 0.45f);
                 } else if (!hasContribution) {
                     SetStatus(state, u8"Нужно выбрать хотя бы один навык.", 1.0f, 0.45f, 0.45f);
+                } else if (percentCheck != 100) {
+                    SetStatus(state, u8"Сумма долей навыков должна быть 100%.", 1.0f, 0.45f, 0.45f);
                 } else {
                     float maxShare = 0.0f;
                     if (!state.xpEntries.empty()) {
@@ -616,7 +630,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             SyncRankSelection(state);
                         }
                         PrepareTaskShares(state);
-                        PrepareXpEntries(state, catalog);
+                        SetEvenSkillRatings(state.xpEntries);
                         state.taskProject.fill('\0');
                         state.taskTitle.fill('\0');
                         state.taskDescription.fill('\0');

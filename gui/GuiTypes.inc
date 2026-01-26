@@ -9,6 +9,7 @@ struct RankOption;
 // User-entered share for a skill in the Add Experience sheet.
 struct XpEntry {
     int percent = 0;
+    int rating = 0;
 };
 
 // Profile contribution share for a multi-profile task.

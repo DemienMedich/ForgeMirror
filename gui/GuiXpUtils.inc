@@ -6,6 +6,8 @@ int TotalSkillXpGui(const Skill& skill) {
     return total;
 }
 
+void RecalculateXpPercentages(std::vector<XpEntry>& entries);
+
 // Reset Add Experience sheet: one row per catalog skill, even split of 100%.
 void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     const auto& skills = catalog.skills();
@@ -14,15 +16,10 @@ void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     state.taskCategoryIndex = 0;
     const int count = static_cast<int>(skills.size());
     if (count <= 0) return;
-    const int base = 100 / count;
-    int remainder = 100 - base * count;
     for (int i = 0; i < count; ++i) {
-        state.xpEntries[i].percent = base;
-        if (remainder > 0) {
-            state.xpEntries[i].percent += 1;
-            --remainder;
-        }
+        state.xpEntries[i].rating = 1;
     }
+    RecalculateXpPercentages(state.xpEntries);
 }
 
 
@@ -50,6 +47,58 @@ int NormalizeCategoryIndex(int index) {
 
 const char* ClassificationLabel(int categoryIndex) {
     return Profile::kCategoryLabels[NormalizeCategoryIndex(categoryIndex)];
+}
+
+// Ratings -> percent auto distribution (1-5 scale).
+int SumRatings(const std::vector<XpEntry>& entries) {
+    int total = 0;
+    for (const auto& entry : entries) total += std::max(0, entry.rating);
+    return total;
+}
+
+void RecalculateXpPercentages(std::vector<XpEntry>& entries) {
+    const int total = SumRatings(entries);
+    if (total <= 0) {
+        for (auto& entry : entries) entry.percent = 0;
+        return;
+    }
+    int remainder = 100;
+    std::vector<int> indices;
+    indices.reserve(entries.size());
+    for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
+        const int rating = std::max(0, entries[i].rating);
+        if (rating <= 0) {
+            entries[i].percent = 0;
+            continue;
+        }
+        int share = (100 * rating) / total;
+        entries[i].percent = share;
+        remainder -= share;
+        indices.push_back(i);
+    }
+    if (!indices.empty() && remainder > 0) {
+        std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+            if (entries[a].rating != entries[b].rating) return entries[a].rating > entries[b].rating;
+            return a < b;
+        });
+        int cursor = 0;
+        while (remainder-- > 0) {
+            int idx = indices[cursor++ % indices.size()];
+            entries[idx].percent += 1;
+        }
+    }
+}
+
+void SetEvenSkillRatings(std::vector<XpEntry>& entries) {
+    for (auto& entry : entries) entry.rating = 1;
+    RecalculateXpPercentages(entries);
+}
+
+void AdjustSkillRating(GuiState& state, int index, int desiredRating) {
+    if (index < 0 || index >= static_cast<int>(state.xpEntries.size())) return;
+    desiredRating = ClampToRange(desiredRating, 0, 5);
+    state.xpEntries[index].rating = desiredRating;
+    RecalculateXpPercentages(state.xpEntries);
 }
 
 // Utility functions below keep the Add Experience sliders in sync.
