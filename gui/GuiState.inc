@@ -62,6 +62,7 @@ struct GuiRuntimeState {
     bool showShortcuts = false;
     bool showAbout = false;
     int workspaceTabRequest = -1;
+    bool profileActionsOpen = false;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;

@@ -144,7 +144,7 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
         }
 
         ImGui::TableSetColumnIndex(1);
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - 170.0f));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - 210.0f));
         ImGui::BeginGroup();
         ImGui::ColorButton("##sync_dot", syncInfo.color,
                            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
@@ -154,8 +154,8 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
         if (ImGui::IsItemHovered() && !syncInfo.tooltip.empty()) {
             ImGui::SetTooltip("%s", syncInfo.tooltip.c_str());
         }
-        ImGui::SameLine(0.0f, 8.0f);
-        const float iconSize = 26.0f;
+        ImGui::SameLine(0.0f, 10.0f);
+        const float iconSize = ImGui::GetFrameHeight();
         bool syncEnabled = state.cloudConfig.enabled;
         if (!syncEnabled) ImGui::BeginDisabled();
         if (IconButtonGui("profile_sync", UiIcon::Launch, u8"Синхронизировать", accent, iconSize, syncEnabled)) {
@@ -167,18 +167,29 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
             }
             ImGui::EndDisabled();
         }
-        ImGui::SameLine(0.0f, 6.0f);
+        ImGui::SameLine(0.0f, 8.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y * 0.6f));
         if (ImGui::SmallButton("...##profile_actions_toggle")) {
-            ImGui::OpenPopup("profile_actions_popup");
+            state.profileActionsOpen = !state.profileActionsOpen;
         }
         ImGui::PopStyleVar();
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(u8"Действия");
         }
-        if (ImGui::BeginPopup("profile_actions_popup")) {
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y * 0.6f));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, style.ItemSpacing.y * 0.6f));
+        ImGui::EndGroup();
+        ImGui::EndTable();
+    }
+
+    if (state.profileActionsOpen) {
+        ImGui::Spacing();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y * 0.65f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, style.ItemSpacing.y * 0.6f));
+        if (ImGui::BeginTable("profile_actions_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("primary", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("profiles", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn("refresh", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
             const bool xpEnabled = state.isAdmin;
             if (!xpEnabled) ImGui::BeginDisabled();
             ImVec4 addBg = accent;
@@ -190,10 +201,9 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
             ImGui::PushStyleColor(ImGuiCol_Button, addBg);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
-            if (ImGui::Button(u8"Добавить опыт", ImVec2(0.0f, 0.0f))) {
+            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
                 PrepareXpEntries(state, catalog);
                 state.xpPopupRequest = true;
-                ImGui::CloseCurrentPopup();
             }
             ImGui::PopStyleColor(3);
             if (!xpEnabled) {
@@ -202,20 +212,22 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
                 }
                 ImGui::EndDisabled();
             }
-            if (ImGui::Button(u8"Профили...", ImVec2(0.0f, 0.0f))) {
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_FrameBg]);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, style.Colors[ImGuiCol_ButtonHovered]);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, style.Colors[ImGuiCol_ButtonActive]);
+            if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
                 state.showProfilesWindow = true;
                 state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
-                ImGui::CloseCurrentPopup();
             }
-            if (ImGui::Button(u8"Обновить", ImVec2(0.0f, 0.0f))) {
+            ImGui::TableSetColumnIndex(2);
+            if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
                 RefreshProfiles(state, storage, catalog);
-                ImGui::CloseCurrentPopup();
             }
-            ImGui::PopStyleVar(2);
-            ImGui::EndPopup();
+            ImGui::PopStyleColor(3);
+            ImGui::EndTable();
         }
-        ImGui::EndGroup();
-        ImGui::EndTable();
+        ImGui::PopStyleVar(2);
     }
 }
 
