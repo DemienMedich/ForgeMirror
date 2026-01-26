@@ -259,6 +259,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             }
             const float ratingWidth = ImGui::CalcTextSize("5").x + ImGui::GetStyle().FramePadding.x * 6.0f;
             const float percentWidth = ImGui::CalcTextSize("100%").x + ImGui::GetStyle().FramePadding.x * 4.0f;
+            RecalculateXpPercentages(state.xpEntries);
             const auto now = std::chrono::system_clock::now();
             const std::int64_t nowSeconds =
             std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
