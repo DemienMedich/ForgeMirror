@@ -115,73 +115,6 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         addSkillHover.w = 0.28f;
         ImVec4 addSkillActive = addSkillBg;
         addSkillActive.w = 0.38f;
-        if (stackActions) {
-            if (!state.isAdmin) ImGui::BeginDisabled();
-            if (emphasizeAddSkill) {
-                ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addSkillHover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addSkillActive);
-            }
-            if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
-                state.addSkillPopupRequest = true;
-                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
-                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
-                std::fill(state.newSkillCategory.begin(), state.newSkillCategory.end(), 0);
-                state.newSkillWeight = 1.0f;
-            }
-            if (emphasizeAddSkill) {
-                ImGui::PopStyleColor(3);
-            }
-            if (!state.isAdmin) ImGui::EndDisabled();
-            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
-                state.deleteSkillPopupRequest = true;
-                state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
-            }
-            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
-        } else if (ImGui::BeginTable("catalog_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-            ImGui::TableSetupColumn("action_left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("action_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            DrawAnchorIcon(UiIcon::List);
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
-            if (!state.isAdmin) ImGui::BeginDisabled();
-            if (emphasizeAddSkill) {
-                ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addSkillHover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addSkillActive);
-            }
-            if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
-                state.addSkillPopupRequest = true;
-                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
-                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
-                std::fill(state.newSkillCategory.begin(), state.newSkillCategory.end(), 0);
-                state.newSkillWeight = 1.0f;
-            }
-            if (emphasizeAddSkill) {
-                ImGui::PopStyleColor(3);
-            }
-            if (!state.isAdmin) ImGui::EndDisabled();
-            ImGui::TableSetColumnIndex(2);
-            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
-                state.deleteSkillPopupRequest = true;
-                state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
-            }
-            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
-            ImGui::EndTable();
-        }
-
-        ImGui::Separator();
-        if (!state.isAdmin) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Очистить все навыки", ImVec2(-1.0f, 0.0f))) {
-            state.clearSkillsPopupRequest = true;
-        }
-        if (!state.isAdmin) ImGui::EndDisabled();
-        ImGui::Separator();
         const char* sortLabels[] = {u8"По названию", u8"По весу (убыв.)"};
         const char* groupLabels[] = {u8"Без группировки", u8"По категории веса", u8"По категории навыка"};
         const char* weightCategoryLabels[] = {
@@ -492,6 +425,73 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             }
         }
         EndCard();
+        if (stackActions) {
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (emphasizeAddSkill) {
+                ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addSkillHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addSkillActive);
+            }
+            if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
+                state.addSkillPopupRequest = true;
+                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
+                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                std::fill(state.newSkillCategory.begin(), state.newSkillCategory.end(), 0);
+                state.newSkillWeight = 1.0f;
+            }
+            if (emphasizeAddSkill) {
+                ImGui::PopStyleColor(3);
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
+                state.deleteSkillPopupRequest = true;
+                state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
+            }
+            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
+        } else if (ImGui::BeginTable("catalog_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("action_left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("action_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
+            if (!state.isAdmin) ImGui::BeginDisabled();
+            if (emphasizeAddSkill) {
+                ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addSkillHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addSkillActive);
+            }
+            if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
+                state.addSkillPopupRequest = true;
+                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
+                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                std::fill(state.newSkillCategory.begin(), state.newSkillCategory.end(), 0);
+                state.newSkillWeight = 1.0f;
+            }
+            if (emphasizeAddSkill) {
+                ImGui::PopStyleColor(3);
+            }
+            if (!state.isAdmin) ImGui::EndDisabled();
+            ImGui::TableSetColumnIndex(2);
+            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
+                state.deleteSkillPopupRequest = true;
+                state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
+            }
+            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
+            ImGui::EndTable();
+        }
+
+        ImGui::Separator();
+        if (!state.isAdmin) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Очистить все навыки", ImVec2(-1.0f, 0.0f))) {
+            state.clearSkillsPopupRequest = true;
+        }
+        if (!state.isAdmin) ImGui::EndDisabled();
+        ImGui::Separator();
         ImGui::Separator();
 
         ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |

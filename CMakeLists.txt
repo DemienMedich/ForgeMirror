@@ -26,7 +26,7 @@ add_executable(JobSkill
 target_include_directories(JobSkill PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.3.16")
+set(APP_VERSION "0.3.17")
 target_compile_definitions(JobSkill PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(JobSkill PROPERTIES OUTPUT_NAME "ForgeMirror")
 
