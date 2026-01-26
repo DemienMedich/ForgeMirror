@@ -259,16 +259,6 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             }
             const float ratingWidth = ImGui::CalcTextSize("5").x + ImGui::GetStyle().FramePadding.x * 6.0f;
             const float percentWidth = ImGui::CalcTextSize("100%").x + ImGui::GetStyle().FramePadding.x * 4.0f;
-            int percentSum = 0;
-            int ratingSum = 0;
-            int maxSharePercent = 0;
-            for (const auto& entry : state.xpEntries) {
-                percentSum += entry.percent;
-                ratingSum += std::max(0, entry.rating);
-                if (entry.percent > maxSharePercent) {
-                    maxSharePercent = entry.percent;
-                }
-            }
             const auto now = std::chrono::system_clock::now();
             const std::int64_t nowSeconds =
             std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
@@ -371,6 +361,17 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             }
             if (visibleXpCount == 0) {
                 ImGui::TextDisabled(u8"Нет навыков по фильтру.");
+            }
+
+            int percentSum = 0;
+            int ratingSum = 0;
+            int maxSharePercent = 0;
+            for (const auto& entry : state.xpEntries) {
+                percentSum += entry.percent;
+                ratingSum += std::max(0, entry.rating);
+                if (entry.percent > maxSharePercent) {
+                    maxSharePercent = entry.percent;
+                }
             }
 
             if (ratingSum <= 0) {
