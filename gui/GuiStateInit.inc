@@ -32,15 +32,12 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.professions = state.modules.professions ? LoadProfessions(storageDir) : std::vector<ProfessionEntry>();
     state.profileProfessionCache.clear();
     state.profileProfessionDirty = true;
-    state.newSkillProfessionIndex = 0;
-    state.editSkillProfessionIndex = 0;
     state.showTasks = state.modules.tasks && state.showTasks;
     state.showPomodoro = state.modules.pomodoro && state.showPomodoro;
     state.showPipeline = state.modules.pipeline && state.showPipeline;
     state.showProfessions = state.modules.professions && state.showProfessions;
     state.showView3d = state.modules.view3d && state.showView3d;
     state.showView3dSettings = state.modules.view3d && state.showView3dSettings;
-    state.catalogCategoryFilter = 0;
     FindStrayStorageFiles(storageDir, 5, state.straySamples, state.strayFileCount);
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);

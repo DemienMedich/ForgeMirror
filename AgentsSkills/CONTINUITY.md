@@ -12,23 +12,26 @@
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.18.
-  - Последнее изменение: принудительный пересчёт долей по оценкам каждый кадр.
+  - Ветка: Beta. Версия: 0.3.19.
+  - Последнее изменение: навыки без категорий, множественные профессии для навыков.
 - Done:
+  - Навыки: категории убраны из добавления/редактирования, можно привязать навык к нескольким профессиям.
+  - Навыки: фильтрация по профессии учитывает множественные привязки.
+  - Сборка GUI: ok (Release).
   - Навыки: в сводке оставлен бар по категориям веса (A-E), спарклайн убран.
   - Навыки: действия (добавить/удалить/очистить) перенесены под сводку.
   - Восстановлены AgentsSkills UI‑гайды.
   - Реализованы оценки 0–5 для навыков и авто‑доли в модале XP.
   - Добавлены patch‑notes до 0.3.18, сборка GUI проходит.
 - Now:
-  - Проверка корректного отображения процентов долей в модале «Добавление опыта».
+  - Проверить UI навыков/профессий после изменения привязок (визуально).
 - Next:
-  - Если проценты всё ещё не отображаются — исправить расчёт/рендер и пересобрать.
+  - При необходимости скорректировать текст/подсказки в навыках и профессиях.
 - Open questions (UNCONFIRMED if needed):
-  - UNCONFIRMED: у пользователя всё ещё не отображаются проценты при выставлении оценок (нужна повторная проверка после 0.3.18).
+  - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiXpModal.inc`, `gui/GuiXpUtils.inc`, `gui/GuiTypes.inc`
-  - `CMakeLists.txt`, `installer/ForgeMirror.iss`
-  - `data/meta/patch-notes/*`, `AgentsSkills/CONTINUITY.md`
+  - `gui/GuiSkillCatalogPanel.inc`, `gui/GuiSkillModals.inc`, `gui/GuiProfessions.inc`
+  - `src/SkillCatalog.cpp`, `include/SkillCatalog.h`, `include/GuiActions.h`, `gui/GuiActions.cpp`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.19.md`, `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
-  - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe"`
+  - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

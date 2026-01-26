@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "GameplayConfig.h"
 
@@ -35,18 +36,19 @@ struct AddSkillResult : ActionResult {
 };
 
 AddSkillResult AddSkillAction(SkillCatalog& catalog, const std::string& name, double weight,
-                              const std::string& desc, const std::string& category, const std::string& profession);
+                              const std::string& desc, const std::string& category, const std::vector<std::string>& professions);
 ActionResult UpdateSkillWeightAction(SkillCatalog& catalog, const std::string& skillId, double weight,
                                     const std::string& displayName, const std::string& desc, const std::string& category,
-                                    const std::string& profession);
+                                    const std::vector<std::string>& professions);
 ActionResult UpdateSkillDetailsAction(SkillCatalog& catalog, const std::string& skillId, const std::string& name,
                                       double weight, const std::string& desc, const std::string& category,
-                                      const std::string& profession);
+                                      const std::vector<std::string>& professions);
 ActionResult RemoveSkillAction(IJobStorage& storage, SkillCatalog& catalog, const std::string& skillId,
                                const std::string& restoreId, bool& removedFromProfiles);
 ActionResult MergeSkillAction(IJobStorage& storage, SkillCatalog& catalog, const std::string& fromId,
                               const std::string& toId, const std::string& newName, double newWeight,
-                              const std::string& newDesc, const std::string& newCategory, const std::string& newProfession,
+                              const std::string& newDesc, const std::string& newCategory,
+                              const std::vector<std::string>& newProfessions,
                               const std::string& restoreId);
 ActionResult ClearAllSkillsAction(IJobStorage& storage, SkillCatalog& catalog,
                                   const std::filesystem::path& storageDir,

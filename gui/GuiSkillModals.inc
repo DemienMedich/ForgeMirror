@@ -19,29 +19,37 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         ImGui::TextDisabled(u8"Вес (0.5 - 1.6)");
         ImGui::SetNextItemWidth(160.0f);
         ImGui::InputFloat(u8"##skill_weight", &state.newSkillWeight, 0.05f, 0.2f, "%.2f");
-        ImGui::TextDisabled(u8"Категория (опционально)");
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputText(u8"##skill_category", state.newSkillCategory.data(), state.newSkillCategory.size());
-        ImGui::TextDisabled(u8"Профессия (опционально)");
-        std::vector<std::string> profLabels;
-        profLabels.reserve(state.professions.size() + 1);
-        profLabels.push_back(u8"[нет]");
-        for (const auto& p : state.professions) profLabels.push_back(p.name);
-        std::vector<const char*> profPtrs;
-        for (auto& s : profLabels) profPtrs.push_back(s.c_str());
-        state.newSkillProfessionIndex = std::clamp(state.newSkillProfessionIndex, 0, static_cast<int>(profPtrs.size()) - 1);
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::Combo("##skill_prof", &state.newSkillProfessionIndex, profPtrs.data(), static_cast<int>(profPtrs.size()));
+        ImGui::TextDisabled(u8"Профессии (можно несколько)");
+        state.newSkillProfessionFlags.resize(state.professions.size(), 0);
+        if (state.professions.empty()) {
+            ImGui::TextDisabled(u8"Профессии не заданы.");
+        } else {
+            for (size_t i = 0; i < state.professions.size(); ++i) {
+                bool checked = state.newSkillProfessionFlags[i] != 0;
+                ImGui::PushID(static_cast<int>(i));
+                if (ImGui::Checkbox("##skill_prof_multi", &checked)) {
+                    state.newSkillProfessionFlags[i] = checked ? 1 : 0;
+                }
+                ImGui::SameLine();
+                ImGui::TextUnformatted(state.professions[i].name.c_str());
+                ImGui::PopID();
+            }
+        }
         ImGui::TextDisabled(u8"Описание");
         ImGui::InputTextMultiline(u8"##skill_desc", state.newSkillDesc.data(), state.newSkillDesc.size(), ImVec2(-1.0f, 120.0f));
         auto saveSkill = [&]() {
+            std::vector<std::string> profIds;
+            profIds.reserve(state.professions.size());
+            for (size_t i = 0; i < state.professions.size(); ++i) {
+                if (i < state.newSkillProfessionFlags.size() && state.newSkillProfessionFlags[i]) {
+                    profIds.push_back(state.professions[i].id);
+                }
+            }
             AddSkillResult result = AddSkillAction(catalog, state.newSkillName.data(),
             static_cast<double>(state.newSkillWeight),
             state.newSkillDesc.data(),
-            state.newSkillCategory.data(),
-            (state.newSkillProfessionIndex > 0 && state.newSkillProfessionIndex - 1 < static_cast<int>(state.professions.size()))
-                ? state.professions[state.newSkillProfessionIndex - 1].id
-                : std::string());
+            std::string{},
+            profIds);
             AppLogLevel level = LogLevelForResult(result);
             SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
             result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Навыки");
@@ -192,14 +200,18 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             accent.w = 1.0f;
             ImGui::TextColored(accent, u8"Слить опыт из '%s' в '%s'?", fromName.c_str(), toName.c_str());
             auto mergeSkills = [&]() {
+                std::string mergeCategory = catalog.category(state.pendingMergeToId);
+                if (mergeCategory.empty()) {
+                    mergeCategory = catalog.category(state.pendingMergeFromId);
+                }
                 ActionResult result = MergeSkillAction(storage, catalog,
                 state.pendingMergeFromId,
                 state.pendingMergeToId,
                 state.pendingMergeName,
                 static_cast<double>(state.pendingMergeWeight),
                 state.pendingMergeDesc,
-                state.pendingMergeCategory,
-                state.pendingMergeProfession,
+                mergeCategory,
+                state.pendingMergeProfessions,
                 state.active ? state.active->id : std::string{});
                 AppLogLevel level = LogLevelForResult(result);
                 SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,
@@ -221,7 +233,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 state.pendingMergeToId.clear();
                 state.pendingMergeName.clear();
                 state.pendingMergeDesc.clear();
-                state.pendingMergeCategory.clear();
+                state.pendingMergeProfessions.clear();
                 state.pendingMergeWeight = 1.0f;
                 ImGui::CloseCurrentPopup();
                 mergeSkillOpen = false;
@@ -237,7 +249,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     state.pendingMergeToId.clear();
                     state.pendingMergeName.clear();
                     state.pendingMergeDesc.clear();
-                    state.pendingMergeCategory.clear();
+                    state.pendingMergeProfessions.clear();
                     state.pendingMergeWeight = 1.0f;
                     ImGui::CloseCurrentPopup();
                     mergeSkillOpen = false;
@@ -263,7 +275,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     state.pendingMergeToId.clear();
                     state.pendingMergeName.clear();
                     state.pendingMergeDesc.clear();
-                    state.pendingMergeCategory.clear();
+                    state.pendingMergeProfessions.clear();
                     state.pendingMergeWeight = 1.0f;
                     ImGui::CloseCurrentPopup();
                     mergeSkillOpen = false;

@@ -77,16 +77,14 @@ struct GuiRuntimeState {
     std::array<char, 128> modalBuffer{};
     std::array<char, 128> newSkillName{};
     std::array<char, 256> newSkillDesc{};
-    std::array<char, 128> newSkillCategory{};
-    int newSkillProfessionIndex = 0;
     std::array<char, 128> editSkillName{};
     std::array<char, 256> editSkillDesc{};
-    std::array<char, 128> editSkillCategory{};
-    int editSkillProfessionIndex = 0;
     std::array<char, 128> newProfessionName{};
     std::array<char, 256> newProfessionDesc{};
     int professionEditIndex = -1;
     float newSkillWeight = 1.0f;
+    std::vector<char> newSkillProfessionFlags;
+    std::vector<char> editSkillProfessionFlags;
     std::array<char, 64> adminPassword{};
     std::array<char, 64> adminPasswordCurrent{};
     std::array<char, 64> adminPasswordNew{};
@@ -96,8 +94,7 @@ struct GuiRuntimeState {
     std::string pendingMergeToId;
     std::string pendingMergeName;
     std::string pendingMergeDesc;
-    std::string pendingMergeCategory;
-    std::string pendingMergeProfession;
+    std::vector<std::string> pendingMergeProfessions;
     float pendingMergeWeight = 1.0f;
     float editedSkillWeight = 1.0f;
     std::array<char, 128> achTitle{};
@@ -159,7 +156,6 @@ struct GuiRuntimeState {
     int catalogSortMode = 0;
     int catalogGroupMode = 0;
     int catalogWeightCategoryFilter = 0;
-    int catalogCategoryFilter = 0;
     int profileSort = 0;
     int profileArchiveFilter = 0;
     bool showLogs = false;

@@ -140,12 +140,14 @@ static void ClearSkillsForProfession(SkillCatalog& catalog, const std::string& p
     if (professionId.empty()) return;
     auto skills = catalog.skills();
     for (const auto& id : skills) {
-        if (catalog.profession(id) == professionId) {
+        if (catalog.has_profession(id, professionId)) {
             const std::string name = catalog.display_name(id);
             const std::string desc = catalog.description(id);
             const std::string category = catalog.category(id);
             const double weight = catalog.weight(id);
-            catalog.update_skill(id, name, weight, desc, category, "");
+            auto profs = catalog.professions(id);
+            profs.erase(std::remove(profs.begin(), profs.end(), professionId), profs.end());
+            catalog.update_skill(id, name, weight, desc, category, profs);
         }
     }
 }
@@ -312,12 +314,19 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         } else if (ImGui::BeginChild("prof_skill_list", ImVec2(0.0f, 220.0f), true)) {
             for (const auto& id : catalogSkills) {
                 std::string name = catalog.display_name(id);
-                bool assigned = catalog.profession(id) == profId;
+                bool assigned = catalog.has_profession(id, profId);
                 ImGui::PushID(id.c_str());
                 if (ImGui::Checkbox("##prof_skill", &assigned)) {
-                    std::string newProf = assigned ? profId : std::string{};
+                    auto profs = catalog.professions(id);
+                    if (assigned) {
+                        if (std::find(profs.begin(), profs.end(), profId) == profs.end()) {
+                            profs.push_back(profId);
+                        }
+                    } else {
+                        profs.erase(std::remove(profs.begin(), profs.end(), profId), profs.end());
+                    }
                     bool ok = catalog.update_skill(id, name, catalog.weight(id),
-                                                   catalog.description(id), catalog.category(id), newProf);
+                                                   catalog.description(id), catalog.category(id), profs);
                     if (ok) {
                         SetStatus(state, u8"Навык обновлён.", 0.45f, 0.9f, 0.45f);
                     } else {
