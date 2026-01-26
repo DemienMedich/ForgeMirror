@@ -11,7 +11,7 @@ $cmakePath = Join-Path $repoRoot "CMakeLists.txt"
 $version = "0.0.0"
 if (Test-Path $cmakePath) {
     # allow suffix after patch (e.g. 0.2.96-beta1)
-    $match = Select-String -Path $cmakePath -Pattern 'APP_VERSION="([0-9]+\.[0-9]+\.[0-9]+[^"]*)"' | Select-Object -First 1
+    $match = Select-String -Path $cmakePath -Pattern 'set\(APP_VERSION\s+"([^"]+)"\)' | Select-Object -First 1
     if ($match) {
         $version = $match.Matches[0].Groups[1].Value
     }
