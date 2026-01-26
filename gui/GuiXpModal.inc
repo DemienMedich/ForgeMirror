@@ -20,8 +20,32 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             goto skip_xp_body;
         }
         const auto& catalogSkills = catalog.skills();
+        std::vector<char> skillAllowed(catalogSkills.size(), 1);
+        bool restrictSkills = false;
+        int allowedSkillCount = static_cast<int>(catalogSkills.size());
+        if (state.active) {
+            const std::string profId = state.active->profile.profession_id();
+            if (!profId.empty()) {
+                restrictSkills = true;
+                allowedSkillCount = 0;
+                for (size_t i = 0; i < catalogSkills.size(); ++i) {
+                    const auto profs = catalog.professions(catalogSkills[i]);
+                    const bool allowed = profs.empty() || std::find(profs.begin(), profs.end(), profId) != profs.end();
+                    skillAllowed[i] = allowed ? 1 : 0;
+                    if (allowed) {
+                        allowedSkillCount += 1;
+                    }
+                }
+            }
+        }
+        auto SetEvenSkillRatingsForAllowed = [&]() {
+            for (size_t i = 0; i < state.xpEntries.size(); ++i) {
+                state.xpEntries[i].rating = (i < skillAllowed.size() && skillAllowed[i]) ? 1 : 0;
+            }
+            RecalculateXpPercentages(state.xpEntries);
+        };
         if (state.xpEntries.size() != catalogSkills.size()) {
-            SetEvenSkillRatings(state.xpEntries);
+            SetEvenSkillRatingsForAllowed();
         }
         if (state.taskShares.size() != state.profiles.size()) {
             PrepareTaskShares(state);
@@ -208,11 +232,14 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
             DrawCardHeader(u8"Распределение навыков");
             ImGui::TextDisabled(u8"Оцените навыки 0-5, доли считаются автоматически.");
+            if (restrictSkills) {
+                ImGui::TextDisabled(u8"Показаны навыки вашей профессии и общие.");
+            }
             const float controlsWidth = ImGui::GetContentRegionAvail().x;
             const bool stackControls = controlsWidth < 520.0f;
             if (stackControls) {
                 if (ImGui::Button(u8"Равномерно##skills_stack", ImVec2(-1.0f, 0.0f))) {
-                    SetEvenSkillRatings(state.xpEntries);
+                    SetEvenSkillRatingsForAllowed();
                 }
                 ImGui::TextDisabled(u8"Фильтр навыков");
                 ImGui::InputTextWithHint(u8"##xp_filter", u8"Фильтр навыков",
@@ -238,7 +265,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableNextColumn();
                 if (ImGui::Button(u8"Равномерно##skills_table", ImVec2(-1.0f, 0.0f))) {
-                    SetEvenSkillRatings(state.xpEntries);
+                    SetEvenSkillRatingsForAllowed();
                 }
                 ImGui::TableNextColumn();
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
@@ -258,6 +285,14 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::EndTable();
             }
             const float ratingWidth = ImGui::CalcTextSize("5").x + ImGui::GetStyle().FramePadding.x * 6.0f;
+            if (restrictSkills) {
+                for (size_t i = 0; i < state.xpEntries.size(); ++i) {
+                    if (i < skillAllowed.size() && !skillAllowed[i]) {
+                        state.xpEntries[i].rating = 0;
+                        state.xpEntries[i].percent = 0;
+                    }
+                }
+            }
             const float percentWidth = ImGui::CalcTextSize("100%").x + ImGui::GetStyle().FramePadding.x * 4.0f;
             RecalculateXpPercentages(state.xpEntries);
             const auto now = std::chrono::system_clock::now();
@@ -275,6 +310,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 xpBonus[i] = std::max(0.0, (mult - 1.0) * 100.0);
                 const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
                 xpPreview[i] = static_cast<int>(std::round(previewXp * mult));
+                if (restrictSkills && i < static_cast<int>(skillAllowed.size()) && !skillAllowed[i]) {
+                    continue;
+                }
                 if (!MatchesFilter(xpNames[i], state.filters.xpSkill.data())) {
                     continue;
                 }
@@ -296,8 +334,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 return a < b;
             });
             const int visibleXpCount = static_cast<int>(xpOrder.size());
+            const int totalSkillCount = restrictSkills ? allowedSkillCount : static_cast<int>(catalogSkills.size());
             ImGui::TextDisabled(u8"Показано: %d из %d",
-            visibleXpCount, static_cast<int>(catalogSkills.size()));
+            visibleXpCount, totalSkillCount);
             const ImGuiStyle& style = ImGui::GetStyle();
             ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
@@ -631,7 +670,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             SyncRankSelection(state);
                         }
                         PrepareTaskShares(state);
-                        SetEvenSkillRatings(state.xpEntries);
+                        SetEvenSkillRatingsForAllowed();
                         state.taskProject.fill('\0');
                         state.taskTitle.fill('\0');
                         state.taskDescription.fill('\0');

@@ -156,6 +156,19 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
         const std::string rankText = DescribeOverallRank(profile);
         const char* rankLabel = RankLabelForLevel(overallLevel);
+        std::string professionName = u8"не задана";
+        const std::string profId = profile.profession_id();
+        if (!profId.empty()) {
+            for (const auto& p : state.professions) {
+                if (p.id == profId) {
+                    professionName = p.name;
+                    break;
+                }
+            }
+            if (professionName == u8"не задана") {
+                professionName = profId;
+            }
+        }
         const auto& catScores = profile.category_best_scores();
         std::string categoriesLine;
         {
@@ -167,7 +180,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             categoriesLine = catStream.str();
         }
         if (BeginCard("profile_header_card")) {
-        if (ImGui::BeginTable("profile_header_summary", 3, ImGuiTableFlags_SizingStretchSame)) {
+        if (ImGui::BeginTable("profile_header_summary", 4, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Уровень");
@@ -178,6 +191,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Прогресс");
             ImGui::TextColored(accent, "%s", progressLabel.c_str());
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Профессия");
+            ImGui::TextColored(accent, "%s", professionName.c_str());
             ImGui::EndTable();
         }
         ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
