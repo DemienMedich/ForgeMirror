@@ -1,7 +1,7 @@
 # CONTINUITY
 
 ## Текущее состояние
-- Ветка: Beta. Текущая версия 0.3.02 (профессии полностью вынесены в отдельный модуль, профиль очищен; навыки сохраняют привязку к профессии при редактировании/весе; health-check/whitelist/patch-notes актуальны).
+- Ветка: Beta. Текущая версия 0.3.11 (откат UI/UX изменений за последние два дня; восстановлены AgentsSkills UI-гайды; сохранены текущие модули).
 - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, кнопка очистки лишнего (только админ).
 - Инсталлер: сборка через `installer/build-installer.ps1` (требуется Inno Setup 6 и ISCC.exe).
 - Smoke_core проверяет: загрузку/сохранение профиля и ранга, gameplay.ini, tasks/pipeline файлы, whitelist.
