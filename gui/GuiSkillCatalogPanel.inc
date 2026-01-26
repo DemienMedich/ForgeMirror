@@ -102,6 +102,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         DrawCardHeader(u8"Навыки");
         ImGui::TextDisabled(u8"Выберите навык слева - детали и редактирование справа.");
         ImGui::TextDisabled(u8"Вес влияет на долю XP при распределении.");
+        if (!state.isAdmin && state.active) {
+            ImGui::TextDisabled(u8"Показываются навыки вашей профессии; без профессий — общие.");
+        }
         const float listWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = listWidth < 320.0f;
         const ImGuiStyle& listStyle = ImGui::GetStyle();
@@ -532,7 +535,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
             accent.w = 1.0f;
             ImGui::TextColored(accent, "%s", displayName.c_str());
-            std::string profName = u8"нет";
+            std::string profName = u8"без ограничений";
             if (!state.professions.empty() && !state.editSkillProfessionFlags.empty()) {
                 std::string joined;
                 for (size_t i = 0; i < state.professions.size() && i < state.editSkillProfessionFlags.size(); ++i) {
@@ -580,6 +583,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.editSkillProfessionFlags.resize(state.professions.size(), 0);
                 if (state.professions.empty()) {
                     ImGui::TextDisabled(u8"Профессии не заданы.");
+                ImGui::TextDisabled(u8"Навык будет общим.");
                 } else {
                     for (size_t i = 0; i < state.professions.size(); ++i) {
                         bool checked = state.editSkillProfessionFlags[i] != 0;

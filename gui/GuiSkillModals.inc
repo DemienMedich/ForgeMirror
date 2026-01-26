@@ -20,9 +20,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         ImGui::SetNextItemWidth(160.0f);
         ImGui::InputFloat(u8"##skill_weight", &state.newSkillWeight, 0.05f, 0.2f, "%.2f");
         ImGui::TextDisabled(u8"Профессии (можно несколько)");
+        ImGui::TextDisabled(u8"Если не выбрано — навык доступен всем.");
         state.newSkillProfessionFlags.resize(state.professions.size(), 0);
         if (state.professions.empty()) {
             ImGui::TextDisabled(u8"Профессии не заданы.");
+            ImGui::TextDisabled(u8"Навык будет общим.");
         } else {
             for (size_t i = 0; i < state.professions.size(); ++i) {
                 bool checked = state.newSkillProfessionFlags[i] != 0;
