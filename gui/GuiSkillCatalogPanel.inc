@@ -1,5 +1,5 @@
 static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, const std::string& value,
-                               const ImVec4& accent, float height = 56.0f) {
+                               const ImVec4& accent, float height = 70.0f) {
     ImGui::PushID(id);
     const ImGuiStyle& style = ImGui::GetStyle();
     const float rounding = std::max(9.0f, style.FrameRounding + 3.0f);
@@ -9,12 +9,12 @@ static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, c
     ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
     if (ImGui::BeginChild("catalog_kpi", ImVec2(0.0f, height), ImGuiChildFlags_Border,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
-        const float badgeSize = std::clamp(height - 20.0f, 24.0f, 32.0f);
+        const float badgeSize = std::clamp(height - 24.0f, 30.0f, 42.0f);
         const float badgeRadius = badgeSize * 0.5f;
         const ImVec2 badgePos = ImGui::GetCursorScreenPos();
         const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
@@ -29,7 +29,7 @@ static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, c
         ImGui::BeginGroup();
         ImGui::TextDisabled("%s", title);
         ImGui::PushStyleColor(ImGuiCol_Text, accent);
-        ImGui::SetWindowFontScale(1.05f);
+        ImGui::SetWindowFontScale(1.12f);
         ImGui::TextUnformatted(value.c_str());
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor();
@@ -43,15 +43,6 @@ static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, c
 
 void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImVec2 origFramePadding = style.FramePadding;
-    ImVec2 origItemSpacing = style.ItemSpacing;
-    ImVec2 origCellPadding = style.CellPadding;
-    ImVec2 origWindowPadding = style.WindowPadding;
-    style.FramePadding = ImVec2(8.0f, 4.0f);
-    style.ItemSpacing = ImVec2(8.0f, 6.0f);
-    style.CellPadding = ImVec2(6.0f, 4.0f);
-    style.WindowPadding = ImVec2(10.0f, 8.0f);
     auto catalogSkills = catalog.skills();
     if (!state.isAdmin && state.active) {
         const std::string& profId = state.active->profile.profession_id();
@@ -885,9 +876,5 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::EndChild();
         ImGui::EndTable();
     }
-    style.FramePadding = origFramePadding;
-    style.ItemSpacing = origItemSpacing;
-    style.CellPadding = origCellPadding;
-    style.WindowPadding = origWindowPadding;
 }
 

@@ -29,15 +29,6 @@ static bool RollbackTask(GuiState& state, IJobStorage& storage, SkillCatalog& ca
 
 void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Tasks, state.storageDir);
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImVec2 origFramePadding = style.FramePadding;
-    ImVec2 origItemSpacing = style.ItemSpacing;
-    ImVec2 origCellPadding = style.CellPadding;
-    ImVec2 origWindowPadding = style.WindowPadding;
-    style.FramePadding = ImVec2(8.0f, 4.0f);
-    style.ItemSpacing = ImVec2(8.0f, 6.0f);
-    style.CellPadding = ImVec2(6.0f, 4.0f);
-    style.WindowPadding = ImVec2(10.0f, 8.0f);
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Все выполненные задачи с распределением вклада.");
     if (state.tasks.empty()) {
@@ -62,10 +53,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         } else {
             ImGui::TextDisabled(u8"Добавление опыта доступно администратору.");
         }
-        style.FramePadding = origFramePadding;
-        style.ItemSpacing = origItemSpacing;
-        style.CellPadding = origCellPadding;
-        style.WindowPadding = origWindowPadding;
         return;
     }
 
@@ -106,8 +93,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
 
     DrawCardHeader(u8"Фильтр");
-    const ImGuiStyle& filterStyle = ImGui::GetStyle();
-    ImVec4 keyBg = filterStyle.Colors[ImGuiCol_FrameBg];
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
     const float filtersWidth = ImGui::GetContentRegionAvail().x;
@@ -598,8 +585,4 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (!deleteOpen && ImGui::IsPopupOpen(u8"Удалить задачу?")) {
         ImGui::CloseCurrentPopup();
     }
-    style.FramePadding = origFramePadding;
-    style.ItemSpacing = origItemSpacing;
-    style.CellPadding = origCellPadding;
-    style.WindowPadding = origWindowPadding;
 }
