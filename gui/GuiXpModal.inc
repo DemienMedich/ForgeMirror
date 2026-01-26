@@ -207,7 +207,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
             DrawCardHeader(u8"Распределение навыков");
-            ImGui::TextDisabled(u8"Оцените навыки 1-5, доли считаются автоматически.");
+            ImGui::TextDisabled(u8"Оцените навыки 0-5, доли считаются автоматически.");
             const float controlsWidth = ImGui::GetContentRegionAvail().x;
             const bool stackControls = controlsWidth < 520.0f;
             if (stackControls) {
@@ -340,9 +340,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     ImGui::TableSetColumnIndex(2);
                     ImGui::PushID(i);
                     int rating = state.xpEntries[i].rating;
-                    const char* ratingLabels[] = {u8"-", "1", "2", "3", "4", "5"};
                     ImGui::PushItemWidth(ratingWidth);
-                    if (ImGui::Combo("##rating", &rating, ratingLabels, IM_ARRAYSIZE(ratingLabels))) {
+                    if (ImGui::SliderInt("##rating", &rating, 0, 5, "%d", ImGuiSliderFlags_AlwaysClamp)) {
                         AdjustSkillRating(state, i, rating);
                         rating = state.xpEntries[i].rating;
                     }

@@ -17,9 +17,9 @@ void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     const int count = static_cast<int>(skills.size());
     if (count <= 0) return;
     for (int i = 0; i < count; ++i) {
-        state.xpEntries[i].rating = 1;
+        state.xpEntries[i].rating = 0;
+        state.xpEntries[i].percent = 0;
     }
-    RecalculateXpPercentages(state.xpEntries);
 }
 
 
@@ -98,7 +98,6 @@ void AdjustSkillRating(GuiState& state, int index, int desiredRating) {
     if (index < 0 || index >= static_cast<int>(state.xpEntries.size())) return;
     desiredRating = ClampToRange(desiredRating, 0, 5);
     state.xpEntries[index].rating = desiredRating;
-    RecalculateXpPercentages(state.xpEntries);
 }
 
 // Utility functions below keep the Add Experience sliders in sync.
