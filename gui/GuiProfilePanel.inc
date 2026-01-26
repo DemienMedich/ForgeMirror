@@ -106,14 +106,6 @@ static SyncStatusInfo BuildSyncStatus(GuiState& state) {
     return info;
 }
 
-
-static const char* ShortSyncLabel(const SyncStatusInfo& info) {
-    if (!info.enabled) return u8"Выкл";
-    if (info.label.find(u8"не было") != std::string::npos) return u8"Нет синк";
-    if (info.label.find(u8"Синхронизировано") != std::string::npos) return u8"ОК";
-    return u8"Не синк";
-}
-
 static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const ImVec4& accent) {
     const ImGuiStyle& style = ImGui::GetStyle();
     const ImVec4 secondary = ElevatedSecondaryText(style);
@@ -129,7 +121,7 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
     if (ImGui::BeginTable("profile_header_row", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("profile_left", ImGuiTableColumnFlags_WidthStretch, 1.7f);
         ImGui::TableSetupColumn("profile_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("profile_actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("profile_actions", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::AlignTextToFramePadding();
@@ -158,12 +150,7 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
                            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
                            ImVec2(8.0f, 8.0f));
         ImGui::SameLine(0.0f, 6.0f);
-        const float statusAvail = ImGui::GetContentRegionAvail().x;
-        const char* statusLabel = syncInfo.label.c_str();
-        if (ImGui::CalcTextSize(statusLabel).x > statusAvail) {
-            statusLabel = ShortSyncLabel(syncInfo);
-        }
-        ImGui::TextColored(syncInfo.color, "%s", statusLabel);
+        ImGui::TextColored(syncInfo.color, "%s", syncInfo.label.c_str());
         if (ImGui::IsItemHovered() && !syncInfo.tooltip.empty()) {
             ImGui::SetTooltip("%s", syncInfo.tooltip.c_str());
         }
@@ -181,7 +168,7 @@ static void DrawProfileHeaderStrip(GuiState& state, IJobStorage& storage, SkillC
             }
             ImGui::EndDisabled();
         }
-        ImGui::SameLine(0.0f, 4.0f);
+        ImGui::SameLine(0.0f, 6.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, style.FramePadding.y * 0.6f));
         if (ImGui::SmallButton("...##profile_actions_toggle")) {
             ImGui::OpenPopup("profile_actions_popup");
