@@ -1,23 +1,32 @@
 # CONTINUITY
 
-## Текущее состояние
-- Ветка: Beta. Текущая версия 0.3.15 (откат UI/UX изменений за последние два дня; восстановлены AgentsSkills UI-гайды; сохранены текущие модули); добавление опыта переведено на оценки 0-5 (автодолей).
-- Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, кнопка очистки лишнего (только админ).
-- Инсталлер: сборка через `installer/build-installer.ps1` (требуется Inno Setup 6 и ISCC.exe).
-- Smoke_core проверяет: загрузку/сохранение профиля и ранга, gameplay.ini, tasks/pipeline файлы, whitelist.
-
-## Команды
-- Сборка: `cmake --build build --config Release`
-- GUI: `cmake --build build-gui --config Release --target JobSkillGui`
-- Smoke-тест: `cmake --build build --config Release --target smoke_core` затем `build/Release/smoke_core.exe`
-- Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe"`
-
-## План / бэклог
-- MyIdeas:
-  - [x] Удаление задач в списке задач с откатом начисленного XP и счётчиков.
-  - [x] Группировка навыков по категориям (категории в skills.txt, фильтр/группировка в каталоге).
-  - [x] Профессии: CRUD/админ в отдельном модуле; профили только отображают название; навыки привязываются к профессии.
-- Стабильность ядра / модульность: минимальное ядро (профили, навыки, XP/уровни, правила, storage API); feature-флаги модулей; единые функции чтения/записи с BOM и валидацией.
-- Сиды/профили: не подтягивать удалённые сиды; whitelist профилей для seed/инсталлятора; все данные профиля в одном месте.
-- Обновления/документация: patch-notes на каждую версию в `data/meta/patch-notes`; README/UPDATE_GUIDE для пользователей/облака.
-- Добавление опыта: оценки 0-5 (ползунки), авторасчёт долей.
+- Goal (incl. success criteria):
+  - Стабильная Beta: корректный UI/UX, синхронизация, сборка/инсталлер, версии + patch-notes на каждую версию.
+  - Система добавления опыта без «ездящих» ползунков: оценка навыков 0–5 и авто‑доли, проценты корректно отображаются.
+- Constraints/Assumptions:
+  - Следовать AgentsSkills UI‑гайдам: `AGENT_UI_TOKENS.md`, `AGENT_UI_GRID.md`, `ForgeMirror_DesignCode.md`, `PR_UI_CHECKLIST.md`.
+  - Версионирование: major.any.minor (minor 2‑значный).
+- Key decisions:
+  - Единая переменная APP_VERSION в CMake для версии приложения.
+  - Откат UI/UX изменений последних двух дней (возврат стабильного UI).
+  - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
+  - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
+- State:
+  - Ветка: Beta. Версия: 0.3.16.
+  - Последнее изменение: принудительный пересчёт долей по оценкам каждый кадр.
+- Done:
+  - Восстановлены AgentsSkills UI‑гайды.
+  - Реализованы оценки 0–5 для навыков и авто‑доли в модале XP.
+  - Добавлены patch‑notes до 0.3.16, сборка GUI проходит.
+- Now:
+  - Проверка корректного отображения процентов долей в модале «Добавление опыта».
+- Next:
+  - Если проценты всё ещё не отображаются — исправить расчёт/рендер и пересобрать.
+- Open questions (UNCONFIRMED if needed):
+  - UNCONFIRMED: у пользователя всё ещё не отображаются проценты при выставлении оценок (нужна повторная проверка после 0.3.16).
+- Working set (files/ids/commands):
+  - `gui/GuiXpModal.inc`, `gui/GuiXpUtils.inc`, `gui/GuiTypes.inc`
+  - `CMakeLists.txt`, `installer/ForgeMirror.iss`
+  - `data/meta/patch-notes/*`, `AgentsSkills/CONTINUITY.md`
+  - Сборка GUI: `cmake --build build-gui --config Release`
+  - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\\Users\\mrdem\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe"`
