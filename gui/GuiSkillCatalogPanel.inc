@@ -155,7 +155,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(0);
             DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Поиск");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
@@ -172,7 +172,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(0);
             DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Группировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_group", &state.catalogGroupMode,
@@ -182,7 +182,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(0);
             DrawAnchorIcon(UiIcon::Chart);
             ImGui::TableSetColumnIndex(1);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             ImGui::TextDisabled(u8"Категория веса");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
@@ -402,7 +402,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(0);
             DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
             if (!state.isAdmin) ImGui::BeginDisabled();
             if (emphasizeAddSkill) {
                 ImGui::PushStyleColor(ImGuiCol_Button, addSkillBg);
@@ -477,6 +477,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TextUnformatted("");
                     lastGroup = weightCategory;
+                }
                 ++visibleCount;
                 if (sortMode == 1 && rowRank < 3) {
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, topRowBgU32);
@@ -485,7 +486,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TextDisabled("%d", rowRank + 1);
                 ImGui::TableSetColumnIndex(1);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, actionKeyBgU32);
                 bool selected = state.selectedCatalogIndex == viewIndex;
                 if (ImGui::Selectable(displayName.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
                     state.selectedCatalogIndex = viewIndex;
@@ -806,5 +807,4 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::EndChild();
         ImGui::EndTable();
     }
-}
 }
