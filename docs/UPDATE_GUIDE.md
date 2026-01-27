@@ -2,7 +2,7 @@
 
 ## Где лежат данные
 - Основное хранилище: `%APPDATA%/ForgeMirror`
-- Структура: `*.ini` (профили), `archive/*.ini`, `skills.txt`, `meta/pipeline.json`, `meta/tasks.json`, `meta/gameplay.ini`, `meta/shortcuts.json`, `meta/ui.ini`, `meta/cloud.ini`, `achievements/*.json`, `achievements/icons/*.png`, `meta/patch-notes/*.md`
+- Структура: `*.ini` (профили), `archive/*.ini`, `skills.txt`, `meta/pipeline.json`, `meta/tasks.json`, `meta/gameplay.ini`, `meta/shortcuts.json`, `meta/ui.ini`, `meta/cloud.ini`, `achievements/*.json`, `achievements/icons/*.png`, `meta/patch-notes/*.md`, `meta/reports/*.txt|csv`, `meta/updates/*`
 - Профессии: `meta/professions.txt` (копируется при push/pull, чистится по whitelist).
 
 ## Обновление через установщик
