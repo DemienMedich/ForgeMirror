@@ -180,6 +180,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         for (int i = 0; i < static_cast<int>(state.professions.size()); ++i) {
             const auto& p = state.professions[i];
             ImGui::TableNextRow();
+            ImGui::PushID(p.id.c_str());
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("%d", i + 1);
             ImGui::TableSetColumnIndex(1);
@@ -190,7 +191,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 std::snprintf(state.newProfessionDesc.data(), state.newProfessionDesc.size(), "%s", p.description.c_str());
             }
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::SmallButton((std::string("X##del_prof_") + std::to_string(i)).c_str())) {
+            if (ImGui::SmallButton(u8"✕##del_prof")) {
                 const std::string removedId = state.professions[i].id;
                 state.professions.erase(state.professions.begin() + i);
                 SaveProfessions(state.storageDir, state.professions);
@@ -198,8 +199,10 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 ClearSkillsForProfession(catalog, removedId);
                 state.profileProfessionDirty = true;
                 SetStatus(state, u8"Профессия удалена.", 0.45f, 0.9f, 0.45f);
+                ImGui::PopID();
                 break;
             }
+            ImGui::PopID();
         }
         ImGui::EndTable();
     }
@@ -348,4 +351,3 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         ImGui::TextDisabled(u8"Выберите профессию, чтобы назначать профили и навыки.");
     }
 }
-
