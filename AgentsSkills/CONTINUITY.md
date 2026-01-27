@@ -12,10 +12,11 @@
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.25.
-  - Последнее изменение: удалены legacy-упоминания старого названия, обновлена версия.
+  - Ветка: Beta. Версия: 0.3.26.
+  - Последнее изменение: хранилище всегда в пользовательской папке, seed копируется туда.
 - Done:
   - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
+  - Хранилище: при наличии пользовательской папки используем её, seed копируется туда.
   - Модульность: guards для задач/помодоро/профессий/ярлыков/пайплайна и вкладок профиля.
   - Модульность: добавлены guards для ачивок в UI.
   - Инсталлер: починен парсинг APP_VERSION из CMakeLists.txt.
@@ -45,8 +46,7 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `src/AppUtils.cpp`, `main.cpp`, `gui/GuiAdminModal.inc`
-  - `README.md`, `CMakeLists.txt`, `data/meta/patch-notes/0.3.25.md`
+  - `src/AppUtils.cpp`, `CMakeLists.txt`, `data/meta/patch-notes/0.3.26.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

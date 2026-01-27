@@ -341,20 +341,14 @@ std::filesystem::path ResolveStorageDirectory() {
         return chosen;
     };
 
-    if (legacyHasData && userReady && !userHasData) {
-        if (CopyStorageTree(legacyDir, userDir)) {
-            return finalize(userDir);
+    if (userReady) {
+        if (!userHasData && legacyHasData) {
+            CopyStorageTree(legacyDir, userDir);
         }
-        return finalize(legacyDir);
-    }
-    if (userHasData) {
         return finalize(userDir);
     }
     if (legacyHasData) {
         return finalize(legacyDir);
-    }
-    if (userReady) {
-        return finalize(userDir);
     }
     EnsureDirectory(legacyDir);
     return finalize(legacyDir);
