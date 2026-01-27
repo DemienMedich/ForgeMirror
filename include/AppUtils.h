@@ -27,6 +27,11 @@ void EnsureAdminProfile(IJobStorage& storage, SkillCatalog& catalog);
 
 std::filesystem::path ResolveStorageDirectory();
 
+// Project data folder (repo root / data).
+std::filesystem::path ProjectSeedDataDir();
+// True if project data folder has profiles/skills/etc.
+bool HasProjectSeedData();
+
 // Align profile skill names/weights with the catalog definitions.
 void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog);
 

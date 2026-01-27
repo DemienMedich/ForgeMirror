@@ -323,6 +323,15 @@ void CopySeedAchievementIcons(const std::filesystem::path& seedRoot, const std::
 
 } // namespace
 
+std::filesystem::path ProjectSeedDataDir() {
+    auto root = GuessProjectRoot();
+    return root / "data";
+}
+
+bool HasProjectSeedData() {
+    return HasStorageData(ProjectSeedDataDir());
+}
+
 std::filesystem::path ResolveStorageDirectory() {
     auto root = GuessProjectRoot();
     auto legacyDir = root / "data";

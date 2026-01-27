@@ -404,6 +404,16 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 ImGui::TextDisabled(u8"Версия приложения: %s", APP_VERSION);
 #endif
                 const std::int64_t dataStamp = GetStorageStamp(state);
+                const std::filesystem::path legacyDir = ProjectSeedDataDir();
+                const bool legacyHasData = HasProjectSeedData();
+                ImGui::TextDisabled(u8"Проектный data/: %s", legacyHasData ? u8"обнаружен" : u8"нет");
+                if (legacyHasData) {
+                    const std::string legacyPath = legacyDir.u8string();
+                    ImGui::TextDisabled(u8"Путь: %s", legacyPath.c_str());
+                    if (ImGui::SmallButton(u8"Копировать путь##legacy_data")) {
+                        ImGui::SetClipboardText(legacyPath.c_str());
+                    }
+                }
                 ImGui::TextDisabled(u8"Штамп данных: %s",
                     dataStamp > 0 ? FormatTimestamp(dataStamp, "%Y-%m-%d %H:%M").c_str() : u8"(нет данных)");
                 ImGui::Separator();
