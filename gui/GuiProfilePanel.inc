@@ -520,10 +520,18 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const int viewMode = state.ui.profileViewMode;
         const bool overviewMode = (viewMode == 0);
         const bool focusMode = (viewMode == 2);
-        auto tabAllowed = [&](int index) {
+        auto moduleTabAllowed = [&](int index) {
+            if (index == 1) return state.modules.achievements;
+            if (index == 5) return state.modules.tasks;
+            return true;
+        };
+        auto viewTabAllowed = [&](int index) {
             if (focusMode) return index == 0;
             if (overviewMode) return index == 0 || index == 3;
             return true;
+        };
+        auto tabAllowed = [&](int index) {
+            return moduleTabAllowed(index) && viewTabAllowed(index);
         };
         if (!tabAllowed(state.ui.profileTab)) {
             state.ui.profileTab = 0;
@@ -557,7 +565,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
             };
             for (const auto& tabInfo : tabs) {
-                const bool disableTab = !tabAllowed(tabInfo.index);
+                if (!moduleTabAllowed(tabInfo.index)) {
+                    continue;
+                }
+                const bool disableTab = !viewTabAllowed(tabInfo.index);
                 if (disableTab) ImGui::BeginDisabled();
                 if (ImGui::BeginTabItem(tabInfo.label, nullptr, tabFlagsFor(tabInfo.index))) {
                     state.profileSection = tabInfo.index;
@@ -576,7 +587,11 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         }
 
         if (state.profileSection == 1) {
-            DrawProfileAchievementsSection(state, catalog, profile, nowSec);
+            if (state.modules.achievements) {
+                DrawProfileAchievementsSection(state, catalog, profile, nowSec);
+            } else {
+                ImGui::TextDisabled(u8"Модуль ачивок отключён.");
+            }
         }
 
         if (state.isAdmin && ImGui::CollapsingHeader(u8"Администрирование")) {
@@ -695,7 +710,11 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         }
 
         if (state.profileSection == 5) {
-            DrawProfileTasksSection(state, state.active->id);
+            if (state.modules.tasks) {
+                DrawProfileTasksSection(state, state.active->id);
+            } else {
+                ImGui::TextDisabled(u8"Модуль задач отключён.");
+            }
         }
 
         ShowStatus(state);

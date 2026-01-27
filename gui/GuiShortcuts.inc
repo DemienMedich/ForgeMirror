@@ -560,6 +560,11 @@ static void DrawShortcutsSidebar(GuiState& state) {
 
 static void DrawShortcutsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Shortcuts, state.storageDir);
+    if (!state.modules.shortcuts) {
+        DrawCardHeader(u8"Ярлыки");
+        ImGui::TextDisabled(u8"Модуль ярлыков отключён.");
+        return;
+    }
     DrawCardHeader(u8"Ярлыки");
     ImGui::TextDisabled(u8"Добавьте ярлыки программ и запускайте их из правой панели.");
 

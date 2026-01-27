@@ -43,6 +43,11 @@ static int FindPomodoroSoundIndex(const std::vector<PomodoroSoundChoice>& choice
 
 void DrawPomodoroPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pomodoro, state.storageDir);
+    if (!state.modules.pomodoro) {
+        DrawCardHeader(u8"Помодоро");
+        ImGui::TextDisabled(u8"Модуль помодоро отключён.");
+        return;
+    }
     DrawCardHeader(u8"Помодоро");
     ImGui::TextDisabled(u8"Фокус-сессии с ручным или авто переходом между интервалами.");
     const ImGuiStyle& style = ImGui::GetStyle();

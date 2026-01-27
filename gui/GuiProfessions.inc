@@ -160,6 +160,11 @@ static void ClearSkillsForProfession(SkillCatalog& catalog, const std::string& p
 
 void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Professions, state.storageDir);
+    if (!state.modules.professions) {
+        DrawCardHeader(u8"Профессии");
+        ImGui::TextDisabled(u8"Модуль профессий отключён.");
+        return;
+    }
     DrawCardHeader(u8"Профессии (админ)");
     if (!state.isAdmin) {
         ImGui::TextDisabled(u8"Только для администратора.");

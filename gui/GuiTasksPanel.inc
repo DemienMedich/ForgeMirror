@@ -29,6 +29,11 @@ static bool RollbackTask(GuiState& state, IJobStorage& storage, SkillCatalog& ca
 
 void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Tasks, state.storageDir);
+    if (!state.modules.tasks) {
+        DrawCardHeader(u8"Задачи");
+        ImGui::TextDisabled(u8"Модуль задач отключён.");
+        return;
+    }
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Все выполненные задачи с распределением вклада.");
     if (state.tasks.empty()) {

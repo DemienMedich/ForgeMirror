@@ -15,6 +15,7 @@
   - Ветка: Beta. Версия: 0.3.19.
   - Последнее изменение: навыки без категорий, множественные профессии для навыков.
 - Done:
+  - Модульность: guards для задач/помодоро/профессий/ярлыков/пайплайна и вкладок профиля.
   - Модульность: добавлены guards для ачивок в UI.
   - Инсталлер: починен парсинг APP_VERSION из CMakeLists.txt.
   - Профиль: добавлено отображение профессии в строке KPI.
@@ -42,7 +43,8 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiProfilePanel.inc`, `gui/GuiSkillCatalogPanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.22.md`, `AgentsSkills/CONTINUITY.md`
+  - `gui/GuiProfilePanel.inc`, `gui/GuiTasksPanel.inc`, `gui/GuiPipelinePanel.inc`
+  - `gui/GuiPomodoroPanel.inc`, `gui/GuiShortcuts.inc`, `gui/GuiProfessions.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.23.md`, `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
