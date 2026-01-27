@@ -24,7 +24,7 @@ cmake -S . -B build-gui `
   -DIMGUI_DIR="Z:/CPP/ForgeMirror/libs/imgui" `
   -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake" `
   -DVCPKG_TARGET_TRIPLET=x64-windows
-cmake --build build-gui --config Release --target JobSkillGui
+cmake --build build-gui --config Release --target ForgeMirrorGui
 
 # Альтернатива без vcpkg (указать путь к glfw3Config.cmake)
 # cmake -S . -B build-gui -DBUILD_IMGUI_GUI=ON -DIMGUI_DIR="Z:/CPP/ForgeMirror/libs/imgui" -Dglfw3_DIR="C:/path/to/glfw3/share/glfw3"
@@ -51,7 +51,7 @@ make rebuild      # Очистка + конфигурация + Release
 
 ### Хранилище
 - По умолчанию: Windows `%APPDATA%\\ForgeMirror`, macOS `~/Library/Application Support/ForgeMirror`, Linux `~/.forgemirror`.
-- Можно переопределить каталог через `FORGEMIRROR_STORAGE_DIR` (поддерживается и `JOBSKILL_STORAGE_DIR`).
+- Можно переопределить каталог через `FORGEMIRROR_STORAGE_DIR`.
 - Если в корне проекта есть `data/` с данными, при первом запуске они копируются в пользовательский каталог (если он пуст).
 - Чтобы продолжать использовать локальный `data/`, задайте `FORGEMIRROR_STORAGE_DIR=./data`.
 - Внутри каталога хранения:
@@ -59,7 +59,7 @@ make rebuild      # Очистка + конфигурация + Release
   - архив: `archive/*.ini`
   - правила: `meta/gameplay.ini`
   - каталог навыков: `skills.txt`
-  - пароль администратора: `meta/admin.ini` (или `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`)
+  - пароль администратора: `meta/admin.ini` (или `FORGEMIRROR_ADMIN_PASSWORD`,)
   - layout GUI: `meta/gui-layout.ini`
 
 Профили лежат вне папок сборки (`build/`), поэтому прогресс переживает пересборки. Лучшие оценки категорий сохраняются в секции `[categories]` каждого профиля.
@@ -126,7 +126,7 @@ ImGui-фронтенд отображает те же данные, что и CL
 ## Заметки администратора
 - Админ-доступ включается через пароль; отдельного admin-профиля не создаётся.
 - Навыки хранятся в `skills.txt` в каталоге хранения.
-- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`).
+- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `FORGEMIRROR_ADMIN_PASSWORD`,).
 - Архивные профили лежат в `archive/`.
 - Профили - INI-файлы (`0001.ini`, `0002.ini`, ...); ID увеличиваются автоматически.
 

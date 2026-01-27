@@ -16,24 +16,24 @@ cmake --build build --config Release
 # GUI
 cmake -S . -B build-gui `
   -DBUILD_IMGUI_GUI=ON `
-  -DIMGUI_DIR="Z:/CPP/JobSkill/libs/imgui" `
+  -DIMGUI_DIR="Z:/CPP/ForgeMirror/libs/imgui" `
   -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake" `
   -DVCPKG_TARGET_TRIPLET=x64-windows `
   -DVCPKG_PWSH_PATH="C:/Program Files/PowerShell/7/pwsh.exe"
-cmake --build build-gui --config Release --target JobSkillGui
+cmake --build build-gui --config Release --target ForgeMirrorGui
 ```
 Готовые бинарники: `build/Release/ForgeMirror.exe`, `build-gui/Release/ForgeMirrorGui.exe`.
 
 ## Хранение данных
 - **По умолчанию:** Windows `%APPDATA%\ForgeMirror`, macOS `~/Library/Application Support/ForgeMirror`, Linux `~/.forgemirror`.
-- **Переопределение:** переменная `FORGEMIRROR_STORAGE_DIR` (поддерживается `JOBSKILL_STORAGE_DIR`).
+- **Переопределение:** переменная `FORGEMIRROR_STORAGE_DIR`.
 - **Миграция:** если в корне проекта есть `data/` с данными, при первом запуске они копируются в пользовательский каталог (если он пуст).
 - **Локальный `data/`:** задайте `FORGEMIRROR_STORAGE_DIR=./data`.
 - **Профили:** `*.ini` (плюс `archive/*.ini` для архивных).
 - **Геймплейные правила:** `meta/gameplay.ini`.
 - **Навыки:** `skills.txt` (список `Название|Вес|Описание`).
 - **Разметка окон GUI:** `meta/gui-layout.ini` (можно удалить для сброса).
-- **Пароль администратора:** `meta/admin.ini` (или переменная `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`).
+- **Пароль администратора:** `meta/admin.ini` (или переменная `FORGEMIRROR_ADMIN_PASSWORD`,).
 
 ## Навыки
 - Просмотр: окно **Skill Catalog** в GUI.

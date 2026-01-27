@@ -30,12 +30,6 @@ run: build
 		"$(BUILD_DIR)/$(CONFIG)/ForgeMirror"; \
 	elif [ -x "$(BUILD_DIR)/$(CONFIG)/ForgeMirror.exe" ]; then \
 		"$(BUILD_DIR)/$(CONFIG)/ForgeMirror.exe"; \
-	elif [ -x "$(BUILD_DIR)/JobSkill" ]; then \
-		"$(BUILD_DIR)/JobSkill"; \
-	elif [ -x "$(BUILD_DIR)/$(CONFIG)/JobSkill" ]; then \
-		"$(BUILD_DIR)/$(CONFIG)/JobSkill"; \
-	elif [ -x "$(BUILD_DIR)/$(CONFIG)/JobSkill.exe" ]; then \
-		"$(BUILD_DIR)/$(CONFIG)/JobSkill.exe"; \
 	else \
 		echo "Executable not found. Try 'make build' first."; \
 		exit 1; \
@@ -57,4 +51,3 @@ rebuild-gui:
 		-DIMGUI_DIR=$(IMGUI_DIR) \
 		-DCMAKE_BUILD_TYPE=$(CONFIG) \
 		$(if $(VCPKG_CHAINFILE),-DCMAKE_TOOLCHAIN_FILE=$(VCPKG_CHAINFILE),)
-	@cmake --build $(GUI_BUILD_DIR) --config $(CONFIG) --target JobSkillGui

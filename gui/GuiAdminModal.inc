@@ -72,10 +72,6 @@ void DrawAdminPasswordModal(GuiState& state) {
         DrawCardHeader(u8"Пароль");
         const char* envLabel = "FORGEMIRROR_ADMIN_PASSWORD";
         const char* env = std::getenv(envLabel);
-        if (!env || !*env) {
-            envLabel = "JOBSKILL_ADMIN_PASSWORD";
-            env = std::getenv(envLabel);
-        }
         const bool envOverride = env && *env;
         if (envOverride) {
             ImGui::TextDisabled(u8"Пароль задан через %s.", envLabel);

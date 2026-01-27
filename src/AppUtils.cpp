@@ -168,23 +168,6 @@ std::filesystem::path DefaultUserStorageDir() {
     return {};
 }
 
-std::filesystem::path LegacyUserStorageDir() {
-#if defined(_WIN32)
-    if (const char* appdata = std::getenv("APPDATA")) {
-        return std::filesystem::path(appdata) / "JobSkill";
-    }
-#elif defined(__APPLE__)
-    if (const char* home = std::getenv("HOME")) {
-        return std::filesystem::path(home) / "Library" / "Application Support" / "JobSkill";
-    }
-#else
-    if (const char* home = std::getenv("HOME")) {
-        return std::filesystem::path(home) / ".jobskill";
-    }
-#endif
-    return {};
-}
-
 bool EnsureDirectory(const std::filesystem::path& dir) {
     if (dir.empty()) return false;
     std::error_code ec;
@@ -347,18 +330,10 @@ std::filesystem::path ResolveStorageDirectory() {
         std::filesystem::path custom(env);
         if (EnsureDirectory(custom)) return custom;
     }
-    if (const char* env = std::getenv("JOBSKILL_STORAGE_DIR")) {
-        std::filesystem::path custom(env);
-        if (EnsureDirectory(custom)) return custom;
-    }
-
     const bool legacyHasData = HasStorageData(legacyDir);
     auto userDir = DefaultUserStorageDir();
-    auto legacyUserDir = LegacyUserStorageDir();
     const bool userReady = EnsureDirectory(userDir);
-    const bool legacyUserReady = EnsureDirectory(legacyUserDir);
     const bool userHasData = userReady && HasStorageData(userDir);
-    const bool legacyUserHasData = legacyUserReady && HasStorageData(legacyUserDir);
 
     auto finalize = [&](std::filesystem::path chosen) {
         MaybeMergeSeedProfiles(legacyDir, chosen);
@@ -372,26 +347,14 @@ std::filesystem::path ResolveStorageDirectory() {
         }
         return finalize(legacyDir);
     }
-    if (legacyUserHasData && userReady && !userHasData) {
-        if (CopyStorageTree(legacyUserDir, userDir)) {
-            return finalize(userDir);
-        }
-        return finalize(legacyUserDir);
-    }
     if (userHasData) {
         return finalize(userDir);
-    }
-    if (legacyUserHasData) {
-        return finalize(legacyUserDir);
     }
     if (legacyHasData) {
         return finalize(legacyDir);
     }
     if (userReady) {
         return finalize(userDir);
-    }
-    if (legacyUserReady) {
-        return finalize(legacyUserDir);
     }
     EnsureDirectory(legacyDir);
     return finalize(legacyDir);
@@ -468,9 +431,6 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
     if (const char* env = std::getenv("FORGEMIRROR_ADMIN_PASSWORD")) {
         if (*env != '\0') return env;
     }
-    if (const char* env = std::getenv("JOBSKILL_ADMIN_PASSWORD")) {
-        if (*env != '\0') return env;
-    }
 
     auto path = AdminPasswordPath(storageDir);
     std::ifstream in(path);
@@ -515,9 +475,6 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
 ModuleToggles LoadModuleToggles() {
     ModuleToggles toggles;
     const char* env = std::getenv("FORGEMIRROR_DISABLE_MODULES");
-    if (!env || *env == '\0') {
-        env = std::getenv("JOBSKILL_DISABLE_MODULES");
-    }
     if (!env || *env == '\0') return toggles;
 
     std::unordered_map<std::string, bool*> map = {

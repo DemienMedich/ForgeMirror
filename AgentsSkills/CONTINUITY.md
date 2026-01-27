@@ -12,8 +12,8 @@
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.19.
-  - Последнее изменение: навыки без категорий, множественные профессии для навыков.
+  - Ветка: Beta. Версия: 0.3.25.
+  - Последнее изменение: удалены legacy-упоминания старого названия, обновлена версия.
 - Done:
   - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
   - Модульность: guards для задач/помодоро/профессий/ярлыков/пайплайна и вкладок профиля.
@@ -31,8 +31,9 @@
   - Восстановлены AgentsSkills UI‑гайды.
   - Реализованы оценки 0–5 для навыков и авто‑доли в модале XP.
   - Добавлены patch‑notes до 0.3.18, сборка GUI проходит.
+  - Удалены legacy-упоминания старого названия (код/доки), оставлен ForgeMirror.
 - Now:
-  - Проверить перенос данных при наличии legacy-папки (JobSkill/ForgeMirror data).
+  - Проверить перенос данных при наличии legacy-папки (старые данные ForgeMirror).
 - Next:
   - План улучшений (по порядку):
     1) Стабильность ядра и модульность (контракты, guards, отключение модулей).
@@ -44,7 +45,8 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `src/AppUtils.cpp`, `CMakeLists.txt`, `data/meta/patch-notes/0.3.24.md`
+  - `src/AppUtils.cpp`, `main.cpp`, `gui/GuiAdminModal.inc`
+  - `README.md`, `CMakeLists.txt`, `data/meta/patch-notes/0.3.25.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
