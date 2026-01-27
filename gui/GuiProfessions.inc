@@ -186,12 +186,13 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             ImGui::TableSetColumnIndex(1);
             bool selected = state.professionEditIndex == i;
             if (ImGui::Selectable(p.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
+            ImGui::SetItemAllowOverlap();
                 state.professionEditIndex = i;
                 std::snprintf(state.newProfessionName.data(), state.newProfessionName.size(), "%s", p.name.c_str());
                 std::snprintf(state.newProfessionDesc.data(), state.newProfessionDesc.size(), "%s", p.description.c_str());
             }
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::SmallButton(u8"✕##del_prof")) {
+            if (ImGui::SmallButton(u8"?##del_prof")) {
                 const std::string removedId = state.professions[i].id;
                 state.professions.erase(state.professions.begin() + i);
                 SaveProfessions(state.storageDir, state.professions);
