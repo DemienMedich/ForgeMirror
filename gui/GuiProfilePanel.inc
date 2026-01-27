@@ -696,6 +696,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             const std::string reportDir = (state.storageDir / "meta" / "reports").u8string();
             ImGui::TextDisabled(u8"Папка отчетов: %s", reportDir.c_str());
+            if (ImGui::GetContentRegionAvail().x > 140.0f) {
+                ImGui::SameLine();
+            }
             if (ImGui::SmallButton(u8"Копировать путь")) {
                 ImGui::SetClipboardText(reportDir.c_str());
             }

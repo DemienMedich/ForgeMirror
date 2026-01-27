@@ -12,8 +12,8 @@
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.30.
-  - Последнее изменение: улучшены отчеты профиля и UX добавления опыта.
+  - Ветка: Beta. Версия: 0.3.31.
+  - Последнее изменение: компактнее блок отчётов в профиле.
 - Done:
   - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
   - Хранилище: при наличии пользовательской папки используем её, seed копируется туда.
@@ -37,6 +37,7 @@
   - Синхронизация: добавлен shortcuts.json, очистка облака по whitelist, расширенный отчёт.
   - Бета-готовность: актуализирован installer fallback, обновлены доки обновлений.
   - UX: в профиле путь отчётов с копированием, в задачах корректная подготовка формы XP.
+  - UX: копирование пути отчётов в одну строку при достаточной ширине.
 - Now:
   - Проверить перенос данных при наличии legacy-папки (старые данные ForgeMirror).
 - Next:
@@ -50,8 +51,8 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiProfilePanel.inc`, `gui/GuiTasksPanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.30.md`
+  - `gui/GuiProfilePanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.31.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
