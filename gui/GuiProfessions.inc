@@ -207,6 +207,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         ImGui::OpenPopup(u8"Удалить профессию?");
         state.professionDeletePopupRequest = false;
     }
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Appearing);
     bool deleteOpen = true;
     if (ImGui::BeginPopupModal(u8"Удалить профессию?", &deleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         std::string profName;
@@ -228,7 +229,8 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             }
         }
         if (profName.empty()) profName = u8"(не найдена)";
-        ImGui::TextWrapped(u8"Вы уверены, что хотите удалить профессию?\n%s", profName.c_str());
+        ImGui::TextWrapped(u8"Вы уверены, что хотите удалить профессию?");
+        ImGui::TextDisabled(u8"%s", profName.c_str());
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
         const float width = ImGui::GetContentRegionAvail().x;
         const bool stackButtons = width < 260.0f;
