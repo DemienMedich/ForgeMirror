@@ -44,19 +44,29 @@ static void DrawCatalogKpiCard(const char* id, UiIcon icon, const char* title, c
 void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::SkillCatalog, state.storageDir);
     auto catalogSkills = catalog.skills();
-    if (!state.isAdmin && state.active) {
-        const std::string& profId = state.active->profile.profession_id();
-        if (!profId.empty()) {
+    std::string activeProfId;
+    if (state.active) {
+        activeProfId = state.active->profile.profession_id();
+    }
+    if (!state.isAdmin) {
+        if (activeProfId != state.catalogProfessionId) {
+            state.catalogProfessionId = activeProfId;
+            state.selectedCatalogIndex = -1;
+            state.lastCatalogSelection = -1;
+        }
+        if (!activeProfId.empty()) {
             std::vector<std::string> filtered;
             filtered.reserve(catalogSkills.size());
             for (const auto& id : catalogSkills) {
                 auto profs = catalog.professions(id);
-                if (profs.empty() || std::find(profs.begin(), profs.end(), profId) != profs.end()) {
+                if (profs.empty() || std::find(profs.begin(), profs.end(), activeProfId) != profs.end()) {
                     filtered.push_back(id);
                 }
             }
             catalogSkills.swap(filtered);
         }
+    } else if (!state.catalogProfessionId.empty()) {
+        state.catalogProfessionId.clear();
     }
     if (state.selectedCatalogIndex >= static_cast<int>(catalogSkills.size())) {
         state.selectedCatalogIndex = -1;

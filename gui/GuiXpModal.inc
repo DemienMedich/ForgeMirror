@@ -23,18 +23,23 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
         std::vector<char> skillAllowed(catalogSkills.size(), 1);
         bool restrictSkills = false;
         int allowedSkillCount = static_cast<int>(catalogSkills.size());
+        std::string profId;
         if (state.active) {
-            const std::string profId = state.active->profile.profession_id();
-            if (!profId.empty()) {
-                restrictSkills = true;
-                allowedSkillCount = 0;
-                for (size_t i = 0; i < catalogSkills.size(); ++i) {
-                    const auto profs = catalog.professions(catalogSkills[i]);
-                    const bool allowed = profs.empty() || std::find(profs.begin(), profs.end(), profId) != profs.end();
-                    skillAllowed[i] = allowed ? 1 : 0;
-                    if (allowed) {
-                        allowedSkillCount += 1;
-                    }
+            profId = state.active->profile.profession_id();
+        }
+        const bool professionChanged = profId != state.xpProfessionId;
+        if (professionChanged) {
+            state.xpProfessionId = profId;
+        }
+        if (!profId.empty()) {
+            restrictSkills = true;
+            allowedSkillCount = 0;
+            for (size_t i = 0; i < catalogSkills.size(); ++i) {
+                const auto profs = catalog.professions(catalogSkills[i]);
+                const bool allowed = profs.empty() || std::find(profs.begin(), profs.end(), profId) != profs.end();
+                skillAllowed[i] = allowed ? 1 : 0;
+                if (allowed) {
+                    allowedSkillCount += 1;
                 }
             }
         }
@@ -45,6 +50,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             RecalculateXpPercentages(state.xpEntries);
         };
         if (state.xpEntries.size() != catalogSkills.size()) {
+            SetEvenSkillRatingsForAllowed();
+        } else if (professionChanged) {
             SetEvenSkillRatingsForAllowed();
         }
         if (state.taskShares.size() != state.profiles.size()) {

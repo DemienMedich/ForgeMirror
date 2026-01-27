@@ -103,6 +103,8 @@ struct GuiRuntimeState {
     int achDurationDays = 0;
     int selectedAchievementIndex = -1;
     std::vector<XpEntry> xpEntries;
+    std::string xpProfessionId;
+    std::string catalogProfessionId;
     std::array<char, 128> taskProject{};
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
