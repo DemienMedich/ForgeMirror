@@ -186,26 +186,102 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             ImGui::TableSetColumnIndex(1);
             bool selected = state.professionEditIndex == i;
             if (ImGui::Selectable(p.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
-            ImGui::SetItemAllowOverlap();
                 state.professionEditIndex = i;
                 std::snprintf(state.newProfessionName.data(), state.newProfessionName.size(), "%s", p.name.c_str());
                 std::snprintf(state.newProfessionDesc.data(), state.newProfessionDesc.size(), "%s", p.description.c_str());
             }
+            ImGui::SetItemAllowOverlap();
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::SmallButton(u8"?##del_prof")) {
-                const std::string removedId = state.professions[i].id;
-                state.professions.erase(state.professions.begin() + i);
-                SaveProfessions(state.storageDir, state.professions);
-                ClearProfilesForProfession(state, storage, removedId);
-                ClearSkillsForProfession(catalog, removedId);
-                state.profileProfessionDirty = true;
-                SetStatus(state, u8"Профессия удалена.", 0.45f, 0.9f, 0.45f);
+            if (ImGui::SmallButton(u8"Х##del_prof")) {
+                state.pendingDeleteProfessionIndex = i;
+                state.pendingDeleteProfessionId = state.professions[i].id;
+                state.professionDeletePopupRequest = true;
                 ImGui::PopID();
                 break;
             }
             ImGui::PopID();
         }
         ImGui::EndTable();
+    }
+
+    if (state.professionDeletePopupRequest) {
+        ImGui::OpenPopup(u8"Удалить профессию?");
+        state.professionDeletePopupRequest = false;
+    }
+    bool deleteOpen = true;
+    if (ImGui::BeginPopupModal(u8"Удалить профессию?", &deleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::string profName;
+        std::string profId = state.pendingDeleteProfessionId;
+        if (state.pendingDeleteProfessionIndex >= 0 &&
+            state.pendingDeleteProfessionIndex < static_cast<int>(state.professions.size())) {
+            const auto& p = state.professions[state.pendingDeleteProfessionIndex];
+            if (profId.empty() || p.id == profId) {
+                profName = p.name;
+                profId = p.id;
+            }
+        }
+        if (profName.empty() && !profId.empty()) {
+            for (const auto& p : state.professions) {
+                if (p.id == profId) {
+                    profName = p.name;
+                    break;
+                }
+            }
+        }
+        if (profName.empty()) profName = u8"(не найдена)";
+        ImGui::TextWrapped(u8"Вы уверены, что хотите удалить профессию?\n%s", profName.c_str());
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        const float width = ImGui::GetContentRegionAvail().x;
+        const bool stackButtons = width < 260.0f;
+        auto doDelete = [&]() {
+            std::string removedId = profId;
+            if (removedId.empty() && state.pendingDeleteProfessionIndex >= 0 &&
+                state.pendingDeleteProfessionIndex < static_cast<int>(state.professions.size())) {
+                removedId = state.professions[state.pendingDeleteProfessionIndex].id;
+            }
+            if (!removedId.empty()) {
+                auto it = std::find_if(state.professions.begin(), state.professions.end(),
+                    [&](const ProfessionEntry& p) { return p.id == removedId; });
+                if (it != state.professions.end()) {
+                    state.professions.erase(it);
+                    SaveProfessions(state.storageDir, state.professions);
+                    ClearProfilesForProfession(state, storage, removedId);
+                    ClearSkillsForProfession(catalog, removedId);
+                    state.profileProfessionDirty = true;
+                    SetStatus(state, u8"Профессия удалена.", 0.45f, 0.9f, 0.45f);
+                }
+            }
+            state.pendingDeleteProfessionIndex = -1;
+            state.pendingDeleteProfessionId.clear();
+            ImGui::CloseCurrentPopup();
+            deleteOpen = false;
+        };
+        auto doCancel = [&]() {
+            state.pendingDeleteProfessionIndex = -1;
+            state.pendingDeleteProfessionId.clear();
+            ImGui::CloseCurrentPopup();
+            deleteOpen = false;
+        };
+        if (stackButtons) {
+            if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                doDelete();
+            }
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                doCancel();
+            }
+        } else if (ImGui::BeginTable("prof_delete_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                doDelete();
+            }
+            ImGui::TableSetColumnIndex(1);
+            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                doCancel();
+            }
+            ImGui::EndTable();
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::Dummy(ImVec2(0.0f, 8.0f));

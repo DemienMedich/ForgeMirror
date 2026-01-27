@@ -12,8 +12,8 @@
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.33.
-  - Последнее изменение: удаление профессий кликается поверх строки, кнопка "?".
+  - Ветка: Beta. Версия: 0.3.34.
+  - Последнее изменение: удаление профессий через подтверждение, кнопка "Х".
 - Done:
   - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
   - Хранилище: при наличии пользовательской папки используем её, seed копируется туда.
@@ -40,6 +40,7 @@
   - UX: копирование пути отчётов в одну строку при достаточной ширине.
   - Профессии: исправлено удаление (уникальные ID в строке).
   - Профессии: кнопка удаления "?" и разрешён клик поверх строки.
+  - Профессии: подтверждение удаления, кнопка "Х".
 - Now:
   - Проверить перенос данных при наличии legacy-папки (старые данные ForgeMirror).
 - Next:
@@ -53,8 +54,8 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiProfessions.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.33.md`
+  - `gui/GuiProfessions.inc`, `gui/GuiState.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.34.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

@@ -69,6 +69,9 @@ struct GuiRuntimeState {
     bool addSkillPopupRequest = false;
     bool deleteSkillPopupRequest = false;
     bool mergeSkillPopupRequest = false;
+    bool professionDeletePopupRequest = false;
+    int pendingDeleteProfessionIndex = -1;
+    std::string pendingDeleteProfessionId;
     bool clearSkillsPopupRequest = false;
     bool adminPopupRequest = false;
     bool adminChangePopupRequest = false;
