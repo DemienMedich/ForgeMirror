@@ -52,6 +52,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
             if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+                PrepareXpEntries(state, catalog);
                 state.xpPopupRequest = true;
             }
             ImGui::PopStyleColor(3);

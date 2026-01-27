@@ -648,7 +648,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 std::filesystem::path outPath;
                 if (ExportProfileReportTxt(state, catalog, profile, state.active->id, outPath)) {
                     std::string msg = u8"Отчет сохранен: ";
-                    msg += outPath.string();
+                    msg += outPath.u8string();
                     SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
                 } else {
                     SetStatus(state, u8"Не удалось сохранить отчет.", 1.0f, 0.45f, 0.45f);
@@ -658,7 +658,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 std::filesystem::path outPath;
                 if (ExportProfileReportCsv(state, catalog, profile, state.active->id, outPath)) {
                     std::string msg = u8"Отчет сохранен: ";
-                    msg += outPath.string();
+                    msg += outPath.u8string();
                     SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
                 } else {
                     SetStatus(state, u8"Не удалось сохранить отчет.", 1.0f, 0.45f, 0.45f);
@@ -694,7 +694,11 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
                 ImGui::EndTable();
             }
-            ImGui::TextDisabled(u8"Отчеты сохраняются в data/meta/reports.");
+            const std::string reportDir = (state.storageDir / "meta" / "reports").u8string();
+            ImGui::TextDisabled(u8"Папка отчетов: %s", reportDir.c_str());
+            if (ImGui::SmallButton(u8"Копировать путь")) {
+                ImGui::SetClipboardText(reportDir.c_str());
+            }
         }
 
         if (state.profileSection == 2) {
