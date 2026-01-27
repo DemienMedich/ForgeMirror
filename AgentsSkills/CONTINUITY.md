@@ -15,6 +15,7 @@
   - Ветка: Beta. Версия: 0.3.19.
   - Последнее изменение: навыки без категорий, множественные профессии для навыков.
 - Done:
+  - Модульность: добавлены guards для ачивок в UI.
   - Инсталлер: починен парсинг APP_VERSION из CMakeLists.txt.
   - Профиль: добавлено отображение профессии в строке KPI.
   - Добавление опыта: список навыков фильтруется по профессии (и общим).
@@ -31,12 +32,17 @@
 - Now:
   - Проверить UI навыков/профессий после изменения привязок (визуально).
 - Next:
-  - При необходимости скорректировать текст/подсказки в навыках и профессиях.
+  - План улучшений (по порядку):
+    1) Стабильность ядра и модульность (контракты, guards, отключение модулей).
+    2) Единое хранилище профилей/данных, исключение дублей и устаревших сидов.
+    3) Навыки/профессии: правила общих навыков и фильтрация при смене профессии.
+    4) Синхронизация: whitelist путей, очистка лишнего, расширенный отчёт.
+    5) Бета‑готовность: версия/patch‑notes/инсталлер/README.
+    6) Мини‑UX полировка (компактность, подсказки, расположение кнопок).
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiSkillCatalogPanel.inc`, `gui/GuiSkillModals.inc`, `gui/GuiProfessions.inc`
-  - `src/SkillCatalog.cpp`, `include/SkillCatalog.h`, `include/GuiActions.h`, `gui/GuiActions.cpp`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.19.md`, `AgentsSkills/CONTINUITY.md`
+  - `gui/GuiProfilePanel.inc`, `gui/GuiSkillCatalogPanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.22.md`, `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

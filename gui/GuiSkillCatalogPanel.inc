@@ -633,7 +633,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 }
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 DrawCardHeader(u8"Ачивки навыка");
-                if (state.active) {
+                if (!state.modules.achievements) {
+                    ImGui::TextDisabled(u8"Модуль ачивок отключён.");
+                } else if (state.active) {
                     auto& ach = state.active->profile.achievements();
                     ImGui::InputTextWithHint(u8"##skill_ach_filter", u8"Фильтр ачивок",
                                              state.filters.skillAch.data(), state.filters.skillAch.size());

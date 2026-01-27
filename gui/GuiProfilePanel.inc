@@ -420,96 +420,99 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (!profile.achievements().empty()) {
-            auto formatDate = [](std::int64_t ts) -> std::string {
-                if (ts <= 0) return std::string(u8"без срока");
-                std::time_t t = static_cast<std::time_t>(ts);
-                std::tm tm{};
-                #if defined(_WIN32)
-                localtime_s(&tm, &t);
-                #else
-                localtime_r(&t, &tm);
-                #endif
-                char buf[32];
-                if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm)) {
-                    return std::string(buf);
+        if (state.modules.achievements) {
+            if (!profile.achievements().empty()) {
+                auto formatDate = [](std::int64_t ts) -> std::string {
+                    if (ts <= 0) return std::string(u8"без срока");
+                    std::time_t t = static_cast<std::time_t>(ts);
+                    std::tm tm{};
+                    #if defined(_WIN32)
+                    localtime_s(&tm, &t);
+                    #else
+                    localtime_r(&t, &tm);
+                    #endif
+                    char buf[32];
+                    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm)) {
+                        return std::string(buf);
+                    }
+                    return std::string(u8"срок указан");
+                };
+                std::vector<const Achievement*> recent;
+                recent.reserve(profile.achievements().size());
+                for (const auto& ach : profile.achievements()) {
+                    recent.push_back(&ach);
                 }
-                return std::string(u8"срок указан");
-            };
-            std::vector<const Achievement*> recent;
-            recent.reserve(profile.achievements().size());
-            for (const auto& ach : profile.achievements()) {
-                recent.push_back(&ach);
-            }
-            std::sort(recent.begin(), recent.end(), [](const Achievement* a, const Achievement* b) {
-                if (a->awardedAt != b->awardedAt) return a->awardedAt > b->awardedAt;
-                return a->title < b->title;
-            });
-            const int showCount = std::min<int>(5, static_cast<int>(recent.size()));
-            if (showCount > 0) {
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
-                ImGui::TextDisabled(u8"Последние ачивки");
-                const float iconSize = 56.0f;
-                const float spacing = ImGui::GetStyle().ItemSpacing.x;
-                const float totalWidth = showCount * iconSize + (showCount - 1) * spacing;
-                const float avail = ImGui::GetContentRegionAvail().x;
-                if (avail > totalWidth) {
-                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - totalWidth) * 0.5f);
-                }
-                for (int i = 0; i < showCount; ++i) {
-                    const Achievement& a = *recent[i];
-                    const bool active = a.is_active(nowSec);
-                    const std::string achSkillName = catalog.display_name(a.skill);
-                    const std::string expires = formatDate(a.expiresAt);
-                    const auto iconPath = ResolveIconPath(a.icon, state.storageDir);
-                    ImGui::PushID(i);
-                    bool hovered = false;
-                    if (iconPath) {
-                        if (const auto* iconTex = GetIconTexture(*iconPath)) {
-                            ImVec4 activeTint = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-                            activeTint.w = 1.0f;
-                            ImVec4 inactiveTint = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], activeTint, 0.25f);
-                            ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)iconTex->id),
-                            ImVec2(iconSize, iconSize),
-                            ImVec2(0, 0), ImVec2(1, 1),
-                            ImVec4(0, 0, 0, 0), active ? activeTint : inactiveTint);
-                            hovered = ImGui::IsItemHovered();
+                std::sort(recent.begin(), recent.end(), [](const Achievement* a, const Achievement* b) {
+                    if (a->awardedAt != b->awardedAt) return a->awardedAt > b->awardedAt;
+                    return a->title < b->title;
+                });
+                const int showCount = std::min<int>(5, static_cast<int>(recent.size()));
+                if (showCount > 0) {
+                    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                    ImGui::TextDisabled(u8"Последние ачивки");
+                    const float iconSize = 56.0f;
+                    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                    const float totalWidth = showCount * iconSize + (showCount - 1) * spacing;
+                    const float avail = ImGui::GetContentRegionAvail().x;
+                    if (avail > totalWidth) {
+                        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - totalWidth) * 0.5f);
+                    }
+                    for (int i = 0; i < showCount; ++i) {
+                        const Achievement& a = *recent[i];
+                        const bool active = a.is_active(nowSec);
+                        const std::string achSkillName = catalog.display_name(a.skill);
+                        const std::string expires = formatDate(a.expiresAt);
+                        const auto iconPath = ResolveIconPath(a.icon, state.storageDir);
+                        ImGui::PushID(i);
+                        bool hovered = false;
+                        if (iconPath) {
+                            if (const auto* iconTex = GetIconTexture(*iconPath)) {
+                                ImVec4 activeTint = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                                activeTint.w = 1.0f;
+                                ImVec4 inactiveTint = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], activeTint, 0.25f);
+                                ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)iconTex->id),
+                                ImVec2(iconSize, iconSize),
+                                ImVec2(0, 0), ImVec2(1, 1),
+                                ImVec4(0, 0, 0, 0), active ? activeTint : inactiveTint);
+                                hovered = ImGui::IsItemHovered();
+                            } else {
+                                ImGui::BeginDisabled();
+                                ImGui::Button("?", ImVec2(iconSize, iconSize));
+                                ImGui::EndDisabled();
+                                hovered = ImGui::IsItemHovered();
+                            }
                         } else {
                             ImGui::BeginDisabled();
                             ImGui::Button("?", ImVec2(iconSize, iconSize));
                             ImGui::EndDisabled();
                             hovered = ImGui::IsItemHovered();
                         }
-                    } else {
-                        ImGui::BeginDisabled();
-                        ImGui::Button("?", ImVec2(iconSize, iconSize));
-                        ImGui::EndDisabled();
-                        hovered = ImGui::IsItemHovered();
-                    }
-                    if (hovered) {
-                        ImGui::BeginTooltip();
-                        ImGui::TextUnformatted(a.title.c_str());
-                        ImGui::Text(u8"%s, %+0.1f%% XP", achSkillName.c_str(), a.bonusPercent);
-                        if (a.expiresAt == 0) {
-                            ImGui::TextUnformatted(u8"Срок: без срока");
-                        } else {
-                            ImGui::Text(u8"Срок до: %s", expires.c_str());
-                            if (active) {
-                                const std::string remaining = FormatDurationShort(a.expiresAt - nowSec);
-                                ImGui::Text(u8"Осталось: %s", remaining.c_str());
+                        if (hovered) {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted(a.title.c_str());
+                            ImGui::Text(u8"%s, %+0.1f%% XP", achSkillName.c_str(), a.bonusPercent);
+                            if (a.expiresAt == 0) {
+                                ImGui::TextUnformatted(u8"Срок: без срока");
                             } else {
-                                ImGui::TextUnformatted(u8"Срок: истекла");
+                                ImGui::Text(u8"Срок до: %s", expires.c_str());
+                                if (active) {
+                                    const std::string remaining = FormatDurationShort(a.expiresAt - nowSec);
+                                    ImGui::Text(u8"Осталось: %s", remaining.c_str());
+                                } else {
+                                    ImGui::TextUnformatted(u8"Срок: истекла");
+                                }
                             }
+                            ImGui::EndTooltip();
                         }
-                        ImGui::EndTooltip();
-                    }
-                    ImGui::PopID();
-                    if (i + 1 < showCount) {
-                        ImGui::SameLine();
+                        ImGui::PopID();
+                        if (i + 1 < showCount) {
+                            ImGui::SameLine();
+                        }
                     }
                 }
             }
-        }
+        } else {
+            ImGui::TextDisabled(u8"Модуль ачивок отключён.");
         }
         EndCard();
         ImGui::Spacing();
@@ -698,4 +701,4 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ShowStatus(state);
     }
 }
-
+}
