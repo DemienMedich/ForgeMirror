@@ -423,6 +423,45 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                     SetStatus(state, u8"Лишние данные не найдены.", 0.6f, 0.7f, 1.0f);
                 }
             }
+            if (ImGui::MenuItem(u8"Расширенный отчет")) {
+                std::vector<std::string> strayList;
+                if (CollectStrayStorageFiles(state.storageDir, strayList)) {
+                    std::error_code ec;
+                    auto reportDir = state.storageDir / "meta" / "reports";
+                    std::filesystem::create_directories(reportDir, ec);
+                    if (ec) {
+                        SetStatus(state, u8"Не удалось создать папку отчетов.", 1.0f, 0.75f, 0.35f);
+                    } else {
+                        std::string stamp = FormatTimestamp(NowSeconds(), "%Y%m%d-%H%M%S");
+                        if (stamp.empty()) stamp = std::to_string(NowSeconds());
+                        auto outPath = reportDir / ("storage-health-" + stamp + ".txt");
+                        std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+                        if (!out) {
+                            SetStatus(state, u8"Не удалось записать отчет.", 1.0f, 0.75f, 0.35f);
+                        } else {
+                            out.imbue(std::locale::classic());
+                            const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+                            out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
+                            out << "Отчет хранилища\n";
+                            out << "Папка: " << state.storageDir.u8string() << "\n";
+                            out << "Дата: " << FormatTimestamp(NowSeconds(), "%Y-%m-%d %H:%M") << "\n";
+                            out << "Лишние элементы: " << strayList.size() << "\n\n";
+                            if (strayList.empty()) {
+                                out << "Лишние файлы не найдены.\n";
+                            } else {
+                                for (const auto& entry : strayList) {
+                                    out << entry << "\n";
+                                }
+                            }
+                            std::string msg = u8"Отчет сохранен: ";
+                            msg += outPath.u8string();
+                            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                        }
+                    }
+                } else {
+                    SetStatus(state, u8"Не удалось сформировать отчет.", 1.0f, 0.75f, 0.35f);
+                }
+            }
             if (ImGui::MenuItem(u8"Выгрузить в облако")) {
                 RunCloudPush(state);
             }

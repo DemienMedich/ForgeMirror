@@ -12,8 +12,8 @@
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.27.
-  - Последнее изменение: фильтрация навыков обновляется при смене профессии.
+  - Ветка: Beta. Версия: 0.3.28.
+  - Последнее изменение: расширен health-check и whitelist синхронизации.
 - Done:
   - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
   - Хранилище: при наличии пользовательской папки используем её, seed копируется туда.
@@ -34,6 +34,7 @@
   - Добавлены patch‑notes до 0.3.18, сборка GUI проходит.
   - Удалены legacy-упоминания старого названия (код/доки), оставлен ForgeMirror.
   - Профессии/навыки: при смене профессии сбрасывается выбор и пересчёт долей XP.
+  - Синхронизация: добавлен shortcuts.json, очистка облака по whitelist, расширенный отчёт.
 - Now:
   - Проверить перенос данных при наличии legacy-папки (старые данные ForgeMirror).
 - Next:
@@ -47,8 +48,9 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiXpModal.inc`, `gui/GuiSkillCatalogPanel.inc`, `gui/GuiState.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.27.md`
+  - `src/CloudSync.cpp`, `include/CloudSync.h`, `src/AppUtils.cpp`
+  - `include/AppUtils.h`, `gui/GuiMainMenuPanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.28.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

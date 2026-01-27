@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 class IJobStorage;
 class Profile;
@@ -39,3 +40,6 @@ ModuleToggles LoadModuleToggles();
 // Find non-whitelisted files in storage (relative paths in outSamples, truncated to maxSamples).
 bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSamples,
                            std::vector<std::string>& outSamples, int& totalCount);
+
+// Collect full list of non-whitelisted files/dirs in storage (relative paths).
+bool CollectStrayStorageFiles(const std::filesystem::path& storageDir, std::vector<std::string>& outList);

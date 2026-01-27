@@ -514,39 +514,49 @@ ModuleToggles LoadModuleToggles() {
     return toggles;
 }
 
-bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSamples,
-                           std::vector<std::string>& outSamples, int& totalCount) {
-    outSamples.clear();
-    totalCount = 0;
+namespace {
+
+bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
+    const std::string relStr = rel.generic_string();
+    if (relStr.empty()) return true;
+    const std::unordered_set<std::string> allowedDirs = {
+        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes",
+        "meta/ui-presets", "meta/reports", "meta/updates", "logs", "cloud"
+    };
+    if (isDir) {
+        return allowedDirs.find(relStr) != allowedDirs.end();
+    }
+    const std::string parent = rel.parent_path().generic_string();
+    const std::string name = rel.filename().string();
+    const std::string ext = rel.extension().string();
+    const std::unordered_set<std::string> allowedMetaFiles = {
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
+        "professions.txt", "seed.merged", "gui-layout.ini", "admin.ini"
+    };
+    if (parent.empty()) {
+        if (ext == ".ini") return true;
+        if (relStr == "skills.txt") return true;
+        return false;
+    }
+    if (parent == "archive") return ext == ".ini";
+    if (parent == "achievements") return ext == ".json";
+    if (parent == "achievements/icons") return ext == ".png";
+    if (parent == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
+    if (parent == "meta/patch-notes") return ext == ".md";
+    if (parent == "meta/ui-presets") return ext == ".ini";
+    if (parent == "meta/reports") return ext == ".txt" || ext == ".csv";
+    if (parent == "meta/updates") return true;
+    if (parent == "logs") return true;
+    if (parent == "cloud") return true;
+    return false;
+}
+
+} // namespace
+
+bool CollectStrayStorageFiles(const std::filesystem::path& storageDir, std::vector<std::string>& outList) {
+    outList.clear();
     std::error_code ec;
     if (storageDir.empty() || !std::filesystem::exists(storageDir, ec)) return false;
-
-    auto is_allowed = [&](const std::filesystem::path& rel, bool isDir) {
-        const std::string relStr = rel.generic_string();
-        if (relStr.empty()) return true;
-        if (relStr == "archive" || relStr == "achievements" || relStr == "achievements/icons" || relStr == "meta") return true;
-        if (relStr == "logs" || relStr == "cloud") return true; // allow optional folders
-        if (!isDir) {
-            const auto ext = rel.extension().string();
-            const auto parent = rel.parent_path().generic_string();
-            if (parent.empty()) {
-                if (ext == ".ini") return true;
-                if (relStr == "skills.txt") return true;
-            } else if (parent == "archive") {
-                if (ext == ".ini") return true;
-            } else if (parent == "meta") {
-                if (ext == ".ini" || ext == ".json") return true;
-                if (rel.filename() == "seed.merged") return true;
-            } else if (parent == "achievements") {
-                if (ext == ".json") return true;
-            } else if (parent == "achievements/icons") {
-                if (ext == ".png") return true;
-            } else if (parent == "logs") {
-                return true; // allow log files
-            }
-        }
-        return false;
-    };
 
     for (auto it = std::filesystem::recursive_directory_iterator(storageDir, ec);
          it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
@@ -554,13 +564,25 @@ bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSa
         const auto& entry = *it;
         auto rel = std::filesystem::relative(entry.path(), storageDir, ec);
         if (ec) break;
-        if (!is_allowed(rel, entry.is_directory())) {
-            totalCount++;
-            if (outSamples.size() < maxSamples && entry.is_regular_file()) {
-                outSamples.push_back(rel.generic_string());
+        if (!IsAllowedStorageEntry(rel, entry.is_directory())) {
+            outList.push_back(rel.generic_string());
+            if (entry.is_directory()) {
+                it.disable_recursion_pending();
             }
         }
     }
+    return true;
+}
+
+bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSamples,
+                           std::vector<std::string>& outSamples, int& totalCount) {
+    outSamples.clear();
+    totalCount = 0;
+    std::vector<std::string> all;
+    if (!CollectStrayStorageFiles(storageDir, all)) return false;
+    totalCount = static_cast<int>(all.size());
+    const size_t limit = std::min(maxSamples, all.size());
+    outSamples.assign(all.begin(), all.begin() + static_cast<std::vector<std::string>::difference_type>(limit));
     return true;
 }
 

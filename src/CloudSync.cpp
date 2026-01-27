@@ -436,6 +436,92 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
     return any;
 }
 
+bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem::path& root, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec)) return false;
+    std::unordered_set<std::string> allowedDirs = {
+        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes"
+    };
+    std::string releasesRel;
+    if (config.releasesDir.empty()) {
+        releasesRel = "releases";
+    } else if (!config.releasesDir.is_absolute()) {
+        releasesRel = config.releasesDir.generic_string();
+    }
+    if (!releasesRel.empty()) {
+        allowedDirs.insert(releasesRel);
+    }
+    std::filesystem::path manifestRel = config.manifest.empty()
+        ? std::filesystem::path("meta/manifest.ini")
+        : config.manifest;
+    std::string manifestDir;
+    std::string manifestName;
+    if (!manifestRel.is_absolute()) {
+        manifestDir = manifestRel.parent_path().generic_string();
+        manifestName = manifestRel.filename().string();
+        if (!manifestDir.empty()) {
+            allowedDirs.insert(manifestDir);
+        }
+    }
+    std::unordered_set<std::string> allowedMetaFiles = {
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "professions.txt"
+    };
+    if (!manifestName.empty() && (manifestDir.empty() || manifestDir == "meta")) {
+        allowedMetaFiles.insert(manifestName);
+    }
+    bool any = false;
+    for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), root, ec);
+        if (ec) break;
+        if (rel.empty()) continue;
+        const bool isDir = entry.is_directory();
+        const std::string relStr = rel.generic_string();
+        const std::string dirStr = rel.parent_path().generic_string();
+        const std::string name = rel.filename().string();
+        const std::string ext = rel.extension().string();
+        auto dirAllowed = [&](const std::string& d) { return allowedDirs.find(d) != allowedDirs.end(); };
+        auto fileAllowed = [&]() {
+            if (dirStr.empty()) {
+                if (ext == ".ini") return true;
+                if (name == "skills.txt") return true;
+                if (!manifestName.empty() && manifestDir.empty() && name == manifestName) return true;
+                return false;
+            }
+            if (dirStr == "archive") return ext == ".ini";
+            if (dirStr == "achievements") return ext == ".json";
+            if (dirStr == "achievements/icons") return ext == ".png";
+            if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
+            if (dirStr == "meta/patch-notes") return ext == ".md";
+            if (!releasesRel.empty() && dirStr == releasesRel) return true;
+            if (!manifestName.empty() && !manifestDir.empty() && dirStr == manifestDir) return name == manifestName;
+            return false;
+        };
+
+        if (isDir) {
+            if (!dirAllowed(relStr)) {
+                std::filesystem::remove_all(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                    it.disable_recursion_pending();
+                }
+            }
+        } else {
+            if (!fileAllowed()) {
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                }
+            }
+        }
+    }
+    return any;
+}
+
 std::vector<int> ParseVersion(const std::string& value) {
     std::vector<int> parts;
     std::stringstream ss(value);
@@ -647,6 +733,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "shortcuts.json", storageDir / "meta" / "shortcuts.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "professions.txt", storageDir / "meta" / "professions.txt", result.stats, true, &ioError);
     CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
@@ -688,6 +775,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "shortcuts.json", cloudRoot / "meta" / "shortcuts.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", result.stats, &ioError);
     CopyFlatDirFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", result.stats, false, &ioError);
     int removed = 0;
@@ -698,8 +786,10 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "shortcuts.json", cloudRoot / "meta" / "shortcuts.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", removed)
-        || RemoveOrphanedFlatFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", removed);
+        || RemoveOrphanedFlatFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", removed)
+        || RemoveStrayCloudFiles(config, cloudRoot, removed);
     if (config.updateManifestOnPush) {
         CloudManifest manifest = LoadCloudManifest(config, storageDir);
         manifest.appVersion = APP_VERSION;
