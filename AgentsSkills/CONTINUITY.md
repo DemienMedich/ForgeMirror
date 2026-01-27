@@ -15,6 +15,7 @@
   - Ветка: Beta. Версия: 0.3.19.
   - Последнее изменение: навыки без категорий, множественные профессии для навыков.
 - Done:
+  - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
   - Модульность: guards для задач/помодоро/профессий/ярлыков/пайплайна и вкладок профиля.
   - Модульность: добавлены guards для ачивок в UI.
   - Инсталлер: починен парсинг APP_VERSION из CMakeLists.txt.
@@ -31,7 +32,7 @@
   - Реализованы оценки 0–5 для навыков и авто‑доли в модале XP.
   - Добавлены patch‑notes до 0.3.18, сборка GUI проходит.
 - Now:
-  - Проверить UI навыков/профессий после изменения привязок (визуально).
+  - Проверить перенос данных при наличии legacy-папки (JobSkill/ForgeMirror data).
 - Next:
   - План улучшений (по порядку):
     1) Стабильность ядра и модульность (контракты, guards, отключение модулей).
@@ -43,8 +44,7 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiProfilePanel.inc`, `gui/GuiTasksPanel.inc`, `gui/GuiPipelinePanel.inc`
-  - `gui/GuiPomodoroPanel.inc`, `gui/GuiShortcuts.inc`, `gui/GuiProfessions.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.23.md`, `AgentsSkills/CONTINUITY.md`
+  - `src/AppUtils.cpp`, `CMakeLists.txt`, `data/meta/patch-notes/0.3.24.md`
+  - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

@@ -275,6 +275,7 @@ void MergeSeedProfiles(const std::filesystem::path& seedRoot, const std::filesys
     const std::unordered_set<std::string> allowed = {
         // Add allowed seed profile IDs here (e.g., "0001"). Empty = no seed profiles.
     };
+    if (allowed.empty()) return;
     auto copy_missing_profile = [&](const std::filesystem::path& srcFile, const std::filesystem::path& dstDir) {
         if (srcFile.extension() != ".ini") return;
         if (!allowed.empty() && allowed.find(srcFile.stem().string()) == allowed.end()) return;
@@ -370,6 +371,12 @@ std::filesystem::path ResolveStorageDirectory() {
             return finalize(userDir);
         }
         return finalize(legacyDir);
+    }
+    if (legacyUserHasData && userReady && !userHasData) {
+        if (CopyStorageTree(legacyUserDir, userDir)) {
+            return finalize(userDir);
+        }
+        return finalize(legacyUserDir);
     }
     if (userHasData) {
         return finalize(userDir);
