@@ -10,7 +10,7 @@ static void DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
     ImGui::PushStyleColor(ImGuiCol_Border, border);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
-    if (ImGui::BeginChild("kpi_card", ImVec2(0.0f, height), ImGuiChildFlags_Border,
+    if (ImGui::BeginChild("kpi_card", ImVec2(0.0f, height), 0,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
