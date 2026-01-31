@@ -220,7 +220,7 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
     ImGui::PushStyleColor(ImGuiCol_Border, border);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, CardRounding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, CardPadding());
-    const bool open = ImGui::BeginChild(id, size, flags,
+    const bool open = ImGui::BeginChild(id, size, flags | ImGuiChildFlags_Border,
                                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if (open) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
