@@ -203,6 +203,9 @@ int main() {
     glfwTerminate();
     return 0;
 }
-
-
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return main();
+}
+#endif
 

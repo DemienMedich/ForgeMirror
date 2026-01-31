@@ -44,6 +44,7 @@
   - Профессии: кликабельная кнопка удаления (без SpanAllColumns).
   - Профессии: окно подтверждения нормальной ширины, текст в 2 строки.
   - Health-check: индикатор наличия проектного data/ (админ, меню облака).
+  - GUI: консоль отключена всегда (Win32 subsystem + WinMain wrapper).
 - Now:
   - Проверить перенос данных при наличии legacy-папки (старые данные ForgeMirror).
 - Next:
@@ -57,9 +58,8 @@
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `include/AppUtils.h`, `src/AppUtils.cpp`
-  - `gui/GuiMainMenuPanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.37.md`
+  - `CMakeLists.txt`, `gui/GuiApp.cpp`
+  - `data/meta/patch-notes/0.3.38.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`

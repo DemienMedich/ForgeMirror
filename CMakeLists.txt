@@ -26,7 +26,7 @@ add_executable(ForgeMirror
 target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.3.37")
+set(APP_VERSION "0.3.38")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
@@ -52,7 +52,7 @@ if(BUILD_IMGUI_GUI)
         ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
         ${IMGUI_DIR}/backends/imgui_impl_opengl2.cpp)
 
-    add_executable(ForgeMirrorGui
+    add_executable(ForgeMirrorGui WIN32
         gui/ForgeMirrorGui.rc
         gui/GuiApp.cpp
         gui/GuiActions.cpp
