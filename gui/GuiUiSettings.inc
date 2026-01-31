@@ -382,6 +382,7 @@ void ApplyThemePreset(int preset, UiSettings& settings, ImGuiStyle& style) {
         case 0: { // Graphite
             settings.theme = 0;
             ImGui::StyleColorsDark(&style);
+            style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.64f, 0.72f, 1.00f);
             style.Colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.07f, 0.08f, 1.00f);
             style.Colors[ImGuiCol_FrameBg] = ImVec4(0.13f, 0.15f, 0.18f, 0.92f);
             style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.21f, 0.25f, 0.95f);
@@ -406,6 +407,7 @@ void ApplyThemePreset(int preset, UiSettings& settings, ImGuiStyle& style) {
         case 1: { // Sapphire
             settings.theme = 0;
             ImGui::StyleColorsDark(&style);
+            style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.66f, 0.76f, 1.00f);
             style.Colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.09f, 0.12f, 1.00f);
             style.Colors[ImGuiCol_FrameBg] = ImVec4(0.12f, 0.18f, 0.28f, 0.85f);
             style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.26f, 0.40f, 0.95f);
@@ -455,7 +457,7 @@ void ApplyThemePreset(int preset, UiSettings& settings, ImGuiStyle& style) {
             settings.theme = 0;
             ImGui::StyleColorsDark(&style);
             style.Colors[ImGuiCol_Text] = ImVec4(0.92f, 0.94f, 1.00f, 1.00f);
-            style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.55f, 0.60f, 0.70f, 1.00f);
+            style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.62f, 0.66f, 0.78f, 1.00f);
             style.Colors[ImGuiCol_WindowBg] = ImVec4(0.05f, 0.06f, 0.09f, 0.94f);
             style.Colors[ImGuiCol_ChildBg] = ImVec4(0.07f, 0.09f, 0.13f, 0.40f);
             style.Colors[ImGuiCol_PopupBg] = ImVec4(0.07f, 0.09f, 0.14f, 0.94f);
@@ -510,9 +512,9 @@ void ApplyGlassUiPreset(UiSettings& settings, ImGuiStyle& style) {
     settings.frameRounding = 10.0f;
     settings.scrollbarRounding = 12.0f;
     settings.grabRounding = 10.0f;
-    settings.windowPadding = ImVec2(14.0f, 12.0f);
-    settings.framePadding = ImVec2(10.0f, 7.0f);
-    settings.itemSpacing = ImVec2(10.0f, 8.0f);
+    settings.windowPadding = ImVec2(12.0f, 10.0f);
+    settings.framePadding = ImVec2(8.0f, 5.0f);
+    settings.itemSpacing = ImVec2(8.0f, 6.0f);
     settings.backgroundAlpha = 0.20f;
     settings.backgroundTiled = false;
     for (auto& bg : settings.backgrounds) {

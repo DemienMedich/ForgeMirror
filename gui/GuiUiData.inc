@@ -52,9 +52,9 @@ struct UiSettings {
     float frameRounding = 4.0f;
     float scrollbarRounding = 6.0f;
     float grabRounding = 4.0f;
-    ImVec2 windowPadding = ImVec2(8.0f, 8.0f);
-    ImVec2 framePadding = ImVec2(6.0f, 4.0f);
-    ImVec2 itemSpacing = ImVec2(8.0f, 4.0f);
+    ImVec2 windowPadding = ImVec2(8.0f, 6.0f);
+    ImVec2 framePadding = ImVec2(6.0f, 3.0f);
+    ImVec2 itemSpacing = ImVec2(8.0f, 3.0f);
     bool customColors = false;
     float backgroundAlpha = 0.25f;
     bool backgroundTiled = false;
