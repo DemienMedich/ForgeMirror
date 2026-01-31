@@ -10,7 +10,7 @@ if (MSVC)
     add_compile_options(/utf-8)
 endif()
 
-add_executable(JobSkill
+add_executable(ForgeMirror
     src/Skill.cpp
     src/Profile.cpp
     src/FakeStorage.cpp
@@ -23,15 +23,17 @@ add_executable(JobSkill
     main.cpp
 )
 
-target_include_directories(JobSkill PRIVATE include)
+target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-target_compile_definitions(JobSkill PRIVATE APP_VERSION="0.2.95")
-set_target_properties(JobSkill PROPERTIES OUTPUT_NAME "ForgeMirror")
+set(APP_VERSION "0.3.38")
+target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
+set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
 # Для Windows корректно установить кодировку консоли при необходимости вручную в приложении
 
 option(BUILD_IMGUI_GUI "Build ImGui-based GUI" OFF)
+option(BUILD_CORE_TESTS "Build core smoke tests" OFF)
 
 if(BUILD_IMGUI_GUI)
     if(NOT IMGUI_DIR)
@@ -50,7 +52,7 @@ if(BUILD_IMGUI_GUI)
         ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
         ${IMGUI_DIR}/backends/imgui_impl_opengl2.cpp)
 
-    add_executable(JobSkillGui
+    add_executable(ForgeMirrorGui WIN32
         gui/ForgeMirrorGui.rc
         gui/GuiApp.cpp
         gui/GuiActions.cpp
@@ -64,18 +66,34 @@ if(BUILD_IMGUI_GUI)
         src/GameplayConfig.cpp
     )
 
-    target_sources(JobSkillGui PRIVATE ${IMGUI_SOURCES})
-    target_include_directories(JobSkillGui PRIVATE include libs/ufbx ${IMGUI_DIR} ${IMGUI_DIR}/backends)
-    target_compile_definitions(JobSkillGui PRIVATE APP_VERSION="0.2.95")
-    set_target_properties(JobSkillGui PROPERTIES OUTPUT_NAME "ForgeMirrorGui")
-    target_link_libraries(JobSkillGui PRIVATE glfw OpenGL::GL)
+    target_sources(ForgeMirrorGui PRIVATE ${IMGUI_SOURCES})
+    target_include_directories(ForgeMirrorGui PRIVATE include libs/ufbx ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+    target_compile_definitions(ForgeMirrorGui PRIVATE APP_VERSION="${APP_VERSION}")
+    set_target_properties(ForgeMirrorGui PROPERTIES OUTPUT_NAME "ForgeMirrorGui")
+    target_link_libraries(ForgeMirrorGui PRIVATE glfw OpenGL::GL)
     if (WIN32)
-        target_link_libraries(JobSkillGui PRIVATE opengl32 winmm comdlg32 shell32)
+        target_link_libraries(ForgeMirrorGui PRIVATE opengl32 winmm comdlg32 shell32)
     endif()
 
-    add_custom_command(TARGET JobSkillGui POST_BUILD
+    add_custom_command(TARGET ForgeMirrorGui POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:glfw>
-            $<TARGET_FILE_DIR:JobSkillGui>)
+            $<TARGET_FILE_DIR:ForgeMirrorGui>)
+endif()
+
+if(BUILD_CORE_TESTS)
+    add_executable(smoke_core
+        tests/smoke_core.cpp
+        src/Profile.cpp
+        src/Skill.cpp
+        src/SkillCatalog.cpp
+        src/AppUtils.cpp
+        src/GameplayConfig.cpp
+        src/CloudSync.cpp
+        src/FileStorage.cpp
+        src/FakeStorage.cpp
+    )
+    target_include_directories(smoke_core PRIVATE include)
+    target_compile_definitions(smoke_core PRIVATE APP_VERSION="0.0.0")
 endif()
 

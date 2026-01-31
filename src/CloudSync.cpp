@@ -21,6 +21,15 @@ std::string Trim(std::string s) {
     return s;
 }
 
+void StripUtf8Bom(std::string& s) {
+    if (s.size() >= 3 &&
+        static_cast<unsigned char>(s[0]) == 0xEF &&
+        static_cast<unsigned char>(s[1]) == 0xBB &&
+        static_cast<unsigned char>(s[2]) == 0xBF) {
+        s.erase(0, 3);
+    }
+}
+
 bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& data) {
     std::error_code ec;
     auto parent = path.parent_path();
@@ -33,11 +42,39 @@ bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& d
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
         if (!out) return false;
+        // Write BOM for editors (Notepad) to recognize UTF-8
+        const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
         out << data;
         if (!out.good()) return false;
     }
     std::filesystem::rename(tmp, path, ec);
     return !ec;
+}
+
+std::filesystem::path CanonicalSafe(const std::filesystem::path& p) {
+    std::error_code ec;
+    auto c = std::filesystem::weakly_canonical(p, ec);
+    if (ec) return {};
+    return c;
+}
+
+bool PathsOverlap(const std::filesystem::path& a, const std::filesystem::path& b) {
+    auto ca = CanonicalSafe(a);
+    auto cb = CanonicalSafe(b);
+    if (ca.empty() || cb.empty()) return false;
+    std::error_code ec;
+    if (std::filesystem::equivalent(ca, cb, ec)) return true;
+    if (ec) ec.clear();
+    auto norm = [](std::string s) {
+        if (!s.empty() && s.back() != '/') s.push_back('/');
+        return s;
+    };
+    const std::string sa = norm(ca.generic_string());
+    const std::string sb = norm(cb.generic_string());
+    if (sa.rfind(sb, 0) == 0) return true; // a inside b
+    if (sb.rfind(sa, 0) == 0) return true; // b inside a
+    return false;
 }
 
 bool ParseBool(const std::string& text, bool fallback) {
@@ -219,6 +256,36 @@ void CopyAchievements(const std::filesystem::path& srcRoot, const std::filesyste
     }
 }
 
+void CopyAchievementIcons(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot,
+                          CloudSyncStats& stats, bool pulling, std::string* errorMessage) {
+    std::error_code ec;
+    if (!std::filesystem::exists(srcRoot, ec)) return;
+    for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::filesystem::path dst = dstRoot / entry.path().filename();
+        if (pulling) {
+            CopyFileIfExists(entry.path(), dst, stats, true, errorMessage);
+        } else {
+            CopyFileIfExistsPush(entry.path(), dst, stats, errorMessage);
+        }
+    }
+}
+
+void CopyFlatDirFiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot,
+                      CloudSyncStats& stats, bool pulling, std::string* errorMessage) {
+    std::error_code ec;
+    if (!std::filesystem::exists(srcRoot, ec)) return;
+    for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::filesystem::path dst = dstRoot / entry.path().filename();
+        if (pulling) {
+            CopyFileIfExists(entry.path(), dst, stats, true, errorMessage);
+        } else {
+            CopyFileIfExistsPush(entry.path(), dst, stats, errorMessage);
+        }
+    }
+}
+
 bool RemoveOrphanedProfiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot, int& removed) {
     std::error_code ec;
     if (!std::filesystem::exists(dstRoot, ec)) return false;
@@ -255,6 +322,204 @@ bool RemoveFileIfMissing(const std::filesystem::path& srcPath, const std::filesy
     if (ec) return false;
     removed += 1;
     return true;
+}
+
+bool RemoveOrphanedAchievements(const std::filesystem::path& srcRoot, const std::filesystem::path& srcArchive,
+                                const std::filesystem::path& dstRoot, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dstRoot, ec)) return false;
+    std::unordered_set<std::string> keep;
+    auto collect = [&](const std::filesystem::path& dir) {
+        if (!std::filesystem::exists(dir, ec)) return;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".ini") continue;
+            keep.insert(entry.path().stem().string());
+        }
+    };
+    collect(srcRoot);
+    collect(srcArchive);
+    bool removedAny = false;
+    for (const auto& entry : std::filesystem::directory_iterator(dstRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".json") continue;
+        const std::string id = entry.path().stem().string();
+        if (keep.find(id) != keep.end()) continue;
+        std::filesystem::remove(entry.path(), ec);
+        if (!ec) {
+            removed += 1;
+            removedAny = true;
+        }
+    }
+    return removedAny;
+}
+
+bool RemoveOrphanedFlatFiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dstRoot, ec)) return false;
+    std::unordered_set<std::string> keep;
+    if (std::filesystem::exists(srcRoot, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(srcRoot, ec)) {
+            if (!entry.is_regular_file()) continue;
+            keep.insert(entry.path().filename().string());
+        }
+    }
+    bool removedAny = false;
+    for (const auto& entry : std::filesystem::directory_iterator(dstRoot, ec)) {
+        if (!entry.is_regular_file()) continue;
+        const std::string name = entry.path().filename().string();
+        if (keep.find(name) != keep.end()) continue;
+        std::filesystem::remove(entry.path(), ec);
+        if (!ec) {
+            removed += 1;
+            removedAny = true;
+        }
+    }
+    return removedAny;
+}
+
+bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec)) return false;
+    const std::unordered_set<std::string> allowedDirs = {
+        "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud"
+    };
+    const std::unordered_set<std::string> allowedMetaFiles = {
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "seed.merged"
+    };
+    bool any = false;
+    for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), root, ec);
+        if (ec) break;
+        if (rel.empty()) continue;
+        const bool isDir = entry.is_directory();
+        const std::string dirStr = rel.parent_path().generic_string();
+        const std::string name = rel.filename().string();
+        auto dirAllowed = [&](const std::string& d) { return allowedDirs.find(d) != allowedDirs.end(); };
+        auto fileAllowed = [&]() {
+            if (dirStr.empty()) {
+                if (entry.path().extension() == ".ini") return true;
+                if (name == "skills.txt") return true;
+                return false;
+            }
+            if (dirStr == "archive") return entry.path().extension() == ".ini";
+            if (dirStr == "achievements") return entry.path().extension() == ".json";
+            if (dirStr == "achievements/icons") return entry.path().extension() == ".png";
+            if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
+            if (dirStr == "logs") return true;
+            if (dirStr == "cloud") return true;
+            return false;
+        };
+
+        if (isDir) {
+            if (!dirAllowed(rel.generic_string())) {
+                std::filesystem::remove_all(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                    it.disable_recursion_pending();
+                }
+            }
+        } else {
+            if (!fileAllowed()) {
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                }
+            }
+        }
+    }
+    return any;
+}
+
+bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem::path& root, int& removed) {
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec)) return false;
+    std::unordered_set<std::string> allowedDirs = {
+        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes"
+    };
+    std::string releasesRel;
+    if (config.releasesDir.empty()) {
+        releasesRel = "releases";
+    } else if (!config.releasesDir.is_absolute()) {
+        releasesRel = config.releasesDir.generic_string();
+    }
+    if (!releasesRel.empty()) {
+        allowedDirs.insert(releasesRel);
+    }
+    std::filesystem::path manifestRel = config.manifest.empty()
+        ? std::filesystem::path("meta/manifest.ini")
+        : config.manifest;
+    std::string manifestDir;
+    std::string manifestName;
+    if (!manifestRel.is_absolute()) {
+        manifestDir = manifestRel.parent_path().generic_string();
+        manifestName = manifestRel.filename().string();
+        if (!manifestDir.empty()) {
+            allowedDirs.insert(manifestDir);
+        }
+    }
+    std::unordered_set<std::string> allowedMetaFiles = {
+        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "professions.txt"
+    };
+    if (!manifestName.empty() && (manifestDir.empty() || manifestDir == "meta")) {
+        allowedMetaFiles.insert(manifestName);
+    }
+    bool any = false;
+    for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+         it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
+        auto rel = std::filesystem::relative(entry.path(), root, ec);
+        if (ec) break;
+        if (rel.empty()) continue;
+        const bool isDir = entry.is_directory();
+        const std::string relStr = rel.generic_string();
+        const std::string dirStr = rel.parent_path().generic_string();
+        const std::string name = rel.filename().string();
+        const std::string ext = rel.extension().string();
+        auto dirAllowed = [&](const std::string& d) { return allowedDirs.find(d) != allowedDirs.end(); };
+        auto fileAllowed = [&]() {
+            if (dirStr.empty()) {
+                if (ext == ".ini") return true;
+                if (name == "skills.txt") return true;
+                if (!manifestName.empty() && manifestDir.empty() && name == manifestName) return true;
+                return false;
+            }
+            if (dirStr == "archive") return ext == ".ini";
+            if (dirStr == "achievements") return ext == ".json";
+            if (dirStr == "achievements/icons") return ext == ".png";
+            if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
+            if (dirStr == "meta/patch-notes") return ext == ".md";
+            if (!releasesRel.empty() && dirStr == releasesRel) return true;
+            if (!manifestName.empty() && !manifestDir.empty() && dirStr == manifestDir) return name == manifestName;
+            return false;
+        };
+
+        if (isDir) {
+            if (!dirAllowed(relStr)) {
+                std::filesystem::remove_all(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                    it.disable_recursion_pending();
+                }
+            }
+        } else {
+            if (!fileAllowed()) {
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec) {
+                    removed++;
+                    any = true;
+                }
+            }
+        }
+    }
+    return any;
 }
 
 std::vector<int> ParseVersion(const std::string& value) {
@@ -299,7 +564,12 @@ CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
     if (!in) return config;
     std::string section;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
         std::string t = Trim(line);
         if (t.empty() || t[0] == '#' || t[0] == ';') continue;
         if (t.front() == '[' && t.back() == ']') {
@@ -349,7 +619,12 @@ CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesy
     std::ifstream in(path);
     if (!in) return manifest;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
         std::string t = Trim(line);
         if (t.empty() || t[0] == '#' || t[0] == ';') continue;
         if (t.front() == '[' && t.back() == ']') continue;
@@ -439,6 +714,10 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
         return result;
     }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    if (PathsOverlap(cloudRoot, storageDir)) {
+        result.message = u8"Путь облака не должен совпадать или быть вложенным в локальное хранилище.";
+        return result;
+    }
     std::error_code ec;
     if (!std::filesystem::exists(cloudRoot, ec)) {
         result.message = u8"Облачное хранилище не найдено.";
@@ -448,9 +727,15 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     std::unordered_set<std::string> skipIds;
     CopyProfiles(cloudRoot, storageDir, role, config, result.stats, skipIds, true, &ioError);
     CopyProfiles(cloudRoot / "archive", storageDir / "archive", role, config, result.stats, skipIds, true, &ioError);
+    CopyAchievements(cloudRoot / "achievements", storageDir / "achievements", skipIds, result.stats, true, &ioError);
+    CopyAchievementIcons(cloudRoot / "achievements" / "icons", storageDir / "achievements" / "icons", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "skills.txt", storageDir / "skills.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "shortcuts.json", storageDir / "meta" / "shortcuts.json", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "professions.txt", storageDir / "meta" / "professions.txt", result.stats, true, &ioError);
+    CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
     result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0;
     if (!result.ok) {
@@ -474,21 +759,37 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         return result;
     }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    if (PathsOverlap(cloudRoot, storageDir)) {
+        result.message = u8"Путь облака не должен совпадать или быть вложенным в локальное хранилище.";
+        return result;
+    }
     std::error_code ec;
     std::filesystem::create_directories(cloudRoot, ec);
     std::string ioError;
     std::unordered_set<std::string> skipIds;
     CopyProfiles(storageDir, cloudRoot, role, config, result.stats, skipIds, false, &ioError);
     CopyProfiles(storageDir / "archive", cloudRoot / "archive", role, config, result.stats, skipIds, false, &ioError);
+    CopyAchievements(storageDir / "achievements", cloudRoot / "achievements", skipIds, result.stats, false, &ioError);
+    CopyAchievementIcons(storageDir / "achievements" / "icons", cloudRoot / "achievements" / "icons", result.stats, false, &ioError);
     CopyFileIfExistsPush(storageDir / "skills.txt", cloudRoot / "skills.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "shortcuts.json", cloudRoot / "meta" / "shortcuts.json", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", result.stats, &ioError);
+    CopyFlatDirFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", result.stats, false, &ioError);
     int removed = 0;
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
         || RemoveOrphanedProfiles(storageDir / "archive", cloudRoot / "archive", removed)
+        || RemoveOrphanedAchievements(storageDir, storageDir / "archive", cloudRoot / "achievements", removed)
         || RemoveFileIfMissing(storageDir / "skills.txt", cloudRoot / "skills.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
-        || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed);
+        || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "shortcuts.json", cloudRoot / "meta" / "shortcuts.json", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", removed)
+        || RemoveOrphanedFlatFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", removed)
+        || RemoveStrayCloudFiles(config, cloudRoot, removed);
     if (config.updateManifestOnPush) {
         CloudManifest manifest = LoadCloudManifest(config, storageDir);
         manifest.appVersion = APP_VERSION;

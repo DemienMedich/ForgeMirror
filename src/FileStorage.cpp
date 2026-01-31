@@ -319,7 +319,15 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             if (!in) return {};
             std::ostringstream ss;
             ss << in.rdbuf();
-            return ss.str();
+            std::string data = ss.str();
+            // Strip UTF-8 BOM if present
+            if (data.size() >= 3 &&
+                static_cast<unsigned char>(data[0]) == 0xEF &&
+                static_cast<unsigned char>(data[1]) == 0xBB &&
+                static_cast<unsigned char>(data[2]) == 0xBF) {
+                data.erase(0, 3);
+            }
+            return data;
         }
 
         std::vector<Achievement> load_achievements(const std::filesystem::path& baseDir, const std::string& id) {
@@ -329,6 +337,12 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             if (!in) return result;
             const auto nowSec = now_seconds();
             std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            if (content.size() >= 3 &&
+                static_cast<unsigned char>(content[0]) == 0xEF &&
+                static_cast<unsigned char>(content[1]) == 0xBB &&
+                static_cast<unsigned char>(content[2]) == 0xBF) {
+                content.erase(0, 3);
+            }
             const auto objects = parse_object_array(content);
             for (const auto& obj : objects) {
                 Achievement a;
@@ -377,6 +391,9 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             for (auto& a : normalized) {
                 normalize_achievement_times(a, nowSec);
             }
+            // Write BOM for editors (Notepad) to recognize UTF-8
+            const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+            out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
             out << "[\n";
             for (size_t i = 0; i < normalized.size(); ++i) {
                 const auto& a = normalized[i];
@@ -510,7 +527,8 @@ public:
         std::int64_t storedLastTask = 0;
         int storedInertiaTasks = 0;
         int storedRecoveryTasks = 0;
-        int storedTasksCompleted = 0;
+    int storedTasksCompleted = 0;
+        std::string storedProfession;
 
         while (std::getline(in, line)) {
             auto t = trim(line);
@@ -528,6 +546,7 @@ public:
                 if (key == "token") token = val;
             } else if (section == "profile") {
                 if (key == "name") name = val;
+                else if (key == "profession") storedProfession = val;
                 else if (key == "overall") {
                     storedOverall = parse_int(val, -1);
                 } else if (key == "totalXp" || key == "totalXP") {
@@ -612,6 +631,7 @@ public:
         if (name.empty()) name = activeId_;
 
         Profile profile(name);
+        profile.set_profession_id(storedProfession);
         std::vector<Skill> restored;
         restored.reserve(skillNames.size());
         for (const auto& skillName : skillNames) {
@@ -668,6 +688,7 @@ public:
         ss << "\n[profile]\n";
         ss << "id=" << activeId_ << "\n";
         ss << "name=" << profile.name() << "\n";
+        if (!profile.profession_id().empty()) ss << "profession=" << profile.profession_id() << "\n";
         ss << "overall=" << profile.overall_level() << "\n";
         ss << "progress=" << profile.level_progress() << "\n";
         ss << "totalXp=" << profile.total_xp() << "\n";

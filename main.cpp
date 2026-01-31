@@ -1000,10 +1000,6 @@ int main() {
             }
             const char* envLabel = "FORGEMIRROR_ADMIN_PASSWORD";
             const char* env = std::getenv(envLabel);
-            if (!env || !*env) {
-                envLabel = "JOBSKILL_ADMIN_PASSWORD";
-                env = std::getenv(envLabel);
-            }
             if (env && *env) {
                 std::cout << "Пароль задан через " << envLabel << "; изменение из приложения недоступно.\n";
                 continue;

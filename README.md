@@ -21,11 +21,13 @@ cmake --build build --config Release
 # Дополнительный GUI (MSVC + vcpkg)
 cmake -S . -B build-gui `
   -DBUILD_IMGUI_GUI=ON `
-  -DIMGUI_DIR="Z:/CPP/JobSkill/libs/imgui" `
+  -DIMGUI_DIR="Z:/CPP/ForgeMirror/libs/imgui" `
   -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-  -DVCPKG_TARGET_TRIPLET=x64-windows `
-  -DVCPKG_PWSH_PATH="C:/Program Files/PowerShell/7/pwsh.exe"
-cmake --build build-gui --config Release --target JobSkillGui
+  -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build build-gui --config Release --target ForgeMirrorGui
+
+# Альтернатива без vcpkg (указать путь к glfw3Config.cmake)
+# cmake -S . -B build-gui -DBUILD_IMGUI_GUI=ON -DIMGUI_DIR="Z:/CPP/ForgeMirror/libs/imgui" -Dglfw3_DIR="C:/path/to/glfw3/share/glfw3"
 ```
 
 На Linux/macOS замените строку с генератором на `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` и уберите Windows-флаги для GUI.
@@ -49,7 +51,7 @@ make rebuild      # Очистка + конфигурация + Release
 
 ### Хранилище
 - По умолчанию: Windows `%APPDATA%\\ForgeMirror`, macOS `~/Library/Application Support/ForgeMirror`, Linux `~/.forgemirror`.
-- Можно переопределить каталог через `FORGEMIRROR_STORAGE_DIR` (поддерживается и `JOBSKILL_STORAGE_DIR`).
+- Можно переопределить каталог через `FORGEMIRROR_STORAGE_DIR`.
 - Если в корне проекта есть `data/` с данными, при первом запуске они копируются в пользовательский каталог (если он пуст).
 - Чтобы продолжать использовать локальный `data/`, задайте `FORGEMIRROR_STORAGE_DIR=./data`.
 - Внутри каталога хранения:
@@ -57,7 +59,7 @@ make rebuild      # Очистка + конфигурация + Release
   - архив: `archive/*.ini`
   - правила: `meta/gameplay.ini`
   - каталог навыков: `skills.txt`
-  - пароль администратора: `meta/admin.ini` (или `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`)
+  - пароль администратора: `meta/admin.ini` (или `FORGEMIRROR_ADMIN_PASSWORD`,)
   - layout GUI: `meta/gui-layout.ini`
 
 Профили лежат вне папок сборки (`build/`), поэтому прогресс переживает пересборки. Лучшие оценки категорий сохраняются в секции `[categories]` каждого профиля.
@@ -87,9 +89,10 @@ make rebuild      # Очистка + конфигурация + Release
 - `logout` — вернуться в главное меню.
 
 ## Процесс в GUI
-ImGui-фронтенд отображает те же данные, что и CLI, но добавляет панели:
+ImGui-фронтенд отображает те же данные, что и CLI, и добавляет панели:
 - Список профилей с переключателем архивации.
-- Детальный просмотр профиля с уровнями, лучшими оценками, кулдаунами, состоянием восстановления и блокировками ранга.
+- Экран профиля с дашбордом (CTA, KPI, рекомендации, прогресс) и раскрываемыми деталями.
+- Профессии (админ): отдельный модуль для CRUD и привязки навыков к профессии.
 - Модальное окно Add Experience:
   1. Выберите категорию (E-A) и оценку (1-10). UI показывает базовый XP, множитель оценки, бонус фокуса, кулдаун и предупреждения о восстановлении.
   2. Ползунки автоматически перераспределяют проценты между навыками, чтобы сумма была 100%.
@@ -121,9 +124,9 @@ ImGui-фронтенд отображает те же данные, что и CL
 - Кулдауны и деградация: включены (kDecayEnabled=true).
 
 ## Заметки администратора
-- Профиль администратора создаётся автоматически с базовыми навыками; доступ администратора включается отдельно.
+- Админ-доступ включается через пароль; отдельного admin-профиля не создаётся.
 - Навыки хранятся в `skills.txt` в каталоге хранения.
-- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `FORGEMIRROR_ADMIN_PASSWORD`, также `JOBSKILL_ADMIN_PASSWORD`).
+- Пароль администратора хранится в `meta/admin.ini` (можно переопределить через `FORGEMIRROR_ADMIN_PASSWORD`,).
 - Архивные профили лежат в `archive/`.
 - Профили - INI-файлы (`0001.ini`, `0002.ini`, ...); ID увеличиваются автоматически.
 

@@ -112,6 +112,14 @@ void ApplyWindowMode(GLFWwindow* window, GuiState& state) {
     state.windowFullscreenLast = state.ui.windowFullscreen;
 }
 
+void DragWindow(GLFWwindow* window, const ImVec2& delta) {
+    if (!window) return;
+    if (delta.x == 0.0f && delta.y == 0.0f) return;
+    int wx = 0, wy = 0;
+    glfwGetWindowPos(window, &wx, &wy);
+    glfwSetWindowPos(window, wx + static_cast<int>(delta.x), wy + static_cast<int>(delta.y));
+}
+
 void HandleBorderlessDrag(GLFWwindow* window, const UiSettings& settings) {
     if (!window) return;
     if (settings.windowDecorated || settings.windowFullscreen) return;
@@ -120,9 +128,7 @@ void HandleBorderlessDrag(GLFWwindow* window, const UiSettings& settings) {
     if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) return;
     ImVec2 delta = io.MouseDelta;
     if (delta.x == 0.0f && delta.y == 0.0f) return;
-    int wx = 0, wy = 0;
-    glfwGetWindowPos(window, &wx, &wy);
-    glfwSetWindowPos(window, wx + static_cast<int>(delta.x), wy + static_cast<int>(delta.y));
+    DragWindow(window, delta);
 }
 
 void ResetUiSettings(UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {

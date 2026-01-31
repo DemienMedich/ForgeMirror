@@ -76,11 +76,20 @@ static bool PlayPomodoroSoundFile(const std::string& path, int volumePercent) {
 #endif
 }
 
-static void PlayPomodoroSound(const GuiState& state, int phase) {
+static void PlayPomodoroSound(GuiState& state, int phase) {
     if (!state.ui.pomodoroSoundEnabled) return;
     const std::string soundPath = ResolvePomodoroSoundPath(state, phase);
 #if defined(_WIN32)
+    if (soundPath.empty()) {
+        SetStatus(state, u8"Звук Помодоро не настроен (выберите файл).", 1.0f, 0.75f, 0.35f);
+        return;
+    }
+    if (!std::filesystem::exists(soundPath)) {
+        SetStatus(state, u8"Файл звука Помодоро не найден: " + soundPath, 1.0f, 0.75f, 0.35f);
+        return;
+    }
     if (!PlayPomodoroSoundFile(soundPath, state.ui.pomodoroSoundVolume)) {
+        SetStatus(state, u8"Не удалось воспроизвести звук Помодоро (кодек MCI?): " + soundPath, 1.0f, 0.75f, 0.35f);
         MessageBeep(MB_OK);
     }
 #else
@@ -161,4 +170,32 @@ static std::string FormatPomodoroTime(int seconds) {
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%02d:%02d", minutes, secs);
     return buf;
+}
+
+// Quick control helpers (used outside this file)
+void PomodoroQuickReset(GuiState& state) {
+    ResetPomodoroState(state);
+}
+
+void PomodoroQuickStart(GuiState& state) {
+    if (state.pomodoroAwaitConfirm) {
+        StartPomodoroPhase(state, state.pomodoroNextPhase);
+        return;
+    }
+    if (state.pomodoroRemainingSeconds > 0 && !state.pomodoroRunning) {
+        state.pomodoroRunning = true;
+        state.pomodoroAccumulator = 0.0f;
+        return;
+    }
+    StartPomodoroPhase(state, static_cast<int>(PomodoroPhase::Work));
+}
+
+void PomodoroQuickNext(GuiState& state) {
+    if (state.pomodoroAwaitConfirm) {
+        StartPomodoroPhase(state, state.pomodoroNextPhase);
+    } else if (state.pomodoroRunning) {
+        FinishPomodoroInterval(state);
+    } else {
+        StartPomodoroPhase(state, NextPomodoroPhase(state));
+    }
 }

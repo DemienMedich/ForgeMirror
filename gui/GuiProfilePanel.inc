@@ -156,6 +156,19 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
         const std::string rankText = DescribeOverallRank(profile);
         const char* rankLabel = RankLabelForLevel(overallLevel);
+        std::string professionName = u8"не задана";
+        const std::string profId = profile.profession_id();
+        if (!profId.empty()) {
+            for (const auto& p : state.professions) {
+                if (p.id == profId) {
+                    professionName = p.name;
+                    break;
+                }
+            }
+            if (professionName == u8"не задана") {
+                professionName = profId;
+            }
+        }
         const auto& catScores = profile.category_best_scores();
         std::string categoriesLine;
         {
@@ -167,7 +180,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             categoriesLine = catStream.str();
         }
         if (BeginCard("profile_header_card")) {
-        if (ImGui::BeginTable("profile_header_summary", 3, ImGuiTableFlags_SizingStretchSame)) {
+        if (ImGui::BeginTable("profile_header_summary", 4, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Уровень");
@@ -178,6 +191,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Прогресс");
             ImGui::TextColored(accent, "%s", progressLabel.c_str());
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Профессия");
+            ImGui::TextColored(accent, "%s", professionName.c_str());
             ImGui::EndTable();
         }
         ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
@@ -395,104 +411,108 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
-            ImGui::TableSetColumnIndex(1);
-            DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
-            ImGui::EndTable();
-        }
-        ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
-        skillCount, activeAchCount, achCount);
-        ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (!profile.achievements().empty()) {
-            auto formatDate = [](std::int64_t ts) -> std::string {
-                if (ts <= 0) return std::string(u8"без срока");
-                std::time_t t = static_cast<std::time_t>(ts);
-                std::tm tm{};
-                #if defined(_WIN32)
-                localtime_s(&tm, &t);
-                #else
-                localtime_r(&t, &tm);
-                #endif
-                char buf[32];
-                if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm)) {
-                    return std::string(buf);
+        DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
+        ImGui::TableSetColumnIndex(1);
+        DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
+        ImGui::EndTable();
+    }
+    ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
+    skillCount, activeAchCount, achCount);
+    ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        if (state.modules.achievements) {
+            if (!profile.achievements().empty()) {
+                auto formatDate = [](std::int64_t ts) -> std::string {
+                    if (ts <= 0) return std::string(u8"без срока");
+                    std::time_t t = static_cast<std::time_t>(ts);
+                    std::tm tm{};
+                    #if defined(_WIN32)
+                    localtime_s(&tm, &t);
+                    #else
+                    localtime_r(&t, &tm);
+                    #endif
+                    char buf[32];
+                    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm)) {
+                        return std::string(buf);
+                    }
+                    return std::string(u8"срок указан");
+                };
+                std::vector<const Achievement*> recent;
+                recent.reserve(profile.achievements().size());
+                for (const auto& ach : profile.achievements()) {
+                    recent.push_back(&ach);
                 }
-                return std::string(u8"срок указан");
-            };
-            std::vector<const Achievement*> recent;
-            recent.reserve(profile.achievements().size());
-            for (const auto& ach : profile.achievements()) {
-                recent.push_back(&ach);
-            }
-            std::sort(recent.begin(), recent.end(), [](const Achievement* a, const Achievement* b) {
-                if (a->awardedAt != b->awardedAt) return a->awardedAt > b->awardedAt;
-                return a->title < b->title;
-            });
-            const int showCount = std::min<int>(5, static_cast<int>(recent.size()));
-            if (showCount > 0) {
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
-                ImGui::TextDisabled(u8"Последние ачивки");
-                const float iconSize = 56.0f;
-                const float spacing = ImGui::GetStyle().ItemSpacing.x;
-                const float totalWidth = showCount * iconSize + (showCount - 1) * spacing;
-                const float avail = ImGui::GetContentRegionAvail().x;
-                if (avail > totalWidth) {
-                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - totalWidth) * 0.5f);
-                }
-                for (int i = 0; i < showCount; ++i) {
-                    const Achievement& a = *recent[i];
-                    const bool active = a.is_active(nowSec);
-                    const std::string achSkillName = catalog.display_name(a.skill);
-                    const std::string expires = formatDate(a.expiresAt);
-                    const auto iconPath = ResolveIconPath(a.icon, state.storageDir);
-                    ImGui::PushID(i);
-                    bool hovered = false;
-                    if (iconPath) {
-                        if (const auto* iconTex = GetIconTexture(*iconPath)) {
-                            const ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
-                            : ImVec4(0.55f, 0.55f, 0.55f, 0.5f);
-                            ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)iconTex->id),
-                            ImVec2(iconSize, iconSize),
-                            ImVec2(0, 0), ImVec2(1, 1),
-                            ImVec4(0, 0, 0, 0), tint);
-                            hovered = ImGui::IsItemHovered();
+                std::sort(recent.begin(), recent.end(), [](const Achievement* a, const Achievement* b) {
+                    if (a->awardedAt != b->awardedAt) return a->awardedAt > b->awardedAt;
+                    return a->title < b->title;
+                });
+                const int showCount = std::min<int>(5, static_cast<int>(recent.size()));
+                if (showCount > 0) {
+                    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                    ImGui::TextDisabled(u8"Последние ачивки");
+                    const float iconSize = 56.0f;
+                    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                    const float totalWidth = showCount * iconSize + (showCount - 1) * spacing;
+                    const float avail = ImGui::GetContentRegionAvail().x;
+                    if (avail > totalWidth) {
+                        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - totalWidth) * 0.5f);
+                    }
+                    for (int i = 0; i < showCount; ++i) {
+                        const Achievement& a = *recent[i];
+                        const bool active = a.is_active(nowSec);
+                        const std::string achSkillName = catalog.display_name(a.skill);
+                        const std::string expires = formatDate(a.expiresAt);
+                        const auto iconPath = ResolveIconPath(a.icon, state.storageDir);
+                        ImGui::PushID(i);
+                        bool hovered = false;
+                        if (iconPath) {
+                            if (const auto* iconTex = GetIconTexture(*iconPath)) {
+                                ImVec4 activeTint = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                                activeTint.w = 1.0f;
+                                ImVec4 inactiveTint = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled], activeTint, 0.25f);
+                                ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)iconTex->id),
+                                ImVec2(iconSize, iconSize),
+                                ImVec2(0, 0), ImVec2(1, 1),
+                                ImVec4(0, 0, 0, 0), active ? activeTint : inactiveTint);
+                                hovered = ImGui::IsItemHovered();
+                            } else {
+                                ImGui::BeginDisabled();
+                                ImGui::Button("?", ImVec2(iconSize, iconSize));
+                                ImGui::EndDisabled();
+                                hovered = ImGui::IsItemHovered();
+                            }
                         } else {
                             ImGui::BeginDisabled();
                             ImGui::Button("?", ImVec2(iconSize, iconSize));
                             ImGui::EndDisabled();
                             hovered = ImGui::IsItemHovered();
                         }
-                    } else {
-                        ImGui::BeginDisabled();
-                        ImGui::Button("?", ImVec2(iconSize, iconSize));
-                        ImGui::EndDisabled();
-                        hovered = ImGui::IsItemHovered();
-                    }
-                    if (hovered) {
-                        ImGui::BeginTooltip();
-                        ImGui::TextUnformatted(a.title.c_str());
-                        ImGui::Text(u8"%s, %+0.1f%% XP", achSkillName.c_str(), a.bonusPercent);
-                        if (a.expiresAt == 0) {
-                            ImGui::TextUnformatted(u8"Срок: без срока");
-                        } else {
-                            ImGui::Text(u8"Срок до: %s", expires.c_str());
-                            if (active) {
-                                const std::string remaining = FormatDurationShort(a.expiresAt - nowSec);
-                                ImGui::Text(u8"Осталось: %s", remaining.c_str());
+                        if (hovered) {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted(a.title.c_str());
+                            ImGui::Text(u8"%s, %+0.1f%% XP", achSkillName.c_str(), a.bonusPercent);
+                            if (a.expiresAt == 0) {
+                                ImGui::TextUnformatted(u8"Срок: без срока");
                             } else {
-                                ImGui::TextUnformatted(u8"Срок: истекла");
+                                ImGui::Text(u8"Срок до: %s", expires.c_str());
+                                if (active) {
+                                    const std::string remaining = FormatDurationShort(a.expiresAt - nowSec);
+                                    ImGui::Text(u8"Осталось: %s", remaining.c_str());
+                                } else {
+                                    ImGui::TextUnformatted(u8"Срок: истекла");
+                                }
                             }
+                            ImGui::EndTooltip();
                         }
-                        ImGui::EndTooltip();
-                    }
-                    ImGui::PopID();
-                    if (i + 1 < showCount) {
-                        ImGui::SameLine();
+                        ImGui::PopID();
+                        if (i + 1 < showCount) {
+                            ImGui::SameLine();
+                        }
                     }
                 }
             }
-        }
+        } else {
+            ImGui::TextDisabled(u8"Модуль ачивок отключён.");
         }
         EndCard();
         ImGui::Spacing();
@@ -500,10 +520,18 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const int viewMode = state.ui.profileViewMode;
         const bool overviewMode = (viewMode == 0);
         const bool focusMode = (viewMode == 2);
-        auto tabAllowed = [&](int index) {
+        auto moduleTabAllowed = [&](int index) {
+            if (index == 1) return state.modules.achievements;
+            if (index == 5) return state.modules.tasks;
+            return true;
+        };
+        auto viewTabAllowed = [&](int index) {
             if (focusMode) return index == 0;
             if (overviewMode) return index == 0 || index == 3;
             return true;
+        };
+        auto tabAllowed = [&](int index) {
+            return moduleTabAllowed(index) && viewTabAllowed(index);
         };
         if (!tabAllowed(state.ui.profileTab)) {
             state.ui.profileTab = 0;
@@ -537,7 +565,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 return (state.profileTabRequest == index) ? ImGuiTabItemFlags_SetSelected : 0;
             };
             for (const auto& tabInfo : tabs) {
-                const bool disableTab = !tabAllowed(tabInfo.index);
+                if (!moduleTabAllowed(tabInfo.index)) {
+                    continue;
+                }
+                const bool disableTab = !viewTabAllowed(tabInfo.index);
                 if (disableTab) ImGui::BeginDisabled();
                 if (ImGui::BeginTabItem(tabInfo.label, nullptr, tabFlagsFor(tabInfo.index))) {
                     state.profileSection = tabInfo.index;
@@ -556,7 +587,11 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         }
 
         if (state.profileSection == 1) {
-            DrawProfileAchievementsSection(state, catalog, profile, nowSec);
+            if (state.modules.achievements) {
+                DrawProfileAchievementsSection(state, catalog, profile, nowSec);
+            } else {
+                ImGui::TextDisabled(u8"Модуль ачивок отключён.");
+            }
         }
 
         if (state.isAdmin && ImGui::CollapsingHeader(u8"Администрирование")) {
@@ -613,7 +648,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 std::filesystem::path outPath;
                 if (ExportProfileReportTxt(state, catalog, profile, state.active->id, outPath)) {
                     std::string msg = u8"Отчет сохранен: ";
-                    msg += outPath.string();
+                    msg += outPath.u8string();
                     SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
                 } else {
                     SetStatus(state, u8"Не удалось сохранить отчет.", 1.0f, 0.45f, 0.45f);
@@ -623,7 +658,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 std::filesystem::path outPath;
                 if (ExportProfileReportCsv(state, catalog, profile, state.active->id, outPath)) {
                     std::string msg = u8"Отчет сохранен: ";
-                    msg += outPath.string();
+                    msg += outPath.u8string();
                     SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
                 } else {
                     SetStatus(state, u8"Не удалось сохранить отчет.", 1.0f, 0.45f, 0.45f);
@@ -659,7 +694,14 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
                 ImGui::EndTable();
             }
-            ImGui::TextDisabled(u8"Отчеты сохраняются в data/meta/reports.");
+            const std::string reportDir = (state.storageDir / "meta" / "reports").u8string();
+            ImGui::TextDisabled(u8"Папка отчетов: %s", reportDir.c_str());
+            if (ImGui::GetContentRegionAvail().x > 140.0f) {
+                ImGui::SameLine();
+            }
+            if (ImGui::SmallButton(u8"Копировать путь")) {
+                ImGui::SetClipboardText(reportDir.c_str());
+            }
         }
 
         if (state.profileSection == 2) {
@@ -675,10 +717,14 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         }
 
         if (state.profileSection == 5) {
-            DrawProfileTasksSection(state, state.active->id);
+            if (state.modules.tasks) {
+                DrawProfileTasksSection(state, state.active->id);
+            } else {
+                ImGui::TextDisabled(u8"Модуль задач отключён.");
+            }
         }
 
         ShowStatus(state);
     }
 }
-
+}

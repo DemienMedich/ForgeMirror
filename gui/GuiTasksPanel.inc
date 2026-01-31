@@ -1,5 +1,39 @@
-void DrawTasksPanel(GuiState& state) {
+static bool RollbackTask(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const TaskEntry& task) {
+    const std::string previousActive = state.active ? state.active->id : std::string{};
+    bool ok = true;
+    for (const auto& participant : task.participants) {
+        if (participant.profileId.empty()) continue;
+        if (!storage.set_active_profile(participant.profileId)) {
+            SetStatus(state, u8"Не удалось активировать профиль для отката XP.", 1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+        auto profileOpt = storage.load_profile();
+        if (!profileOpt) {
+            SetStatus(state, u8"Не удалось загрузить профиль для отката XP.", 1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+        Profile profile = *profileOpt;
+        const int newTotalXp = std::max(0, profile.total_xp() - participant.globalXp);
+        const int newTasks = std::max(0, profile.tasks_completed() - 1);
+        profile.set_total_xp(newTotalXp);
+        profile.set_tasks_completed(newTasks);
+        storage.save_profile(profile);
+    }
+    if (!previousActive.empty()) {
+        SelectProfileById(state, storage, catalog, previousActive);
+    }
+    return ok;
+}
+
+void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Tasks, state.storageDir);
+    if (!state.modules.tasks) {
+        DrawCardHeader(u8"Задачи");
+        ImGui::TextDisabled(u8"Модуль задач отключён.");
+        return;
+    }
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Все выполненные задачи с распределением вклада.");
     if (state.tasks.empty()) {
@@ -18,6 +52,7 @@ void DrawTasksPanel(GuiState& state) {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
             if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+                PrepareXpEntries(state, catalog);
                 state.xpPopupRequest = true;
             }
             ImGui::PopStyleColor(3);
@@ -26,6 +61,36 @@ void DrawTasksPanel(GuiState& state) {
         }
         return;
     }
+
+    auto ComputeFilteredTasks = [&state]() {
+        std::vector<const TaskEntry*> ordered;
+        ordered.reserve(state.tasks.size());
+        for (const auto& task : state.tasks) {
+            ordered.push_back(&task);
+        }
+        std::sort(ordered.begin(), ordered.end(), [](const TaskEntry* a, const TaskEntry* b) {
+            return a->createdAt > b->createdAt;
+        });
+        const std::int64_t nowSec = NowSeconds();
+        const std::int64_t minTs = state.tasksFilterDays > 0
+            ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
+            : 0;
+        const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
+            state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
+            ? state.profiles[state.tasksFilterProfile - 1].id
+            : std::string();
+        std::vector<const TaskEntry*> filtered;
+        filtered.reserve(ordered.size());
+        for (const TaskEntry* task : ordered) {
+            const std::string filterText = task->project + " " + task->title + " " + task->description;
+            if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
+            if (state.tasksFilterCategory > 0 && task->category != state.tasksFilterCategory - 1) continue;
+            if (!filterProfileId.empty() && !FindTaskParticipant(*task, filterProfileId)) continue;
+            if (minTs > 0 && task->createdAt < minTs) continue;
+            filtered.push_back(task);
+        }
+        return filtered;
+    };
 
     std::unordered_map<std::string, std::string> nameById;
     nameById.reserve(state.profiles.size());
@@ -102,24 +167,7 @@ void DrawTasksPanel(GuiState& state) {
         if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
             std::filesystem::path outPath;
             int exported = 0;
-            std::vector<const TaskEntry*> filtered;
-            filtered.reserve(state.tasks.size());
-            const std::int64_t nowSec = NowSeconds();
-            const std::int64_t minTs = state.tasksFilterDays > 0
-                ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                : 0;
-            const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                ? state.profiles[state.tasksFilterProfile - 1].id
-                : std::string();
-            for (const auto& task : state.tasks) {
-                const std::string filterText = task.project + " " + task.title + " " + task.description;
-                if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                if (minTs > 0 && task.createdAt < minTs) continue;
-                filtered.push_back(&task);
-            }
+            std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
             if (!ExportTasksCsv(state, filtered, nameById, outPath, exported)) {
                 SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
             } else {
@@ -132,24 +180,7 @@ void DrawTasksPanel(GuiState& state) {
         if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
             std::filesystem::path outPath;
             int exported = 0;
-            std::vector<const TaskEntry*> filtered;
-            filtered.reserve(state.tasks.size());
-            const std::int64_t nowSec = NowSeconds();
-            const std::int64_t minTs = state.tasksFilterDays > 0
-                ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                : 0;
-            const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                ? state.profiles[state.tasksFilterProfile - 1].id
-                : std::string();
-            for (const auto& task : state.tasks) {
-                const std::string filterText = task.project + " " + task.title + " " + task.description;
-                if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                if (minTs > 0 && task.createdAt < minTs) continue;
-                filtered.push_back(&task);
-            }
+            std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
             if (!ExportTasksTxt(state, filtered, nameById, outPath, exported)) {
                 SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
             } else {
@@ -207,24 +238,7 @@ void DrawTasksPanel(GuiState& state) {
             if (ImGui::Button(u8"CSV", ImVec2(-1.0f, 0.0f))) {
                 std::filesystem::path outPath;
                 int exported = 0;
-                std::vector<const TaskEntry*> filtered;
-                filtered.reserve(state.tasks.size());
-                const std::int64_t nowSec = NowSeconds();
-                const std::int64_t minTs = state.tasksFilterDays > 0
-                    ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                    : 0;
-                const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                    state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                    ? state.profiles[state.tasksFilterProfile - 1].id
-                    : std::string();
-                for (const auto& task : state.tasks) {
-                    const std::string filterText = task.project + " " + task.title + " " + task.description;
-                    if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                    if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                    if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                    if (minTs > 0 && task.createdAt < minTs) continue;
-                    filtered.push_back(&task);
-                }
+                std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
                 if (!ExportTasksCsv(state, filtered, nameById, outPath, exported)) {
                     SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
                 } else {
@@ -237,24 +251,7 @@ void DrawTasksPanel(GuiState& state) {
             if (ImGui::Button(u8"TXT", ImVec2(-1.0f, 0.0f))) {
                 std::filesystem::path outPath;
                 int exported = 0;
-                std::vector<const TaskEntry*> filtered;
-                filtered.reserve(state.tasks.size());
-                const std::int64_t nowSec = NowSeconds();
-                const std::int64_t minTs = state.tasksFilterDays > 0
-                    ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-                    : 0;
-                const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-                    state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-                    ? state.profiles[state.tasksFilterProfile - 1].id
-                    : std::string();
-                for (const auto& task : state.tasks) {
-                    const std::string filterText = task.project + " " + task.title + " " + task.description;
-                    if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-                    if (state.tasksFilterCategory > 0 && task.category != state.tasksFilterCategory - 1) continue;
-                    if (!filterProfileId.empty() && !FindTaskParticipant(task, filterProfileId)) continue;
-                    if (minTs > 0 && task.createdAt < minTs) continue;
-                    filtered.push_back(&task);
-                }
+                std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
                 if (!ExportTasksTxt(state, filtered, nameById, outPath, exported)) {
                     SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
                 } else {
@@ -268,37 +265,10 @@ void DrawTasksPanel(GuiState& state) {
         }
     }
 
-    std::vector<const TaskEntry*> ordered;
-    ordered.reserve(state.tasks.size());
-    for (const auto& task : state.tasks) {
-        ordered.push_back(&task);
-    }
-    std::sort(ordered.begin(), ordered.end(), [](const TaskEntry* a, const TaskEntry* b) {
-        return a->createdAt > b->createdAt;
-    });
-
-    const std::int64_t nowSec = NowSeconds();
-    const std::int64_t minTs = state.tasksFilterDays > 0
-        ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
-        : 0;
-    const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
-        state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
-        ? state.profiles[state.tasksFilterProfile - 1].id
-        : std::string();
-
-    std::vector<const TaskEntry*> filtered;
-    filtered.reserve(ordered.size());
-    for (const TaskEntry* task : ordered) {
-        const std::string filterText = task->project + " " + task->title + " " + task->description;
-        if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
-        if (state.tasksFilterCategory > 0 && task->category != state.tasksFilterCategory - 1) continue;
-        if (!filterProfileId.empty() && !FindTaskParticipant(*task, filterProfileId)) continue;
-        if (minTs > 0 && task->createdAt < minTs) continue;
-        filtered.push_back(task);
-    }
+    std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
     std::array<int, Profile::kCategoryCount> categoryCounts{};
-    int totalFiltered = static_cast<int>(filtered.size());
+    const int filteredCount = static_cast<int>(filtered.size());
     int topIdx = 0;
     int topCount = 0;
     int minIdx = -1;
@@ -346,15 +316,15 @@ void DrawTasksPanel(GuiState& state) {
         } else {
             std::ostringstream focusStream;
             focusStream.imbue(std::locale::classic());
-            float pct = totalFiltered > 0 ? (static_cast<float>(topCount) / static_cast<float>(totalFiltered)) * 100.0f : 0.0f;
+            float pct = filteredCount > 0 ? (static_cast<float>(topCount) / static_cast<float>(filteredCount)) * 100.0f : 0.0f;
             focusStream << std::fixed << std::setprecision(0) << pct;
             std::string focusText = std::string(ClassificationLabel(topIdx)) +
                 " (" + std::to_string(topCount) + ", " + focusStream.str() + "%)";
-            const float avgScore = totalFiltered > 0
-                ? static_cast<float>(scoreSum) / static_cast<float>(totalFiltered)
+            const float avgScore = filteredCount > 0
+                ? static_cast<float>(scoreSum) / static_cast<float>(filteredCount)
                 : 0.0f;
-            const float avgPool = totalFiltered > 0
-                ? static_cast<float>(poolSum) / static_cast<float>(totalFiltered)
+            const float avgPool = filteredCount > 0
+                ? static_cast<float>(poolSum) / static_cast<float>(filteredCount)
                 : 0.0f;
             if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
                 ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.7f);
@@ -366,7 +336,7 @@ void DrawTasksPanel(GuiState& state) {
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Всего");
-                ImGui::Text("%d", totalFiltered);
+                ImGui::Text("%d", filteredCount);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Последняя");
@@ -480,9 +450,17 @@ void DrawTasksPanel(GuiState& state) {
         }
         ImGui::EndTable();
     }
-    ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(state.tasks.size()));
-    if (visibleCount == 0) {
+    const int totalTasks = static_cast<int>(state.tasks.size());
+    ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
+    if (filteredCount == 0) {
         ImGui::TextDisabled(u8"Нет задач по фильтру.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+            state.filters.tasks.fill('\0');
+            state.tasksFilterProfile = 0;
+            state.tasksFilterCategory = 0;
+            state.tasksFilterDays = 0;
+        }
     }
 
     const TaskEntry* expanded = nullptr;
@@ -551,7 +529,66 @@ void DrawTasksPanel(GuiState& state) {
                 }
                 ImGui::EndTable();
             }
+            if (state.isAdmin && !expanded->id.empty()) {
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::TextDisabled(u8"Действия");
+                if (ImGui::Button(u8"Удалить задачу и откатить XP", ImVec2(-1.0f, 0.0f))) {
+                    state.pendingTaskDeleteId = expanded->id;
+                    state.taskDeletePopupRequest = true;
+                }
+            }
         }
         EndCard();
+    }
+
+    if (state.taskDeletePopupRequest) {
+        ImGui::OpenPopup(u8"Удалить задачу?");
+        state.taskDeletePopupRequest = false;
+    }
+    bool deleteOpen = true;
+    if (ImGui::BeginPopupModal(u8"Удалить задачу?", &deleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        TaskEntry* target = nullptr;
+        for (auto& task : state.tasks) {
+            if (task.id == state.pendingTaskDeleteId) {
+                target = &task;
+                break;
+            }
+        }
+        if (!target) {
+            ImGui::TextDisabled(u8"Задача не найдена.");
+        } else {
+            std::string title = TaskDisplayTitle(*target);
+            if (title.empty()) title = target->id;
+            ImGui::TextWrapped(u8"Удалить задачу \"%s\" и откатить начисленный XP для участников?", title.c_str());
+            ImGui::Spacing();
+            if (ImGui::Button(u8"Удалить", ImVec2(140.0f, 0.0f))) {
+                TaskEntry copy = *target;
+                bool rollbackOk = RollbackTask(state, storage, catalog, copy);
+                if (rollbackOk) {
+                    state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
+                                                     [&](const TaskEntry& t) { return t.id == copy.id; }),
+                                      state.tasks.end());
+                    SaveTasks(state.storageDir, state.tasks);
+                    if (state.tasksExpandedId == copy.id) {
+                        state.tasksExpandedId.clear();
+                    }
+                    SetStatus(state, u8"Задача удалена, XP откатан.", 0.45f, 0.9f, 0.45f);
+                }
+                state.pendingTaskDeleteId.clear();
+                ImGui::CloseCurrentPopup();
+                deleteOpen = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Отмена", ImVec2(140.0f, 0.0f))) {
+                state.pendingTaskDeleteId.clear();
+                ImGui::CloseCurrentPopup();
+                deleteOpen = false;
+            }
+        }
+        ImGui::EndPopup();
+    }
+    if (!deleteOpen && ImGui::IsPopupOpen(u8"Удалить задачу?")) {
+        ImGui::CloseCurrentPopup();
     }
 }

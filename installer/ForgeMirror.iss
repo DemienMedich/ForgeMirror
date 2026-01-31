@@ -1,7 +1,12 @@
 #define SourceRoot ".."
 
 #ifndef AppVersion
-  #define AppVersion "0.0.0"
+  // Fallback to current app version (kept in CMakeLists.txt). Override via /DAppVersion=... when building.
+  #define AppVersion "0.3.29"
+#endif
+
+#if AppVersion == "0.0.0"
+  #pragma message "AppVersion is 0.0.0. Run installer/build-installer.ps1 (auto-reads APP_VERSION from CMakeLists.txt) or pass /DAppVersion=<version> to ISCC."
 #endif
 
 #ifndef OutputDir

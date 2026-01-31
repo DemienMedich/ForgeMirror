@@ -21,6 +21,74 @@ void append_utf8(std::string& out, uint32_t cp);
 
 const std::vector<SkillEntry> kDefaultSkills = {};
 
+bool has_prefix_nocase(const std::string& text, const std::string& prefix) {
+    if (text.size() < prefix.size()) return false;
+    for (size_t i = 0; i < prefix.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(text[i])) != std::tolower(static_cast<unsigned char>(prefix[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+std::string trim_copy(const std::string& text) {
+    size_t start = 0;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start]))) {
+        ++start;
+    }
+    size_t end = text.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+        --end;
+    }
+    return text.substr(start, end - start);
+}
+
+std::vector<std::string> normalize_professions(const std::vector<std::string>& professions) {
+    std::vector<std::string> out;
+    out.reserve(professions.size());
+    std::unordered_set<std::string> seen;
+    for (const auto& prof : professions) {
+        std::string trimmed = trim_copy(prof);
+        if (trimmed.empty()) continue;
+        if (seen.insert(trimmed).second) {
+            out.push_back(trimmed);
+        }
+    }
+    return out;
+}
+
+std::vector<std::string> split_professions(const std::string& raw) {
+    std::vector<std::string> out;
+    std::string token;
+    for (char ch : raw) {
+        if (ch == ',' || ch == ';') {
+            std::string trimmed = trim_copy(token);
+            if (!trimmed.empty()) {
+                out.push_back(trimmed);
+            }
+            token.clear();
+        } else {
+            token.push_back(ch);
+        }
+    }
+    std::string trimmed = trim_copy(token);
+    if (!trimmed.empty()) {
+        out.push_back(trimmed);
+    }
+    return out;
+}
+
+std::string join_professions(const std::vector<std::string>& professions) {
+    std::string out;
+    for (const auto& prof : professions) {
+        if (prof.empty()) continue;
+        if (!out.empty()) out += ',';
+        out += prof;
+    }
+    return out;
+}
+
 double clamp_weight(double value) {
     const double minW = 0.5;
     const double maxW = 1.6;
@@ -278,6 +346,80 @@ bool encode_cp1251(uint32_t cp, unsigned char& out) {
     return false;
 }
 
+uint32_t decode_cp1251_byte(unsigned char b) {
+    if (b <= 0x7F) return b;
+    switch (b) {
+        case 0x80: return 0x0402;
+        case 0x81: return 0x0403;
+        case 0x82: return 0x201A;
+        case 0x83: return 0x0453;
+        case 0x84: return 0x201E;
+        case 0x85: return 0x2026;
+        case 0x86: return 0x2020;
+        case 0x87: return 0x2021;
+        case 0x88: return 0x20AC;
+        case 0x89: return 0x2030;
+        case 0x8A: return 0x0409;
+        case 0x8B: return 0x2039;
+        case 0x8C: return 0x040A;
+        case 0x8D: return 0x040C;
+        case 0x8E: return 0x040B;
+        case 0x8F: return 0x040F;
+        case 0x90: return 0x0452;
+        case 0x91: return 0x2018;
+        case 0x92: return 0x2019;
+        case 0x93: return 0x201C;
+        case 0x94: return 0x201D;
+        case 0x95: return 0x2022;
+        case 0x96: return 0x2013;
+        case 0x97: return 0x2014;
+        case 0x99: return 0x2122;
+        case 0x9A: return 0x0459;
+        case 0x9B: return 0x203A;
+        case 0x9C: return 0x045A;
+        case 0x9D: return 0x045C;
+        case 0x9E: return 0x045B;
+        case 0x9F: return 0x045F;
+        case 0xA0: return 0x00A0;
+        case 0xA1: return 0x040E;
+        case 0xA2: return 0x045E;
+        case 0xA3: return 0x0408;
+        case 0xA4: return 0x00A4;
+        case 0xA5: return 0x0490;
+        case 0xA6: return 0x00A6;
+        case 0xA7: return 0x00A7;
+        case 0xA8: return 0x0401;
+        case 0xA9: return 0x00A9;
+        case 0xAA: return 0x0404;
+        case 0xAB: return 0x00AB;
+        case 0xAC: return 0x00AC;
+        case 0xAD: return 0x00AD;
+        case 0xAE: return 0x00AE;
+        case 0xAF: return 0x0407;
+        case 0xB0: return 0x00B0;
+        case 0xB1: return 0x00B1;
+        case 0xB2: return 0x0406;
+        case 0xB3: return 0x0456;
+        case 0xB4: return 0x0491;
+        case 0xB5: return 0x00B5;
+        case 0xB6: return 0x00B6;
+        case 0xB7: return 0x00B7;
+        case 0xB8: return 0x0451;
+        case 0xB9: return 0x2116;
+        case 0xBA: return 0x0454;
+        case 0xBB: return 0x00BB;
+        case 0xBC: return 0x0458;
+        case 0xBD: return 0x0405;
+        case 0xBE: return 0x0455;
+        case 0xBF: return 0x0457;
+        default:
+            if (b >= 0xC0 && b <= 0xFF) {
+                return 0x0410 + (b - 0xC0);
+            }
+            return 0x003F; // '?'
+    }
+}
+
 uint32_t lower_codepoint(uint32_t cp) {
     if (cp >= 'A' && cp <= 'Z') return cp + 32;
     if (cp >= 0x0410 && cp <= 0x042F) return cp + 0x20;
@@ -387,15 +529,43 @@ std::string FixMojibakeCp1251Utf8(const std::string& text) {
     return out;
 }
 
+std::string DecodeCp1251ToUtf8(const std::string& bytes) {
+    std::string out;
+    out.reserve(bytes.size());
+    for (unsigned char b : bytes) {
+        append_utf8(out, decode_cp1251_byte(b));
+    }
+    return out;
+}
+
 std::string MaybeFixMojibake(const std::string& text) {
     if (text.empty()) return text;
     const TextQuality before = MeasureTextQuality(text);
-    if (!LooksLikeMojibake(before)) return text;
-    const std::string fixed = FixMojibakeCp1251Utf8(text);
-    if (fixed == text) return text;
-    const TextQuality after = MeasureTextQuality(fixed);
-    if (MojibakeScore(after) < MojibakeScore(before)) return fixed;
-    return text;
+    int bestScore = MojibakeScore(before);
+    std::string best = text;
+
+    if (LooksLikeMojibake(before)) {
+        const std::string fixed = FixMojibakeCp1251Utf8(text);
+        if (fixed != text) {
+            const int score = MojibakeScore(MeasureTextQuality(fixed));
+            if (score < bestScore) {
+                bestScore = score;
+                best = fixed;
+            }
+        }
+    }
+
+    // Try full CP1251 decode if text was likely saved as CP1251 bytes.
+    const std::string cpCandidate = DecodeCp1251ToUtf8(text);
+    if (cpCandidate != text) {
+        const int score = MojibakeScore(MeasureTextQuality(cpCandidate));
+        if (score < bestScore) {
+            bestScore = score;
+            best = cpCandidate;
+        }
+    }
+
+    return best;
 }
 
 std::string lowercase_utf8(const std::string& value) {
@@ -452,6 +622,32 @@ double SkillCatalog::weight(const std::string& skill) const {
     return 1.0;
 }
 
+std::string SkillCatalog::category(const std::string& id) const {
+    if (auto resolved = resolve_id(id)) {
+        auto it = categoriesById_.find(*resolved);
+        if (it != categoriesById_.end()) return it->second;
+    }
+    return {};
+}
+
+std::vector<std::string> SkillCatalog::professions(const std::string& id) const {
+    if (auto resolved = resolve_id(id)) {
+        auto it = professionsById_.find(*resolved);
+        if (it != professionsById_.end()) return it->second;
+    }
+    return {};
+}
+
+bool SkillCatalog::has_profession(const std::string& id, const std::string& professionId) const {
+    if (professionId.empty()) return false;
+    if (auto resolved = resolve_id(id)) {
+        auto it = professionsById_.find(*resolved);
+        if (it == professionsById_.end()) return false;
+        return std::find(it->second.begin(), it->second.end(), professionId) != it->second.end();
+    }
+    return false;
+}
+
 std::string SkillCatalog::display_name(const std::string& id) const {
     if (auto resolved = resolve_id(id)) {
         auto it = namesById_.find(*resolved);
@@ -491,11 +687,14 @@ void SkillCatalog::reload() {
     load();
 }
 
-bool SkillCatalog::add_skill(const std::string& skill, double weight, const std::string& description) {
+bool SkillCatalog::add_skill(const std::string& skill, double weight, const std::string& description,
+                             const std::string& category, const std::vector<std::string>& professions) {
     std::string trimmed = trim(skill);
     if (trimmed.empty()) return false;
     weight = clamp_weight(weight);
     std::string desc = trim(description);
+    std::string cat = trim(category);
+    std::vector<std::string> profs = normalize_professions(professions);
 
     auto norm = normalize(trimmed);
     auto it = idByName_.find(norm);
@@ -503,6 +702,8 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
         const std::string& id = it->second;
         double& storedWeight = weightsById_[id];
         std::string& storedDesc = descriptionsById_[id];
+        std::string& storedCat = categoriesById_[id];
+        std::vector<std::string>& storedProf = professionsById_[id];
         bool changed = false;
         if (std::abs(storedWeight - weight) >= 1e-3) {
             storedWeight = weight;
@@ -512,22 +713,34 @@ bool SkillCatalog::add_skill(const std::string& skill, double weight, const std:
             storedDesc = std::move(desc);
             changed = true;
         }
+        if (storedCat != cat) {
+            storedCat = std::move(cat);
+            changed = true;
+        }
+        if (storedProf != profs) {
+            storedProf = profs;
+            changed = true;
+        }
         if (changed) save();
         return changed;
     }
 
     const std::string id = make_id(trimmed);
-    add_internal(id, trimmed, weight, desc, true);
+    add_internal(id, trimmed, weight, desc, cat, profs, true);
     return true;
 }
 
-bool SkillCatalog::update_skill(const std::string& id, const std::string& displayName, double weight, const std::string& description) {
+bool SkillCatalog::update_skill(const std::string& id, const std::string& displayName, double weight,
+                                const std::string& description, const std::string& category,
+                                const std::vector<std::string>& professions) {
     auto resolved = resolve_id(id);
     if (!resolved) return false;
     std::string trimmed = trim(displayName);
     if (trimmed.empty()) return false;
     weight = clamp_weight(weight);
     std::string desc = trim(description);
+    std::string cat = trim(category);
+    std::vector<std::string> profs = normalize_professions(professions);
 
     const std::string currentId = *resolved;
     const std::string newNorm = normalize(trimmed);
@@ -557,6 +770,16 @@ bool SkillCatalog::update_skill(const std::string& id, const std::string& displa
         storedDesc = std::move(desc);
         changed = true;
     }
+    std::string& storedCat = categoriesById_[currentId];
+    if (storedCat != cat) {
+        storedCat = std::move(cat);
+        changed = true;
+    }
+    std::vector<std::string>& storedProf = professionsById_[currentId];
+    if (storedProf != profs) {
+        storedProf = profs;
+        changed = true;
+    }
     if (changed) save();
     return changed;
 }
@@ -572,6 +795,7 @@ bool SkillCatalog::remove_skill(const std::string& idOrName) {
     namesById_.erase(id);
     weightsById_.erase(id);
     descriptionsById_.erase(id);
+    categoriesById_.erase(id);
     orderedIds_.erase(std::remove(orderedIds_.begin(), orderedIds_.end(), id), orderedIds_.end());
     save();
     return true;
@@ -583,12 +807,14 @@ void SkillCatalog::load() {
     namesById_.clear();
     weightsById_.clear();
     descriptionsById_.clear();
+    categoriesById_.clear();
+    professionsById_.clear();
     bool repaired = false;
 
     std::ifstream in(file_path(), std::ios::binary);
     if (!in) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
+            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, {}, {}, false);
         }
         save();
         return;
@@ -611,48 +837,80 @@ void SkillCatalog::load() {
         std::string id;
         std::string name;
         std::string desc;
+        std::string category;
+        std::string professionToken;
+        std::vector<std::string> professions;
         double weight = 1.0;
-        auto append_desc = [&](size_t start) {
-            if (start >= parts.size()) return;
-            desc = parts[start];
-            for (size_t i = start + 1; i < parts.size(); ++i) {
-                if (!desc.empty()) desc += "|";
-                desc += parts[i];
+        auto join_rest = [&](size_t start) {
+            std::string out;
+            for (size_t i = start; i < parts.size(); ++i) {
+                if (!out.empty()) out += "|";
+                out += parts[i];
             }
+            return out;
+        };
+        auto is_cat_token = [](const std::string& token) {
+            return has_prefix_nocase(token, "cat=") || has_prefix_nocase(token, "cat:");
+        };
+        auto extract_cat = [&](const std::string& token) {
+            if (has_prefix_nocase(token, "cat=")) return trim(token.substr(4));
+            if (has_prefix_nocase(token, "cat:")) return trim(token.substr(4));
+            return trim(token);
+        };
+        auto is_prof_token = [](const std::string& token) {
+            return has_prefix_nocase(token, "prof=") || has_prefix_nocase(token, "prof:");
+        };
+        auto extract_prof = [&](const std::string& token) {
+            if (has_prefix_nocase(token, "prof=")) return trim(token.substr(5));
+            if (has_prefix_nocase(token, "prof:")) return trim(token.substr(5));
+            return trim(token);
         };
 
         if (parts.size() >= 4) {
             id = parts[0];
             name = parts[1];
             double parsed = 1.0;
-            if (try_parse_weight(parts[2], parsed)) {
-                weight = parsed;
-                append_desc(3);
-            } else if (try_parse_weight(parts[3], parsed)) {
-                weight = parsed;
-                desc = parts[2];
-                if (parts.size() > 4) {
-                    for (size_t i = 4; i < parts.size(); ++i) {
-                        if (!desc.empty()) desc += "|";
-                        desc += parts[i];
+            bool parsedWeight = try_parse_weight(parts[2], parsed);
+            size_t descStart = 3;
+            if (!parsedWeight && try_parse_weight(parts[3], parsed)) {
+                parsedWeight = true;
+                descStart = 2;
+                desc = join_rest(4);
+            }
+            weight = parsedWeight ? parsed : parse_weight(parts[2], 1.0);
+            if (desc.empty()) {
+                if (descStart < parts.size()) {
+                    if (is_cat_token(parts[descStart])) {
+                        category = extract_cat(parts[descStart]);
+                        desc = join_rest(descStart + 1);
+                    } else if (is_prof_token(parts[descStart])) {
+                        professionToken = extract_prof(parts[descStart]);
+                        desc = join_rest(descStart + 1);
+                    } else {
+                        desc = join_rest(descStart);
                     }
                 }
-            } else {
-                weight = parse_weight(parts[2], 1.0);
-                append_desc(3);
             }
         } else if (parts.size() >= 3) {
             name = parts[0];
             double parsed = 1.0;
-            if (try_parse_weight(parts[1], parsed)) {
-                weight = parsed;
-                desc = parts[2];
-            } else if (try_parse_weight(parts[2], parsed)) {
-                weight = parsed;
-                desc = parts[1];
-            } else {
-                weight = parse_weight(parts[1], 1.0);
-                desc = parts[2];
+            bool parsedWeight = try_parse_weight(parts[1], parsed);
+            size_t descStart = 2;
+            if (!parsedWeight && try_parse_weight(parts[2], parsed)) {
+                parsedWeight = true;
+                descStart = 1;
+            }
+            weight = parsedWeight ? parsed : parse_weight(parts[1], 1.0);
+            if (descStart < parts.size()) {
+                if (is_cat_token(parts[descStart])) {
+                    category = extract_cat(parts[descStart]);
+                    desc = join_rest(descStart + 1);
+                } else if (is_prof_token(parts[descStart])) {
+                    professionToken = extract_prof(parts[descStart]);
+                    desc = join_rest(descStart + 1);
+                } else {
+                    desc = join_rest(descStart);
+                }
             }
         } else if (parts.size() >= 2) {
             name = parts[0];
@@ -674,16 +932,33 @@ void SkillCatalog::load() {
                 repaired = true;
             }
         }
+        if (!category.empty()) {
+            std::string fixedCat = MaybeFixMojibake(category);
+            if (fixedCat != category) {
+                category = std::move(fixedCat);
+                repaired = true;
+            }
+        }
+        if (!professionToken.empty()) {
+            std::string fixedProf = MaybeFixMojibake(professionToken);
+            if (fixedProf != professionToken) {
+                professionToken = std::move(fixedProf);
+                repaired = true;
+            }
+        }
         name = trim(name);
         desc = trim(desc);
+        category = trim(category);
+        professionToken = trim(professionToken);
+        professions = split_professions(professionToken);
         if (name.empty()) continue;
         if (id.empty()) id = make_id(name);
-        add_internal(id, name, clamp_weight(weight), desc, false);
+        add_internal(id, name, clamp_weight(weight), desc, category, professions, false);
     }
 
     if (orderedIds_.empty()) {
         for (const auto& entry : kDefaultSkills) {
-            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, false);
+            add_internal(make_id(entry.name), entry.name, entry.weight, entry.description, {}, {}, false);
         }
         save();
     } else {
@@ -726,6 +1001,20 @@ void SkillCatalog::save() const {
         if (nameIt == namesById_.end()) continue;
         const double w = weight(id);
         out << id << "|" << nameIt->second << "|" << w;
+        std::string cat;
+        if (auto catIt = categoriesById_.find(id); catIt != categoriesById_.end()) {
+            cat = catIt->second;
+        }
+        std::string prof;
+        if (auto profIt = professionsById_.find(id); profIt != professionsById_.end()) {
+            prof = join_professions(profIt->second);
+        }
+        if (!cat.empty()) {
+            out << "|cat=" << cat;
+        }
+        if (!prof.empty()) {
+            out << "|prof=" << prof;
+        }
         auto it = descriptionsById_.find(id);
         if (it != descriptionsById_.end() && !it->second.empty()) {
             out << "|" << it->second;
@@ -783,16 +1072,22 @@ std::string SkillCatalog::make_id(const std::string& displayName) const {
     return candidate;
 }
 
-void SkillCatalog::add_internal(const std::string& id, const std::string& displayName, double weight, const std::string& description, bool persist) {
+void SkillCatalog::add_internal(const std::string& id, const std::string& displayName, double weight,
+                                const std::string& description, const std::string& category,
+                                const std::vector<std::string>& professions, bool persist) {
     std::string trimmedName = trim(displayName);
     if (trimmedName.empty()) return;
     const std::string norm = normalize(trimmedName);
+    const std::string trimmedCat = trim(category);
+    const std::vector<std::string> trimmedProfs = normalize_professions(professions);
     auto existingByName = idByName_.find(norm);
     if (existingByName != idByName_.end()) {
         const std::string existingId = existingByName->second;
         namesById_[existingId] = trimmedName;
         weightsById_[existingId] = clamp_weight(weight);
         descriptionsById_[existingId] = trim(description);
+        categoriesById_[existingId] = trimmedCat;
+        professionsById_[existingId] = trimmedProfs;
         if (persist) save();
         return;
     }
@@ -809,6 +1104,8 @@ void SkillCatalog::add_internal(const std::string& id, const std::string& displa
     idByName_[norm] = id;
     weightsById_[id] = clamp_weight(weight);
     descriptionsById_[id] = trim(description);
+    categoriesById_[id] = trimmedCat;
+    professionsById_[id] = trimmedProfs;
 
     if (persist) save();
 }

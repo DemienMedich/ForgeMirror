@@ -10,7 +10,15 @@ static std::string tasks_read_all(const std::filesystem::path& p) {
     if (!in) return {};
     std::ostringstream ss;
     ss << in.rdbuf();
-    return ss.str();
+    std::string data = ss.str();
+    // Strip UTF-8 BOM if present
+    if (data.size() >= 3 &&
+        static_cast<unsigned char>(data[0]) == 0xEF &&
+        static_cast<unsigned char>(data[1]) == 0xBB &&
+        static_cast<unsigned char>(data[2]) == 0xBF) {
+        data.erase(0, 3);
+    }
+    return data;
 }
 
 static bool tasks_write_all(const std::filesystem::path& p, const std::string& data) {
@@ -272,7 +280,11 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
         out << "\n";
     }
     out << "]";
-    return tasks_write_all(TasksStoragePath(storageDir), out.str());
+    std::string data = out.str();
+    // Write BOM for editors (Notepad) to recognize UTF-8
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    data.insert(0, reinterpret_cast<const char*>(bom), sizeof(bom));
+    return tasks_write_all(TasksStoragePath(storageDir), data);
 }
 
 static const TaskParticipant* FindTaskParticipant(const TaskEntry& task, const std::string& profileId) {
@@ -320,6 +332,9 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for spreadsheet tools
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "Date,Project,Task,Description,Category,Score,Participants,BaseXP,BasePool\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
@@ -355,6 +370,9 @@ static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEn
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for editors
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "Выполненные задачи\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;

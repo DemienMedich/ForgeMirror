@@ -97,6 +97,7 @@ const char* ClassificationLabel(int categoryIndex);
 #include "GuiUiSettings.inc"
 #include "GuiUiHelpers.inc"
 #include "GuiTasks.inc"
+#include "GuiProfessions.inc"
 #include "GuiPomodoro.inc"
 #include "GuiIcons.inc"
 #include "GuiShortcuts.inc"
@@ -202,6 +203,9 @@ int main() {
     glfwTerminate();
     return 0;
 }
-
-
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return main();
+}
+#endif
 

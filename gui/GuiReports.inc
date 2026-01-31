@@ -24,6 +24,9 @@ bool ExportAppLogs(const GuiState& state, std::filesystem::path& outPath, int& e
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for editors
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     for (const auto& entry : state.appLogs) {
         if (!MatchesLogFilters(state, entry)) continue;
         ++exportedCount;
@@ -68,6 +71,9 @@ bool ExportProfileReportTxt(const GuiState& state, const SkillCatalog& catalog, 
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for editors
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
 
     const int level = profile.overall_level();
     const int totalXp = profile.total_xp();
@@ -128,6 +134,9 @@ bool ExportProfileReportCsv(const GuiState& state, const SkillCatalog& catalog, 
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for spreadsheet tools
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
 
     const std::int64_t lastTask = profile.last_task_timestamp();
     const std::string lastTaskText = lastTask > 0 ? FormatTimestamp(lastTask, "%Y-%m-%d %H:%M") : std::string(u8"нет данных");
@@ -182,6 +191,9 @@ bool ExportProfileActivity(const GuiState& state, const std::string& profileId,
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for editors
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "Последние действия: " << profileId << "\n";
     for (auto it = log.rbegin(); it != log.rend(); ++it) {
         if (!MatchesFilter(*it, filter)) continue;
@@ -223,6 +235,9 @@ bool ExportAdminStatsCsv(const GuiState& state, std::filesystem::path& outPath) 
     std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // UTF-8 BOM for spreadsheet tools
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
 
     out << "ID,Name,Level,Rank,TotalXP,LastActivity,InactiveFor,Archived,RecoveryTasks,AchievementsTotal,AchievementsActive\n";
     const std::int64_t nowSec = NowSeconds();

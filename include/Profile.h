@@ -68,6 +68,8 @@ public:
     void increment_tasks_completed(int delta = 1);
     bool is_admin() const { return isAdmin_; }
     void set_admin(bool value) { isAdmin_ = value; }
+    const std::string& profession_id() const { return professionId_; }
+    void set_profession_id(std::string id) { professionId_ = std::move(id); }
     bool penalty_active() const { return recoveryTasksRemaining_ > 0; }
     bool penalties_enabled() const;
     int recovery_tasks_remaining() const { return recoveryTasksRemaining_; }
@@ -79,7 +81,6 @@ public:
     void add_achievement(const Achievement& ach) { achievements_.push_back(ach); }
     void remove_achievement(size_t idx) { if (idx < achievements_.size()) achievements_.erase(achievements_.begin() + idx); }
     double skill_bonus_multiplier(const std::string& skillName, std::int64_t now) const;
-
 private:
     static int RequiredXpForLevel(int level);
     static int TotalXpForLevel(int level);
@@ -98,4 +99,5 @@ private:
     int recoveryTasksRemaining_ = 0;
     int tasksCompleted_ = 0;
     std::vector<Achievement> achievements_;
+    std::string professionId_;
 };

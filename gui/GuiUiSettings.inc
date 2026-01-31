@@ -28,6 +28,15 @@ std::filesystem::path UiPresetPath(const std::filesystem::path& storageDir, cons
     return dir / (SanitizePresetName(name) + ".ini");
 }
 
+void StripUtf8Bom(std::string& s) {
+    if (s.size() >= 3 &&
+        static_cast<unsigned char>(s[0]) == 0xEF &&
+        static_cast<unsigned char>(s[1]) == 0xBB &&
+        static_cast<unsigned char>(s[2]) == 0xBF) {
+        s.erase(0, 3);
+    }
+}
+
 std::vector<std::string> LoadUiPresetNames(const std::filesystem::path& storageDir) {
     std::vector<std::string> out;
     std::error_code ec;
@@ -118,7 +127,12 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
     in.imbue(std::locale::classic());
     std::string section;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
         auto t = TrimStringGui(line);
         if (t.empty() || t[0] == '#' || t[0] == ';') continue;
         if (t.front() == '[' && t.back() == ']') {
@@ -254,6 +268,9 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return;
     out.imbue(std::locale::classic());
+    // Write BOM for editors (Notepad) to recognize UTF-8
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "[style]\n";
     out << "theme=" << settings.theme << "\n";
     out << "fontScale=" << settings.fontScale << "\n";

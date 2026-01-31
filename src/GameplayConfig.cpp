@@ -116,7 +116,17 @@ GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir) {
 
     std::string section;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) {
+            if (line.size() >= 3 &&
+                static_cast<unsigned char>(line[0]) == 0xEF &&
+                static_cast<unsigned char>(line[1]) == 0xBB &&
+                static_cast<unsigned char>(line[2]) == 0xBF) {
+                line.erase(0, 3);
+            }
+            firstLine = false;
+        }
         auto t = trim(line);
         if (t.empty() || t[0] == '#' || t[0] == ';') continue;
         if (t.front() == '[' && t.back() == ']') {
@@ -168,6 +178,9 @@ bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::pat
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     out.imbue(std::locale::classic());
+    // Write BOM for editors (Notepad) to recognize UTF-8
+    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "# Gameplay rules for ForgeMirror\n";
     out << "[leveling]\n";
     out << "base=" << sanitized.levelBaseXp << "\n";

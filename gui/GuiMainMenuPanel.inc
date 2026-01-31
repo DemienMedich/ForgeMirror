@@ -44,6 +44,7 @@ static void ApplyCloudResultStatus(GuiState& state, const CloudSyncResult& resul
     } else {
         SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
     }
+    FindStrayStorageFiles(state.storageDir, 5, state.straySamples, state.strayFileCount);
 }
 
 static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
@@ -55,6 +56,8 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         RefreshProfiles(state, storage, catalog);
         state.tasks = LoadTasks(state.storageDir);
         state.pipelineSteps = LoadPipeline(state.storageDir);
+        state.rulesConfig = LoadGameplayConfig(state.storageDir);
+        state.rulesDraft = state.rulesConfig;
     }
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
@@ -99,6 +102,8 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             RefreshProfiles(state, storage, catalog);
             state.tasks = LoadTasks(state.storageDir);
             state.pipelineSteps = LoadPipeline(state.storageDir);
+            state.rulesConfig = LoadGameplayConfig(state.storageDir);
+            state.rulesDraft = state.rulesConfig;
         }
     }
     if (doPush) {
@@ -187,6 +192,13 @@ static std::int64_t ComputeStorageStamp(const std::filesystem::path& storageDir)
             latest = std::max(latest, stamp);
         }
     }
+    auto gameplayPath = storageDir / "meta" / "gameplay.ini";
+    if (std::filesystem::exists(gameplayPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(gameplayPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
     return latest;
 }
 
@@ -199,7 +211,7 @@ static std::int64_t GetStorageStamp(GuiState& state) {
     return state.lastStorageDataAt;
 }
 
-void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
@@ -223,6 +235,8 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
 
     ImVec4 menuBg = style.Colors[ImGuiCol_WindowBg];
     menuBg.w = std::max(menuBg.w, 0.85f);
+    bool barHovered = false;
+    bool barAnyItemHovered = false;
     ImGui::PushStyleColor(ImGuiCol_MenuBarBg, menuBg);
     if (ImGui::BeginMainMenuBar()) {
 #ifdef APP_VERSION
@@ -373,11 +387,91 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
             ImGui::TextDisabled(u8"Папка: %s", cloudRootLabel.c_str());
             ImGui::Separator();
+            if (state.isAdmin && state.strayFileCount > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
+                ImGui::Text(u8"Лишние файлы: %d", state.strayFileCount);
+                ImGui::PopStyleColor();
+                if (!state.straySamples.empty()) {
+                    ImGui::TextDisabled(u8"Примеры:");
+                    for (const auto& s : state.straySamples) {
+                        ImGui::BulletText("%s", s.c_str());
+                    }
+                }
+                ImGui::Separator();
+            }
+            if (state.isAdmin) {
+#ifdef APP_VERSION
+                ImGui::TextDisabled(u8"Версия приложения: %s", APP_VERSION);
+#endif
+                const std::int64_t dataStamp = GetStorageStamp(state);
+                const std::filesystem::path legacyDir = ProjectSeedDataDir();
+                const bool legacyHasData = HasProjectSeedData();
+                ImGui::TextDisabled(u8"Проектный data/: %s", legacyHasData ? u8"обнаружен" : u8"нет");
+                if (legacyHasData) {
+                    const std::string legacyPath = legacyDir.u8string();
+                    ImGui::TextDisabled(u8"Путь: %s", legacyPath.c_str());
+                    if (ImGui::SmallButton(u8"Копировать путь##legacy_data")) {
+                        ImGui::SetClipboardText(legacyPath.c_str());
+                    }
+                }
+                ImGui::TextDisabled(u8"Штамп данных: %s",
+                    dataStamp > 0 ? FormatTimestamp(dataStamp, "%Y-%m-%d %H:%M").c_str() : u8"(нет данных)");
+                ImGui::Separator();
+            }
             if (ImGui::MenuItem(u8"Обновить из облака")) {
                 RunCloudPull(state, storage, catalog);
             }
 
             if (!state.isAdmin) ImGui::BeginDisabled();
+            if (ImGui::MenuItem(u8"Очистить лишние файлы")) {
+                int removed = 0;
+                removed += RemoveStrayFiles(state.storageDir, removed) ? 0 : 0;
+                FindStrayStorageFiles(state.storageDir, 5, state.straySamples, state.strayFileCount);
+                if (removed > 0) {
+                    SetStatus(state, u8"Лишние данные удалены.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, u8"Лишние данные не найдены.", 0.6f, 0.7f, 1.0f);
+                }
+            }
+            if (ImGui::MenuItem(u8"Расширенный отчет")) {
+                std::vector<std::string> strayList;
+                if (CollectStrayStorageFiles(state.storageDir, strayList)) {
+                    std::error_code ec;
+                    auto reportDir = state.storageDir / "meta" / "reports";
+                    std::filesystem::create_directories(reportDir, ec);
+                    if (ec) {
+                        SetStatus(state, u8"Не удалось создать папку отчетов.", 1.0f, 0.75f, 0.35f);
+                    } else {
+                        std::string stamp = FormatTimestamp(NowSeconds(), "%Y%m%d-%H%M%S");
+                        if (stamp.empty()) stamp = std::to_string(NowSeconds());
+                        auto outPath = reportDir / ("storage-health-" + stamp + ".txt");
+                        std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+                        if (!out) {
+                            SetStatus(state, u8"Не удалось записать отчет.", 1.0f, 0.75f, 0.35f);
+                        } else {
+                            out.imbue(std::locale::classic());
+                            const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+                            out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
+                            out << "Отчет хранилища\n";
+                            out << "Папка: " << state.storageDir.u8string() << "\n";
+                            out << "Дата: " << FormatTimestamp(NowSeconds(), "%Y-%m-%d %H:%M") << "\n";
+                            out << "Лишние элементы: " << strayList.size() << "\n\n";
+                            if (strayList.empty()) {
+                                out << "Лишние файлы не найдены.\n";
+                            } else {
+                                for (const auto& entry : strayList) {
+                                    out << entry << "\n";
+                                }
+                            }
+                            std::string msg = u8"Отчет сохранен: ";
+                            msg += outPath.u8string();
+                            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                        }
+                    }
+                } else {
+                    SetStatus(state, u8"Не удалось сформировать отчет.", 1.0f, 0.75f, 0.35f);
+                }
+            }
             if (ImGui::MenuItem(u8"Выгрузить в облако")) {
                 RunCloudPush(state);
             }
@@ -505,6 +599,19 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
                 tooltip += FormatTimestamp(state.lastCloudSyncOkAt, "%Y-%m-%d %H:%M");
             }
         }
+        if (state.strayFileCount > 0) {
+            tooltip += u8"\nЛишние файлы в хранилище: ";
+            tooltip += std::to_string(state.strayFileCount);
+            if (!state.straySamples.empty()) {
+                tooltip += u8"\nПримеры: ";
+                bool first = true;
+                for (const auto& s : state.straySamples) {
+                    if (!first) tooltip += ", ";
+                    tooltip += s;
+                    first = false;
+                }
+            }
+        }
         ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, ImGui::GetColorU32(dotColor));
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", tooltip.c_str());
@@ -526,9 +633,15 @@ void DrawMainMenuBar(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
             state.requestExit = true;
         }
 
+        barHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        barAnyItemHovered = ImGui::IsAnyItemHovered();
         ImGui::EndMainMenuBar();
     }
     ImGui::PopStyleColor();
+    const bool canDragBar = window && !state.ui.windowDecorated && !state.ui.windowFullscreen;
+    if (canDragBar && barHovered && !barAnyItemHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        DragWindow(window, ImGui::GetIO().MouseDelta);
+    }
 }
 
 void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {

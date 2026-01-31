@@ -9,6 +9,7 @@ struct RankOption;
 // User-entered share for a skill in the Add Experience sheet.
 struct XpEntry {
     int percent = 0;
+    int rating = 0;
 };
 
 // Profile contribution share for a multi-profile task.
@@ -46,6 +47,12 @@ struct ShortcutEntry {
     std::string id;
     std::string label;
     std::string path;
+};
+
+struct ProfessionEntry {
+    std::string id;
+    std::string name;
+    std::string description;
 };
 
 // Simple description struct for pipeline hints shown in the UI sidebar.

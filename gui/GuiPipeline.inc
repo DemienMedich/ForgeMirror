@@ -85,7 +85,15 @@ static std::string pipeline_read_all(const std::filesystem::path& p) {
     if (!in) return {};
     std::ostringstream ss;
     ss << in.rdbuf();
-    return ss.str();
+    std::string data = ss.str();
+    // Strip UTF-8 BOM if present
+    if (data.size() >= 3 &&
+        static_cast<unsigned char>(data[0]) == 0xEF &&
+        static_cast<unsigned char>(data[1]) == 0xBB &&
+        static_cast<unsigned char>(data[2]) == 0xBF) {
+        data.erase(0, 3);
+    }
+    return data;
 }
 
 static bool pipeline_write_all(const std::filesystem::path& p, const std::string& data) {
@@ -98,6 +106,9 @@ static bool pipeline_write_all(const std::filesystem::path& p, const std::string
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
         if (!out) return false;
+        // Write BOM for editors (Notepad) to recognize UTF-8
+        const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
         out << data;
         if (!out.good()) return false;
     }

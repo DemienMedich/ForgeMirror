@@ -10,6 +10,11 @@ static void SyncPipelineEditBuffers(GuiState& state, int index) {
 
 void DrawPipelinePanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pipeline, state.storageDir);
+    if (!state.modules.pipeline) {
+        DrawCardHeader(u8"Пайплайн");
+        ImGui::TextDisabled(u8"Модуль пайплайна отключён.");
+        return;
+    }
     const int stepCount = static_cast<int>(state.pipelineSteps.size());
     if (stepCount == 0) {
         DrawCardHeader(u8"Пайплайн");

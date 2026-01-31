@@ -11,7 +11,15 @@ static std::string shortcuts_read_all(const std::filesystem::path& p) {
     if (!in) return {};
     std::ostringstream ss;
     ss << in.rdbuf();
-    return ss.str();
+    std::string data = ss.str();
+    // Strip UTF-8 BOM if present
+    if (data.size() >= 3 &&
+        static_cast<unsigned char>(data[0]) == 0xEF &&
+        static_cast<unsigned char>(data[1]) == 0xBB &&
+        static_cast<unsigned char>(data[2]) == 0xBF) {
+        data.erase(0, 3);
+    }
+    return data;
 }
 
 static bool shortcuts_write_all(const std::filesystem::path& p, const std::string& data) {
@@ -24,6 +32,9 @@ static bool shortcuts_write_all(const std::filesystem::path& p, const std::strin
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
         if (!out) return false;
+        // Write BOM for editors (Notepad) to recognize UTF-8
+        const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
         out << data;
         if (!out.good()) return false;
     }
@@ -513,7 +524,9 @@ static void DrawShortcutsSidebar(GuiState& state) {
                 ImGui::PushID(static_cast<int>(i));
                 if (ShortcutBadgeButton("shortcut_launch", badge, entry.label.c_str(), accent, iconSize, true)) {
                     if (!LaunchShortcut(entry.path)) {
-                        SetStatus(state, u8"Не удалось открыть ярлык.", 1.0f, 0.75f, 0.35f);
+                        std::string msg = u8"Не удалось открыть ярлык: ";
+                        msg += entry.path;
+                        SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
                     }
                 }
                 ImGui::SameLine(0.0f, style.ItemSpacing.x * 0.6f);
@@ -547,6 +560,11 @@ static void DrawShortcutsSidebar(GuiState& state) {
 
 static void DrawShortcutsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Shortcuts, state.storageDir);
+    if (!state.modules.shortcuts) {
+        DrawCardHeader(u8"Ярлыки");
+        ImGui::TextDisabled(u8"Модуль ярлыков отключён.");
+        return;
+    }
     DrawCardHeader(u8"Ярлыки");
     ImGui::TextDisabled(u8"Добавьте ярлыки программ и запускайте их из правой панели.");
 
@@ -580,6 +598,8 @@ static void DrawShortcutsPanel(GuiState& state) {
         std::string label = TrimStringGui(state.shortcutLabel.data());
         if (path.empty()) {
             SetStatus(state, u8"Укажите путь к ярлыку.", 1.0f, 0.45f, 0.45f);
+        } else if (!std::filesystem::exists(path)) {
+            SetStatus(state, u8"Файл не найден: " + path, 1.0f, 0.75f, 0.35f);
         } else {
             if (label.empty()) {
                 label = std::filesystem::path(path).stem().string();

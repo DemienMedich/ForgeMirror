@@ -3,6 +3,9 @@ struct GuiDataState {
     std::vector<IJobStorage::ProfileInfo> profiles;
     std::optional<GuiProfile> active;
     std::filesystem::path storageDir;
+    ModuleToggles modules;
+    int strayFileCount = 0;
+    std::vector<std::string> straySamples;
     std::string adminPasswordExpected;
     GameplayConfig rulesConfig;
     GameplayConfig rulesDraft;
@@ -14,6 +17,9 @@ struct GuiDataState {
     std::vector<TaskEntry> tasks;
     std::vector<ShortcutEntry> shortcuts;
     std::vector<PipelineStep> pipelineSteps;
+    std::vector<ProfessionEntry> professions;
+    std::unordered_map<std::string, std::string> profileProfessionCache;
+    bool profileProfessionDirty = true;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;
 };
@@ -43,6 +49,7 @@ struct GuiRuntimeState {
     std::string viewMeshError;
     std::array<char, 260> modelPathBuffer{};
     bool showSkillCatalog = false;
+    bool showProfessions = false;
     bool showPipeline = false;
     bool showRules = false;
     bool showUiSettings = false;
@@ -62,6 +69,9 @@ struct GuiRuntimeState {
     bool addSkillPopupRequest = false;
     bool deleteSkillPopupRequest = false;
     bool mergeSkillPopupRequest = false;
+    bool professionDeletePopupRequest = false;
+    int pendingDeleteProfessionIndex = -1;
+    std::string pendingDeleteProfessionId;
     bool clearSkillsPopupRequest = false;
     bool adminPopupRequest = false;
     bool adminChangePopupRequest = false;
@@ -72,7 +82,12 @@ struct GuiRuntimeState {
     std::array<char, 256> newSkillDesc{};
     std::array<char, 128> editSkillName{};
     std::array<char, 256> editSkillDesc{};
+    std::array<char, 128> newProfessionName{};
+    std::array<char, 256> newProfessionDesc{};
+    int professionEditIndex = -1;
     float newSkillWeight = 1.0f;
+    std::vector<char> newSkillProfessionFlags;
+    std::vector<char> editSkillProfessionFlags;
     std::array<char, 64> adminPassword{};
     std::array<char, 64> adminPasswordCurrent{};
     std::array<char, 64> adminPasswordNew{};
@@ -82,6 +97,7 @@ struct GuiRuntimeState {
     std::string pendingMergeToId;
     std::string pendingMergeName;
     std::string pendingMergeDesc;
+    std::vector<std::string> pendingMergeProfessions;
     float pendingMergeWeight = 1.0f;
     float editedSkillWeight = 1.0f;
     std::array<char, 128> achTitle{};
@@ -90,10 +106,14 @@ struct GuiRuntimeState {
     int achDurationDays = 0;
     int selectedAchievementIndex = -1;
     std::vector<XpEntry> xpEntries;
+    std::string xpProfessionId;
+    std::string catalogProfessionId;
     std::array<char, 128> taskProject{};
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
     std::vector<TaskProfileShare> taskShares;
+    bool taskDeletePopupRequest = false;
+    std::string pendingTaskDeleteId;
     int tasksFilterProfile = 0;
     int tasksFilterCategory = 0;
     int tasksFilterDays = 0;

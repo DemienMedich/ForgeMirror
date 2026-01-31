@@ -1,6 +1,7 @@
 void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
                   const GameplayConfig& gameplayConfig, const std::filesystem::path& storageDir,
                   ImGuiStyle& style, ImGuiIO& io, GLFWwindow* window) {
+    state.modules = LoadModuleToggles();
     state.storageDir = storageDir;
     state.adminPasswordExpected = LoadAdminPassword(storageDir);
     state.rulesConfig = gameplayConfig;
@@ -23,9 +24,21 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
     state.profileTabRequest = state.profileSection;
     ApplyUiFiltersToState(state);
-    state.tasks = LoadTasks(storageDir);
-    state.shortcuts = LoadShortcuts(storageDir);
-    state.pipelineSteps = LoadPipeline(storageDir);
+    state.tasks = state.modules.tasks ? LoadTasks(storageDir) : std::vector<TaskEntry>();
+    state.taskDeletePopupRequest = false;
+    state.pendingTaskDeleteId.clear();
+    state.shortcuts = state.modules.shortcuts ? LoadShortcuts(storageDir) : std::vector<ShortcutEntry>();
+    state.pipelineSteps = state.modules.pipeline ? LoadPipeline(storageDir) : std::vector<PipelineStep>();
+    state.professions = state.modules.professions ? LoadProfessions(storageDir) : std::vector<ProfessionEntry>();
+    state.profileProfessionCache.clear();
+    state.profileProfessionDirty = true;
+    state.showTasks = state.modules.tasks && state.showTasks;
+    state.showPomodoro = state.modules.pomodoro && state.showPomodoro;
+    state.showPipeline = state.modules.pipeline && state.showPipeline;
+    state.showProfessions = state.modules.professions && state.showProfessions;
+    state.showView3d = state.modules.view3d && state.showView3d;
+    state.showView3dSettings = state.modules.view3d && state.showView3dSettings;
+    FindStrayStorageFiles(storageDir, 5, state.straySamples, state.strayFileCount);
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
     state.windowFullscreenLast = state.ui.windowFullscreen;
