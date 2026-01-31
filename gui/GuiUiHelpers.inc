@@ -150,10 +150,10 @@ ImVec4 BlendColor(const ImVec4& a, const ImVec4& b, float t) {
 
 struct UiLayoutTokens {
     float cardPaddingX = 12.0f;
-    float cardPaddingY = 10.0f;
-    float cardSpacingY = 10.0f;
-    float sectionSpacingY = 8.0f;
-    ImVec2 tableCellPadding = ImVec2(8.0f, 6.0f);
+    float cardPaddingY = 12.0f;
+    float cardSpacingY = 12.0f;
+    float sectionSpacingY = 18.0f;
+    ImVec2 tableCellPadding = ImVec2(12.0f, 6.0f);
 };
 
 const UiLayoutTokens& LayoutTokens() {

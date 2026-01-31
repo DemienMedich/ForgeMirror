@@ -1,3 +1,11 @@
+UI аудит:
+- Разный размер кнопок: где-то full width, где-то SmallButton/иконка без единой иерархии.
+- Карточки/секции используют разные отступы (CardPadding/WindowPadding/ItemSpacing не синхронизированы).
+- Таблицы: местами BordersInnerH/V включены, местами нет — визуальный шум.
+- Заголовки секций и подписи разного веса/контраста (TextDisabled не задан в 0/1/2).
+- Ховеры списков/строк не единообразны (RowBg vs Header/Frame).
+- Навигация: активные состояния иконок/текста не всегда синхронизированы.
+
 # CONTINUITY
 
 - Goal (incl. success criteria):
@@ -63,3 +71,8 @@
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
+
+Done:
+- UI: введен ритм 6/12/18 (LayoutTokens и базовые отступы).
+- UI: повышен контраст вторичного текста в пресетах (TextDisabled).
+- UI: обновлены отступы стеклянного пресета.
