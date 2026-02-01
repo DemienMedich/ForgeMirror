@@ -23,6 +23,9 @@ UI аудит:
   - Ветка: Beta. Версия: 0.3.37.
   - Последнее изменение: индикатор проектного data/ в меню облака.
 - Done:
+- UI: унифицированы иконки/икон-кнопки (убран glow, рамка только при hover/selected).
+- UI: ослаблен контраст рамок карточек/бейджей.
+
   - Хранилище: копирование из legacy в основной каталог, seed-профили отключены.
   - Хранилище: при наличии пользовательской папки используем её, seed копируется туда.
   - Модульность: guards для задач/помодоро/профессий/ярлыков/пайплайна и вкладок профиля.
@@ -66,8 +69,8 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `CMakeLists.txt`, `gui/GuiApp.cpp`
-  - `data/meta/patch-notes/0.3.38.md`
+  - `gui/GuiIcons.inc`, `gui/GuiUiHelpers.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.39.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release`
   - Инсталлер: `powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-installer.ps1 -Configuration Release -IsccPath "C:\Users\mrdem\AppData\Local\Programs\Inno Setup 6\ISCC.exe"`
@@ -76,3 +79,5 @@ Done:
 - UI: введен ритм 6/12/18 (LayoutTokens и базовые отступы).
 - UI: повышен контраст вторичного текста в пресетах (TextDisabled).
 - UI: обновлены отступы стеклянного пресета.
+- UI: унифицированы иконки/икон-кнопки (убран glow, рамка только при hover/selected).
+- UI: ослаблен контраст рамок карточек/бейджей.

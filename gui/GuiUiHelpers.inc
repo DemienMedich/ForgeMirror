@@ -190,7 +190,7 @@ ImVec4 CardBackgroundColor() {
 ImVec4 CardBorderColor() {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 border = style.Colors[ImGuiCol_Border];
-    border.w = std::max(border.w, 0.28f);
+    border.w = std::max(border.w, 0.18f);
     return border;
 }
 

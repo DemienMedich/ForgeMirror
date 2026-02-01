@@ -284,16 +284,15 @@ static void DrawIconBadge(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 base = style.Colors[ImGuiCol_FrameBg];
     ImVec4 border = style.Colors[ImGuiCol_Border];
-    ImVec4 glow = accent;
     base.w = std::max(base.w, 0.55f);
-    border.w = std::max(border.w, 0.25f);
-    glow.w = 0.10f;
+    border.w = std::max(border.w, 0.18f);
 
     if (filled) {
         drawList->AddCircleFilled(center, radius, ImGui::GetColorU32(base), 24);
     }
-    drawList->AddCircle(center, radius, ImGui::GetColorU32(border), 24, 1.0f);
-    drawList->AddCircle(center, radius + 1.0f, ImGui::GetColorU32(glow), 24, 1.5f);
+    if (border.w > 0.01f) {
+        drawList->AddCircle(center, radius, ImGui::GetColorU32(border), 24, 1.0f);
+    }
 
     ImVec4 iconColor = accent;
     iconColor.w = 1.0f;
@@ -323,9 +322,6 @@ static bool IconButtonGui(const char* id, UiIcon icon, const char* tooltip, cons
     ImVec4 hover = style.Colors[ImGuiCol_ButtonHovered];
     ImVec4 down = style.Colors[ImGuiCol_ButtonActive];
     ImVec4 border = style.Colors[ImGuiCol_Border];
-    ImVec4 glow = accent;
-    glow.w = 0.10f;
-
     if (selected) {
         base = BlendColor(base, accent, 0.35f);
         hover = BlendColor(hover, accent, 0.35f);
@@ -336,11 +332,10 @@ static bool IconButtonGui(const char* id, UiIcon icon, const char* tooltip, cons
     if (active) bg = down;
     else if (hovered) bg = hover;
     bg.w = std::max(bg.w, 0.55f);
-    border.w = std::max(border.w, 0.22f);
+    border.w = std::max(border.w, (hovered || selected) ? 0.20f : 0.0f);
 
     drawList->AddRectFilled(pMin, pMax, ImGui::GetColorU32(bg), rounding);
     drawList->AddRect(pMin, pMax, ImGui::GetColorU32(border), rounding, 0, 1.0f);
-    drawList->AddRect(pMin, pMax, ImGui::GetColorU32(glow), rounding, 0, 1.5f);
 
     ImVec4 iconColor = selected ? accent : style.Colors[ImGuiCol_Text];
     if (!enabled) iconColor = style.Colors[ImGuiCol_TextDisabled];
@@ -380,9 +375,6 @@ static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, con
     ImVec4 hover = style.Colors[ImGuiCol_ButtonHovered];
     ImVec4 down = style.Colors[ImGuiCol_ButtonActive];
     ImVec4 border = style.Colors[ImGuiCol_Border];
-    ImVec4 glow = accent;
-    glow.w = 0.10f;
-
     if (selected) {
         base = BlendColor(base, accent, 0.35f);
         hover = BlendColor(hover, accent, 0.35f);
@@ -393,11 +385,10 @@ static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, con
     if (active) bg = down;
     else if (hovered) bg = hover;
     bg.w = std::max(bg.w, 0.55f);
-    border.w = std::max(border.w, 0.22f);
+    border.w = std::max(border.w, (hovered || selected) ? 0.20f : 0.0f);
 
     drawList->AddRectFilled(pMin, pMax, ImGui::GetColorU32(bg), rounding);
     drawList->AddRect(pMin, pMax, ImGui::GetColorU32(border), rounding, 0, 1.0f);
-    drawList->AddRect(pMin, pMax, ImGui::GetColorU32(glow), rounding, 0, 1.5f);
 
     if (selected) {
         ImVec4 mark = accent;
