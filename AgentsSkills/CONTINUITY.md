@@ -20,8 +20,8 @@ UI аудит:
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: Beta. Версия: 0.3.37.
-  - Последнее изменение: индикатор проектного data/ в меню облака.
+  - Ветка: develop_gui. Версия: 0.3.42.
+  - Последнее изменение: UI полировка п.1-6 + фон/модалки.
 - Done:
 - UI: унифицированы иконки/икон-кнопки (убран glow, рамка только при hover/selected).
 - UI: ослаблен контраст рамок карточек/бейджей.
@@ -69,14 +69,7 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiUiHelpers.inc`, `gui/GuiUiSettingsPanel.inc`
-  - `gui/GuiAdminModal.inc`, `gui/GuiSkillModals.inc`, `gui/GuiXpModal.inc`
-  - `gui/GuiProfileModals.inc`, `gui/GuiProfessions.inc`, `gui/GuiTasksPanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.42.md`
   - `AgentsSkills/CONTINUITY.md`
-  - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
-
-Done:
-- UI: мягкий градиент фона окон без изменения палитры.
-- UI: убраны контурные подсветки карточек (глубина без визуального шума).
-- UI: тени оставлены только модальным окнам (единый DrawModalShadow).
+  - Сборка GUI Debug: `cmake --build build-gui --config Debug --target ForgeMirrorGui`
+  - Сборка GUI Release: `cmake --build build-gui --config Release --target ForgeMirrorGui`
+  - Сборка CLI: `cmake --build build-gui --config Release --target ForgeMirror`
