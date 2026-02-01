@@ -322,12 +322,6 @@ static bool IconButtonGui(const char* id, UiIcon icon, const char* tooltip, cons
     ImVec4 hover = style.Colors[ImGuiCol_ButtonHovered];
     ImVec4 down = style.Colors[ImGuiCol_ButtonActive];
     ImVec4 border = style.Colors[ImGuiCol_Border];
-    if (selected) {
-        base = BlendColor(base, accent, 0.35f);
-        hover = BlendColor(hover, accent, 0.35f);
-        down = BlendColor(down, accent, 0.35f);
-    }
-
     ImVec4 bg = base;
     if (active) bg = down;
     else if (hovered) bg = hover;
@@ -375,12 +369,6 @@ static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, con
     ImVec4 hover = style.Colors[ImGuiCol_ButtonHovered];
     ImVec4 down = style.Colors[ImGuiCol_ButtonActive];
     ImVec4 border = style.Colors[ImGuiCol_Border];
-    if (selected) {
-        base = BlendColor(base, accent, 0.35f);
-        hover = BlendColor(hover, accent, 0.35f);
-        down = BlendColor(down, accent, 0.35f);
-    }
-
     ImVec4 bg = base;
     if (active) bg = down;
     else if (hovered) bg = hover;
@@ -402,7 +390,7 @@ static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, con
     const float padX = 10.0f;
     const float badgeRadius = std::clamp((height - 16.0f) * 0.5f, 14.0f, 18.0f);
     const ImVec2 badgeCenter(pMin.x + padX + badgeRadius, center.y);
-    ImVec4 badgeAccent = selected ? accent : BlendColor(accent, style.Colors[ImGuiCol_TextDisabled], 0.55f);
+    ImVec4 badgeAccent = selected ? accent : style.Colors[ImGuiCol_TextDisabled];
     badgeAccent.w = 1.0f;
     DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, badgeAccent, true);
 

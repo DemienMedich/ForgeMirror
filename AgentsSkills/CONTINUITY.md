@@ -69,15 +69,11 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiProfileSections.inc`, `gui/GuiTasksPanel.inc`
-  - `gui/GuiXpModal.inc`, `gui/GuiSkillCatalogPanel.inc`
-  - `gui/GuiAdminStatsPanel.inc`, `gui/GuiLogsPanel.inc`
-  - `gui/GuiPipelinePanel.inc`, `gui/GuiShortcuts.inc`
-  - `gui/GuiProfessions.inc`, `gui/GuiProfilePanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.40.md`
+  - `gui/GuiIcons.inc`, `gui/GuiNavigationPanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.41.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
 
 Done:
-- UI: таблицы упрощены (убраны BordersInnerH/V, остался RowBg).
-- UI: плотность таблиц унифицирована через TableCellPadding().
+- UI: навигация упрощена (активный пункт без акцентной заливки фона).
+- UI: единый акцент в навигации — маркер + текст активного пункта.
