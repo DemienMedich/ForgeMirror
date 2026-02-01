@@ -59,7 +59,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             filtered.reserve(catalogSkills.size());
             for (const auto& id : catalogSkills) {
                 auto profs = catalog.professions(id);
-                if (profs.empty() || std::find(profs.begin(), profs.end(), activeProfId) != profs.end()) {
+                if (profs.empty() | std::find(profs.begin(), profs.end(), activeProfId) != profs.end()) {
                     filtered.push_back(id);
                 }
             }
@@ -285,7 +285,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 const int count = weightCounts[static_cast<size_t>(cat)];
                 if (count <= 0) continue;
                 activeCategories += 1;
-                if (minCategory == -1 || count < minCategoryCount) {
+                if (minCategory == -1 | count < minCategoryCount) {
                     minCategory = cat;
                     minCategoryCount = count;
                 }
@@ -401,12 +401,12 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::PopStyleColor(3);
             }
             if (!state.isAdmin) ImGui::EndDisabled();
-            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
+            if (!state.isAdmin | !canDeleteSkill) ImGui::BeginDisabled();
             if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
                 state.deleteSkillPopupRequest = true;
                 state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
             }
-            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
+            if (!state.isAdmin | !canDeleteSkill) ImGui::EndDisabled();
         } else if (ImGui::BeginTable("catalog_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
@@ -434,12 +434,12 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             }
             if (!state.isAdmin) ImGui::EndDisabled();
             ImGui::TableSetColumnIndex(2);
-            if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
+            if (!state.isAdmin | !canDeleteSkill) ImGui::BeginDisabled();
             if (ImGui::Button(u8"Удалить навык", ImVec2(-1.0f, 0.0f))) {
                 state.deleteSkillPopupRequest = true;
                 state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
             }
-            if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
+            if (!state.isAdmin | !canDeleteSkill) ImGui::EndDisabled();
             ImGui::EndTable();
         }
 
@@ -452,7 +452,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         ImGui::Separator();
         ImGui::Separator();
 
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg |
             ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];

@@ -77,7 +77,7 @@ static void shortcuts_skip_ws(const std::string& text, size_t& pos) {
 
 static bool shortcuts_parse_string(const std::string& text, size_t& pos, std::string& out) {
     shortcuts_skip_ws(text, pos);
-    if (pos >= text.size() || text[pos] != '"') return false;
+    if (pos >= text.size() | text[pos] != '"') return false;
     ++pos;
     while (pos < text.size()) {
         char c = text[pos++];
@@ -109,7 +109,7 @@ static bool shortcuts_parse_string(const std::string& text, size_t& pos, std::st
 static bool shortcuts_parse_object(const std::string& text, size_t& pos,
                                    std::unordered_map<std::string, std::string>& out) {
     shortcuts_skip_ws(text, pos);
-    if (pos >= text.size() || text[pos] != '{') return false;
+    if (pos >= text.size() | text[pos] != '{') return false;
     ++pos;
     while (pos < text.size()) {
         shortcuts_skip_ws(text, pos);
@@ -120,7 +120,7 @@ static bool shortcuts_parse_object(const std::string& text, size_t& pos,
         std::string key;
         if (!shortcuts_parse_string(text, pos, key)) return false;
         shortcuts_skip_ws(text, pos);
-        if (pos >= text.size() || text[pos] != ':') return false;
+        if (pos >= text.size() | text[pos] != ':') return false;
         ++pos;
         std::string value;
         if (!shortcuts_parse_string(text, pos, value)) return false;
@@ -142,7 +142,7 @@ static std::vector<std::unordered_map<std::string, std::string>> shortcuts_parse
     std::vector<std::unordered_map<std::string, std::string>> objects;
     size_t pos = 0;
     shortcuts_skip_ws(text, pos);
-    if (pos >= text.size() || text[pos] != '[') return objects;
+    if (pos >= text.size() | text[pos] != '[') return objects;
     ++pos;
     while (pos < text.size()) {
         shortcuts_skip_ws(text, pos);
@@ -177,7 +177,7 @@ static std::vector<ShortcutEntry> LoadShortcuts(const std::filesystem::path& sto
         if (auto v = find_value("id")) entry.id = *v;
         if (auto v = find_value("label")) entry.label = *v;
         if (auto v = find_value("path")) entry.path = *v;
-        if (entry.id.empty() || entry.path.empty()) continue;
+        if (entry.id.empty() | entry.path.empty()) continue;
         out.push_back(std::move(entry));
     }
     return out;
@@ -624,7 +624,7 @@ static void DrawShortcutsPanel(GuiState& state) {
         ImGui::TextDisabled(u8"Ярлыков пока нет.");
         return;
     }
-    if (ImGui::BeginTable("shortcuts_list", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+    if (ImGui::BeginTable("shortcuts_list", 3, ImGuiTableFlags_RowBg |
                                                   ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn(u8"Название", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn(u8"Путь", ImGuiTableColumnFlags_WidthStretch, 1.9f);

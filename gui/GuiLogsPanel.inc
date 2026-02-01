@@ -61,8 +61,8 @@ void DrawLogsPanel(GuiState& state) {
             infoCount += 1;
         }
         if (entry.timestamp > 0) {
-            if (minTs == 0 || entry.timestamp < minTs) minTs = entry.timestamp;
-            if (maxTs == 0 || entry.timestamp > maxTs) maxTs = entry.timestamp;
+            if (minTs == 0 | entry.timestamp < minTs) minTs = entry.timestamp;
+            if (maxTs == 0 | entry.timestamp > maxTs) maxTs = entry.timestamp;
         }
         if (entry.source.empty()) continue;
         if (std::find(logSources.begin(), logSources.end(), entry.source) == logSources.end()) {
@@ -333,7 +333,7 @@ void DrawLogsPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Показано: %d из %d", filteredCount, static_cast<int>(state.appLogs.size()));
     const bool hasTextFilter = state.filters.logs[0] != '\0';
     const bool hasSourceFilter = state.filters.logSource[0] != '\0';
-    if (filteredCount == 0 && (hasTextFilter || hasSourceFilter)) {
+    if (filteredCount == 0 && (hasTextFilter | hasSourceFilter)) {
         ImGui::TextDisabled(u8"По фильтрам ничего не найдено.");
         if (ImGui::SmallButton(u8"Сбросить фильтры")) {
             state.filters.logs.fill('\0');
@@ -378,7 +378,7 @@ void DrawLogsPanel(GuiState& state) {
         row.w = std::clamp(row.w * 0.12f, 0.04f, 0.12f);
         return ImGui::GetColorU32(row);
     };
-    ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+    ImGuiTableFlags flags = ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
                             ImGuiTableFlags_SizingStretchProp;
     if (state.logCompactView) {

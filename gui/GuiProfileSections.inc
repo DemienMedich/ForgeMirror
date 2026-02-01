@@ -88,7 +88,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        if (ImGui::BeginTable("profile_state_summary", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+        if (ImGui::BeginTable("profile_state_summary", 2, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("state_label", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableSetupColumn("state_value", ImGuiTableColumnFlags_WidthStretch);
 
@@ -148,7 +148,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
             ImVec4 warnRow = warnText;
             warnRow.w = std::clamp(warnRow.w * 0.16f, 0.06f, 0.16f);
-            if (ImGui::BeginTable("profile_balance_table", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH)) {
+            if (ImGui::BeginTable("profile_balance_table", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn(u8"Категория", ImGuiTableColumnFlags_WidthFixed, 120.0f);
                 ImGui::TableSetupColumn(u8"Оценка", ImGuiTableColumnFlags_WidthFixed, 70.0f);
                 ImGui::TableSetupColumn(u8"Прогресс", ImGuiTableColumnFlags_WidthStretch);
@@ -244,8 +244,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
             topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
             const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
-            if (ImGui::BeginTable("top_skills", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-            ImGuiTableFlags_SizingStretchProp)) {
+            if (ImGui::BeginTable("top_skills", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Навык");
                 ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 80.0f);
@@ -305,8 +304,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     tint.w = std::clamp(tint.w * 0.12f, 0.04f, 0.12f);
                     return ImGui::GetColorU32(tint);
                 };
-                if (ImGui::BeginTable("profile_flags", 3, ImGuiTableFlags_SizingStretchProp |
-                ImGuiTableFlags_BordersInnerV)) {
+                if (ImGui::BeginTable("profile_flags", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Сигнал");
                 ImGui::TableSetupColumn(u8"Статус");
@@ -397,7 +395,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             tint.w = std::clamp(tint.w * 0.12f, 0.04f, 0.12f);
             return ImGui::GetColorU32(tint);
         };
-        if (ImGui::BeginTable("profile_status", 4, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+        if (ImGui::BeginTable("profile_status", 4, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn(u8"Параметр", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 180.0f);
@@ -566,7 +564,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             if (a.expiresAt == 0) continue;
             if (!a.is_active(nowSec)) continue;
             const std::int64_t remaining = a.expiresAt - nowSec;
-            if (remaining <= 0 || remaining > kSoonWindow) continue;
+            if (remaining <= 0 | remaining > kSoonWindow) continue;
             std::string label = a.title;
             const std::string achSkillName = catalog.display_name(a.skill);
             if (!achSkillName.empty()) {
@@ -748,8 +746,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     });
     int visibleCount = 0;
     int rowRank = 0;
-    ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-    ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
+    ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
@@ -771,7 +768,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
                 continue;
             }
             const float w = static_cast<float>(skill.weight);
-            if (w < state.profileSkillWeightRange[0] || w > state.profileSkillWeightRange[1]) {
+            if (w < state.profileSkillWeightRange[0] | w > state.profileSkillWeightRange[1]) {
                 continue;
             }
             if (state.profileSkillCategoryFilter > 0) {
@@ -1110,8 +1107,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-                                                 ImGuiTableFlags_SizingStretchProp)) {
+        if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);

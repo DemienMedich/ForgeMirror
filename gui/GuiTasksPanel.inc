@@ -326,7 +326,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const float avgPool = filteredCount > 0
                 ? static_cast<float>(poolSum) / static_cast<float>(filteredCount)
                 : 0.0f;
-            if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.7f);
                 ImGui::TableSetupColumn("sum_last", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                 ImGui::TableSetupColumn("sum_focus", ImGuiTableColumnFlags_WidthStretch, 1.1f);
@@ -378,7 +378,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (!task) continue;
                 const std::int64_t day = task->createdAt / 86400;
                 const int idx = static_cast<int>(day - startDay);
-                if (idx < 0 || idx >= kDays) continue;
+                if (idx < 0 | idx >= kDays) continue;
                 dayCounts[idx] += 1.0f;
                 maxCount = std::max(maxCount, static_cast<int>(dayCounts[idx]));
             }
@@ -396,7 +396,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     ImGui::Spacing();
 
     int visibleCount = 0;
-    if (ImGui::BeginTable("tasks_table", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+    if (ImGui::BeginTable("tasks_table", 6, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -508,7 +508,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (expanded->participants.empty()) {
                 ImGui::TextDisabled(u8"Нет участников.");
             } else if (ImGui::BeginTable("tasks_detail_participants", 4,
-                                         ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH)) {
+                                         ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.3f);
                 ImGui::TableSetupColumn(u8"Вклад", ImGuiTableColumnFlags_WidthFixed, 70.0f);
                 ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 90.0f);

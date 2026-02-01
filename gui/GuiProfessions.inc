@@ -12,7 +12,7 @@ static std::vector<ProfessionEntry> LoadProfessions(const std::filesystem::path&
     if (!in) return out;
     std::string line;
     while (std::getline(in, line)) {
-        if (line.empty() || line[0] == '#') continue;
+        if (line.empty() | line[0] == '#') continue;
         std::vector<std::string> parts;
         std::string part;
         std::istringstream ss(line);
@@ -38,7 +38,7 @@ static bool SaveProfessions(const std::filesystem::path& storageDir, const std::
     std::ostringstream out;
     out.imbue(std::locale::classic());
     for (const auto& e : list) {
-        if (e.id.empty() || e.name.empty()) continue;
+        if (e.id.empty() | e.name.empty()) continue;
         out << e.id << "|" << e.name;
         out << "|" << e.description;
         out << "\n";
@@ -215,7 +215,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         if (state.pendingDeleteProfessionIndex >= 0 &&
             state.pendingDeleteProfessionIndex < static_cast<int>(state.professions.size())) {
             const auto& p = state.professions[state.pendingDeleteProfessionIndex];
-            if (profId.empty() || p.id == profId) {
+            if (profId.empty() | p.id == profId) {
                 profName = p.name;
                 profId = p.id;
             }
@@ -349,7 +349,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         }
         if (state.profiles.empty()) {
             ImGui::TextDisabled(u8"Профили не найдены.");
-        } else if (ImGui::BeginTable("prof_members", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+        } else if (ImGui::BeginTable("prof_members", 3, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.4f);
             ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 140.0f);

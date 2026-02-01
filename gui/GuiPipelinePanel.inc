@@ -1,5 +1,5 @@
 static void SyncPipelineEditBuffers(GuiState& state, int index) {
-    if (index < 0 || index >= static_cast<int>(state.pipelineSteps.size())) return;
+    if (index < 0 | index >= static_cast<int>(state.pipelineSteps.size())) return;
     if (state.pipelineEditIndex == index) return;
     std::snprintf(state.pipelineTitle.data(), state.pipelineTitle.size(), "%s",
                   state.pipelineSteps[index].title.c_str());
@@ -85,7 +85,7 @@ void DrawPipelinePanel(GuiState& state) {
             state.filters.pipeline.fill('\0');
         }
     }
-    if (state.selectedPipelineIndex < 0 || state.selectedPipelineIndex >= stepCount) {
+    if (state.selectedPipelineIndex < 0 | state.selectedPipelineIndex >= stepCount) {
         state.selectedPipelineIndex = 0;
     }
     if (!MatchesFilter(state.pipelineSteps[state.selectedPipelineIndex].title, state.filters.pipeline.data())) {
@@ -104,7 +104,7 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::TableSetColumnIndex(0);
         if (ImGui::BeginChild("pipeline_list", ImVec2(0, listHeight), true)) {
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 6.0f));
-        ImGuiTableFlags listFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+        ImGuiTableFlags listFlags = ImGuiTableFlags_RowBg |
                                     ImGuiTableFlags_SizingStretchProp;
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
