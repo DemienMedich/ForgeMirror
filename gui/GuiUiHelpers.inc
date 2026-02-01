@@ -31,6 +31,24 @@ void EnsureWindowVisible(float padding = 12.0f, ImVec2 minSize = ImVec2(240.0f, 
 }
 
 void DrawWindowBackground(const UiSettings& settings, UiWindowId id, const std::filesystem::path& storageDir) {
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 pos = ImGui::GetWindowPos();
+    ImVec2 size = ImGui::GetWindowSize();
+
+    // Soft vertical gradient keeps depth without extra card decoration.
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 top = style.Colors[ImGuiCol_WindowBg];
+    ImVec4 bottom = style.Colors[ImGuiCol_ChildBg];
+    top.w = std::max(top.w, 0.92f);
+    bottom.w = std::max(bottom.w, 0.96f);
+    drawList->AddRectFilledMultiColor(
+        pos,
+        ImVec2(pos.x + size.x, pos.y + size.y),
+        ImGui::GetColorU32(top),
+        ImGui::GetColorU32(top),
+        ImGui::GetColorU32(bottom),
+        ImGui::GetColorU32(bottom));
+
     const auto idx = static_cast<size_t>(id);
     if (idx >= settings.backgrounds.size()) return;
     const std::string& relPath = settings.backgrounds[idx];
@@ -38,9 +56,6 @@ void DrawWindowBackground(const UiSettings& settings, UiWindowId id, const std::
     auto resolved = ResolveIconPath(relPath, storageDir);
     if (!resolved) return;
     if (const auto* tex = GetIconTexture(*resolved)) {
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 pos = ImGui::GetWindowPos();
-        ImVec2 size = ImGui::GetWindowSize();
         ImU32 tint = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, settings.backgroundAlpha));
         if (!settings.backgroundTiled) {
             drawList->AddImage((ImTextureID)(intptr_t)tex->id, pos, ImVec2(pos.x + size.x, pos.y + size.y),
@@ -222,15 +237,26 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, CardPadding());
     const bool open = ImGui::BeginChild(id, size, flags | ImGuiChildFlags_Border,
                                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    if (open) {
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 pos = ImGui::GetWindowPos();
-        ImVec2 sizeNow = ImGui::GetWindowSize();
-        float rounding = CardRounding();
-        ImU32 glow = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.05f));
-        drawList->AddRect(pos, ImVec2(pos.x + sizeNow.x, pos.y + sizeNow.y), glow, rounding, 0, 1.0f);
-    }
     return open;
+}
+
+
+void DrawModalShadow(float padding = 10.0f, float alpha = 0.22f) {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport) return;
+    ImDrawList* drawList = ImGui::GetForegroundDrawList(viewport);
+    ImVec2 p0 = ImGui::GetWindowPos();
+    ImVec2 sz = ImGui::GetWindowSize();
+    ImVec2 p1(p0.x + sz.x, p0.y + sz.y);
+    const float rounding = std::max(ImGui::GetStyle().PopupRounding, 6.0f) + padding * 0.5f;
+    ImU32 shade = ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, alpha));
+    drawList->AddRect(
+        ImVec2(p0.x - padding, p0.y - padding),
+        ImVec2(p1.x + padding, p1.y + padding),
+        shade,
+        rounding,
+        0,
+        padding * 0.55f);
 }
 
 void EndCard() {

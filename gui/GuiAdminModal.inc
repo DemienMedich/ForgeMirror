@@ -6,6 +6,7 @@ void DrawAdminLoginModal(GuiState& state) {
     }
     bool adminPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Вход администратора", &adminPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         DrawCardHeader(u8"Пароль администратора");
         ImGui::InputText(u8"Пароль", state.adminPassword.data(), state.adminPassword.size(), ImGuiInputTextFlags_Password);
         const std::string layoutLabel = KeyboardLayoutLabel();
@@ -69,6 +70,7 @@ void DrawAdminPasswordModal(GuiState& state) {
     }
     bool popupOpen = true;
     if (ImGui::BeginPopupModal(u8"Смена пароля администратора", &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         DrawCardHeader(u8"Пароль");
         const char* envLabel = "FORGEMIRROR_ADMIN_PASSWORD";
         const char* env = std::getenv(envLabel);

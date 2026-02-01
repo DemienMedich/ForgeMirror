@@ -210,6 +210,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
     ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Appearing);
     bool deleteOpen = true;
     if (ImGui::BeginPopupModal(u8"Удалить профессию?", &deleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         std::string profName;
         std::string profId = state.pendingDeleteProfessionId;
         if (state.pendingDeleteProfessionIndex >= 0 &&

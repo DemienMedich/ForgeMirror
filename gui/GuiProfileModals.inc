@@ -6,6 +6,7 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
     }
     bool createPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Создать профиль", &createPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         DrawCardHeader(u8"Данные профиля");
         ImGui::InputText(u8"Имя", state.modalBuffer.data(), state.modalBuffer.size());
         auto createProfile = [&]() {
@@ -68,6 +69,7 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     }
     bool confirmPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Подтвердите действие", &confirmPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
             const auto& info = state.profiles[state.selectedIndex];
             std::string action;

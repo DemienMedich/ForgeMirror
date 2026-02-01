@@ -11,6 +11,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     const float maxHeight = std::max(240.0f, display.y - 80.0f);
     ImGui::SetNextWindowSizeConstraints(ImVec2(minWidth, 0.0f), ImVec2(maxWidth, maxHeight));
     if (ImGui::BeginPopupModal(u8"Добавить навык", &addSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         DrawCardHeader(u8"Параметры навыка");
         ImGui::TextDisabled(u8"Название и описание обязательны.");
         ImGui::TextDisabled(u8"Название");
@@ -116,6 +117,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     }
     bool deleteSkillOpen = true;
     if (ImGui::BeginPopupModal(u8"Удалить навык", &deleteSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         if (!state.pendingSkillDelete.empty()) {
             const std::string displayName = catalog.display_name(state.pendingSkillDelete);
             ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
@@ -194,6 +196,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     }
     bool mergeSkillOpen = true;
     if (ImGui::BeginPopupModal(u8"Слияние навыков", &mergeSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         if (!state.pendingMergeFromId.empty() && !state.pendingMergeToId.empty()) {
             const std::string fromName = catalog.display_name(state.pendingMergeFromId);
             const std::string toName = catalog.display_name(state.pendingMergeToId);
@@ -303,6 +306,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     }
     bool clearSkillsOpen = true;
     if (ImGui::BeginPopupModal(u8"Очистить навыки", &clearSkillsOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         ImVec4 warn = LogLevelColor(AppLogLevel::Warning);
         warn.w = 1.0f;
         ImGui::TextColored(warn, u8"Удалить все навыки из каталога и профилей?");

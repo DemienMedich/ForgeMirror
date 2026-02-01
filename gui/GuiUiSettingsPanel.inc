@@ -117,6 +117,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImGui::SetNextWindowSize(ImVec2(560.0f, 420.0f), ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal(u8"Выбор папки синхронизации", &pickerOpen,
                                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse)) {
+        DrawModalShadow();
         std::error_code ec;
         const bool hasPath = !state.cloudPickerPath.empty();
         const bool exists = hasPath && std::filesystem::exists(state.cloudPickerPath, ec);

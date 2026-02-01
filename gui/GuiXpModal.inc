@@ -7,6 +7,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     }
     bool xpPopupOpen = true;
     if (ImGui::BeginPopupModal(u8"Добавление опыта", &xpPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         if (!state.isAdmin) {
             ImGui::TextDisabled(u8"Доступно только администратору.");
             if (ImGui::Button(u8"Закрыть")) {

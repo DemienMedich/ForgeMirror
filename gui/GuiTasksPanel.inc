@@ -548,6 +548,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
     bool deleteOpen = true;
     if (ImGui::BeginPopupModal(u8"Удалить задачу?", &deleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
         TaskEntry* target = nullptr;
         for (auto& task : state.tasks) {
             if (task.id == state.pendingTaskDeleteId) {

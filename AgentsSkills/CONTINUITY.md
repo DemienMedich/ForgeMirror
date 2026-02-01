@@ -69,11 +69,14 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiIcons.inc`, `gui/GuiNavigationPanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.41.md`
+  - `gui/GuiUiHelpers.inc`, `gui/GuiUiSettingsPanel.inc`
+  - `gui/GuiAdminModal.inc`, `gui/GuiSkillModals.inc`, `gui/GuiXpModal.inc`
+  - `gui/GuiProfileModals.inc`, `gui/GuiProfessions.inc`, `gui/GuiTasksPanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.42.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
 
 Done:
-- UI: навигация упрощена (активный пункт без акцентной заливки фона).
-- UI: единый акцент в навигации — маркер + текст активного пункта.
+- UI: мягкий градиент фона окон без изменения палитры.
+- UI: убраны контурные подсветки карточек (глубина без визуального шума).
+- UI: тени оставлены только модальным окнам (единый DrawModalShadow).
