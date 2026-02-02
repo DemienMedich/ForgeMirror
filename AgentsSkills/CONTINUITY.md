@@ -69,12 +69,10 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiUiHelpers.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.44.md`
+  - `gui/GuiTasksPanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.45.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
 
 Done:
-- UI: модалки получили более мягкую тень (двухслойная).
-- UI: градиент фона слабее на светлой теме.
-- Cleanup: dist/*.exe удаление заблокировано политикой выполнения.
+- UI: унифицирован текст пустого состояния в задачах.

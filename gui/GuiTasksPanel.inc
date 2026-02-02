@@ -312,7 +312,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (BeginCard("tasks_summary_card")) {
         DrawCardHeader(u8"Сводка");
         if (filtered.empty()) {
-            ImGui::TextDisabled(u8"Нет задач по текущим фильтрам.");
+            ImGui::TextDisabled(u8"Нет задач по фильтру.");
         } else {
             std::ostringstream focusStream;
             focusStream.imbue(std::locale::classic());
