@@ -38,10 +38,17 @@ void DrawWindowBackground(const UiSettings& settings, UiWindowId id, const std::
     // Soft vertical gradient keeps depth without extra card decoration.
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 top = style.Colors[ImGuiCol_WindowBg];
-    ImVec4 bottom = style.Colors[ImGuiCol_ChildBg];
+    ImVec4 child = style.Colors[ImGuiCol_ChildBg];
     const float baseAlpha = std::clamp(settings.alpha, 0.0f, 1.0f);
-    top.w = std::clamp(top.w * baseAlpha, 0.25f, 1.0f);
-    bottom.w = std::clamp(bottom.w * baseAlpha, 0.25f, 1.0f);
+    const float mix = (settings.theme == 1) ? 0.20f : 0.45f; // light theme gets subtler gradient
+    ImVec4 bottom(
+        top.x + (child.x - top.x) * mix,
+        top.y + (child.y - top.y) * mix,
+        top.z + (child.z - top.z) * mix,
+        top.w + (child.w - top.w) * mix
+    );
+    top.w = std::clamp(top.w * baseAlpha, 0.20f, 1.0f);
+    bottom.w = std::clamp(bottom.w * baseAlpha, 0.20f, 1.0f);
     drawList->AddRectFilledMultiColor(
         pos,
         ImVec2(pos.x + size.x, pos.y + size.y),
@@ -242,22 +249,33 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
 }
 
 
-void DrawModalShadow(float padding = 10.0f, float alpha = 0.18f) {
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
+void DrawModalShadow(float padding = 12.0f, float alpha = 0.14f) {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport) return;
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList(viewport);
     if (!drawList) return;
     ImVec2 p0 = ImGui::GetWindowPos();
     ImVec2 sz = ImGui::GetWindowSize();
     ImVec2 p1(p0.x + sz.x, p0.y + sz.y);
-    const float rounding = std::max(ImGui::GetStyle().PopupRounding, 6.0f) + padding * 0.5f;
-    ImU32 shade = ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, alpha));
+    const float rounding = std::max(ImGui::GetStyle().PopupRounding, 6.0f);
+    ImU32 shadeOuter = ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, alpha));
+    ImU32 shadeInner = ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, alpha * 0.6f));
+    drawList->AddRect(
+        ImVec2(p0.x - padding * 1.6f, p0.y - padding * 1.6f),
+        ImVec2(p1.x + padding * 1.6f, p1.y + padding * 1.6f),
+        shadeOuter,
+        rounding + padding * 0.6f,
+        0,
+        padding * 0.45f);
     drawList->AddRect(
         ImVec2(p0.x - padding, p0.y - padding),
         ImVec2(p1.x + padding, p1.y + padding),
-        shade,
-        rounding,
+        shadeInner,
+        rounding + padding * 0.35f,
         0,
-        padding * 0.55f);
+        padding * 0.35f);
 }
+
 
 
 void EndCard() {
