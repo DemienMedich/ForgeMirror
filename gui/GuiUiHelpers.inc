@@ -39,8 +39,9 @@ void DrawWindowBackground(const UiSettings& settings, UiWindowId id, const std::
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 top = style.Colors[ImGuiCol_WindowBg];
     ImVec4 bottom = style.Colors[ImGuiCol_ChildBg];
-    top.w = std::max(top.w, 0.92f);
-    bottom.w = std::max(bottom.w, 0.96f);
+    const float baseAlpha = std::clamp(settings.alpha, 0.0f, 1.0f);
+    top.w = std::clamp(top.w * baseAlpha, 0.25f, 1.0f);
+    bottom.w = std::clamp(bottom.w * baseAlpha, 0.25f, 1.0f);
     drawList->AddRectFilledMultiColor(
         pos,
         ImVec2(pos.x + size.x, pos.y + size.y),
@@ -241,10 +242,9 @@ bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags
 }
 
 
-void DrawModalShadow(float padding = 10.0f, float alpha = 0.22f) {
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    if (!viewport) return;
-    ImDrawList* drawList = ImGui::GetForegroundDrawList(viewport);
+void DrawModalShadow(float padding = 10.0f, float alpha = 0.18f) {
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    if (!drawList) return;
     ImVec2 p0 = ImGui::GetWindowPos();
     ImVec2 sz = ImGui::GetWindowSize();
     ImVec2 p1(p0.x + sz.x, p0.y + sz.y);
@@ -258,6 +258,7 @@ void DrawModalShadow(float padding = 10.0f, float alpha = 0.22f) {
         0,
         padding * 0.55f);
 }
+
 
 void EndCard() {
     ImGui::EndChild();

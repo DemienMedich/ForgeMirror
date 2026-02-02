@@ -69,7 +69,11 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
+  - `gui/GuiUiHelpers.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.43.md`
   - `AgentsSkills/CONTINUITY.md`
-  - Сборка GUI Debug: `cmake --build build-gui --config Debug --target ForgeMirrorGui`
-  - Сборка GUI Release: `cmake --build build-gui --config Release --target ForgeMirrorGui`
-  - Сборка CLI: `cmake --build build-gui --config Release --target ForgeMirror`
+  - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
+
+Done:
+- UI: градиент фона учитывает ui.alpha/альфу темы.
+- UI: тень модалок в background drawlist текущего viewport.
