@@ -185,6 +185,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
+                if (state.isAdmin && state.showVaultAdmin &&
+                    ImGui::BeginTabItem(u8"Хранилище", &state.showVaultAdmin, tabFlagsFor(UiWindowId::VaultAdmin))) {
+                    if (state.workspaceTabRequest == static_cast<int>(UiWindowId::VaultAdmin)) {
+                        state.workspaceTabRequest = -1;
+                    }
+                    if (beginTabBody("##tab_vault")) {
+                        DrawVaultAdminPanel(state);
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
                 if (state.showUiSettings &&
                     ImGui::BeginTabItem(u8"Настройки", &state.showUiSettings, tabFlagsFor(UiWindowId::UiSettings))) {
                     if (state.workspaceTabRequest == static_cast<int>(UiWindowId::UiSettings)) {

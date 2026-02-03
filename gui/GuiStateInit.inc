@@ -8,6 +8,8 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.rulesDraft = gameplayConfig;
     state.cloudConfig = LoadCloudSyncConfig(storageDir);
     state.bannerTexts = LoadBannerTexts(storageDir);
+    state.vault = LoadStorageVault(storageDir);
+    SyncVaultBuffers(state);
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
     state.lastCloudSyncAt = NowSeconds();

@@ -31,6 +31,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showLogs = false;
     state.showAdminStats = false;
     state.showBannerAdmin = false;
+    state.showVaultAdmin = false;
     state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
 }
 
@@ -62,6 +63,8 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         state.bannerTexts = LoadBannerTexts(state.storageDir);
         EnsureBannerSelection(state);
         state.bannerLastRotateAt = NowSeconds();
+        state.vault = LoadStorageVault(state.storageDir);
+        SyncVaultBuffers(state);
     }
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
@@ -111,6 +114,8 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             state.bannerTexts = LoadBannerTexts(state.storageDir);
             EnsureBannerSelection(state);
             state.bannerLastRotateAt = NowSeconds();
+            state.vault = LoadStorageVault(state.storageDir);
+            SyncVaultBuffers(state);
         }
     }
     if (doPush) {
@@ -353,6 +358,9 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 if (ImGui::MenuItem(u8"Баннер")) {
                     OpenWorkspaceTab(state, state.showBannerAdmin, UiWindowId::BannerAdmin);
                 }
+                if (ImGui::MenuItem(u8"Хранилище")) {
+                    OpenWorkspaceTab(state, state.showVaultAdmin, UiWindowId::VaultAdmin);
+                }
             }
             ImGui::EndMenu();
         }
@@ -386,6 +394,8 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                     state.showLogs = false;
                     state.showAdminStats = false;
                     state.showBannerAdmin = false;
+    state.showVaultAdmin = false;
+                    state.showVaultAdmin = false;
                 } else {
                     state.adminPopupRequest = true;
                     state.adminPassword.fill('\0');

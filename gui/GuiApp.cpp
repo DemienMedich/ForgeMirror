@@ -122,6 +122,7 @@ const char* ClassificationLabel(int categoryIndex);
 #include "GuiView3dPanels.inc"
 #include "GuiProfilePanel.inc"
 #include "GuiBannerPanel.inc"
+#include "GuiVaultPanel.inc"
 
 #include "GuiMenuHelpers.inc"
 #include "GuiNavigationPanel.inc"

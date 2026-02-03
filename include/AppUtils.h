@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,23 @@ struct ModuleToggles {
     bool view3d = true;
     bool professions = true;
 };
+
+
+struct StorageLogEntry {
+    std::int64_t timestamp = 0;
+    double amount = 0.0;
+    std::string action;
+    std::string note;
+};
+
+struct StorageVaultData {
+    std::string currencyName;
+    std::string currencyCode;
+    double balance = 0.0;
+    int logLimit = 10;
+    std::vector<StorageLogEntry> log;
+};
+
 
 // Convert overall level to human-readable rank (Intern, Junior, etc.).
 std::string DescribeOverallRank(const Profile& profile);
@@ -46,6 +64,10 @@ void AppendProfileAudit(const std::filesystem::path& storageDir, const std::stri
 
 // Load module toggles from environment (FORGEMIRROR_DISABLE_MODULES=tasks,pipeline,...).
 ModuleToggles LoadModuleToggles();
+// Storage vault data (meta/storage.json).
+StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir);
+bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data);
+
 // Banner text storage (meta/banner.json).
 std::filesystem::path BannerTextPath(const std::filesystem::path& storageDir);
 std::vector<std::string> LoadBannerTexts(const std::filesystem::path& storageDir);

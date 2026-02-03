@@ -65,9 +65,15 @@ struct GuiRuntimeState {
     bool showShortcuts = false;
     bool showAbout = false;
     bool showBannerAdmin = false;
+    bool showVaultAdmin = false;
     int workspaceTabRequest = -1;
     std::string bannerTextCurrent;
     std::int64_t bannerLastRotateAt = 0;
+
+    StorageVaultData vault;
+    std::array<char, 64> vaultCurrencyName{};
+    std::array<char, 16> vaultCurrencyCode{};
+    int vaultLogLimitDraft = 10;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;

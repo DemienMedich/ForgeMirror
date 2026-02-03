@@ -67,6 +67,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showLogs = false;
         state.showAdminStats = false;
         state.showBannerAdmin = false;
+        state.showVaultAdmin = false;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F1)) {
         state.showSkillCatalog = false;
@@ -82,6 +83,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showLogs = false;
         state.showAdminStats = false;
         state.showBannerAdmin = false;
+        state.showVaultAdmin = false;
         state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F2)) {

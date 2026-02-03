@@ -35,7 +35,7 @@ void DrawNavigationPanel(GuiState& state) {
     };
     const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d || state.showTasks ||
     state.showPomodoro || state.showUiSettings || state.showShortcuts || state.showAbout ||
-    (state.isAdmin && (state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats || state.showBannerAdmin));
+    (state.isAdmin && (state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats || state.showBannerAdmin || state.showVaultAdmin));
     const bool profileActive = !anyWorkspace;
     navButton("nav_profile", UiIcon::Home, u8"Профиль [F1]", profileActive, [&]() {
         state.showSkillCatalog = false;
@@ -94,6 +94,9 @@ void DrawNavigationPanel(GuiState& state) {
         });
         navButton("nav_banner", UiIcon::Info, u8"Баннер", state.showBannerAdmin, [&]() {
             OpenWorkspaceTab(state, state.showBannerAdmin, UiWindowId::BannerAdmin);
+        });
+        navButton("nav_vault", UiIcon::LockClosed, u8"Хранилище", state.showVaultAdmin, [&]() {
+            OpenWorkspaceTab(state, state.showVaultAdmin, UiWindowId::VaultAdmin);
         });
         navButton("nav_view3d_settings", UiIcon::Cube, u8"3D настройки", state.showView3dSettings, [&]() {
             OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);

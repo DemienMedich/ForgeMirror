@@ -650,6 +650,167 @@ bool SaveBannerTexts(const std::filesystem::path& storageDir, const std::vector<
     return true;
 }
 
+
+std::filesystem::path StorageVaultPath(const std::filesystem::path& storageDir) {
+    return storageDir / "meta" / "storage.json";
+}
+
+static int ClampVaultLogLimit(int value) {
+    return std::clamp(value, 10, 50);
+}
+
+static bool ExtractJsonStringField(const std::string& content, const char* key, std::string& out) {
+    const std::string token = std::string("\"") + key + "\"";
+    size_t pos = content.find(token);
+    if (pos == std::string::npos) return false;
+    pos = content.find(':', pos + token.size());
+    if (pos == std::string::npos) return false;
+    pos = content.find('"', pos);
+    if (pos == std::string::npos) return false;
+    ++pos;
+    std::string value;
+    bool esc = false;
+    for (; pos < content.size(); ++pos) {
+        char c = content[pos];
+        if (esc) {
+            switch (c) {
+                case 'n': value.push_back('\n'); break;
+                case 'r': value.push_back('\r'); break;
+                case 't': value.push_back('\t'); break;
+                case '\\': value.push_back('\\'); break;
+                case '"': value.push_back('"'); break;
+                default: value.push_back(c); break;
+            }
+            esc = false;
+            continue;
+        }
+        if (c == '\\') {
+            esc = true;
+            continue;
+        }
+        if (c == '"') break;
+        value.push_back(c);
+    }
+    out = value;
+    return true;
+}
+
+static bool ExtractJsonNumberField(const std::string& content, const char* key, double& out) {
+    const std::string token = std::string("\"") + key + "\"";
+    size_t pos = content.find(token);
+    if (pos == std::string::npos) return false;
+    pos = content.find(':', pos + token.size());
+    if (pos == std::string::npos) return false;
+    ++pos;
+    while (pos < content.size() && std::isspace(static_cast<unsigned char>(content[pos]))) {
+        ++pos;
+    }
+    if (pos >= content.size()) return false;
+    char* end = nullptr;
+    out = std::strtod(content.c_str() + pos, &end);
+    if (end == content.c_str() + pos) return false;
+    return true;
+}
+
+static std::vector<StorageLogEntry> ParseVaultLog(const std::string& content) {
+    std::vector<StorageLogEntry> log;
+    const std::string token = "\"log\"";
+    size_t pos = content.find(token);
+    if (pos == std::string::npos) return log;
+    size_t lb = content.find('[', pos + token.size());
+    if (lb == std::string::npos) return log;
+    size_t rb = content.find(']', lb + 1);
+    if (rb == std::string::npos || rb <= lb) return log;
+    size_t cur = lb + 1;
+    while (cur < rb) {
+        size_t objStart = content.find('{', cur);
+        if (objStart == std::string::npos || objStart > rb) break;
+        size_t objEnd = content.find('}', objStart + 1);
+        if (objEnd == std::string::npos || objEnd > rb) break;
+        std::string obj = content.substr(objStart, objEnd - objStart + 1);
+        StorageLogEntry entry;
+        double value = 0.0;
+        if (ExtractJsonNumberField(obj, "ts", value)) {
+            entry.timestamp = static_cast<std::int64_t>(value);
+        }
+        if (ExtractJsonNumberField(obj, "amount", value)) {
+            entry.amount = value;
+        }
+        ExtractJsonStringField(obj, "action", entry.action);
+        ExtractJsonStringField(obj, "note", entry.note);
+        if (entry.timestamp != 0 || entry.amount != 0.0 || !entry.action.empty() || !entry.note.empty()) {
+            log.push_back(entry);
+        }
+        cur = objEnd + 1;
+    }
+    return log;
+}
+
+static void TrimVaultLog(StorageVaultData& data) {
+    data.logLimit = ClampVaultLogLimit(data.logLimit);
+    if (data.logLimit <= 0) return;
+    if (data.log.size() > static_cast<size_t>(data.logLimit)) {
+        const size_t drop = data.log.size() - static_cast<size_t>(data.logLimit);
+        data.log.erase(data.log.begin(), data.log.begin() + static_cast<std::ptrdiff_t>(drop));
+    }
+}
+
+StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
+    StorageVaultData data;
+    data.currencyName = u8"Кукоин";
+    data.currencyCode = "KUK";
+    data.balance = 0.0;
+    data.logLimit = 10;
+    std::ifstream in(StorageVaultPath(storageDir), std::ios::binary);
+    if (!in) return data;
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string value;
+    if (ExtractJsonStringField(content, "currency_name", value) && !value.empty()) {
+        data.currencyName = value;
+    }
+    if (ExtractJsonStringField(content, "currency_code", value) && !value.empty()) {
+        data.currencyCode = value;
+    }
+    double num = 0.0;
+    if (ExtractJsonNumberField(content, "balance", num)) {
+        data.balance = num;
+    }
+    if (ExtractJsonNumberField(content, "log_limit", num)) {
+        data.logLimit = ClampVaultLogLimit(static_cast<int>(num));
+    }
+    data.log = ParseVaultLog(content);
+    TrimVaultLog(data);
+    return data;
+}
+
+bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data) {
+    std::filesystem::create_directories(storageDir / "meta");
+    std::ofstream out(StorageVaultPath(storageDir), std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    StorageVaultData save = data;
+    if (save.currencyName.empty()) save.currencyName = u8"Кукоин";
+    if (save.currencyCode.empty()) save.currencyCode = "KUK";
+    TrimVaultLog(save);
+
+    out << "{\n";
+    out << "  \"currency_name\": \"" << EscapeJsonString(save.currencyName) << "\",\n";
+    out << "  \"currency_code\": \"" << EscapeJsonString(save.currencyCode) << "\",\n";
+    out << "  \"balance\": " << save.balance << ",\n";
+    out << "  \"log_limit\": " << save.logLimit << ",\n";
+    out << "  \"log\": [";
+    for (size_t i = 0; i < save.log.size(); ++i) {
+        const auto& entry = save.log[i];
+        out << "\n    {\"ts\":" << entry.timestamp
+            << ",\"action\":\"" << EscapeJsonString(entry.action)
+            << "\",\"amount\":" << entry.amount
+            << ",\"note\":\"" << EscapeJsonString(entry.note) << "\"}";
+        if (i + 1 < save.log.size()) out << ',';
+    }
+    if (!save.log.empty()) out << "\n  ";
+    out << "]\n}";
+    return true;
+}
+
 ModuleToggles LoadModuleToggles() {
     ModuleToggles toggles;
     const char* env = std::getenv("FORGEMIRROR_DISABLE_MODULES");
@@ -715,7 +876,7 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     const std::string ext = rel.extension().string();
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
-        "professions.txt", "banner.json", "profile-audit.log", "seed.merged", "gui-layout.ini", "admin.ini"
+        "professions.txt", "banner.json", "storage.json", "profile-audit.log", "seed.merged", "gui-layout.ini", "admin.ini"
     };
     if (parent.empty()) {
         if (ext == ".ini") return true;
