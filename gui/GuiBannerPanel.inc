@@ -136,7 +136,7 @@ void DrawBannerAdminPanel(GuiState& state) {
             ImGui::TextDisabled(u8"Фраз пока нет.");
         } else if (ImGui::BeginTable("banner_rows", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn(u8"Текст", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn(u8"Правка", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+            ImGui::TableSetupColumn(u8"Правка", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableSetupColumn(u8"Удалить", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             for (size_t i = 0; i < state.bannerTexts.size(); ++i) {
                 ImGui::TableNextRow();
