@@ -134,18 +134,21 @@ void DrawBannerAdminPanel(GuiState& state) {
     if (ImGui::BeginChild("banner_list", ImVec2(0.0f, listHeight), true)) {
         if (state.bannerTexts.empty()) {
             ImGui::TextDisabled(u8"Фраз пока нет.");
-        } else {
+        } else if (ImGui::BeginTable("banner_rows", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn(u8"Текст", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn(u8"Правка", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+            ImGui::TableSetupColumn(u8"Удалить", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             for (size_t i = 0; i < state.bannerTexts.size(); ++i) {
+                ImGui::TableNextRow();
                 ImGui::PushID(static_cast<int>(i));
-                const float actionWidth = 140.0f;
-                const float availWidth = ImGui::GetContentRegionAvail().x;
+                ImGui::TableSetColumnIndex(0);
                 ImGui::TextUnformatted(state.bannerTexts[i].c_str());
-                ImGui::SameLine(std::max(0.0f, availWidth - actionWidth));
+                ImGui::TableSetColumnIndex(1);
                 if (ImGui::SmallButton(u8"Редактировать")) {
                     state.bannerEditIndex = static_cast<int>(i);
                     std::snprintf(state.bannerInput.data(), state.bannerInput.size(), "%s", state.bannerTexts[i].c_str());
                 }
-                ImGui::SameLine();
+                ImGui::TableSetColumnIndex(2);
                 if (ImGui::SmallButton(u8"Удалить")) {
                     state.bannerTexts.erase(state.bannerTexts.begin() + static_cast<std::ptrdiff_t>(i));
                     SaveBannerTexts(state.storageDir, state.bannerTexts);
@@ -157,6 +160,7 @@ void DrawBannerAdminPanel(GuiState& state) {
                 }
                 ImGui::PopID();
             }
+            ImGui::EndTable();
         }
     }
     ImGui::EndChild();
