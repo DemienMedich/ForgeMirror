@@ -475,6 +475,82 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
     return SaveAdminPassword(storageDir, trimmed);
 }
 
+
+std::filesystem::path BannerTextPath(const std::filesystem::path& storageDir) {
+    return storageDir / "meta" / "banner.json";
+}
+
+static std::string EscapeJsonString(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"': out += "\\\""; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out.push_back(c); break;
+        }
+    }
+    return out;
+}
+
+std::vector<std::string> LoadBannerTexts(const std::filesystem::path& storageDir) {
+    std::vector<std::string> out;
+    std::ifstream in(BannerTextPath(storageDir), std::ios::binary);
+    if (!in) return out;
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto itemsPos = content.find("\"items\"");
+    if (itemsPos == std::string::npos) return out;
+    auto lb = content.find('[', itemsPos);
+    auto rb = content.find(']', lb);
+    if (lb == std::string::npos || rb == std::string::npos || rb <= lb) return out;
+    std::string arr = content.substr(lb + 1, rb - lb - 1);
+    std::string current;
+    bool inStr = false;
+    bool esc = false;
+    for (char c : arr) {
+        if (esc) {
+            switch (c) {
+                case 'n': current.push_back('\n'); break;
+                case 'r': current.push_back('\r'); break;
+                case 't': current.push_back('\t'); break;
+                default: current.push_back(c); break;
+            }
+            esc = false;
+            continue;
+        }
+        if (c == '\\') {
+            if (inStr) esc = true;
+            continue;
+        }
+        if (c == '"') {
+            inStr = !inStr;
+            if (!inStr && !current.empty()) {
+                out.push_back(current);
+                current.clear();
+            }
+            continue;
+        }
+        if (inStr) current.push_back(c);
+    }
+    return out;
+}
+
+bool SaveBannerTexts(const std::filesystem::path& storageDir, const std::vector<std::string>& texts) {
+    std::filesystem::create_directories(storageDir / "meta");
+    std::ofstream out(BannerTextPath(storageDir), std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out << "{\n  \"items\": [";
+    for (size_t i = 0; i < texts.size(); ++i) {
+        out << "\"" << EscapeJsonString(texts[i]) << "\"";
+        if (i + 1 < texts.size()) out << ", ";
+    }
+    out << "]\n}";
+    return true;
+}
+
 ModuleToggles LoadModuleToggles() {
     ModuleToggles toggles;
     const char* env = std::getenv("FORGEMIRROR_DISABLE_MODULES");

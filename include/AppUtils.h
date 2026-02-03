@@ -41,6 +41,11 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
 
 // Load module toggles from environment (FORGEMIRROR_DISABLE_MODULES=tasks,pipeline,...).
 ModuleToggles LoadModuleToggles();
+// Banner text storage (meta/banner.json).
+std::filesystem::path BannerTextPath(const std::filesystem::path& storageDir);
+std::vector<std::string> LoadBannerTexts(const std::filesystem::path& storageDir);
+bool SaveBannerTexts(const std::filesystem::path& storageDir, const std::vector<std::string>& texts);
+
 
 // Find non-whitelisted files in storage (relative paths in outSamples, truncated to maxSamples).
 bool FindStrayStorageFiles(const std::filesystem::path& storageDir, size_t maxSamples,

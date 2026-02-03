@@ -18,6 +18,7 @@ struct GuiDataState {
     std::vector<ShortcutEntry> shortcuts;
     std::vector<PipelineStep> pipelineSteps;
     std::vector<ProfessionEntry> professions;
+    std::vector<std::string> bannerTexts;
     std::unordered_map<std::string, std::string> profileProfessionCache;
     bool profileProfessionDirty = true;
     AdminStatsCache adminStats;
@@ -61,7 +62,10 @@ struct GuiRuntimeState {
     bool showPomodoro = false;
     bool showShortcuts = false;
     bool showAbout = false;
+    bool showBannerAdmin = false;
     int workspaceTabRequest = -1;
+    std::string bannerTextCurrent;
+    std::int64_t bannerLastRotateAt = 0;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
@@ -78,6 +82,7 @@ struct GuiRuntimeState {
     bool isAdmin = false;
     ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
+    std::array<char, 256> bannerInput{};
     std::array<char, 128> newSkillName{};
     std::array<char, 256> newSkillDesc{};
     std::array<char, 128> editSkillName{};

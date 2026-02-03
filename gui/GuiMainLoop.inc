@@ -17,6 +17,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
             }
         }
         DrawMainMenuBar(window, state, storage, catalog);
+        DrawBannerStrip(state);
         DrawNavigationPanel(state);
         DrawWorkspacePanel(state, storage, catalog, style);
         DrawAdminLoginModal(state);

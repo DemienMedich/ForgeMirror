@@ -66,7 +66,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
-        "professions.txt", "seed.merged", "gui-layout.ini", "admin.ini"
+        "professions.txt", "banner.json", "seed.merged", "gui-layout.ini", "admin.ini"
     };
     bool any = false;
     for (auto it = std::filesystem::recursive_directory_iterator(storageDir, ec);

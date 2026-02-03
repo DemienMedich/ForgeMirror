@@ -30,6 +30,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showView3dSettings = false;
     state.showLogs = false;
     state.showAdminStats = false;
+    state.showBannerAdmin = false;
     state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
 }
 
@@ -58,6 +59,9 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         state.pipelineSteps = LoadPipeline(state.storageDir);
         state.rulesConfig = LoadGameplayConfig(state.storageDir);
         state.rulesDraft = state.rulesConfig;
+        state.bannerTexts = LoadBannerTexts(state.storageDir);
+        EnsureBannerSelection(state);
+        state.bannerLastRotateAt = NowSeconds();
     }
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
@@ -104,6 +108,9 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             state.pipelineSteps = LoadPipeline(state.storageDir);
             state.rulesConfig = LoadGameplayConfig(state.storageDir);
             state.rulesDraft = state.rulesConfig;
+            state.bannerTexts = LoadBannerTexts(state.storageDir);
+            EnsureBannerSelection(state);
+            state.bannerLastRotateAt = NowSeconds();
         }
     }
     if (doPush) {
@@ -195,6 +202,13 @@ static std::int64_t ComputeStorageStamp(const std::filesystem::path& storageDir)
     auto gameplayPath = storageDir / "meta" / "gameplay.ini";
     if (std::filesystem::exists(gameplayPath, ec)) {
         auto stamp = ToUnixSeconds(std::filesystem::last_write_time(gameplayPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
+    auto bannerPath = storageDir / "meta" / "banner.json";
+    if (std::filesystem::exists(bannerPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(bannerPath, ec));
         if (!ec) {
             latest = std::max(latest, stamp);
         }
@@ -336,6 +350,9 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 if (ImGui::MenuItem(u8"3D настройки")) {
                     OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
                 }
+                if (ImGui::MenuItem(u8"Баннер")) {
+                    OpenWorkspaceTab(state, state.showBannerAdmin, UiWindowId::BannerAdmin);
+                }
             }
             ImGui::EndMenu();
         }
@@ -368,6 +385,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                     state.showView3dSettings = false;
                     state.showLogs = false;
                     state.showAdminStats = false;
+                    state.showBannerAdmin = false;
                 } else {
                     state.adminPopupRequest = true;
                     state.adminPassword.fill('\0');

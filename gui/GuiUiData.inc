@@ -14,6 +14,7 @@ enum class UiWindowId {
     Pomodoro,
     Shortcuts,
     About,
+    BannerAdmin,
     Count
 };
 
@@ -41,7 +42,8 @@ const std::array<UiWindowInfo, kUiWindowCount>& UiWindows() {
         {UiWindowId::Tasks, "Задачи"},
         {UiWindowId::Pomodoro, "Помодоро"},
         {UiWindowId::Shortcuts, "Ярлыки"},
-        {UiWindowId::About, "О программе"}
+        {UiWindowId::About, "О программе"},
+        {UiWindowId::BannerAdmin, "Баннер"}
     }};
     return windows;
 }

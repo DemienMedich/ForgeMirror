@@ -7,9 +7,14 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.rulesConfig = gameplayConfig;
     state.rulesDraft = gameplayConfig;
     state.cloudConfig = LoadCloudSyncConfig(storageDir);
+    state.bannerTexts = LoadBannerTexts(storageDir);
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
     state.lastCloudSyncAt = NowSeconds();
+    state.bannerLastRotateAt = state.lastCloudSyncAt;
+    if (!state.bannerTexts.empty()) {
+        state.bannerTextCurrent = state.bannerTexts.front();
+    }
     std::error_code ec;
     const auto uiPath = UiSettingsPath(storageDir);
     const bool uiMissing = !std::filesystem::exists(uiPath, ec);

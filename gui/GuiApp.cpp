@@ -53,6 +53,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <numeric>
+#include <random>
 #include <vector>
 #include <chrono>
 
@@ -120,6 +121,7 @@ const char* ClassificationLabel(int categoryIndex);
 #include "GuiAboutPanel.inc"
 #include "GuiView3dPanels.inc"
 #include "GuiProfilePanel.inc"
+#include "GuiBannerPanel.inc"
 
 #include "GuiMenuHelpers.inc"
 #include "GuiNavigationPanel.inc"

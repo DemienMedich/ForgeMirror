@@ -66,6 +66,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showView3dSettings = false;
         state.showLogs = false;
         state.showAdminStats = false;
+        state.showBannerAdmin = false;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F1)) {
         state.showSkillCatalog = false;
@@ -80,6 +81,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showView3dSettings = false;
         state.showLogs = false;
         state.showAdminStats = false;
+        state.showBannerAdmin = false;
         state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F2)) {
@@ -110,6 +112,7 @@ void UpdateUiFrame(GuiState& state, GLFWwindow* window, ImGuiStyle& style, ImGui
     SyncUiTheme(state, style);
     ApplyUiWindowState(state, window, style, io);
     ApplyAccessGuardsAndHotkeys(state);
+    UpdateBannerRotation(state);
     if (state.modules.pomodoro) {
         UpdatePomodoro(state, io);
     }

@@ -10,6 +10,8 @@ void DrawNavigationPanel(GuiState& state) {
         const float navWidth = kNavigationPanelWidth;
         ImGuiViewportP* viewportP = (ImGuiViewportP*)(void*)viewport;
         ImRect workRect = viewportP->GetBuildWorkRect();
+        const float bannerHeight = BannerHeight();
+        workRect.Min.y += bannerHeight;
         ImGui::SetNextWindowPos(workRect.Min, ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(navWidth, workRect.Max.y - workRect.Min.y), ImGuiCond_Always);
     }
@@ -33,7 +35,7 @@ void DrawNavigationPanel(GuiState& state) {
     };
     const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d || state.showTasks ||
     state.showPomodoro || state.showUiSettings || state.showShortcuts || state.showAbout ||
-    (state.isAdmin && (state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats));
+    (state.isAdmin && (state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats || state.showBannerAdmin));
     const bool profileActive = !anyWorkspace;
     navButton("nav_profile", UiIcon::Home, u8"Профиль [F1]", profileActive, [&]() {
         state.showSkillCatalog = false;
@@ -89,6 +91,9 @@ void DrawNavigationPanel(GuiState& state) {
         });
         navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
             OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
+        });
+        navButton("nav_banner", UiIcon::Info, u8"Баннер", state.showBannerAdmin, [&]() {
+            OpenWorkspaceTab(state, state.showBannerAdmin, UiWindowId::BannerAdmin);
         });
         navButton("nav_view3d_settings", UiIcon::Cube, u8"3D настройки", state.showView3dSettings, [&]() {
             OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);

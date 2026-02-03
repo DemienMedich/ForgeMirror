@@ -5,6 +5,8 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
         ImGuiViewportP* viewportP = (ImGuiViewportP*)(void*)viewport;
         ImRect workRect = viewportP->GetBuildWorkRect();
         const float navWidth = kNavigationPanelWidth;
+        const float bannerHeight = BannerHeight();
+        workRect.Min.y += bannerHeight;
         const float width = std::max(0.0f, (workRect.Max.x - workRect.Min.x) - navWidth);
         ImGui::SetNextWindowPos(ImVec2(workRect.Min.x + navWidth, workRect.Min.y), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(width, workRect.Max.y - workRect.Min.y), ImGuiCond_Always);
@@ -168,6 +170,17 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     }
                     if (beginTabBody("##tab_rules")) {
                         DrawRulesPanel(state, storage, catalog);
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (state.isAdmin && state.showBannerAdmin &&
+                    ImGui::BeginTabItem(u8"Баннер", &state.showBannerAdmin, tabFlagsFor(UiWindowId::BannerAdmin))) {
+                    if (state.workspaceTabRequest == static_cast<int>(UiWindowId::BannerAdmin)) {
+                        state.workspaceTabRequest = -1;
+                    }
+                    if (beginTabBody("##tab_banner")) {
+                        DrawBannerAdminPanel(state);
                     }
                     ImGui::EndChild();
                     ImGui::EndTabItem();
