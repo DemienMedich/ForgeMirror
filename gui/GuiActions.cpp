@@ -156,9 +156,15 @@ CreateProfileResult CreateProfileAction(IJobStorage& storage, SkillCatalog& cata
     Profile profile(trimmed);
     SyncProfileWithCatalog(profile, catalog);
     if (auto info = storage.create_profile(profile)) {
+        const std::string login = "user_" + info->id;
+        const std::string password = GenerateRandomPassword();
+        profile.set_login(login);
+        profile.set_password_encoded(EncodePassword(password));
         storage.save_profile(profile);
         result.ok = true;
         result.id = info->id;
+        result.login = login;
+        result.password = password;
         result.message = u8"Профиль создан.";
     } else {
         result.message = u8"Не удалось создать профиль.";

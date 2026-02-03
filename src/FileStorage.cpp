@@ -529,6 +529,8 @@ public:
         int storedRecoveryTasks = 0;
     int storedTasksCompleted = 0;
         std::string storedProfession;
+        std::string storedLogin;
+        std::string storedPassword;
 
         while (std::getline(in, line)) {
             auto t = trim(line);
@@ -544,6 +546,8 @@ public:
 
             if (section == "auth") {
                 if (key == "token") token = val;
+                else if (key == "login") storedLogin = val;
+                else if (key == "password") storedPassword = val;
             } else if (section == "profile") {
                 if (key == "name") name = val;
                 else if (key == "profession") storedProfession = val;
@@ -632,6 +636,9 @@ public:
 
         Profile profile(name);
         profile.set_profession_id(storedProfession);
+        if (storedLogin.empty()) storedLogin = activeId_;
+        profile.set_login(storedLogin);
+        profile.set_password_encoded(storedPassword);
         std::vector<Skill> restored;
         restored.reserve(skillNames.size());
         for (const auto& skillName : skillNames) {
@@ -683,6 +690,12 @@ public:
         std::ostringstream ss;
         ss.imbue(std::locale::classic());
         ss << "[auth]\n";
+        std::string login = profile.login();
+        if (login.empty()) login = activeId_;
+        ss << "login=" << login << "\n";
+        if (!profile.password_encoded().empty()) {
+            ss << "password=" << profile.password_encoded() << "\n";
+        }
         if (token_) ss << "token=" << *token_ << "\n";
 
         ss << "\n[profile]\n";

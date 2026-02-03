@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -18,6 +19,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <random>
+#include <chrono>
 
 namespace {
 
@@ -47,6 +50,7 @@ std::string BuildRank(const char* base, int startLevel, int substep, int level) 
 }
 
 } // namespace
+
 
 std::string DescribeOverallRank(const Profile& profile) {
     const int overallLevel = profile.overall_level();
@@ -415,6 +419,47 @@ std::string CaesarDecode(const std::string& text, int shift) {
     return CaesarEncode(text, -shift);
 }
 
+static std::string XorData(const std::string& data, const std::string& key) {
+    if (key.empty()) return data;
+    std::string out;
+    out.resize(data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+        out[i] = static_cast<char>(data[i] ^ key[i % key.size()]);
+    }
+    return out;
+}
+
+static std::string ToHex(const std::string& data) {
+    static const char* kHex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(data.size() * 2);
+    for (unsigned char c : data) {
+        out.push_back(kHex[(c >> 4) & 0xF]);
+        out.push_back(kHex[c & 0xF]);
+    }
+    return out;
+}
+
+static bool FromHex(const std::string& hex, std::string& out) {
+    if (hex.size() % 2 != 0) return false;
+    out.clear();
+    out.reserve(hex.size() / 2);
+    auto decode = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1;
+    };
+    for (size_t i = 0; i < hex.size(); i += 2) {
+        int hi = decode(hex[i]);
+        int lo = decode(hex[i + 1]);
+        if (hi < 0 || lo < 0) return false;
+        out.push_back(static_cast<char>((hi << 4) | lo));
+    }
+    return true;
+}
+
+
 bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
     auto path = AdminPasswordPath(storageDir);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -423,12 +468,50 @@ bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::strin
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "# ForgeMirror admin password\n";
-    const std::string encoded = CaesarEncode(password, 7);
-    out << "password=caesar:" << encoded << "\n";
+    const std::string encoded = EncodePassword(password);
+    out << "password=" << encoded << "\n";
     return out.good();
 }
 
 } // namespace
+std::string EncodePassword(const std::string& password) {
+    if (password.empty()) return {};
+    static const std::string kKey = "ForgeMirror";
+    std::string xored = XorData(password, kKey);
+    return std::string("xor:") + ToHex(xored);
+}
+
+std::string DecodePassword(const std::string& value) {
+    if (value.empty()) return {};
+    const std::string xorPrefix = "xor:";
+    if (value.rfind(xorPrefix, 0) == 0) {
+        std::string raw;
+        if (!FromHex(value.substr(xorPrefix.size()), raw)) return {};
+        static const std::string kKey = "ForgeMirror";
+        return XorData(raw, kKey);
+    }
+    const std::string caesarPrefix = "caesar:";
+    if (value.rfind(caesarPrefix, 0) == 0) {
+        std::string encoded = value.substr(caesarPrefix.size());
+        return CaesarDecode(encoded, 7);
+    }
+    return value;
+}
+
+std::string GenerateRandomPassword(size_t length) {
+    static const char* kAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    if (length < 6) length = 6;
+    std::uniform_int_distribution<size_t> dist(0, std::strlen(kAlphabet) - 1);
+    static std::mt19937 rng(static_cast<unsigned int>(
+        std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::string out;
+    out.reserve(length);
+    for (size_t i = 0; i < length; ++i) {
+        out.push_back(kAlphabet[dist(rng)]);
+    }
+    return out;
+}
+
 
 std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
     if (const char* env = std::getenv("FORGEMIRROR_ADMIN_PASSWORD")) {
@@ -450,13 +533,7 @@ std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
             if (t.rfind("password=", 0) == 0) {
                 std::string value = TrimCopy(t.substr(9));
                 if (!value.empty()) {
-                    const std::string prefix = "caesar:";
-                    if (value.rfind(prefix, 0) == 0) {
-                        std::string encoded = value.substr(prefix.size());
-                        std::string decoded = CaesarDecode(encoded, 7);
-                        if (!decoded.empty()) return decoded;
-                    }
-                    return value;
+                    return DecodePassword(value);
                 }
             } else {
                 return t;

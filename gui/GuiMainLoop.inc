@@ -26,6 +26,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
         DrawXpModal(state, storage, catalog);
         DrawCreateProfileModal(state, storage, catalog);
         DrawConfirmModal(state, storage, catalog);
+        DrawProfilePasswordModals(state, storage);
         FinalizeFrame(state, window);
     }
 }

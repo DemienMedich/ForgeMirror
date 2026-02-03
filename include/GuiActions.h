@@ -20,6 +20,8 @@ struct ActionResult {
 
 struct CreateProfileResult : ActionResult {
     std::string id;
+    std::string login;
+    std::string password;
 };
 
 struct SaveRulesResult : ActionResult {

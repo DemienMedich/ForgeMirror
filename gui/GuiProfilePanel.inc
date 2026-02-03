@@ -269,6 +269,70 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Логин");
+            ImGui::TableSetColumnIndex(1);
+            std::string login = profile.login().empty() ? state.active->id : profile.login();
+            ImGui::TextUnformatted(login.c_str());
+            if (ImGui::GetContentRegionAvail().x > 120.0f) {
+                ImGui::SameLine();
+            }
+            if (ImGui::SmallButton(u8"Копировать##profile_login")) {
+                ImGui::SetClipboardText(login.c_str());
+            }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Доступ");
+            ImGui::TableSetColumnIndex(1);
+            const bool hasPassword = !profile.password_encoded().empty();
+            const bool unlocked = hasPassword && state.unlockedProfiles.count(state.active->id) > 0;
+            std::string accessText = hasPassword ? (unlocked ? u8"Открыт" : u8"Закрыт") : u8"Пароль не задан";
+            ImVec4 accessColor = unlocked ? accent : ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+            if (!hasPassword) {
+                accessColor = LogLevelColor(AppLogLevel::Warning);
+                accessColor.w = std::max(accessColor.w, 0.9f);
+            }
+            ImGui::TextColored(accessColor, "%s", accessText.c_str());
+            const float actionsWidth = ImGui::GetContentRegionAvail().x;
+            const bool stackActions = actionsWidth < 320.0f;
+            auto openUnlock = [&]() {
+                state.profileAuthTargetId = state.active->id;
+                state.profileAuthTargetName = profile.name();
+                std::fill(state.profilePasswordInput.begin(), state.profilePasswordInput.end(), '\0');
+                state.profileUnlockPopupRequest = true;
+            };
+            auto openChange = [&]() {
+                state.profileAuthTargetId = state.active->id;
+                state.profileAuthTargetName = profile.name();
+                std::fill(state.profilePasswordInput.begin(), state.profilePasswordInput.end(), '\0');
+                std::fill(state.profilePasswordNew.begin(), state.profilePasswordNew.end(), '\0');
+                std::fill(state.profilePasswordConfirm.begin(), state.profilePasswordConfirm.end(), '\0');
+                state.profileChangePasswordRequest = true;
+            };
+            auto openReset = [&]() {
+                state.profileResetTargetId = state.active->id;
+                state.profileResetTargetName = profile.name();
+                state.profileResetPassword = GenerateRandomPassword();
+                state.profileResetPasswordRequest = true;
+            };
+            if (hasPassword && !unlocked) {
+                if (!stackActions) ImGui::SameLine();
+                if (ImGui::SmallButton(u8"Ввести пароль")) {
+                    openUnlock();
+                }
+            }
+            const char* changeLabel = hasPassword ? u8"Сменить пароль" : u8"Задать пароль";
+            if (!stackActions) ImGui::SameLine();
+            if (ImGui::SmallButton(changeLabel)) {
+                openChange();
+            }
+            if (state.isAdmin) {
+                if (!stackActions) ImGui::SameLine();
+                if (ImGui::SmallButton(u8"Сбросить пароль")) {
+                    openReset();
+                }
+            }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Опыт");
             ImGui::TableSetColumnIndex(1);
             const bool xpEnabled = state.isAdmin;

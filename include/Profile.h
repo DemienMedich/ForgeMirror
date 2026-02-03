@@ -39,6 +39,10 @@ public:
     int level_progress() const { return levelProgress_; }
     int xp_to_next_level() const { return RequiredXpForLevel(overallLevel_) - levelProgress_; }
     const std::string& name() const { return name_; }
+    const std::string& login() const { return login_; }
+    void set_login(std::string login) { login_ = std::move(login); }
+    const std::string& password_encoded() const { return passwordEncoded_; }
+    void set_password_encoded(std::string password) { passwordEncoded_ = std::move(password); }
     std::vector<Skill> list_skills() const;
     void set_skills(const std::vector<Skill>& skills);
     void set_total_xp(int totalXp);
@@ -87,6 +91,8 @@ private:
     void RecalculateLevel();
 
     std::string name_;
+    std::string login_;
+    std::string passwordEncoded_;
     std::unordered_map<std::string, Skill> skills_;
     int levelProgress_ = 0;
     int overallLevel_ = 1;
