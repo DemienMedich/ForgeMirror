@@ -69,10 +69,10 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiTasksPanel.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.45.md`
+  - `gui/GuiMainMenuPanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.46.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
 
 Done:
-- UI: унифицирован текст пустого состояния в задачах.
+- UI: выровнен текст статуса активного профиля (без скобок).

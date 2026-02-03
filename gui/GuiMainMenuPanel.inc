@@ -250,7 +250,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 std::string label = "[" + state.active->id + "] " + state.active->profile.name();
                 ImGui::TextDisabled(u8"Активный: %s", label.c_str());
             } else {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Активный: (не выбран)");
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Активный: не выбран");
             }
             ImGui::Separator();
 
