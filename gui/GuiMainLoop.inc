@@ -7,6 +7,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         UpdateUiFrame(state, window, style, io, layoutPath);
+        ApplyPomodoroCoin(state, storage);
         if (state.cloudConfig.enabled && state.cloudConfig.autoSyncEnabled) {
             const int intervalMinutes = std::clamp(state.cloudConfig.autoSyncMinutes, 1, 120);
             const std::int64_t now = NowSeconds();

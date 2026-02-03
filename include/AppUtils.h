@@ -34,6 +34,11 @@ struct StorageVaultData {
     double balance = 0.0;
     int logLimit = 10;
     std::vector<StorageLogEntry> log;
+    int pomodoroStartMinutes = 540;
+    int pomodoroEndMinutes = 1080;
+    int pomodoroMinMinutes = 20;
+    int pomodoroCoinsPerCycle = 1;
+    int pomodoroDaysMask = 0;
 };
 
 

@@ -75,6 +75,11 @@ struct GuiRuntimeState {
     std::array<char, 64> vaultCurrencyName{};
     std::array<char, 16> vaultCurrencyCode{};
     int vaultLogLimitDraft = 10;
+    int vaultPomodoroStartMinutes = 540;
+    int vaultPomodoroEndMinutes = 1080;
+    int vaultPomodoroMinMinutes = 20;
+    int vaultPomodoroCoins = 1;
+    int vaultPomodoroDaysMask = 0;
 
     bool createPopupRequest = false;
     bool confirmPopupRequest = false;
@@ -165,6 +170,10 @@ struct GuiRuntimeState {
     int pomodoroCyclesCompleted = 0;
     float pomodoroAccumulator = 0.0f;
     bool pomodoroRunning = false;
+    bool pomodoroCoinPending = false;
+    std::string pomodoroCoinProfileId;
+    int pomodoroCoinAmount = 0;
+    std::int64_t pomodoroCoinTimestamp = 0;
     bool pomodoroAwaitConfirm = false;
     UiFilters filters;
     std::array<float, 2> profileSkillWeightRange{0.0f, 2.0f};

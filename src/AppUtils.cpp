@@ -659,6 +659,10 @@ static int ClampVaultLogLimit(int value) {
     return std::clamp(value, 10, 50);
 }
 
+static int ClampVaultMinutes(int value) {
+    return std::clamp(value, 0, 24 * 60 - 1);
+}
+
 static bool ExtractJsonStringField(const std::string& content, const char* key, std::string& out) {
     const std::string token = std::string("\"") + key + "\"";
     size_t pos = content.find(token);
@@ -761,6 +765,11 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     data.currencyCode = "KUK";
     data.balance = 0.0;
     data.logLimit = 10;
+    data.pomodoroStartMinutes = 9 * 60;
+    data.pomodoroEndMinutes = 18 * 60;
+    data.pomodoroMinMinutes = 20;
+    data.pomodoroCoinsPerCycle = 1;
+    data.pomodoroDaysMask = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
     std::ifstream in(StorageVaultPath(storageDir), std::ios::binary);
     if (!in) return data;
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -778,6 +787,22 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     if (ExtractJsonNumberField(content, "log_limit", num)) {
         data.logLimit = ClampVaultLogLimit(static_cast<int>(num));
     }
+    if (ExtractJsonNumberField(content, "pomodoro_start", num)) {
+        data.pomodoroStartMinutes = ClampVaultMinutes(static_cast<int>(num));
+    }
+    if (ExtractJsonNumberField(content, "pomodoro_end", num)) {
+        data.pomodoroEndMinutes = ClampVaultMinutes(static_cast<int>(num));
+    }
+    if (ExtractJsonNumberField(content, "pomodoro_min", num)) {
+        data.pomodoroMinMinutes = std::max(1, static_cast<int>(num));
+    }
+    if (ExtractJsonNumberField(content, "pomodoro_coin", num)) {
+        data.pomodoroCoinsPerCycle = std::max(0, static_cast<int>(num));
+    }
+    if (ExtractJsonNumberField(content, "pomodoro_days", num)) {
+        data.pomodoroDaysMask = static_cast<int>(num);
+        if (data.pomodoroDaysMask < 0) data.pomodoroDaysMask = 0;
+    }
     data.log = ParseVaultLog(content);
     TrimVaultLog(data);
     return data;
@@ -790,6 +815,14 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     StorageVaultData save = data;
     if (save.currencyName.empty()) save.currencyName = u8"Кукоин";
     if (save.currencyCode.empty()) save.currencyCode = "KUK";
+    save.logLimit = ClampVaultLogLimit(save.logLimit);
+    save.pomodoroStartMinutes = ClampVaultMinutes(save.pomodoroStartMinutes);
+    save.pomodoroEndMinutes = ClampVaultMinutes(save.pomodoroEndMinutes);
+    save.pomodoroMinMinutes = std::max(1, save.pomodoroMinMinutes);
+    save.pomodoroCoinsPerCycle = std::max(0, save.pomodoroCoinsPerCycle);
+    if (save.pomodoroDaysMask == 0) {
+        save.pomodoroDaysMask = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
+    }
     TrimVaultLog(save);
 
     out << "{\n";
@@ -797,6 +830,11 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     out << "  \"currency_code\": \"" << EscapeJsonString(save.currencyCode) << "\",\n";
     out << "  \"balance\": " << save.balance << ",\n";
     out << "  \"log_limit\": " << save.logLimit << ",\n";
+    out << "  \"pomodoro_start\": " << save.pomodoroStartMinutes << ",\n";
+    out << "  \"pomodoro_end\": " << save.pomodoroEndMinutes << ",\n";
+    out << "  \"pomodoro_min\": " << save.pomodoroMinMinutes << ",\n";
+    out << "  \"pomodoro_coin\": " << save.pomodoroCoinsPerCycle << ",\n";
+    out << "  \"pomodoro_days\": " << save.pomodoroDaysMask << ",\n";
     out << "  \"log\": [";
     for (size_t i = 0; i < save.log.size(); ++i) {
         const auto& entry = save.log[i];

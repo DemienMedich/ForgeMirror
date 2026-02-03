@@ -1,3 +1,100 @@
+
+static bool PomodoroWithinWindow(const GuiState& state, std::int64_t now) {
+    std::time_t t = static_cast<std::time_t>(now);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    const int wday = tm.tm_wday; // 0=Sun
+    if (wday < 0 || wday > 6) return false;
+    if ((state.vault.pomodoroDaysMask & (1 << wday)) == 0) return false;
+    const int minutes = tm.tm_hour * 60 + tm.tm_min;
+    const int start = state.vault.pomodoroStartMinutes;
+    const int end = state.vault.pomodoroEndMinutes;
+    if (start == end) return false;
+    if (start < end) {
+        return minutes >= start && minutes < end;
+    }
+    return minutes >= start || minutes < end;
+}
+
+static bool CanAwardPomodoroCoin(const GuiState& state, int workMinutes, int remainingSeconds) {
+    if (!state.active) return false;
+    if (state.vault.pomodoroCoinsPerCycle <= 0) return false;
+    if (workMinutes < state.vault.pomodoroMinMinutes) return false;
+    if (remainingSeconds > 0) return false; // only full cycle
+    const auto& profile = state.active->profile;
+    if (profile.password_encoded().empty()) return false;
+    if (state.unlockedProfiles.count(state.active->id) == 0) return false;
+    const std::int64_t now = NowSeconds();
+    return PomodoroWithinWindow(state, now);
+}
+
+static void QueuePomodoroCoin(GuiState& state, int amount) {
+    if (!state.active) return;
+    state.pomodoroCoinPending = true;
+    state.pomodoroCoinProfileId = state.active->id;
+    state.pomodoroCoinAmount = amount;
+    state.pomodoroCoinTimestamp = NowSeconds();
+}
+
+static void AppendVaultLogEntry(GuiState& state, const std::string& action, double amount,
+                                const std::string& note) {
+    StorageLogEntry entry;
+    entry.timestamp = NowSeconds();
+    entry.action = action;
+    entry.amount = amount;
+    entry.note = note;
+    state.vault.log.push_back(entry);
+    const int limit = std::clamp(state.vault.logLimit, 10, 50);
+    if (static_cast<int>(state.vault.log.size()) > limit) {
+        const size_t drop = state.vault.log.size() - static_cast<size_t>(limit);
+        state.vault.log.erase(state.vault.log.begin(), state.vault.log.begin() + static_cast<std::ptrdiff_t>(drop));
+    }
+}
+
+static void ApplyPomodoroCoin(GuiState& state, IJobStorage& storage) {
+    if (!state.pomodoroCoinPending) return;
+    const std::string targetId = state.pomodoroCoinProfileId;
+    state.pomodoroCoinPending = false;
+    state.pomodoroCoinProfileId.clear();
+    if (targetId.empty()) return;
+    const int amount = std::max(0, state.pomodoroCoinAmount);
+    if (amount <= 0) return;
+    std::string restoreId = state.active ? state.active->id : std::string{};
+    if (!storage.set_active_profile(targetId)) {
+        SetStatus(state, u8"Не удалось начислить монету (профиль не найден).", 1.0f, 0.45f, 0.45f);
+        return;
+    }
+    auto profileOpt = storage.load_profile();
+    if (!profileOpt) {
+        SetStatus(state, u8"Не удалось начислить монету (ошибка профиля).", 1.0f, 0.45f, 0.45f);
+        if (!restoreId.empty() && restoreId != targetId) storage.set_active_profile(restoreId);
+        return;
+    }
+    Profile profile = *profileOpt;
+    profile.set_wallet_balance(profile.wallet_balance() + amount);
+    if (!storage.save_profile(profile)) {
+        SetStatus(state, u8"Не удалось сохранить кошелёк профиля.", 1.0f, 0.45f, 0.45f);
+    } else {
+        if (state.active && state.active->id == targetId) {
+            state.active->profile = profile;
+        }
+        state.profileWalletCache[targetId] = profile.wallet_balance();
+        const std::string note = profile.name().empty() ? targetId : profile.name();
+        AppendVaultLogEntry(state, "pomodoro", amount, note);
+        SaveStorageVault(state.storageDir, state.vault);
+        SetStatus(state, u8"Монета начислена за полный цикл помодоро.", 0.45f, 0.9f, 0.45f);
+    }
+    if (!restoreId.empty() && restoreId != targetId) {
+        storage.set_active_profile(restoreId);
+    }
+    state.pomodoroCoinAmount = 0;
+    state.pomodoroCoinTimestamp = 0;
+}
+
 enum class PomodoroPhase {
     Work = 0,
     Break = 1,
@@ -131,6 +228,10 @@ static int NextPomodoroPhase(GuiState& state) {
 static void FinishPomodoroInterval(GuiState& state) {
     const int phase = PomodoroClampPhase(state.pomodoroPhase);
     if (phase == static_cast<int>(PomodoroPhase::Work)) {
+        const int workMinutes = PomodoroPhaseMinutes(state.ui, phase);
+        if (CanAwardPomodoroCoin(state, workMinutes, state.pomodoroRemainingSeconds)) {
+            QueuePomodoroCoin(state, std::max(1, state.vault.pomodoroCoinsPerCycle));
+        }
         state.pomodoroCyclesCompleted = std::min(state.pomodoroCyclesCompleted + 1, 99);
     } else if (phase == static_cast<int>(PomodoroPhase::LongBreak)) {
         state.pomodoroCyclesCompleted = 0;

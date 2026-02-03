@@ -4,12 +4,22 @@ static void SyncVaultBuffers(GuiState& state) {
     std::snprintf(state.vaultCurrencyCode.data(), state.vaultCurrencyCode.size(), "%s",
                   state.vault.currencyCode.c_str());
     state.vaultLogLimitDraft = state.vault.logLimit;
+    state.vaultPomodoroStartMinutes = state.vault.pomodoroStartMinutes;
+    state.vaultPomodoroEndMinutes = state.vault.pomodoroEndMinutes;
+    state.vaultPomodoroMinMinutes = state.vault.pomodoroMinMinutes;
+    state.vaultPomodoroCoins = state.vault.pomodoroCoinsPerCycle;
+    state.vaultPomodoroDaysMask = state.vault.pomodoroDaysMask;
 }
 
 static void ApplyVaultSettings(GuiState& state) {
     state.vault.currencyName = TrimStringGui(state.vaultCurrencyName.data());
     state.vault.currencyCode = TrimStringGui(state.vaultCurrencyCode.data());
     state.vault.logLimit = std::clamp(state.vaultLogLimitDraft, 10, 50);
+    state.vault.pomodoroStartMinutes = std::clamp(state.vaultPomodoroStartMinutes, 0, 24 * 60 - 1);
+    state.vault.pomodoroEndMinutes = std::clamp(state.vaultPomodoroEndMinutes, 0, 24 * 60 - 1);
+    state.vault.pomodoroMinMinutes = std::max(1, state.vaultPomodoroMinMinutes);
+    state.vault.pomodoroCoinsPerCycle = std::max(0, state.vaultPomodoroCoins);
+    state.vault.pomodoroDaysMask = state.vaultPomodoroDaysMask;
     if (SaveStorageVault(state.storageDir, state.vault)) {
         SetStatus(state, u8"Настройки хранилища сохранены.", 0.45f, 0.9f, 0.45f);
     } else {
@@ -51,6 +61,60 @@ void DrawVaultAdminPanel(GuiState& state) {
         ApplyVaultSettings(state);
     }
 
+
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    DrawCardHeader(u8"Начисление за помодоро");
+    ImGui::TextDisabled(u8"Монеты начисляются за полный цикл фокуса.");
+    int startHour = state.vaultPomodoroStartMinutes / 60;
+    int startMin = state.vaultPomodoroStartMinutes % 60;
+    int endHour = state.vaultPomodoroEndMinutes / 60;
+    int endMin = state.vaultPomodoroEndMinutes % 60;
+    if (ImGui::BeginTable("vault_pomodoro_time", 4, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("h", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("m", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("pad", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Старт");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderInt("##vault_start_h", &startHour, 0, 23);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderInt("##vault_start_m", &startMin, 0, 59);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Конец");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderInt("##vault_end_h", &endHour, 0, 23);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderInt("##vault_end_m", &endMin, 0, 59);
+        ImGui::EndTable();
+    }
+    state.vaultPomodoroStartMinutes = startHour * 60 + startMin;
+    state.vaultPomodoroEndMinutes = endHour * 60 + endMin;
+    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SliderInt(u8"Мин. минут", &state.vaultPomodoroMinMinutes, 1, 90);
+    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SliderInt(u8"Монет за цикл", &state.vaultPomodoroCoins, 0, 5);
+
+    ImGui::TextDisabled(u8"Дни недели");
+    const char* dayLabels[] = {u8"Вс", u8"Пн", u8"Вт", u8"Ср", u8"Чт", u8"Пт", u8"Сб"};
+    for (int d = 0; d < 7; ++d) {
+        bool enabled = (state.vaultPomodoroDaysMask & (1 << d)) != 0;
+        if (ImGui::Checkbox(dayLabels[d], &enabled)) {
+            if (enabled) state.vaultPomodoroDaysMask |= (1 << d);
+            else state.vaultPomodoroDaysMask &= ~(1 << d);
+        }
+        if (d < 6) ImGui::SameLine();
+    }
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    if (ImGui::SmallButton(u8"Сохранить правила")) {
+        ApplyVaultSettings(state);
+    }
     const float listHeight = std::max(160.0f, ImGui::GetTextLineHeightWithSpacing() * 6.0f);
     if (ImGui::BeginChild("vault_log", ImVec2(0.0f, listHeight), true)) {
         if (state.vault.log.empty()) {
