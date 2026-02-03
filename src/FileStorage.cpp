@@ -513,6 +513,7 @@ public:
         int storedTotalXp = -1;
         int storedProgress = -1;
         bool storedAdmin = false;
+        bool storedBlocked = false;
         std::vector<std::string> skillNames;
         std::vector<XpEvent> queue;
         std::optional<std::string> token;
@@ -559,6 +560,8 @@ public:
                     storedProgress = parse_int(val, -1);
                 } else if (key == "admin") {
                     storedAdmin = parse_int(val, 0) != 0;
+                } else if (key == "blocked") {
+                    storedBlocked = parse_int(val, 0) != 0;
                 } else if (key == "lastTaskTs") {
                     try { storedLastTask = std::stoll(sanitize_int(val)); } catch (...) {}
                 } else if (key == "inertiaTasks") {
@@ -677,6 +680,7 @@ public:
         profile.start_penalty_recovery(storedRecoveryTasks);
         profile.set_tasks_completed(storedTasksCompleted);
         profile.set_admin(storedAdmin);
+        profile.set_blocked(storedBlocked);
         profile.set_achievements(load_achievements(baseDir_, activeId_));
 
         token_ = token;
@@ -706,6 +710,7 @@ public:
         ss << "progress=" << profile.level_progress() << "\n";
         ss << "totalXp=" << profile.total_xp() << "\n";
         ss << "admin=" << (profile.is_admin() ? 1 : 0) << "\n";
+        ss << "blocked=" << (profile.is_blocked() ? 1 : 0) << "\n";
         ss << "lastTaskTs=" << profile.last_task_timestamp() << "\n";
         ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
         ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
@@ -950,3 +955,4 @@ private:
 };
 
 IJobStorage* CreateFileStorage(const std::filesystem::path& dir) { return new FileStorage(dir); }
+

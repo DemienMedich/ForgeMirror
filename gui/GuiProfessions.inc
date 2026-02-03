@@ -71,12 +71,16 @@ static std::string GenerateProfessionId(const std::vector<ProfessionEntry>& list
 
 static void RefreshProfileProfessionCache(GuiState& state, IJobStorage& storage) {
     state.profileProfessionCache.clear();
+    state.profileLoginCache.clear();
+    state.profileBlockedCache.clear();
     std::string restoreId = state.active ? state.active->id : std::string{};
     for (const auto& info : state.profiles) {
-        if (info.archived) continue;
         if (!storage.set_active_profile(info.id)) continue;
         if (auto profile = storage.load_profile()) {
             state.profileProfessionCache[info.id] = profile->profession_id();
+            std::string login = profile->login().empty() ? info.id : profile->login();
+            state.profileLoginCache[info.id] = login;
+            state.profileBlockedCache[info.id] = profile->is_blocked();
         }
     }
     if (!restoreId.empty()) {

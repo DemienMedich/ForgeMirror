@@ -29,6 +29,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.profileSection = std::clamp(state.ui.profileTab, 0, 5);
     state.profileTabRequest = state.profileSection;
     ApplyUiFiltersToState(state);
+    ApplyProfileAccessSettings(state);
     state.tasks = state.modules.tasks ? LoadTasks(storageDir) : std::vector<TaskEntry>();
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();

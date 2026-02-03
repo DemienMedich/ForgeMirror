@@ -553,6 +553,28 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
 }
 
 
+void AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
+                        const std::string& action, const std::string& details) {
+    if (storageDir.empty() || profileId.empty() || action.empty()) return;
+    std::error_code ec;
+    const auto path = storageDir / "meta" / "profile-audit.log";
+    std::filesystem::create_directories(path.parent_path(), ec);
+    std::ofstream out(path, std::ios::binary | std::ios::app);
+    if (!out) return;
+    auto sanitize = [](std::string value) {
+        for (char& c : value) {
+            if (c == '\r' || c == '\n' || c == '|') c = ' ';
+        }
+        return TrimCopy(value);
+    };
+    const auto now = std::chrono::system_clock::now();
+    const auto ts = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    out << ts << "|" << sanitize(profileId) << "|" << sanitize(action);
+    if (!details.empty()) {
+        out << "|" << sanitize(details);
+    }
+    out << "\n";
+}
 std::filesystem::path BannerTextPath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "banner.json";
 }
@@ -693,7 +715,7 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     const std::string ext = rel.extension().string();
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
-        "professions.txt", "seed.merged", "gui-layout.ini", "admin.ini"
+        "professions.txt", "banner.json", "profile-audit.log", "seed.merged", "gui-layout.ini", "admin.ini"
     };
     if (parent.empty()) {
         if (ext == ".ini") return true;
@@ -782,4 +804,6 @@ void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
         profile.set_skills(skills);
     }
 }
+
+
 

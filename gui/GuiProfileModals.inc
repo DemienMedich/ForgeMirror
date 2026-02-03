@@ -16,6 +16,7 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
             result.ok ? 0.45f : 0.45f, 1.0f, level, u8"Профили");
             if (result.ok) {
                 RefreshProfiles(state, storage, catalog, result.id);
+                AppendProfileAudit(state.storageDir, result.id, "create", std::string("login=") + result.login);
                 if (!result.login.empty() && !result.password.empty()) {
                     state.profileCredentialsLogin = result.login;
                     state.profileCredentialsPassword = result.password;
@@ -82,6 +83,8 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 case ConfirmAction::Archive: action = u8"архивирование"; break;
                 case ConfirmAction::Restore: action = u8"восстановление"; break;
                 case ConfirmAction::Delete: action = u8"удаление"; break;
+                case ConfirmAction::Block: action = u8"блокировку"; break;
+                case ConfirmAction::Unblock: action = u8"разблокировку"; break;
                 default: action = ""; break;
             }
             ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
@@ -96,6 +99,10 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     actionResult = SetProfileArchivedAction(storage, info.id, false);
                 } else if (state.confirmAction == ConfirmAction::Delete) {
                     actionResult = DeleteProfileAction(storage, info.id);
+                } else if (state.confirmAction == ConfirmAction::Block) {
+                    actionResult = SetProfileBlockedAction(storage, info.id, true);
+                } else if (state.confirmAction == ConfirmAction::Unblock) {
+                    actionResult = SetProfileBlockedAction(storage, info.id, false);
                 }
                 if (actionResult.ok) {
                     SetStatus(state, actionResult.message, 0.45f, 0.9f, 0.45f, 1.0f,
@@ -104,7 +111,13 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     if (state.confirmAction != ConfirmAction::Delete) {
                         newFocus = info.id;
                     }
+                    if (state.confirmAction == ConfirmAction::Block || state.confirmAction == ConfirmAction::Unblock) {
+                        AppendProfileAudit(state.storageDir, info.id, state.confirmAction == ConfirmAction::Block ? "block" : "unblock");
+                    }
                     RefreshProfiles(state, storage, catalog, newFocus);
+                    if (state.confirmAction == ConfirmAction::Block || state.confirmAction == ConfirmAction::Unblock) {
+                        state.profileProfessionDirty = true;
+                    }
                 } else {
                     SetStatus(state, actionResult.message, 1.0f, 0.45f, 0.45f, 1.0f,
                     AppLogLevel::Error, u8"Профили");
@@ -185,12 +198,15 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
             const auto& profile = state.active->profile;
             ImGui::TextDisabled(u8"Профиль: %s", profile.name().c_str());
             ImGui::InputText(u8"Пароль", state.profilePasswordInput.data(), state.profilePasswordInput.size(), ImGuiInputTextFlags_Password);
+            DrawKeyboardHintLine(true);
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 260.0f;
             auto submitUnlock = [&]() {
                 std::string input = state.profilePasswordInput.data();
                 if (VerifyProfilePassword(profile, input)) {
                     state.unlockedProfiles.insert(state.active->id);
+                    SaveProfileAccessSettings(state);
+                    AppendProfileAudit(state.storageDir, state.active->id, "unlock");
                     SetStatus(state, u8"Доступ к профилю открыт.", 0.45f, 0.9f, 0.45f);
                     std::fill(state.profilePasswordInput.begin(), state.profilePasswordInput.end(), '\0');
                     ImGui::CloseCurrentPopup();
@@ -251,6 +267,8 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
             ImGui::InputText(u8"Новый пароль", state.profilePasswordNew.data(), state.profilePasswordNew.size(), ImGuiInputTextFlags_Password);
             ImGui::InputText(u8"Повтор", state.profilePasswordConfirm.data(), state.profilePasswordConfirm.size(), ImGuiInputTextFlags_Password);
 
+            DrawKeyboardHintLine(true);
+
             auto applyChange = [&]() {
                 std::string current = state.profilePasswordInput.data();
                 std::string next = state.profilePasswordNew.data();
@@ -272,6 +290,8 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                 if (storage.save_profile(profile)) {
                     state.active->profile = profile;
                     state.unlockedProfiles.insert(state.active->id);
+                    SaveProfileAccessSettings(state);
+                    AppendProfileAudit(state.storageDir, state.active->id, "password_change");
                     SetStatus(state, u8"Пароль обновлён.", 0.45f, 0.9f, 0.45f);
                 } else {
                     SetStatus(state, u8"Не удалось сохранить пароль.", 1.0f, 0.45f, 0.45f);
@@ -317,6 +337,7 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
     if (state.profileResetPasswordRequest) {
         ImGui::OpenPopup(u8"Сбросить пароль");
         state.profileResetPasswordRequest = false;
+        state.profileResetConfirm = false;
     }
     bool resetOpen = true;
     if (ImGui::BeginPopupModal(u8"Сбросить пароль", &resetOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -349,6 +370,8 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                 if (storage.save_profile(updated)) {
                     state.active->profile = updated;
                     state.unlockedProfiles.erase(state.active->id);
+                    SaveProfileAccessSettings(state);
+                    AppendProfileAudit(state.storageDir, state.active->id, "password_reset");
                     SetStatus(state, u8"Пароль сброшен.", 0.45f, 0.9f, 0.45f);
                     ImGui::CloseCurrentPopup();
                     resetOpen = false;
@@ -357,12 +380,16 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                 }
             };
 
+            ImGui::Spacing();
+            ImGui::Checkbox(u8"Подтверждаю сброс пароля", &state.profileResetConfirm);
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 260.0f;
             if (stackActions) {
+                if (!state.profileResetConfirm) ImGui::BeginDisabled();
                 if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
                     applyReset();
                 }
+                if (!state.profileResetConfirm) ImGui::EndDisabled();
                 if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                     ImGui::CloseCurrentPopup();
                     resetOpen = false;
@@ -370,9 +397,11 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
             } else if (ImGui::BeginTable("reset_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
+                if (!state.profileResetConfirm) ImGui::BeginDisabled();
                 if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
                     applyReset();
                 }
+                if (!state.profileResetConfirm) ImGui::EndDisabled();
                 ImGui::TableSetColumnIndex(1);
                 if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                     ImGui::CloseCurrentPopup();

@@ -554,10 +554,18 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
         const float iconGap = style.ItemSpacing.x * 0.75f;
         const int iconCount = 7;
         const float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
-        float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - iconsWidth;
+        const std::string kbHint = KeyboardHintCompactLabel(false);
+        const float kbGap = style.ItemSpacing.x * 0.6f;
+        const float kbWidth = ImGui::CalcTextSize(kbHint.c_str()).x;
+        const float rightBlockWidth = iconsWidth + kbWidth + kbGap;
+        float rightX = ImGui::GetWindowWidth() - style.WindowPadding.x - rightBlockWidth;
         if (rightX > ImGui::GetCursorPosX()) {
             ImGui::SetCursorPosX(rightX);
         }
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", kbHint.c_str());
+        ImGui::SameLine(0.0f, kbGap);
 
         if (IconButtonGui("top_profiles", UiIcon::Users, u8"Профили", accent, iconSize, true, state.showProfilesWindow)) {
             state.showProfilesWindow = !state.showProfilesWindow;
@@ -665,6 +673,10 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
 void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
 
+    if (state.profileProfessionDirty) {
+        RefreshProfileProfessionCache(state, storage);
+    }
+
     if (BeginCard("profiles_list_card")) {
         DrawCardHeader(u8"Профили");
         ImGui::TextDisabled(u8"Главное меню: выберите профиль или создайте новый.");
@@ -706,9 +718,29 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::EndTable();
         }
         const float filtersWidth = ImGui::GetContentRegionAvail().x;
-        const bool stackFilters = filtersWidth < 520.0f;
+        const bool stackFilters = filtersWidth < 640.0f;
         const char* archiveLabels[] = {u8"Все", u8"Активные", u8"Архив"};
         const char* profileSortLabels[] = {u8"ID", u8"Имя"};
+        std::vector<std::string> professionLabels;
+        std::vector<std::string> professionIds;
+        professionLabels.emplace_back(u8"Все профессии");
+        professionIds.emplace_back("");
+        professionLabels.emplace_back(u8"Без профессии");
+        professionIds.emplace_back("__none__");
+        for (const auto& prof : state.professions) {
+            if (prof.id.empty()) continue;
+            professionLabels.push_back(prof.name);
+            professionIds.push_back(prof.id);
+        }
+        std::vector<const char*> professionLabelPtrs;
+        professionLabelPtrs.reserve(professionLabels.size());
+        for (auto& label : professionLabels) {
+            professionLabelPtrs.push_back(label.c_str());
+        }
+        if (state.profileProfessionFilter < 0 ||
+            state.profileProfessionFilter >= static_cast<int>(professionLabelPtrs.size())) {
+            state.profileProfessionFilter = 0;
+        }
         if (stackFilters) {
             ImGui::TextDisabled(u8"Поиск");
             ImGui::InputTextWithHint(u8"##profile_search", u8"Поиск профиля",
@@ -719,14 +751,19 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::TextDisabled(u8"Профили");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_archive", &state.profileArchiveFilter, archiveLabels, IM_ARRAYSIZE(archiveLabels));
+            ImGui::TextDisabled(u8"Профессия");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##profile_profession", &state.profileProfessionFilter,
+                professionLabelPtrs.data(), static_cast<int>(professionLabelPtrs.size()));
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_sort", &state.profileSort, profileSortLabels, IM_ARRAYSIZE(profileSortLabels));
-        } else if (ImGui::BeginTable("profile_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+        } else if (ImGui::BeginTable("profile_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.95f);
-            ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 0.95f);
+            ImGui::TableSetupColumn("filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+            ImGui::TableSetupColumn("filter_profession", ImGuiTableColumnFlags_WidthStretch, 0.95f);
+            ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 0.85f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             DrawAnchorIcon(UiIcon::List);
@@ -744,19 +781,72 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_archive", &state.profileArchiveFilter, archiveLabels, IM_ARRAYSIZE(archiveLabels));
             ImGui::TableSetColumnIndex(3);
+            ImGui::TextDisabled(u8"Профессия");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##profile_profession", &state.profileProfessionFilter,
+                professionLabelPtrs.data(), static_cast<int>(professionLabelPtrs.size()));
+            ImGui::TableSetColumnIndex(4);
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_sort", &state.profileSort, profileSortLabels, IM_ARRAYSIZE(profileSortLabels));
             ImGui::EndTable();
         }
         ImGui::Separator();
+        if (!state.recentProfiles.empty()) {
+            ImGui::TextDisabled(u8"Недавние");
+            bool anyRecent = false;
+            for (const auto& recentId : state.recentProfiles) {
+                auto it = std::find_if(state.profiles.begin(), state.profiles.end(),
+                    [&](const IJobStorage::ProfileInfo& info) { return info.id == recentId; });
+                if (it == state.profiles.end()) continue;
+                if (anyRecent) ImGui::SameLine(0.0f, style.ItemSpacing.x * 0.5f);
+                anyRecent = true;
+                ImGui::PushID(recentId.c_str());
+                const std::string label = it->name.empty() ? it->id : it->name;
+                if (ImGui::SmallButton(label.c_str())) {
+                    state.selectedIndex = static_cast<int>(std::distance(state.profiles.begin(), it));
+                    RefreshActiveProfile(state, storage, catalog);
+                    SyncRankSelection(state);
+                    SetStatus(state, "", 0.6f, 0.7f, 1.0f);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("[%s] %s", it->id.c_str(), it->name.c_str());
+                }
+                ImGui::PopID();
+            }
+            if (anyRecent) {
+                ImGui::Spacing();
+            }
+        }
         std::vector<int> visibleIndices;
         visibleIndices.reserve(state.profiles.size());
+        std::string selectedProfessionId;
+        if (state.profileProfessionFilter > 0 &&
+            state.profileProfessionFilter < static_cast<int>(professionIds.size())) {
+            selectedProfessionId = professionIds[state.profileProfessionFilter];
+        }
         for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
             const auto& info = state.profiles[i];
             if (state.profileArchiveFilter == 1 && info.archived) continue;
             if (state.profileArchiveFilter == 2 && !info.archived) continue;
-            if (!MatchesFilter(info.id + " " + info.name, state.filters.profile.data())) {
+            std::string profId;
+            if (auto it = state.profileProfessionCache.find(info.id); it != state.profileProfessionCache.end()) {
+                profId = it->second;
+            }
+            if (!selectedProfessionId.empty()) {
+                if (selectedProfessionId == "__none__") {
+                    if (!profId.empty()) continue;
+                } else if (profId != selectedProfessionId) {
+                    continue;
+                }
+            }
+            std::string login = info.id;
+            if (auto it = state.profileLoginCache.find(info.id); it != state.profileLoginCache.end() && !it->second.empty()) {
+                login = it->second;
+            }
+            const std::string profName = ProfessionNameById(state, profId);
+            if (!MatchesFilter(info.id + " " + info.name + " " + login + " " + profName,
+                               state.filters.profile.data())) {
                 continue;
             }
             visibleIndices.push_back(i);
@@ -808,7 +898,18 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             }
             for (int i : visibleIndices) {
                 const auto& info = state.profiles[i];
-                std::string label = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
+                std::string label = "[" + info.id + "] " + info.name;
+                std::string login = info.id;
+                if (auto itLogin = state.profileLoginCache.find(info.id); itLogin != state.profileLoginCache.end() && !itLogin->second.empty()) {
+                    login = itLogin->second;
+                }
+                if (!login.empty() && login != info.id) {
+                    label += " · " + login;
+                }
+                if (info.archived) label += u8" (в архиве)";
+                if (auto itBlocked = state.profileBlockedCache.find(info.id); itBlocked != state.profileBlockedCache.end() && itBlocked->second) {
+                    label += u8" (заблокирован)";
+                }
                 if (ImGui::Selectable(label.c_str(), state.selectedIndex == i)) {
                     state.selectedIndex = i;
                     RefreshActiveProfile(state, storage, catalog);
@@ -822,3 +923,8 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
     EndCard();
 
 }
+
+
+
+
+

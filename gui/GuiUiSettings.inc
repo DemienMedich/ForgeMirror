@@ -163,6 +163,8 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
             else if (key == "profileTab") settings.profileTab = ParseInt(value, settings.profileTab);
         } else if (section == "profile") {
             if (key == "lastProfileId") settings.lastProfileId = value;
+            else if (key == "unlocked") settings.profileUnlocked = value;
+            else if (key == "recent") settings.profileRecent = value;
             else if (key == "viewMode") settings.profileViewMode = ParseInt(value, settings.profileViewMode);
         } else if (section == "logs") {
             if (key == "filter") settings.logFilter = value;
@@ -292,6 +294,8 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
 
     out << "[profile]\n";
     out << "lastProfileId=" << SanitizeLogLine(settings.lastProfileId) << "\n";
+    out << "unlocked=" << SanitizeLogLine(settings.profileUnlocked) << "\n";
+    out << "recent=" << SanitizeLogLine(settings.profileRecent) << "\n";
     out << "viewMode=" << settings.profileViewMode << "\n\n";
 
     out << "[logs]\n";
@@ -602,4 +606,7 @@ void SyncFiltersToUi(GuiState& state) {
     state.ui.adminStatsRefreshSeconds = state.adminStatsRefreshSeconds;
     state.ui.inactivityThresholdDays = state.inactivityThresholdDays;
 }
+
+
+
 

@@ -41,6 +41,8 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
 std::string EncodePassword(const std::string& password);
 std::string DecodePassword(const std::string& value);
 std::string GenerateRandomPassword(size_t length = 10);
+void AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
+                        const std::string& action, const std::string& details = {});
 
 // Load module toggles from environment (FORGEMIRROR_DISABLE_MODULES=tasks,pipeline,...).
 ModuleToggles LoadModuleToggles();

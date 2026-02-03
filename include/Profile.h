@@ -72,6 +72,8 @@ public:
     void increment_tasks_completed(int delta = 1);
     bool is_admin() const { return isAdmin_; }
     void set_admin(bool value) { isAdmin_ = value; }
+    bool is_blocked() const { return blocked_; }
+    void set_blocked(bool value) { blocked_ = value; }
     const std::string& profession_id() const { return professionId_; }
     void set_profession_id(std::string id) { professionId_ = std::move(id); }
     bool penalty_active() const { return recoveryTasksRemaining_ > 0; }
@@ -106,4 +108,6 @@ private:
     int tasksCompleted_ = 0;
     std::vector<Achievement> achievements_;
     std::string professionId_;
+    bool blocked_ = false;
 };
+

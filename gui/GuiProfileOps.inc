@@ -6,6 +6,110 @@ static void ReportProfileError(GuiState& state, std::string message) {
 }
 }
 
+static std::vector<std::string> SplitProfileIdList(const std::string& raw) {
+    std::vector<std::string> out;
+    if (raw.empty()) return out;
+    std::istringstream ss(raw);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        item = TrimStringGui(item);
+        if (!item.empty()) out.push_back(item);
+    }
+    return out;
+}
+
+static std::string JoinProfileIdList(const std::vector<std::string>& ids) {
+    std::string out;
+    for (const auto& id : ids) {
+        if (id.empty()) continue;
+        if (!out.empty()) out += ',';
+        out += id;
+    }
+    return out;
+}
+
+static void ApplyProfileAccessSettings(GuiState& state) {
+    state.unlockedProfiles.clear();
+    for (const auto& id : SplitProfileIdList(state.ui.profileUnlocked)) {
+        state.unlockedProfiles.insert(id);
+    }
+    state.recentProfiles = SplitProfileIdList(state.ui.profileRecent);
+    constexpr size_t kMaxRecentProfiles = 6;
+    if (state.recentProfiles.size() > kMaxRecentProfiles) {
+        state.recentProfiles.resize(kMaxRecentProfiles);
+    }
+}
+
+static bool UpdateProfileAccessSettings(GuiState& state) {
+    std::vector<std::string> unlockedList;
+    unlockedList.reserve(state.unlockedProfiles.size());
+    for (const auto& id : state.unlockedProfiles) {
+        if (!id.empty()) unlockedList.push_back(id);
+    }
+    std::sort(unlockedList.begin(), unlockedList.end());
+    const std::string unlockedJoined = JoinProfileIdList(unlockedList);
+    const std::string recentJoined = JoinProfileIdList(state.recentProfiles);
+    bool changed = false;
+    if (state.ui.profileUnlocked != unlockedJoined) {
+        state.ui.profileUnlocked = unlockedJoined;
+        changed = true;
+    }
+    if (state.ui.profileRecent != recentJoined) {
+        state.ui.profileRecent = recentJoined;
+        changed = true;
+    }
+    return changed;
+}
+
+static void SaveProfileAccessSettings(GuiState& state) {
+    if (UpdateProfileAccessSettings(state)) {
+        SaveUiSettings(state.storageDir, state.ui);
+    }
+}
+
+static void TrackRecentProfile(GuiState& state, const std::string& id) {
+    if (id.empty()) return;
+    auto& list = state.recentProfiles;
+    auto it = std::find(list.begin(), list.end(), id);
+    if (it != list.end()) {
+        list.erase(it);
+    }
+    list.insert(list.begin(), id);
+    constexpr size_t kMaxRecentProfiles = 6;
+    if (list.size() > kMaxRecentProfiles) {
+        list.resize(kMaxRecentProfiles);
+    }
+    SaveProfileAccessSettings(state);
+}
+
+static void PruneProfileAccessState(GuiState& state) {
+    std::unordered_set<std::string> validIds;
+    validIds.reserve(state.profiles.size());
+    for (const auto& info : state.profiles) {
+        validIds.insert(info.id);
+    }
+    bool changed = false;
+    for (auto it = state.unlockedProfiles.begin(); it != state.unlockedProfiles.end(); ) {
+        if (validIds.find(*it) == validIds.end()) {
+            it = state.unlockedProfiles.erase(it);
+            changed = true;
+        } else {
+            ++it;
+        }
+    }
+    auto& recent = state.recentProfiles;
+    auto newEnd = std::remove_if(recent.begin(), recent.end(), [&](const std::string& id) {
+        return validIds.find(id) == validIds.end();
+    });
+    if (newEnd != recent.end()) {
+        recent.erase(newEnd, recent.end());
+        changed = true;
+    }
+    if (changed) {
+        SaveProfileAccessSettings(state);
+    }
+}
+
 // Load the currently selected profile from storage and synchronise its skills.
 void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     state.profileLoading = true;
@@ -25,6 +129,7 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
         storage.save_profile(*loaded);
         state.active = GuiProfile{*loaded, info.id};
         state.ui.lastProfileId = info.id;
+        TrackRecentProfile(state, info.id);
         state.activityLogs[state.active->id];
         PrepareXpEntries(state, catalog);
         state.profileLoadError.clear();
@@ -96,6 +201,7 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
     state.adminStatsDirty = true;
     state.profileLoading = false;
     state.profileLoadError.clear();
+    PruneProfileAccessState(state);
     if (state.profiles.empty()) {
         state.selectedIndex = -1;
         state.active.reset();

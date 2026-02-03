@@ -68,6 +68,8 @@ struct UiSettings {
     int profileTab = 0;
     int profileViewMode = 1;
     std::string lastProfileId;
+    std::string profileUnlocked;
+    std::string profileRecent;
     std::string logFilter;
     std::string logSourceFilter;
     bool logShowInfo = true;
@@ -200,3 +202,4 @@ const std::vector<UiColorGroup>& UiColorGroups() {
     }
     return groups;
 }
+

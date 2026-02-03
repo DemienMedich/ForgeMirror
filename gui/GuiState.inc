@@ -20,6 +20,8 @@ struct GuiDataState {
     std::vector<ProfessionEntry> professions;
     std::vector<std::string> bannerTexts;
     std::unordered_map<std::string, std::string> profileProfessionCache;
+    std::unordered_map<std::string, std::string> profileLoginCache;
+    std::unordered_map<std::string, bool> profileBlockedCache;
     bool profileProfessionDirty = true;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;
@@ -92,12 +94,14 @@ struct GuiRuntimeState {
     std::string profileResetTargetId;
     std::string profileResetTargetName;
     std::string profileResetPassword;
+    bool profileResetConfirm = false;
     std::string profileCredentialsLogin;
     std::string profileCredentialsPassword;
     std::array<char, 64> profilePasswordInput{};
     std::array<char, 64> profilePasswordNew{};
     std::array<char, 64> profilePasswordConfirm{};
     std::unordered_set<std::string> unlockedProfiles;
+    std::vector<std::string> recentProfiles;
     int bannerEditIndex = -1;
     std::array<char, 128> newSkillName{};
     std::array<char, 256> newSkillDesc{};
@@ -184,6 +188,7 @@ struct GuiRuntimeState {
     int catalogWeightCategoryFilter = 0;
     int profileSort = 0;
     int profileArchiveFilter = 0;
+    int profileProfessionFilter = 0;
     bool showLogs = false;
     bool logShowInfo = true;
     bool logShowWarning = true;

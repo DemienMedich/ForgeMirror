@@ -9,8 +9,7 @@ void DrawAdminLoginModal(GuiState& state) {
         DrawModalShadow();
         DrawCardHeader(u8"Пароль администратора");
         ImGui::InputText(u8"Пароль", state.adminPassword.data(), state.adminPassword.size(), ImGuiInputTextFlags_Password);
-        const std::string layoutLabel = KeyboardLayoutLabel();
-        ImGui::TextDisabled(u8"Раскладка: %s", layoutLabel.c_str());
+        DrawKeyboardHintLine(true);
         auto handleLogin = [&]() {
             if (std::string(state.adminPassword.data()) == state.adminPasswordExpected) {
                 state.isAdmin = true;
@@ -89,6 +88,8 @@ void DrawAdminPasswordModal(GuiState& state) {
         ImGui::InputText(u8"Повторите пароль", state.adminPasswordConfirm.data(),
                          state.adminPasswordConfirm.size(), ImGuiInputTextFlags_Password);
         if (envOverride) ImGui::EndDisabled();
+        DrawKeyboardHintLine(true);
+
 
         auto handleSave = [&]() {
             const std::string current(state.adminPasswordCurrent.data());

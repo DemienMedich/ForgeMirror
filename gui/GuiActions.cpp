@@ -186,6 +186,34 @@ ActionResult DeleteProfileAction(IJobStorage& storage, const std::string& id) {
     return result;
 }
 
+ActionResult SetProfileBlockedAction(IJobStorage& storage, const std::string& id, bool blocked) {
+    ActionResult result;
+    if (id.empty()) {
+        result.ok = false;
+        result.userError = true;
+        result.message = u8"Профиль не выбран.";
+        return result;
+    }
+    if (!storage.set_active_profile(id)) {
+        result.ok = false;
+        result.message = u8"Не удалось активировать профиль.";
+        return result;
+    }
+    if (auto profile = storage.load_profile()) {
+        profile->set_blocked(blocked);
+        if (storage.save_profile(*profile)) {
+            result.ok = true;
+            result.changed = true;
+            result.message = blocked ? u8"Профиль заблокирован." : u8"Профиль разблокирован.";
+            return result;
+        }
+    }
+    result.ok = false;
+    result.message = u8"Не удалось сохранить профиль.";
+    return result;
+}
+
+
 SaveRulesResult SaveGameplayRulesAction(const GameplayConfig& draft, const std::filesystem::path& storageDir) {
     SaveRulesResult result;
     result.config = SanitizeGameplayConfig(draft);

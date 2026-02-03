@@ -333,6 +333,24 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Статус");
+            ImGui::TableSetColumnIndex(1);
+            const bool blocked = profile.is_blocked();
+            ImVec4 statusColor = blocked ? LogLevelColor(AppLogLevel::Warning) : ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+            if (blocked) statusColor.w = std::max(statusColor.w, 0.9f);
+            ImGui::TextColored(statusColor, "%s", blocked ? u8"Заблокирован" : u8"Активен");
+            if (state.isAdmin) {
+                const float statusWidth = ImGui::GetContentRegionAvail().x;
+                const bool stackStatusActions = statusWidth < 220.0f;
+                if (!stackStatusActions) ImGui::SameLine();
+                const char* actionLabel = blocked ? u8"Разблокировать" : u8"Блокировать";
+                if (ImGui::SmallButton(actionLabel)) {
+                    state.confirmAction = blocked ? ConfirmAction::Unblock : ConfirmAction::Block;
+                    state.confirmPopupRequest = true;
+                }
+            }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Опыт");
             ImGui::TableSetColumnIndex(1);
             const bool xpEnabled = state.isAdmin;

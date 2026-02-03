@@ -31,6 +31,7 @@ struct SaveRulesResult : ActionResult {
 CreateProfileResult CreateProfileAction(IJobStorage& storage, SkillCatalog& catalog, const std::string& name);
 ActionResult SetProfileArchivedAction(IJobStorage& storage, const std::string& id, bool archived);
 ActionResult DeleteProfileAction(IJobStorage& storage, const std::string& id);
+ActionResult SetProfileBlockedAction(IJobStorage& storage, const std::string& id, bool blocked);
 SaveRulesResult SaveGameplayRulesAction(const GameplayConfig& draft, const std::filesystem::path& storageDir);
 
 struct AddSkillResult : ActionResult {

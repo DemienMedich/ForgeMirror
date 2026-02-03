@@ -260,6 +260,44 @@ std::string KeyboardLayoutLabel() {
 #endif
 }
 
+bool IsCapsLockOn() {
+#if defined(_WIN32)
+    return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+#else
+    return false;
+#endif
+}
+
+bool IsShiftDown() {
+#if defined(_WIN32)
+    return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+#else
+    return false;
+#endif
+}
+
+std::string KeyboardHintCompactLabel(bool includeShift = false) {
+    std::string label = KeyboardLayoutLabel();
+    label += u8" | Caps: ";
+    label += IsCapsLockOn() ? u8"Вкл" : u8"Выкл";
+    if (includeShift) {
+        label += u8" | Shift: ";
+        label += IsShiftDown() ? u8"Нажат" : u8"Нет";
+    }
+    return label;
+}
+
+void DrawKeyboardHintLine(bool includeShift = true) {
+    const std::string layout = KeyboardLayoutLabel();
+    const char* capsLabel = IsCapsLockOn() ? u8"Вкл" : u8"Выкл";
+    if (includeShift) {
+        const char* shiftLabel = IsShiftDown() ? u8"Нажат" : u8"Нет";
+        ImGui::TextDisabled(u8"Раскладка: %s | Caps: %s | Shift: %s", layout.c_str(), capsLabel, shiftLabel);
+    } else {
+        ImGui::TextDisabled(u8"Раскладка: %s | Caps: %s", layout.c_str(), capsLabel);
+    }
+}
+
 std::string SanitizeLogLine(std::string text) {
     for (char& ch : text) {
         if (ch == '\r' || ch == '\n' || ch == '\t') ch = ' ';

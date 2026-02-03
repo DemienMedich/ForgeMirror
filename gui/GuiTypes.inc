@@ -66,7 +66,9 @@ enum class ConfirmAction {
     None,
     Archive,
     Restore,
-    Delete
+    Delete,
+    Block,
+    Unblock
 };
 
 enum class AppLogLevel {
@@ -81,3 +83,4 @@ struct AppLogEntry {
     std::string source;
     std::string message;
 };
+
