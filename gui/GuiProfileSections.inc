@@ -45,7 +45,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         std::string stateText;
         ImVec4 stateColor = accentSoft;
         if (lastTaskTs <= 0) {
-            stateText = u8"Нет активности";
+            stateText = u8"Нет активности.";
             stateColor = LogLevelColor(AppLogLevel::Warning);
         } else if (recoveryLeft > 0) {
             stateText = u8"Прогрев";
@@ -343,7 +343,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     ImGui::TextDisabled("%d", ++rowRank);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Нет активности");
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Нет активности.");
                     ImGui::TableSetColumnIndex(2);
                     if (staleDays > 0) {
                         ImGui::Text(u8"> %d дн.", staleDays);
