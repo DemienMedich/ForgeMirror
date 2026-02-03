@@ -83,6 +83,7 @@ struct GuiRuntimeState {
     ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
     std::array<char, 256> bannerInput{};
+    int bannerEditIndex = -1;
     std::array<char, 128> newSkillName{};
     std::array<char, 256> newSkillDesc{};
     std::array<char, 128> editSkillName{};

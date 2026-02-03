@@ -55,14 +55,16 @@ static void DrawBannerStrip(GuiState& state) {
     const float height = BannerHeight();
     const float textHeight = ImGui::GetTextLineHeight();
     const float y = std::max(0.0f, (height - textHeight) * 0.5f);
+    const float baseX = ImGui::GetCursorPosX();
     const float left = ImGui::GetCursorScreenPos().x;
     const float right = ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - style.WindowPadding.x;
-    const float avail = std::max(0.0f, right - left);
+    const float avail = std::max(0.0f, ImGui::GetContentRegionAvail().x);
     if (!state.bannerTextCurrent.empty()) {
         const std::string& text = state.bannerTextCurrent;
         const ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
         if (textSize.x <= avail) {
             ImGui::SetCursorPosY(y);
+            ImGui::SetCursorPosX(baseX + std::max(0.0f, (avail - textSize.x) * 0.5f));
             ImGui::TextUnformatted(text.c_str());
         } else {
             ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -98,17 +100,32 @@ void DrawBannerAdminPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Новая фраза");
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##banner_input", u8"Введите текст", state.bannerInput.data(), state.bannerInput.size());
-    if (ImGui::Button(u8"Добавить", ImVec2(-1.0f, 0.0f))) {
+    const bool editing = state.bannerEditIndex >= 0 && state.bannerEditIndex < static_cast<int>(state.bannerTexts.size());
+    const char* actionLabel = editing ? u8"Сохранить" : u8"Добавить";
+    if (ImGui::Button(actionLabel, ImVec2(-1.0f, 0.0f))) {
         std::string text = TrimStringGui(state.bannerInput.data());
         if (!text.empty()) {
-            state.bannerTexts.push_back(text);
+            if (editing) {
+                state.bannerTexts[static_cast<size_t>(state.bannerEditIndex)] = text;
+                state.bannerEditIndex = -1;
+                SetStatus(state, u8"Фраза обновлена.", 0.45f, 0.9f, 0.45f);
+            } else {
+                state.bannerTexts.push_back(text);
+                SetStatus(state, u8"Фраза добавлена.", 0.45f, 0.9f, 0.45f);
+            }
             std::fill(state.bannerInput.begin(), state.bannerInput.end(), '\0');
             SaveBannerTexts(state.storageDir, state.bannerTexts);
             EnsureBannerSelection(state);
             state.bannerLastRotateAt = NowSeconds();
-            SetStatus(state, u8"Фраза добавлена.", 0.45f, 0.9f, 0.45f);
         } else {
             SetStatus(state, u8"Введите текст фразы.", 1.0f, 0.75f, 0.35f);
+        }
+    }
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    if (editing) {
+        if (ImGui::SmallButton(u8"Отмена")) {
+            state.bannerEditIndex = -1;
+            std::fill(state.bannerInput.begin(), state.bannerInput.end(), '\0');
         }
     }
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
@@ -120,10 +137,15 @@ void DrawBannerAdminPanel(GuiState& state) {
         } else {
             for (size_t i = 0; i < state.bannerTexts.size(); ++i) {
                 ImGui::PushID(static_cast<int>(i));
-                const float actionWidth = 70.0f;
+                const float actionWidth = 140.0f;
                 const float availWidth = ImGui::GetContentRegionAvail().x;
                 ImGui::TextUnformatted(state.bannerTexts[i].c_str());
                 ImGui::SameLine(std::max(0.0f, availWidth - actionWidth));
+                if (ImGui::SmallButton(u8"Редактировать")) {
+                    state.bannerEditIndex = static_cast<int>(i);
+                    std::snprintf(state.bannerInput.data(), state.bannerInput.size(), "%s", state.bannerTexts[i].c_str());
+                }
+                ImGui::SameLine();
                 if (ImGui::SmallButton(u8"Удалить")) {
                     state.bannerTexts.erase(state.bannerTexts.begin() + static_cast<std::ptrdiff_t>(i));
                     SaveBannerTexts(state.storageDir, state.bannerTexts);
