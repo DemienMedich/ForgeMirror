@@ -73,6 +73,7 @@ static void RefreshProfileProfessionCache(GuiState& state, IJobStorage& storage)
     state.profileProfessionCache.clear();
     state.profileLoginCache.clear();
     state.profileBlockedCache.clear();
+    state.profileWalletCache.clear();
     std::string restoreId = state.active ? state.active->id : std::string{};
     for (const auto& info : state.profiles) {
         if (!storage.set_active_profile(info.id)) continue;

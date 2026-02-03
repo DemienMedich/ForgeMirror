@@ -920,6 +920,19 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                 if (auto itBlocked = state.profileBlockedCache.find(info.id); itBlocked != state.profileBlockedCache.end() && itBlocked->second) {
                     label += u8" (заблокирован)";
                 }
+                if (state.isAdmin) {
+                    if (auto itWallet = state.profileWalletCache.find(info.id); itWallet != state.profileWalletCache.end()) {
+                        std::string currency = !state.vault.currencyCode.empty() ? state.vault.currencyCode : state.vault.currencyName;
+                        if (currency.empty()) currency = "KUK";
+                        std::ostringstream walletStream;
+                        walletStream.imbue(std::locale::classic());
+                        walletStream << std::fixed << std::setprecision(0) << itWallet->second;
+                        label += u8" · Баланс: ";
+                        label += walletStream.str();
+                        label += " ";
+                        label += currency;
+                    }
+                }
                 if (ImGui::Selectable(label.c_str(), state.selectedIndex == i)) {
                     state.selectedIndex = i;
                     RefreshActiveProfile(state, storage, catalog);

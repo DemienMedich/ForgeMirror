@@ -501,6 +501,18 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
+    const bool walletHasPassword = !profile.password_encoded().empty();
+    const bool walletUnlocked = walletHasPassword && state.unlockedProfiles.count(state.active->id) > 0;
+    if (state.isAdmin || walletUnlocked) {
+        std::string currency = !state.vault.currencyName.empty() ? state.vault.currencyName : state.vault.currencyCode;
+        if (currency.empty()) currency = u8"Кукоин";
+        std::ostringstream walletStream;
+        walletStream.imbue(std::locale::classic());
+        walletStream << std::fixed << std::setprecision(0) << profile.wallet_balance();
+        ImGui::TextDisabled(u8"Кошелек: %s %s", walletStream.str().c_str(), currency.c_str());
+    } else {
+        ImGui::TextDisabled(u8"Кошелек: скрыт (нужен пароль)");
+    }
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (state.modules.achievements) {
             if (!profile.achievements().empty()) {

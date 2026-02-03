@@ -528,7 +528,8 @@ public:
         std::int64_t storedLastTask = 0;
         int storedInertiaTasks = 0;
         int storedRecoveryTasks = 0;
-    int storedTasksCompleted = 0;
+        int storedTasksCompleted = 0;
+        double storedWallet = 0.0;
         std::string storedProfession;
         std::string storedLogin;
         std::string storedPassword;
@@ -570,6 +571,8 @@ public:
                     storedRecoveryTasks = parse_int(val, 0);
                 } else if (key == "tasksCompleted") {
                     storedTasksCompleted = parse_int(val, 0);
+                } else if (key == "wallet") {
+                    storedWallet = parse_double(val, 0.0);
                 }
             } else if (section == "skills") {
                 if (key == "names") {
@@ -679,6 +682,7 @@ public:
         profile.set_inactivity_tasks(storedInertiaTasks);
         profile.start_penalty_recovery(storedRecoveryTasks);
         profile.set_tasks_completed(storedTasksCompleted);
+        profile.set_wallet_balance(storedWallet);
         profile.set_admin(storedAdmin);
         profile.set_blocked(storedBlocked);
         profile.set_achievements(load_achievements(baseDir_, activeId_));
@@ -715,6 +719,7 @@ public:
         ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
         ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
         ss << "tasksCompleted=" << profile.tasks_completed() << "\n";
+        ss << "wallet=" << profile.wallet_balance() << "\n";
 
         ss << "\n[skills]\n";
         auto skills = profile.list_skills();

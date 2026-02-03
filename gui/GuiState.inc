@@ -22,6 +22,7 @@ struct GuiDataState {
     std::unordered_map<std::string, std::string> profileProfessionCache;
     std::unordered_map<std::string, std::string> profileLoginCache;
     std::unordered_map<std::string, bool> profileBlockedCache;
+    std::unordered_map<std::string, double> profileWalletCache;
     bool profileProfessionDirty = true;
     AdminStatsCache adminStats;
     bool adminStatsDirty = true;

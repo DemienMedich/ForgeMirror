@@ -43,6 +43,9 @@ public:
     void set_login(std::string login) { login_ = std::move(login); }
     const std::string& password_encoded() const { return passwordEncoded_; }
     void set_password_encoded(std::string password) { passwordEncoded_ = std::move(password); }
+
+    double wallet_balance() const { return walletBalance_; }
+    void set_wallet_balance(double value) { walletBalance_ = value; }
     std::vector<Skill> list_skills() const;
     void set_skills(const std::vector<Skill>& skills);
     void set_total_xp(int totalXp);
@@ -109,5 +112,6 @@ private:
     std::vector<Achievement> achievements_;
     std::string professionId_;
     bool blocked_ = false;
+    double walletBalance_ = 0.0;
 };
 
