@@ -69,10 +69,10 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - Нет.
 - Working set (files/ids/commands):
-  - `gui/GuiProfileSections.inc`
-  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.47.md`
+  - `gui/GuiProfilePanel.inc`
+  - `CMakeLists.txt`, `data/meta/patch-notes/0.3.48.md`
   - `AgentsSkills/CONTINUITY.md`
   - Сборка GUI: `cmake --build build-gui --config Release --target ForgeMirrorGui`
 
 Done:
-- UI: унифицирована пунктуация в пустых состояниях ("Нет активности.").
+- UI: унифицировано состояние выбора профиля (без скобок).

@@ -50,7 +50,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         if (!hasProfiles) {
             ImGui::TextDisabled(u8"Профили не найдены.");
         } else {
-            std::string currentLabel = u8"(не выбран)";
+            std::string currentLabel = u8"не выбран";
             if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
                 const auto& info = state.profiles[state.selectedIndex];
                 currentLabel = "[" + info.id + "] " + info.name + (info.archived ? u8" (в архиве)" : "");
