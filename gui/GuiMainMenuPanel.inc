@@ -1,3 +1,7 @@
+#include <algorithm>
+#include <cctype>
+#include <vector>
+
 #if defined(_WIN32)
 #include <shellapi.h>
 #include <windows.h>
@@ -5,6 +9,10 @@
 
 static bool LaunchPath(const std::filesystem::path& path) {
     if (path.empty()) return false;
+#include <algorithm>
+#include <cctype>
+#include <vector>
+
 #if defined(_WIN32)
     std::filesystem::path full(path);
     std::error_code ec;
@@ -246,6 +254,143 @@ static std::int64_t GetStorageStamp(GuiState& state) {
     return state.lastStorageDataAt;
 }
 
+
+static float UpdateNoticeHeight() {
+    return 32.0f;
+}
+
+static std::vector<int> ParseVersionPartsLocal(const std::string& value) {
+    std::vector<int> parts;
+    std::string num;
+    for (char c : value) {
+        if (std::isdigit(static_cast<unsigned char>(c)) != 0) {
+            num.push_back(c);
+        } else if (c == '.') {
+            if (!num.empty()) {
+                parts.push_back(std::stoi(num));
+                num.clear();
+            } else {
+                parts.push_back(0);
+            }
+        }
+    }
+    if (!num.empty()) {
+        parts.push_back(std::stoi(num));
+    }
+    if (parts.empty()) parts.push_back(0);
+    return parts;
+}
+
+static int CompareVersionsLocal(const std::string& a, const std::string& b) {
+    auto pa = ParseVersionPartsLocal(a);
+    auto pb = ParseVersionPartsLocal(b);
+    const size_t n = std::max(pa.size(), pb.size());
+    pa.resize(n, 0);
+    pb.resize(n, 0);
+    for (size_t i = 0; i < n; ++i) {
+        if (pa[i] < pb[i]) return -1;
+        if (pa[i] > pb[i]) return 1;
+    }
+    return 0;
+}
+
+static bool ExtractReleaseVersion(const std::string& filename, std::string& outVersion) {
+    auto dot = filename.find_last_of('.');
+    if (dot == std::string::npos) return false;
+    std::string ext = filename.substr(dot + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (ext != "exe") return false;
+    std::string base = filename.substr(0, dot);
+    const std::string prefix = "ForgeMirrorSetup_";
+    if (base.rfind(prefix, 0) == 0) {
+        base = base.substr(prefix.size());
+    } else {
+        auto pos = base.find_last_of('_');
+        if (pos == std::string::npos) return false;
+        base = base.substr(pos + 1);
+    }
+    if (base.empty()) return false;
+    outVersion = base;
+    return true;
+}
+
+static void RefreshUpdateNotice(GuiState& state, const std::filesystem::path& cloudRoot) {
+    const std::int64_t now = NowSeconds();
+    if (state.updateNoticeCheckedAt > 0 && now - state.updateNoticeCheckedAt < 5) return;
+    state.updateNoticeCheckedAt = now;
+    state.updateNoticeVisible = false;
+    if (!state.cloudConfig.enabled) return;
+    std::filesystem::path releasesDir = state.cloudConfig.releasesDir.empty()
+        ? (cloudRoot / "releases")
+        : state.cloudConfig.releasesDir;
+    if (!releasesDir.is_absolute()) {
+        releasesDir = cloudRoot / releasesDir;
+    }
+    std::error_code ec;
+    if (!std::filesystem::exists(releasesDir, ec)) return;
+    std::string bestVersion;
+    std::string bestFile;
+    for (const auto& entry : std::filesystem::directory_iterator(releasesDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::string name = entry.path().filename().string();
+        std::string ver;
+        if (!ExtractReleaseVersion(name, ver)) continue;
+        if (bestVersion.empty() || CompareVersionsLocal(ver, bestVersion) > 0) {
+            bestVersion = ver;
+            bestFile = name;
+        }
+    }
+    if (bestVersion.empty()) return;
+    if (CompareVersionsLocal(bestVersion, APP_VERSION) <= 0) return;
+    if (!state.updateNoticeDismissedVersion.empty() &&
+        CompareVersionsLocal(bestVersion, state.updateNoticeDismissedVersion) <= 0) {
+        return;
+    }
+    state.updateNoticeVisible = true;
+    state.updateNoticeVersion = bestVersion;
+    state.updateNoticeFile = bestFile;
+    state.updateNoticeFolder = releasesDir;
+}
+
+static void DrawUpdateNoticeStrip(GuiState& state) {
+    if (!state.updateNoticeVisible) return;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings;
+    if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
+        const ImVec2 pos = viewport->WorkPos;
+        const ImVec2 size(viewport->WorkSize.x, UpdateNoticeHeight());
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    }
+    ImGui::Begin("##update_notice", nullptr, flags);
+    DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::AlignTextToFramePadding();
+    std::string label = u8"Доступно обновление ";
+    label += state.updateNoticeVersion;
+    ImGui::TextUnformatted(label.c_str());
+    const float buttonHeight = ImGui::GetFrameHeight();
+    const float closeWidth = ImGui::CalcTextSize(u8"Закрыть").x + style.FramePadding.x * 2.0f;
+    const float downloadWidth = ImGui::CalcTextSize(u8"Скачать").x + style.FramePadding.x * 2.0f;
+    const float totalWidth = closeWidth + downloadWidth + style.ItemSpacing.x;
+    const float startX = ImGui::GetContentRegionMax().x - totalWidth;
+    const float y = std::max(0.0f, (UpdateNoticeHeight() - buttonHeight) * 0.5f);
+    ImGui::SetCursorPosY(y);
+    if (startX > ImGui::GetCursorPosX()) {
+        ImGui::SetCursorPosX(startX);
+    }
+    if (ImGui::Button(u8"Скачать", ImVec2(downloadWidth, 0.0f))) {
+        LaunchPath(state.updateNoticeFolder);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"Закрыть", ImVec2(closeWidth, 0.0f))) {
+        state.updateNoticeVisible = false;
+        state.updateNoticeDismissedVersion = state.updateNoticeVersion;
+    }
+    ImGui::End();
+}
+
 void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
@@ -257,6 +402,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
         resolvedCloudRoot = state.storageDir / resolvedCloudRoot;
     }
     const std::string cloudRootLabel = resolvedCloudRoot.u8string();
+    RefreshUpdateNotice(state, resolvedCloudRoot);
 
     const bool canArchive = state.selectedIndex >= 0 &&
     state.selectedIndex < static_cast<int>(state.profiles.size()) &&

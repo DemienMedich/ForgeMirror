@@ -18,6 +18,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
             }
         }
         DrawMainMenuBar(window, state, storage, catalog);
+        DrawUpdateNoticeStrip(state);
         DrawBannerStrip(state);
         DrawNavigationPanel(state);
         DrawWorkspacePanel(state, storage, catalog, style);

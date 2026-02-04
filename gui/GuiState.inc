@@ -211,6 +211,12 @@ struct GuiRuntimeState {
     bool logShowWarning = true;
     bool logShowError = true;
     bool logAutoScroll = true;
+    bool updateNoticeVisible = false;
+    std::string updateNoticeVersion;
+    std::string updateNoticeFile;
+    std::filesystem::path updateNoticeFolder;
+    std::string updateNoticeDismissedVersion;
+    std::int64_t updateNoticeCheckedAt = 0;
     bool requestExit = false;
 };
 
