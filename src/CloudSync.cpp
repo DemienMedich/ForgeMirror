@@ -184,6 +184,17 @@ std::int64_t ReadStorageUpdatedAt(const std::filesystem::path& path) {
     return 0;
 }
 
+std::int64_t ReadStorageRevision(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return 0;
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::int64_t value = 0;
+    if (ExtractJsonIntField(content, "rev", value)) {
+        return value;
+    }
+    return 0;
+}
+
 static std::uint64_t Fnv1a64Hash(const std::string& data) {
     const std::uint64_t kOffset = 1469598103934665603ull;
     const std::uint64_t kPrime = 1099511628211ull;
@@ -1122,11 +1133,19 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     if (cloudExists && !localExists) {
         shouldPullStorage = true;
     } else if (cloudExists && localExists) {
+        const std::int64_t cloudRev = ReadStorageRevision(cloudStorage);
+        const std::int64_t localRev = ReadStorageRevision(localStorage);
         const std::int64_t cloudUpdated = ReadStorageUpdatedAt(cloudStorage);
         const std::int64_t localUpdated = ReadStorageUpdatedAt(localStorage);
         const std::string cloudHash = ReadStorageContentHash(cloudStorage);
         const std::string localHash = ReadStorageContentHash(localStorage);
-        if (cloudUpdated > 0 || localUpdated > 0) {
+        if (cloudRev > 0 || localRev > 0) {
+            if (cloudRev > localRev) {
+                shouldPullStorage = true;
+            } else if (cloudRev == localRev && !cloudHash.empty() && !localHash.empty() && cloudHash != localHash) {
+                storageConflict = true;
+            }
+        } else if (cloudUpdated > 0 || localUpdated > 0) {
             if (cloudUpdated > localUpdated) {
                 shouldPullStorage = true;
             } else if (cloudUpdated == localUpdated && !cloudHash.empty() && !localHash.empty() && cloudHash != localHash) {

@@ -830,6 +830,7 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     data.balance = 0.0;
     data.logLimit = 10;
     data.updatedAt = 0;
+    data.revision = 0;
     data.contentHash.clear();
     data.pomodoroStartMinutes = 9 * 60;
     data.pomodoroEndMinutes = 18 * 60;
@@ -865,6 +866,9 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     if (ExtractJsonNumberField(content, "updated_at", num)) {
         data.updatedAt = static_cast<std::int64_t>(num);
     }
+    if (ExtractJsonNumberField(content, "rev", num)) {
+        data.revision = static_cast<std::int64_t>(num);
+    }
     if (ExtractJsonStringField(content, "content_hash", value)) {
         data.contentHash = value;
     }
@@ -891,6 +895,17 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
 
 bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data) {
     std::filesystem::create_directories(storageDir / "meta");
+    std::int64_t existingRev = 0;
+    {
+        std::ifstream in(StorageVaultPath(storageDir), std::ios::binary);
+        if (in) {
+            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            double num = 0.0;
+            if (ExtractJsonNumberField(content, "rev", num)) {
+                existingRev = static_cast<std::int64_t>(num);
+            }
+        }
+    }
     std::ofstream out(StorageVaultPath(storageDir), std::ios::binary | std::ios::trunc);
     if (!out) return false;
     StorageVaultData save = data;
@@ -898,6 +913,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     if (save.currencyCode.empty()) save.currencyCode = "KUK";
     save.logLimit = ClampVaultLogLimit(save.logLimit);
     save.updatedAt = VaultNowSeconds();
+    save.revision = std::max(save.revision, existingRev) + 1;
     save.pomodoroStartMinutes = ClampVaultMinutes(save.pomodoroStartMinutes);
     save.pomodoroEndMinutes = ClampVaultMinutes(save.pomodoroEndMinutes);
     save.pomodoroMinMinutes = std::max(1, save.pomodoroMinMinutes);
@@ -916,6 +932,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     save.contentHash = contentHash;
     out << "  \"balance_enc\": \"" << EscapeJsonString(balanceEnc) << "\",\n";
     out << "  \"log_limit\": " << save.logLimit << ",\n";
+    out << "  \"rev\": " << static_cast<long long>(save.revision) << ",\n";
     out << "  \"updated_at\": " << static_cast<long long>(save.updatedAt) << ",\n";
     out << "  \"content_hash\": \"" << contentHash << "\",\n";
     out << "  \"pomodoro_start\": " << save.pomodoroStartMinutes << ",\n";
