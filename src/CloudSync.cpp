@@ -159,6 +159,109 @@ bool IsAdminProfileFile(const std::filesystem::path& path) {
     return false;
 }
 
+std::string ToLowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+bool ProfileHasPassword(const std::filesystem::path& path, std::string* outEncoded) {
+    std::ifstream in(path);
+    if (!in) return false;
+    std::string line;
+    std::string section;
+    bool firstLine = true;
+    while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
+        std::string t = Trim(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.front() == '[' && t.back() == ']') {
+            section = ToLowerAscii(t.substr(1, t.size() - 2));
+            continue;
+        }
+        if (section != "auth") continue;
+        auto eq = t.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = ToLowerAscii(Trim(t.substr(0, eq)));
+        std::string val = Trim(t.substr(eq + 1));
+        if (key == "password") {
+            if (outEncoded) *outEncoded = val;
+            return !val.empty();
+        }
+    }
+    if (outEncoded) outEncoded->clear();
+    return false;
+}
+
+bool EnsureProfilePassword(const std::filesystem::path& path, const std::string& encoded) {
+    if (encoded.empty()) return false;
+    std::ifstream in(path);
+    if (!in) return false;
+    std::vector<std::string> lines;
+    std::string line;
+    bool firstLine = true;
+    bool inAuth = false;
+    bool authFound = false;
+    int authHeaderIndex = -1;
+    int insertAfter = -1;
+    while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
+        lines.push_back(line);
+        std::string t = Trim(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.front() == '[' && t.back() == ']') {
+            std::string section = ToLowerAscii(t.substr(1, t.size() - 2));
+            inAuth = (section == "auth");
+            if (inAuth) {
+                authFound = true;
+                authHeaderIndex = static_cast<int>(lines.size()) - 1;
+            }
+            continue;
+        }
+        if (!inAuth) continue;
+        auto eq = t.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = ToLowerAscii(Trim(t.substr(0, eq)));
+        std::string val = Trim(t.substr(eq + 1));
+        if (key == "password") {
+            if (!val.empty()) {
+                return true;
+            }
+            std::string prefix = line.substr(0, line.find_first_not_of(" 	"));
+            lines.back() = prefix + "password=" + encoded;
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            if (!out) return false;
+            for (size_t i = 0; i < lines.size(); ++i) {
+                out << lines[i];
+                if (i + 1 < lines.size()) out << "\n";
+            }
+            return out.good();
+        }
+        if (key == "login") {
+            insertAfter = static_cast<int>(lines.size());
+        }
+    }
+    if (!authFound) return false;
+    if (insertAfter < 0) {
+        insertAfter = authHeaderIndex + 1;
+    }
+    std::string newLine = std::string("password=") + encoded;
+    lines.insert(lines.begin() + insertAfter, newLine);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        out << lines[i];
+        if (i + 1 < lines.size()) out << "\n";
+    }
+    return out.good();
+}
+
 bool CopyFileIfExists(const std::filesystem::path& src, const std::filesystem::path& dst,
                       CloudSyncStats& stats, bool count, std::string* errorMessage) {
     std::error_code ec;
@@ -229,8 +332,20 @@ void CopyProfiles(const std::filesystem::path& srcRoot, const std::filesystem::p
             continue;
         }
         std::filesystem::path dst = dstRoot / entry.path().filename();
+        std::string preservedPassword;
+        bool preservedHasPassword = false;
+        const bool srcHasPassword = ProfileHasPassword(entry.path(), nullptr);
+        if (pulling && std::filesystem::exists(dst, ec)) {
+            preservedHasPassword = ProfileHasPassword(dst, &preservedPassword);
+        }
         if (pulling) {
-            if (CopyFileIfExists(entry.path(), dst, stats, true, errorMessage)) stats.profilesPulled += 1;
+            const bool copied = CopyFileIfExists(entry.path(), dst, stats, true, errorMessage);
+            if (copied) {
+                stats.profilesPulled += 1;
+                if (!srcHasPassword && preservedHasPassword && !preservedPassword.empty()) {
+                    EnsureProfilePassword(dst, preservedPassword);
+                }
+            }
         } else {
             if (CopyFileIfExistsPush(entry.path(), dst, stats, errorMessage)) stats.profilesPushed += 1;
         }
@@ -465,7 +580,7 @@ bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem:
         }
     }
     std::unordered_set<std::string> allowedMetaFiles = {
-        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "professions.txt", "banner.json", "storage.json", "profile-audit.log"
+        "pipeline.json", "tasks.json", "gameplay.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log"
     };
     if (!manifestName.empty() && (manifestDir.empty() || manifestDir == "meta")) {
         allowedMetaFiles.insert(manifestName);
@@ -734,7 +849,6 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
-    CopyFileIfExists(cloudRoot / "meta" / "shortcuts.json", storageDir / "meta" / "shortcuts.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "professions.txt", storageDir / "meta" / "professions.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "banner.json", storageDir / "meta" / "banner.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "storage.json", storageDir / "meta" / "storage.json", result.stats, true, &ioError);
@@ -779,7 +893,6 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
-    CopyFileIfExistsPush(storageDir / "meta" / "shortcuts.json", cloudRoot / "meta" / "shortcuts.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "banner.json", cloudRoot / "meta" / "banner.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "storage.json", cloudRoot / "meta" / "storage.json", result.stats, &ioError);
@@ -793,7 +906,6 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed)
-        || RemoveFileIfMissing(storageDir / "meta" / "shortcuts.json", cloudRoot / "meta" / "shortcuts.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "banner.json", cloudRoot / "meta" / "banner.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "storage.json", cloudRoot / "meta" / "storage.json", removed)

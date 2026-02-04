@@ -216,6 +216,7 @@ bool ShouldSkipSeedCopy(const std::filesystem::path& rel) {
     const std::string relPath = rel.generic_string();
     if (relPath == "meta/ui.ini") return true;
     if (relPath == "meta/gui-layout.ini") return true;
+    if (relPath == "meta/shortcuts.json") return true;
     if (relPath.rfind("meta/ui-presets", 0) == 0) return true;
     return false;
 }

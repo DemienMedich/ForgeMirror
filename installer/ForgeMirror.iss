@@ -2,7 +2,7 @@
 
 #ifndef AppVersion
   // Fallback to current app version (kept in CMakeLists.txt). Override via /DAppVersion=... when building.
-  #define AppVersion "0.3.29"
+  #define AppVersion "0.3.57"
 #endif
 
 #if AppVersion == "0.0.0"
@@ -41,7 +41,7 @@ Name: "desktopicon"; Description: "Create a desktop icon"; Flags: unchecked
 [Files]
 Source: "{#SourceRoot}\build-gui\Release\ForgeMirrorGui.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\build-gui\Release\glfw3.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceRoot}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceRoot}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "meta\shortcuts.json"
 Source: "{#SourceRoot}\gui\fonts\*"; DestDir: "{app}\gui\fonts"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
