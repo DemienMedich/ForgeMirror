@@ -1089,5 +1089,55 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     return result;
 }
 
+CloudSyncResult PushProfileWallet(const CloudSyncConfig& config, const std::filesystem::path& storageDir,
+                                 const std::string& profileId) {
+    CloudSyncResult result;
+    if (!config.enabled) {
+        result.message = u8"Облако отключено.";
+        return result;
+    }
+    if (profileId.empty()) {
+        result.message = u8"Профиль не выбран.";
+        return result;
+    }
+    const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    if (PathsOverlap(cloudRoot, storageDir)) {
+        result.message = u8"Путь облака не должен совпадать или быть вложенным в локальное хранилище.";
+        return result;
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(cloudRoot, ec);
+    if (ec) {
+        result.message = u8"Не удалось создать папку облака.";
+        return result;
+    }
+    const auto src = storageDir / (profileId + ".ini");
+    const auto dst = cloudRoot / (profileId + ".ini");
+    if (!std::filesystem::exists(src, ec)) {
+        result.message = u8"Профиль не найден локально.";
+        return result;
+    }
+    if (!std::filesystem::exists(dst, ec)) {
+        result.message = u8"Профиль отсутствует в облаке. Нужна выгрузка администратора.";
+        return result;
+    }
+    double walletValue = 0.0;
+    std::string walletEnc;
+    if (!ProfileReadWallet(src, &walletValue, &walletEnc) || walletEnc.empty()) {
+        result.message = u8"Кошелёк профиля не найден.";
+        return result;
+    }
+    if (!EnsureProfileWalletEncoded(dst, walletEnc)) {
+        result.message = u8"Не удалось обновить кошелёк в облаке.";
+        return result;
+    }
+    result.ok = true;
+    result.changed = true;
+    result.stats.filesPushed = 1;
+    result.message = u8"Кошелёк профиля выгружен в облако.";
+    return result;
+}
+
+
 
 

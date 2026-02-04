@@ -55,6 +55,7 @@ CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::f
                                      const CloudManifest& manifest, std::filesystem::path& outPath);
 CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);
 CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);
+CloudSyncResult PushProfileWallet(const CloudSyncConfig& config, const std::filesystem::path& storageDir, const std::string& profileId);
 // Remove files/dirs outside whitelist in storageDir; returns true if any removed, writes count.
 inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& removed) {
     removed = 0;

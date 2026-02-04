@@ -127,21 +127,32 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
         pushResult = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
         anyAction = true;
     }
+    CloudSyncResult walletResult;
+    const bool doWalletPush = (!state.isAdmin && state.active && !state.active->id.empty()
+        && state.unlockedProfiles.count(state.active->id) > 0);
+    if (doWalletPush) {
+        walletResult = PushProfileWallet(state.cloudConfig, state.storageDir, state.active->id);
+        anyAction = true;
+    }
     RefreshCloudState(state);
 
     const bool okPull = !doPull || pullResult.ok;
     const bool okPush = !doPush || pushResult.ok;
-    const bool ok = okPull && okPush;
-    const bool changed = (doPull && pullResult.changed) || (doPush && pushResult.changed);
+    const bool okWallet = !doWalletPush || walletResult.ok;
+    const bool ok = okPull && okPush && okWallet;
+    const bool changed = (doPull && pullResult.changed) || (doPush && pushResult.changed)
+        || (doWalletPush && walletResult.changed);
     std::string message;
     if (!anyAction) {
         message = u8"Действия синхронизации отключены.";
     } else if (!ok) {
-        message = doPull && !pullResult.ok ? pullResult.message : pushResult.message;
+        if (doPull && !pullResult.ok) message = pullResult.message;
+        else if (doPush && !pushResult.ok) message = pushResult.message;
+        else if (doWalletPush && !walletResult.ok) message = walletResult.message;
     } else {
         message = changed ? u8"Синхронизация завершена." : u8"Данные синхронизированы.";
         if (viewerMode) {
-            message += u8" Вы в режиме просмотра: выгрузка доступна администратору.";
+            message += u8" Вы в режиме просмотра: выгрузка доступна только для кошелька.";
         }
     }
     if (showStatus || !ok) {
