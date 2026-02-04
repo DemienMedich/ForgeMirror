@@ -184,15 +184,34 @@ std::int64_t ReadStorageUpdatedAt(const std::filesystem::path& path) {
     return 0;
 }
 
+static std::uint64_t Fnv1a64Hash(const std::string& data) {
+    const std::uint64_t kOffset = 1469598103934665603ull;
+    const std::uint64_t kPrime = 1099511628211ull;
+    std::uint64_t hash = kOffset;
+    for (unsigned char c : data) {
+        hash ^= static_cast<std::uint64_t>(c);
+        hash *= kPrime;
+    }
+    return hash;
+}
+
+static std::string ToHex64(std::uint64_t value) {
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss << std::hex << std::setw(16) << std::setfill('0') << value;
+    return ss.str();
+}
+
 std::string ReadStorageContentHash(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) return {};
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     std::string value;
-    if (ExtractJsonStringField(content, "content_hash", value)) {
+    if (ExtractJsonStringField(content, "content_hash", value) && !value.empty()) {
         return Trim(value);
     }
-    return {};
+    if (content.empty()) return {};
+    return ToHex64(Fnv1a64Hash(content));
 }
 
 std::int64_t NowSeconds() {
@@ -1116,8 +1135,6 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
         } else {
             if (!cloudHash.empty() && !localHash.empty() && cloudHash != localHash) {
                 storageConflict = true;
-            } else {
-                shouldPullStorage = ShouldPullIfNewer(cloudStorage, localStorage);
             }
         }
     }
