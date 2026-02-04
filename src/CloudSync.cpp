@@ -1,9 +1,11 @@
 #include "CloudSync.h"
+#include "AppUtils.h"
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <locale>
 #include <sstream>
 #include <unordered_set>
@@ -102,6 +104,14 @@ std::string SanitizeInt(const std::string& value) {
 std::int64_t ParseInt64(const std::string& value, std::int64_t fallback) {
     try {
         return std::stoll(SanitizeInt(value));
+    } catch (...) {
+        return fallback;
+    }
+}
+
+double ParseDouble(const std::string& value, double fallback) {
+    try {
+        return std::stod(value);
     } catch (...) {
         return fallback;
     }
@@ -262,6 +272,121 @@ bool EnsureProfilePassword(const std::filesystem::path& path, const std::string&
     return out.good();
 }
 
+bool ProfileReadWallet(const std::filesystem::path& path, double* outValue, std::string* outEncoded) {
+    std::ifstream in(path);
+    if (!in) return false;
+    std::string line;
+    std::string section;
+    bool firstLine = true;
+    bool hasEncoded = false;
+    bool hasPlain = false;
+    double walletValue = 0.0;
+    std::string walletEncoded;
+    while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
+        std::string t = Trim(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.front() == '[' && t.back() == ']') {
+            section = ToLowerAscii(t.substr(1, t.size() - 2));
+            continue;
+        }
+        if (section != "profile") continue;
+        auto eq = t.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = ToLowerAscii(Trim(t.substr(0, eq)));
+        std::string val = Trim(t.substr(eq + 1));
+        if (key == "wallet_enc") {
+            if (!val.empty()) {
+                walletEncoded = val;
+                const std::string decoded = DecodePassword(val);
+                walletValue = ParseDouble(decoded, walletValue);
+                hasEncoded = true;
+            }
+        } else if (key == "wallet") {
+            walletValue = ParseDouble(val, walletValue);
+            hasPlain = true;
+        }
+    }
+    if (!hasEncoded && !hasPlain) return false;
+    if (outValue) *outValue = walletValue;
+    if (outEncoded) {
+        if (hasEncoded && !walletEncoded.empty()) {
+            *outEncoded = walletEncoded;
+        } else {
+            std::ostringstream ss;
+            ss.imbue(std::locale::classic());
+            ss.setf(std::ios::fixed);
+            ss << std::setprecision(2) << walletValue;
+            *outEncoded = EncodePassword(ss.str());
+        }
+    }
+    return true;
+}
+
+bool EnsureProfileWalletEncoded(const std::filesystem::path& path, const std::string& encoded) {
+    if (encoded.empty()) return false;
+    std::ifstream in(path);
+    if (!in) return false;
+    std::vector<std::string> lines;
+    std::string line;
+    bool firstLine = true;
+    bool inProfile = false;
+    bool profileFound = false;
+    int profileHeaderIndex = -1;
+    int insertAfter = -1;
+    while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
+        lines.push_back(line);
+        std::string t = Trim(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.front() == '[' && t.back() == ']') {
+            std::string section = ToLowerAscii(t.substr(1, t.size() - 2));
+            inProfile = (section == "profile");
+            if (inProfile) {
+                profileFound = true;
+                profileHeaderIndex = static_cast<int>(lines.size()) - 1;
+                insertAfter = profileHeaderIndex + 1;
+            }
+            continue;
+        }
+        if (!inProfile) continue;
+        auto eq = t.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = ToLowerAscii(Trim(t.substr(0, eq)));
+        std::string val = Trim(t.substr(eq + 1));
+        if (key == "wallet_enc") {
+            if (!val.empty()) return true;
+            std::string prefix = line.substr(0, line.find_first_not_of(" 	"));
+            lines.back() = prefix + "wallet_enc=" + encoded;
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            if (!out) return false;
+            for (size_t i = 0; i < lines.size(); ++i) {
+                out << lines[i];
+                if (i + 1 < lines.size()) out << "\n";
+            }
+            return out.good();
+        }
+        insertAfter = static_cast<int>(lines.size());
+    }
+    if (!profileFound) return false;
+    if (insertAfter < 0) insertAfter = profileHeaderIndex + 1;
+    lines.insert(lines.begin() + insertAfter, std::string("wallet_enc=") + encoded);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        out << lines[i];
+        if (i + 1 < lines.size()) out << "\n";
+    }
+    return out.good();
+}
+
+
 bool CopyFileIfExists(const std::filesystem::path& src, const std::filesystem::path& dst,
                       CloudSyncStats& stats, bool count, std::string* errorMessage) {
     std::error_code ec;
@@ -347,8 +472,16 @@ void CopyProfiles(const std::filesystem::path& srcRoot, const std::filesystem::p
         std::string preservedPassword;
         bool preservedHasPassword = false;
         const bool srcHasPassword = ProfileHasPassword(entry.path(), nullptr);
+        double preservedWallet = 0.0;
+        std::string preservedWalletEnc;
+        bool preservedHasWallet = false;
+        double srcWallet = 0.0;
+        bool srcHasWallet = ProfileReadWallet(entry.path(), &srcWallet, nullptr);
+        bool srcNewer = true;
         if (pulling && std::filesystem::exists(dst, ec)) {
             preservedHasPassword = ProfileHasPassword(dst, &preservedPassword);
+            preservedHasWallet = ProfileReadWallet(dst, &preservedWallet, &preservedWalletEnc);
+            srcNewer = ShouldPullIfNewer(entry.path(), dst);
         }
         if (pulling) {
             const bool copied = CopyFileIfExists(entry.path(), dst, stats, true, errorMessage);
@@ -356,6 +489,12 @@ void CopyProfiles(const std::filesystem::path& srcRoot, const std::filesystem::p
                 stats.profilesPulled += 1;
                 if (!srcHasPassword && preservedHasPassword && !preservedPassword.empty()) {
                     EnsureProfilePassword(dst, preservedPassword);
+                }
+                if (preservedHasWallet && !preservedWalletEnc.empty()) {
+                    const bool preserveWallet = (!srcHasWallet) || (!srcNewer) || (preservedWallet > srcWallet + 1e-6);
+                    if (preserveWallet) {
+                        EnsureProfileWalletEncoded(dst, preservedWalletEnc);
+                    }
                 }
             }
         } else {
