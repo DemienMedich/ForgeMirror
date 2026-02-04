@@ -307,10 +307,6 @@ static std::int64_t GetStorageStamp(GuiState& state) {
 }
 
 
-static float UpdateNoticeHeight() {
-    return 32.0f;
-}
-
 static std::vector<int> ParseVersionPartsLocal(const std::string& value) {
     std::vector<int> parts;
     std::string num;
@@ -404,43 +400,27 @@ static void RefreshUpdateNotice(GuiState& state, const std::filesystem::path& cl
     state.updateNoticeFolder = releasesDir;
 }
 
-static void DrawUpdateNoticeStrip(GuiState& state) {
+static void DrawUpdateNoticeModal(GuiState& state) {
     if (!state.updateNoticeVisible) return;
-    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings;
-    if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
-        const ImVec2 pos = viewport->WorkPos;
-        const ImVec2 size(viewport->WorkSize.x, UpdateNoticeHeight());
-        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    ImGui::OpenPopup(u8"Доступно обновление");
+    bool open = true;
+    if (ImGui::BeginPopupModal(u8"Доступно обновление", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
+        std::string label = u8"Найдена новая версия ";
+        label += state.updateNoticeVersion;
+        ImGui::TextWrapped("%s", label.c_str());
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        if (ImGui::Button(u8"Установить", ImVec2(200.0f, 0.0f))) {
+            LaunchPath(state.updateNoticeFolder);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(u8"Закрыть", ImVec2(200.0f, 0.0f))) {
+            state.updateNoticeVisible = false;
+            state.updateNoticeDismissedVersion = state.updateNoticeVersion;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
-    ImGui::Begin("##update_notice", nullptr, flags);
-    DrawWindowBackground(state.ui, UiWindowId::MainMenu, state.storageDir);
-    const ImGuiStyle& style = ImGui::GetStyle();
-    ImGui::AlignTextToFramePadding();
-    std::string label = u8"Доступно обновление ";
-    label += state.updateNoticeVersion;
-    ImGui::TextUnformatted(label.c_str());
-    const float buttonHeight = ImGui::GetFrameHeight();
-    const float closeWidth = ImGui::CalcTextSize(u8"Закрыть").x + style.FramePadding.x * 2.0f;
-    const float downloadWidth = ImGui::CalcTextSize(u8"Установить").x + style.FramePadding.x * 2.0f;
-    const float totalWidth = closeWidth + downloadWidth + style.ItemSpacing.x;
-    const float startX = ImGui::GetContentRegionMax().x - totalWidth;
-    const float y = std::max(0.0f, (UpdateNoticeHeight() - buttonHeight) * 0.5f);
-    ImGui::SetCursorPosY(y);
-    if (startX > ImGui::GetCursorPosX()) {
-        ImGui::SetCursorPosX(startX);
-    }
-    if (ImGui::Button(u8"Установить", ImVec2(downloadWidth, 0.0f))) {
-        LaunchPath(state.updateNoticeFolder);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Закрыть", ImVec2(closeWidth, 0.0f))) {
-        state.updateNoticeVisible = false;
-        state.updateNoticeDismissedVersion = state.updateNoticeVersion;
-    }
-    ImGui::End();
 }
 
 void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {

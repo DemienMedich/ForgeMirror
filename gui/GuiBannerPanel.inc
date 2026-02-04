@@ -44,7 +44,7 @@ static void DrawBannerStrip(GuiState& state) {
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings;
     if (ImGuiViewport* viewport = ImGui::GetMainViewport()) {
-        const float noticeOffset = state.updateNoticeVisible ? 32.0f : 0.0f;
+        const float noticeOffset = 0.0f;
         const ImVec2 pos(viewport->WorkPos.x, viewport->WorkPos.y + noticeOffset);
         const ImVec2 size(viewport->WorkSize.x, BannerHeight());
         ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
