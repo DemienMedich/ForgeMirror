@@ -57,6 +57,53 @@ static void ApplyCloudResultStatus(GuiState& state, const CloudSyncResult& resul
     FindStrayStorageFiles(state.storageDir, 5, state.straySamples, state.strayFileCount);
 }
 
+static void TriggerStorageConflict(GuiState& state, const CloudSyncResult& result) {
+    if (!result.storageConflict) return;
+    state.storageConflictPopupRequest = true;
+    state.storageConflictPath = result.storageConflictPath;
+}
+
+static void DrawStorageConflictModal(GuiState& state) {
+    bool open = state.storageConflictPopupRequest;
+    if (open) {
+        ImGui::OpenPopup(u8"Конфликт хранилища");
+        state.storageConflictPopupRequest = false;
+    }
+    bool popupOpen = true;
+    if (ImGui::BeginPopupModal(u8"Конфликт хранилища", &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
+        ImGui::TextWrapped(u8"Обнаружен конфликт настроек хранилища (storage.json).");
+        ImGui::TextWrapped(u8"Облачная версия сохранена в meta/updates.");
+        if (!state.storageConflictPath.empty()) {
+            ImGui::TextDisabled("%s", state.storageConflictPath.u8string().c_str());
+        }
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        if (ImGui::Button(u8"Принять облачную", ImVec2(200.0f, 0.0f))) {
+            if (!state.storageConflictPath.empty()) {
+                std::error_code ec;
+                const auto target = state.storageDir / "meta" / "storage.json";
+                std::filesystem::copy_file(state.storageConflictPath, target,
+                                           std::filesystem::copy_options::overwrite_existing, ec);
+                if (!ec) {
+                    state.vault = LoadStorageVault(state.storageDir);
+                    SyncVaultBuffers(state);
+                    SetStatus(state, u8"Применена облачная версия хранилища.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, u8"Не удалось применить облачную версию.", 1.0f, 0.75f, 0.35f);
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(u8"Оставить локальную", ImVec2(200.0f, 0.0f))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+
+
 static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
     CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
@@ -76,6 +123,7 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     }
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
+    TriggerStorageConflict(state, result);
     state.lastCloudSyncAt = NowSeconds();
     state.lastCloudSyncOk = result.ok;
     if (result.ok) {
@@ -87,6 +135,7 @@ static void RunCloudPush(GuiState& state) {
     CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
     RefreshCloudState(state);
     ApplyCloudResultStatus(state, result);
+    TriggerStorageConflict(state, result);
     state.lastCloudSyncAt = NowSeconds();
     state.lastCloudSyncOk = result.ok;
     if (result.ok) {
@@ -143,6 +192,9 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
         anyAction = true;
     }
     RefreshCloudState(state);
+    if (doPull) {
+        TriggerStorageConflict(state, pullResult);
+    }
 
     const bool okPull = !doPull || pullResult.ok;
     const bool okPush = !doPush || pushResult.ok;

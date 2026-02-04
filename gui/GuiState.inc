@@ -217,6 +217,8 @@ struct GuiRuntimeState {
     std::filesystem::path updateNoticeFolder;
     std::string updateNoticeDismissedVersion;
     std::int64_t updateNoticeCheckedAt = 0;
+    bool storageConflictPopupRequest = false;
+    std::filesystem::path storageConflictPath;
     bool requestExit = false;
 };
 

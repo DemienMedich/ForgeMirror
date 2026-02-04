@@ -167,10 +167,13 @@ int main() {
 
     auto storageDir = ResolveStorageDirectory();
     CloudSyncConfig cloudConfig = LoadCloudSyncConfig(storageDir);
+    CloudSyncResult initialPullResult;
+    bool initialPullRan = false;
     bool initialCloudPullOk = false;
     if (cloudConfig.enabled && cloudConfig.autoPull) {
-        CloudSyncResult pullResult = PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
-        initialCloudPullOk = pullResult.ok;
+        initialPullResult = PullCloudSnapshot(cloudConfig, storageDir, CloudRole::Viewer);
+        initialPullRan = true;
+        initialCloudPullOk = initialPullResult.ok;
     }
     static std::string layoutPath;
     ConfigureLayoutPath(io, storageDir, layoutPath);
@@ -189,6 +192,10 @@ int main() {
     state.cloudConfig = cloudConfig;
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+    if (initialPullRan && initialPullResult.storageConflict) {
+        state.storageConflictPopupRequest = true;
+        state.storageConflictPath = initialPullResult.storageConflictPath;
+    }
     if (initialCloudPullOk) {
         state.lastCloudSyncOk = true;
         state.lastCloudSyncOkAt = NowSeconds();

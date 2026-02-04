@@ -1135,6 +1135,8 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     }
     CopyFileIfExists(cloudRoot / "meta" / "profile-audit.log", storageDir / "meta" / "profile-audit.log", result.stats, true, &ioError);
     CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
+    result.storageConflict = storageConflict;
+    result.storageConflictPath = storageConflictPath;
     result.ok = result.stats.ioErrors == 0;
     result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0 || storageConflict;
     if (!result.ok) {

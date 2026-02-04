@@ -22,6 +22,8 @@ struct CloudSyncStats {
 struct CloudSyncResult {
     bool ok = false;
     bool changed = false;
+    bool storageConflict = false;
+    std::filesystem::path storageConflictPath;
     std::string message;
     CloudSyncStats stats;
 };
