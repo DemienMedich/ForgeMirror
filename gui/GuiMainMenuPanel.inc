@@ -372,7 +372,7 @@ static void DrawUpdateNoticeStrip(GuiState& state) {
     ImGui::TextUnformatted(label.c_str());
     const float buttonHeight = ImGui::GetFrameHeight();
     const float closeWidth = ImGui::CalcTextSize(u8"Закрыть").x + style.FramePadding.x * 2.0f;
-    const float downloadWidth = ImGui::CalcTextSize(u8"Скачать").x + style.FramePadding.x * 2.0f;
+    const float downloadWidth = ImGui::CalcTextSize(u8"Установить").x + style.FramePadding.x * 2.0f;
     const float totalWidth = closeWidth + downloadWidth + style.ItemSpacing.x;
     const float startX = ImGui::GetContentRegionMax().x - totalWidth;
     const float y = std::max(0.0f, (UpdateNoticeHeight() - buttonHeight) * 0.5f);
@@ -380,7 +380,7 @@ static void DrawUpdateNoticeStrip(GuiState& state) {
     if (startX > ImGui::GetCursorPosX()) {
         ImGui::SetCursorPosX(startX);
     }
-    if (ImGui::Button(u8"Скачать", ImVec2(downloadWidth, 0.0f))) {
+    if (ImGui::Button(u8"Установить", ImVec2(downloadWidth, 0.0f))) {
         LaunchPath(state.updateNoticeFolder);
     }
     ImGui::SameLine();
