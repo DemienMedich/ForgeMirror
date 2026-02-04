@@ -671,6 +671,24 @@ static std::int64_t VaultNowSeconds() {
         .count();
 }
 
+static std::uint64_t Fnv1a64(const std::string& data) {
+    const std::uint64_t kOffset = 1469598103934665603ull;
+    const std::uint64_t kPrime = 1099511628211ull;
+    std::uint64_t hash = kOffset;
+    for (unsigned char c : data) {
+        hash ^= static_cast<std::uint64_t>(c);
+        hash *= kPrime;
+    }
+    return hash;
+}
+
+static std::string ToHex64(std::uint64_t value) {
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss << std::hex << std::setw(16) << std::setfill('0') << value;
+    return ss.str();
+}
+
 static bool ExtractJsonStringField(const std::string& content, const char* key, std::string& out) {
     const std::string token = std::string("\"") + key + "\"";
     size_t pos = content.find(token);
@@ -739,6 +757,28 @@ static std::string FormatVaultAmount(double value) {
     return ss.str();
 }
 
+static std::string BuildVaultContentHash(const StorageVaultData& data, const std::string& balancePlain) {
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss.setf(std::ios::fixed);
+    ss << data.currencyName << "\n";
+    ss << data.currencyCode << "\n";
+    ss << balancePlain << "\n";
+    ss << data.logLimit << "\n";
+    ss << data.pomodoroStartMinutes << "\n";
+    ss << data.pomodoroEndMinutes << "\n";
+    ss << data.pomodoroMinMinutes << "\n";
+    ss << data.pomodoroCoinsPerCycle << "\n";
+    ss << data.pomodoroDaysMask << "\n";
+    for (const auto& entry : data.log) {
+        ss << entry.timestamp << "|";
+        ss << FormatVaultAmount(entry.amount) << "|";
+        ss << entry.action << "|";
+        ss << entry.note << "\n";
+    }
+    return ToHex64(Fnv1a64(ss.str()));
+}
+
 static std::vector<StorageLogEntry> ParseVaultLog(const std::string& content) {
 
     std::vector<StorageLogEntry> log;
@@ -790,6 +830,7 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     data.balance = 0.0;
     data.logLimit = 10;
     data.updatedAt = 0;
+    data.contentHash.clear();
     data.pomodoroStartMinutes = 9 * 60;
     data.pomodoroEndMinutes = 18 * 60;
     data.pomodoroMinMinutes = 20;
@@ -823,6 +864,9 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     }
     if (ExtractJsonNumberField(content, "updated_at", num)) {
         data.updatedAt = static_cast<std::int64_t>(num);
+    }
+    if (ExtractJsonStringField(content, "content_hash", value)) {
+        data.contentHash = value;
     }
     if (ExtractJsonNumberField(content, "pomodoro_start", num)) {
         data.pomodoroStartMinutes = ClampVaultMinutes(static_cast<int>(num));
@@ -866,10 +910,14 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     out << "{\n";
     out << "  \"currency_name\": \"" << EscapeJsonString(save.currencyName) << "\",\n";
     out << "  \"currency_code\": \"" << EscapeJsonString(save.currencyCode) << "\",\n";
-    const std::string balanceEnc = EncodePassword(FormatVaultAmount(save.balance));
+    const std::string balancePlain = FormatVaultAmount(save.balance);
+    const std::string balanceEnc = EncodePassword(balancePlain);
+    const std::string contentHash = BuildVaultContentHash(save, balancePlain);
+    save.contentHash = contentHash;
     out << "  \"balance_enc\": \"" << EscapeJsonString(balanceEnc) << "\",\n";
     out << "  \"log_limit\": " << save.logLimit << ",\n";
     out << "  \"updated_at\": " << static_cast<long long>(save.updatedAt) << ",\n";
+    out << "  \"content_hash\": \"" << contentHash << "\",\n";
     out << "  \"pomodoro_start\": " << save.pomodoroStartMinutes << ",\n";
     out << "  \"pomodoro_end\": " << save.pomodoroEndMinutes << ",\n";
     out << "  \"pomodoro_min\": " << save.pomodoroMinMinutes << ",\n";

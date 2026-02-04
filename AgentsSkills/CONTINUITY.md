@@ -20,8 +20,8 @@ UI аудит:
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: profile. Версия: 0.3.64.
-  - Последнее изменение: исправлена синхронизация storage.json по updated_at (интервалы помодоро сохраняются).
+  - Ветка: profile. Версия: 0.3.65.
+  - Последнее изменение: добавлена защита конфликтов storage.json через content_hash + бэкап в meta/updates.
 - Done:
 
   - Хранилище: storage.json получает updated_at; при sync интервалы помодоро не сбрасываются.

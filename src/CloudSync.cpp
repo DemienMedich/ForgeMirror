@@ -129,11 +129,47 @@ bool ExtractJsonIntField(const std::string& content, const char* key, std::int64
         ++pos;
     }
     if (pos >= content.size()) return false;
-    const char* start = content.c_str() + pos;
-    char* end = nullptr;
-    long long value = std::strtoll(start, &end, 10);
-    if (end == start) return false;
+    const char* startPtr = content.c_str() + pos;
+    char* endPtr = nullptr;
+    long long value = std::strtoll(startPtr, &endPtr, 10);
+    if (endPtr == startPtr) return false;
     out = static_cast<std::int64_t>(value);
+    return true;
+}
+
+bool ExtractJsonStringField(const std::string& content, const char* key, std::string& out) {
+    const std::string token = std::string("\"") + key + "\"";
+    size_t pos = content.find(token);
+    if (pos == std::string::npos) return false;
+    pos = content.find(':', pos + token.size());
+    if (pos == std::string::npos) return false;
+    pos = content.find('"', pos);
+    if (pos == std::string::npos) return false;
+    ++pos;
+    std::string value;
+    bool esc = false;
+    for (; pos < content.size(); ++pos) {
+        char c = content[pos];
+        if (esc) {
+            switch (c) {
+                case 'n': value.push_back('\n'); break;
+                case 'r': value.push_back('\r'); break;
+                case 't': value.push_back('\t'); break;
+                case '\\': value.push_back('\\'); break;
+                case '"': value.push_back('"'); break;
+                default: value.push_back(c); break;
+            }
+            esc = false;
+            continue;
+        }
+        if (c == '\\') {
+            esc = true;
+            continue;
+        }
+        if (c == '"') break;
+        value.push_back(c);
+    }
+    out = value;
     return true;
 }
 
@@ -148,10 +184,34 @@ std::int64_t ReadStorageUpdatedAt(const std::filesystem::path& path) {
     return 0;
 }
 
+std::string ReadStorageContentHash(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {};
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string value;
+    if (ExtractJsonStringField(content, "content_hash", value)) {
+        return Trim(value);
+    }
+    return {};
+}
+
 std::int64_t NowSeconds() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
         .count();
+}
+
+bool SaveStorageConflictCopy(const std::filesystem::path& cloudStorage,
+                             const std::filesystem::path& storageDir,
+                             std::filesystem::path& outPath) {
+    std::error_code ec;
+    if (!std::filesystem::exists(cloudStorage, ec)) return false;
+    const auto targetDir = storageDir / "meta" / "updates";
+    std::filesystem::create_directories(targetDir, ec);
+    if (ec) return false;
+    const auto ts = NowSeconds();
+    outPath = targetDir / ("storage.cloud.conflict." + std::to_string(ts) + ".json");
+    return std::filesystem::copy_file(cloudStorage, outPath, std::filesystem::copy_options::overwrite_existing, ec);
 }
 
 std::filesystem::path CloudConfigPath(const std::filesystem::path& storageDir) {
@@ -1035,6 +1095,8 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "banner.json", storageDir / "meta" / "banner.json", result.stats, true, &ioError);
     const auto cloudStorage = cloudRoot / "meta" / "storage.json";
     const auto localStorage = storageDir / "meta" / "storage.json";
+    bool storageConflict = false;
+    std::filesystem::path storageConflictPath;
     bool shouldPullStorage = false;
     const bool cloudExists = std::filesystem::exists(cloudStorage, ec);
     const bool localExists = std::filesystem::exists(localStorage, ec);
@@ -1043,21 +1105,42 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     } else if (cloudExists && localExists) {
         const std::int64_t cloudUpdated = ReadStorageUpdatedAt(cloudStorage);
         const std::int64_t localUpdated = ReadStorageUpdatedAt(localStorage);
+        const std::string cloudHash = ReadStorageContentHash(cloudStorage);
+        const std::string localHash = ReadStorageContentHash(localStorage);
         if (cloudUpdated > 0 || localUpdated > 0) {
-            shouldPullStorage = cloudUpdated > localUpdated;
+            if (cloudUpdated > localUpdated) {
+                shouldPullStorage = true;
+            } else if (cloudUpdated == localUpdated && !cloudHash.empty() && !localHash.empty() && cloudHash != localHash) {
+                storageConflict = true;
+            }
         } else {
-            shouldPullStorage = ShouldPullIfNewer(cloudStorage, localStorage);
+            if (!cloudHash.empty() && !localHash.empty() && cloudHash != localHash) {
+                storageConflict = true;
+            } else {
+                shouldPullStorage = ShouldPullIfNewer(cloudStorage, localStorage);
+            }
         }
     }
-    if (shouldPullStorage) {
+    if (storageConflict) {
+        if (SaveStorageConflictCopy(cloudStorage, storageDir, storageConflictPath)) {
+            result.stats.filesPulled += 1;
+        } else {
+            result.stats.ioErrors += 1;
+            if (ioError.empty()) {
+                ioError = u8"Не удалось сохранить конфликт storage.json.";
+            }
+        }
+    } else if (shouldPullStorage) {
         CopyFileIfExists(cloudStorage, localStorage, result.stats, true, &ioError);
     }
     CopyFileIfExists(cloudRoot / "meta" / "profile-audit.log", storageDir / "meta" / "profile-audit.log", result.stats, true, &ioError);
     CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
-    result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0;
+    result.changed = result.stats.filesPulled > 0 || result.stats.profilesPulled > 0 || storageConflict;
     if (!result.ok) {
         result.message = ioError.empty() ? u8"Ошибка копирования данных из облака." : ioError;
+    } else if (storageConflict) {
+        result.message = u8"Обнаружен конфликт настроек хранилища. Облачная версия сохранена в meta/updates.";
     } else if (result.changed) {
         result.message = u8"Данные из облака обновлены.";
     } else {
