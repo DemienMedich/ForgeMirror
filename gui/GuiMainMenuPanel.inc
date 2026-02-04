@@ -99,6 +99,11 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
     CloudSyncResult pullResult;
     CloudSyncResult pushResult;
     bool anyAction = false;
+    const bool pushFirst = doPull && doPush;
+    if (pushFirst) {
+        pushResult = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
+        anyAction = true;
+    }
     if (doPull) {
         pullResult = PullCloudSnapshot(state.cloudConfig, state.storageDir,
                                        state.isAdmin ? CloudRole::Admin : CloudRole::Viewer);
@@ -118,7 +123,7 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             SyncVaultBuffers(state);
         }
     }
-    if (doPush) {
+    if (doPush && !pushFirst) {
         pushResult = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
         anyAction = true;
     }
