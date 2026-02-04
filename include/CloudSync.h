@@ -62,7 +62,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
     if (!std::filesystem::exists(storageDir, ec)) return false;
     const std::unordered_set<std::string> allowedDirs = {
         "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes",
-        "meta/ui-presets", "meta/reports", "meta/updates", "logs", "cloud"
+        "meta/ui-presets", "meta/reports", "meta/updates", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
@@ -96,6 +96,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
             if (dirStr == "meta/updates") return true;
             if (dirStr == "logs") return true;
             if (dirStr == "cloud") return true;
+            if (dirStr == "cloud/releases") return true;
             return false;
         };
 

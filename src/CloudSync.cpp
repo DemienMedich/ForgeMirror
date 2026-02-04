@@ -382,7 +382,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
     std::error_code ec;
     if (!std::filesystem::exists(root, ec)) return false;
     const std::unordered_set<std::string> allowedDirs = {
-        "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud"
+        "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "seed.merged"
@@ -411,6 +411,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
             if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
             if (dirStr == "logs") return true;
             if (dirStr == "cloud") return true;
+            if (dirStr == "cloud/releases") return true;
             return false;
         };
 
