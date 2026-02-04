@@ -123,9 +123,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::EndTable();
             }
         }
-    }
-    EndCard();
-    ImGui::Spacing();
+        }
+        EndCard();
+        ImGui::Spacing();
 
     if (!state.active) {
         if (state.profileLoading) {
@@ -608,6 +608,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         } else {
             ImGui::TextDisabled(u8"Модуль ачивок отключён.");
         }
+        }
         EndCard();
         ImGui::Spacing();
 
@@ -820,5 +821,4 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
         ShowStatus(state);
     }
-}
 }
