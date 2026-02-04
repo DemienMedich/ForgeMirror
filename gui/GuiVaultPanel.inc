@@ -15,10 +15,15 @@ static void ApplyVaultSettings(GuiState& state) {
     state.vault.currencyName = TrimStringGui(state.vaultCurrencyName.data());
     state.vault.currencyCode = TrimStringGui(state.vaultCurrencyCode.data());
     state.vault.logLimit = std::clamp(state.vaultLogLimitDraft, 10, 50);
-    state.vault.pomodoroStartMinutes = std::clamp(state.vaultPomodoroStartMinutes, 0, 24 * 60 - 1);
-    state.vault.pomodoroEndMinutes = std::clamp(state.vaultPomodoroEndMinutes, 0, 24 * 60 - 1);
-    state.vault.pomodoroMinMinutes = std::max(1, state.vaultPomodoroMinMinutes);
-    state.vault.pomodoroCoinsPerCycle = std::max(0, state.vaultPomodoroCoins);
+    auto clampInt = [](int v, int lo, int hi) {
+        if (v < lo) return lo;
+        if (v > hi) return hi;
+        return v;
+    };
+    state.vault.pomodoroStartMinutes = clampInt(state.vaultPomodoroStartMinutes, 0, 24 * 60 - 1);
+    state.vault.pomodoroEndMinutes = clampInt(state.vaultPomodoroEndMinutes, 0, 24 * 60 - 1);
+    state.vault.pomodoroMinMinutes = clampInt(state.vaultPomodoroMinMinutes, 1, 90);
+    state.vault.pomodoroCoinsPerCycle = clampInt(state.vaultPomodoroCoins, 0, 5);
     state.vault.pomodoroDaysMask = state.vaultPomodoroDaysMask;
     if (SaveStorageVault(state.storageDir, state.vault)) {
         SetStatus(state, u8"Настройки хранилища сохранены.", 0.45f, 0.9f, 0.45f);

@@ -40,21 +40,6 @@ static void QueuePomodoroCoin(GuiState& state, int amount) {
     state.pomodoroCoinTimestamp = NowSeconds();
 }
 
-static void AppendVaultLogEntry(GuiState& state, const std::string& action, double amount,
-                                const std::string& note) {
-    StorageLogEntry entry;
-    entry.timestamp = NowSeconds();
-    entry.action = action;
-    entry.amount = amount;
-    entry.note = note;
-    state.vault.log.push_back(entry);
-    const int limit = std::clamp(state.vault.logLimit, 10, 50);
-    if (static_cast<int>(state.vault.log.size()) > limit) {
-        const size_t drop = state.vault.log.size() - static_cast<size_t>(limit);
-        state.vault.log.erase(state.vault.log.begin(), state.vault.log.begin() + static_cast<std::ptrdiff_t>(drop));
-    }
-}
-
 static void ApplyPomodoroCoin(GuiState& state, IJobStorage& storage) {
     if (!state.pomodoroCoinPending) return;
     const std::string targetId = state.pomodoroCoinProfileId;
@@ -83,9 +68,6 @@ static void ApplyPomodoroCoin(GuiState& state, IJobStorage& storage) {
             state.active->profile = profile;
         }
         state.profileWalletCache[targetId] = profile.wallet_balance();
-        const std::string note = profile.name().empty() ? targetId : profile.name();
-        AppendVaultLogEntry(state, "pomodoro", amount, note);
-        SaveStorageVault(state.storageDir, state.vault);
         SetStatus(state, u8"Монета начислена за полный цикл помодоро.", 0.45f, 0.9f, 0.45f);
     }
     if (!restoreId.empty() && restoreId != targetId) {

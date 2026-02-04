@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
@@ -716,7 +717,23 @@ static bool ExtractJsonNumberField(const std::string& content, const char* key, 
     return true;
 }
 
+static bool ParseVaultAmount(const std::string& text, double& out) {
+    if (text.empty()) return false;
+    char* end = nullptr;
+    out = std::strtod(text.c_str(), &end);
+    return end && end != text.c_str();
+}
+
+static std::string FormatVaultAmount(double value) {
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss.setf(std::ios::fixed);
+    ss << std::setprecision(2) << value;
+    return ss.str();
+}
+
 static std::vector<StorageLogEntry> ParseVaultLog(const std::string& content) {
+
     std::vector<StorageLogEntry> log;
     const std::string token = "\"log\"";
     size_t pos = content.find(token);
@@ -781,7 +798,16 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
         data.currencyCode = value;
     }
     double num = 0.0;
-    if (ExtractJsonNumberField(content, "balance", num)) {
+    bool hasBalance = false;
+    if (ExtractJsonStringField(content, "balance_enc", value) && !value.empty()) {
+        const std::string decoded = DecodePassword(value);
+        double parsed = 0.0;
+        if (ParseVaultAmount(decoded, parsed)) {
+            data.balance = parsed;
+            hasBalance = true;
+        }
+    }
+    if (!hasBalance && ExtractJsonNumberField(content, "balance", num)) {
         data.balance = num;
     }
     if (ExtractJsonNumberField(content, "log_limit", num)) {
@@ -828,7 +854,8 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     out << "{\n";
     out << "  \"currency_name\": \"" << EscapeJsonString(save.currencyName) << "\",\n";
     out << "  \"currency_code\": \"" << EscapeJsonString(save.currencyCode) << "\",\n";
-    out << "  \"balance\": " << save.balance << ",\n";
+    const std::string balanceEnc = EncodePassword(FormatVaultAmount(save.balance));
+    out << "  \"balance_enc\": \"" << EscapeJsonString(balanceEnc) << "\",\n";
     out << "  \"log_limit\": " << save.logLimit << ",\n";
     out << "  \"pomodoro_start\": " << save.pomodoroStartMinutes << ",\n";
     out << "  \"pomodoro_end\": " << save.pomodoroEndMinutes << ",\n";

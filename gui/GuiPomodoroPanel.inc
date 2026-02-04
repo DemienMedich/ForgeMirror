@@ -41,6 +41,72 @@ static int FindPomodoroSoundIndex(const std::vector<PomodoroSoundChoice>& choice
     return 0;
 }
 
+static std::string FormatVaultTimeLabel(int minutes) {
+    if (minutes < 0) minutes = 0;
+    minutes %= (24 * 60);
+    const int h = minutes / 60;
+    const int m = minutes % 60;
+    char buf[8];
+    std::snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
+    return std::string(buf);
+}
+
+static std::string FormatPomodoroDaysMaskLabel(int mask) {
+    const char* labels[] = {u8"Вс", u8"Пн", u8"Вт", u8"Ср", u8"Чт", u8"Пт", u8"Сб"};
+    std::string out;
+    for (int d = 0; d < 7; ++d) {
+        if ((mask & (1 << d)) == 0) continue;
+        if (!out.empty()) out += " ";
+        out += labels[d];
+    }
+    if (out.empty()) out = u8"—";
+    return out;
+}
+
+static void DrawPomodoroCoinIndicator(GuiState& state) {
+    ImVec4 okColor = ImVec4(0.45f, 0.9f, 0.45f, 1.0f);
+    ImVec4 warnColor = LogLevelColor(AppLogLevel::Warning);
+    std::string status = u8"начисление активно";
+    bool ok = true;
+
+    if (!state.active) {
+        status = u8"нет активного профиля";
+        ok = false;
+    } else if (state.vault.pomodoroCoinsPerCycle <= 0) {
+        status = u8"начисление выключено";
+        ok = false;
+    } else if (state.active->profile.password_encoded().empty()) {
+        status = u8"пароль не задан";
+        ok = false;
+    } else if (state.unlockedProfiles.count(state.active->id) == 0) {
+        status = u8"нужен вход";
+        ok = false;
+    } else if (PomodoroPhaseMinutes(state.ui, static_cast<int>(PomodoroPhase::Work)) < state.vault.pomodoroMinMinutes) {
+        status = u8"фокус короче минимума";
+        ok = false;
+    } else if (!PomodoroWithinWindow(state, NowSeconds())) {
+        status = u8"вне расписания";
+        ok = false;
+    }
+
+    ImGui::TextDisabled(u8"Монеты");
+    ImGui::SameLine();
+    ImGui::TextColored(ok ? okColor : warnColor, "%s", status.c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::Text(u8"Начисление: +%d за полный фокус", std::max(0, state.vault.pomodoroCoinsPerCycle));
+        ImGui::Text(u8"Минимум: %d мин", std::max(1, state.vault.pomodoroMinMinutes));
+        ImGui::Text(u8"Окно: %s - %s",
+                    FormatVaultTimeLabel(state.vault.pomodoroStartMinutes).c_str(),
+                    FormatVaultTimeLabel(state.vault.pomodoroEndMinutes).c_str());
+        ImGui::Text(u8"Дни: %s", FormatPomodoroDaysMaskLabel(state.vault.pomodoroDaysMask).c_str());
+        if (!ok) {
+            ImGui::TextDisabled(u8"Причина: %s", status.c_str());
+        }
+        ImGui::EndTooltip();
+    }
+}
+
 void DrawPomodoroPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Pomodoro, state.storageDir);
     if (!state.modules.pomodoro) {
@@ -102,6 +168,8 @@ void DrawPomodoroPanel(GuiState& state) {
         ImGui::TableSetColumnIndex(1);
         if (BeginCard("pomodoro_controls")) {
             DrawCardHeader(u8"Управление");
+            DrawPomodoroCoinIndicator(state);
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
             if (awaiting) {
                 if (emphasizeStart) {
                     ImVec4 startBg = accent;

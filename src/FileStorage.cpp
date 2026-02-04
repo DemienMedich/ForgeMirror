@@ -1,4 +1,5 @@
 #include "IJobStorage.h"
+#include "AppUtils.h"
 
 #include <algorithm>
 #include <array>
@@ -530,6 +531,8 @@ public:
         int storedRecoveryTasks = 0;
         int storedTasksCompleted = 0;
         double storedWallet = 0.0;
+        std::string storedWalletEncoded;
+        bool hasStoredWalletEncoded = false;
         std::string storedProfession;
         std::string storedLogin;
         std::string storedPassword;
@@ -571,6 +574,9 @@ public:
                     storedRecoveryTasks = parse_int(val, 0);
                 } else if (key == "tasksCompleted") {
                     storedTasksCompleted = parse_int(val, 0);
+                } else if (key == "wallet_enc") {
+                    storedWalletEncoded = val;
+                    hasStoredWalletEncoded = true;
                 } else if (key == "wallet") {
                     storedWallet = parse_double(val, 0.0);
                 }
@@ -682,6 +688,10 @@ public:
         profile.set_inactivity_tasks(storedInertiaTasks);
         profile.start_penalty_recovery(storedRecoveryTasks);
         profile.set_tasks_completed(storedTasksCompleted);
+        if (hasStoredWalletEncoded && !storedWalletEncoded.empty()) {
+            const std::string decoded = DecodePassword(storedWalletEncoded);
+            storedWallet = parse_double(decoded, storedWallet);
+        }
         profile.set_wallet_balance(storedWallet);
         profile.set_admin(storedAdmin);
         profile.set_blocked(storedBlocked);
@@ -719,7 +729,14 @@ public:
         ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
         ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
         ss << "tasksCompleted=" << profile.tasks_completed() << "\n";
-        ss << "wallet=" << profile.wallet_balance() << "\n";
+        std::ostringstream walletStream;
+        walletStream.imbue(std::locale::classic());
+        walletStream.setf(std::ios::fixed);
+        walletStream << std::setprecision(2) << profile.wallet_balance();
+        const std::string walletEnc = EncodePassword(walletStream.str());
+        if (!walletEnc.empty()) {
+            ss << "wallet_enc=" << walletEnc << "\n";
+        }
 
         ss << "\n[skills]\n";
         auto skills = profile.list_skills();
