@@ -665,6 +665,12 @@ static int ClampVaultMinutes(int value) {
     return std::clamp(value, 0, 24 * 60 - 1);
 }
 
+static std::int64_t VaultNowSeconds() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
 static bool ExtractJsonStringField(const std::string& content, const char* key, std::string& out) {
     const std::string token = std::string("\"") + key + "\"";
     size_t pos = content.find(token);
@@ -783,6 +789,7 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     data.currencyCode = "KUK";
     data.balance = 0.0;
     data.logLimit = 10;
+    data.updatedAt = 0;
     data.pomodoroStartMinutes = 9 * 60;
     data.pomodoroEndMinutes = 18 * 60;
     data.pomodoroMinMinutes = 20;
@@ -814,6 +821,9 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     if (ExtractJsonNumberField(content, "log_limit", num)) {
         data.logLimit = ClampVaultLogLimit(static_cast<int>(num));
     }
+    if (ExtractJsonNumberField(content, "updated_at", num)) {
+        data.updatedAt = static_cast<std::int64_t>(num);
+    }
     if (ExtractJsonNumberField(content, "pomodoro_start", num)) {
         data.pomodoroStartMinutes = ClampVaultMinutes(static_cast<int>(num));
     }
@@ -843,6 +853,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     if (save.currencyName.empty()) save.currencyName = u8"Кукоин";
     if (save.currencyCode.empty()) save.currencyCode = "KUK";
     save.logLimit = ClampVaultLogLimit(save.logLimit);
+    save.updatedAt = VaultNowSeconds();
     save.pomodoroStartMinutes = ClampVaultMinutes(save.pomodoroStartMinutes);
     save.pomodoroEndMinutes = ClampVaultMinutes(save.pomodoroEndMinutes);
     save.pomodoroMinMinutes = std::max(1, save.pomodoroMinMinutes);
@@ -858,6 +869,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     const std::string balanceEnc = EncodePassword(FormatVaultAmount(save.balance));
     out << "  \"balance_enc\": \"" << EscapeJsonString(balanceEnc) << "\",\n";
     out << "  \"log_limit\": " << save.logLimit << ",\n";
+    out << "  \"updated_at\": " << static_cast<long long>(save.updatedAt) << ",\n";
     out << "  \"pomodoro_start\": " << save.pomodoroStartMinutes << ",\n";
     out << "  \"pomodoro_end\": " << save.pomodoroEndMinutes << ",\n";
     out << "  \"pomodoro_min\": " << save.pomodoroMinMinutes << ",\n";

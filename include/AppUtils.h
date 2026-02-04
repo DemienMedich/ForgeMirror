@@ -32,6 +32,7 @@ struct StorageVaultData {
     std::string currencyName;
     std::string currencyCode;
     double balance = 0.0;
+    std::int64_t updatedAt = 0;
     int logLimit = 10;
     std::vector<StorageLogEntry> log;
     int pomodoroStartMinutes = 540;

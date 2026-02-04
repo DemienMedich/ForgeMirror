@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <locale>
@@ -115,6 +116,36 @@ double ParseDouble(const std::string& value, double fallback) {
     } catch (...) {
         return fallback;
     }
+}
+
+bool ExtractJsonIntField(const std::string& content, const char* key, std::int64_t& out) {
+    const std::string token = std::string("\"") + key + "\"";
+    size_t pos = content.find(token);
+    if (pos == std::string::npos) return false;
+    pos = content.find(':', pos + token.size());
+    if (pos == std::string::npos) return false;
+    ++pos;
+    while (pos < content.size() && std::isspace(static_cast<unsigned char>(content[pos]))) {
+        ++pos;
+    }
+    if (pos >= content.size()) return false;
+    const char* start = content.c_str() + pos;
+    char* end = nullptr;
+    long long value = std::strtoll(start, &end, 10);
+    if (end == start) return false;
+    out = static_cast<std::int64_t>(value);
+    return true;
+}
+
+std::int64_t ReadStorageUpdatedAt(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return 0;
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::int64_t value = 0;
+    if (ExtractJsonIntField(content, "updated_at", value)) {
+        return value;
+    }
+    return 0;
 }
 
 std::int64_t NowSeconds() {
@@ -1004,7 +1035,21 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "banner.json", storageDir / "meta" / "banner.json", result.stats, true, &ioError);
     const auto cloudStorage = cloudRoot / "meta" / "storage.json";
     const auto localStorage = storageDir / "meta" / "storage.json";
-    if (ShouldPullIfNewer(cloudStorage, localStorage)) {
+    bool shouldPullStorage = false;
+    const bool cloudExists = std::filesystem::exists(cloudStorage, ec);
+    const bool localExists = std::filesystem::exists(localStorage, ec);
+    if (cloudExists && !localExists) {
+        shouldPullStorage = true;
+    } else if (cloudExists && localExists) {
+        const std::int64_t cloudUpdated = ReadStorageUpdatedAt(cloudStorage);
+        const std::int64_t localUpdated = ReadStorageUpdatedAt(localStorage);
+        if (cloudUpdated > 0 || localUpdated > 0) {
+            shouldPullStorage = cloudUpdated > localUpdated;
+        } else {
+            shouldPullStorage = ShouldPullIfNewer(cloudStorage, localStorage);
+        }
+    }
+    if (shouldPullStorage) {
         CopyFileIfExists(cloudStorage, localStorage, result.stats, true, &ioError);
     }
     CopyFileIfExists(cloudRoot / "meta" / "profile-audit.log", storageDir / "meta" / "profile-audit.log", result.stats, true, &ioError);
