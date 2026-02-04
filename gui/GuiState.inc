@@ -174,6 +174,7 @@ struct GuiRuntimeState {
     std::string pomodoroCoinProfileId;
     int pomodoroCoinAmount = 0;
     std::int64_t pomodoroCoinTimestamp = 0;
+    std::int64_t pomodoroWorkStartedAt = 0;
     bool pomodoroAwaitConfirm = false;
     UiFilters filters;
     std::array<float, 2> profileSkillWeightRange{0.0f, 2.0f};

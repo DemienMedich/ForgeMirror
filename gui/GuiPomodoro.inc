@@ -29,7 +29,8 @@ static bool CanAwardPomodoroCoin(const GuiState& state, int workMinutes, int rem
     if (profile.password_encoded().empty()) return false;
     if (state.unlockedProfiles.count(state.active->id) == 0) return false;
     const std::int64_t now = NowSeconds();
-    return PomodoroWithinWindow(state, now);
+    const std::int64_t startedAt = state.pomodoroWorkStartedAt > 0 ? state.pomodoroWorkStartedAt : now;
+    return PomodoroWithinWindow(state, startedAt);
 }
 
 static void QueuePomodoroCoin(GuiState& state, int amount) {
@@ -190,6 +191,9 @@ static void ResetPomodoroState(GuiState& state) {
 static void StartPomodoroPhase(GuiState& state, int phase) {
     const int minutes = std::max(1, PomodoroPhaseMinutes(state.ui, phase));
     state.pomodoroPhase = PomodoroClampPhase(phase);
+    if (state.pomodoroPhase == static_cast<int>(PomodoroPhase::Work)) {
+        state.pomodoroWorkStartedAt = NowSeconds();
+    }
     state.pomodoroRemainingSeconds = minutes * 60;
     state.pomodoroAccumulator = 0.0f;
     state.pomodoroRunning = true;
@@ -214,6 +218,7 @@ static void FinishPomodoroInterval(GuiState& state) {
         if (CanAwardPomodoroCoin(state, workMinutes, state.pomodoroRemainingSeconds)) {
             QueuePomodoroCoin(state, std::max(1, state.vault.pomodoroCoinsPerCycle));
         }
+        state.pomodoroWorkStartedAt = 0;
         state.pomodoroCyclesCompleted = std::min(state.pomodoroCyclesCompleted + 1, 99);
     } else if (phase == static_cast<int>(PomodoroPhase::LongBreak)) {
         state.pomodoroCyclesCompleted = 0;

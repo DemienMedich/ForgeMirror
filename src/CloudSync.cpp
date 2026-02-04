@@ -316,6 +316,18 @@ bool CopyFileIfExistsPush(const std::filesystem::path& src, const std::filesyste
     return false;
 }
 
+static bool ShouldPullIfNewer(const std::filesystem::path& src, const std::filesystem::path& dst) {
+    std::error_code ec;
+    if (!std::filesystem::exists(src, ec)) return false;
+    if (!std::filesystem::exists(dst, ec)) return true;
+    auto srcTime = std::filesystem::last_write_time(src, ec);
+    if (ec) return true;
+    auto dstTime = std::filesystem::last_write_time(dst, ec);
+    if (ec) return true;
+    return srcTime > dstTime;
+}
+
+
 void CopyProfiles(const std::filesystem::path& srcRoot, const std::filesystem::path& dstRoot,
                   CloudRole role, const CloudSyncConfig& config, CloudSyncStats& stats,
                   std::unordered_set<std::string>& skippedAdminIds, bool pulling,
@@ -851,7 +863,11 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "professions.txt", storageDir / "meta" / "professions.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "banner.json", storageDir / "meta" / "banner.json", result.stats, true, &ioError);
-    CopyFileIfExists(cloudRoot / "meta" / "storage.json", storageDir / "meta" / "storage.json", result.stats, true, &ioError);
+    const auto cloudStorage = cloudRoot / "meta" / "storage.json";
+    const auto localStorage = storageDir / "meta" / "storage.json";
+    if (ShouldPullIfNewer(cloudStorage, localStorage)) {
+        CopyFileIfExists(cloudStorage, localStorage, result.stats, true, &ioError);
+    }
     CopyFileIfExists(cloudRoot / "meta" / "profile-audit.log", storageDir / "meta" / "profile-audit.log", result.stats, true, &ioError);
     CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.ok = result.stats.ioErrors == 0;
