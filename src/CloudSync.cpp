@@ -612,7 +612,7 @@ void CopyProfiles(const std::filesystem::path& srcRoot, const std::filesystem::p
                     EnsureProfilePassword(dst, preservedPassword);
                 }
                 if (preservedHasWallet && !preservedWalletEnc.empty()) {
-                    const bool preserveWallet = (!srcHasWallet) || (!srcNewer) || (preservedWallet > srcWallet + 1e-6);
+                    const bool preserveWallet = (!srcHasWallet) || (preservedWallet > srcWallet + 1e-6);
                     if (preserveWallet) {
                         EnsureProfileWalletEncoded(dst, preservedWalletEnc);
                     }
