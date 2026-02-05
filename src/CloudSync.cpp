@@ -482,7 +482,7 @@ bool EnsureProfileWalletEncoded(const std::filesystem::path& path, const std::st
         std::string key = ToLowerAscii(Trim(t.substr(0, eq)));
         std::string val = Trim(t.substr(eq + 1));
         if (key == "wallet_enc") {
-            if (!val.empty()) return true;
+            if (!val.empty() && val == encoded) return true;
             std::string prefix = line.substr(0, line.find_first_not_of(" 	"));
             lines.back() = prefix + "wallet_enc=" + encoded;
             std::ofstream out(path, std::ios::binary | std::ios::trunc);

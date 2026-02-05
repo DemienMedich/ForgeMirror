@@ -23,13 +23,19 @@ static bool PomodoroWithinWindow(const GuiState& state, std::int64_t now) {
 static bool CanAwardPomodoroCoin(const GuiState& state, int workMinutes, int remainingSeconds) {
     if (!state.active) return false;
     if (state.vault.pomodoroCoinsPerCycle <= 0) return false;
-    if (workMinutes < state.vault.pomodoroMinMinutes) return false;
     if (remainingSeconds > 0) return false; // only full cycle
     const auto& profile = state.active->profile;
     if (profile.password_encoded().empty()) return false;
     if (state.unlockedProfiles.count(state.active->id) == 0) return false;
     const std::int64_t now = NowSeconds();
     const std::int64_t startedAt = state.pomodoroWorkStartedAt > 0 ? state.pomodoroWorkStartedAt : now;
+    int elapsedMinutes = workMinutes;
+    if (startedAt > 0 && now >= startedAt) {
+        const std::int64_t delta = now - startedAt;
+        elapsedMinutes = static_cast<int>((delta + 59) / 60);
+        if (elapsedMinutes < workMinutes) elapsedMinutes = workMinutes;
+    }
+    if (elapsedMinutes < state.vault.pomodoroMinMinutes) return false;
     return PomodoroWithinWindow(state, startedAt);
 }
 
