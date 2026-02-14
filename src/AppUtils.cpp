@@ -922,6 +922,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     }
     std::ofstream out(StorageVaultPath(storageDir), std::ios::binary | std::ios::trunc);
     if (!out) return false;
+    out.imbue(std::locale::classic());
     StorageVaultData save = data;
     if (save.currencyName.empty()) save.currencyName = u8"Кукоин";
     if (save.currencyCode.empty()) save.currencyCode = "KUK";
@@ -1122,6 +1123,8 @@ void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog) {
         profile.set_skills(skills);
     }
 }
+
+
 
 
 

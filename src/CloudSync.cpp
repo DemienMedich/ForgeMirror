@@ -125,11 +125,22 @@ bool ExtractJsonIntField(const std::string& content, const char* key, std::int64
     pos = content.find(':', pos + token.size());
     if (pos == std::string::npos) return false;
     ++pos;
-    while (pos < content.size() && std::isspace(static_cast<unsigned char>(content[pos]))) {
-        ++pos;
+    std::string number;
+    number.reserve(24);
+    for (; pos < content.size(); ++pos) {
+        const char c = content[pos];
+        if (c == ',' || c == '}' || c == ']') break;
+        if (std::isspace(static_cast<unsigned char>(c))) {
+            if (!number.empty()) break;
+            continue;
+        }
+        if ((c >= '0' && c <= '9') || (c == '-' && number.empty())) {
+            number.push_back(c);
+        }
+        // Skip non-digit separators/corrupted chars.
     }
-    if (pos >= content.size()) return false;
-    const char* startPtr = content.c_str() + pos;
+    if (number.empty()) return false;
+    const char* startPtr = number.c_str();
     char* endPtr = nullptr;
     long long value = std::strtoll(startPtr, &endPtr, 10);
     if (endPtr == startPtr) return false;
@@ -1303,6 +1314,7 @@ CloudSyncResult PushProfileWallet(const CloudSyncConfig& config, const std::file
     result.message = u8"Кошелёк профиля выгружен в облако.";
     return result;
 }
+
 
 
 
