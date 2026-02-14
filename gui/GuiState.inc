@@ -169,6 +169,17 @@ struct GuiRuntimeState {
     int tasksFilterCategory = 0;
     int tasksFilterStatus = 0;
     int tasksFilterDays = 0;
+    int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days
+    std::unordered_set<std::string> taskSelectionIds;
+    int taskBulkStatus = 0;
+    int taskBulkProjectIndex = 0;
+    std::array<char, 20> taskBulkDeadline{};
+    std::vector<char> taskBulkAssignees;
+    bool taskBulkDeletePopupRequest = false;
+    std::array<char, 20> taskInlineDeadlineBuffer{};
+    std::string taskInlineDeadlineEditId;
+    std::vector<char> taskInlineAssigneeFlags;
+    std::string taskInlineAssigneeEditId;
     std::string tasksExpandedId;
     std::array<char, 128> shortcutLabel{};
     std::array<char, 260> shortcutPath{};

@@ -43,6 +43,13 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.projects = LoadProjects(storageDir);
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();
+    state.tasksQuickFilter = 0;
+    state.taskSelectionIds.clear();
+    state.taskBulkStatus = kTaskStatusInProgress;
+    state.taskBulkProjectIndex = 0;
+    state.taskBulkDeletePopupRequest = false;
+    state.taskInlineDeadlineEditId.clear();
+    state.taskInlineAssigneeEditId.clear();
     state.shortcuts = state.modules.shortcuts ? LoadShortcuts(storageDir) : std::vector<ShortcutEntry>();
     state.pipelineSteps = state.modules.pipeline ? LoadPipeline(storageDir) : std::vector<PipelineStep>();
     state.professions = state.modules.professions ? LoadProfessions(storageDir) : std::vector<ProfessionEntry>();
@@ -69,6 +76,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s",
                   state.cloudConfig.root.u8string().c_str());
     std::snprintf(state.taskPlanDeadline.data(), state.taskPlanDeadline.size(), "%s", FormatTimestamp(NowSeconds() + 86400, "%Y-%m-%d 18:00").c_str());
+    std::snprintf(state.taskBulkDeadline.data(), state.taskBulkDeadline.size(), "%s", FormatTimestamp(NowSeconds() + 86400, "%Y-%m-%d 18:00").c_str());
     RefreshProfiles(state, storage, catalog, state.ui.lastProfileId);
 }
 

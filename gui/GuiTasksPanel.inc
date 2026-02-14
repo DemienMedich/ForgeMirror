@@ -59,6 +59,118 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
+    auto FindTaskMutable = [&state](const std::string& taskId) -> TaskEntry* {
+        auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
+                               [&](const TaskEntry& item) { return item.id == taskId; });
+        return (it == state.tasks.end()) ? nullptr : &(*it);
+    };
+
+    auto UpdateTaskProject = [&](const std::string& taskId, int projectIndex) -> bool {
+        TaskEntry* task = FindTaskMutable(taskId);
+        if (!task) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        const std::string prevId = task->projectId;
+        const std::string prevName = task->project;
+        if (projectIndex <= 0) {
+            task->projectId.clear();
+            task->project.clear();
+        } else {
+            const int idx = projectIndex - 1;
+            if (idx < 0 || idx >= static_cast<int>(state.projects.size())) {
+                SetStatus(state, u8"Проект не найден.", 1.0f, 0.45f, 0.45f);
+                return false;
+            }
+            task->projectId = state.projects[idx].id;
+            task->project = state.projects[idx].name;
+        }
+        if (task->projectId == prevId && task->project == prevName) {
+            return true;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            SetStatus(state, u8"Проект задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        task->projectId = prevId;
+        task->project = prevName;
+        SetStatus(state, u8"Не удалось сохранить проект задачи.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto UpdateTaskDeadline = [&](const std::string& taskId, const std::string& deadlineInput) -> bool {
+        TaskEntry* task = FindTaskMutable(taskId);
+        if (!task) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        const std::int64_t prevDeadline = task->deadlineAt;
+        const std::string trimmed = TrimStringGui(deadlineInput);
+        if (trimmed.empty()) {
+            task->deadlineAt = 0;
+        } else {
+            std::int64_t parsed = 0;
+            if (!ParseTaskDeadlineInput(trimmed, parsed)) {
+                SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
+                return false;
+            }
+            task->deadlineAt = parsed;
+        }
+        if (task->deadlineAt == prevDeadline) {
+            return true;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            SetStatus(state, u8"Дедлайн задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        task->deadlineAt = prevDeadline;
+        SetStatus(state, u8"Не удалось сохранить дедлайн задачи.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto UpdateTaskAssignees = [&](const std::string& taskId, const std::vector<std::string>& assignees) -> bool {
+        TaskEntry* task = FindTaskMutable(taskId);
+        if (!task) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        if (assignees.empty()) {
+            SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        if (!task->participants.empty()) {
+            SetStatus(state, u8"Для этой задачи исполнители зафиксированы по записи XP.", 1.0f, 0.75f, 0.35f);
+            return false;
+        }
+        const std::vector<std::string> prevAssignees = task->assignees;
+        task->assignees = assignees;
+        if (task->assignees == prevAssignees) {
+            return true;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            SetStatus(state, u8"Исполнители задачи обновлены.", 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        task->assignees = prevAssignees;
+        SetStatus(state, u8"Не удалось сохранить исполнителей задачи.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto StartOfLocalDay = [](std::int64_t ts) -> std::int64_t {
+        std::time_t tv = static_cast<std::time_t>(ts);
+        std::tm localTm{};
+#if defined(_WIN32)
+        localtime_s(&localTm, &tv);
+#else
+        localtime_r(&tv, &localTm);
+#endif
+        localTm.tm_hour = 0;
+        localTm.tm_min = 0;
+        localTm.tm_sec = 0;
+        localTm.tm_isdst = -1;
+        return static_cast<std::int64_t>(std::mktime(&localTm));
+    };
+
     if (state.isAdmin) {
         if (BeginCard("tasks_create_card")) {
             DrawCardHeader(u8"Создать задачу");
@@ -202,7 +314,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Задач пока нет.");
     }
 
-    auto ComputeFilteredTasks = [&state]() {
+    auto ComputeFilteredTasks = [&state, &StartOfLocalDay]() {
         std::vector<const TaskEntry*> ordered;
         ordered.reserve(state.tasks.size());
         for (const auto& task : state.tasks) {
@@ -215,6 +327,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         const std::int64_t minTs = state.tasksFilterDays > 0
             ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
             : 0;
+        const std::int64_t dayStart = StartOfLocalDay(nowSec);
+        const std::int64_t dayEnd = dayStart + 86400;
         const std::string filterProfileId = (state.tasksFilterProfile > 0 &&
             state.tasksFilterProfile <= static_cast<int>(state.profiles.size()))
             ? state.profiles[state.tasksFilterProfile - 1].id
@@ -227,6 +341,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (state.tasksFilterStatus > 0 && NormalizeTaskStatus(task->status) != (state.tasksFilterStatus - 1)) continue;
             if (!filterProfileId.empty() && !TaskHasAssignee(*task, filterProfileId)) continue;
             if (minTs > 0 && task->createdAt < minTs) continue;
+
+            if (state.tasksQuickFilter == 1) {
+                if (!state.active || !TaskHasAssignee(*task, state.active->id)) continue;
+            } else if (state.tasksQuickFilter == 2) {
+                if (task->deadlineAt <= 0 || task->deadlineAt < dayStart || task->deadlineAt >= dayEnd) continue;
+            } else if (state.tasksQuickFilter == 3) {
+                if (task->deadlineAt <= 0 || task->deadlineAt >= nowSec || NormalizeTaskStatus(task->status) == kTaskStatusDone) continue;
+            } else if (state.tasksQuickFilter == 4) {
+                const std::int64_t nextWeekEnd = dayStart + 7 * 86400;
+                if (task->deadlineAt <= 0 || task->deadlineAt < dayStart || task->deadlineAt >= nextWeekEnd) continue;
+            }
+
             filtered.push_back(task);
         }
         return filtered;
@@ -236,6 +362,45 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     nameById.reserve(state.profiles.size());
     for (const auto& info : state.profiles) {
         nameById[info.id] = info.name;
+    }
+
+    std::vector<std::string> projectLabels;
+    projectLabels.reserve(state.projects.size() + 1);
+    projectLabels.push_back(u8"Без проекта");
+    for (const auto& project : state.projects) {
+        projectLabels.push_back(project.name);
+    }
+    std::vector<const char*> projectLabelPtrs;
+    projectLabelPtrs.reserve(projectLabels.size());
+    for (const auto& label : projectLabels) {
+        projectLabelPtrs.push_back(label.c_str());
+    }
+    state.taskBulkProjectIndex = std::clamp(state.taskBulkProjectIndex, 0,
+        static_cast<int>(projectLabelPtrs.size()) - 1);
+
+    DrawCardHeader(u8"Быстрые фильтры");
+    if (ImGui::Button(u8"Все", ImVec2(96.0f, 0.0f))) {
+        state.tasksQuickFilter = 0;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"Мне назначено", ImVec2(140.0f, 0.0f))) {
+        if (state.active) {
+            state.tasksQuickFilter = 1;
+        } else {
+            SetStatus(state, u8"Выберите активный профиль для фильтра 'Мне назначено'.", 1.0f, 0.75f, 0.35f);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"Сегодня", ImVec2(96.0f, 0.0f))) {
+        state.tasksQuickFilter = 2;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"Просрочено", ImVec2(116.0f, 0.0f))) {
+        state.tasksQuickFilter = 3;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"7 дней", ImVec2(96.0f, 0.0f))) {
+        state.tasksQuickFilter = 4;
     }
 
     DrawCardHeader(u8"Фильтр");
@@ -398,6 +563,140 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
+    for (auto it = state.taskSelectionIds.begin(); it != state.taskSelectionIds.end();) {
+        const bool exists = std::any_of(state.tasks.begin(), state.tasks.end(),
+                                        [&](const TaskEntry& item) { return item.id == *it; });
+        if (!exists) {
+            it = state.taskSelectionIds.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    if (state.taskBulkAssignees.size() != state.profiles.size()) {
+        std::vector<char> next(state.profiles.size(), 0);
+        for (size_t i = 0; i < std::min(next.size(), state.taskBulkAssignees.size()); ++i) {
+            next[i] = state.taskBulkAssignees[i] ? 1 : 0;
+        }
+        state.taskBulkAssignees = std::move(next);
+    }
+
+    if (state.isAdmin) {
+        if (BeginCard("tasks_bulk_actions")) {
+            DrawCardHeader(u8"Массовые действия");
+            const int selectedCount = static_cast<int>(state.taskSelectionIds.size());
+            ImGui::TextDisabled(u8"Выбрано задач: %d", selectedCount);
+
+            if (ImGui::Button(u8"Выбрать видимые", ImVec2(170.0f, 0.0f))) {
+                for (const TaskEntry* task : filtered) {
+                    if (task) state.taskSelectionIds.insert(task->id);
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Снять выбор", ImVec2(170.0f, 0.0f))) {
+                state.taskSelectionIds.clear();
+            }
+
+            const bool hasSelection = !state.taskSelectionIds.empty();
+            if (!hasSelection) {
+                ImGui::TextDisabled(u8"Отметьте задачи чекбоксами в таблице ниже.");
+            }
+            if (!hasSelection) ImGui::BeginDisabled();
+
+            ImGui::Separator();
+            ImGui::TextDisabled(u8"Статус");
+            ImGui::SetNextItemWidth(160.0f);
+            const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
+            state.taskBulkStatus = std::clamp(state.taskBulkStatus, kTaskStatusNew, kTaskStatusDone);
+            ImGui::Combo("##task_bulk_status", &state.taskBulkStatus, statusLabels, IM_ARRAYSIZE(statusLabels));
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Применить статус", ImVec2(170.0f, 0.0f))) {
+                int ok = 0;
+                for (const auto& taskId : state.taskSelectionIds) {
+                    ok += UpdateTaskStatus(taskId, state.taskBulkStatus) ? 1 : 0;
+                }
+                std::string msg = u8"Статус обновлен для задач: " + std::to_string(ok);
+                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            }
+
+            ImGui::TextDisabled(u8"Проект");
+            ImGui::SetNextItemWidth(220.0f);
+            ImGui::Combo("##task_bulk_project", &state.taskBulkProjectIndex,
+                         projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Назначить проект", ImVec2(170.0f, 0.0f))) {
+                int ok = 0;
+                for (const auto& taskId : state.taskSelectionIds) {
+                    ok += UpdateTaskProject(taskId, state.taskBulkProjectIndex) ? 1 : 0;
+                }
+                std::string msg = u8"Проект обновлен для задач: " + std::to_string(ok);
+                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            }
+
+            ImGui::TextDisabled(u8"Дедлайн (YYYY-MM-DD HH:MM)");
+            ImGui::SetNextItemWidth(220.0f);
+            ImGui::InputTextWithHint("##task_bulk_deadline", u8"2026-02-14 18:00",
+                                     state.taskBulkDeadline.data(), state.taskBulkDeadline.size());
+            ImGui::SameLine();
+            if (ImGui::Button(u8"Установить дедлайн", ImVec2(170.0f, 0.0f))) {
+                int ok = 0;
+                for (const auto& taskId : state.taskSelectionIds) {
+                    ok += UpdateTaskDeadline(taskId, state.taskBulkDeadline.data()) ? 1 : 0;
+                }
+                std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(ok);
+                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            }
+
+            if (ImGui::TreeNode(u8"Исполнители")) {
+                for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                    const auto& info = state.profiles[i];
+                    bool checked = (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] != 0);
+                    if (info.archived) ImGui::BeginDisabled();
+                    ImGui::PushID(info.id.c_str());
+                    if (ImGui::Checkbox("##bulk_assign", &checked)) {
+                        if (i < static_cast<int>(state.taskBulkAssignees.size())) {
+                            state.taskBulkAssignees[i] = checked ? 1 : 0;
+                        }
+                    }
+                    ImGui::PopID();
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(info.name.c_str());
+                    if (info.archived) {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled(u8"(архив)");
+                        ImGui::EndDisabled();
+                    }
+                }
+                if (ImGui::Button(u8"Назначить исполнителей", ImVec2(170.0f, 0.0f))) {
+                    std::vector<std::string> assignees;
+                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                        if (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] && !state.profiles[i].archived) {
+                            assignees.push_back(state.profiles[i].id);
+                        }
+                    }
+                    if (assignees.empty()) {
+                        SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
+                    } else {
+                        int ok = 0;
+                        for (const auto& taskId : state.taskSelectionIds) {
+                            ok += UpdateTaskAssignees(taskId, assignees) ? 1 : 0;
+                        }
+                        std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(ok);
+                        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                    }
+                }
+                ImGui::TreePop();
+            }
+
+            if (ImGui::Button(u8"Удалить выбранные", ImVec2(170.0f, 0.0f))) {
+                state.taskBulkDeletePopupRequest = true;
+            }
+            if (!hasSelection) ImGui::EndDisabled();
+        }
+        EndCard();
+        ImGui::Spacing();
+    }
+
     std::array<int, Profile::kCategoryCount> categoryCounts{};
     const int filteredCount = static_cast<int>(filtered.size());
     int topIdx = 0;
@@ -533,14 +832,19 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     ImGui::Spacing();
 
     int visibleCount = 0;
-    if (ImGui::BeginTable("tasks_table", 6, ImGuiTableFlags_RowBg |
+    const bool allowBulkSelection = state.isAdmin;
+    const int tableColumns = allowBulkSelection ? 7 : 6;
+    if (ImGui::BeginTable("tasks_table", tableColumns, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
+        if (allowBulkSelection) {
+            ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 34.0f);
+        }
         ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 150.0f);
         ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 130.0f);
         ImGui::TableHeadersRow();
         const std::int64_t nowSec = NowSeconds();
         for (const TaskEntry* task : filtered) {
@@ -553,18 +857,66 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
             }
-            ImGui::TableSetColumnIndex(0);
+            TaskEntry* editableTask = state.isAdmin ? FindTaskMutable(task->id) : nullptr;
+            int col = 0;
+            ImGui::PushID(task->id.c_str());
+
+            if (allowBulkSelection) {
+                ImGui::TableSetColumnIndex(col++);
+                bool selected = state.taskSelectionIds.find(task->id) != state.taskSelectionIds.end();
+                if (ImGui::Checkbox("##row_select", &selected)) {
+                    if (selected) {
+                        state.taskSelectionIds.insert(task->id);
+                    } else {
+                        state.taskSelectionIds.erase(task->id);
+                    }
+                }
+            }
+
+            ImGui::TableSetColumnIndex(col++);
             const bool isExpanded = (state.tasksExpandedId == task->id);
-            const std::string rowId = std::string("##task_row_") + task->id;
-            if (ImGui::Selectable(rowId.c_str(), isExpanded, ImGuiSelectableFlags_SpanAllColumns)) {
+            if (ImGui::Selectable("##row_expand", isExpanded, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(16.0f, 0.0f))) {
                 state.tasksExpandedId = isExpanded ? std::string() : task->id;
             }
             ImGui::SameLine();
             const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
             ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
 
-            ImGui::TableSetColumnIndex(1);
-            if (task->deadlineAt > 0) {
+            ImGui::TableSetColumnIndex(col++);
+            if (state.isAdmin && editableTask) {
+                const std::string deadlineText = task->deadlineAt > 0 ? FormatTimestamp(task->deadlineAt, "%Y-%m-%d %H:%M") : std::string();
+                std::string buttonLabel = deadlineText.empty() ? std::string(u8"Установить") : deadlineText;
+                if (ImGui::Button(buttonLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
+                    std::snprintf(state.taskInlineDeadlineBuffer.data(), state.taskInlineDeadlineBuffer.size(), "%s", deadlineText.c_str());
+                    state.taskInlineDeadlineEditId = task->id;
+                    ImGui::OpenPopup("deadline_popup");
+                }
+                if (ImGui::BeginPopup("deadline_popup")) {
+                    ImGui::TextDisabled(u8"Дедлайн (YYYY-MM-DD HH:MM)");
+                    ImGui::SetNextItemWidth(180.0f);
+                    ImGui::InputTextWithHint("##deadline_input", u8"2026-02-14 18:00",
+                                             state.taskInlineDeadlineBuffer.data(), state.taskInlineDeadlineBuffer.size());
+                    if (ImGui::Button(u8"Сохранить", ImVec2(100.0f, 0.0f))) {
+                        if (UpdateTaskDeadline(task->id, state.taskInlineDeadlineBuffer.data())) {
+                            state.taskInlineDeadlineEditId.clear();
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(u8"Очистить", ImVec2(100.0f, 0.0f))) {
+                        if (UpdateTaskDeadline(task->id, "")) {
+                            state.taskInlineDeadlineEditId.clear();
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(u8"Отмена", ImVec2(100.0f, 0.0f))) {
+                        state.taskInlineDeadlineEditId.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
+                }
+            } else if (task->deadlineAt > 0) {
                 const std::string deadline = FormatTimestamp(task->deadlineAt, "%d.%m.%Y %H:%M");
                 if (overdue) {
                     ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadline.c_str());
@@ -575,16 +927,31 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TextDisabled("-");
             }
 
-            ImGui::TableSetColumnIndex(2);
+            ImGui::TableSetColumnIndex(col++);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             const std::string projectName = ResolveTaskProjectName(state, *task);
-            if (projectName.empty()) {
+            if (state.isAdmin && editableTask) {
+                int projectIndex = 0;
+                if (!editableTask->projectId.empty()) {
+                    for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
+                        if (state.projects[i].id == editableTask->projectId) {
+                            projectIndex = i + 1;
+                            break;
+                        }
+                    }
+                }
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##task_project_row", &projectIndex,
+                                 projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()))) {
+                    UpdateTaskProject(task->id, projectIndex);
+                }
+            } else if (projectName.empty()) {
                 ImGui::TextDisabled(u8"Без проекта");
             } else {
                 ImGui::TextUnformatted(projectName.c_str());
             }
 
-            ImGui::TableSetColumnIndex(3);
+            ImGui::TableSetColumnIndex(col++);
             ImGui::TextUnformatted(task->title.c_str());
             if (!task->description.empty() && ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
@@ -594,25 +961,76 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::EndTooltip();
             }
 
-            ImGui::TableSetColumnIndex(4);
+            ImGui::TableSetColumnIndex(col++);
             const std::string participants = BuildParticipantLabel(*task, nameById);
             if (participants.empty()) {
                 ImGui::TextDisabled(u8"Не назначена");
             } else {
                 ImGui::TextUnformatted(participants.c_str());
             }
+            if (state.isAdmin && editableTask && task->participants.empty()) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton(u8"Изм.")) {
+                    state.taskInlineAssigneeEditId = task->id;
+                    if (state.taskInlineAssigneeFlags.size() != state.profiles.size()) {
+                        state.taskInlineAssigneeFlags.assign(state.profiles.size(), 0);
+                    }
+                    for (size_t i = 0; i < state.profiles.size(); ++i) {
+                        const auto& info = state.profiles[i];
+                        const bool assigned = std::find(editableTask->assignees.begin(), editableTask->assignees.end(), info.id) != editableTask->assignees.end();
+                        state.taskInlineAssigneeFlags[i] = assigned ? 1 : 0;
+                    }
+                    ImGui::OpenPopup("assignee_popup");
+                }
+                if (ImGui::BeginPopup("assignee_popup")) {
+                    ImGui::TextDisabled(u8"Исполнители");
+                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                        const auto& info = state.profiles[i];
+                        bool checked = (i < static_cast<int>(state.taskInlineAssigneeFlags.size()) && state.taskInlineAssigneeFlags[i] != 0);
+                        if (info.archived) ImGui::BeginDisabled();
+                        if (ImGui::Checkbox((std::string("##row_assignee_") + info.id).c_str(), &checked)) {
+                            if (i < static_cast<int>(state.taskInlineAssigneeFlags.size())) {
+                                state.taskInlineAssigneeFlags[i] = checked ? 1 : 0;
+                            }
+                        }
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(info.name.c_str());
+                        if (info.archived) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled(u8"(архив)");
+                            ImGui::EndDisabled();
+                        }
+                    }
+                    if (ImGui::Button(u8"Сохранить", ImVec2(110.0f, 0.0f))) {
+                        std::vector<std::string> nextAssignees;
+                        for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                            if (i < static_cast<int>(state.taskInlineAssigneeFlags.size()) && state.taskInlineAssigneeFlags[i] && !state.profiles[i].archived) {
+                                nextAssignees.push_back(state.profiles[i].id);
+                            }
+                        }
+                        if (UpdateTaskAssignees(task->id, nextAssignees)) {
+                            state.taskInlineAssigneeEditId.clear();
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(u8"Отмена", ImVec2(110.0f, 0.0f))) {
+                        state.taskInlineAssigneeEditId.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
+                }
+            }
 
-            ImGui::TableSetColumnIndex(5);
+            ImGui::TableSetColumnIndex(col++);
             const int normalizedStatus = NormalizeTaskStatus(task->status);
             if (state.isAdmin) {
                 int draftStatus = normalizedStatus;
                 const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
-                ImGui::PushID(task->id.c_str());
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_status_row", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
                     UpdateTaskStatus(task->id, draftStatus);
                 }
-                ImGui::PopID();
             } else if (normalizedStatus == kTaskStatusDone) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusLabel(normalizedStatus));
             } else if (overdue) {
@@ -620,6 +1038,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             } else {
                 ImGui::TextUnformatted(TaskStatusLabel(normalizedStatus));
             }
+
+            ImGui::PopID();
         }
         ImGui::EndTable();
     }
@@ -633,6 +1053,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterProfile = 0;
             state.tasksFilterStatus = 0;
             state.tasksFilterDays = 0;
+            state.tasksQuickFilter = 0;
         }
     }
 
@@ -742,6 +1163,77 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
         }
         EndCard();
+    }
+
+    if (state.taskBulkDeletePopupRequest) {
+        ImGui::OpenPopup(u8"Удалить выбранные задачи?");
+        state.taskBulkDeletePopupRequest = false;
+    }
+    bool bulkDeleteOpen = true;
+    if (ImGui::BeginPopupModal(u8"Удалить выбранные задачи?", &bulkDeleteOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
+        ImGui::TextWrapped(u8"Удалить выбранные задачи: %d шт.?", static_cast<int>(state.taskSelectionIds.size()));
+        ImGui::Spacing();
+        if (ImGui::Button(u8"Удалить", ImVec2(140.0f, 0.0f))) {
+            int removed = 0;
+            int rollbackFailed = 0;
+            std::vector<std::string> idsToErase;
+            idsToErase.reserve(state.taskSelectionIds.size());
+            for (const auto& taskId : state.taskSelectionIds) {
+                auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
+                                       [&](const TaskEntry& item) { return item.id == taskId; });
+                if (it == state.tasks.end()) continue;
+                TaskEntry copy = *it;
+                bool hasXp = false;
+                for (const auto& participant : copy.participants) {
+                    if (participant.globalXp > 0 || participant.skillXp > 0) {
+                        hasXp = true;
+                        break;
+                    }
+                }
+                if (hasXp && !RollbackTask(state, storage, catalog, copy)) {
+                    rollbackFailed += 1;
+                    continue;
+                }
+                idsToErase.push_back(copy.id);
+            }
+            if (!idsToErase.empty()) {
+                state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
+                                                 [&](const TaskEntry& item) {
+                                                     return std::find(idsToErase.begin(), idsToErase.end(), item.id) != idsToErase.end();
+                                                 }),
+                                  state.tasks.end());
+                if (SaveTasks(state.storageDir, state.tasks)) {
+                    removed = static_cast<int>(idsToErase.size());
+                    for (const auto& id : idsToErase) {
+                        state.taskSelectionIds.erase(id);
+                        if (state.tasksExpandedId == id) {
+                            state.tasksExpandedId.clear();
+                        }
+                    }
+                } else {
+                    SetStatus(state, u8"Не удалось сохранить удаление задач.", 1.0f, 0.45f, 0.45f);
+                }
+            }
+            std::string msg = u8"Удалено задач: " + std::to_string(removed);
+            if (rollbackFailed > 0) {
+                msg += u8", не удалено из-за ошибки отката XP: " + std::to_string(rollbackFailed);
+                SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
+            } else {
+                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            }
+            ImGui::CloseCurrentPopup();
+            bulkDeleteOpen = false;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(u8"Отмена", ImVec2(140.0f, 0.0f))) {
+            ImGui::CloseCurrentPopup();
+            bulkDeleteOpen = false;
+        }
+        ImGui::EndPopup();
+    }
+    if (!bulkDeleteOpen && ImGui::IsPopupOpen(u8"Удалить выбранные задачи?")) {
+        ImGui::CloseCurrentPopup();
     }
 
     if (state.taskDeletePopupRequest) {
