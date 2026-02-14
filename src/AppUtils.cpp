@@ -732,13 +732,27 @@ static bool ExtractJsonNumberField(const std::string& content, const char* key, 
     pos = content.find(':', pos + token.size());
     if (pos == std::string::npos) return false;
     ++pos;
-    while (pos < content.size() && std::isspace(static_cast<unsigned char>(content[pos]))) {
-        ++pos;
+    std::string number;
+    number.reserve(32);
+    bool hasDot = false;
+    for (; pos < content.size(); ++pos) {
+        const char c = content[pos];
+        if (c == ',' || c == '}' || c == ']') break;
+        if (std::isspace(static_cast<unsigned char>(c))) {
+            if (!number.empty()) break;
+            continue;
+        }
+        if ((c >= '0' && c <= '9') || (c == '-' && number.empty()) || (c == '.' && !hasDot)) {
+            number.push_back(c);
+            if (c == '.') hasDot = true;
+            continue;
+        }
+        // Skip unexpected characters (e.g., corrupted digits)
     }
-    if (pos >= content.size()) return false;
-    char* end = nullptr;
-    out = std::strtod(content.c_str() + pos, &end);
-    if (end == content.c_str() + pos) return false;
+    if (number.empty()) return false;
+    char* endPtr = nullptr;
+    out = std::strtod(number.c_str(), &endPtr);
+    if (endPtr == number.c_str()) return false;
     return true;
 }
 
