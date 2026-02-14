@@ -32,15 +32,26 @@ struct TaskParticipant {
 // Stored task metadata.
 struct TaskEntry {
     std::string id;
+    std::string projectId;
     std::string project;
     std::string title;
     std::string description;
+    std::int64_t deadlineAt = 0;
+    int status = 0; // 0=Новая, 1=В работе, 2=Выполнена
     int category = 0;
     int score = 0;
     int baseXp = 0;
     int basePool = 0;
     std::int64_t createdAt = 0;
+    std::vector<std::string> assignees;
     std::vector<TaskParticipant> participants;
+};
+
+struct ProjectEntry {
+    std::string id;
+    std::string name;
+    std::string description;
+    std::int64_t createdAt = 0;
 };
 
 struct ShortcutEntry {

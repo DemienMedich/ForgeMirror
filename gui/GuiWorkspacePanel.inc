@@ -75,6 +75,18 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     ImGui::EndTabItem();
                 }
 
+                if (state.isAdmin && state.showProjects &&
+                    ImGui::BeginTabItem(u8"Проекты", &state.showProjects, tabFlagsFor(UiWindowId::Projects))) {
+                    if (state.workspaceTabRequest == static_cast<int>(UiWindowId::Projects)) {
+                        state.workspaceTabRequest = -1;
+                    }
+                    if (beginTabBody("##tab_projects")) {
+                        DrawProjectsPanel(state);
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+
                 if (state.showSkillCatalog &&
                     ImGui::BeginTabItem(u8"Навыки", &state.showSkillCatalog, tabFlagsFor(UiWindowId::SkillCatalog))) {
                     if (state.workspaceTabRequest == static_cast<int>(UiWindowId::SkillCatalog)) {

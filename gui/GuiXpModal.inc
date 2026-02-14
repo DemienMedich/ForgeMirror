@@ -520,8 +520,16 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     TaskEntry task;
                     task.id = GenerateTaskId(nowSeconds, state.tasks.size() + 1);
                     task.project = project;
+                    for (const auto& projectEntry : state.projects) {
+                        if (projectEntry.name == project) {
+                            task.projectId = projectEntry.id;
+                            break;
+                        }
+                    }
                     task.title = title;
                     task.description = description;
+                    task.deadlineAt = 0;
+                    task.status = kTaskStatusDone;
                     task.category = readyCategory;
                     task.score = readyScore;
                     task.baseXp = rules.categoryBaseXp[readyCategory];
@@ -529,12 +537,14 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     task.createdAt = nowSeconds;
 
                     std::vector<TaskParticipant> participants;
+                    std::vector<std::string> assignees;
                     std::string activeId = state.active ? state.active->id : std::string{};
                     constexpr std::int64_t kThirtyDays = 30LL * 24 * 3600;
 
                     for (int i = 0; i < static_cast<int>(state.taskShares.size()); ++i) {
                         const auto& share = state.taskShares[i];
                         if (!share.selected | share.archived) continue;
+                        assignees.push_back(share.id);
                         if (!storage.set_active_profile(share.id)) continue;
                         auto profileOpt = storage.load_profile();
                         if (!profileOpt) continue;
@@ -670,6 +680,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
                     if (!participants.empty()) {
                         task.participants = std::move(participants);
+                        task.assignees = std::move(assignees);
                         state.tasks.push_back(std::move(task));
                         const bool saveOk = SaveTasks(state.storageDir, state.tasks);
                         if (!activeId.empty()) {

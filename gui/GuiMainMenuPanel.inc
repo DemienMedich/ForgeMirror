@@ -31,6 +31,7 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.showView3d = false;
     state.showTasks = false;
     state.showPomodoro = false;
+    state.showProjects = false;
     state.showShortcuts = false;
     state.showAbout = false;
     state.showRules = false;
@@ -112,6 +113,7 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         state.lastCatalogSelection = -1;
         RefreshProfiles(state, storage, catalog);
         state.tasks = LoadTasks(state.storageDir);
+        state.projects = LoadProjects(state.storageDir);
         state.pipelineSteps = LoadPipeline(state.storageDir);
         state.rulesConfig = LoadGameplayConfig(state.storageDir);
         state.rulesDraft = state.rulesConfig;
@@ -170,6 +172,7 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             state.lastCatalogSelection = -1;
             RefreshProfiles(state, storage, catalog);
             state.tasks = LoadTasks(state.storageDir);
+            state.projects = LoadProjects(state.storageDir);
             state.pipelineSteps = LoadPipeline(state.storageDir);
             state.rulesConfig = LoadGameplayConfig(state.storageDir);
             state.rulesDraft = state.rulesConfig;
@@ -262,6 +265,13 @@ static std::int64_t ComputeStorageStamp(const std::filesystem::path& storageDir)
     auto tasksPath = storageDir / "meta" / "tasks.json";
     if (std::filesystem::exists(tasksPath, ec)) {
         auto stamp = ToUnixSeconds(std::filesystem::last_write_time(tasksPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
+    auto projectsPath = storageDir / "meta" / "projects.json";
+    if (std::filesystem::exists(projectsPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(projectsPath, ec));
         if (!ec) {
             latest = std::max(latest, stamp);
         }
@@ -543,6 +553,9 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 if (ImGui::MenuItem(u8"Логи", "F6")) {
                     OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
                 }
+                if (ImGui::MenuItem(u8"Проекты")) {
+                    OpenWorkspaceTab(state, state.showProjects, UiWindowId::Projects);
+                }
                 if (ImGui::MenuItem(u8"Правила", "F4")) {
                     OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
                 }
@@ -583,12 +596,12 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             if (ImGui::MenuItem(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ")) {
                 if (state.isAdmin) {
                     state.isAdmin = false;
+                    state.showProjects = false;
                     state.showRules = false;
                     state.showView3dSettings = false;
                     state.showLogs = false;
                     state.showAdminStats = false;
                     state.showBannerAdmin = false;
-    state.showVaultAdmin = false;
                     state.showVaultAdmin = false;
                 } else {
                     state.adminPopupRequest = true;

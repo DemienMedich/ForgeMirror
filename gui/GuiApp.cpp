@@ -98,6 +98,7 @@ const char* ClassificationLabel(int categoryIndex);
 #include "GuiUiSettings.inc"
 #include "GuiUiHelpers.inc"
 #include "GuiTasks.inc"
+#include "GuiProjects.inc"
 #include "GuiProfessions.inc"
 #include "GuiPomodoro.inc"
 #include "GuiIcons.inc"

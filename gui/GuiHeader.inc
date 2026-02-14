@@ -62,6 +62,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.cloudConfig.enabled = false;
     }
     if (!state.isAdmin) {
+        state.showProjects = false;
         state.showRules = false;
         state.showView3dSettings = false;
         state.showLogs = false;
@@ -75,6 +76,7 @@ static void ApplyAccessGuardsAndHotkeys(GuiState& state) {
         state.showView3d = false;
         state.showTasks = false;
         state.showPomodoro = false;
+        state.showProjects = false;
         state.showShortcuts = false;
         state.showAbout = false;
         state.showRules = false;

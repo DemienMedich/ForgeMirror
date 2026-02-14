@@ -35,7 +35,7 @@ void DrawNavigationPanel(GuiState& state) {
     };
     const bool anyWorkspace = state.showSkillCatalog || state.showPipeline || state.showView3d || state.showTasks ||
     state.showPomodoro || state.showUiSettings || state.showShortcuts || state.showAbout ||
-    (state.isAdmin && (state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats || state.showBannerAdmin || state.showVaultAdmin));
+    (state.isAdmin && (state.showProjects || state.showRules || state.showView3dSettings || state.showLogs || state.showAdminStats || state.showBannerAdmin || state.showVaultAdmin));
     const bool profileActive = !anyWorkspace;
     navButton("nav_profile", UiIcon::Home, u8"Профиль [F1]", profileActive, [&]() {
         state.showSkillCatalog = false;
@@ -43,6 +43,7 @@ void DrawNavigationPanel(GuiState& state) {
         state.showView3d = false;
         state.showTasks = false;
         state.showPomodoro = false;
+        state.showProjects = false;
         state.showRules = false;
         state.showUiSettings = false;
         state.showShortcuts = false;
@@ -88,6 +89,9 @@ void DrawNavigationPanel(GuiState& state) {
         });
         navButton("nav_logs", UiIcon::List, u8"Логи [F6]", state.showLogs, [&]() {
             OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
+        });
+        navButton("nav_projects", UiIcon::Flow, u8"Проекты", state.showProjects, [&]() {
+            OpenWorkspaceTab(state, state.showProjects, UiWindowId::Projects);
         });
         navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
             OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);

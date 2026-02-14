@@ -1,6 +1,22 @@
 int CountSelectedProfileShares(const std::vector<TaskProfileShare>& shares);
 void BalanceProfileShares(std::vector<TaskProfileShare>& shares, int fixedIndex);
 
+static constexpr int kTaskStatusNew = 0;
+static constexpr int kTaskStatusInProgress = 1;
+static constexpr int kTaskStatusDone = 2;
+
+static int NormalizeTaskStatus(int value) {
+    return std::clamp(value, kTaskStatusNew, kTaskStatusDone);
+}
+
+static const char* TaskStatusLabel(int status) {
+    switch (NormalizeTaskStatus(status)) {
+        case kTaskStatusInProgress: return u8"В работе";
+        case kTaskStatusDone: return u8"Выполнена";
+        default: return u8"Новая";
+    }
+}
+
 static std::filesystem::path TasksStoragePath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "tasks.json";
 }
@@ -231,6 +247,35 @@ static std::vector<TaskParticipant> ParseParticipants(const std::string& text) {
     return out;
 }
 
+static std::string SerializeAssignees(const std::vector<std::string>& assignees) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    bool first = true;
+    for (const auto& id : assignees) {
+        if (id.empty()) continue;
+        if (!first) out << ';';
+        first = false;
+        out << id;
+    }
+    return out.str();
+}
+
+static std::vector<std::string> ParseAssignees(const std::string& text) {
+    std::vector<std::string> out;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find(';', start);
+        if (end == std::string::npos) end = text.size();
+        std::string token = TrimStringGui(text.substr(start, end - start));
+        if (!token.empty()) {
+            out.push_back(std::move(token));
+        }
+        if (end == text.size()) break;
+        start = end + 1;
+    }
+    return out;
+}
+
 static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir) {
     std::vector<TaskEntry> out;
     const auto path = TasksStoragePath(storageDir);
@@ -245,16 +290,36 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
         };
         TaskEntry entry;
         if (auto v = find_value("id")) entry.id = *v;
+        if (auto v = find_value("projectId")) entry.projectId = *v;
         if (auto v = find_value("project")) entry.project = *v;
         if (auto v = find_value("title")) entry.title = *v;
         if (auto v = find_value("description")) entry.description = *v;
+        if (auto v = find_value("deadlineAt")) entry.deadlineAt = tasks_parse_int64(*v, 0);
+        bool hasStatus = false;
+        if (auto v = find_value("status")) {
+            entry.status = NormalizeTaskStatus(tasks_parse_int(*v, kTaskStatusNew));
+            hasStatus = true;
+        }
         if (auto v = find_value("category")) entry.category = tasks_parse_int(*v, 0);
         if (auto v = find_value("score")) entry.score = tasks_parse_int(*v, 0);
         if (auto v = find_value("baseXp")) entry.baseXp = tasks_parse_int(*v, 0);
         if (auto v = find_value("basePool")) entry.basePool = tasks_parse_int(*v, 0);
         if (auto v = find_value("createdAt")) entry.createdAt = tasks_parse_int64(*v, 0);
+        if (auto v = find_value("assignees")) entry.assignees = ParseAssignees(*v);
         if (auto v = find_value("participants")) entry.participants = ParseParticipants(*v);
         if (entry.id.empty()) continue;
+        if (entry.assignees.empty()) {
+            for (const auto& participant : entry.participants) {
+                if (!participant.profileId.empty()) {
+                    entry.assignees.push_back(participant.profileId);
+                }
+            }
+        }
+        if (!hasStatus) {
+            entry.status = entry.participants.empty() ? kTaskStatusNew : kTaskStatusDone;
+        } else if (entry.status < kTaskStatusNew || entry.status > kTaskStatusDone) {
+            entry.status = entry.participants.empty() ? kTaskStatusNew : kTaskStatusDone;
+        }
         out.push_back(std::move(entry));
     }
     return out;
@@ -267,14 +332,18 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
     for (size_t i = 0; i < tasks.size(); ++i) {
         const auto& entry = tasks[i];
         out << "  {\"id\":\"" << tasks_json_escape(entry.id)
+            << "\",\"projectId\":\"" << tasks_json_escape(entry.projectId)
             << "\",\"project\":\"" << tasks_json_escape(entry.project)
             << "\",\"title\":\"" << tasks_json_escape(entry.title)
             << "\",\"description\":\"" << tasks_json_escape(entry.description)
-            << "\",\"category\":" << entry.category
+            << "\",\"deadlineAt\":" << entry.deadlineAt
+            << ",\"status\":" << NormalizeTaskStatus(entry.status)
+            << ",\"category\":" << entry.category
             << ",\"score\":" << entry.score
             << ",\"baseXp\":" << entry.baseXp
             << ",\"basePool\":" << entry.basePool
             << ",\"createdAt\":" << entry.createdAt
+            << ",\"assignees\":\"" << tasks_json_escape(SerializeAssignees(entry.assignees)) << "\""
             << ",\"participants\":\"" << tasks_json_escape(SerializeParticipants(entry.participants)) << "\"}";
         if (i + 1 < tasks.size()) out << ",";
         out << "\n";
@@ -294,6 +363,14 @@ static const TaskParticipant* FindTaskParticipant(const TaskEntry& task, const s
     return nullptr;
 }
 
+static bool TaskHasAssignee(const TaskEntry& task, const std::string& profileId) {
+    if (profileId.empty()) return false;
+    for (const auto& id : task.assignees) {
+        if (id == profileId) return true;
+    }
+    return FindTaskParticipant(task, profileId) != nullptr;
+}
+
 static std::string TaskDisplayTitle(const TaskEntry& task) {
     if (!task.project.empty() && !task.title.empty()) {
         return task.project + " - " + task.title;
@@ -307,12 +384,24 @@ static std::string BuildParticipantLabel(const TaskEntry& task,
     std::ostringstream out;
     out.imbue(std::locale::classic());
     bool first = true;
-    for (const auto& p : task.participants) {
+    if (!task.participants.empty()) {
+        for (const auto& p : task.participants) {
+            if (!first) out << ", ";
+            first = false;
+            auto it = names.find(p.profileId);
+            const std::string label = (it == names.end()) ? p.profileId : it->second;
+            out << label;
+            if (p.percent > 0) {
+                out << " " << p.percent << "%";
+            }
+        }
+        return out.str();
+    }
+    for (const auto& profileId : task.assignees) {
         if (!first) out << ", ";
         first = false;
-        auto it = names.find(p.profileId);
-        const std::string label = (it == names.end()) ? p.profileId : it->second;
-        out << label << " " << p.percent << "%";
+        auto it = names.find(profileId);
+        out << ((it == names.end()) ? profileId : it->second);
     }
     return out.str();
 }
@@ -335,17 +424,20 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
     // UTF-8 BOM for spreadsheet tools
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-    out << "Date,Project,Task,Description,Category,Score,Participants,BaseXP,BasePool\n";
+    out << "Date,Deadline,Project,Task,Description,Status,Category,Score,Participants,BaseXP,BasePool\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
         ++exportedCount;
         std::string stampText = FormatTimestamp(task->createdAt, "%Y-%m-%d %H:%M");
         if (stampText.empty()) stampText = "-";
         const std::string participants = BuildParticipantLabel(*task, names);
+        const std::string deadlineText = task->deadlineAt > 0 ? FormatTimestamp(task->deadlineAt, "%Y-%m-%d %H:%M") : std::string();
         out << CsvEscape(stampText) << ","
+            << CsvEscape(deadlineText) << ","
             << CsvEscape(task->project) << ","
             << CsvEscape(task->title) << ","
             << CsvEscape(task->description) << ","
+            << CsvEscape(TaskStatusLabel(task->status)) << ","
             << CsvEscape(ClassificationLabel(task->category)) << ","
             << task->score << ","
             << CsvEscape(participants) << ","
@@ -380,9 +472,12 @@ static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEn
         std::string stampText = FormatTimestamp(task->createdAt, "%Y-%m-%d %H:%M");
         if (stampText.empty()) stampText = "-";
         const std::string participants = BuildParticipantLabel(*task, names);
+        const std::string deadlineText = task->deadlineAt > 0 ? FormatTimestamp(task->deadlineAt, "%Y-%m-%d %H:%M") : std::string(u8"без дедлайна");
         out << "- " << stampText << " | "
+            << SanitizeLogLine(deadlineText) << " | "
             << SanitizeLogLine(task->project) << " | "
             << SanitizeLogLine(task->title) << " | "
+            << SanitizeLogLine(TaskStatusLabel(task->status)) << " | "
             << SanitizeLogLine(ClassificationLabel(task->category)) << " | "
             << task->score << "/10 | "
             << SanitizeLogLine(participants) << "\n";

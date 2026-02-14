@@ -783,7 +783,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
         "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
-        "pipeline.json", "tasks.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "seed.merged"
+        "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "seed.merged"
     };
     bool any = false;
     for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
@@ -863,7 +863,7 @@ bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem:
         }
     }
     std::unordered_set<std::string> allowedMetaFiles = {
-        "pipeline.json", "tasks.json", "gameplay.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log"
+        "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log"
     };
     if (!manifestName.empty() && (manifestDir.empty() || manifestDir == "meta")) {
         allowedMetaFiles.insert(manifestName);
@@ -1131,6 +1131,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExists(cloudRoot / "skills.txt", storageDir / "skills.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "projects.json", storageDir / "meta" / "projects.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "gameplay.ini", storageDir / "meta" / "gameplay.ini", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "professions.txt", storageDir / "meta" / "professions.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "banner.json", storageDir / "meta" / "banner.json", result.stats, true, &ioError);
@@ -1224,6 +1225,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "skills.txt", cloudRoot / "skills.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "projects.json", cloudRoot / "meta" / "projects.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "banner.json", cloudRoot / "meta" / "banner.json", result.stats, &ioError);
@@ -1237,6 +1239,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         || RemoveFileIfMissing(storageDir / "skills.txt", cloudRoot / "skills.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "projects.json", cloudRoot / "meta" / "projects.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "gameplay.ini", cloudRoot / "meta" / "gameplay.ini", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "professions.txt", cloudRoot / "meta" / "professions.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "banner.json", cloudRoot / "meta" / "banner.json", removed)

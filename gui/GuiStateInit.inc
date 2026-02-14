@@ -40,6 +40,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     ApplyUiFiltersToState(state);
     ApplyProfileAccessSettings(state);
     state.tasks = state.modules.tasks ? LoadTasks(storageDir) : std::vector<TaskEntry>();
+    state.projects = LoadProjects(storageDir);
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();
     state.shortcuts = state.modules.shortcuts ? LoadShortcuts(storageDir) : std::vector<ShortcutEntry>();
@@ -48,6 +49,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.profileProfessionCache.clear();
     state.profileProfessionDirty = true;
     state.showTasks = state.modules.tasks && state.showTasks;
+    state.showProjects = state.isAdmin && state.showProjects;
     state.showPomodoro = state.modules.pomodoro && state.showPomodoro;
     state.showPipeline = state.modules.pipeline && state.showPipeline;
     state.showProfessions = state.modules.professions && state.showProfessions;
@@ -66,6 +68,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     std::snprintf(state.modelPathBuffer.data(), state.modelPathBuffer.size(), "%s", state.ui.modelPath.c_str());
     std::snprintf(state.cloudRootBuffer.data(), state.cloudRootBuffer.size(), "%s",
                   state.cloudConfig.root.u8string().c_str());
+    std::snprintf(state.taskPlanDeadline.data(), state.taskPlanDeadline.size(), "%s", FormatTimestamp(NowSeconds() + 86400, "%Y-%m-%d 18:00").c_str());
     RefreshProfiles(state, storage, catalog, state.ui.lastProfileId);
 }
 

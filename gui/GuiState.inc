@@ -15,6 +15,7 @@ struct GuiDataState {
     std::unordered_map<std::string, std::deque<std::string>> activityLogs;
     std::deque<AppLogEntry> appLogs;
     std::vector<TaskEntry> tasks;
+    std::vector<ProjectEntry> projects;
     std::vector<ShortcutEntry> shortcuts;
     std::vector<PipelineStep> pipelineSteps;
     std::vector<ProfessionEntry> professions;
@@ -62,6 +63,7 @@ struct GuiRuntimeState {
     bool showAdminStats = false;
     bool showProfilesWindow = false;
     bool showTasks = false;
+    bool showProjects = false;
     bool showPomodoro = false;
     bool showShortcuts = false;
     bool showAbout = false;
@@ -122,6 +124,12 @@ struct GuiRuntimeState {
     std::array<char, 128> newProfessionName{};
     std::array<char, 256> newProfessionDesc{};
     int professionEditIndex = -1;
+    std::array<char, 128> newProjectName{};
+    std::array<char, 256> newProjectDesc{};
+    int projectEditIndex = -1;
+    bool projectDeletePopupRequest = false;
+    int pendingDeleteProjectIndex = -1;
+    std::string pendingDeleteProjectId;
     float newSkillWeight = 1.0f;
     std::vector<char> newSkillProfessionFlags;
     std::vector<char> editSkillProfessionFlags;
@@ -148,11 +156,18 @@ struct GuiRuntimeState {
     std::array<char, 128> taskProject{};
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
+    std::array<char, 128> taskPlanTitle{};
+    std::array<char, 256> taskPlanDescription{};
+    std::array<char, 20> taskPlanDeadline{};
+    int taskPlanProjectIndex = 0;
+    int taskPlanStatus = 0;
+    std::vector<char> taskPlanAssignees;
     std::vector<TaskProfileShare> taskShares;
     bool taskDeletePopupRequest = false;
     std::string pendingTaskDeleteId;
     int tasksFilterProfile = 0;
     int tasksFilterCategory = 0;
+    int tasksFilterStatus = 0;
     int tasksFilterDays = 0;
     std::string tasksExpandedId;
     std::array<char, 128> shortcutLabel{};
