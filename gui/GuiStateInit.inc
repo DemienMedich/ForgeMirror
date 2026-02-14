@@ -9,6 +9,13 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.cloudConfig = LoadCloudSyncConfig(storageDir);
     state.bannerTexts = LoadBannerTexts(storageDir);
     state.vault = LoadStorageVault(storageDir);
+    const auto storageVaultPath = storageDir / "meta" / "storage.json";
+    std::error_code vaultEc;
+    if (!std::filesystem::exists(storageVaultPath, vaultEc)) {
+        if (SaveStorageVault(storageDir, state.vault)) {
+            state.vault = LoadStorageVault(storageDir);
+        }
+    }
     SyncVaultBuffers(state);
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
@@ -61,3 +68,4 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
                   state.cloudConfig.root.u8string().c_str());
     RefreshProfiles(state, storage, catalog, state.ui.lastProfileId);
 }
+
