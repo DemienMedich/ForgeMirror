@@ -37,7 +37,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Планирование и выполненные задачи в одном журнале.");
 
-    auto UpdateTaskStatus = [&state](const std::string& taskId, int newStatus) -> bool {
+    auto IsTaskStatusTransitionAllowed = [](int fromStatus, int toStatus) -> bool {
+        const int from = NormalizeTaskStatus(fromStatus);
+        const int to = NormalizeTaskStatus(toStatus);
+        if (from == to) return true;
+        // Разрешаем "reopen" (Выполнена -> В работе), но запрещаем прямой откат в "Новая".
+        if (from == kTaskStatusDone && to == kTaskStatusNew) {
+            return false;
+        }
+        return true;
+    };
+
+    auto UpdateTaskStatus = [&state, &IsTaskStatusTransitionAllowed](const std::string& taskId, int newStatus) -> bool {
         auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
                                [&](const TaskEntry& item) { return item.id == taskId; });
         if (it == state.tasks.end()) {
@@ -48,6 +59,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         const int next = NormalizeTaskStatus(newStatus);
         if (prev == next) {
             return true;
+        }
+        if (!IsTaskStatusTransitionAllowed(prev, next)) {
+            SetStatus(state, u8"Недопустимый переход статуса (Выполнена -> Новая).", 1.0f, 0.75f, 0.35f);
+            return false;
         }
         it->status = next;
         if (SaveTasks(state.storageDir, state.tasks)) {
@@ -402,6 +417,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (ImGui::Button(u8"7 дней", ImVec2(96.0f, 0.0f))) {
         state.tasksQuickFilter = 4;
     }
+    const char* quickFilterLabels[] = {u8"Все", u8"Мне назначено", u8"Сегодня", u8"Просрочено", u8"7 дней"};
+    state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
+    ImGui::TextDisabled(u8"Активный быстрый фильтр: %s", quickFilterLabels[state.tasksQuickFilter]);
 
     DrawCardHeader(u8"Фильтр");
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -611,12 +629,51 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::Combo("##task_bulk_status", &state.taskBulkStatus, statusLabels, IM_ARRAYSIZE(statusLabels));
             ImGui::SameLine();
             if (ImGui::Button(u8"Применить статус", ImVec2(170.0f, 0.0f))) {
-                int ok = 0;
+                struct PrevState {
+                    TaskEntry* task = nullptr;
+                    int status = 0;
+                };
+                std::vector<PrevState> touched;
+                touched.reserve(state.taskSelectionIds.size());
+                int changed = 0;
+                int invalidTransition = 0;
+                const int targetStatus = NormalizeTaskStatus(state.taskBulkStatus);
                 for (const auto& taskId : state.taskSelectionIds) {
-                    ok += UpdateTaskStatus(taskId, state.taskBulkStatus) ? 1 : 0;
+                    TaskEntry* task = FindTaskMutable(taskId);
+                    if (!task) continue;
+                    const int prev = NormalizeTaskStatus(task->status);
+                    if (prev == targetStatus) {
+                        continue;
+                    }
+                    if (!IsTaskStatusTransitionAllowed(prev, targetStatus)) {
+                        invalidTransition += 1;
+                        continue;
+                    }
+                    touched.push_back({task, prev});
+                    task->status = targetStatus;
+                    changed += 1;
                 }
-                std::string msg = u8"Статус обновлен для задач: " + std::to_string(ok);
-                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                if (changed <= 0) {
+                    if (invalidTransition > 0) {
+                        std::string msg = u8"Пропущено переходов статуса: " + std::to_string(invalidTransition);
+                        SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
+                    } else {
+                        SetStatus(state, u8"Нет задач для изменения статуса.", 1.0f, 0.75f, 0.35f);
+                    }
+                } else if (SaveTasks(state.storageDir, state.tasks)) {
+                    std::string msg = u8"Статус обновлен для задач: " + std::to_string(changed);
+                    if (invalidTransition > 0) {
+                        msg += u8" (пропущено: " + std::to_string(invalidTransition) + ")";
+                    }
+                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                } else {
+                    for (const auto& prev : touched) {
+                        if (prev.task) {
+                            prev.task->status = prev.status;
+                        }
+                    }
+                    SetStatus(state, u8"Не удалось сохранить массовое изменение статуса.", 1.0f, 0.45f, 0.45f);
+                }
             }
 
             ImGui::TextDisabled(u8"Проект");
@@ -625,12 +682,47 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                          projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
             ImGui::SameLine();
             if (ImGui::Button(u8"Назначить проект", ImVec2(170.0f, 0.0f))) {
-                int ok = 0;
+                const std::string nextProjectId = (state.taskBulkProjectIndex > 0 &&
+                    (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
+                    ? state.projects[state.taskBulkProjectIndex - 1].id
+                    : std::string();
+                const std::string nextProjectName = (state.taskBulkProjectIndex > 0 &&
+                    (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
+                    ? state.projects[state.taskBulkProjectIndex - 1].name
+                    : std::string();
+                struct PrevProject {
+                    TaskEntry* task = nullptr;
+                    std::string projectId;
+                    std::string projectName;
+                };
+                std::vector<PrevProject> touched;
+                touched.reserve(state.taskSelectionIds.size());
+                int changed = 0;
                 for (const auto& taskId : state.taskSelectionIds) {
-                    ok += UpdateTaskProject(taskId, state.taskBulkProjectIndex) ? 1 : 0;
+                    TaskEntry* task = FindTaskMutable(taskId);
+                    if (!task) continue;
+                    if (task->projectId == nextProjectId && task->project == nextProjectName) {
+                        continue;
+                    }
+                    touched.push_back({task, task->projectId, task->project});
+                    task->projectId = nextProjectId;
+                    task->project = nextProjectName;
+                    changed += 1;
                 }
-                std::string msg = u8"Проект обновлен для задач: " + std::to_string(ok);
-                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                if (changed <= 0) {
+                    SetStatus(state, u8"Нет задач для изменения проекта.", 1.0f, 0.75f, 0.35f);
+                } else if (SaveTasks(state.storageDir, state.tasks)) {
+                    std::string msg = u8"Проект обновлен для задач: " + std::to_string(changed);
+                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                } else {
+                    for (const auto& prev : touched) {
+                        if (prev.task) {
+                            prev.task->projectId = prev.projectId;
+                            prev.task->project = prev.projectName;
+                        }
+                    }
+                    SetStatus(state, u8"Не удалось сохранить массовое изменение проекта.", 1.0f, 0.45f, 0.45f);
+                }
             }
 
             ImGui::TextDisabled(u8"Дедлайн (YYYY-MM-DD HH:MM)");
@@ -639,12 +731,43 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                      state.taskBulkDeadline.data(), state.taskBulkDeadline.size());
             ImGui::SameLine();
             if (ImGui::Button(u8"Установить дедлайн", ImVec2(170.0f, 0.0f))) {
-                int ok = 0;
-                for (const auto& taskId : state.taskSelectionIds) {
-                    ok += UpdateTaskDeadline(taskId, state.taskBulkDeadline.data()) ? 1 : 0;
+                const std::string deadlineInput = TrimStringGui(state.taskBulkDeadline.data());
+                std::int64_t parsedDeadline = 0;
+                if (!deadlineInput.empty() && !ParseTaskDeadlineInput(deadlineInput, parsedDeadline)) {
+                    SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
+                } else {
+                    struct PrevDeadline {
+                        TaskEntry* task = nullptr;
+                        std::int64_t deadlineAt = 0;
+                    };
+                    std::vector<PrevDeadline> touched;
+                    touched.reserve(state.taskSelectionIds.size());
+                    int changed = 0;
+                    for (const auto& taskId : state.taskSelectionIds) {
+                        TaskEntry* task = FindTaskMutable(taskId);
+                        if (!task) continue;
+                        const std::int64_t nextDeadline = deadlineInput.empty() ? 0 : parsedDeadline;
+                        if (task->deadlineAt == nextDeadline) {
+                            continue;
+                        }
+                        touched.push_back({task, task->deadlineAt});
+                        task->deadlineAt = nextDeadline;
+                        changed += 1;
+                    }
+                    if (changed <= 0) {
+                        SetStatus(state, u8"Нет задач для изменения дедлайна.", 1.0f, 0.75f, 0.35f);
+                    } else if (SaveTasks(state.storageDir, state.tasks)) {
+                        std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(changed);
+                        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                    } else {
+                        for (const auto& prev : touched) {
+                            if (prev.task) {
+                                prev.task->deadlineAt = prev.deadlineAt;
+                            }
+                        }
+                        SetStatus(state, u8"Не удалось сохранить массовое изменение дедлайна.", 1.0f, 0.45f, 0.45f);
+                    }
                 }
-                std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(ok);
-                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
             }
 
             if (ImGui::TreeNode(u8"Исполнители")) {
@@ -677,12 +800,49 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     if (assignees.empty()) {
                         SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
                     } else {
-                        int ok = 0;
+                        struct PrevAssignees {
+                            TaskEntry* task = nullptr;
+                            std::vector<std::string> assignees;
+                        };
+                        std::vector<PrevAssignees> touched;
+                        touched.reserve(state.taskSelectionIds.size());
+                        int changed = 0;
+                        int lockedByXp = 0;
                         for (const auto& taskId : state.taskSelectionIds) {
-                            ok += UpdateTaskAssignees(taskId, assignees) ? 1 : 0;
+                            TaskEntry* task = FindTaskMutable(taskId);
+                            if (!task) continue;
+                            if (!task->participants.empty()) {
+                                lockedByXp += 1;
+                                continue;
+                            }
+                            if (task->assignees == assignees) {
+                                continue;
+                            }
+                            touched.push_back({task, task->assignees});
+                            task->assignees = assignees;
+                            changed += 1;
                         }
-                        std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(ok);
-                        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                        if (changed <= 0) {
+                            if (lockedByXp > 0) {
+                                std::string msg = u8"Пропущено задач с XP-участниками: " + std::to_string(lockedByXp);
+                                SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
+                            } else {
+                                SetStatus(state, u8"Нет задач для изменения исполнителей.", 1.0f, 0.75f, 0.35f);
+                            }
+                        } else if (SaveTasks(state.storageDir, state.tasks)) {
+                            std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(changed);
+                            if (lockedByXp > 0) {
+                                msg += u8" (пропущено: " + std::to_string(lockedByXp) + ")";
+                            }
+                            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                        } else {
+                            for (const auto& prev : touched) {
+                                if (prev.task) {
+                                    prev.task->assignees = prev.assignees;
+                                }
+                            }
+                            SetStatus(state, u8"Не удалось сохранить массовое изменение исполнителей.", 1.0f, 0.45f, 0.45f);
+                        }
                     }
                 }
                 ImGui::TreePop();
@@ -814,7 +974,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (!task) continue;
                 const std::int64_t day = task->createdAt / 86400;
                 const int idx = static_cast<int>(day - startDay);
-                if (idx < 0 | idx >= kDays) continue;
+                if (idx < 0 || idx >= kDays) continue;
                 dayCounts[idx] += 1.0f;
                 maxCount = std::max(maxCount, static_cast<int>(dayCounts[idx]));
             }
