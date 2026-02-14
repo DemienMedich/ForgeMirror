@@ -37,6 +37,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Планирование и выполненные задачи в одном журнале.");
 
+    auto UpdateTaskStatus = [&state](const std::string& taskId, int newStatus) -> bool {
+        auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
+                               [&](const TaskEntry& item) { return item.id == taskId; });
+        if (it == state.tasks.end()) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        const int prev = NormalizeTaskStatus(it->status);
+        const int next = NormalizeTaskStatus(newStatus);
+        if (prev == next) {
+            return true;
+        }
+        it->status = next;
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            SetStatus(state, u8"Статус задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        it->status = prev;
+        SetStatus(state, u8"Не удалось сохранить статус задачи.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
     if (state.isAdmin) {
         if (BeginCard("tasks_create_card")) {
             DrawCardHeader(u8"Создать задачу");
@@ -582,7 +604,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::TableSetColumnIndex(5);
             const int normalizedStatus = NormalizeTaskStatus(task->status);
-            if (normalizedStatus == kTaskStatusDone) {
+            if (state.isAdmin) {
+                int draftStatus = normalizedStatus;
+                const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
+                ImGui::PushID(task->id.c_str());
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##task_status_row", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
+                    UpdateTaskStatus(task->id, draftStatus);
+                }
+                ImGui::PopID();
+            } else if (normalizedStatus == kTaskStatusDone) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusLabel(normalizedStatus));
             } else if (overdue) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusLabel(normalizedStatus));
@@ -693,12 +724,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_detail_status", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
-                    editableTask->status = NormalizeTaskStatus(draftStatus);
-                    if (SaveTasks(state.storageDir, state.tasks)) {
-                        SetStatus(state, u8"Статус задачи обновлен.", 0.45f, 0.9f, 0.45f);
-                    } else {
-                        SetStatus(state, u8"Не удалось сохранить статус задачи.", 1.0f, 0.45f, 0.45f);
-                    }
+                    UpdateTaskStatus(editableTask->id, draftStatus);
                 }
 
                 bool hasXp = false;
