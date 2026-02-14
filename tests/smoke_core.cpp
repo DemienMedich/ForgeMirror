@@ -19,6 +19,13 @@ static bool WriteFile(const std::filesystem::path& path, const std::string& data
     return out.good();
 }
 
+static bool ReadFile(const std::filesystem::path& path, std::string& outData) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return false;
+    outData.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return true;
+}
+
 static bool TestGameplayConfig(const std::filesystem::path& dir) {
     GameplayConfig cfg;
     cfg.levelBaseXp = 10;
@@ -54,6 +61,39 @@ static bool TestWhitelist(const std::filesystem::path& dir) {
     return removed >= 2 && !std::filesystem::exists(dir / "bad.txt");
 }
 
+static bool TestStorageVaultRobustParsing(const std::filesystem::path& dir) {
+    const std::string nbsp = u8" ";
+    std::string storageJson;
+    storageJson += "{\n";
+    storageJson += "  \"currency_name\": \"Кукоин\",\n";
+    storageJson += "  \"currency_code\": \"KUK\",\n";
+    storageJson += "  \"balance_enc\": \"xor:76414257\",\n";
+    storageJson += "  \"log_limit\": 10,\n";
+    storageJson += "  \"rev\": 15,\n";
+    storageJson += "  \"updated_at\": 1" + nbsp + "770" + nbsp + "312" + nbsp + "982,\n";
+    storageJson += "  \"content_hash\": \"b07b8cc957f0aeb5\",\n";
+    storageJson += "  \"pomodoro_start\": 540,\n";
+    storageJson += "  \"pomodoro_end\": 1" + nbsp + "200,\n";
+    storageJson += "  \"pomodoro_min\": 20,\n";
+    storageJson += "  \"pomodoro_coin\": 1,\n";
+    storageJson += "  \"pomodoro_days\": 62,\n";
+    storageJson += "  \"log\": []\n";
+    storageJson += "}\n";
+    if (!WriteFile(dir / "meta" / "storage.json", storageJson)) return false;
+
+    StorageVaultData loaded = LoadStorageVault(dir);
+    if (loaded.updatedAt != 1770312982LL) return false;
+    if (loaded.pomodoroEndMinutes != 1200) return false;
+    if (loaded.pomodoroMinMinutes != 20) return false;
+
+    if (!SaveStorageVault(dir, loaded)) return false;
+    std::string saved;
+    if (!ReadFile(dir / "meta" / "storage.json", saved)) return false;
+    if (saved.find(nbsp) != std::string::npos) return false;
+    if (saved.find("\"pomodoro_end\": 1200") == std::string::npos) return false;
+    return true;
+}
+
 int main() {
     std::filesystem::path tmp = std::filesystem::temp_directory_path() / "forgemirror_smoke";
     std::error_code ec;
@@ -64,8 +104,9 @@ int main() {
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okWhitelist = TestWhitelist(tmp);
+    const bool okVault = TestStorageVaultRobustParsing(tmp);
 
-    if (okProfile && okRules && okTasks && okWhitelist) {
+    if (okProfile && okRules && okTasks && okWhitelist && okVault) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
@@ -73,6 +114,7 @@ int main() {
               << "profile=" << okProfile
               << " rules=" << okRules
               << " tasks=" << okTasks
-              << " whitelist=" << okWhitelist << "\n";
+              << " whitelist=" << okWhitelist
+              << " vault=" << okVault << "\n";
     return 1;
 }
