@@ -684,6 +684,142 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         state.taskBulkAssignees = std::move(next);
     }
 
+    const std::int64_t nowSec = NowSeconds();
+    std::vector<const TaskEntry*> overdueDeadlines;
+    std::vector<const TaskEntry*> upcoming2h;
+    std::vector<const TaskEntry*> upcoming24h;
+    overdueDeadlines.reserve(state.tasks.size());
+    upcoming2h.reserve(state.tasks.size());
+    upcoming24h.reserve(state.tasks.size());
+    std::unordered_set<std::string> reminderCandidates;
+    reminderCandidates.reserve(state.tasks.size());
+
+    for (const auto& task : state.tasks) {
+        if (task.id.empty()) continue;
+        if (task.deadlineAt <= 0) continue;
+        if (NormalizeTaskStatus(task.status) == kTaskStatusDone) continue;
+        reminderCandidates.insert(task.id);
+        if (task.deadlineAt < nowSec) {
+            overdueDeadlines.push_back(&task);
+        } else if (task.deadlineAt <= (nowSec + 2 * 3600)) {
+            upcoming2h.push_back(&task);
+        } else if (task.deadlineAt <= (nowSec + 24 * 3600)) {
+            upcoming24h.push_back(&task);
+        }
+    }
+    auto byDeadlineAsc = [](const TaskEntry* a, const TaskEntry* b) {
+        if (a->deadlineAt != b->deadlineAt) return a->deadlineAt < b->deadlineAt;
+        return a->createdAt > b->createdAt;
+    };
+    std::sort(overdueDeadlines.begin(), overdueDeadlines.end(), byDeadlineAsc);
+    std::sort(upcoming2h.begin(), upcoming2h.end(), byDeadlineAsc);
+    std::sort(upcoming24h.begin(), upcoming24h.end(), byDeadlineAsc);
+
+    auto pruneReminderSet = [&](std::unordered_set<std::string>& setRef) {
+        for (auto it = setRef.begin(); it != setRef.end();) {
+            if (reminderCandidates.find(*it) == reminderCandidates.end()) {
+                it = setRef.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    };
+    pruneReminderSet(state.tasksReminderShown24h);
+    pruneReminderSet(state.tasksReminderShown2h);
+
+    if (state.tasksReminderLastAt <= 0 || (nowSec - state.tasksReminderLastAt) >= 30) {
+        state.tasksReminderLastAt = nowSec;
+        const TaskEntry* notifyTask = nullptr;
+        bool criticalWindow = false;
+        for (const TaskEntry* task : upcoming2h) {
+            if (!task) continue;
+            if (state.tasksReminderShown2h.find(task->id) == state.tasksReminderShown2h.end()) {
+                notifyTask = task;
+                criticalWindow = true;
+                break;
+            }
+        }
+        if (!notifyTask) {
+            for (const TaskEntry* task : upcoming24h) {
+                if (!task) continue;
+                if (state.tasksReminderShown24h.find(task->id) == state.tasksReminderShown24h.end()) {
+                    notifyTask = task;
+                    criticalWindow = false;
+                    break;
+                }
+            }
+        }
+        if (notifyTask) {
+            const std::string taskTitle = TaskDisplayTitle(*notifyTask).empty()
+                ? notifyTask->id
+                : TaskDisplayTitle(*notifyTask);
+            const std::string deadlineText = FormatTimestamp(notifyTask->deadlineAt, "%d.%m.%Y %H:%M");
+            std::string msg;
+            if (criticalWindow) {
+                msg = u8"Скоро дедлайн (<2ч): " + taskTitle + u8" до " + deadlineText;
+                SetStatus(state, msg, 1.0f, 0.75f, 0.35f, 1.0f, AppLogLevel::Warning, u8"Задачи");
+                state.tasksReminderShown2h.insert(notifyTask->id);
+                state.tasksReminderShown24h.insert(notifyTask->id);
+            } else {
+                msg = u8"Дедлайн в течение 24ч: " + taskTitle + u8" до " + deadlineText;
+                SetStatus(state, msg, 0.75f, 0.85f, 1.0f, 1.0f, AppLogLevel::Info, u8"Задачи");
+                state.tasksReminderShown24h.insert(notifyTask->id);
+            }
+        }
+    }
+
+    if (BeginCard("tasks_upcoming_deadlines")) {
+        DrawCardHeader(u8"Скоро дедлайн");
+        ImGui::TextDisabled(u8"Просрочено: %d | <2ч: %d | <24ч: %d",
+                            static_cast<int>(overdueDeadlines.size()),
+                            static_cast<int>(upcoming2h.size()),
+                            static_cast<int>(upcoming24h.size()));
+
+        auto DrawDeadlineList = [&](const char* caption, const std::vector<const TaskEntry*>& items,
+                                    const ImVec4& color, int maxItems) {
+            if (items.empty()) return;
+            ImGui::Spacing();
+            ImGui::TextColored(color, "%s", caption);
+            const int limit = std::min(maxItems, static_cast<int>(items.size()));
+            for (int i = 0; i < limit; ++i) {
+                const TaskEntry* task = items[static_cast<size_t>(i)];
+                if (!task) continue;
+                const std::string title = TaskDisplayTitle(*task).empty() ? task->id : TaskDisplayTitle(*task);
+                const std::string deadlineText = FormatTimestamp(task->deadlineAt, "%d.%m.%Y %H:%M");
+                std::string leftText;
+                if (task->deadlineAt < nowSec) {
+                    leftText = u8"просрочено";
+                } else {
+                    const std::int64_t leftSec = task->deadlineAt - nowSec;
+                    const int leftHours = static_cast<int>(leftSec / 3600);
+                    const int leftMinutes = static_cast<int>((leftSec % 3600) / 60);
+                    std::ostringstream leftStream;
+                    leftStream.imbue(std::locale::classic());
+                    leftStream << leftHours << u8"ч " << std::setw(2) << std::setfill('0') << leftMinutes << u8"м";
+                    leftText = leftStream.str();
+                }
+                ImGui::BulletText("%s | %s | %s | %s",
+                                  title.c_str(),
+                                  deadlineText.c_str(),
+                                  TaskPriorityLabel(task->priority),
+                                  leftText.c_str());
+            }
+            if (static_cast<int>(items.size()) > limit) {
+                ImGui::TextDisabled(u8"Еще: %d", static_cast<int>(items.size()) - limit);
+            }
+        };
+
+        DrawDeadlineList(u8"Просроченные", overdueDeadlines, LogLevelColor(AppLogLevel::Error), 3);
+        DrawDeadlineList(u8"Ближайшие 2 часа", upcoming2h, LogLevelColor(AppLogLevel::Warning), 4);
+        DrawDeadlineList(u8"Ближайшие 24 часа", upcoming24h, LogLevelColor(AppLogLevel::Info), 4);
+
+        if (overdueDeadlines.empty() && upcoming2h.empty() && upcoming24h.empty()) {
+            ImGui::TextDisabled(u8"Критичных дедлайнов нет.");
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
     auto ApplyBulkStatus = [&]() -> bool {
         struct PrevState {
             TaskEntry* task = nullptr;
