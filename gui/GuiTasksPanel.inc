@@ -74,6 +74,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
+    auto UpdateTaskPriority = [&state](const std::string& taskId, int newPriority) -> bool {
+        auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
+                               [&](const TaskEntry& item) { return item.id == taskId; });
+        if (it == state.tasks.end()) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        const int prev = NormalizeTaskPriority(it->priority);
+        const int next = NormalizeTaskPriority(newPriority);
+        if (prev == next) {
+            return true;
+        }
+        it->priority = next;
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            SetStatus(state, u8"Приоритет задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        it->priority = prev;
+        SetStatus(state, u8"Не удалось сохранить приоритет задачи.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
     auto FindTaskMutable = [&state](const std::string& taskId) -> TaskEntry* {
         auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
                                [&](const TaskEntry& item) { return item.id == taskId; });
@@ -204,6 +226,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.taskPlanProjectIndex = std::clamp(state.taskPlanProjectIndex, 0,
                 static_cast<int>(projectLabelPtrs.size()) - 1);
             state.taskPlanStatus = NormalizeTaskStatus(state.taskPlanStatus);
+            state.taskPlanPriority = NormalizeTaskPriority(state.taskPlanPriority);
 
             if (ImGui::BeginTable("tasks_create_form", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("create_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -226,6 +249,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo("##task_plan_status", &state.taskPlanStatus, statusLabels, IM_ARRAYSIZE(statusLabels));
+                ImGui::TextDisabled(u8"Приоритет");
+                const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##task_plan_priority", &state.taskPlanPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels));
                 ImGui::EndTable();
             }
 
@@ -293,6 +320,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     task.description = description;
                     task.deadlineAt = deadlineTs;
                     task.status = NormalizeTaskStatus(state.taskPlanStatus);
+                    task.priority = NormalizeTaskPriority(state.taskPlanPriority);
                     task.createdAt = nowSec;
                     task.assignees = assignees;
                     if (state.taskPlanProjectIndex > 0) {
@@ -308,6 +336,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         state.taskPlanTitle.fill('\0');
                         state.taskPlanDescription.fill('\0');
                         state.taskPlanStatus = kTaskStatusNew;
+                        state.taskPlanPriority = kTaskPriorityMedium;
                         for (auto& flag : state.taskPlanAssignees) flag = 0;
                         EnsureTaskPlanAssigneesSize(state);
                     } else {
@@ -335,9 +364,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         for (const auto& task : state.tasks) {
             ordered.push_back(&task);
         }
-        std::sort(ordered.begin(), ordered.end(), [](const TaskEntry* a, const TaskEntry* b) {
-            return a->createdAt > b->createdAt;
-        });
         const std::int64_t nowSec = NowSeconds();
         const std::int64_t minTs = state.tasksFilterDays > 0
             ? nowSec - static_cast<std::int64_t>(state.tasksFilterDays) * 86400
@@ -354,6 +380,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const std::string filterText = ResolveTaskProjectName(state, *task) + " " + task->title + " " + task->description;
             if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
             if (state.tasksFilterStatus > 0 && NormalizeTaskStatus(task->status) != (state.tasksFilterStatus - 1)) continue;
+            if (state.tasksFilterPriority > 0 && NormalizeTaskPriority(task->priority) != (state.tasksFilterPriority - 1)) continue;
             if (!filterProfileId.empty() && !TaskHasAssignee(*task, filterProfileId)) continue;
             if (minTs > 0 && task->createdAt < minTs) continue;
 
@@ -369,6 +396,26 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             filtered.push_back(task);
+        }
+
+        if (state.tasksSortMode == 1) {
+            std::sort(filtered.begin(), filtered.end(), [](const TaskEntry* a, const TaskEntry* b) {
+                const std::int64_t ad = (a->deadlineAt > 0) ? a->deadlineAt : std::numeric_limits<std::int64_t>::max();
+                const std::int64_t bd = (b->deadlineAt > 0) ? b->deadlineAt : std::numeric_limits<std::int64_t>::max();
+                if (ad != bd) return ad < bd;
+                return a->createdAt > b->createdAt;
+            });
+        } else if (state.tasksSortMode == 2) {
+            std::sort(filtered.begin(), filtered.end(), [](const TaskEntry* a, const TaskEntry* b) {
+                const int ap = NormalizeTaskPriority(a->priority);
+                const int bp = NormalizeTaskPriority(b->priority);
+                if (ap != bp) return ap > bp;
+                return a->createdAt > b->createdAt;
+            });
+        } else {
+            std::sort(filtered.begin(), filtered.end(), [](const TaskEntry* a, const TaskEntry* b) {
+                return a->createdAt > b->createdAt;
+            });
         }
         return filtered;
     };
@@ -444,6 +491,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     const char* statusLabelPtrs[] = {u8"Все статусы", u8"Новая", u8"В работе", u8"Выполнена"};
     state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0, static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
 
+    const char* priorityLabelPtrs[] = {u8"Все приоритеты", u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
+    state.tasksFilterPriority = std::clamp(state.tasksFilterPriority, 0, static_cast<int>(IM_ARRAYSIZE(priorityLabelPtrs)) - 1);
+
+    const char* sortLabelPtrs[] = {u8"Сначала новые", u8"Ближайший дедлайн", u8"Высокий приоритет"};
+    state.tasksSortMode = std::clamp(state.tasksSortMode, 0, static_cast<int>(IM_ARRAYSIZE(sortLabelPtrs)) - 1);
+
     const int dayOptions[] = {0, 7, 30, 90, 365};
     const char* dayLabels[] = {u8"Все время", u8"7 дней", u8"30 дней", u8"90 дней", u8"365 дней"};
     int dayIndex = 0;
@@ -470,6 +523,20 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                          statusLabelPtrs, IM_ARRAYSIZE(statusLabelPtrs))) {
             state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0,
                 static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
+        }
+        ImGui::TextDisabled(u8"Приоритет");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##tasks_priority", &state.tasksFilterPriority,
+                         priorityLabelPtrs, IM_ARRAYSIZE(priorityLabelPtrs))) {
+            state.tasksFilterPriority = std::clamp(state.tasksFilterPriority, 0,
+                static_cast<int>(IM_ARRAYSIZE(priorityLabelPtrs)) - 1);
+        }
+        ImGui::TextDisabled(u8"Сортировка");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##tasks_sort", &state.tasksSortMode,
+                         sortLabelPtrs, IM_ARRAYSIZE(sortLabelPtrs))) {
+            state.tasksSortMode = std::clamp(state.tasksSortMode, 0,
+                static_cast<int>(IM_ARRAYSIZE(sortLabelPtrs)) - 1);
         }
         ImGui::TextDisabled(u8"Период");
         ImGui::SetNextItemWidth(-1.0f);
@@ -503,11 +570,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
             }
         }
-    } else if (ImGui::BeginTable("tasks_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("tasks_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn("filter_profile", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("filter_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("filter_status", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("filter_priority", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
@@ -532,10 +600,19 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0,
                 static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
         }
+        ImGui::TableSetColumnIndex(4);
+        ImGui::TextDisabled(u8"Приоритет");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##tasks_priority", &state.tasksFilterPriority,
+                         priorityLabelPtrs, IM_ARRAYSIZE(priorityLabelPtrs))) {
+            state.tasksFilterPriority = std::clamp(state.tasksFilterPriority, 0,
+                static_cast<int>(IM_ARRAYSIZE(priorityLabelPtrs)) - 1);
+        }
         ImGui::EndTable();
-        if (ImGui::BeginTable("tasks_filters_extra", 3, ImGuiTableFlags_SizingStretchProp)) {
+        if (ImGui::BeginTable("tasks_filters_extra", 4, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("filter_period", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("filter_actions", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -548,6 +625,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 state.tasksFilterDays = dayOptions[dayIndex];
             }
             ImGui::TableSetColumnIndex(2);
+            ImGui::TextDisabled(u8"Сортировка");
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo(u8"##tasks_sort", &state.tasksSortMode,
+                             sortLabelPtrs, IM_ARRAYSIZE(sortLabelPtrs))) {
+                state.tasksSortMode = std::clamp(state.tasksSortMode, 0,
+                    static_cast<int>(IM_ARRAYSIZE(sortLabelPtrs)) - 1);
+            }
+            ImGui::TableSetColumnIndex(3);
             ImGui::TextDisabled(u8"Экспорт");
             if (ImGui::Button(u8"CSV", ImVec2(-1.0f, 0.0f))) {
                 std::filesystem::path outPath;
@@ -1069,7 +1154,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
     int visibleCount = 0;
     const bool allowBulkSelection = state.isAdmin;
-    const int tableColumns = allowBulkSelection ? 7 : 6;
+    const int tableColumns = allowBulkSelection ? 8 : 7;
     if (ImGui::BeginTable("tasks_table", tableColumns, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
         if (allowBulkSelection) {
@@ -1080,6 +1165,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn(u8"Приоритет", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 130.0f);
         ImGui::TableHeadersRow();
         const std::int64_t nowSec = NowSeconds();
@@ -1259,6 +1345,27 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             ImGui::TableSetColumnIndex(col++);
+            const int normalizedPriority = NormalizeTaskPriority(task->priority);
+            if (state.isAdmin) {
+                int draftPriority = normalizedPriority;
+                const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##task_priority_row", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
+                    UpdateTaskPriority(task->id, draftPriority);
+                }
+            } else {
+                if (normalizedPriority >= kTaskPriorityCritical) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityLabel(normalizedPriority));
+                } else if (normalizedPriority >= kTaskPriorityHigh) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityLabel(normalizedPriority));
+                } else if (normalizedPriority <= kTaskPriorityLow) {
+                    ImGui::TextDisabled("%s", TaskPriorityLabel(normalizedPriority));
+                } else {
+                    ImGui::TextUnformatted(TaskPriorityLabel(normalizedPriority));
+                }
+            }
+
+            ImGui::TableSetColumnIndex(col++);
             const int normalizedStatus = NormalizeTaskStatus(task->status);
             if (state.isAdmin) {
                 int draftStatus = normalizedStatus;
@@ -1288,7 +1395,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.filters.tasks.fill('\0');
             state.tasksFilterProfile = 0;
             state.tasksFilterStatus = 0;
+            state.tasksFilterPriority = 0;
             state.tasksFilterDays = 0;
+            state.tasksSortMode = 0;
             state.tasksQuickFilter = 0;
         }
     }
@@ -1323,6 +1432,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const std::string projectName = ResolveTaskProjectName(state, *expanded);
             ImGui::TextDisabled(u8"Проект: %s", projectName.empty() ? u8"Без проекта" : projectName.c_str());
             ImGui::TextDisabled(u8"Статус: %s", TaskStatusLabel(expanded->status));
+            ImGui::TextDisabled(u8"Приоритет: %s", TaskPriorityLabel(expanded->priority));
             if (expanded->deadlineAt > 0) {
                 const std::string deadlineText = FormatTimestamp(expanded->deadlineAt, "%Y-%m-%d %H:%M");
                 const bool overdue = expanded->deadlineAt < NowSeconds() && NormalizeTaskStatus(expanded->status) != kTaskStatusDone;
@@ -1382,6 +1492,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_detail_status", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
                     UpdateTaskStatus(editableTask->id, draftStatus);
+                }
+
+                int draftPriority = NormalizeTaskPriority(editableTask->priority);
+                const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##task_detail_priority", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
+                    UpdateTaskPriority(editableTask->id, draftPriority);
                 }
 
                 bool hasXp = false;

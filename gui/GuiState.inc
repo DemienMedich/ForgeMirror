@@ -161,6 +161,7 @@ struct GuiRuntimeState {
     std::array<char, 20> taskPlanDeadline{};
     int taskPlanProjectIndex = 0;
     int taskPlanStatus = 0;
+    int taskPlanPriority = 1;
     std::vector<char> taskPlanAssignees;
     std::vector<TaskProfileShare> taskShares;
     bool taskDeletePopupRequest = false;
@@ -168,7 +169,9 @@ struct GuiRuntimeState {
     int tasksFilterProfile = 0;
     int tasksFilterCategory = 0;
     int tasksFilterStatus = 0;
+    int tasksFilterPriority = 0;
     int tasksFilterDays = 0;
+    int tasksSortMode = 0; // 0=date, 1=deadline, 2=priority
     int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days
     std::unordered_set<std::string> taskSelectionIds;
     int taskBulkStatus = 0;

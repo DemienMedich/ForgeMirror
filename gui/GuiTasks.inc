@@ -5,6 +5,11 @@ static constexpr int kTaskStatusNew = 0;
 static constexpr int kTaskStatusInProgress = 1;
 static constexpr int kTaskStatusDone = 2;
 
+static constexpr int kTaskPriorityLow = 0;
+static constexpr int kTaskPriorityMedium = 1;
+static constexpr int kTaskPriorityHigh = 2;
+static constexpr int kTaskPriorityCritical = 3;
+
 static int NormalizeTaskStatus(int value) {
     return std::clamp(value, kTaskStatusNew, kTaskStatusDone);
 }
@@ -14,6 +19,19 @@ static const char* TaskStatusLabel(int status) {
         case kTaskStatusInProgress: return u8"В работе";
         case kTaskStatusDone: return u8"Выполнена";
         default: return u8"Новая";
+    }
+}
+
+static int NormalizeTaskPriority(int value) {
+    return std::clamp(value, kTaskPriorityLow, kTaskPriorityCritical);
+}
+
+static const char* TaskPriorityLabel(int priority) {
+    switch (NormalizeTaskPriority(priority)) {
+        case kTaskPriorityLow: return u8"Низкий";
+        case kTaskPriorityHigh: return u8"Высокий";
+        case kTaskPriorityCritical: return u8"Критический";
+        default: return u8"Средний";
     }
 }
 
@@ -300,6 +318,11 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
             entry.status = NormalizeTaskStatus(tasks_parse_int(*v, kTaskStatusNew));
             hasStatus = true;
         }
+        if (auto v = find_value("priority")) {
+            entry.priority = NormalizeTaskPriority(tasks_parse_int(*v, kTaskPriorityMedium));
+        } else {
+            entry.priority = kTaskPriorityMedium;
+        }
         if (auto v = find_value("category")) entry.category = tasks_parse_int(*v, 0);
         if (auto v = find_value("score")) entry.score = tasks_parse_int(*v, 0);
         if (auto v = find_value("baseXp")) entry.baseXp = tasks_parse_int(*v, 0);
@@ -338,6 +361,7 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
             << "\",\"description\":\"" << tasks_json_escape(entry.description)
             << "\",\"deadlineAt\":" << entry.deadlineAt
             << ",\"status\":" << NormalizeTaskStatus(entry.status)
+            << ",\"priority\":" << NormalizeTaskPriority(entry.priority)
             << ",\"category\":" << entry.category
             << ",\"score\":" << entry.score
             << ",\"baseXp\":" << entry.baseXp
@@ -424,7 +448,7 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
     // UTF-8 BOM for spreadsheet tools
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-    out << "Date,Deadline,Project,Task,Description,Status,Category,Score,Participants,BaseXP,BasePool\n";
+    out << "Date,Deadline,Project,Task,Description,Status,Priority,Category,Score,Participants,BaseXP,BasePool\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
         ++exportedCount;
@@ -438,6 +462,7 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
             << CsvEscape(task->title) << ","
             << CsvEscape(task->description) << ","
             << CsvEscape(TaskStatusLabel(task->status)) << ","
+            << CsvEscape(TaskPriorityLabel(task->priority)) << ","
             << CsvEscape(ClassificationLabel(task->category)) << ","
             << task->score << ","
             << CsvEscape(participants) << ","
@@ -478,6 +503,7 @@ static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEn
             << SanitizeLogLine(task->project) << " | "
             << SanitizeLogLine(task->title) << " | "
             << SanitizeLogLine(TaskStatusLabel(task->status)) << " | "
+            << SanitizeLogLine(TaskPriorityLabel(task->priority)) << " | "
             << SanitizeLogLine(ClassificationLabel(task->category)) << " | "
             << task->score << "/10 | "
             << SanitizeLogLine(participants) << "\n";

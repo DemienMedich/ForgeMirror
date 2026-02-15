@@ -43,6 +43,9 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.projects = LoadProjects(storageDir);
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();
+    state.taskPlanPriority = 1;
+    state.tasksFilterPriority = 0;
+    state.tasksSortMode = 0;
     state.tasksQuickFilter = 0;
     state.taskSelectionIds.clear();
     state.taskBulkStatus = kTaskStatusInProgress;

@@ -38,6 +38,7 @@ struct TaskEntry {
     std::string description;
     std::int64_t deadlineAt = 0;
     int status = 0; // 0=Новая, 1=В работе, 2=Выполнена
+    int priority = 1; // 0=Низкий, 1=Средний, 2=Высокий, 3=Критический
     int category = 0;
     int score = 0;
     int baseXp = 0;

@@ -37,7 +37,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             allowedSkillCount = 0;
             for (size_t i = 0; i < catalogSkills.size(); ++i) {
                 const auto profs = catalog.professions(catalogSkills[i]);
-                const bool allowed = profs.empty() | std::find(profs.begin(), profs.end(), profId) != profs.end();
+                const bool allowed = profs.empty() || std::find(profs.begin(), profs.end(), profId) != profs.end();
                 skillAllowed[i] = allowed ? 1 : 0;
                 if (allowed) {
                     allowedSkillCount += 1;
@@ -208,7 +208,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         ImGui::EndDisabled();
                     }
                     ImGui::TableSetColumnIndex(1);
-                    if (!share.selected | share.archived) ImGui::BeginDisabled();
+                    if (!share.selected || share.archived) ImGui::BeginDisabled();
                     ImGui::PushID(i);
                     int percent = share.percent;
                     if (ImGui::SliderInt("##member_share", &percent, 0, 100, "%d%%",
@@ -217,7 +217,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         percent = share.percent;
                     }
                     ImGui::PopID();
-                    if (!share.selected | share.archived) ImGui::EndDisabled();
+                    if (!share.selected || share.archived) ImGui::EndDisabled();
                     ImGui::TableSetColumnIndex(2);
                     if (!share.selected) {
                         ImGui::TextDisabled(u8"Не выбран");
@@ -473,7 +473,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     ratingCheck += std::max(0, entry.rating);
                 }
                 const bool hasContribution = ratingCheck > 0;
-                if (project.empty() | title.empty() | description.empty()) {
+                if (project.empty() || title.empty() || description.empty()) {
                     SetStatus(state, u8"Заполните проект, задачу и описание.", 1.0f, 0.45f, 0.45f);
                 } else if (memberCount <= 0) {
                     SetStatus(state, u8"Выберите хотя бы один профиль.", 1.0f, 0.45f, 0.45f);
@@ -503,13 +503,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     int fallbackIndex = -1;
                     for (int i = 0; i < static_cast<int>(state.taskShares.size()); ++i) {
                         auto& share = state.taskShares[i];
-                        if (!share.selected | share.archived) continue;
+                        if (!share.selected || share.archived) continue;
                         int percent = ClampToRange(share.percent, 0, 100);
                         if (percent <= 0) continue;
                         int sharePool = (basePool * percent) / 100;
                         participantPools[i] = sharePool;
                         remainder -= sharePool;
-                        if (fallbackIndex == -1 | percent > state.taskShares[fallbackIndex].percent) {
+                        if (fallbackIndex == -1 || percent > state.taskShares[fallbackIndex].percent) {
                             fallbackIndex = i;
                         }
                     }
@@ -530,6 +530,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     task.description = description;
                     task.deadlineAt = 0;
                     task.status = kTaskStatusDone;
+                    task.priority = kTaskPriorityMedium;
                     task.category = readyCategory;
                     task.score = readyScore;
                     task.baseXp = rules.categoryBaseXp[readyCategory];
@@ -543,7 +544,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
                     for (int i = 0; i < static_cast<int>(state.taskShares.size()); ++i) {
                         const auto& share = state.taskShares[i];
-                        if (!share.selected | share.archived) continue;
+                        if (!share.selected || share.archived) continue;
                         assignees.push_back(share.id);
                         if (!storage.set_active_profile(share.id)) continue;
                         auto profileOpt = storage.load_profile();
@@ -564,7 +565,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             int shareXp = (participantPool * percent) / 100;
                             xpDistribution[s] = shareXp;
                             remainderXp -= shareXp;
-                            if (fallbackSkill == -1 | percent > state.xpEntries[fallbackSkill].percent) {
+                            if (fallbackSkill == -1 || percent > state.xpEntries[fallbackSkill].percent) {
                                 fallbackSkill = s;
                             }
                         }
