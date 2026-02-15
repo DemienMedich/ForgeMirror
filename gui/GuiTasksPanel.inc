@@ -599,258 +599,334 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         state.taskBulkAssignees = std::move(next);
     }
 
+    auto ApplyBulkStatus = [&]() -> bool {
+        struct PrevState {
+            TaskEntry* task = nullptr;
+            int status = 0;
+        };
+        std::vector<PrevState> touched;
+        touched.reserve(state.taskSelectionIds.size());
+        int changed = 0;
+        int invalidTransition = 0;
+        const int targetStatus = NormalizeTaskStatus(state.taskBulkStatus);
+        for (const auto& taskId : state.taskSelectionIds) {
+            TaskEntry* task = FindTaskMutable(taskId);
+            if (!task) continue;
+            const int prev = NormalizeTaskStatus(task->status);
+            if (prev == targetStatus) {
+                continue;
+            }
+            if (!IsTaskStatusTransitionAllowed(prev, targetStatus)) {
+                invalidTransition += 1;
+                continue;
+            }
+            touched.push_back({task, prev});
+            task->status = targetStatus;
+            changed += 1;
+        }
+        if (changed <= 0) {
+            if (invalidTransition > 0) {
+                std::string msg = u8"Пропущено переходов статуса: " + std::to_string(invalidTransition);
+                SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
+            } else {
+                SetStatus(state, u8"Нет задач для изменения статуса.", 1.0f, 0.75f, 0.35f);
+            }
+            return false;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            std::string msg = u8"Статус обновлен для задач: " + std::to_string(changed);
+            if (invalidTransition > 0) {
+                msg += u8" (пропущено: " + std::to_string(invalidTransition) + ")";
+            }
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        for (const auto& prev : touched) {
+            if (prev.task) {
+                prev.task->status = prev.status;
+            }
+        }
+        SetStatus(state, u8"Не удалось сохранить массовое изменение статуса.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto ApplyBulkProject = [&]() -> bool {
+        const std::string nextProjectId = (state.taskBulkProjectIndex > 0 &&
+            (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
+            ? state.projects[state.taskBulkProjectIndex - 1].id
+            : std::string();
+        const std::string nextProjectName = (state.taskBulkProjectIndex > 0 &&
+            (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
+            ? state.projects[state.taskBulkProjectIndex - 1].name
+            : std::string();
+        struct PrevProject {
+            TaskEntry* task = nullptr;
+            std::string projectId;
+            std::string projectName;
+        };
+        std::vector<PrevProject> touched;
+        touched.reserve(state.taskSelectionIds.size());
+        int changed = 0;
+        for (const auto& taskId : state.taskSelectionIds) {
+            TaskEntry* task = FindTaskMutable(taskId);
+            if (!task) continue;
+            if (task->projectId == nextProjectId && task->project == nextProjectName) {
+                continue;
+            }
+            touched.push_back({task, task->projectId, task->project});
+            task->projectId = nextProjectId;
+            task->project = nextProjectName;
+            changed += 1;
+        }
+        if (changed <= 0) {
+            SetStatus(state, u8"Нет задач для изменения проекта.", 1.0f, 0.75f, 0.35f);
+            return false;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            std::string msg = u8"Проект обновлен для задач: " + std::to_string(changed);
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        for (const auto& prev : touched) {
+            if (prev.task) {
+                prev.task->projectId = prev.projectId;
+                prev.task->project = prev.projectName;
+            }
+        }
+        SetStatus(state, u8"Не удалось сохранить массовое изменение проекта.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto ApplyBulkDeadline = [&](bool clearDeadline) -> bool {
+        const std::string deadlineInput = clearDeadline ? std::string() : TrimStringGui(state.taskBulkDeadline.data());
+        std::int64_t parsedDeadline = 0;
+        if (!deadlineInput.empty() && !ParseTaskDeadlineInput(deadlineInput, parsedDeadline)) {
+            SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        struct PrevDeadline {
+            TaskEntry* task = nullptr;
+            std::int64_t deadlineAt = 0;
+        };
+        std::vector<PrevDeadline> touched;
+        touched.reserve(state.taskSelectionIds.size());
+        int changed = 0;
+        for (const auto& taskId : state.taskSelectionIds) {
+            TaskEntry* task = FindTaskMutable(taskId);
+            if (!task) continue;
+            const std::int64_t nextDeadline = deadlineInput.empty() ? 0 : parsedDeadline;
+            if (task->deadlineAt == nextDeadline) {
+                continue;
+            }
+            touched.push_back({task, task->deadlineAt});
+            task->deadlineAt = nextDeadline;
+            changed += 1;
+        }
+        if (changed <= 0) {
+            SetStatus(state, u8"Нет задач для изменения дедлайна.", 1.0f, 0.75f, 0.35f);
+            return false;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(changed);
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        for (const auto& prev : touched) {
+            if (prev.task) {
+                prev.task->deadlineAt = prev.deadlineAt;
+            }
+        }
+        SetStatus(state, u8"Не удалось сохранить массовое изменение дедлайна.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto ApplyBulkAssignees = [&]() -> bool {
+        std::vector<std::string> assignees;
+        for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+            if (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] && !state.profiles[i].archived) {
+                assignees.push_back(state.profiles[i].id);
+            }
+        }
+        if (assignees.empty()) {
+            SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        struct PrevAssignees {
+            TaskEntry* task = nullptr;
+            std::vector<std::string> assignees;
+        };
+        std::vector<PrevAssignees> touched;
+        touched.reserve(state.taskSelectionIds.size());
+        int changed = 0;
+        int lockedByXp = 0;
+        for (const auto& taskId : state.taskSelectionIds) {
+            TaskEntry* task = FindTaskMutable(taskId);
+            if (!task) continue;
+            if (!task->participants.empty()) {
+                lockedByXp += 1;
+                continue;
+            }
+            if (task->assignees == assignees) {
+                continue;
+            }
+            touched.push_back({task, task->assignees});
+            task->assignees = assignees;
+            changed += 1;
+        }
+        if (changed <= 0) {
+            if (lockedByXp > 0) {
+                std::string msg = u8"Пропущено задач с XP-участниками: " + std::to_string(lockedByXp);
+                SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
+            } else {
+                SetStatus(state, u8"Нет задач для изменения исполнителей.", 1.0f, 0.75f, 0.35f);
+            }
+            return false;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(changed);
+            if (lockedByXp > 0) {
+                msg += u8" (пропущено: " + std::to_string(lockedByXp) + ")";
+            }
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        for (const auto& prev : touched) {
+            if (prev.task) {
+                prev.task->assignees = prev.assignees;
+            }
+        }
+        SetStatus(state, u8"Не удалось сохранить массовое изменение исполнителей.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
     if (state.isAdmin) {
         if (BeginCard("tasks_bulk_actions")) {
             DrawCardHeader(u8"Массовые действия");
             const int selectedCount = static_cast<int>(state.taskSelectionIds.size());
-            ImGui::TextDisabled(u8"Выбрано задач: %d", selectedCount);
-
-            if (ImGui::Button(u8"Выбрать видимые", ImVec2(170.0f, 0.0f))) {
+            ImGui::TextDisabled(u8"Выбрано: %d", selectedCount);
+            ImGui::SameLine();
+            if (ImGui::SmallButton(u8"Видимые")) {
                 for (const TaskEntry* task : filtered) {
                     if (task) state.taskSelectionIds.insert(task->id);
                 }
             }
             ImGui::SameLine();
-            if (ImGui::Button(u8"Снять выбор", ImVec2(170.0f, 0.0f))) {
+            if (ImGui::SmallButton(u8"Снять")) {
                 state.taskSelectionIds.clear();
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(u8"Удалить")) {
+                state.taskBulkDeletePopupRequest = true;
             }
 
             const bool hasSelection = !state.taskSelectionIds.empty();
             if (!hasSelection) {
-                ImGui::TextDisabled(u8"Отметьте задачи чекбоксами в таблице ниже.");
+                ImGui::TextDisabled(u8"Отметьте задачи чекбоксами в таблице.");
             }
             if (!hasSelection) ImGui::BeginDisabled();
 
-            ImGui::Separator();
-            ImGui::TextDisabled(u8"Статус");
-            ImGui::SetNextItemWidth(160.0f);
             const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
             state.taskBulkStatus = std::clamp(state.taskBulkStatus, kTaskStatusNew, kTaskStatusDone);
-            ImGui::Combo("##task_bulk_status", &state.taskBulkStatus, statusLabels, IM_ARRAYSIZE(statusLabels));
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Применить статус", ImVec2(170.0f, 0.0f))) {
-                struct PrevState {
-                    TaskEntry* task = nullptr;
-                    int status = 0;
-                };
-                std::vector<PrevState> touched;
-                touched.reserve(state.taskSelectionIds.size());
-                int changed = 0;
-                int invalidTransition = 0;
-                const int targetStatus = NormalizeTaskStatus(state.taskBulkStatus);
-                for (const auto& taskId : state.taskSelectionIds) {
-                    TaskEntry* task = FindTaskMutable(taskId);
-                    if (!task) continue;
-                    const int prev = NormalizeTaskStatus(task->status);
-                    if (prev == targetStatus) {
-                        continue;
-                    }
-                    if (!IsTaskStatusTransitionAllowed(prev, targetStatus)) {
-                        invalidTransition += 1;
-                        continue;
-                    }
-                    touched.push_back({task, prev});
-                    task->status = targetStatus;
-                    changed += 1;
+
+            if (ImGui::BeginTable("tasks_bulk_compact_row1", 4, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("bulk_status", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableSetupColumn("bulk_status_btn", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+                ImGui::TableSetupColumn("bulk_project", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableSetupColumn("bulk_project_btn", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##task_bulk_status", &state.taskBulkStatus, statusLabels, IM_ARRAYSIZE(statusLabels));
+
+                ImGui::TableSetColumnIndex(1);
+                if (ImGui::Button(u8"Применить", ImVec2(-1.0f, 0.0f))) {
+                    ApplyBulkStatus();
                 }
-                if (changed <= 0) {
-                    if (invalidTransition > 0) {
-                        std::string msg = u8"Пропущено переходов статуса: " + std::to_string(invalidTransition);
-                        SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
-                    } else {
-                        SetStatus(state, u8"Нет задач для изменения статуса.", 1.0f, 0.75f, 0.35f);
-                    }
-                } else if (SaveTasks(state.storageDir, state.tasks)) {
-                    std::string msg = u8"Статус обновлен для задач: " + std::to_string(changed);
-                    if (invalidTransition > 0) {
-                        msg += u8" (пропущено: " + std::to_string(invalidTransition) + ")";
-                    }
-                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-                } else {
-                    for (const auto& prev : touched) {
-                        if (prev.task) {
-                            prev.task->status = prev.status;
-                        }
-                    }
-                    SetStatus(state, u8"Не удалось сохранить массовое изменение статуса.", 1.0f, 0.45f, 0.45f);
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##task_bulk_project", &state.taskBulkProjectIndex,
+                             projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
+
+                ImGui::TableSetColumnIndex(3);
+                if (ImGui::Button(u8"Проект", ImVec2(-1.0f, 0.0f))) {
+                    ApplyBulkProject();
                 }
+                ImGui::EndTable();
             }
 
-            ImGui::TextDisabled(u8"Проект");
-            ImGui::SetNextItemWidth(220.0f);
-            ImGui::Combo("##task_bulk_project", &state.taskBulkProjectIndex,
-                         projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Назначить проект", ImVec2(170.0f, 0.0f))) {
-                const std::string nextProjectId = (state.taskBulkProjectIndex > 0 &&
-                    (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
-                    ? state.projects[state.taskBulkProjectIndex - 1].id
-                    : std::string();
-                const std::string nextProjectName = (state.taskBulkProjectIndex > 0 &&
-                    (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
-                    ? state.projects[state.taskBulkProjectIndex - 1].name
-                    : std::string();
-                struct PrevProject {
-                    TaskEntry* task = nullptr;
-                    std::string projectId;
-                    std::string projectName;
-                };
-                std::vector<PrevProject> touched;
-                touched.reserve(state.taskSelectionIds.size());
-                int changed = 0;
-                for (const auto& taskId : state.taskSelectionIds) {
-                    TaskEntry* task = FindTaskMutable(taskId);
-                    if (!task) continue;
-                    if (task->projectId == nextProjectId && task->project == nextProjectName) {
-                        continue;
-                    }
-                    touched.push_back({task, task->projectId, task->project});
-                    task->projectId = nextProjectId;
-                    task->project = nextProjectName;
-                    changed += 1;
+            if (ImGui::BeginTable("tasks_bulk_compact_row2", 4, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("bulk_deadline", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                ImGui::TableSetupColumn("bulk_deadline_set", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+                ImGui::TableSetupColumn("bulk_deadline_clear", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+                ImGui::TableSetupColumn("bulk_assignees", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextWithHint("##task_bulk_deadline", u8"YYYY-MM-DD HH:MM",
+                                         state.taskBulkDeadline.data(), state.taskBulkDeadline.size());
+
+                ImGui::TableSetColumnIndex(1);
+                if (ImGui::Button(u8"Дедлайн", ImVec2(-1.0f, 0.0f))) {
+                    ApplyBulkDeadline(false);
                 }
-                if (changed <= 0) {
-                    SetStatus(state, u8"Нет задач для изменения проекта.", 1.0f, 0.75f, 0.35f);
-                } else if (SaveTasks(state.storageDir, state.tasks)) {
-                    std::string msg = u8"Проект обновлен для задач: " + std::to_string(changed);
-                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-                } else {
-                    for (const auto& prev : touched) {
-                        if (prev.task) {
-                            prev.task->projectId = prev.projectId;
-                            prev.task->project = prev.projectName;
-                        }
-                    }
-                    SetStatus(state, u8"Не удалось сохранить массовое изменение проекта.", 1.0f, 0.45f, 0.45f);
+
+                ImGui::TableSetColumnIndex(2);
+                if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+                    ApplyBulkDeadline(true);
                 }
+
+                ImGui::TableSetColumnIndex(3);
+                if (ImGui::Button(u8"Исполнители", ImVec2(-1.0f, 0.0f))) {
+                    ImGui::OpenPopup("tasks_bulk_assignees_popup");
+                }
+                ImGui::EndTable();
             }
 
-            ImGui::TextDisabled(u8"Дедлайн (YYYY-MM-DD HH:MM)");
-            ImGui::SetNextItemWidth(220.0f);
-            ImGui::InputTextWithHint("##task_bulk_deadline", u8"2026-02-14 18:00",
-                                     state.taskBulkDeadline.data(), state.taskBulkDeadline.size());
-            ImGui::SameLine();
-            if (ImGui::Button(u8"Установить дедлайн", ImVec2(170.0f, 0.0f))) {
-                const std::string deadlineInput = TrimStringGui(state.taskBulkDeadline.data());
-                std::int64_t parsedDeadline = 0;
-                if (!deadlineInput.empty() && !ParseTaskDeadlineInput(deadlineInput, parsedDeadline)) {
-                    SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
-                } else {
-                    struct PrevDeadline {
-                        TaskEntry* task = nullptr;
-                        std::int64_t deadlineAt = 0;
-                    };
-                    std::vector<PrevDeadline> touched;
-                    touched.reserve(state.taskSelectionIds.size());
-                    int changed = 0;
-                    for (const auto& taskId : state.taskSelectionIds) {
-                        TaskEntry* task = FindTaskMutable(taskId);
-                        if (!task) continue;
-                        const std::int64_t nextDeadline = deadlineInput.empty() ? 0 : parsedDeadline;
-                        if (task->deadlineAt == nextDeadline) {
-                            continue;
-                        }
-                        touched.push_back({task, task->deadlineAt});
-                        task->deadlineAt = nextDeadline;
-                        changed += 1;
-                    }
-                    if (changed <= 0) {
-                        SetStatus(state, u8"Нет задач для изменения дедлайна.", 1.0f, 0.75f, 0.35f);
-                    } else if (SaveTasks(state.storageDir, state.tasks)) {
-                        std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(changed);
-                        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-                    } else {
-                        for (const auto& prev : touched) {
-                            if (prev.task) {
-                                prev.task->deadlineAt = prev.deadlineAt;
-                            }
-                        }
-                        SetStatus(state, u8"Не удалось сохранить массовое изменение дедлайна.", 1.0f, 0.45f, 0.45f);
-                    }
-                }
-            }
-
-            if (ImGui::TreeNode(u8"Исполнители")) {
-                for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
-                    const auto& info = state.profiles[i];
-                    bool checked = (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] != 0);
-                    if (info.archived) ImGui::BeginDisabled();
-                    ImGui::PushID(info.id.c_str());
-                    if (ImGui::Checkbox("##bulk_assign", &checked)) {
-                        if (i < static_cast<int>(state.taskBulkAssignees.size())) {
-                            state.taskBulkAssignees[i] = checked ? 1 : 0;
-                        }
-                    }
-                    ImGui::PopID();
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(info.name.c_str());
-                    if (info.archived) {
-                        ImGui::SameLine();
-                        ImGui::TextDisabled(u8"(архив)");
-                        ImGui::EndDisabled();
-                    }
-                }
-                if (ImGui::Button(u8"Назначить исполнителей", ImVec2(170.0f, 0.0f))) {
-                    std::vector<std::string> assignees;
+            if (ImGui::BeginPopup("tasks_bulk_assignees_popup")) {
+                ImGui::TextDisabled(u8"Массовое назначение исполнителей");
+                if (ImGui::BeginTable("bulk_assignees_table", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("bulk_assignee_col1", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    ImGui::TableSetupColumn("bulk_assignee_col2", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
-                        if (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] && !state.profiles[i].archived) {
-                            assignees.push_back(state.profiles[i].id);
+                        const auto& info = state.profiles[i];
+                        if (i % 2 == 0) {
+                            ImGui::TableNextRow();
+                        }
+                        ImGui::TableSetColumnIndex(i % 2);
+                        bool checked = (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] != 0);
+                        if (info.archived) ImGui::BeginDisabled();
+                        ImGui::PushID(info.id.c_str());
+                        if (ImGui::Checkbox("##bulk_assign", &checked)) {
+                            if (i < static_cast<int>(state.taskBulkAssignees.size())) {
+                                state.taskBulkAssignees[i] = checked ? 1 : 0;
+                            }
+                        }
+                        ImGui::PopID();
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(info.name.c_str());
+                        if (info.archived) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled(u8"(архив)");
+                            ImGui::EndDisabled();
                         }
                     }
-                    if (assignees.empty()) {
-                        SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
-                    } else {
-                        struct PrevAssignees {
-                            TaskEntry* task = nullptr;
-                            std::vector<std::string> assignees;
-                        };
-                        std::vector<PrevAssignees> touched;
-                        touched.reserve(state.taskSelectionIds.size());
-                        int changed = 0;
-                        int lockedByXp = 0;
-                        for (const auto& taskId : state.taskSelectionIds) {
-                            TaskEntry* task = FindTaskMutable(taskId);
-                            if (!task) continue;
-                            if (!task->participants.empty()) {
-                                lockedByXp += 1;
-                                continue;
-                            }
-                            if (task->assignees == assignees) {
-                                continue;
-                            }
-                            touched.push_back({task, task->assignees});
-                            task->assignees = assignees;
-                            changed += 1;
-                        }
-                        if (changed <= 0) {
-                            if (lockedByXp > 0) {
-                                std::string msg = u8"Пропущено задач с XP-участниками: " + std::to_string(lockedByXp);
-                                SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
-                            } else {
-                                SetStatus(state, u8"Нет задач для изменения исполнителей.", 1.0f, 0.75f, 0.35f);
-                            }
-                        } else if (SaveTasks(state.storageDir, state.tasks)) {
-                            std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(changed);
-                            if (lockedByXp > 0) {
-                                msg += u8" (пропущено: " + std::to_string(lockedByXp) + ")";
-                            }
-                            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-                        } else {
-                            for (const auto& prev : touched) {
-                                if (prev.task) {
-                                    prev.task->assignees = prev.assignees;
-                                }
-                            }
-                            SetStatus(state, u8"Не удалось сохранить массовое изменение исполнителей.", 1.0f, 0.45f, 0.45f);
-                        }
+                    ImGui::EndTable();
+                }
+                if (ImGui::Button(u8"Применить", ImVec2(120.0f, 0.0f))) {
+                    if (ApplyBulkAssignees()) {
+                        ImGui::CloseCurrentPopup();
                     }
                 }
-                ImGui::TreePop();
+                ImGui::SameLine();
+                if (ImGui::Button(u8"Отмена", ImVec2(120.0f, 0.0f))) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
 
-            if (ImGui::Button(u8"Удалить выбранные", ImVec2(170.0f, 0.0f))) {
-                state.taskBulkDeletePopupRequest = true;
-            }
             if (!hasSelection) ImGui::EndDisabled();
         }
         EndCard();
