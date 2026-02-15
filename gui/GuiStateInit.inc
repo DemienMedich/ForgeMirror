@@ -40,6 +40,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     ApplyUiFiltersToState(state);
     ApplyProfileAccessSettings(state);
     state.tasks = state.modules.tasks ? LoadTasks(storageDir) : std::vector<TaskEntry>();
+    state.taskAudit = state.modules.tasks ? LoadTaskAudit(storageDir) : std::vector<TaskAuditEntry>();
     state.projects = LoadProjects(storageDir);
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();

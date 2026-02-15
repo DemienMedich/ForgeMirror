@@ -20,9 +20,12 @@ UI аудит:
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: taskmanager. Версия: 0.3.82.
+  - Ветка: taskmanager. Версия: 0.3.83.
   - Последнее изменение: locale-independent storage.json + устойчивый cloud-парсинг.
 - Done:
+  - Задачи: добавлен журнал изменений `meta/task-audit.log` (create/status/priority/project/deadline/assignees/delete + bulk-операции).
+  - Задачи: в панели задач добавлен блок `Последние изменения` (время, актор, задача, поле, изменение).
+  - Синхронизация: `meta/task-audit.log` включен в cloud push/pull/whitelist-cleanup и health-check whitelist.
   - Задачи: добавлен блок "Скоро дедлайн" + авто-напоминания 24ч/2ч с анти-спам защитой.
   - Задачи: добавлен приоритет (модель+UI+фильтр+сортировка+inline-редактирование).
   - Задачи: блок массовых действий уплотнён (компактный layout + popup для исполнителей).

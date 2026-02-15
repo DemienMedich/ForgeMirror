@@ -39,6 +39,109 @@ static std::filesystem::path TasksStoragePath(const std::filesystem::path& stora
     return storageDir / "meta" / "tasks.json";
 }
 
+static std::filesystem::path TaskAuditStoragePath(const std::filesystem::path& storageDir) {
+    return storageDir / "meta" / "task-audit.log";
+}
+
+static std::string tasks_sanitize_log_token(std::string value) {
+    for (char& ch : value) {
+        if (ch == '\r' || ch == '\n' || ch == '|') ch = ' ';
+    }
+    return TrimStringGui(value);
+}
+
+static std::int64_t tasks_parse_log_ts(const std::string& value) {
+    try {
+        return std::stoll(value);
+    } catch (...) {
+        return 0;
+    }
+}
+
+static std::vector<TaskAuditEntry> LoadTaskAudit(const std::filesystem::path& storageDir, size_t maxEntries = 200) {
+    std::vector<TaskAuditEntry> out;
+    std::ifstream in(TaskAuditStoragePath(storageDir), std::ios::binary);
+    if (!in) return out;
+    std::string line;
+    bool firstLine = true;
+    while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
+        std::string trimmed = TrimStringGui(line);
+        if (trimmed.empty()) continue;
+        std::array<std::string, 6> parts{};
+        size_t start = 0;
+        int idx = 0;
+        while (idx < 5) {
+            size_t sep = trimmed.find('|', start);
+            if (sep == std::string::npos) break;
+            parts[static_cast<size_t>(idx)] = trimmed.substr(start, sep - start);
+            start = sep + 1;
+            ++idx;
+        }
+        if (idx != 5 || start > trimmed.size()) continue;
+        parts[5] = trimmed.substr(start);
+        TaskAuditEntry entry;
+        entry.timestamp = tasks_parse_log_ts(parts[0]);
+        entry.actor = parts[1];
+        entry.taskId = parts[2];
+        entry.field = parts[3];
+        entry.oldValue = parts[4];
+        entry.newValue = parts[5];
+        if (entry.taskId.empty() || entry.field.empty()) continue;
+        out.push_back(std::move(entry));
+    }
+    if (maxEntries > 0 && out.size() > maxEntries) {
+        out.erase(out.begin(), out.end() - maxEntries);
+    }
+    return out;
+}
+
+static bool AppendTaskAudit(const std::filesystem::path& storageDir,
+                            const std::string& actor,
+                            const std::string& taskId,
+                            const std::string& field,
+                            const std::string& oldValue,
+                            const std::string& newValue,
+                            std::vector<TaskAuditEntry>* cache = nullptr) {
+    const std::string safeTaskId = tasks_sanitize_log_token(taskId);
+    const std::string safeField = tasks_sanitize_log_token(field);
+    if (safeTaskId.empty() || safeField.empty()) return false;
+
+    std::error_code ec;
+    const auto path = TaskAuditStoragePath(storageDir);
+    std::filesystem::create_directories(path.parent_path(), ec);
+    std::ofstream out(path, std::ios::binary | std::ios::app);
+    if (!out) return false;
+
+    TaskAuditEntry entry;
+    entry.timestamp = NowSeconds();
+    entry.actor = tasks_sanitize_log_token(actor);
+    entry.taskId = safeTaskId;
+    entry.field = safeField;
+    entry.oldValue = tasks_sanitize_log_token(oldValue);
+    entry.newValue = tasks_sanitize_log_token(newValue);
+
+    out << entry.timestamp << "|"
+        << entry.actor << "|"
+        << entry.taskId << "|"
+        << entry.field << "|"
+        << entry.oldValue << "|"
+        << entry.newValue << "\n";
+    if (!out.good()) return false;
+
+    if (cache) {
+        cache->push_back(entry);
+        constexpr size_t kTaskAuditMaxEntries = 200;
+        if (cache->size() > kTaskAuditMaxEntries) {
+            cache->erase(cache->begin(), cache->end() - kTaskAuditMaxEntries);
+        }
+    }
+    return true;
+}
+
 static std::string tasks_read_all(const std::filesystem::path& p) {
     std::ifstream in(p, std::ios::binary);
     if (!in) return {};

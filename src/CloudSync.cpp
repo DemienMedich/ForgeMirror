@@ -783,7 +783,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
         "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
-        "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "seed.merged"
+        "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "seed.merged"
     };
     bool any = false;
     for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
@@ -863,7 +863,7 @@ bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem:
         }
     }
     std::unordered_set<std::string> allowedMetaFiles = {
-        "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log"
+        "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log"
     };
     if (!manifestName.empty() && (manifestDir.empty() || manifestDir == "meta")) {
         allowedMetaFiles.insert(manifestName);
@@ -1182,6 +1182,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
         CopyFileIfExists(cloudStorage, localStorage, result.stats, true, &ioError);
     }
     CopyFileIfExists(cloudRoot / "meta" / "profile-audit.log", storageDir / "meta" / "profile-audit.log", result.stats, true, &ioError);
+    CopyFileIfExists(cloudRoot / "meta" / "task-audit.log", storageDir / "meta" / "task-audit.log", result.stats, true, &ioError);
     CopyFlatDirFiles(cloudRoot / "meta" / "patch-notes", storageDir / "meta" / "patch-notes", result.stats, true, &ioError);
     result.storageConflict = storageConflict;
     result.storageConflictPath = storageConflictPath;
@@ -1231,6 +1232,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyFileIfExistsPush(storageDir / "meta" / "banner.json", cloudRoot / "meta" / "banner.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "storage.json", cloudRoot / "meta" / "storage.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "profile-audit.log", cloudRoot / "meta" / "profile-audit.log", result.stats, &ioError);
+    CopyFileIfExistsPush(storageDir / "meta" / "task-audit.log", cloudRoot / "meta" / "task-audit.log", result.stats, &ioError);
     CopyFlatDirFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", result.stats, false, &ioError);
     int removed = 0;
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
@@ -1245,6 +1247,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
         || RemoveFileIfMissing(storageDir / "meta" / "banner.json", cloudRoot / "meta" / "banner.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "storage.json", cloudRoot / "meta" / "storage.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "profile-audit.log", cloudRoot / "meta" / "profile-audit.log", removed)
+        || RemoveFileIfMissing(storageDir / "meta" / "task-audit.log", cloudRoot / "meta" / "task-audit.log", removed)
         || RemoveOrphanedFlatFiles(storageDir / "meta" / "patch-notes", cloudRoot / "meta" / "patch-notes", removed)
         || RemoveStrayCloudFiles(config, cloudRoot, removed);
     if (config.updateManifestOnPush) {

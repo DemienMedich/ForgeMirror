@@ -48,6 +48,15 @@ struct TaskEntry {
     std::vector<TaskParticipant> participants;
 };
 
+struct TaskAuditEntry {
+    std::int64_t timestamp = 0;
+    std::string actor;
+    std::string taskId;
+    std::string field;
+    std::string oldValue;
+    std::string newValue;
+};
+
 struct ProjectEntry {
     std::string id;
     std::string name;

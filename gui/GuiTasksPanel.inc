@@ -48,7 +48,65 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return true;
     };
 
-    auto UpdateTaskStatus = [&state, &IsTaskStatusTransitionAllowed](const std::string& taskId, int newStatus) -> bool {
+    auto ResolveTaskActor = [&state]() -> std::string {
+        if (state.isAdmin) return "admin";
+        if (state.active) {
+            return "[" + state.active->id + "] " + state.active->profile.name();
+        }
+        return "system";
+    };
+
+    auto ResolveProfileAuditLabel = [&state](const std::string& profileId) -> std::string {
+        for (const auto& info : state.profiles) {
+            if (info.id == profileId) {
+                return "[" + info.id + "] " + info.name;
+            }
+        }
+        return profileId;
+    };
+
+    auto FormatAssigneesAudit = [&](const std::vector<std::string>& assignees) -> std::string {
+        if (assignees.empty()) return u8"—";
+        std::ostringstream out;
+        out.imbue(std::locale::classic());
+        bool first = true;
+        for (const auto& profileId : assignees) {
+            if (profileId.empty()) continue;
+            if (!first) out << ", ";
+            first = false;
+            out << ResolveProfileAuditLabel(profileId);
+        }
+        std::string value = out.str();
+        return value.empty() ? std::string(u8"—") : value;
+    };
+
+    auto FormatDeadlineAudit = [](std::int64_t deadlineAt) -> std::string {
+        return deadlineAt > 0 ? FormatTimestamp(deadlineAt, "%Y-%m-%d %H:%M") : std::string(u8"—");
+    };
+
+    auto ResolveProjectAuditLabel = [&state](const std::string& projectId, const std::string& fallback) -> std::string {
+        if (!projectId.empty()) {
+            for (const auto& project : state.projects) {
+                if (project.id == projectId) {
+                    return project.name;
+                }
+            }
+        }
+        if (!fallback.empty()) return fallback;
+        return u8"Без проекта";
+    };
+
+    auto AppendTaskAuditEntry = [&](const std::string& taskId,
+                                   const std::string& field,
+                                   const std::string& oldValue,
+                                   const std::string& newValue) {
+        if (oldValue == newValue) return;
+        if (!AppendTaskAudit(state.storageDir, ResolveTaskActor(), taskId, field, oldValue, newValue, &state.taskAudit)) {
+            AppendAppLog(state, AppLogLevel::Warning, u8"Задачи", u8"Не удалось записать task-audit.log");
+        }
+    };
+
+    auto UpdateTaskStatus = [&state, &IsTaskStatusTransitionAllowed, &AppendTaskAuditEntry](const std::string& taskId, int newStatus) -> bool {
         auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
                                [&](const TaskEntry& item) { return item.id == taskId; });
         if (it == state.tasks.end()) {
@@ -64,8 +122,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             SetStatus(state, u8"Недопустимый переход статуса (Выполнена -> Новая).", 1.0f, 0.75f, 0.35f);
             return false;
         }
+        const std::string oldLabel = TaskStatusLabel(prev);
+        const std::string newLabel = TaskStatusLabel(next);
         it->status = next;
         if (SaveTasks(state.storageDir, state.tasks)) {
+            AppendTaskAuditEntry(taskId, "status", oldLabel, newLabel);
             SetStatus(state, u8"Статус задачи обновлен.", 0.45f, 0.9f, 0.45f);
             return true;
         }
@@ -74,7 +135,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
-    auto UpdateTaskPriority = [&state](const std::string& taskId, int newPriority) -> bool {
+    auto UpdateTaskPriority = [&state, &AppendTaskAuditEntry](const std::string& taskId, int newPriority) -> bool {
         auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
                                [&](const TaskEntry& item) { return item.id == taskId; });
         if (it == state.tasks.end()) {
@@ -86,8 +147,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (prev == next) {
             return true;
         }
+        const std::string oldLabel = TaskPriorityLabel(prev);
+        const std::string newLabel = TaskPriorityLabel(next);
         it->priority = next;
         if (SaveTasks(state.storageDir, state.tasks)) {
+            AppendTaskAuditEntry(taskId, "priority", oldLabel, newLabel);
             SetStatus(state, u8"Приоритет задачи обновлен.", 0.45f, 0.9f, 0.45f);
             return true;
         }
@@ -125,7 +189,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (task->projectId == prevId && task->project == prevName) {
             return true;
         }
+        const std::string oldProject = ResolveProjectAuditLabel(prevId, prevName);
+        const std::string newProject = ResolveProjectAuditLabel(task->projectId, task->project);
         if (SaveTasks(state.storageDir, state.tasks)) {
+            AppendTaskAuditEntry(taskId, "project", oldProject, newProject);
             SetStatus(state, u8"Проект задачи обновлен.", 0.45f, 0.9f, 0.45f);
             return true;
         }
@@ -156,7 +223,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (task->deadlineAt == prevDeadline) {
             return true;
         }
+        const std::string oldDeadline = FormatDeadlineAudit(prevDeadline);
+        const std::string newDeadline = FormatDeadlineAudit(task->deadlineAt);
         if (SaveTasks(state.storageDir, state.tasks)) {
+            AppendTaskAuditEntry(taskId, "deadline", oldDeadline, newDeadline);
             SetStatus(state, u8"Дедлайн задачи обновлен.", 0.45f, 0.9f, 0.45f);
             return true;
         }
@@ -184,7 +254,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (task->assignees == prevAssignees) {
             return true;
         }
+        const std::string oldAssignees = FormatAssigneesAudit(prevAssignees);
+        const std::string newAssignees = FormatAssigneesAudit(task->assignees);
         if (SaveTasks(state.storageDir, state.tasks)) {
+            AppendTaskAuditEntry(taskId, "assignees", oldAssignees, newAssignees);
             SetStatus(state, u8"Исполнители задачи обновлены.", 0.45f, 0.9f, 0.45f);
             return true;
         }
@@ -331,7 +404,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         }
                     }
                     state.tasks.push_back(std::move(task));
+                    const TaskEntry& createdTask = state.tasks.back();
                     if (SaveTasks(state.storageDir, state.tasks)) {
+                        AppendTaskAuditEntry(createdTask.id, "create", u8"—", TaskDisplayTitle(createdTask));
                         SetStatus(state, u8"Задача создана.", 0.45f, 0.9f, 0.45f);
                         state.taskPlanTitle.fill('\0');
                         state.taskPlanDescription.fill('\0');
@@ -820,6 +895,54 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     EndCard();
     ImGui::Spacing();
 
+    if (BeginCard("tasks_audit_card")) {
+        DrawCardHeader(u8"Последние изменения");
+        constexpr int kTaskAuditPreview = 8;
+        if (state.taskAudit.empty()) {
+            ImGui::TextDisabled(u8"Изменений пока нет.");
+        } else if (ImGui::BeginTable("tasks_audit_table", 5,
+                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("audit_time", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("audit_actor", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+            ImGui::TableSetupColumn("audit_task", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("audit_field", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn("audit_change", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+            ImGui::TableHeadersRow();
+            int shown = 0;
+            for (auto it = state.taskAudit.rbegin(); it != state.taskAudit.rend() && shown < kTaskAuditPreview; ++it, ++shown) {
+                const TaskAuditEntry& row = *it;
+                std::string taskLabel = row.taskId;
+                auto taskIt = std::find_if(state.tasks.begin(), state.tasks.end(),
+                    [&](const TaskEntry& task) { return task.id == row.taskId; });
+                if (taskIt != state.tasks.end()) {
+                    const std::string title = TaskDisplayTitle(*taskIt);
+                    if (!title.empty()) taskLabel = title;
+                }
+                const std::string timeLabel = row.timestamp > 0
+                    ? FormatTimestamp(row.timestamp, "%d.%m %H:%M")
+                    : std::string(u8"—");
+                std::string changeLabel = row.oldValue;
+                changeLabel += " -> ";
+                changeLabel += row.newValue;
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(timeLabel.c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(row.actor.empty() ? u8"system" : row.actor.c_str());
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextUnformatted(taskLabel.c_str());
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextUnformatted(row.field.c_str());
+                ImGui::TableSetColumnIndex(4);
+                ImGui::TextUnformatted(changeLabel.c_str());
+            }
+            ImGui::EndTable();
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
     auto ApplyBulkStatus = [&]() -> bool {
         struct PrevState {
             TaskEntry* task = nullptr;
@@ -855,6 +978,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             return false;
         }
         if (SaveTasks(state.storageDir, state.tasks)) {
+            for (const auto& prev : touched) {
+                if (!prev.task) continue;
+                AppendTaskAuditEntry(prev.task->id, "status", TaskStatusLabel(prev.status), TaskStatusLabel(targetStatus));
+            }
             std::string msg = u8"Статус обновлен для задач: " + std::to_string(changed);
             if (invalidTransition > 0) {
                 msg += u8" (пропущено: " + std::to_string(invalidTransition) + ")";
@@ -904,6 +1031,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             return false;
         }
         if (SaveTasks(state.storageDir, state.tasks)) {
+            for (const auto& prev : touched) {
+                if (!prev.task) continue;
+                AppendTaskAuditEntry(prev.task->id, "project",
+                    ResolveProjectAuditLabel(prev.projectId, prev.projectName),
+                    ResolveProjectAuditLabel(prev.task->projectId, prev.task->project));
+            }
             std::string msg = u8"Проект обновлен для задач: " + std::to_string(changed);
             SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
             return true;
@@ -948,6 +1081,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             return false;
         }
         if (SaveTasks(state.storageDir, state.tasks)) {
+            for (const auto& prev : touched) {
+                if (!prev.task) continue;
+                AppendTaskAuditEntry(prev.task->id, "deadline",
+                    FormatDeadlineAudit(prev.deadlineAt),
+                    FormatDeadlineAudit(prev.task->deadlineAt));
+            }
             std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(changed);
             SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
             return true;
@@ -1004,6 +1143,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             return false;
         }
         if (SaveTasks(state.storageDir, state.tasks)) {
+            for (const auto& prev : touched) {
+                if (!prev.task) continue;
+                AppendTaskAuditEntry(prev.task->id, "assignees",
+                    FormatAssigneesAudit(prev.assignees),
+                    FormatAssigneesAudit(prev.task->assignees));
+            }
             std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(changed);
             if (lockedByXp > 0) {
                 msg += u8" (пропущено: " + std::to_string(lockedByXp) + ")";
@@ -1667,7 +1812,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             int removed = 0;
             int rollbackFailed = 0;
             std::vector<std::string> idsToErase;
+            std::vector<TaskEntry> removedTasks;
             idsToErase.reserve(state.taskSelectionIds.size());
+            removedTasks.reserve(state.taskSelectionIds.size());
             for (const auto& taskId : state.taskSelectionIds) {
                 auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
                                        [&](const TaskEntry& item) { return item.id == taskId; });
@@ -1685,6 +1832,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     continue;
                 }
                 idsToErase.push_back(copy.id);
+                removedTasks.push_back(std::move(copy));
             }
             if (!idsToErase.empty()) {
                 state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
@@ -1694,6 +1842,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                   state.tasks.end());
                 if (SaveTasks(state.storageDir, state.tasks)) {
                     removed = static_cast<int>(idsToErase.size());
+                    for (const auto& removedTask : removedTasks) {
+                        AppendTaskAuditEntry(removedTask.id, "delete", TaskDisplayTitle(removedTask), u8"удалена");
+                    }
                     for (const auto& id : idsToErase) {
                         state.taskSelectionIds.erase(id);
                         if (state.tasksExpandedId == id) {
@@ -1767,14 +1918,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
                                                      [&](const TaskEntry& t) { return t.id == copy.id; }),
                                       state.tasks.end());
-                    SaveTasks(state.storageDir, state.tasks);
-                    if (state.tasksExpandedId == copy.id) {
-                        state.tasksExpandedId.clear();
-                    }
-                    if (hasXp) {
-                        SetStatus(state, u8"Задача удалена, XP откатан.", 0.45f, 0.9f, 0.45f);
+                    if (SaveTasks(state.storageDir, state.tasks)) {
+                        AppendTaskAuditEntry(copy.id, "delete", TaskDisplayTitle(copy), u8"удалена");
+                        if (state.tasksExpandedId == copy.id) {
+                            state.tasksExpandedId.clear();
+                        }
+                        if (hasXp) {
+                            SetStatus(state, u8"Задача удалена, XP откатан.", 0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state, u8"Задача удалена.", 0.45f, 0.9f, 0.45f);
+                        }
                     } else {
-                        SetStatus(state, u8"Задача удалена.", 0.45f, 0.9f, 0.45f);
+                        SetStatus(state, u8"Не удалось сохранить удаление задачи.", 1.0f, 0.45f, 0.45f);
                     }
                 }
                 state.pendingTaskDeleteId.clear();

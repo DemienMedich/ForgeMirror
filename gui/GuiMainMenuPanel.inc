@@ -113,6 +113,7 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         state.lastCatalogSelection = -1;
         RefreshProfiles(state, storage, catalog);
         state.tasks = LoadTasks(state.storageDir);
+        state.taskAudit = LoadTaskAudit(state.storageDir);
         state.projects = LoadProjects(state.storageDir);
         state.pipelineSteps = LoadPipeline(state.storageDir);
         state.rulesConfig = LoadGameplayConfig(state.storageDir);
@@ -172,6 +173,7 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
             state.lastCatalogSelection = -1;
             RefreshProfiles(state, storage, catalog);
             state.tasks = LoadTasks(state.storageDir);
+            state.taskAudit = LoadTaskAudit(state.storageDir);
             state.projects = LoadProjects(state.storageDir);
             state.pipelineSteps = LoadPipeline(state.storageDir);
             state.rulesConfig = LoadGameplayConfig(state.storageDir);

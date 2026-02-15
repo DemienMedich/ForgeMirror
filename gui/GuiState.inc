@@ -15,6 +15,7 @@ struct GuiDataState {
     std::unordered_map<std::string, std::deque<std::string>> activityLogs;
     std::deque<AppLogEntry> appLogs;
     std::vector<TaskEntry> tasks;
+    std::vector<TaskAuditEntry> taskAudit;
     std::vector<ProjectEntry> projects;
     std::vector<ShortcutEntry> shortcuts;
     std::vector<PipelineStep> pipelineSteps;
