@@ -191,6 +191,47 @@ void DrawLogsPanel(GuiState& state) {
                       AppLogLevel::Error, u8"Логи");
         }
     };
+    auto exportTaskAudit = [&]() {
+        if (state.taskAudit.empty()) {
+            SetStatus(state, u8"Журнал задач пуст.", 1.0f, 0.75f, 0.35f, 1.0f,
+                      AppLogLevel::Warning, u8"Логи");
+            return;
+        }
+        std::error_code ec;
+        auto reportDir = state.storageDir / "meta" / "reports";
+        std::filesystem::create_directories(reportDir, ec);
+        if (ec) {
+            SetStatus(state, u8"Не удалось создать папку отчетов.", 1.0f, 0.45f, 0.45f, 1.0f,
+                      AppLogLevel::Error, u8"Логи");
+            return;
+        }
+        std::string stamp = FormatTimestamp(NowSeconds(), "%Y%m%d-%H%M%S");
+        if (stamp.empty()) stamp = std::to_string(NowSeconds());
+        auto outPath = reportDir / ("task-audit-" + stamp + ".txt");
+        std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+        if (!out) {
+            SetStatus(state, u8"Не удалось сохранить журнал задач.", 1.0f, 0.45f, 0.45f, 1.0f,
+                      AppLogLevel::Error, u8"Логи");
+            return;
+        }
+        const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
+        out << "Журнал изменений задач\n";
+        for (const auto& row : state.taskAudit) {
+            const std::string ts = row.timestamp > 0
+                ? FormatTimestamp(row.timestamp, "%Y-%m-%d %H:%M:%S")
+                : std::string("-");
+            out << ts << " | "
+                << SanitizeLogLine(row.actor.empty() ? std::string("system") : row.actor) << " | "
+                << SanitizeLogLine(row.taskId) << " | "
+                << SanitizeLogLine(row.field) << " | "
+                << SanitizeLogLine(row.oldValue) << " -> "
+                << SanitizeLogLine(row.newValue) << "\n";
+        }
+        std::string msg = u8"Экспортирован журнал задач: ";
+        msg += outPath.string();
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Логи");
+    };
     auto setLevelPreset = [&](bool showInfo, bool showWarn, bool showError) {
         state.logShowInfo = showInfo;
         state.logShowWarning = showWarn;
@@ -487,6 +528,56 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::TextDisabled(u8"Нет записей по фильтру.");
         }
     }
+
+    ImGui::Spacing();
+    if (BeginCard("log_task_audit_card")) {
+        DrawCardHeader(u8"Аудит задач");
+        ImGui::TextDisabled(u8"Изменения задач из meta/task-audit.log");
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Экспорт аудита задач")) {
+            exportTaskAudit();
+        }
+
+        if (state.taskAudit.empty()) {
+            ImGui::TextDisabled(u8"Записей пока нет.");
+        } else if (ImGui::BeginTable("log_task_audit_table", 5,
+                                     ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp,
+                                     ImVec2(0.0f, 180.0f))) {
+            ImGui::TableSetupColumn(u8"Время", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn(u8"Актор", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn(u8"Поле", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn(u8"Изменение", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+            ImGui::TableHeadersRow();
+            int shown = 0;
+            constexpr int kPreview = 20;
+            for (auto it = state.taskAudit.rbegin(); it != state.taskAudit.rend() && shown < kPreview; ++it, ++shown) {
+                const TaskAuditEntry& row = *it;
+                const std::string ts = row.timestamp > 0
+                    ? FormatTimestamp(row.timestamp, "%Y-%m-%d %H:%M:%S")
+                    : std::string("-");
+                const std::string actor = row.actor.empty() ? std::string("system") : row.actor;
+                std::string change = row.oldValue;
+                change += " -> ";
+                change += row.newValue;
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(ts.c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(actor.c_str());
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextUnformatted(row.taskId.c_str());
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextUnformatted(row.field.c_str());
+                ImGui::TableSetColumnIndex(4);
+                ImGui::TextWrapped("%s", change.c_str());
+            }
+            ImGui::EndTable();
+        }
+    }
+    EndCard();
+
     SyncFiltersToUi(state);
 }
 
