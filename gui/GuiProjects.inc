@@ -80,15 +80,37 @@ static std::string ResolveTaskProjectName(const GuiState& state, const TaskEntry
     return task.project;
 }
 
-static int CountTasksForProject(const GuiState& state, const std::string& projectId) {
-    if (projectId.empty()) return 0;
-    int count = 0;
+
+struct ProjectTaskStats {
+    int total = 0;
+    int created = 0;
+    int inProgress = 0;
+    int done = 0;
+    int overdue = 0;
+};
+
+static ProjectTaskStats BuildProjectTaskStats(const GuiState& state, const std::string& projectId) {
+    ProjectTaskStats stats{};
+    if (projectId.empty()) return stats;
+    const std::int64_t nowSec = NowSeconds();
     for (const auto& task : state.tasks) {
-        if (task.projectId == projectId) {
-            ++count;
+        if (task.projectId != projectId) {
+            continue;
+        }
+        stats.total += 1;
+        const int status = NormalizeTaskStatus(task.status);
+        if (status == kTaskStatusDone) {
+            stats.done += 1;
+        } else if (status == kTaskStatusInProgress) {
+            stats.inProgress += 1;
+        } else {
+            stats.created += 1;
+        }
+        if (task.deadlineAt > 0 && task.deadlineAt < nowSec && status != kTaskStatusDone) {
+            stats.overdue += 1;
         }
     }
-    return count;
+    return stats;
 }
 
 static void EnsureTaskPlanAssigneesSize(GuiState& state) {
@@ -163,14 +185,16 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Хранятся в meta/projects.json, синхронизируются через облако.");
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
-    if (ImGui::BeginTable("projects_table", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+    if (ImGui::BeginTable("projects_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn("tasks", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 170.0f);
         ImGui::TableHeadersRow();
         for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
             const auto& project = state.projects[i];
+            const ProjectTaskStats taskStats = BuildProjectTaskStats(state, project.id);
             ImGui::TableNextRow();
             ImGui::PushID(project.id.c_str());
             ImGui::TableSetColumnIndex(0);
@@ -183,8 +207,25 @@ void DrawProjectsPanel(GuiState& state) {
                 std::snprintf(state.newProjectDesc.data(), state.newProjectDesc.size(), "%s", project.description.c_str());
             }
             ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%d", CountTasksForProject(state, project.id));
+            ImGui::Text("%d", taskStats.total);
+
             ImGui::TableSetColumnIndex(3);
+            ImGui::TextDisabled(u8"Н:%d  В:%d  Г:%d", taskStats.created, taskStats.inProgress, taskStats.done);
+            if (taskStats.overdue > 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", taskStats.overdue);
+            }
+
+            ImGui::TableSetColumnIndex(4);
+            const bool canOpenTasks = state.modules.tasks;
+            if (!canOpenTasks) ImGui::BeginDisabled();
+            if (ImGui::SmallButton(u8"К задачам##open_tasks_project")) {
+                state.showProjects = false;
+                state.showTasks = true;
+                state.tasksFilterProject = 2 + i;
+            }
+            if (!canOpenTasks) ImGui::EndDisabled();
+            ImGui::SameLine();
             if (ImGui::SmallButton(u8"Х##del_project")) {
                 state.pendingDeleteProjectIndex = i;
                 state.pendingDeleteProjectId = project.id;
@@ -313,3 +354,5 @@ void DrawProjectsPanel(GuiState& state) {
         }
     }
 }
+
+
