@@ -54,6 +54,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.tasksReminderShown2h.clear();
     state.taskSelectionIds.clear();
     state.taskBulkStatus = kTaskStatusInProgress;
+    state.taskBulkPriority = kTaskPriorityMedium;
     state.taskBulkProjectIndex = 0;
     state.taskBulkDeletePopupRequest = false;
     state.taskInlineDeadlineEditId.clear();

@@ -1050,6 +1050,50 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
+    auto ApplyBulkPriority = [&]() -> bool {
+        struct PrevPriority {
+            TaskEntry* task = nullptr;
+            int priority = kTaskPriorityMedium;
+        };
+        std::vector<PrevPriority> touched;
+        touched.reserve(state.taskSelectionIds.size());
+        const int targetPriority = NormalizeTaskPriority(state.taskBulkPriority);
+        int changed = 0;
+        for (const auto& taskId : state.taskSelectionIds) {
+            TaskEntry* task = FindTaskMutable(taskId);
+            if (!task) continue;
+            const int prev = NormalizeTaskPriority(task->priority);
+            if (prev == targetPriority) {
+                continue;
+            }
+            touched.push_back({task, prev});
+            task->priority = targetPriority;
+            changed += 1;
+        }
+        if (changed <= 0) {
+            SetStatus(state, u8"Нет задач для изменения приоритета.", 1.0f, 0.75f, 0.35f);
+            return false;
+        }
+        if (SaveTasks(state.storageDir, state.tasks)) {
+            for (const auto& prev : touched) {
+                if (!prev.task) continue;
+                AppendTaskAuditEntry(prev.task->id, "priority",
+                    TaskPriorityLabel(prev.priority),
+                    TaskPriorityLabel(targetPriority));
+            }
+            std::string msg = u8"Приоритет обновлен для задач: " + std::to_string(changed);
+            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+            return true;
+        }
+        for (const auto& prev : touched) {
+            if (prev.task) {
+                prev.task->priority = prev.priority;
+            }
+        }
+        SetStatus(state, u8"Не удалось сохранить массовое изменение приоритета.", 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
     auto ApplyBulkProject = [&]() -> bool {
         const std::string nextProjectId = (state.taskBulkProjectIndex > 0 &&
             (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
@@ -1244,13 +1288,17 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (!hasSelection) ImGui::BeginDisabled();
 
             const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
+            const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
             state.taskBulkStatus = std::clamp(state.taskBulkStatus, kTaskStatusNew, kTaskStatusDone);
+            state.taskBulkPriority = std::clamp(state.taskBulkPriority, kTaskPriorityLow, kTaskPriorityCritical);
 
-            if (ImGui::BeginTable("tasks_bulk_compact_row1", 4, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("bulk_status", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-                ImGui::TableSetupColumn("bulk_status_btn", ImGuiTableColumnFlags_WidthFixed, 130.0f);
-                ImGui::TableSetupColumn("bulk_project", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-                ImGui::TableSetupColumn("bulk_project_btn", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+            if (ImGui::BeginTable("tasks_bulk_compact_row1", 6, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("bulk_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("bulk_status_btn", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                ImGui::TableSetupColumn("bulk_priority", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("bulk_priority_btn", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                ImGui::TableSetupColumn("bulk_project", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("bulk_project_btn", ImGuiTableColumnFlags_WidthFixed, 110.0f);
                 ImGui::TableNextRow();
 
                 ImGui::TableSetColumnIndex(0);
@@ -1258,16 +1306,25 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Combo("##task_bulk_status", &state.taskBulkStatus, statusLabels, IM_ARRAYSIZE(statusLabels));
 
                 ImGui::TableSetColumnIndex(1);
-                if (ImGui::Button(u8"Применить", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Статус", ImVec2(-1.0f, 0.0f))) {
                     ApplyBulkStatus();
                 }
 
                 ImGui::TableSetColumnIndex(2);
                 ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##task_bulk_priority", &state.taskBulkPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels));
+
+                ImGui::TableSetColumnIndex(3);
+                if (ImGui::Button(u8"Приоритет", ImVec2(-1.0f, 0.0f))) {
+                    ApplyBulkPriority();
+                }
+
+                ImGui::TableSetColumnIndex(4);
+                ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo("##task_bulk_project", &state.taskBulkProjectIndex,
                              projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
 
-                ImGui::TableSetColumnIndex(3);
+                ImGui::TableSetColumnIndex(5);
                 if (ImGui::Button(u8"Проект", ImVec2(-1.0f, 0.0f))) {
                     ApplyBulkProject();
                 }

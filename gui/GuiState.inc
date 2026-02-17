@@ -180,6 +180,7 @@ struct GuiRuntimeState {
     std::unordered_set<std::string> tasksReminderShown2h;
     std::unordered_set<std::string> taskSelectionIds;
     int taskBulkStatus = 0;
+    int taskBulkPriority = 1;
     int taskBulkProjectIndex = 0;
     std::array<char, 20> taskBulkDeadline{};
     std::vector<char> taskBulkAssignees;

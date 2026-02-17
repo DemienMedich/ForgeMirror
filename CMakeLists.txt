@@ -26,7 +26,7 @@ add_executable(ForgeMirror
 target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.3.86")
+set(APP_VERSION "0.3.87")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
@@ -96,6 +96,4 @@ if(BUILD_CORE_TESTS)
     target_include_directories(smoke_core PRIVATE include)
     target_compile_definitions(smoke_core PRIVATE APP_VERSION="0.0.0")
 endif()
-
-
 
