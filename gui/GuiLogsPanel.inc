@@ -41,6 +41,20 @@ static void DrawLogKpiCard(const char* id, UiIcon icon, const char* title, const
     ImGui::PopID();
 }
 
+static bool LaunchLogPath(const std::filesystem::path& path) {
+    if (path.empty()) return false;
+#if defined(_WIN32)
+    std::filesystem::path full(path);
+    std::error_code ec;
+    if (!full.is_absolute()) {
+        full = std::filesystem::absolute(full, ec);
+    }
+    return ShellExecuteA(nullptr, "open", full.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL) > (HINSTANCE)32;
+#else
+    return false;
+#endif
+}
+
 void DrawLogsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Logs, state.storageDir);
     DrawCardHeader(u8"Логи");
@@ -61,8 +75,8 @@ void DrawLogsPanel(GuiState& state) {
             infoCount += 1;
         }
         if (entry.timestamp > 0) {
-            if (minTs == 0 | entry.timestamp < minTs) minTs = entry.timestamp;
-            if (maxTs == 0 | entry.timestamp > maxTs) maxTs = entry.timestamp;
+            if (minTs == 0 || entry.timestamp < minTs) minTs = entry.timestamp;
+            if (maxTs == 0 || entry.timestamp > maxTs) maxTs = entry.timestamp;
         }
         if (entry.source.empty()) continue;
         if (std::find(logSources.begin(), logSources.end(), entry.source) == logSources.end()) {
@@ -374,7 +388,7 @@ void DrawLogsPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Показано: %d из %d", filteredCount, static_cast<int>(state.appLogs.size()));
     const bool hasTextFilter = state.filters.logs[0] != '\0';
     const bool hasSourceFilter = state.filters.logSource[0] != '\0';
-    if (filteredCount == 0 && (hasTextFilter | hasSourceFilter)) {
+    if (filteredCount == 0 && (hasTextFilter || hasSourceFilter)) {
         ImGui::TextDisabled(u8"По фильтрам ничего не найдено.");
         if (ImGui::SmallButton(u8"Сбросить фильтры")) {
             state.filters.logs.fill('\0');
@@ -537,6 +551,60 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::SmallButton(u8"Экспорт аудита задач")) {
             exportTaskAudit();
         }
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Открыть файл аудита")) {
+            const auto auditPath = TaskAuditStoragePath(state.storageDir);
+            std::error_code ec;
+            if (!std::filesystem::exists(auditPath, ec)) {
+                SetStatus(state, u8"Файл аудита задач не найден.", 1.0f, 0.75f, 0.35f, 1.0f,
+                          AppLogLevel::Warning, u8"Логи");
+            } else if (!LaunchLogPath(auditPath)) {
+                SetStatus(state, u8"Не удалось открыть файл аудита задач.", 1.0f, 0.45f, 0.45f, 1.0f,
+                          AppLogLevel::Error, u8"Логи");
+            }
+        }
+
+        static std::array<char, 64> taskAuditActorFilter{};
+        static std::array<char, 96> taskAuditTaskFilter{};
+        static std::array<char, 48> taskAuditFieldFilter{};
+
+        if (ImGui::BeginTable("log_task_audit_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("audit_filter_actor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("audit_filter_task", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("audit_filter_field", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn("audit_filter_reset", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::InputTextWithHint(u8"##task_audit_actor", u8"Актор", taskAuditActorFilter.data(), taskAuditActorFilter.size());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::InputTextWithHint(u8"##task_audit_task", u8"Задача/ID", taskAuditTaskFilter.data(), taskAuditTaskFilter.size());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::InputTextWithHint(u8"##task_audit_field", u8"Поле", taskAuditFieldFilter.data(), taskAuditFieldFilter.size());
+            ImGui::TableSetColumnIndex(3);
+            if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+                taskAuditActorFilter.fill('\0');
+                taskAuditTaskFilter.fill('\0');
+                taskAuditFieldFilter.fill('\0');
+            }
+            ImGui::EndTable();
+        }
+
+        auto matchesTaskAudit = [&](const TaskAuditEntry& row) {
+            const std::string actor = row.actor.empty() ? std::string("system") : row.actor;
+            std::string taskText = row.taskId;
+            if (!row.oldValue.empty()) {
+                taskText += " ";
+                taskText += row.oldValue;
+            }
+            if (!row.newValue.empty()) {
+                taskText += " ";
+                taskText += row.newValue;
+            }
+            if (!MatchesFilter(actor, taskAuditActorFilter.data())) return false;
+            if (!MatchesFilter(taskText, taskAuditTaskFilter.data())) return false;
+            if (!MatchesFilter(row.field, taskAuditFieldFilter.data())) return false;
+            return true;
+        };
 
         if (state.taskAudit.empty()) {
             ImGui::TextDisabled(u8"Записей пока нет.");
@@ -551,8 +619,10 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::TableHeadersRow();
             int shown = 0;
             constexpr int kPreview = 20;
-            for (auto it = state.taskAudit.rbegin(); it != state.taskAudit.rend() && shown < kPreview; ++it, ++shown) {
+            for (auto it = state.taskAudit.rbegin(); it != state.taskAudit.rend() && shown < kPreview; ++it) {
                 const TaskAuditEntry& row = *it;
+                if (!matchesTaskAudit(row)) continue;
+                ++shown;
                 const std::string ts = row.timestamp > 0
                     ? FormatTimestamp(row.timestamp, "%Y-%m-%d %H:%M:%S")
                     : std::string("-");
@@ -574,6 +644,10 @@ void DrawLogsPanel(GuiState& state) {
                 ImGui::TextWrapped("%s", change.c_str());
             }
             ImGui::EndTable();
+            ImGui::TextDisabled(u8"Показано: %d из %d", shown, static_cast<int>(state.taskAudit.size()));
+            if (shown == 0) {
+                ImGui::TextDisabled(u8"По фильтрам ничего не найдено.");
+            }
         }
     }
     EndCard();
