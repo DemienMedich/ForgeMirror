@@ -45,6 +45,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();
     state.taskPlanPriority = 1;
+    state.tasksFilterProject = 0;
     state.tasksFilterPriority = 0;
     state.tasksSortMode = 0;
     state.tasksQuickFilter = 0;
