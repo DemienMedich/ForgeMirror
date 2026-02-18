@@ -268,25 +268,52 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::TextDisabled("%s", projectName.c_str());
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
         if (ImGui::Button(u8"Удалить", ImVec2(180.0f, 0.0f))) {
-            state.projects.erase(std::remove_if(state.projects.begin(), state.projects.end(),
-                                                [&](const ProjectEntry& p) { return p.id == projectId; }),
-                                 state.projects.end());
-            for (auto& task : state.tasks) {
-                if (task.projectId == projectId) {
-                    task.projectId.clear();
-                    task.project.clear();
+            if (projectId.empty()) {
+                SetStatus(state, u8"Не выбран проект для удаления.", 1.0f, 0.45f, 0.45f);
+            } else {
+                const auto prevProjects = state.projects;
+                const auto prevTasks = state.tasks;
+                int detachedTasks = 0;
+
+                state.projects.erase(std::remove_if(state.projects.begin(), state.projects.end(),
+                                                    [&](const ProjectEntry& p) { return p.id == projectId; }),
+                                     state.projects.end());
+                for (auto& task : state.tasks) {
+                    if (task.projectId == projectId) {
+                        task.projectId.clear();
+                        task.project.clear();
+                        detachedTasks += 1;
+                    }
+                }
+
+                const bool projectsSaved = SaveProjects(state.storageDir, state.projects);
+                const bool tasksSaved = projectsSaved && SaveTasks(state.storageDir, state.tasks);
+                if (projectsSaved && tasksSaved) {
+                    state.projectEditIndex = -1;
+                    state.newProjectName.fill('\0');
+                    state.newProjectDesc.fill('\0');
+                    state.pendingDeleteProjectIndex = -1;
+                    state.pendingDeleteProjectId.clear();
+                    std::string msg = u8"Проект удален";
+                    if (detachedTasks > 0) {
+                        msg += u8", задач отвязано: " + std::to_string(detachedTasks);
+                    }
+                    msg += ".";
+                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                    ImGui::CloseCurrentPopup();
+                    deleteOpen = false;
+                } else {
+                    state.projects = prevProjects;
+                    state.tasks = prevTasks;
+                    const bool rollbackProjectsOk = SaveProjects(state.storageDir, state.projects);
+                    const bool rollbackTasksOk = SaveTasks(state.storageDir, state.tasks);
+                    if (!rollbackProjectsOk || !rollbackTasksOk) {
+                        SetStatus(state, u8"Ошибка удаления проекта и отката. Проверьте файлы в meta/.", 1.0f, 0.45f, 0.45f);
+                    } else {
+                        SetStatus(state, u8"Не удалось удалить проект: изменения отменены.", 1.0f, 0.75f, 0.35f);
+                    }
                 }
             }
-            SaveProjects(state.storageDir, state.projects);
-            SaveTasks(state.storageDir, state.tasks);
-            state.projectEditIndex = -1;
-            state.newProjectName.fill('\0');
-            state.newProjectDesc.fill('\0');
-            state.pendingDeleteProjectIndex = -1;
-            state.pendingDeleteProjectId.clear();
-            SetStatus(state, u8"Проект удален.", 0.45f, 0.9f, 0.45f);
-            ImGui::CloseCurrentPopup();
-            deleteOpen = false;
         }
         ImGui::SameLine();
         if (ImGui::Button(u8"Отмена", ImVec2(180.0f, 0.0f))) {
@@ -354,5 +381,6 @@ void DrawProjectsPanel(GuiState& state) {
         }
     }
 }
+
 
 

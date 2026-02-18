@@ -2,7 +2,7 @@
 
 #ifndef AppVersion
   // Fallback to current app version (kept in CMakeLists.txt). Override via /DAppVersion=... when building.
-  #define AppVersion "0.3.88"
+  #define AppVersion "0.3.89"
 #endif
 
 #if AppVersion == "0.0.0"
@@ -50,5 +50,6 @@ Name: "{autodesktop}\ForgeMirror"; Filename: "{app}\ForgeMirrorGui.exe"; Working
 
 [Run]
 Filename: "{app}\ForgeMirrorGui.exe"; Description: "Launch ForgeMirror"; Flags: nowait postinstall skipifsilent
+
 
 
