@@ -183,8 +183,23 @@ void DrawProjectsPanel(GuiState& state) {
         return;
     }
     ImGui::TextDisabled(u8"Хранятся в meta/projects.json, синхронизируются через облако.");
+
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float checkboxWidth = 210.0f;
+    const float resetWidth = 72.0f;
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float inputWidth = std::max(160.0f, avail - checkboxWidth - resetWidth - spacing * 2.0f);
+    ImGui::SetNextItemWidth(inputWidth);
+    ImGui::InputTextWithHint("##projects_filter", u8"Поиск проекта", state.filters.projects.data(), state.filters.projects.size());
+    ImGui::SameLine();
+    if (ImGui::SmallButton(u8"Сброс##projects_filter")) {
+        state.filters.projects.fill('\0');
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
+    int shownProjects = 0;
     if (ImGui::BeginTable("projects_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.1f);
@@ -195,10 +210,18 @@ void DrawProjectsPanel(GuiState& state) {
         for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
             const auto& project = state.projects[i];
             const ProjectTaskStats taskStats = BuildProjectTaskStats(state, project.id);
+            const std::string hay = project.name + " " + project.description;
+            if (!MatchesFilter(hay, state.filters.projects.data())) {
+                continue;
+            }
+            if (state.projectsFilterOverdueOnly && taskStats.overdue <= 0) {
+                continue;
+            }
+            shownProjects += 1;
             ImGui::TableNextRow();
             ImGui::PushID(project.id.c_str());
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("%d", i + 1);
+            ImGui::TextDisabled("%d", shownProjects);
             ImGui::TableSetColumnIndex(1);
             const bool selected = state.projectEditIndex == i;
             if (ImGui::Selectable(project.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
@@ -236,6 +259,10 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::PopID();
         }
         ImGui::EndTable();
+    }
+    ImGui::TextDisabled(u8"Показано проектов: %d из %d", shownProjects, static_cast<int>(state.projects.size()));
+    if (shownProjects <= 0) {
+        ImGui::TextDisabled(u8"Нет проектов по фильтру.");
     }
 
     if (state.projectDeletePopupRequest) {
@@ -381,6 +408,4 @@ void DrawProjectsPanel(GuiState& state) {
         }
     }
 }
-
-
 

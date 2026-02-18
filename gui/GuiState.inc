@@ -131,6 +131,7 @@ struct GuiRuntimeState {
     bool projectDeletePopupRequest = false;
     int pendingDeleteProjectIndex = -1;
     std::string pendingDeleteProjectId;
+    bool projectsFilterOverdueOnly = false;
     float newSkillWeight = 1.0f;
     std::vector<char> newSkillProfessionFlags;
     std::vector<char> editSkillProfessionFlags;
@@ -259,3 +260,4 @@ struct GuiRuntimeState {
 
 // Aggregates every bit of GUI state (selected profile, popups, sheet values, etc.).
 struct GuiState : GuiDataState, GuiRuntimeState {};
+

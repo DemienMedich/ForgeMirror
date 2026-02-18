@@ -124,6 +124,7 @@ struct UiFilters {
     std::array<char, 96> logs{};
     std::array<char, 64> logSource{};
     std::array<char, 96> tasks{};
+    std::array<char, 96> projects{};
 };
 
 struct UiColorEntry {
