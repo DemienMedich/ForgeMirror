@@ -194,6 +194,7 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::SameLine();
     if (ImGui::SmallButton(u8"Сброс##projects_filter")) {
         state.filters.projects.fill('\0');
+        state.projectsFilterOverdueOnly = false;
     }
     ImGui::SameLine();
     ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
@@ -219,6 +220,11 @@ void DrawProjectsPanel(GuiState& state) {
             }
             shownProjects += 1;
             ImGui::TableNextRow();
+            if (taskStats.overdue > 0) {
+                ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+            }
             ImGui::PushID(project.id.c_str());
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("%d", shownProjects);
@@ -234,6 +240,11 @@ void DrawProjectsPanel(GuiState& state) {
 
             ImGui::TableSetColumnIndex(3);
             ImGui::TextDisabled(u8"Н:%d  В:%d  Г:%d", taskStats.created, taskStats.inProgress, taskStats.done);
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(u8"Н = новые, В = в работе, Г = готово, П = просроченные");
+                ImGui::EndTooltip();
+            }
             if (taskStats.overdue > 0) {
                 ImGui::SameLine();
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", taskStats.overdue);
@@ -408,4 +419,5 @@ void DrawProjectsPanel(GuiState& state) {
         }
     }
 }
+
 
