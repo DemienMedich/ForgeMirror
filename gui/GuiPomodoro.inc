@@ -26,7 +26,7 @@ static bool CanAwardPomodoroCoin(const GuiState& state, int workMinutes, int rem
     if (remainingSeconds > 0) return false; // only full cycle
     const auto& profile = state.active->profile;
     if (profile.password_encoded().empty()) return false;
-    if (state.unlockedProfiles.count(state.active->id) == 0) return false;
+    if (!IsProfileAccessUnlocked(state, state.active->id)) return false;
     const std::int64_t now = NowSeconds();
     const std::int64_t startedAt = state.pomodoroWorkStartedAt > 0 ? state.pomodoroWorkStartedAt : now;
     int elapsedMinutes = workMinutes;

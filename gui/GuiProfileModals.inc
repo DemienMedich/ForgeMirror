@@ -199,13 +199,29 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
             ImGui::TextDisabled(u8"Профиль: %s", profile.name().c_str());
             ImGui::InputText(u8"Пароль", state.profilePasswordInput.data(), state.profilePasswordInput.size(), ImGuiInputTextFlags_Password);
             DrawKeyboardHintLine(true);
+            ImGui::TextDisabled(u8"Доверенное устройство");
+            const char* trustLabels[] = {u8"Только в этой сессии", u8"30 дней", u8"90 дней"};
+            int trustIndex = 0;
+            if (state.profileTrustDays >= 90) trustIndex = 2;
+            else if (state.profileTrustDays >= 30) trustIndex = 1;
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo("##profile_trust", &trustIndex, trustLabels, IM_ARRAYSIZE(trustLabels))) {
+                state.profileTrustDays = (trustIndex == 2) ? 90 : (trustIndex == 1 ? 30 : 0);
+            }
+            ImGui::TextDisabled(u8"Хранится локально и не синхронизируется.");
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 260.0f;
             auto submitUnlock = [&]() {
                 std::string input = state.profilePasswordInput.data();
                 if (VerifyProfilePassword(profile, input)) {
-                    state.unlockedProfiles.insert(state.active->id);
-                    SaveProfileAccessSettings(state);
+                    const int trustDays = (state.profileTrustDays >= 90) ? 90 : (state.profileTrustDays >= 30 ? 30 : 0);
+                    if (trustDays > 0) {
+                        const std::int64_t expiresAt = NowSeconds() + static_cast<std::int64_t>(trustDays) * 86400;
+                        state.trustedProfiles[state.active->id] = expiresAt;
+                        SaveProfileAccessSettings(state);
+                    } else {
+                        state.unlockedProfiles.insert(state.active->id);
+                    }
                     AppendProfileAudit(state.storageDir, state.active->id, "unlock");
                     SetStatus(state, u8"Доступ к профилю открыт.", 0.45f, 0.9f, 0.45f);
                     std::fill(state.profilePasswordInput.begin(), state.profilePasswordInput.end(), '\0');
@@ -268,6 +284,16 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
             ImGui::InputText(u8"Повтор", state.profilePasswordConfirm.data(), state.profilePasswordConfirm.size(), ImGuiInputTextFlags_Password);
 
             DrawKeyboardHintLine(true);
+            ImGui::TextDisabled(u8"Доверенное устройство");
+            const char* trustLabels[] = {u8"Только в этой сессии", u8"30 дней", u8"90 дней"};
+            int trustIndex = 0;
+            if (state.profileTrustDays >= 90) trustIndex = 2;
+            else if (state.profileTrustDays >= 30) trustIndex = 1;
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo("##profile_trust", &trustIndex, trustLabels, IM_ARRAYSIZE(trustLabels))) {
+                state.profileTrustDays = (trustIndex == 2) ? 90 : (trustIndex == 1 ? 30 : 0);
+            }
+            ImGui::TextDisabled(u8"Хранится локально и не синхронизируется.");
 
             auto applyChange = [&]() {
                 std::string current = state.profilePasswordInput.data();
@@ -370,6 +396,7 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                 if (storage.save_profile(updated)) {
                     state.active->profile = updated;
                     state.unlockedProfiles.erase(state.active->id);
+                    state.trustedProfiles.erase(state.active->id);
                     SaveProfileAccessSettings(state);
                     AppendProfileAudit(state.storageDir, state.active->id, "password_reset");
                     SetStatus(state, u8"Пароль сброшен.", 0.45f, 0.9f, 0.45f);

@@ -284,8 +284,23 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextDisabled(u8"Доступ");
             ImGui::TableSetColumnIndex(1);
             const bool hasPassword = !profile.password_encoded().empty();
-            const bool unlocked = hasPassword && state.unlockedProfiles.count(state.active->id) > 0;
-            std::string accessText = hasPassword ? (unlocked ? u8"Открыт" : u8"Закрыт") : u8"Пароль не задан";
+            const bool unlocked = hasPassword && IsProfileAccessUnlocked(state, state.active->id);
+            const bool sessionUnlock = hasPassword && state.unlockedProfiles.count(state.active->id) > 0;
+            std::string accessText;
+            if (!hasPassword) {
+                accessText = u8"Пароль не задан";
+            } else if (!unlocked) {
+                accessText = u8"Закрыт";
+            } else {
+                auto it = state.trustedProfiles.find(state.active->id);
+                if (it != state.trustedProfiles.end() && it->second > NowSeconds()) {
+                    accessText = u8"Открыт до " + FormatTimestamp(it->second, "%Y-%m-%d");
+                } else if (sessionUnlock) {
+                    accessText = u8"Открыт (сессия)";
+                } else {
+                    accessText = u8"Открыт";
+                }
+            }
             ImVec4 accessColor = unlocked ? accent : ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
             if (!hasPassword) {
                 accessColor = LogLevelColor(AppLogLevel::Warning);
@@ -502,7 +517,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
     const bool walletHasPassword = !profile.password_encoded().empty();
-    const bool walletUnlocked = walletHasPassword && state.unlockedProfiles.count(state.active->id) > 0;
+    const bool walletUnlocked = walletHasPassword && IsProfileAccessUnlocked(state, state.active->id);
     if (state.isAdmin || walletUnlocked) {
         std::string currency = !state.vault.currencyName.empty() ? state.vault.currencyName : state.vault.currencyCode;
         if (currency.empty()) currency = u8"Кукоин";

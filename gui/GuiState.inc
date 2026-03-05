@@ -116,6 +116,8 @@ struct GuiRuntimeState {
     std::array<char, 64> profilePasswordNew{};
     std::array<char, 64> profilePasswordConfirm{};
     std::unordered_set<std::string> unlockedProfiles;
+    std::unordered_map<std::string, std::int64_t> trustedProfiles;
+    int profileTrustDays = 30;
     std::vector<std::string> recentProfiles;
     int bannerEditIndex = -1;
     std::array<char, 128> newSkillName{};

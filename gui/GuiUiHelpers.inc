@@ -154,13 +154,24 @@ void HandleBorderlessDrag(GLFWwindow* window, const UiSettings& settings) {
     DragWindow(window, delta);
 }
 
+
+static bool IsProfileAccessUnlocked(const GuiState& state, const std::string& id) {
+    if (id.empty()) return false;
+    if (state.unlockedProfiles.count(id) > 0) return true;
+    auto it = state.trustedProfiles.find(id);
+    if (it == state.trustedProfiles.end()) return false;
+    return it->second > NowSeconds();
+}
+
 void ResetUiSettings(UiSettings& settings, ImGuiStyle& style, ImGuiIO& io) {
     std::string lastProfileId = std::move(settings.lastProfileId);
     std::string unlocked = std::move(settings.profileUnlocked);
+    std::string trusted = std::move(settings.profileTrusted);
     std::string recent = std::move(settings.profileRecent);
     settings = UiSettings();
     settings.lastProfileId = std::move(lastProfileId);
     settings.profileUnlocked = std::move(unlocked);
+    settings.profileTrusted = std::move(trusted);
     settings.profileRecent = std::move(recent);
     ApplyUiTheme(settings.theme, style);
     ApplyUiSettings(settings, style, io);

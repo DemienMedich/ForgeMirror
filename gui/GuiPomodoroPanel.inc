@@ -78,7 +78,7 @@ static void DrawPomodoroCoinIndicator(GuiState& state) {
     } else if (state.active->profile.password_encoded().empty()) {
         status = u8"пароль не задан";
         ok = false;
-    } else if (state.unlockedProfiles.count(state.active->id) == 0) {
+    } else if (!IsProfileAccessUnlocked(state, state.active->id)) {
         status = u8"нужен вход";
         ok = false;
     } else if (PomodoroPhaseMinutes(state.ui, static_cast<int>(PomodoroPhase::Work)) < state.vault.pomodoroMinMinutes) {

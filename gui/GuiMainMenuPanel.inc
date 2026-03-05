@@ -191,7 +191,7 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
     }
     CloudSyncResult walletResult;
     const bool doWalletPush = (!state.isAdmin && state.active && !state.active->id.empty()
-        && state.unlockedProfiles.count(state.active->id) > 0);
+        && IsProfileAccessUnlocked(state, state.active->id));
     if (doWalletPush) {
         walletResult = PushProfileWallet(state.cloudConfig, state.storageDir, state.active->id);
         anyAction = true;

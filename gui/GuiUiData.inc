@@ -73,6 +73,7 @@ struct UiSettings {
     int profileViewMode = 1;
     std::string lastProfileId;
     std::string profileUnlocked;
+    std::string profileTrusted;
     std::string profileRecent;
     std::string logFilter;
     std::string logSourceFilter;

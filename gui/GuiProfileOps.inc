@@ -28,30 +28,104 @@ static std::string JoinProfileIdList(const std::vector<std::string>& ids) {
     return out;
 }
 
+static std::unordered_map<std::string, std::int64_t> ParseTrustedProfileList(const std::string& raw) {
+    std::unordered_map<std::string, std::int64_t> out;
+    if (raw.empty()) return out;
+    std::istringstream ss(raw);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        item = TrimStringGui(item);
+        if (item.empty()) continue;
+        const auto sep = item.find(':');
+        if (sep == std::string::npos) continue;
+        std::string id = TrimStringGui(item.substr(0, sep));
+        std::string val = TrimStringGui(item.substr(sep + 1));
+        if (id.empty() || val.empty()) continue;
+        long long ts = 0;
+        try {
+            ts = std::stoll(val);
+        } catch (...) {
+            continue;
+        }
+        if (ts <= 0) continue;
+        auto it = out.find(id);
+        if (it == out.end() || it->second < ts) {
+            out[id] = static_cast<std::int64_t>(ts);
+        }
+    }
+    return out;
+}
+
+static std::string JoinTrustedProfileList(const std::unordered_map<std::string, std::int64_t>& trusted) {
+    if (trusted.empty()) return {};
+    std::vector<std::pair<std::string, std::int64_t>> items;
+    items.reserve(trusted.size());
+    for (const auto& entry : trusted) {
+        if (!entry.first.empty() && entry.second > 0) {
+            items.emplace_back(entry.first, entry.second);
+        }
+    }
+    std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    bool first = true;
+    for (const auto& item : items) {
+        if (!first) out << ',';
+        first = false;
+        out << item.first << ':' << item.second;
+    }
+    return out.str();
+}
+
+static void SaveProfileAccessSettings(GuiState& state);
+
 static void ApplyProfileAccessSettings(GuiState& state) {
     state.unlockedProfiles.clear();
-    for (const auto& id : SplitProfileIdList(state.ui.profileUnlocked)) {
-        state.unlockedProfiles.insert(id);
+    state.trustedProfiles = ParseTrustedProfileList(state.ui.profileTrusted);
+    const std::int64_t now = NowSeconds();
+    for (auto it = state.trustedProfiles.begin(); it != state.trustedProfiles.end(); ) {
+        if (it->first.empty() || it->second <= now) {
+            it = state.trustedProfiles.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    bool migrated = false;
+    if (!state.ui.profileUnlocked.empty()) {
+        const auto legacy = SplitProfileIdList(state.ui.profileUnlocked);
+        if (!legacy.empty()) {
+            const std::int64_t expiresAt = now + 30LL * 86400;
+            for (const auto& id : legacy) {
+                if (id.empty()) continue;
+                if (state.trustedProfiles.find(id) == state.trustedProfiles.end()) {
+                    state.trustedProfiles[id] = expiresAt;
+                    migrated = true;
+                }
+            }
+        }
+        state.ui.profileUnlocked.clear();
+        migrated = true;
     }
     state.recentProfiles = SplitProfileIdList(state.ui.profileRecent);
     constexpr size_t kMaxRecentProfiles = 6;
     if (state.recentProfiles.size() > kMaxRecentProfiles) {
         state.recentProfiles.resize(kMaxRecentProfiles);
     }
+    if (migrated) {
+        SaveProfileAccessSettings(state);
+    }
 }
 
 static bool UpdateProfileAccessSettings(GuiState& state) {
-    std::vector<std::string> unlockedList;
-    unlockedList.reserve(state.unlockedProfiles.size());
-    for (const auto& id : state.unlockedProfiles) {
-        if (!id.empty()) unlockedList.push_back(id);
-    }
-    std::sort(unlockedList.begin(), unlockedList.end());
-    const std::string unlockedJoined = JoinProfileIdList(unlockedList);
+    const std::string trustedJoined = JoinTrustedProfileList(state.trustedProfiles);
     const std::string recentJoined = JoinProfileIdList(state.recentProfiles);
     bool changed = false;
-    if (state.ui.profileUnlocked != unlockedJoined) {
-        state.ui.profileUnlocked = unlockedJoined;
+    if (state.ui.profileTrusted != trustedJoined) {
+        state.ui.profileTrusted = trustedJoined;
+        changed = true;
+    }
+    if (!state.ui.profileUnlocked.empty()) {
+        state.ui.profileUnlocked.clear();
         changed = true;
     }
     if (state.ui.profileRecent != recentJoined) {
@@ -88,10 +162,19 @@ static void PruneProfileAccessState(GuiState& state) {
     for (const auto& info : state.profiles) {
         validIds.insert(info.id);
     }
+    const std::int64_t now = NowSeconds();
     bool changed = false;
     for (auto it = state.unlockedProfiles.begin(); it != state.unlockedProfiles.end(); ) {
         if (validIds.find(*it) == validIds.end()) {
             it = state.unlockedProfiles.erase(it);
+            changed = true;
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = state.trustedProfiles.begin(); it != state.trustedProfiles.end(); ) {
+        if (validIds.find(it->first) == validIds.end() || it->second <= now) {
+            it = state.trustedProfiles.erase(it);
             changed = true;
         } else {
             ++it;

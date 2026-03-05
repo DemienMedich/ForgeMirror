@@ -164,6 +164,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
         } else if (section == "profile") {
             if (key == "lastProfileId") settings.lastProfileId = value;
             else if (key == "unlocked") settings.profileUnlocked = value;
+            else if (key == "trusted") settings.profileTrusted = value;
             else if (key == "recent") settings.profileRecent = value;
             else if (key == "viewMode") settings.profileViewMode = ParseInt(value, settings.profileViewMode);
         } else if (section == "logs") {
@@ -300,6 +301,7 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "[profile]\n";
     out << "lastProfileId=" << SanitizeLogLine(settings.lastProfileId) << "\n";
     out << "unlocked=" << SanitizeLogLine(settings.profileUnlocked) << "\n";
+    out << "trusted=" << SanitizeLogLine(settings.profileTrusted) << "\n";
     out << "recent=" << SanitizeLogLine(settings.profileRecent) << "\n";
     out << "viewMode=" << settings.profileViewMode << "\n\n";
 
