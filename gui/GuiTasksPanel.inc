@@ -470,7 +470,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (state.tasksFilterStatus > 0 && NormalizeTaskStatus(task->status) != (state.tasksFilterStatus - 1)) continue;
             if (state.tasksFilterPriority > 0 && NormalizeTaskPriority(task->priority) != (state.tasksFilterPriority - 1)) continue;
             if (!filterProfileId.empty() && !TaskHasAssignee(*task, filterProfileId)) continue;
-            if (filterWithoutProject) {
+            const bool quickNoProject = (state.tasksQuickFilter == 5);
+            if (quickNoProject) {
+                if (!resolvedProjectName.empty()) continue;
+            } else if (filterWithoutProject) {
                 if (!resolvedProjectName.empty()) continue;
             } else if (!filterProjectId.empty() || !filterProjectName.empty()) {
                 bool projectMatch = false;
@@ -560,7 +563,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (ImGui::Button(u8"7 дней", ImVec2(96.0f, 0.0f))) {
         state.tasksQuickFilter = 4;
     }
-    const char* quickFilterLabels[] = {u8"Все", u8"Мне назначено", u8"Сегодня", u8"Просрочено", u8"7 дней"};
+    ImGui::SameLine();
+    if (ImGui::Button(u8"Без проекта", ImVec2(140.0f, 0.0f))) {
+        state.tasksQuickFilter = 5;
+    }
+    const char* quickFilterLabels[] = {u8"Все", u8"Мне назначено", u8"Сегодня", u8"Просрочено", u8"7 дней", u8"Без проекта"};
     state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
     ImGui::TextDisabled(u8"Активный быстрый фильтр: %s", quickFilterLabels[state.tasksQuickFilter]);
 

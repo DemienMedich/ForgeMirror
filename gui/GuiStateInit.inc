@@ -49,8 +49,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.tasksFilterPriority = 0;
     state.tasksSortMode = 0;
     state.tasksQuickFilter = 0;
-    state.projectsFilterOverdueOnly = false;
-    state.filters.projects.fill('\0');
+    state.projectsSortMode = std::clamp(state.projectsSortMode, 0, 2);
     state.tasksReminderLastAt = 0;
     state.tasksReminderShown24h.clear();
     state.tasksReminderShown2h.clear();

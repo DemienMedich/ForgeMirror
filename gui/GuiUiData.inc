@@ -81,6 +81,9 @@ struct UiSettings {
     bool logShowError = true;
     bool logAutoScroll = true;
     bool logCompactView = false;
+    std::string projectsFilter;
+    bool projectsOverdueOnly = false;
+    int projectsSortMode = 0;
     std::string adminStatsFilter;
     bool adminStatsIncludeArchived = true;
     int adminStatsRankFilter = 0;

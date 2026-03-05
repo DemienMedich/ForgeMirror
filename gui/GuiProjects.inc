@@ -190,14 +190,25 @@ void DrawProjectsPanel(GuiState& state) {
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
     const float inputWidth = std::max(160.0f, avail - checkboxWidth - resetWidth - spacing * 2.0f);
     ImGui::SetNextItemWidth(inputWidth);
-    ImGui::InputTextWithHint("##projects_filter", u8"Поиск проекта", state.filters.projects.data(), state.filters.projects.size());
+    bool projectsFilterChanged = ImGui::InputTextWithHint("##projects_filter", u8"Поиск проекта", state.filters.projects.data(), state.filters.projects.size());
     ImGui::SameLine();
     if (ImGui::SmallButton(u8"Сброс##projects_filter")) {
         state.filters.projects.fill('\0');
         state.projectsFilterOverdueOnly = false;
+        projectsFilterChanged = true;
     }
     ImGui::SameLine();
-    ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
+    bool overdueChanged = ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::TextDisabled(u8"Сортировка");
+    ImGui::SetNextItemWidth(220.0f);
+    const char* projectSortLabels[] = {u8"По названию", u8"По задачам", u8"По просроченным"};
+    state.projectsSortMode = std::clamp(state.projectsSortMode, 0, 2);
+    bool sortChanged = ImGui::Combo("##projects_sort", &state.projectsSortMode, projectSortLabels, IM_ARRAYSIZE(projectSortLabels));
+    if (projectsFilterChanged || overdueChanged || sortChanged) {
+        SyncFiltersToUi(state);
+        state.uiDirty = true;
+    }
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
     int shownProjects = 0;
@@ -208,9 +219,42 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 170.0f);
         ImGui::TableHeadersRow();
+
+        std::vector<ProjectTaskStats> projectStats;
+        projectStats.reserve(state.projects.size());
+        std::vector<std::string> projectNamesLower;
+        projectNamesLower.reserve(state.projects.size());
+        std::vector<int> projectOrder;
+        projectOrder.reserve(state.projects.size());
         for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
             const auto& project = state.projects[i];
-            const ProjectTaskStats taskStats = BuildProjectTaskStats(state, project.id);
+            projectStats.push_back(BuildProjectTaskStats(state, project.id));
+            projectNamesLower.push_back(ToLowerUtf8(project.name));
+            projectOrder.push_back(i);
+        }
+        const int sortMode = std::clamp(state.projectsSortMode, 0, 2);
+        if (sortMode == 1) {
+            std::sort(projectOrder.begin(), projectOrder.end(), [&](int a, int b) {
+                const auto& sa = projectStats[a];
+                const auto& sb = projectStats[b];
+                if (sa.total != sb.total) return sa.total > sb.total;
+                return projectNamesLower[a] < projectNamesLower[b];
+            });
+        } else if (sortMode == 2) {
+            std::sort(projectOrder.begin(), projectOrder.end(), [&](int a, int b) {
+                const auto& sa = projectStats[a];
+                const auto& sb = projectStats[b];
+                if (sa.overdue != sb.overdue) return sa.overdue > sb.overdue;
+                return projectNamesLower[a] < projectNamesLower[b];
+            });
+        } else {
+            std::sort(projectOrder.begin(), projectOrder.end(), [&](int a, int b) {
+                return projectNamesLower[a] < projectNamesLower[b];
+            });
+        }
+        for (int idx : projectOrder) {
+            const auto& project = state.projects[idx];
+            const auto& taskStats = projectStats[idx];
             const std::string hay = project.name + " " + project.description;
             if (!MatchesFilter(hay, state.filters.projects.data())) {
                 continue;
@@ -229,9 +273,9 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("%d", shownProjects);
             ImGui::TableSetColumnIndex(1);
-            const bool selected = state.projectEditIndex == i;
+            const bool selected = state.projectEditIndex == idx;
             if (ImGui::Selectable(project.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
-                state.projectEditIndex = i;
+                state.projectEditIndex = idx;
                 std::snprintf(state.newProjectName.data(), state.newProjectName.size(), "%s", project.name.c_str());
                 std::snprintf(state.newProjectDesc.data(), state.newProjectDesc.size(), "%s", project.description.c_str());
             }
@@ -256,12 +300,12 @@ void DrawProjectsPanel(GuiState& state) {
             if (ImGui::SmallButton(u8"К задачам##open_tasks_project")) {
                 state.showProjects = false;
                 state.showTasks = true;
-                state.tasksFilterProject = 2 + i;
+                state.tasksFilterProject = 2 + idx;
             }
             if (!canOpenTasks) ImGui::EndDisabled();
             ImGui::SameLine();
             if (ImGui::SmallButton(u8"Х##del_project")) {
-                state.pendingDeleteProjectIndex = i;
+                state.pendingDeleteProjectIndex = idx;
                 state.pendingDeleteProjectId = project.id;
                 state.projectDeletePopupRequest = true;
                 ImGui::PopID();
@@ -312,12 +356,16 @@ void DrawProjectsPanel(GuiState& state) {
                 const auto prevProjects = state.projects;
                 const auto prevTasks = state.tasks;
                 int detachedTasks = 0;
+                std::vector<std::pair<std::string, std::string>> detachedAudit;
 
                 state.projects.erase(std::remove_if(state.projects.begin(), state.projects.end(),
                                                     [&](const ProjectEntry& p) { return p.id == projectId; }),
                                      state.projects.end());
                 for (auto& task : state.tasks) {
                     if (task.projectId == projectId) {
+                        std::string oldProject = ResolveTaskProjectName(state, task);
+                        if (oldProject.empty()) oldProject = std::string(u8"Без проекта");
+                        detachedAudit.emplace_back(task.id, std::move(oldProject));
                         task.projectId.clear();
                         task.project.clear();
                         detachedTasks += 1;
@@ -338,6 +386,25 @@ void DrawProjectsPanel(GuiState& state) {
                     }
                     msg += ".";
                     SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                    if (!detachedAudit.empty()) {
+                        std::string actor;
+                        if (state.isAdmin) {
+                            actor = "admin";
+                        } else if (state.active) {
+                            actor = "[" + state.active->id + "] " + state.active->profile.name();
+                        } else {
+                            actor = "system";
+                        }
+                        const std::string newValue = std::string(u8"Без проекта");
+                        for (const auto& entry : detachedAudit) {
+                            const std::string& taskId = entry.first;
+                            const std::string& oldValue = entry.second;
+                            if (taskId.empty() || oldValue == newValue) continue;
+                            if (!AppendTaskAudit(state.storageDir, actor, taskId, "project", oldValue, newValue, &state.taskAudit)) {
+                                AppendAppLog(state, AppLogLevel::Warning, u8"Проекты", u8"Не удалось записать task-audit.log");
+                            }
+                        }
+                    }
                     ImGui::CloseCurrentPopup();
                     deleteOpen = false;
                 } else {
@@ -389,35 +456,49 @@ void DrawProjectsPanel(GuiState& state) {
             SetStatus(state, u8"Название проекта обязательно.", 1.0f, 0.45f, 0.45f);
         } else {
             int editIndex = state.projectEditIndex;
-            if (editIndex >= 0 && editIndex < static_cast<int>(state.projects.size())) {
-                auto& project = state.projects[editIndex];
-                project.name = name;
-                project.description = description;
-            } else {
-                ProjectEntry project;
-                project.id = GenerateProjectId(state.projects);
-                project.name = name;
-                project.description = description;
-                project.createdAt = NowSeconds();
-                state.projects.push_back(std::move(project));
-                std::sort(state.projects.begin(), state.projects.end(), [](const ProjectEntry& a, const ProjectEntry& b) {
-                    return a.name < b.name;
-                });
-                for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
-                    if (state.projects[i].name == name) {
-                        editIndex = i;
-                        break;
-                    }
+            bool duplicate = false;
+            const std::string nameLower = ToLowerUtf8(name);
+            for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
+                if (i == editIndex) continue;
+                if (ToLowerUtf8(state.projects[i].name) == nameLower) {
+                    duplicate = true;
+                    break;
                 }
             }
-            if (SaveProjects(state.storageDir, state.projects)) {
-                state.projectEditIndex = editIndex;
-                SetStatus(state, u8"Проект сохранен.", 0.45f, 0.9f, 0.45f);
+            if (duplicate) {
+                SetStatus(state, u8"Проект с таким названием уже существует.", 1.0f, 0.45f, 0.45f);
             } else {
-                SetStatus(state, u8"Не удалось сохранить проект.", 1.0f, 0.45f, 0.45f);
+                if (editIndex >= 0 && editIndex < static_cast<int>(state.projects.size())) {
+                    auto& project = state.projects[editIndex];
+                    project.name = name;
+                    project.description = description;
+                } else {
+                    ProjectEntry project;
+                    project.id = GenerateProjectId(state.projects);
+                    project.name = name;
+                    project.description = description;
+                    project.createdAt = NowSeconds();
+                    state.projects.push_back(std::move(project));
+                    std::sort(state.projects.begin(), state.projects.end(), [](const ProjectEntry& a, const ProjectEntry& b) {
+                        return ToLowerUtf8(a.name) < ToLowerUtf8(b.name);
+                    });
+                    for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
+                        if (state.projects[i].name == name) {
+                            editIndex = i;
+                            break;
+                        }
+                    }
+                }
+                if (SaveProjects(state.storageDir, state.projects)) {
+                    state.projectEditIndex = editIndex;
+                    SetStatus(state, u8"Проект сохранен.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, u8"Не удалось сохранить проект.", 1.0f, 0.45f, 0.45f);
+                }
             }
         }
     }
 }
+
 
 
