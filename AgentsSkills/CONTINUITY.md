@@ -20,11 +20,12 @@ UI аудит:
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: taskmanager. Версия: 0.3.99.
-  - Последнее изменение: task/project-мутации вынесены в AppTaskProjectService, GUI панели задач/проектов используют app-service вместо прямой работы со storage.
+  - Ветка: taskmanager. Версия: 0.4.00.
+  - Последнее изменение: profession-операции вынесены в AppProfessionService, GUI панели профессий используют app-service для CRUD/назначения/удаления.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
+  - Архитектура GUI: добавлен `AppProfessionService`, сохранение/удаление профессий и назначение профессии профилям вынесены из GUI в app-service с rollback при ошибке.
   - Архитектура GUI: профильные операции вынесены в `AppProfileService` (`LoadSortedProfiles` / `LoadActiveProfile` / `ReloadProfiles`), `GuiProfileOps` переведён на service-слой.
   - Архитектура GUI: вынесены доменные типы в `include/AppDomainTypes.h`, добавлен `AppContext`, инициализация/перезагрузка synced-данных сведена в общий helper-слой.
   - Задачи: исправлены подписи таблицы "Назначить профилям" (читаемые заголовки).

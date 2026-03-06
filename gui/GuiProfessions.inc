@@ -1,74 +1,3 @@
-static std::filesystem::path ProfessionsPath(const std::filesystem::path& storageDir) {
-    return storageDir / "meta" / "professions.txt";
-}
-
-static std::string ProfTrim(const std::string& s) {
-    return TrimStringGui(s.c_str());
-}
-
-static std::vector<ProfessionEntry> LoadProfessions(const std::filesystem::path& storageDir) {
-    std::vector<ProfessionEntry> out;
-    std::ifstream in(ProfessionsPath(storageDir), std::ios::binary);
-    if (!in) return out;
-    std::string line;
-    while (std::getline(in, line)) {
-        if (line.empty() | line[0] == '#') continue;
-        std::vector<std::string> parts;
-        std::string part;
-        std::istringstream ss(line);
-        while (std::getline(ss, part, '|')) {
-            parts.push_back(ProfTrim(part));
-        }
-        if (parts.size() < 2) continue;
-        ProfessionEntry e;
-        size_t idx = 0;
-        e.id = parts[idx++];
-        e.name = parts[idx++];
-        if (idx < parts.size()) {
-            e.description = parts[idx++];
-        }
-        if (!e.id.empty() && !e.name.empty()) {
-            out.push_back(std::move(e));
-        }
-    }
-    return out;
-}
-
-static bool SaveProfessions(const std::filesystem::path& storageDir, const std::vector<ProfessionEntry>& list) {
-    std::ostringstream out;
-    out.imbue(std::locale::classic());
-    for (const auto& e : list) {
-        if (e.id.empty() | e.name.empty()) continue;
-        out << e.id << "|" << e.name;
-        out << "|" << e.description;
-        out << "\n";
-    }
-    std::string data = out.str();
-    data.insert(data.begin(), static_cast<char>(0xEF));
-    data.insert(data.begin() + 1, static_cast<char>(0xBB));
-    data.insert(data.begin() + 2, static_cast<char>(0xBF));
-    std::error_code ec;
-    std::filesystem::create_directories(ProfessionsPath(storageDir).parent_path(), ec);
-    std::ofstream f(ProfessionsPath(storageDir), std::ios::binary | std::ios::trunc);
-    if (!f) return false;
-    f.write(data.data(), data.size());
-    return f.good();
-}
-
-static std::string GenerateProfessionId(const std::vector<ProfessionEntry>& list) {
-    const std::int64_t now = NowSeconds();
-    int suffix = static_cast<int>(list.size()) + 1;
-    std::string base = "pr_" + std::to_string(now);
-    auto exists = [&](const std::string& id) {
-        return std::any_of(list.begin(), list.end(), [&](const ProfessionEntry& e) { return e.id == id; });
-    };
-    std::string candidate = base;
-    while (exists(candidate)) {
-        candidate = base + "_" + std::to_string(suffix++);
-    }
-    return candidate;
-}
-
 static void RefreshProfileProfessionCache(GuiState& state, IJobStorage& storage) {
     state.profileProfessionCache.clear();
     state.profileLoginCache.clear();
@@ -97,71 +26,6 @@ static std::string ProfessionNameById(const GuiState& state, const std::string& 
     }
     return {};
 }
-
-static bool ApplyProfileProfession(GuiState& state, IJobStorage& storage,
-                                   const std::string& profileId, const std::string& professionId) {
-    std::string restoreId = state.active ? state.active->id : std::string{};
-    if (!storage.set_active_profile(profileId)) return false;
-    if (auto profile = storage.load_profile()) {
-        profile->set_profession_id(professionId);
-        if (!storage.save_profile(*profile)) return false;
-    } else {
-        return false;
-    }
-    if (!restoreId.empty() && restoreId != profileId) {
-        storage.set_active_profile(restoreId);
-    }
-    if (state.active && state.active->id == profileId) {
-        state.active->profile.set_profession_id(professionId);
-    }
-    state.profileProfessionCache[profileId] = professionId;
-    return true;
-}
-
-static void ClearProfilesForProfession(GuiState& state, IJobStorage& storage, const std::string& professionId) {
-    if (professionId.empty()) return;
-    std::string restoreId = state.active ? state.active->id : std::string{};
-    for (const auto& info : state.profiles) {
-        if (info.archived) continue;
-        if (!storage.set_active_profile(info.id)) continue;
-        if (auto profile = storage.load_profile()) {
-            if (profile->profession_id() == professionId) {
-                profile->set_profession_id("");
-                storage.save_profile(*profile);
-                state.profileProfessionCache[info.id].clear();
-                if (state.active && state.active->id == info.id) {
-                    state.active->profile.set_profession_id("");
-                }
-            }
-        }
-    }
-    if (!restoreId.empty()) {
-        storage.set_active_profile(restoreId);
-    }
-    state.profileProfessionDirty = true;
-}
-
-static void ClearSkillsForProfession(SkillCatalog& catalog, const std::string& professionId) {
-    if (professionId.empty()) return;
-    auto skills = catalog.skills();
-    for (const auto& id : skills) {
-        if (catalog.has_profession(id, professionId)) {
-            const std::string name = catalog.display_name(id);
-            const std::string desc = catalog.description(id);
-            const std::string category = catalog.category(id);
-            const double weight = catalog.weight(id);
-            auto profs = catalog.professions(id);
-            profs.erase(std::remove(profs.begin(), profs.end(), professionId), profs.end());
-            catalog.update_skill(id, name, weight, desc, category, profs);
-        }
-    }
-}
-
-// Professions storage helpers (meta/professions.txt)
-#include <fstream>
-#include <sstream>
-#include <locale>
-#include <imgui.h>
 
 void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Professions, state.storageDir);
@@ -246,17 +110,31 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 state.pendingDeleteProfessionIndex < static_cast<int>(state.professions.size())) {
                 removedId = state.professions[state.pendingDeleteProfessionIndex].id;
             }
-            if (!removedId.empty()) {
-                auto it = std::find_if(state.professions.begin(), state.professions.end(),
-                    [&](const ProfessionEntry& p) { return p.id == removedId; });
-                if (it != state.professions.end()) {
-                    state.professions.erase(it);
-                    SaveProfessions(state.storageDir, state.professions);
-                    ClearProfilesForProfession(state, storage, removedId);
-                    ClearSkillsForProfession(catalog, removedId);
-                    state.profileProfessionDirty = true;
-                    SetStatus(state, u8"Профессия удалена.", 0.45f, 0.9f, 0.45f);
+            AppProfessionMutationResult deleteResult = AppDeleteProfessionEntry(
+                state.storageDir,
+                state.professions,
+                storage,
+                state.profiles,
+                catalog,
+                state.active ? state.active->id : std::string{},
+                removedId);
+            if (deleteResult.ok) {
+                if (state.active && state.active->profile.profession_id() == removedId) {
+                    state.active->profile.set_profession_id("");
                 }
+                state.profileProfessionDirty = true;
+                state.professionEditIndex = -1;
+                state.newProfessionName.fill('\0');
+                state.newProfessionDesc.fill('\0');
+                std::string status = u8"Профессия удалена.";
+                if (deleteResult.affectedProfiles > 0 || deleteResult.affectedSkills > 0) {
+                    status = u8"Профессия удалена: профилей очищено " +
+                             std::to_string(deleteResult.affectedProfiles) +
+                             u8", навыков отвязано " + std::to_string(deleteResult.affectedSkills) + u8".";
+                }
+                SetStatus(state, status, 0.45f, 0.9f, 0.45f);
+            } else {
+                SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
             }
             state.pendingDeleteProfessionIndex = -1;
             state.pendingDeleteProfessionId.clear();
@@ -313,27 +191,19 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
     auto saveProfession = [&]() {
         std::string name = TrimStringGui(state.newProfessionName.data());
         std::string desc = TrimStringGui(state.newProfessionDesc.data());
-        if (name.empty()) {
-            SetStatus(state, u8"Название обязательно.", 1.0f, 0.45f, 0.45f);
+        AppProfessionMutationResult saveResult = AppSaveProfessionEntry(
+            state.storageDir,
+            state.professions,
+            state.professionEditIndex,
+            name,
+            desc);
+        if (!saveResult.ok) {
+            SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
             return;
         }
-        int editedIndex = state.professionEditIndex;
-        if (editedIndex >= 0 && editedIndex < static_cast<int>(state.professions.size())) {
-            auto& p = state.professions[editedIndex];
-            p.name = name;
-            p.description = desc;
-        } else {
-            ProfessionEntry p;
-            p.id = GenerateProfessionId(state.professions);
-            p.name = name;
-            p.description = desc;
-            state.professions.push_back(std::move(p));
-            editedIndex = static_cast<int>(state.professions.size()) - 1;
-        }
-        SaveProfessions(state.storageDir, state.professions);
         state.profileProfessionDirty = true;
         SetStatus(state, u8"Профессия сохранена.", 0.45f, 0.9f, 0.45f);
-        state.professionEditIndex = editedIndex;
+        state.professionEditIndex = saveResult.professionIndex;
         std::snprintf(state.newProfessionName.data(), state.newProfessionName.size(), "%s", name.c_str());
         std::snprintf(state.newProfessionDesc.data(), state.newProfessionDesc.size(), "%s", desc.c_str());
     };
@@ -386,10 +256,19 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 ImGui::PushID(info.id.c_str());
                 if (ImGui::Checkbox("##assign_prof", &checked)) {
                     std::string newProf = checked ? profId : std::string{};
-                    if (ApplyProfileProfession(state, storage, info.id, newProf)) {
+                    AppProfessionMutationResult assignResult = AppAssignProfessionToProfile(
+                        storage,
+                        state.active ? state.active->id : std::string{},
+                        info.id,
+                        newProf);
+                    if (assignResult.ok) {
+                        state.profileProfessionCache[info.id] = newProf;
+                        if (state.active && state.active->id == info.id) {
+                            state.active->profile.set_profession_id(newProf);
+                        }
                         SetStatus(state, u8"Профессия профиля обновлена.", 0.45f, 0.9f, 0.45f);
                     } else {
-                        SetStatus(state, u8"Не удалось обновить профессию профиля.", 1.0f, 0.45f, 0.45f);
+                        SetStatus(state, assignResult.errorMessage, 1.0f, 0.45f, 0.45f);
                     }
                 }
                 ImGui::PopID();
