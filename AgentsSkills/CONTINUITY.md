@@ -20,9 +20,10 @@ UI аудит:
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: taskmanager. Версия: 0.3.96.
-  - Последнее изменение: подготовлен базовый app-layer для будущей смены GUI — AppContext, AppDomainTypes и единый reload синхронизируемых данных.
+  - Ветка: taskmanager. Версия: 0.3.97.
+  - Последнее изменение: профильные операции вынесены в AppProfileService, GUI теперь не грузит и не выбирает профиль напрямую из storage.
 - Done:
+  - Архитектура GUI: профильные операции вынесены в `AppProfileService` (`LoadSortedProfiles` / `LoadActiveProfile` / `ReloadProfiles`), `GuiProfileOps` переведён на service-слой.
   - Архитектура GUI: вынесены доменные типы в `include/AppDomainTypes.h`, добавлен `AppContext`, инициализация/перезагрузка synced-данных сведена в общий helper-слой.
   - Задачи: исправлены подписи таблицы "Назначить профилям" (читаемые заголовки).
   - Профили: локальная доверенность устройства (30/90 дней, ui.ini, без синхронизации) + отображение срока/сессии.

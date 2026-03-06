@@ -13,15 +13,6 @@ std::optional<std::filesystem::path> FindAssetUpwards(const std::filesystem::pat
     return std::nullopt;
 }
 
-// Pull profile list from storage and sort it for deterministic GUI display.
-std::vector<IJobStorage::ProfileInfo> LoadProfiles(IJobStorage& storage) {
-    auto list = storage.list_profiles();
-    std::sort(list.begin(), list.end(), [](const auto& a, const auto& b) {
-        return a.id < b.id;
-    });
-    return list;
-}
-
 void InitStorageContext(const std::filesystem::path& storageDir, SkillCatalog& catalog,
                         GameplayConfig& gameplayConfig, std::unique_ptr<IJobStorage>& storage) {
     gameplayConfig = LoadGameplayConfig(storageDir);
