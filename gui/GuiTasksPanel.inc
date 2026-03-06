@@ -336,9 +336,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::TextDisabled(u8"Назначить профилям");
             if (ImGui::BeginTable("task_plan_assignees", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("assignee_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-                ImGui::TableSetupColumn("assignee_name", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-                ImGui::TableSetupColumn("assignee_set", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn(u8"№", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+                ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+                ImGui::TableSetupColumn(u8"Назначить", ImGuiTableColumnFlags_WidthFixed, 90.0f);
                 ImGui::TableHeadersRow();
                 for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
                     const auto& info = state.profiles[i];
