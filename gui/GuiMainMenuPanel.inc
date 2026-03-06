@@ -44,10 +44,10 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
 }
 
-static void RefreshCloudState(GuiState& state) {
-    state.cloudManifest = LoadCloudManifest(state.cloudConfig, state.storageDir);
-    state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+static void RefreshCloudState(GuiState& state, const AppContext& app) {
+    RefreshCloudManifestState(state, app);
 }
+
 
 static void ApplyCloudResultStatus(GuiState& state, const CloudSyncResult& result) {
     if (result.ok) {
@@ -105,26 +105,15 @@ static void DrawStorageConflictModal(GuiState& state) {
 
 
 
-static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+static void RunCloudPull(GuiState& state, AppContext& app) {
     CloudRole role = state.isAdmin ? CloudRole::Admin : CloudRole::Viewer;
     CloudSyncResult result = PullCloudSnapshot(state.cloudConfig, state.storageDir, role);
     if (result.ok) {
-        catalog.reload();
+        app.catalog.reload();
         state.lastCatalogSelection = -1;
-        RefreshProfiles(state, storage, catalog);
-        state.tasks = LoadTasks(state.storageDir);
-        state.taskAudit = LoadTaskAudit(state.storageDir);
-        state.projects = LoadProjects(state.storageDir);
-        state.pipelineSteps = LoadPipeline(state.storageDir);
-        state.rulesConfig = LoadGameplayConfig(state.storageDir);
-        state.rulesDraft = state.rulesConfig;
-        state.bannerTexts = LoadBannerTexts(state.storageDir);
-        EnsureBannerSelection(state);
-        state.bannerLastRotateAt = NowSeconds();
-        state.vault = LoadStorageVault(state.storageDir);
-        SyncVaultBuffers(state);
+        ReloadSyncedWorkspaceData(state, app);
     }
-    RefreshCloudState(state);
+    RefreshCloudState(state, app);
     ApplyCloudResultStatus(state, result);
     TriggerStorageConflict(state, result);
     state.lastCloudSyncAt = NowSeconds();
@@ -134,9 +123,10 @@ static void RunCloudPull(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     }
 }
 
-static void RunCloudPush(GuiState& state) {
-    CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
-    RefreshCloudState(state);
+
+static void RunCloudPush(GuiState& state, const AppContext& app) {
+    CloudSyncResult result = PushCloudSnapshot(state.cloudConfig, app.storageDir, CloudRole::Admin);
+    RefreshCloudState(state, app);
     ApplyCloudResultStatus(state, result);
     TriggerStorageConflict(state, result);
     state.lastCloudSyncAt = NowSeconds();
@@ -146,7 +136,8 @@ static void RunCloudPush(GuiState& state) {
     }
 }
 
-static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, bool showStatus) {
+
+static void RunCloudQuickSync(GuiState& state, AppContext& app, bool showStatus) {
     if (!state.cloudConfig.enabled) {
         if (showStatus) {
             SetStatus(state, u8"Облако отключено.", 1.0f, 0.75f, 0.35f);
@@ -161,42 +152,31 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
     bool anyAction = false;
     const bool pushFirst = doPull && doPush;
     if (pushFirst) {
-        pushResult = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
+        pushResult = PushCloudSnapshot(state.cloudConfig, app.storageDir, CloudRole::Admin);
         anyAction = true;
     }
     if (doPull) {
-        pullResult = PullCloudSnapshot(state.cloudConfig, state.storageDir,
+        pullResult = PullCloudSnapshot(state.cloudConfig, app.storageDir,
                                        state.isAdmin ? CloudRole::Admin : CloudRole::Viewer);
         anyAction = true;
         if (pullResult.ok) {
-            catalog.reload();
+            app.catalog.reload();
             state.lastCatalogSelection = -1;
-            RefreshProfiles(state, storage, catalog);
-            state.tasks = LoadTasks(state.storageDir);
-            state.taskAudit = LoadTaskAudit(state.storageDir);
-            state.projects = LoadProjects(state.storageDir);
-            state.pipelineSteps = LoadPipeline(state.storageDir);
-            state.rulesConfig = LoadGameplayConfig(state.storageDir);
-            state.rulesDraft = state.rulesConfig;
-            state.bannerTexts = LoadBannerTexts(state.storageDir);
-            EnsureBannerSelection(state);
-            state.bannerLastRotateAt = NowSeconds();
-            state.vault = LoadStorageVault(state.storageDir);
-            SyncVaultBuffers(state);
+            ReloadSyncedWorkspaceData(state, app);
         }
     }
     if (doPush && !pushFirst) {
-        pushResult = PushCloudSnapshot(state.cloudConfig, state.storageDir, CloudRole::Admin);
+        pushResult = PushCloudSnapshot(state.cloudConfig, app.storageDir, CloudRole::Admin);
         anyAction = true;
     }
     CloudSyncResult walletResult;
     const bool doWalletPush = (!state.isAdmin && state.active && !state.active->id.empty()
         && IsProfileAccessUnlocked(state, state.active->id));
     if (doWalletPush) {
-        walletResult = PushProfileWallet(state.cloudConfig, state.storageDir, state.active->id);
+        walletResult = PushProfileWallet(state.cloudConfig, app.storageDir, state.active->id);
         anyAction = true;
     }
-    RefreshCloudState(state);
+    RefreshCloudState(state, app);
     if (doPull) {
         TriggerStorageConflict(state, pullResult);
     }
@@ -235,6 +215,7 @@ static void RunCloudQuickSync(GuiState& state, IJobStorage& storage, SkillCatalo
         }
     }
 }
+
 
 static std::int64_t ToUnixSeconds(std::filesystem::file_time_type time) {
     using namespace std::chrono;
@@ -436,6 +417,7 @@ static void DrawUpdateNoticeModal(GuiState& state) {
 }
 
 void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    AppContext app{state.storageDir, storage, catalog};
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
@@ -656,7 +638,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 ImGui::Separator();
             }
             if (ImGui::MenuItem(u8"Обновить из облака")) {
-                RunCloudPull(state, storage, catalog);
+                RunCloudPull(state, app);
             }
 
             if (!state.isAdmin) ImGui::BeginDisabled();
@@ -710,7 +692,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 }
             }
             if (ImGui::MenuItem(u8"Выгрузить в облако")) {
-                RunCloudPush(state);
+                RunCloudPush(state, app);
             }
             if (!state.isAdmin) ImGui::EndDisabled();
 
@@ -809,7 +791,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
         }
         if (IconButtonGui("top_sync", UiIcon::Launch, syncTooltip.c_str(), accent, iconSize,
                           state.cloudConfig.enabled)) {
-            RunCloudQuickSync(state, storage, catalog, true);
+            RunCloudQuickSync(state, app, true);
         }
         ImGui::SameLine(0.0f, style.ItemSpacing.x * 0.35f);
         const float dotSize = std::max(10.0f, iconSize * 0.28f);

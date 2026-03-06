@@ -1,3 +1,5 @@
+#include "AppContext.h"
+#include "AppDomainTypes.h"
 #include "AppUtils.h"
 #include "IJobStorage.h"
 #include "Profile.h"
@@ -83,11 +85,14 @@ namespace {
 std::int64_t NowSeconds();
 std::string TrimStringGui(std::string s);
 int TotalSkillXpGui(const Skill& skill);
+void RefreshProfiles(GuiState& state, AppContext& app, const std::string& preferredId = {});
 void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId = {});
 const char* RankLabelForLevel(int level);
 int RankIndexForLevel(int level);
 const std::vector<RankOption>& RankOptions();
 const char* ClassificationLabel(int categoryIndex);
+static void EnsureBannerSelection(GuiState& state);
+static void SyncVaultBuffers(GuiState& state);
 
 #include "GuiTextUtils.inc"
 #include "GuiAssets.inc"
@@ -110,6 +115,7 @@ const char* ClassificationLabel(int categoryIndex);
 #include "GuiProfileOps.inc"
 
 #include "GuiPipeline.inc"
+#include "GuiAppContext.inc"
 #include "GuiPipelinePanel.inc"
 
 #include "GuiRulesPanel.inc"
@@ -189,7 +195,8 @@ int main() {
 
     ImGuiStyle& style = ImGui::GetStyle();
     GuiState state;
-    InitGuiState(state, *storage, catalog, gameplayConfig, storageDir, style, io, window);
+    AppContext app{storageDir, *storage, catalog};
+    InitGuiState(state, app, gameplayConfig, style, io, window);
     state.cloudConfig = cloudConfig;
     state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
     state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
@@ -202,7 +209,7 @@ int main() {
         state.lastCloudSyncOkAt = NowSeconds();
     }
 
-    RunGuiLoop(window, state, *storage, catalog, style, io, layoutPath);
+    RunGuiLoop(window, state, app, style, io, layoutPath);
 
     SaveUiSettings(storageDir, state.ui);
     ReleaseIconTextures();

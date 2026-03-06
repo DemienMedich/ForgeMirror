@@ -1,6 +1,9 @@
-void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
-                  const GameplayConfig& gameplayConfig, const std::filesystem::path& storageDir,
-                  ImGuiStyle& style, ImGuiIO& io, GLFWwindow* window) {
+void InitGuiState(GuiState& state, AppContext& app,
+                  const GameplayConfig& gameplayConfig, ImGuiStyle& style, ImGuiIO& io, GLFWwindow* window) {
+    auto& storage = app.storage;
+    auto& catalog = app.catalog;
+    const auto& storageDir = app.storageDir;
+
     state.modules = LoadModuleToggles();
     state.storageDir = storageDir;
     state.adminPasswordExpected = LoadAdminPassword(storageDir);
@@ -9,16 +12,9 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.cloudConfig = LoadCloudSyncConfig(storageDir);
     state.bannerTexts = LoadBannerTexts(storageDir);
     state.vault = LoadStorageVault(storageDir);
-    const auto storageVaultPath = storageDir / "meta" / "storage.json";
-    std::error_code vaultEc;
-    if (!std::filesystem::exists(storageVaultPath, vaultEc)) {
-        if (SaveStorageVault(storageDir, state.vault)) {
-            state.vault = LoadStorageVault(storageDir);
-        }
-    }
+    EnsureStorageVaultFile(state, app);
     SyncVaultBuffers(state);
-    state.cloudManifest = LoadCloudManifest(state.cloudConfig, storageDir);
-    state.cloudUpdateAvailable = IsUpdateAvailable(state.cloudManifest, APP_VERSION);
+    RefreshCloudManifestState(state, app);
     state.lastCloudSyncAt = NowSeconds();
     state.bannerLastRotateAt = state.lastCloudSyncAt;
     if (!state.bannerTexts.empty()) {
@@ -39,9 +35,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.profileTabRequest = state.profileSection;
     ApplyUiFiltersToState(state);
     ApplyProfileAccessSettings(state);
-    state.tasks = state.modules.tasks ? LoadTasks(storageDir) : std::vector<TaskEntry>();
-    state.taskAudit = state.modules.tasks ? LoadTaskAudit(storageDir) : std::vector<TaskAuditEntry>();
-    state.projects = LoadProjects(storageDir);
+    LoadWorkspaceCollections(state, app);
     state.taskDeletePopupRequest = false;
     state.pendingTaskDeleteId.clear();
     state.taskPlanPriority = 1;
@@ -60,11 +54,6 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
     state.taskBulkDeletePopupRequest = false;
     state.taskInlineDeadlineEditId.clear();
     state.taskInlineAssigneeEditId.clear();
-    state.shortcuts = state.modules.shortcuts ? LoadShortcuts(storageDir) : std::vector<ShortcutEntry>();
-    state.pipelineSteps = state.modules.pipeline ? LoadPipeline(storageDir) : std::vector<PipelineStep>();
-    state.professions = state.modules.professions ? LoadProfessions(storageDir) : std::vector<ProfessionEntry>();
-    state.profileProfessionCache.clear();
-    state.profileProfessionDirty = true;
     state.showTasks = state.modules.tasks && state.showTasks;
     state.showProjects = state.isAdmin && state.showProjects;
     state.showPomodoro = state.modules.pomodoro && state.showPomodoro;
@@ -87,6 +76,7 @@ void InitGuiState(GuiState& state, IJobStorage& storage, SkillCatalog& catalog,
                   state.cloudConfig.root.u8string().c_str());
     std::snprintf(state.taskPlanDeadline.data(), state.taskPlanDeadline.size(), "%s", FormatTimestamp(NowSeconds() + 86400, "%Y-%m-%d 18:00").c_str());
     std::snprintf(state.taskBulkDeadline.data(), state.taskBulkDeadline.size(), "%s", FormatTimestamp(NowSeconds() + 86400, "%Y-%m-%d 18:00").c_str());
-    RefreshProfiles(state, storage, catalog, state.ui.lastProfileId);
+    RefreshProfiles(state, app, state.ui.lastProfileId);
 }
+
 

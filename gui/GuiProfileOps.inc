@@ -194,7 +194,9 @@ static void PruneProfileAccessState(GuiState& state) {
 }
 
 // Load the currently selected profile from storage and synchronise its skills.
-void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+void RefreshActiveProfile(GuiState& state, AppContext& app) {
+    auto& storage = app.storage;
+    auto& catalog = app.catalog;
     state.profileLoading = true;
     state.profileLoadError.clear();
     state.active.reset();
@@ -222,14 +224,21 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
     }
 }
 
-void ReapplyRulesToProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    AppContext app{state.storageDir, storage, catalog};
+    RefreshActiveProfile(state, app);
+}
+
+
+void ReapplyRulesToProfiles(GuiState& state, AppContext& app) {
+    auto& storage = app.storage;
+    auto& catalog = app.catalog;
     auto list = storage.list_profiles();
     std::string focusId = state.active ? state.active->id : std::string{};
     for (const auto& info : list) {
         if (!storage.set_active_profile(info.id)) continue;
         if (auto profile = storage.load_profile()) {
             SyncProfileWithCatalog(*profile, catalog);
-            // Preserve current level/progress but re-evaluate XP with the new rules.
             int level = profile->overall_level();
             int progress = profile->level_progress();
             profile->set_level_and_progress(level, progress);
@@ -240,6 +249,12 @@ void ReapplyRulesToProfiles(GuiState& state, IJobStorage& storage, SkillCatalog&
         storage.set_active_profile(focusId);
     }
 }
+
+void ReapplyRulesToProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
+    AppContext app{state.storageDir, storage, catalog};
+    ReapplyRulesToProfiles(state, app);
+}
+
 
 void SyncRankSelection(GuiState& state) {
     if (!state.active) {
@@ -256,24 +271,32 @@ void SyncRankSelection(GuiState& state) {
     state.selectedRankIndex = bestIdx;
 }
 
-bool SelectProfileById(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& id) {
+bool SelectProfileById(GuiState& state, AppContext& app, const std::string& id) {
     if (id.empty()) return false;
     for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
         if (state.profiles[i].id == id) {
             state.selectedIndex = i;
-            RefreshActiveProfile(state, storage, catalog);
+            RefreshActiveProfile(state, app);
             SyncRankSelection(state);
             PrepareTaskShares(state);
             return true;
         }
     }
-    RefreshProfiles(state, storage, catalog, id);
+    RefreshProfiles(state, app, id);
     SyncRankSelection(state);
     return state.active.has_value();
 }
 
+bool SelectProfileById(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& id) {
+    AppContext app{state.storageDir, storage, catalog};
+    return SelectProfileById(state, app, id);
+}
+
+
 // Reload profile list and try to keep the previously selected/active entry.
-void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId) {
+void RefreshProfiles(GuiState& state, AppContext& app, const std::string& preferredId) {
+    auto& storage = app.storage;
+
     std::string currentId;
     if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
         currentId = state.profiles[state.selectedIndex].id;
@@ -297,7 +320,7 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
         for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
             if (state.profiles[i].id == targetId) {
                 state.selectedIndex = i;
-                RefreshActiveProfile(state, storage, catalog);
+                RefreshActiveProfile(state, app);
                 PrepareTaskShares(state);
                 return;
             }
@@ -305,6 +328,12 @@ void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalo
     }
 
     state.selectedIndex = 0;
-    RefreshActiveProfile(state, storage, catalog);
+    RefreshActiveProfile(state, app);
     PrepareTaskShares(state);
 }
+
+void RefreshProfiles(GuiState& state, IJobStorage& storage, SkillCatalog& catalog, const std::string& preferredId) {
+    AppContext app{state.storageDir, storage, catalog};
+    RefreshProfiles(state, app, preferredId);
+}
+
