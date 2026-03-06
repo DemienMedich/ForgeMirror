@@ -1,3 +1,10 @@
 build/
 build-gui/
 dist/
+.idea/
+.gigaide/
+imgui.ini
+*.user
+*.VC.db
+*.opendb
+*.suo
