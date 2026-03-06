@@ -37,17 +37,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Планирование и выполненные задачи в одном журнале.");
 
-    auto IsTaskStatusTransitionAllowed = [](int fromStatus, int toStatus) -> bool {
-        const int from = NormalizeTaskStatus(fromStatus);
-        const int to = NormalizeTaskStatus(toStatus);
-        if (from == to) return true;
-        // Разрешаем "reopen" (Выполнена -> В работе), но запрещаем прямой откат в "Новая".
-        if (from == kTaskStatusDone && to == kTaskStatusNew) {
-            return false;
-        }
-        return true;
-    };
-
     auto ResolveTaskActor = [&state]() -> std::string {
         if (state.isAdmin) return "admin";
         if (state.active) {
@@ -56,213 +45,97 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return "system";
     };
 
-    auto ResolveProfileAuditLabel = [&state](const std::string& profileId) -> std::string {
-        for (const auto& info : state.profiles) {
-            if (info.id == profileId) {
-                return "[" + info.id + "] " + info.name;
-            }
-        }
-        return profileId;
-    };
-
-    auto FormatAssigneesAudit = [&](const std::vector<std::string>& assignees) -> std::string {
-        if (assignees.empty()) return u8"—";
-        std::ostringstream out;
-        out.imbue(std::locale::classic());
-        bool first = true;
-        for (const auto& profileId : assignees) {
-            if (profileId.empty()) continue;
-            if (!first) out << ", ";
-            first = false;
-            out << ResolveProfileAuditLabel(profileId);
-        }
-        std::string value = out.str();
-        return value.empty() ? std::string(u8"—") : value;
-    };
-
-    auto FormatDeadlineAudit = [](std::int64_t deadlineAt) -> std::string {
-        return deadlineAt > 0 ? FormatTimestamp(deadlineAt, "%Y-%m-%d %H:%M") : std::string(u8"—");
-    };
-
-    auto ResolveProjectAuditLabel = [&state](const std::string& projectId, const std::string& fallback) -> std::string {
-        if (!projectId.empty()) {
-            for (const auto& project : state.projects) {
-                if (project.id == projectId) {
-                    return project.name;
-                }
-            }
-        }
-        if (!fallback.empty()) return fallback;
-        return u8"Без проекта";
-    };
-
-    auto AppendTaskAuditEntry = [&](const std::string& taskId,
-                                   const std::string& field,
-                                   const std::string& oldValue,
-                                   const std::string& newValue) {
-        if (oldValue == newValue) return;
-        if (!AppendTaskAudit(state.storageDir, ResolveTaskActor(), taskId, field, oldValue, newValue, &state.taskAudit)) {
-            AppendAppLog(state, AppLogLevel::Warning, u8"Задачи", u8"Не удалось записать task-audit.log");
-        }
-    };
-
-    auto UpdateTaskStatus = [&state, &IsTaskStatusTransitionAllowed, &AppendTaskAuditEntry](const std::string& taskId, int newStatus) -> bool {
-        auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
-                               [&](const TaskEntry& item) { return item.id == taskId; });
-        if (it == state.tasks.end()) {
-            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
-            return false;
-        }
-        const int prev = NormalizeTaskStatus(it->status);
-        const int next = NormalizeTaskStatus(newStatus);
-        if (prev == next) {
-            return true;
-        }
-        if (!IsTaskStatusTransitionAllowed(prev, next)) {
-            SetStatus(state, u8"Недопустимый переход статуса (Выполнена -> Новая).", 1.0f, 0.75f, 0.35f);
-            return false;
-        }
-        const std::string oldLabel = TaskStatusLabel(prev);
-        const std::string newLabel = TaskStatusLabel(next);
-        it->status = next;
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            AppendTaskAuditEntry(taskId, "status", oldLabel, newLabel);
-            SetStatus(state, u8"Статус задачи обновлен.", 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        it->status = prev;
-        SetStatus(state, u8"Не удалось сохранить статус задачи.", 1.0f, 0.45f, 0.45f);
-        return false;
-    };
-
-    auto UpdateTaskPriority = [&state, &AppendTaskAuditEntry](const std::string& taskId, int newPriority) -> bool {
-        auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
-                               [&](const TaskEntry& item) { return item.id == taskId; });
-        if (it == state.tasks.end()) {
-            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
-            return false;
-        }
-        const int prev = NormalizeTaskPriority(it->priority);
-        const int next = NormalizeTaskPriority(newPriority);
-        if (prev == next) {
-            return true;
-        }
-        const std::string oldLabel = TaskPriorityLabel(prev);
-        const std::string newLabel = TaskPriorityLabel(next);
-        it->priority = next;
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            AppendTaskAuditEntry(taskId, "priority", oldLabel, newLabel);
-            SetStatus(state, u8"Приоритет задачи обновлен.", 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        it->priority = prev;
-        SetStatus(state, u8"Не удалось сохранить приоритет задачи.", 1.0f, 0.45f, 0.45f);
-        return false;
-    };
-
     auto FindTaskMutable = [&state](const std::string& taskId) -> TaskEntry* {
         auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
                                [&](const TaskEntry& item) { return item.id == taskId; });
         return (it == state.tasks.end()) ? nullptr : &(*it);
     };
 
-    auto UpdateTaskProject = [&](const std::string& taskId, int projectIndex) -> bool {
-        TaskEntry* task = FindTaskMutable(taskId);
-        if (!task) {
-            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
-            return false;
+    auto UpdateTaskStatus = [&](const std::string& taskId, int newStatus) -> bool {
+        AppMutationResult mutation = AppUpdateTaskStatus(
+            state.storageDir, state.tasks, taskId, newStatus, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Статус задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            }
+            return true;
         }
-        const std::string prevId = task->projectId;
-        const std::string prevName = task->project;
-        if (projectIndex <= 0) {
-            task->projectId.clear();
-            task->project.clear();
-        } else {
+        const bool warn = (mutation.errorMessage == u8"Недопустимый переход статуса (Выполнена -> Новая).");
+        SetStatus(state, mutation.errorMessage, warn ? 1.0f : 1.0f, warn ? 0.75f : 0.45f, warn ? 0.35f : 0.45f);
+        return false;
+    };
+
+    auto UpdateTaskPriority = [&](const std::string& taskId, int newPriority) -> bool {
+        AppMutationResult mutation = AppUpdateTaskPriority(
+            state.storageDir, state.tasks, taskId, newPriority, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Приоритет задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            }
+            return true;
+        }
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto UpdateTaskProject = [&](const std::string& taskId, int projectIndex) -> bool {
+        std::string nextProjectId;
+        std::string nextProjectName;
+        if (projectIndex > 0) {
             const int idx = projectIndex - 1;
             if (idx < 0 || idx >= static_cast<int>(state.projects.size())) {
                 SetStatus(state, u8"Проект не найден.", 1.0f, 0.45f, 0.45f);
                 return false;
             }
-            task->projectId = state.projects[idx].id;
-            task->project = state.projects[idx].name;
+            nextProjectId = state.projects[idx].id;
+            nextProjectName = state.projects[idx].name;
         }
-        if (task->projectId == prevId && task->project == prevName) {
+        AppMutationResult mutation = AppUpdateTaskProject(
+            state.storageDir, state.tasks, taskId, nextProjectId, nextProjectName, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Проект задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            }
             return true;
         }
-        const std::string oldProject = ResolveProjectAuditLabel(prevId, prevName);
-        const std::string newProject = ResolveProjectAuditLabel(task->projectId, task->project);
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            AppendTaskAuditEntry(taskId, "project", oldProject, newProject);
-            SetStatus(state, u8"Проект задачи обновлен.", 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        task->projectId = prevId;
-        task->project = prevName;
-        SetStatus(state, u8"Не удалось сохранить проект задачи.", 1.0f, 0.45f, 0.45f);
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
         return false;
     };
 
     auto UpdateTaskDeadline = [&](const std::string& taskId, const std::string& deadlineInput) -> bool {
-        TaskEntry* task = FindTaskMutable(taskId);
-        if (!task) {
-            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
-            return false;
-        }
-        const std::int64_t prevDeadline = task->deadlineAt;
         const std::string trimmed = TrimStringGui(deadlineInput);
-        if (trimmed.empty()) {
-            task->deadlineAt = 0;
-        } else {
+        std::optional<std::int64_t> deadlineAt;
+        if (!trimmed.empty()) {
             std::int64_t parsed = 0;
-            if (!ParseTaskDeadlineInput(trimmed, parsed)) {
+            if (!AppParseTaskDeadlineInput(trimmed, parsed)) {
                 SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
                 return false;
             }
-            task->deadlineAt = parsed;
+            deadlineAt = parsed;
         }
-        if (task->deadlineAt == prevDeadline) {
+        AppMutationResult mutation = AppUpdateTaskDeadline(
+            state.storageDir, state.tasks, taskId, deadlineAt, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Дедлайн задачи обновлен.", 0.45f, 0.9f, 0.45f);
+            }
             return true;
         }
-        const std::string oldDeadline = FormatDeadlineAudit(prevDeadline);
-        const std::string newDeadline = FormatDeadlineAudit(task->deadlineAt);
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            AppendTaskAuditEntry(taskId, "deadline", oldDeadline, newDeadline);
-            SetStatus(state, u8"Дедлайн задачи обновлен.", 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        task->deadlineAt = prevDeadline;
-        SetStatus(state, u8"Не удалось сохранить дедлайн задачи.", 1.0f, 0.45f, 0.45f);
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
         return false;
     };
 
     auto UpdateTaskAssignees = [&](const std::string& taskId, const std::vector<std::string>& assignees) -> bool {
-        TaskEntry* task = FindTaskMutable(taskId);
-        if (!task) {
-            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
-            return false;
-        }
-        if (assignees.empty()) {
-            SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
-            return false;
-        }
-        if (!task->participants.empty()) {
-            SetStatus(state, u8"Для этой задачи исполнители зафиксированы по записи XP.", 1.0f, 0.75f, 0.35f);
-            return false;
-        }
-        const std::vector<std::string> prevAssignees = task->assignees;
-        task->assignees = assignees;
-        if (task->assignees == prevAssignees) {
+        AppMutationResult mutation = AppUpdateTaskAssignees(
+            state.storageDir, state.tasks, taskId, assignees, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Исполнители задачи обновлены.", 0.45f, 0.9f, 0.45f);
+            }
             return true;
         }
-        const std::string oldAssignees = FormatAssigneesAudit(prevAssignees);
-        const std::string newAssignees = FormatAssigneesAudit(task->assignees);
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            AppendTaskAuditEntry(taskId, "assignees", oldAssignees, newAssignees);
-            SetStatus(state, u8"Исполнители задачи обновлены.", 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        task->assignees = prevAssignees;
-        SetStatus(state, u8"Не удалось сохранить исполнителей задачи.", 1.0f, 0.45f, 0.45f);
+        const bool warn = (mutation.errorMessage == u8"Для этой задачи исполнители зафиксированы по записи XP.");
+        SetStatus(state, mutation.errorMessage, 1.0f, warn ? 0.75f : 0.45f, warn ? 0.35f : 0.45f);
         return false;
     };
 
@@ -388,12 +261,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 } else {
                     TaskEntry task;
                     const std::int64_t nowSec = NowSeconds();
-                    task.id = GenerateTaskId(nowSec, state.tasks.size() + 1);
+                    task.id = AppGenerateTaskId(nowSec, state.tasks.size() + 1);
                     task.title = title;
                     task.description = description;
                     task.deadlineAt = deadlineTs;
-                    task.status = NormalizeTaskStatus(state.taskPlanStatus);
-                    task.priority = NormalizeTaskPriority(state.taskPlanPriority);
+                    task.status = AppNormalizeTaskStatus(state.taskPlanStatus);
+                    task.priority = AppNormalizeTaskPriority(state.taskPlanPriority);
                     task.createdAt = nowSec;
                     task.assignees = assignees;
                     if (state.taskPlanProjectIndex > 0) {
@@ -403,10 +276,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             task.project = state.projects[projectIdx].name;
                         }
                     }
-                    state.tasks.push_back(std::move(task));
-                    const TaskEntry& createdTask = state.tasks.back();
-                    if (SaveTasks(state.storageDir, state.tasks)) {
-                        AppendTaskAuditEntry(createdTask.id, "create", u8"—", TaskDisplayTitle(createdTask));
+                    AppMutationResult mutation = AppCreateTaskEntry(
+                        state.storageDir, state.tasks, task, ResolveTaskActor(), &state.taskAudit);
+                    if (mutation.ok) {
                         SetStatus(state, u8"Задача создана.", 0.45f, 0.9f, 0.45f);
                         state.taskPlanTitle.fill('\0');
                         state.taskPlanDescription.fill('\0');
@@ -415,7 +287,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         for (auto& flag : state.taskPlanAssignees) flag = 0;
                         EnsureTaskPlanAssigneesSize(state);
                     } else {
-                        SetStatus(state, u8"Не удалось сохранить задачу.", 1.0f, 0.45f, 0.45f);
+                        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
                     }
                 }
             }
@@ -1003,102 +875,43 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     ImGui::Spacing();
 
     auto ApplyBulkStatus = [&]() -> bool {
-        struct PrevState {
-            TaskEntry* task = nullptr;
-            int status = 0;
-        };
-        std::vector<PrevState> touched;
-        touched.reserve(state.taskSelectionIds.size());
-        int changed = 0;
-        int invalidTransition = 0;
-        const int targetStatus = NormalizeTaskStatus(state.taskBulkStatus);
-        for (const auto& taskId : state.taskSelectionIds) {
-            TaskEntry* task = FindTaskMutable(taskId);
-            if (!task) continue;
-            const int prev = NormalizeTaskStatus(task->status);
-            if (prev == targetStatus) {
-                continue;
-            }
-            if (!IsTaskStatusTransitionAllowed(prev, targetStatus)) {
-                invalidTransition += 1;
-                continue;
-            }
-            touched.push_back({task, prev});
-            task->status = targetStatus;
-            changed += 1;
+        AppMutationResult mutation = AppBulkUpdateTaskStatus(
+            state.storageDir, state.tasks, state.taskSelectionIds, state.taskBulkStatus, ResolveTaskActor(), &state.taskAudit);
+        if (!mutation.ok) {
+            SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+            return false;
         }
-        if (changed <= 0) {
-            if (invalidTransition > 0) {
-                std::string msg = u8"Пропущено переходов статуса: " + std::to_string(invalidTransition);
+        if (!mutation.changed) {
+            if (mutation.skippedCount > 0) {
+                std::string msg = u8"Пропущено переходов статуса: " + std::to_string(mutation.skippedCount);
                 SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
             } else {
                 SetStatus(state, u8"Нет задач для изменения статуса.", 1.0f, 0.75f, 0.35f);
             }
             return false;
         }
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            for (const auto& prev : touched) {
-                if (!prev.task) continue;
-                AppendTaskAuditEntry(prev.task->id, "status", TaskStatusLabel(prev.status), TaskStatusLabel(targetStatus));
-            }
-            std::string msg = u8"Статус обновлен для задач: " + std::to_string(changed);
-            if (invalidTransition > 0) {
-                msg += u8" (пропущено: " + std::to_string(invalidTransition) + ")";
-            }
-            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-            return true;
+        std::string msg = u8"Статус обновлен для задач: " + std::to_string(mutation.changedCount);
+        if (mutation.skippedCount > 0) {
+            msg += u8" (пропущено: " + std::to_string(mutation.skippedCount) + ")";
         }
-        for (const auto& prev : touched) {
-            if (prev.task) {
-                prev.task->status = prev.status;
-            }
-        }
-        SetStatus(state, u8"Не удалось сохранить массовое изменение статуса.", 1.0f, 0.45f, 0.45f);
-        return false;
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+        return true;
     };
 
     auto ApplyBulkPriority = [&]() -> bool {
-        struct PrevPriority {
-            TaskEntry* task = nullptr;
-            int priority = kTaskPriorityMedium;
-        };
-        std::vector<PrevPriority> touched;
-        touched.reserve(state.taskSelectionIds.size());
-        const int targetPriority = NormalizeTaskPriority(state.taskBulkPriority);
-        int changed = 0;
-        for (const auto& taskId : state.taskSelectionIds) {
-            TaskEntry* task = FindTaskMutable(taskId);
-            if (!task) continue;
-            const int prev = NormalizeTaskPriority(task->priority);
-            if (prev == targetPriority) {
-                continue;
-            }
-            touched.push_back({task, prev});
-            task->priority = targetPriority;
-            changed += 1;
+        AppMutationResult mutation = AppBulkUpdateTaskPriority(
+            state.storageDir, state.tasks, state.taskSelectionIds, state.taskBulkPriority, ResolveTaskActor(), &state.taskAudit);
+        if (!mutation.ok) {
+            SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+            return false;
         }
-        if (changed <= 0) {
+        if (!mutation.changed) {
             SetStatus(state, u8"Нет задач для изменения приоритета.", 1.0f, 0.75f, 0.35f);
             return false;
         }
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            for (const auto& prev : touched) {
-                if (!prev.task) continue;
-                AppendTaskAuditEntry(prev.task->id, "priority",
-                    TaskPriorityLabel(prev.priority),
-                    TaskPriorityLabel(targetPriority));
-            }
-            std::string msg = u8"Приоритет обновлен для задач: " + std::to_string(changed);
-            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        for (const auto& prev : touched) {
-            if (prev.task) {
-                prev.task->priority = prev.priority;
-            }
-        }
-        SetStatus(state, u8"Не удалось сохранить массовое изменение приоритета.", 1.0f, 0.45f, 0.45f);
-        return false;
+        std::string msg = u8"Приоритет обновлен для задач: " + std::to_string(mutation.changedCount);
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+        return true;
     };
 
     auto ApplyBulkProject = [&]() -> bool {
@@ -1110,97 +923,45 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             (state.taskBulkProjectIndex - 1) < static_cast<int>(state.projects.size()))
             ? state.projects[state.taskBulkProjectIndex - 1].name
             : std::string();
-        struct PrevProject {
-            TaskEntry* task = nullptr;
-            std::string projectId;
-            std::string projectName;
-        };
-        std::vector<PrevProject> touched;
-        touched.reserve(state.taskSelectionIds.size());
-        int changed = 0;
-        for (const auto& taskId : state.taskSelectionIds) {
-            TaskEntry* task = FindTaskMutable(taskId);
-            if (!task) continue;
-            if (task->projectId == nextProjectId && task->project == nextProjectName) {
-                continue;
-            }
-            touched.push_back({task, task->projectId, task->project});
-            task->projectId = nextProjectId;
-            task->project = nextProjectName;
-            changed += 1;
+        AppMutationResult mutation = AppBulkUpdateTaskProject(
+            state.storageDir, state.tasks, state.taskSelectionIds, nextProjectId, nextProjectName, ResolveTaskActor(), &state.taskAudit);
+        if (!mutation.ok) {
+            SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+            return false;
         }
-        if (changed <= 0) {
+        if (!mutation.changed) {
             SetStatus(state, u8"Нет задач для изменения проекта.", 1.0f, 0.75f, 0.35f);
             return false;
         }
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            for (const auto& prev : touched) {
-                if (!prev.task) continue;
-                AppendTaskAuditEntry(prev.task->id, "project",
-                    ResolveProjectAuditLabel(prev.projectId, prev.projectName),
-                    ResolveProjectAuditLabel(prev.task->projectId, prev.task->project));
-            }
-            std::string msg = u8"Проект обновлен для задач: " + std::to_string(changed);
-            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        for (const auto& prev : touched) {
-            if (prev.task) {
-                prev.task->projectId = prev.projectId;
-                prev.task->project = prev.projectName;
-            }
-        }
-        SetStatus(state, u8"Не удалось сохранить массовое изменение проекта.", 1.0f, 0.45f, 0.45f);
-        return false;
+        std::string msg = u8"Проект обновлен для задач: " + std::to_string(mutation.changedCount);
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+        return true;
     };
 
     auto ApplyBulkDeadline = [&](bool clearDeadline) -> bool {
         const std::string deadlineInput = clearDeadline ? std::string() : TrimStringGui(state.taskBulkDeadline.data());
-        std::int64_t parsedDeadline = 0;
-        if (!deadlineInput.empty() && !ParseTaskDeadlineInput(deadlineInput, parsedDeadline)) {
-            SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
+        std::optional<std::int64_t> deadlineAt;
+        if (!deadlineInput.empty()) {
+            std::int64_t parsedDeadline = 0;
+            if (!AppParseTaskDeadlineInput(deadlineInput, parsedDeadline)) {
+                SetStatus(state, u8"Формат дедлайна: YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
+                return false;
+            }
+            deadlineAt = parsedDeadline;
+        }
+        AppMutationResult mutation = AppBulkUpdateTaskDeadline(
+            state.storageDir, state.tasks, state.taskSelectionIds, deadlineAt, ResolveTaskActor(), &state.taskAudit);
+        if (!mutation.ok) {
+            SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
             return false;
         }
-        struct PrevDeadline {
-            TaskEntry* task = nullptr;
-            std::int64_t deadlineAt = 0;
-        };
-        std::vector<PrevDeadline> touched;
-        touched.reserve(state.taskSelectionIds.size());
-        int changed = 0;
-        for (const auto& taskId : state.taskSelectionIds) {
-            TaskEntry* task = FindTaskMutable(taskId);
-            if (!task) continue;
-            const std::int64_t nextDeadline = deadlineInput.empty() ? 0 : parsedDeadline;
-            if (task->deadlineAt == nextDeadline) {
-                continue;
-            }
-            touched.push_back({task, task->deadlineAt});
-            task->deadlineAt = nextDeadline;
-            changed += 1;
-        }
-        if (changed <= 0) {
+        if (!mutation.changed) {
             SetStatus(state, u8"Нет задач для изменения дедлайна.", 1.0f, 0.75f, 0.35f);
             return false;
         }
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            for (const auto& prev : touched) {
-                if (!prev.task) continue;
-                AppendTaskAuditEntry(prev.task->id, "deadline",
-                    FormatDeadlineAudit(prev.deadlineAt),
-                    FormatDeadlineAudit(prev.task->deadlineAt));
-            }
-            std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(changed);
-            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-            return true;
-        }
-        for (const auto& prev : touched) {
-            if (prev.task) {
-                prev.task->deadlineAt = prev.deadlineAt;
-            }
-        }
-        SetStatus(state, u8"Не удалось сохранить массовое изменение дедлайна.", 1.0f, 0.45f, 0.45f);
-        return false;
+        std::string msg = u8"Дедлайн обновлен для задач: " + std::to_string(mutation.changedCount);
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+        return true;
     };
 
     auto ApplyBulkAssignees = [&]() -> bool {
@@ -1210,62 +971,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 assignees.push_back(state.profiles[i].id);
             }
         }
-        if (assignees.empty()) {
-            SetStatus(state, u8"Выберите хотя бы одного исполнителя.", 1.0f, 0.45f, 0.45f);
+        AppMutationResult mutation = AppBulkUpdateTaskAssignees(
+            state.storageDir, state.tasks, state.taskSelectionIds, assignees, ResolveTaskActor(), &state.taskAudit);
+        if (!mutation.ok) {
+            const bool warn = (mutation.errorMessage == u8"Выберите хотя бы одного исполнителя.");
+            SetStatus(state, mutation.errorMessage, 1.0f, warn ? 0.45f : 0.45f, warn ? 0.45f : 0.45f);
             return false;
         }
-        struct PrevAssignees {
-            TaskEntry* task = nullptr;
-            std::vector<std::string> assignees;
-        };
-        std::vector<PrevAssignees> touched;
-        touched.reserve(state.taskSelectionIds.size());
-        int changed = 0;
-        int lockedByXp = 0;
-        for (const auto& taskId : state.taskSelectionIds) {
-            TaskEntry* task = FindTaskMutable(taskId);
-            if (!task) continue;
-            if (!task->participants.empty()) {
-                lockedByXp += 1;
-                continue;
-            }
-            if (task->assignees == assignees) {
-                continue;
-            }
-            touched.push_back({task, task->assignees});
-            task->assignees = assignees;
-            changed += 1;
-        }
-        if (changed <= 0) {
-            if (lockedByXp > 0) {
-                std::string msg = u8"Пропущено задач с XP-участниками: " + std::to_string(lockedByXp);
+        if (!mutation.changed) {
+            if (mutation.skippedCount > 0) {
+                std::string msg = u8"Пропущено задач с XP-участниками: " + std::to_string(mutation.skippedCount);
                 SetStatus(state, msg, 1.0f, 0.75f, 0.35f);
             } else {
                 SetStatus(state, u8"Нет задач для изменения исполнителей.", 1.0f, 0.75f, 0.35f);
             }
             return false;
         }
-        if (SaveTasks(state.storageDir, state.tasks)) {
-            for (const auto& prev : touched) {
-                if (!prev.task) continue;
-                AppendTaskAuditEntry(prev.task->id, "assignees",
-                    FormatAssigneesAudit(prev.assignees),
-                    FormatAssigneesAudit(prev.task->assignees));
-            }
-            std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(changed);
-            if (lockedByXp > 0) {
-                msg += u8" (пропущено: " + std::to_string(lockedByXp) + ")";
-            }
-            SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-            return true;
+        std::string msg = u8"Исполнители обновлены для задач: " + std::to_string(mutation.changedCount);
+        if (mutation.skippedCount > 0) {
+            msg += u8" (пропущено: " + std::to_string(mutation.skippedCount) + ")";
         }
-        for (const auto& prev : touched) {
-            if (prev.task) {
-                prev.task->assignees = prev.assignees;
-            }
-        }
-        SetStatus(state, u8"Не удалось сохранить массовое изменение исполнителей.", 1.0f, 0.45f, 0.45f);
-        return false;
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+        return true;
     };
 
     if (state.isAdmin) {
@@ -1952,16 +1679,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 removedTasks.push_back(std::move(copy));
             }
             if (!idsToErase.empty()) {
-                state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
-                                                 [&](const TaskEntry& item) {
-                                                     return std::find(idsToErase.begin(), idsToErase.end(), item.id) != idsToErase.end();
-                                                 }),
-                                  state.tasks.end());
-                if (SaveTasks(state.storageDir, state.tasks)) {
-                    removed = static_cast<int>(idsToErase.size());
-                    for (const auto& removedTask : removedTasks) {
-                        AppendTaskAuditEntry(removedTask.id, "delete", TaskDisplayTitle(removedTask), u8"удалена");
-                    }
+                AppMutationResult deleteResult = AppDeleteTasksByIds(
+                    state.storageDir, state.tasks, idsToErase, ResolveTaskActor(), &state.taskAudit, nullptr);
+                if (deleteResult.ok) {
+                    removed = deleteResult.changedCount;
                     for (const auto& id : idsToErase) {
                         state.taskSelectionIds.erase(id);
                         if (state.tasksExpandedId == id) {
@@ -1969,7 +1690,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         }
                     }
                 } else {
-                    SetStatus(state, u8"Не удалось сохранить удаление задач.", 1.0f, 0.45f, 0.45f);
+                    SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
                 }
             }
             std::string msg = u8"Удалено задач: " + std::to_string(removed);
@@ -2032,11 +1753,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     rollbackOk = RollbackTask(state, storage, catalog, copy);
                 }
                 if (rollbackOk) {
-                    state.tasks.erase(std::remove_if(state.tasks.begin(), state.tasks.end(),
-                                                     [&](const TaskEntry& t) { return t.id == copy.id; }),
-                                      state.tasks.end());
-                    if (SaveTasks(state.storageDir, state.tasks)) {
-                        AppendTaskAuditEntry(copy.id, "delete", TaskDisplayTitle(copy), u8"удалена");
+                    AppMutationResult deleteResult = AppDeleteTasksByIds(
+                        state.storageDir, state.tasks, std::vector<std::string>{copy.id}, ResolveTaskActor(), &state.taskAudit, nullptr);
+                    if (deleteResult.ok) {
                         if (state.tasksExpandedId == copy.id) {
                             state.tasksExpandedId.clear();
                         }
@@ -2046,7 +1765,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             SetStatus(state, u8"Задача удалена.", 0.45f, 0.9f, 0.45f);
                         }
                     } else {
-                        SetStatus(state, u8"Не удалось сохранить удаление задачи.", 1.0f, 0.45f, 0.45f);
+                        SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
                     }
                 }
                 state.pendingTaskDeleteId.clear();

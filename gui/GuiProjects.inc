@@ -350,74 +350,42 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::TextDisabled("%s", projectName.c_str());
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
         if (ImGui::Button(u8"Удалить", ImVec2(180.0f, 0.0f))) {
-            if (projectId.empty()) {
-                SetStatus(state, u8"Не выбран проект для удаления.", 1.0f, 0.45f, 0.45f);
+            std::string actor;
+            if (state.isAdmin) {
+                actor = "admin";
+            } else if (state.active) {
+                actor = "[" + state.active->id + "] " + state.active->profile.name();
             } else {
-                const auto prevProjects = state.projects;
-                const auto prevTasks = state.tasks;
-                int detachedTasks = 0;
-                std::vector<std::pair<std::string, std::string>> detachedAudit;
-
-                state.projects.erase(std::remove_if(state.projects.begin(), state.projects.end(),
-                                                    [&](const ProjectEntry& p) { return p.id == projectId; }),
-                                     state.projects.end());
-                for (auto& task : state.tasks) {
-                    if (task.projectId == projectId) {
-                        std::string oldProject = ResolveTaskProjectName(state, task);
-                        if (oldProject.empty()) oldProject = std::string(u8"Без проекта");
-                        detachedAudit.emplace_back(task.id, std::move(oldProject));
-                        task.projectId.clear();
-                        task.project.clear();
-                        detachedTasks += 1;
-                    }
+                actor = "system";
+            }
+            AppProjectDeleteResult deleteResult = AppDeleteProjectAndDetachTasks(
+                state.storageDir, state.projects, state.tasks, projectId, actor, &state.taskAudit);
+            if (deleteResult.ok) {
+                state.projectEditIndex = -1;
+                state.newProjectName.fill('\0');
+                state.newProjectDesc.fill('\0');
+                state.pendingDeleteProjectIndex = -1;
+                state.pendingDeleteProjectId.clear();
+                std::string msg = u8"Проект удален";
+                if (deleteResult.detachedTasks > 0) {
+                    msg += u8", задач отвязано: " + std::to_string(deleteResult.detachedTasks);
                 }
-
-                const bool projectsSaved = SaveProjects(state.storageDir, state.projects);
-                const bool tasksSaved = projectsSaved && SaveTasks(state.storageDir, state.tasks);
-                if (projectsSaved && tasksSaved) {
-                    state.projectEditIndex = -1;
-                    state.newProjectName.fill('\0');
-                    state.newProjectDesc.fill('\0');
-                    state.pendingDeleteProjectIndex = -1;
-                    state.pendingDeleteProjectId.clear();
-                    std::string msg = u8"Проект удален";
-                    if (detachedTasks > 0) {
-                        msg += u8", задач отвязано: " + std::to_string(detachedTasks);
-                    }
-                    msg += ".";
-                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
-                    if (!detachedAudit.empty()) {
-                        std::string actor;
-                        if (state.isAdmin) {
-                            actor = "admin";
-                        } else if (state.active) {
-                            actor = "[" + state.active->id + "] " + state.active->profile.name();
-                        } else {
-                            actor = "system";
-                        }
-                        const std::string newValue = std::string(u8"Без проекта");
-                        for (const auto& entry : detachedAudit) {
-                            const std::string& taskId = entry.first;
-                            const std::string& oldValue = entry.second;
-                            if (taskId.empty() || oldValue == newValue) continue;
-                            if (!AppendTaskAudit(state.storageDir, actor, taskId, "project", oldValue, newValue, &state.taskAudit)) {
-                                AppendAppLog(state, AppLogLevel::Warning, u8"Проекты", u8"Не удалось записать task-audit.log");
-                            }
-                        }
-                    }
-                    ImGui::CloseCurrentPopup();
-                    deleteOpen = false;
-                } else {
-                    state.projects = prevProjects;
-                    state.tasks = prevTasks;
-                    const bool rollbackProjectsOk = SaveProjects(state.storageDir, state.projects);
-                    const bool rollbackTasksOk = SaveTasks(state.storageDir, state.tasks);
-                    if (!rollbackProjectsOk || !rollbackTasksOk) {
-                        SetStatus(state, u8"Ошибка удаления проекта и отката. Проверьте файлы в meta/.", 1.0f, 0.45f, 0.45f);
-                    } else {
-                        SetStatus(state, u8"Не удалось удалить проект: изменения отменены.", 1.0f, 0.75f, 0.35f);
-                    }
-                }
+                msg += ".";
+                SetStatus(state, msg, 0.45f, 0.9f, 0.45f);
+                ImGui::CloseCurrentPopup();
+                deleteOpen = false;
+            } else if (deleteResult.errorMessage == u8"Не удалось записать task-audit.log") {
+                AppendAppLog(state, AppLogLevel::Warning, u8"Проекты", u8"Не удалось записать task-audit.log");
+                SetStatus(state, u8"Проект удален, но task-audit.log не обновлен.", 1.0f, 0.75f, 0.35f);
+                state.projectEditIndex = -1;
+                state.newProjectName.fill('\0');
+                state.newProjectDesc.fill('\0');
+                state.pendingDeleteProjectIndex = -1;
+                state.pendingDeleteProjectId.clear();
+                ImGui::CloseCurrentPopup();
+                deleteOpen = false;
+            } else {
+                SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
             }
         }
         ImGui::SameLine();
@@ -450,55 +418,17 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::InputTextMultiline("##project_desc", state.newProjectDesc.data(), state.newProjectDesc.size(), ImVec2(-1.0f, 90.0f));
 
     if (ImGui::Button(u8"Сохранить проект", ImVec2(-1.0f, 0.0f))) {
-        const std::string name = TrimStringGui(state.newProjectName.data());
-        const std::string description = TrimStringGui(state.newProjectDesc.data());
-        if (name.empty()) {
-            SetStatus(state, u8"Название проекта обязательно.", 1.0f, 0.45f, 0.45f);
+        AppProjectSaveResult saveResult = AppSaveProjectEntry(
+            state.storageDir,
+            state.projects,
+            state.projectEditIndex,
+            TrimStringGui(state.newProjectName.data()),
+            TrimStringGui(state.newProjectDesc.data()));
+        if (saveResult.ok) {
+            state.projectEditIndex = saveResult.projectIndex;
+            SetStatus(state, u8"Проект сохранен.", 0.45f, 0.9f, 0.45f);
         } else {
-            int editIndex = state.projectEditIndex;
-            bool duplicate = false;
-            const std::string nameLower = ToLowerUtf8(name);
-            for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
-                if (i == editIndex) continue;
-                if (ToLowerUtf8(state.projects[i].name) == nameLower) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (duplicate) {
-                SetStatus(state, u8"Проект с таким названием уже существует.", 1.0f, 0.45f, 0.45f);
-            } else {
-                if (editIndex >= 0 && editIndex < static_cast<int>(state.projects.size())) {
-                    auto& project = state.projects[editIndex];
-                    project.name = name;
-                    project.description = description;
-                } else {
-                    ProjectEntry project;
-                    project.id = GenerateProjectId(state.projects);
-                    project.name = name;
-                    project.description = description;
-                    project.createdAt = NowSeconds();
-                    state.projects.push_back(std::move(project));
-                    std::sort(state.projects.begin(), state.projects.end(), [](const ProjectEntry& a, const ProjectEntry& b) {
-                        return ToLowerUtf8(a.name) < ToLowerUtf8(b.name);
-                    });
-                    for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
-                        if (state.projects[i].name == name) {
-                            editIndex = i;
-                            break;
-                        }
-                    }
-                }
-                if (SaveProjects(state.storageDir, state.projects)) {
-                    state.projectEditIndex = editIndex;
-                    SetStatus(state, u8"Проект сохранен.", 0.45f, 0.9f, 0.45f);
-                } else {
-                    SetStatus(state, u8"Не удалось сохранить проект.", 1.0f, 0.45f, 0.45f);
-                }
-            }
+            SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
         }
     }
 }
-
-
-

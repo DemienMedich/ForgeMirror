@@ -1,6 +1,7 @@
 #include "AppContext.h"
 #include "AppDomainTypes.h"
 #include "AppProfileService.h"
+#include "AppTaskProjectService.h"
 #include "AppWorkspaceDataService.h"
 #include "AppUtils.h"
 #include "IJobStorage.h"
