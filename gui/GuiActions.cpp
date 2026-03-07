@@ -1,6 +1,7 @@
 #include "GuiActions.h"
 
 #include "AppUtils.h"
+#include "AppProfileMutationService.h"
 #include "IJobStorage.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
@@ -147,69 +148,46 @@ bool MergeSkillInProfiles(IJobStorage& storage, SkillCatalog& catalog, const std
 
 CreateProfileResult CreateProfileAction(IJobStorage& storage, SkillCatalog& catalog, const std::string& name) {
     CreateProfileResult result;
-    std::string trimmed = TrimCopy(name);
-    if (trimmed.empty()) {
-        result.userError = true;
-        result.message = u8"Имя не может быть пустым.";
-        return result;
-    }
-    Profile profile(trimmed);
-    SyncProfileWithCatalog(profile, catalog);
-    if (auto info = storage.create_profile(profile)) {
-        const std::string login = "user_" + info->id;
-        const std::string password = GenerateRandomPassword();
-        profile.set_login(login);
-        profile.set_password_encoded(EncodePassword(password));
-        storage.save_profile(profile);
-        result.ok = true;
-        result.id = info->id;
-        result.login = login;
-        result.password = password;
-        result.message = u8"Профиль создан.";
-    } else {
-        result.message = u8"Не удалось создать профиль.";
-    }
+    const AppProfileCreateResult serviceResult = AppCreateProfile(storage, catalog, name);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.id = serviceResult.profileId;
+    result.login = serviceResult.login;
+    result.password = serviceResult.password;
+    result.message = serviceResult.ok ? std::string(u8"Профиль создан.") : serviceResult.errorMessage;
     return result;
 }
 
 ActionResult SetProfileArchivedAction(IJobStorage& storage, const std::string& id, bool archived) {
     ActionResult result;
-    result.ok = storage.set_archived(id, archived);
-    result.message = result.ok ? u8"Операция выполнена." : u8"Не удалось выполнить операцию.";
+    const AppProfileActionResult serviceResult = AppSetProfileArchived(storage, id, archived);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.message = serviceResult.ok ? std::string(u8"Операция выполнена.") : serviceResult.errorMessage;
     return result;
 }
 
 ActionResult DeleteProfileAction(IJobStorage& storage, const std::string& id) {
     ActionResult result;
-    result.ok = storage.delete_profile(id);
-    result.message = result.ok ? u8"Операция выполнена." : u8"Не удалось выполнить операцию.";
+    const AppProfileActionResult serviceResult = AppDeleteProfile(storage, id);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.message = serviceResult.ok ? std::string(u8"Операция выполнена.") : serviceResult.errorMessage;
     return result;
 }
 
 ActionResult SetProfileBlockedAction(IJobStorage& storage, const std::string& id, bool blocked) {
     ActionResult result;
-    if (id.empty()) {
-        result.ok = false;
-        result.userError = true;
-        result.message = u8"Профиль не выбран.";
-        return result;
-    }
-    if (!storage.set_active_profile(id)) {
-        result.ok = false;
-        result.message = u8"Не удалось активировать профиль.";
-        return result;
-    }
-    if (auto profile = storage.load_profile()) {
-        profile->set_blocked(blocked);
-        if (storage.save_profile(*profile)) {
-            result.ok = true;
-            result.changed = true;
-            result.message = blocked ? u8"Профиль заблокирован." : u8"Профиль разблокирован.";
-            return result;
-        }
-    }
-    result.ok = false;
-    result.message = u8"Не удалось сохранить профиль.";
+    AppProfileMutationResult serviceResult = AppSetProfileBlocked(storage, id, id, blocked);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.message = serviceResult.ok
+        ? (blocked ? std::string(u8"Профиль заблокирован.") : std::string(u8"Профиль разблокирован."))
+        : serviceResult.errorMessage;
     return result;
 }
 
@@ -377,67 +355,47 @@ ActionResult ClearAllSkillsAction(IJobStorage& storage, SkillCatalog& catalog,
     return result;
 }
 
-ActionResult GrantAchievementAction(Profile& profile, IJobStorage& storage, const std::string& title,
-                                    const std::string& skillId, double bonusPercent, const std::string& icon,
-                                    std::int64_t nowSec, int durationDays) {
+ActionResult GrantAchievementAction(const std::string& profileId, Profile& profile, IJobStorage& storage,
+                                    const std::string& title, const std::string& skillId, double bonusPercent,
+                                    const std::string& icon, std::int64_t nowSec, int durationDays) {
     ActionResult result;
-    Achievement a;
-    a.title = title;
-    a.skill = skillId;
-    a.bonusPercent = bonusPercent;
-    a.icon = icon;
-    a.awardedAt = nowSec;
-    if (durationDays > 0) {
-        a.expiresAt = nowSec + static_cast<std::int64_t>(durationDays) * 24 * 3600;
-    } else {
-        a.expiresAt = 0;
+    AppProfileMutationResult serviceResult = AppGrantAchievement(storage, profileId, profileId, title, skillId,
+                                                                 bonusPercent, icon, nowSec, durationDays);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.message = serviceResult.ok ? std::string(u8"Ачивка выдана.") : serviceResult.errorMessage;
+    if (serviceResult.ok && serviceResult.profile) {
+        profile = *serviceResult.profile;
     }
-    profile.add_achievement(a);
-    storage.save_profile(profile);
-    result.ok = true;
-    result.message = u8"Ачивка выдана.";
     return result;
 }
 
-ActionResult UpdateAchievementAction(Profile& profile, IJobStorage& storage, int index,
+ActionResult UpdateAchievementAction(const std::string& profileId, Profile& profile, IJobStorage& storage, int index,
                                      const std::string& title, double bonusPercent, const std::string& icon,
                                      std::int64_t nowSec, int durationDays) {
     ActionResult result;
-    auto achList = profile.achievements();
-    if (index < 0 || index >= static_cast<int>(achList.size())) {
-        result.userError = true;
-        result.message = u8"Сначала выберите ачивку.";
-        return result;
+    AppProfileMutationResult serviceResult = AppUpdateAchievement(storage, profileId, profileId, index, title,
+                                                                  bonusPercent, icon, nowSec, durationDays);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.message = serviceResult.ok ? std::string(u8"Ачивка обновлена.") : serviceResult.errorMessage;
+    if (serviceResult.ok && serviceResult.profile) {
+        profile = *serviceResult.profile;
     }
-    Achievement& a = achList[static_cast<size_t>(index)];
-    a.title = title;
-    a.icon = icon;
-    a.bonusPercent = bonusPercent;
-    if (durationDays > 0) {
-        if (a.awardedAt == 0) a.awardedAt = nowSec;
-        a.expiresAt = a.awardedAt + static_cast<std::int64_t>(durationDays) * 24 * 3600;
-    } else {
-        a.expiresAt = 0;
-    }
-    profile.set_achievements(achList);
-    storage.save_profile(profile);
-    result.ok = true;
-    result.message = u8"Ачивка обновлена.";
     return result;
 }
 
-ActionResult DeleteAchievementAction(Profile& profile, IJobStorage& storage, int index) {
+ActionResult DeleteAchievementAction(const std::string& profileId, Profile& profile, IJobStorage& storage, int index) {
     ActionResult result;
-    auto achList = profile.achievements();
-    if (index < 0 || index >= static_cast<int>(achList.size())) {
-        result.userError = true;
-        result.message = u8"Сначала выберите ачивку.";
-        return result;
+    AppProfileMutationResult serviceResult = AppDeleteAchievement(storage, profileId, profileId, index);
+    result.ok = serviceResult.ok;
+    result.userError = serviceResult.userError;
+    result.changed = serviceResult.changed;
+    result.message = serviceResult.ok ? std::string(u8"Ачивка удалена.") : serviceResult.errorMessage;
+    if (serviceResult.ok && serviceResult.profile) {
+        profile = *serviceResult.profile;
     }
-    achList.erase(achList.begin() + index);
-    profile.set_achievements(achList);
-    storage.save_profile(profile);
-    result.ok = true;
-    result.message = u8"Ачивка удалена.";
     return result;
 }

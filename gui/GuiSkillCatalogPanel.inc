@@ -762,7 +762,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::InputInt(u8"Срок (дней, 0 = без срока)", &state.achDurationDays);
                     if (state.achDurationDays < 0) state.achDurationDays = 0;
                     if (ImGui::Button(u8"Выдать ачивку")) {
-                        ActionResult result = GrantAchievementAction(state.active->profile, storage,
+                        ActionResult result = GrantAchievementAction(state.active->id, state.active->profile, storage,
                                                                     state.achTitle.data(), skillId,
                                                                     static_cast<double>(state.achBonus),
                                                                     state.achIcon.data(), nowSecGlobal,
@@ -777,7 +777,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                     ImGui::SameLine();
                     if (ImGui::Button(u8"Сохранить изменения")) {
-                        ActionResult result = UpdateAchievementAction(state.active->profile, storage,
+                        ActionResult result = UpdateAchievementAction(state.active->id, state.active->profile, storage,
                                                                      state.selectedAchievementIndex,
                                                                      state.achTitle.data(),
                                                                      static_cast<double>(state.achBonus),
@@ -792,7 +792,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                     ImGui::SameLine();
                     if (ImGui::Button(u8"Удалить ачивку")) {
-                        ActionResult result = DeleteAchievementAction(state.active->profile, storage,
+                        ActionResult result = DeleteAchievementAction(state.active->id, state.active->profile, storage,
                                                                      state.selectedAchievementIndex);
                         AppLogLevel level = LogLevelForResult(result);
                         SetStatus(state, result.message, result.ok ? 0.45f : 1.0f, result.ok ? 0.9f : 0.45f,

@@ -57,10 +57,10 @@ ActionResult ClearAllSkillsAction(IJobStorage& storage, SkillCatalog& catalog,
                                   const std::filesystem::path& storageDir,
                                   const std::string& restoreId);
 
-ActionResult GrantAchievementAction(Profile& profile, IJobStorage& storage, const std::string& title,
-                                    const std::string& skillId, double bonusPercent, const std::string& icon,
-                                    std::int64_t nowSec, int durationDays);
-ActionResult UpdateAchievementAction(Profile& profile, IJobStorage& storage, int index,
+ActionResult GrantAchievementAction(const std::string& profileId, Profile& profile, IJobStorage& storage,
+                                    const std::string& title, const std::string& skillId, double bonusPercent,
+                                    const std::string& icon, std::int64_t nowSec, int durationDays);
+ActionResult UpdateAchievementAction(const std::string& profileId, Profile& profile, IJobStorage& storage, int index,
                                      const std::string& title, double bonusPercent, const std::string& icon,
                                      std::int64_t nowSec, int durationDays);
-ActionResult DeleteAchievementAction(Profile& profile, IJobStorage& storage, int index);
+ActionResult DeleteAchievementAction(const std::string& profileId, Profile& profile, IJobStorage& storage, int index);

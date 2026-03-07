@@ -1,13 +1,26 @@
 #include "AppProfileMutationService.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <utility>
 
 #include "AppUtils.h"
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
 
 namespace {
+
+std::string TrimCopy(const std::string& input) {
+    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+    std::string out = input;
+    out.erase(out.begin(), std::find_if(out.begin(), out.end(),
+                                        [&](unsigned char c) { return !is_space(c); }));
+    out.erase(std::find_if(out.rbegin(), out.rend(),
+                           [&](unsigned char c) { return !is_space(c); }).base(),
+              out.end());
+    return out;
+}
 
 void RestoreActiveProfile(IJobStorage& storage, const std::string& restoreProfileId) {
     if (!restoreProfileId.empty()) {
@@ -27,6 +40,7 @@ AppProfileMutationResult PersistProfile(IJobStorage& storage,
                                         const Profile& profile) {
     AppProfileMutationResult result;
     if (profileId.empty()) {
+        result.userError = true;
         result.errorMessage = u8"Профиль не выбран.";
         return result;
     }
@@ -53,6 +67,7 @@ AppProfileMutationResult LoadProfileForMutation(IJobStorage& storage,
                                                 const std::string& profileId) {
     AppProfileMutationResult result;
     if (profileId.empty()) {
+        result.userError = true;
         result.errorMessage = u8"Профиль не выбран.";
         return result;
     }
@@ -61,18 +76,130 @@ AppProfileMutationResult LoadProfileForMutation(IJobStorage& storage,
         result.errorMessage = u8"Не удалось активировать профиль.";
         return result;
     }
-    auto profile = storage.load_profile();
-    if (!profile) {
+    auto loaded = storage.load_profile();
+    if (!loaded) {
         RestoreActiveProfile(storage, restoreProfileId);
         result.errorMessage = u8"Не удалось загрузить профиль.";
         return result;
     }
     result.ok = true;
-    result.profile = std::move(profile);
+    result.profile = std::move(loaded);
     return result;
 }
 
+Achievement BuildAchievement(const std::string& title,
+                             const std::string& skillId,
+                             double bonusPercent,
+                             const std::string& icon,
+                             std::int64_t nowSec,
+                             int durationDays) {
+    Achievement achievement;
+    achievement.title = title;
+    achievement.skill = skillId;
+    achievement.bonusPercent = bonusPercent;
+    achievement.icon = icon;
+    achievement.awardedAt = nowSec;
+    achievement.expiresAt = (durationDays > 0)
+        ? nowSec + static_cast<std::int64_t>(durationDays) * 24 * 3600
+        : 0;
+    return achievement;
+}
+
 } // namespace
+
+AppProfileCreateResult AppCreateProfile(IJobStorage& storage,
+                                        SkillCatalog& catalog,
+                                        const std::string& name) {
+    AppProfileCreateResult result;
+    const std::string trimmed = TrimCopy(name);
+    if (trimmed.empty()) {
+        result.userError = true;
+        result.errorMessage = u8"Имя не может быть пустым.";
+        return result;
+    }
+
+    Profile profile(trimmed);
+    SyncProfileWithCatalog(profile, catalog);
+    auto info = storage.create_profile(profile);
+    if (!info) {
+        result.errorMessage = u8"Не удалось создать профиль.";
+        return result;
+    }
+
+    const std::string login = "user_" + info->id;
+    const std::string password = GenerateRandomPassword();
+    profile.set_login(login);
+    profile.set_password_encoded(EncodePassword(password));
+    if (!storage.save_profile(profile)) {
+        storage.delete_profile(info->id);
+        result.errorMessage = u8"Не удалось сохранить профиль.";
+        return result;
+    }
+
+    result.ok = true;
+    result.changed = true;
+    result.profileId = info->id;
+    result.login = login;
+    result.password = password;
+    return result;
+}
+
+AppProfileActionResult AppSetProfileArchived(IJobStorage& storage,
+                                             const std::string& profileId,
+                                             bool archived) {
+    AppProfileActionResult result;
+    if (profileId.empty()) {
+        result.userError = true;
+        result.errorMessage = u8"Профиль не выбран.";
+        return result;
+    }
+    result.ok = storage.set_archived(profileId, archived);
+    result.changed = result.ok;
+    if (!result.ok) {
+        result.errorMessage = u8"Не удалось выполнить операцию.";
+    }
+    return result;
+}
+
+AppProfileActionResult AppDeleteProfile(IJobStorage& storage,
+                                        const std::string& profileId) {
+    AppProfileActionResult result;
+    if (profileId.empty()) {
+        result.userError = true;
+        result.errorMessage = u8"Профиль не выбран.";
+        return result;
+    }
+    result.ok = storage.delete_profile(profileId);
+    result.changed = result.ok;
+    if (!result.ok) {
+        result.errorMessage = u8"Не удалось выполнить операцию.";
+    }
+    return result;
+}
+
+AppProfileMutationResult AppSetProfileBlocked(IJobStorage& storage,
+                                              const std::string& restoreProfileId,
+                                              const std::string& profileId,
+                                              bool blocked) {
+    AppProfileMutationResult loaded = LoadProfileForMutation(storage, restoreProfileId, profileId);
+    if (!loaded.ok || !loaded.profile) {
+        return loaded;
+    }
+
+    Profile profile = *loaded.profile;
+    if (profile.is_blocked() == blocked) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = true;
+        loaded.changed = false;
+        loaded.affectedProfiles = 0;
+        loaded.profile = profile;
+        loaded.errorMessage.clear();
+        return loaded;
+    }
+
+    profile.set_blocked(blocked);
+    return PersistProfile(storage, restoreProfileId, profileId, profile);
+}
 
 AppProfileMutationResult AppSaveProfileSnapshot(IJobStorage& storage,
                                                 const std::string& restoreProfileId,
@@ -95,6 +222,7 @@ AppProfileMutationResult AppChangeProfilePassword(IJobStorage& storage,
     if (newPassword.empty()) {
         RestoreActiveProfile(storage, restoreProfileId);
         loaded.ok = false;
+        loaded.userError = true;
         loaded.errorMessage = u8"Новый пароль не может быть пустым.";
         loaded.profile.reset();
         return loaded;
@@ -105,6 +233,7 @@ AppProfileMutationResult AppChangeProfilePassword(IJobStorage& storage,
         !VerifyEncodedPassword(profile, currentPassword)) {
         RestoreActiveProfile(storage, restoreProfileId);
         loaded.ok = false;
+        loaded.userError = true;
         loaded.errorMessage = u8"Неверный текущий пароль.";
         loaded.profile.reset();
         return loaded;
@@ -181,6 +310,84 @@ AppProfileMutationResult AppAdjustProfileWallet(IJobStorage& storage,
     }
 
     profile.set_wallet_balance(nextBalance);
+    return PersistProfile(storage, restoreProfileId, profileId, profile);
+}
+
+AppProfileMutationResult AppGrantAchievement(IJobStorage& storage,
+                                             const std::string& restoreProfileId,
+                                             const std::string& profileId,
+                                             const std::string& title,
+                                             const std::string& skillId,
+                                             double bonusPercent,
+                                             const std::string& icon,
+                                             std::int64_t nowSec,
+                                             int durationDays) {
+    AppProfileMutationResult loaded = LoadProfileForMutation(storage, restoreProfileId, profileId);
+    if (!loaded.ok || !loaded.profile) {
+        return loaded;
+    }
+    Profile profile = *loaded.profile;
+    profile.add_achievement(BuildAchievement(title, skillId, bonusPercent, icon, nowSec, durationDays));
+    return PersistProfile(storage, restoreProfileId, profileId, profile);
+}
+
+AppProfileMutationResult AppUpdateAchievement(IJobStorage& storage,
+                                              const std::string& restoreProfileId,
+                                              const std::string& profileId,
+                                              int index,
+                                              const std::string& title,
+                                              double bonusPercent,
+                                              const std::string& icon,
+                                              std::int64_t nowSec,
+                                              int durationDays) {
+    AppProfileMutationResult loaded = LoadProfileForMutation(storage, restoreProfileId, profileId);
+    if (!loaded.ok || !loaded.profile) {
+        return loaded;
+    }
+    Profile profile = *loaded.profile;
+    auto achievements = profile.achievements();
+    if (index < 0 || index >= static_cast<int>(achievements.size())) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false;
+        loaded.userError = true;
+        loaded.errorMessage = u8"Сначала выберите ачивку.";
+        loaded.profile.reset();
+        return loaded;
+    }
+    Achievement& achievement = achievements[static_cast<size_t>(index)];
+    achievement.title = title;
+    achievement.icon = icon;
+    achievement.bonusPercent = bonusPercent;
+    if (durationDays > 0) {
+        if (achievement.awardedAt == 0) achievement.awardedAt = nowSec;
+        achievement.expiresAt = achievement.awardedAt + static_cast<std::int64_t>(durationDays) * 24 * 3600;
+    } else {
+        achievement.expiresAt = 0;
+    }
+    profile.set_achievements(achievements);
+    return PersistProfile(storage, restoreProfileId, profileId, profile);
+}
+
+AppProfileMutationResult AppDeleteAchievement(IJobStorage& storage,
+                                              const std::string& restoreProfileId,
+                                              const std::string& profileId,
+                                              int index) {
+    AppProfileMutationResult loaded = LoadProfileForMutation(storage, restoreProfileId, profileId);
+    if (!loaded.ok || !loaded.profile) {
+        return loaded;
+    }
+    Profile profile = *loaded.profile;
+    auto achievements = profile.achievements();
+    if (index < 0 || index >= static_cast<int>(achievements.size())) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false;
+        loaded.userError = true;
+        loaded.errorMessage = u8"Сначала выберите ачивку.";
+        loaded.profile.reset();
+        return loaded;
+    }
+    achievements.erase(achievements.begin() + index);
+    profile.set_achievements(achievements);
     return PersistProfile(storage, restoreProfileId, profileId, profile);
 }
 
