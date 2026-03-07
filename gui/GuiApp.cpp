@@ -1,6 +1,7 @@
 #include "AppContext.h"
 #include "AppDomainTypes.h"
 #include "AppProfileService.h"
+#include "AppProfileMutationService.h"
 #include "AppTaskProjectService.h"
 #include "AppProfessionService.h"
 #include "AppPipelineService.h"

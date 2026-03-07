@@ -307,29 +307,33 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     SetStatus(state, u8"Пароли не совпадают.", 1.0f, 0.45f, 0.45f);
                     return;
                 }
-                if (hasPassword && !VerifyProfilePassword(profile, current)) {
-                    SetStatus(state, u8"Неверный текущий пароль.", 1.0f, 0.45f, 0.45f);
+                AppProfileMutationResult mutation = AppChangeProfilePassword(
+                    storage, state.active->id, state.active->id, current, next, hasPassword);
+                if (!mutation.ok || !mutation.profile) {
+                    SetStatus(state,
+                              mutation.errorMessage.empty() ? u8"Не удалось сохранить пароль." : mutation.errorMessage,
+                              1.0f, 0.45f, 0.45f);
                     return;
                 }
-                profile.set_password_encoded(EncodePassword(next));
-                storage.set_active_profile(state.active->id);
-                if (storage.save_profile(profile)) {
-                    state.active->profile = profile;
-                    state.unlockedProfiles.insert(state.active->id);
-                    SaveProfileAccessSettings(state);
-                    AppendProfileAudit(state.storageDir, state.active->id, "password_change");
-                    SetStatus(state, u8"Пароль обновлён.", 0.45f, 0.9f, 0.45f);
+                state.active->profile = *mutation.profile;
+                state.unlockedProfiles.erase(state.active->id);
+                state.trustedProfiles.erase(state.active->id);
+                const int trustDays = (state.profileTrustDays >= 90) ? 90 : (state.profileTrustDays >= 30 ? 30 : 0);
+                if (trustDays > 0) {
+                    const std::int64_t expiresAt = NowSeconds() + static_cast<std::int64_t>(trustDays) * 86400;
+                    state.trustedProfiles[state.active->id] = expiresAt;
                 } else {
-                    SetStatus(state, u8"Не удалось сохранить пароль.", 1.0f, 0.45f, 0.45f);
-                    return;
+                    state.unlockedProfiles.insert(state.active->id);
                 }
+                SaveProfileAccessSettings(state);
+                AppendProfileAudit(state.storageDir, state.active->id, "password_change");
+                SetStatus(state, u8"Пароль обновлён.", 0.45f, 0.9f, 0.45f);
                 std::fill(state.profilePasswordInput.begin(), state.profilePasswordInput.end(), '\0');
                 std::fill(state.profilePasswordNew.begin(), state.profilePasswordNew.end(), '\0');
                 std::fill(state.profilePasswordConfirm.begin(), state.profilePasswordConfirm.end(), '\0');
                 ImGui::CloseCurrentPopup();
                 changeOpen = false;
             };
-
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 260.0f;
             if (stackActions) {
@@ -390,23 +394,23 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
             }
 
             auto applyReset = [&]() {
-                auto updated = state.active->profile;
-                updated.set_password_encoded(EncodePassword(state.profileResetPassword));
-                storage.set_active_profile(state.active->id);
-                if (storage.save_profile(updated)) {
-                    state.active->profile = updated;
-                    state.unlockedProfiles.erase(state.active->id);
-                    state.trustedProfiles.erase(state.active->id);
-                    SaveProfileAccessSettings(state);
-                    AppendProfileAudit(state.storageDir, state.active->id, "password_reset");
-                    SetStatus(state, u8"Пароль сброшен.", 0.45f, 0.9f, 0.45f);
-                    ImGui::CloseCurrentPopup();
-                    resetOpen = false;
-                } else {
-                    SetStatus(state, u8"Не удалось сбросить пароль.", 1.0f, 0.45f, 0.45f);
+                AppProfileMutationResult mutation = AppResetProfilePassword(
+                    storage, state.active->id, state.active->id, state.profileResetPassword);
+                if (!mutation.ok || !mutation.profile) {
+                    SetStatus(state,
+                              mutation.errorMessage.empty() ? u8"Не удалось сбросить пароль." : mutation.errorMessage,
+                              1.0f, 0.45f, 0.45f);
+                    return;
                 }
+                state.active->profile = *mutation.profile;
+                state.unlockedProfiles.erase(state.active->id);
+                state.trustedProfiles.erase(state.active->id);
+                SaveProfileAccessSettings(state);
+                AppendProfileAudit(state.storageDir, state.active->id, "password_reset");
+                SetStatus(state, u8"Пароль сброшен.", 0.45f, 0.9f, 0.45f);
+                ImGui::CloseCurrentPopup();
+                resetOpen = false;
             };
-
             ImGui::Spacing();
             ImGui::Checkbox(u8"Подтверждаю сброс пароля", &state.profileResetConfirm);
             const float actionWidth = ImGui::GetContentRegionAvail().x;

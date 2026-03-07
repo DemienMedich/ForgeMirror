@@ -675,7 +675,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         if (recoveryPenalty) summaryStream << u8" (прогрев " << recoveryPercent << "%)";
                         AppendLog(state, share.id, summaryStream.str());
 
-                        storage.save_profile(profile);
+                        AppProfileMutationResult mutation = AppSaveProfileSnapshot(storage, activeId, share.id, profile);
+                        if (!mutation.ok) {
+                            SetStatus(state,
+                                      mutation.errorMessage.empty() ? u8"Не удалось сохранить профиль после начисления XP." : mutation.errorMessage,
+                                      1.0f, 0.45f, 0.45f);
+                            continue;
+                        }
                         participants.push_back(TaskParticipant{share.id, share.percent, effectiveXp, skillXpTotal});
                     }
 

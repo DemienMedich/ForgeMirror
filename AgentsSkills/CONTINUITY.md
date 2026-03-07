@@ -20,15 +20,16 @@ UI аудит:
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
 - State:
-  - Ветка: taskmanager. Версия: 0.4.03.
-  - Последнее изменение: shortcuts-операции вынесены в AppShortcutsService, GUI панель ярлыков использует app-service вместо локального JSON-слоя.
+  - Ветка: taskmanager. Версия: 0.4.04.
+  - Последнее изменение: runtime-мутации профиля вынесены в AppProfileMutationService, прямые save_profile убраны из password/rank/pomodoro/xp/rollback/reapply-веток GUI.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
   - Архитектура GUI: добавлен `AppProfessionService`, сохранение/удаление профессий и назначение профессии профилям вынесены из GUI в app-service с rollback при ошибке.
   - Архитектура GUI: добавлен `AppPipelineService`, CRUD/перестановка шагов пайплайна вынесены из GUI в app-service, старый `GuiPipeline.inc` удалён.
   - Архитектура GUI: добавлен `AppMetaService`, мутации баннера и сохранение draft-настроек хранилища вынесены из GUI в app-service.
-  - Архитектура GUI: добавлен `AppShortcutsService`, сохранение/добавление/удаление/перестановка ярлыков вынесены из GUI в app-service, локальный JSON-helper удалён из UI-слоя.
+  - Архитектура GUI: добавлен AppShortcutsService, сохранение/добавление/удаление/перестановка ярлыков вынесены из GUI в app-service, локальный JSON-helper удалён из UI-слоя.
+  - Архитектура GUI: добавлен AppProfileMutationService, смена/сброс пароля, применение ранга, кошелёк помодоро, reapply правил и сохранение профиля после XP/rollback переведены на app-service слой.
   - Архитектура GUI: профильные операции вынесены в `AppProfileService` (`LoadSortedProfiles` / `LoadActiveProfile` / `ReloadProfiles`), `GuiProfileOps` переведён на service-слой.
   - Архитектура GUI: вынесены доменные типы в `include/AppDomainTypes.h`, добавлен `AppContext`, инициализация/перезагрузка synced-данных сведена в общий helper-слой.
   - Задачи: исправлены подписи таблицы "Назначить профилям" (читаемые заголовки).

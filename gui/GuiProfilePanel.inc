@@ -711,6 +711,19 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             for (const auto& o : opts) labels.push_back(o.label);
             ImGui::TextDisabled(u8"Назначить ранг");
             if (state.selectedRankIndex >= static_cast<int>(opts.size())) state.selectedRankIndex = 0;
+            auto applyRank = [&]() {
+                const int newLevel = opts[state.selectedRankIndex].level;
+                AppProfileMutationResult mutation = AppAssignProfileLevel(
+                    storage, state.active->id, state.active->id, newLevel, newLevel);
+                if (!mutation.ok || !mutation.profile) {
+                    SetStatus(state,
+                              mutation.errorMessage.empty() ? u8"Не удалось обновить ранг." : mutation.errorMessage,
+                              1.0f, 0.45f, 0.45f);
+                    return;
+                }
+                state.active->profile = *mutation.profile;
+                SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
+            };
             const float rankWidth = ImGui::GetContentRegionAvail().x;
             const bool stackRank = rankWidth < 360.0f;
             if (stackRank) {
@@ -720,10 +733,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
                 }
                 if (ImGui::Button(u8"Применить ранг", ImVec2(-1.0f, 0.0f))) {
-                    const int newLevel = opts[state.selectedRankIndex].level;
-                    state.active->profile.set_level_and_progress(newLevel, newLevel);
-                    storage.save_profile(state.active->profile);
-                    SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
+                    applyRank();
                 }
             } else if (ImGui::BeginTable("profile_rank_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("rank_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
@@ -744,15 +754,11 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
                 ImGui::TableSetColumnIndex(2);
                 if (ImGui::Button(u8"Применить ранг", ImVec2(-1.0f, 0.0f))) {
-                    const int newLevel = opts[state.selectedRankIndex].level;
-                    state.active->profile.set_level_and_progress(newLevel, newLevel);
-                    storage.save_profile(state.active->profile);
-                    SetStatus(state, u8"Ранг обновлён.", 0.45f, 0.9f, 0.45f);
+                    applyRank();
                 }
                 ImGui::EndTable();
             }
         }
-
         if (state.isAdmin && ImGui::CollapsingHeader(u8"Отчет")) {
             auto exportTxt = [&]() {
                 std::filesystem::path outPath;

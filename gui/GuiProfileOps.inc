@@ -232,22 +232,12 @@ void RefreshActiveProfile(GuiState& state, IJobStorage& storage, SkillCatalog& c
 
 
 void ReapplyRulesToProfiles(GuiState& state, AppContext& app) {
-    auto& storage = app.storage;
-    auto& catalog = app.catalog;
-    auto list = storage.list_profiles();
-    std::string focusId = state.active ? state.active->id : std::string{};
-    for (const auto& info : list) {
-        if (!storage.set_active_profile(info.id)) continue;
-        if (auto profile = storage.load_profile()) {
-            SyncProfileWithCatalog(*profile, catalog);
-            int level = profile->overall_level();
-            int progress = profile->level_progress();
-            profile->set_level_and_progress(level, progress);
-            storage.save_profile(*profile);
-        }
-    }
-    if (!focusId.empty()) {
-        storage.set_active_profile(focusId);
+    const std::string focusId = state.active ? state.active->id : std::string{};
+    AppProfileMutationResult mutation = AppReapplyRulesToProfiles(app, focusId);
+    if (!mutation.ok) {
+        SetStatus(state,
+                  mutation.errorMessage.empty() ? u8"Не удалось применить правила к профилям." : mutation.errorMessage,
+                  1.0f, 0.45f, 0.45f, 1.0f, AppLogLevel::Error, u8"Правила");
     }
 }
 

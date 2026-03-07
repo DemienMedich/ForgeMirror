@@ -19,7 +19,14 @@ static bool RollbackTask(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         const int newTasks = std::max(0, profile.tasks_completed() - 1);
         profile.set_total_xp(newTotalXp);
         profile.set_tasks_completed(newTasks);
-        storage.save_profile(profile);
+        AppProfileMutationResult mutation = AppSaveProfileSnapshot(storage, previousActive, participant.profileId, profile);
+        if (!mutation.ok) {
+            SetStatus(state,
+                      mutation.errorMessage.empty() ? u8"Не удалось сохранить профиль при откате XP." : mutation.errorMessage,
+                      1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
     }
     if (!previousActive.empty()) {
         SelectProfileById(state, storage, catalog, previousActive);

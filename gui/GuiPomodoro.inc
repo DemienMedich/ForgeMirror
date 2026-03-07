@@ -56,29 +56,17 @@ static void ApplyPomodoroCoin(GuiState& state, IJobStorage& storage) {
     const int amount = std::max(0, state.pomodoroCoinAmount);
     if (amount <= 0) return;
     std::string restoreId = state.active ? state.active->id : std::string{};
-    if (!storage.set_active_profile(targetId)) {
-        SetStatus(state, u8"Не удалось начислить монету (профиль не найден).", 1.0f, 0.45f, 0.45f);
-        return;
-    }
-    auto profileOpt = storage.load_profile();
-    if (!profileOpt) {
-        SetStatus(state, u8"Не удалось начислить монету (ошибка профиля).", 1.0f, 0.45f, 0.45f);
-        if (!restoreId.empty() && restoreId != targetId) storage.set_active_profile(restoreId);
-        return;
-    }
-    Profile profile = *profileOpt;
-    profile.set_wallet_balance(profile.wallet_balance() + amount);
-    if (!storage.save_profile(profile)) {
-        SetStatus(state, u8"Не удалось сохранить кошелёк профиля.", 1.0f, 0.45f, 0.45f);
+    AppProfileMutationResult mutation = AppAdjustProfileWallet(storage, restoreId, targetId, static_cast<double>(amount));
+    if (!mutation.ok || !mutation.profile) {
+        SetStatus(state,
+                  mutation.errorMessage.empty() ? u8"Не удалось сохранить кошелёк профиля." : mutation.errorMessage,
+                  1.0f, 0.45f, 0.45f);
     } else {
         if (state.active && state.active->id == targetId) {
-            state.active->profile = profile;
+            state.active->profile = *mutation.profile;
         }
-        state.profileWalletCache[targetId] = profile.wallet_balance();
+        state.profileWalletCache[targetId] = mutation.profile->wallet_balance();
         SetStatus(state, u8"Монета начислена за полный цикл помодоро.", 0.45f, 0.9f, 0.45f);
-    }
-    if (!restoreId.empty() && restoreId != targetId) {
-        storage.set_active_profile(restoreId);
     }
     state.pomodoroCoinAmount = 0;
     state.pomodoroCoinTimestamp = 0;
