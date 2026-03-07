@@ -21,15 +21,15 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::TextDisabled(u8"Пайплайн пуст.");
         if (state.isAdmin) {
             if (ImGui::Button(u8"Добавить этап")) {
-                PipelineStep step;
-                step.title = u8"Новый этап";
-                step.description = u8"Описание этапа.";
-                state.pipelineSteps.push_back(std::move(step));
-                SavePipeline(state.storageDir, state.pipelineSteps);
-                state.selectedPipelineIndex = static_cast<int>(state.pipelineSteps.size()) - 1;
-                state.pipelineEditIndex = -1;
-                SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                SetStatus(state, u8"Этап добавлен.", 0.45f, 0.9f, 0.45f);
+                AppPipelineMutationResult addResult = AppAddPipelineStep(state.storageDir, state.pipelineSteps, stepCount - 1);
+                if (addResult.ok) {
+                    state.selectedPipelineIndex = addResult.selectedIndex;
+                    state.pipelineEditIndex = -1;
+                    SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+                    SetStatus(state, u8"Этап добавлен.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, addResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                }
             }
         }
         return;
@@ -222,58 +222,66 @@ void DrawPipelinePanel(GuiState& state) {
             }
 
             if (saveRequested) {
-                std::string title = TrimStringGui(state.pipelineTitle.data());
-                std::string description = TrimStringGui(state.pipelineDescription.data());
-                if (title.empty()) {
-                    SetStatus(state, u8"Название этапа не может быть пустым.", 1.0f, 0.45f, 0.45f);
-                } else if (state.selectedPipelineIndex >= 0 &&
-                           state.selectedPipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
-                    state.pipelineSteps[state.selectedPipelineIndex].title = title;
-                    state.pipelineSteps[state.selectedPipelineIndex].description = description;
-                    if (SavePipeline(state.storageDir, state.pipelineSteps)) {
-                        SetStatus(state, u8"Пайплайн сохранён.", 0.45f, 0.9f, 0.45f);
-                    } else {
-                        SetStatus(state, u8"Не удалось сохранить пайплайн.", 1.0f, 0.45f, 0.45f);
-                    }
+                AppPipelineMutationResult saveResult = AppUpdatePipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    state.selectedPipelineIndex,
+                    TrimStringGui(state.pipelineTitle.data()),
+                    TrimStringGui(state.pipelineDescription.data()));
+                if (saveResult.ok) {
+                    state.selectedPipelineIndex = saveResult.selectedIndex;
+                    SetStatus(state, u8"Пайплайн сохранён.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
                 }
             }
 
             if (addRequested) {
-                PipelineStep step;
-                step.title = u8"Новый этап";
-                step.description = u8"Описание этапа.";
-                const int insertPos = std::clamp(state.selectedPipelineIndex + 1, 0,
-                                                 static_cast<int>(state.pipelineSteps.size()));
-                state.pipelineSteps.insert(state.pipelineSteps.begin() + insertPos, std::move(step));
-                state.selectedPipelineIndex = insertPos;
-                state.pipelineEditIndex = -1;
-                SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                SavePipeline(state.storageDir, state.pipelineSteps);
-                SetStatus(state, u8"Этап добавлен.", 0.45f, 0.9f, 0.45f);
+                AppPipelineMutationResult addResult = AppAddPipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    state.selectedPipelineIndex);
+                if (addResult.ok) {
+                    state.selectedPipelineIndex = addResult.selectedIndex;
+                    state.pipelineEditIndex = -1;
+                    SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+                    SetStatus(state, u8"Этап добавлен.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, addResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                }
             }
 
             if (deleteRequested) {
-                if (state.selectedPipelineIndex >= 0 &&
-                    state.selectedPipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
-                    state.pipelineSteps.erase(state.pipelineSteps.begin() + state.selectedPipelineIndex);
-                    if (state.selectedPipelineIndex >= static_cast<int>(state.pipelineSteps.size())) {
-                        state.selectedPipelineIndex = static_cast<int>(state.pipelineSteps.size()) - 1;
-                    }
+                AppPipelineMutationResult deleteResult = AppDeletePipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    state.selectedPipelineIndex);
+                if (deleteResult.ok) {
+                    state.selectedPipelineIndex = deleteResult.selectedIndex;
                     state.pipelineEditIndex = -1;
                     SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                    SavePipeline(state.storageDir, state.pipelineSteps);
                     SetStatus(state, u8"Этап удалён.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
                 }
             }
 
             if (moveFrom >= 0 && moveTo >= 0 &&
                 moveFrom < static_cast<int>(state.pipelineSteps.size()) &&
                 moveTo < static_cast<int>(state.pipelineSteps.size())) {
-                std::swap(state.pipelineSteps[moveFrom], state.pipelineSteps[moveTo]);
-                state.selectedPipelineIndex = moveTo;
-                state.pipelineEditIndex = -1;
-                SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                SavePipeline(state.storageDir, state.pipelineSteps);
+                AppPipelineMutationResult moveResult = AppMovePipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    moveFrom,
+                    moveTo);
+                if (moveResult.ok) {
+                    state.selectedPipelineIndex = moveResult.selectedIndex;
+                    state.pipelineEditIndex = -1;
+                    SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+                    SetStatus(state, u8"Порядок этапов обновлён.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, moveResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                }
             }
         }
         ImGui::EndTable();

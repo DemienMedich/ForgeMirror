@@ -3,6 +3,7 @@
 #include "AppProfileService.h"
 #include "AppTaskProjectService.h"
 #include "AppProfessionService.h"
+#include "AppPipelineService.h"
 #include "AppWorkspaceDataService.h"
 #include "AppUtils.h"
 #include "IJobStorage.h"
@@ -118,7 +119,6 @@ static void SyncVaultBuffers(GuiState& state);
 #include "GuiProfileSections.inc"
 #include "GuiProfileOps.inc"
 
-#include "GuiPipeline.inc"
 #include "GuiAppContext.inc"
 #include "GuiPipelinePanel.inc"
 
