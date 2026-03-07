@@ -4,6 +4,7 @@
 #include "AppTaskProjectService.h"
 #include "AppProfessionService.h"
 #include "AppPipelineService.h"
+#include "AppMetaService.h"
 #include "AppWorkspaceDataService.h"
 #include "AppUtils.h"
 #include "IJobStorage.h"

@@ -105,21 +105,17 @@ void DrawBannerAdminPanel(GuiState& state) {
     const char* actionLabel = editing ? u8"Сохранить" : u8"Добавить";
     if (ImGui::Button(actionLabel, ImVec2(-1.0f, 0.0f))) {
         std::string text = TrimStringGui(state.bannerInput.data());
-        if (!text.empty()) {
-            if (editing) {
-                state.bannerTexts[static_cast<size_t>(state.bannerEditIndex)] = text;
-                state.bannerEditIndex = -1;
-                SetStatus(state, u8"Фраза обновлена.", 0.45f, 0.9f, 0.45f);
-            } else {
-                state.bannerTexts.push_back(text);
-                SetStatus(state, u8"Фраза добавлена.", 0.45f, 0.9f, 0.45f);
-            }
+        AppBannerMutationResult result = editing
+            ? AppUpdateBannerText(state.storageDir, state.bannerTexts, state.bannerEditIndex, text)
+            : AppAddBannerText(state.storageDir, state.bannerTexts, text);
+        if (result.ok) {
+            state.bannerEditIndex = -1;
             std::fill(state.bannerInput.begin(), state.bannerInput.end(), '\0');
-            SaveBannerTexts(state.storageDir, state.bannerTexts);
             EnsureBannerSelection(state);
             state.bannerLastRotateAt = NowSeconds();
+            SetStatus(state, editing ? u8"Фраза обновлена." : u8"Фраза добавлена.", 0.45f, 0.9f, 0.45f);
         } else {
-            SetStatus(state, u8"Введите текст фразы.", 1.0f, 0.75f, 0.35f);
+            SetStatus(state, result.errorMessage, 1.0f, 0.75f, 0.35f);
         }
     }
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -151,11 +147,21 @@ void DrawBannerAdminPanel(GuiState& state) {
                 }
                 ImGui::TableSetColumnIndex(2);
                 if (ImGui::SmallButton(u8"Удалить")) {
-                    state.bannerTexts.erase(state.bannerTexts.begin() + static_cast<std::ptrdiff_t>(i));
-                    SaveBannerTexts(state.storageDir, state.bannerTexts);
-                    EnsureBannerSelection(state);
-                    state.bannerLastRotateAt = NowSeconds();
-                    SetStatus(state, u8"Фраза удалена.", 0.45f, 0.9f, 0.45f);
+                    AppBannerMutationResult deleteResult = AppDeleteBannerText(
+                        state.storageDir,
+                        state.bannerTexts,
+                        static_cast<int>(i));
+                    if (deleteResult.ok) {
+                        if (state.bannerEditIndex == static_cast<int>(i)) {
+                            state.bannerEditIndex = -1;
+                            std::fill(state.bannerInput.begin(), state.bannerInput.end(), '\0');
+                        }
+                        EnsureBannerSelection(state);
+                        state.bannerLastRotateAt = NowSeconds();
+                        SetStatus(state, u8"Фраза удалена.", 0.45f, 0.9f, 0.45f);
+                    } else {
+                        SetStatus(state, deleteResult.errorMessage, 1.0f, 0.75f, 0.35f);
+                    }
                     ImGui::PopID();
                     break;
                 }
