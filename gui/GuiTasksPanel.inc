@@ -1345,6 +1345,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::Spacing();
     }
 
+    const float taskLayoutWidth = ImGui::GetContentRegionAvail().x;
+    const float taskLayoutGap = style.ItemSpacing.x;
+    const float detailPanelWidth = std::clamp(taskLayoutWidth * 0.30f, 320.0f, 400.0f);
+    const bool useTaskSplitView = (taskLayoutWidth - detailPanelWidth - taskLayoutGap) >= 920.0f;
+    if (useTaskSplitView) {
+        const float listPanelWidth = std::max(0.0f, taskLayoutWidth - detailPanelWidth - taskLayoutGap);
+        ImGui::BeginChild("tasks_master_column", ImVec2(listPanelWidth, 0.0f), ImGuiChildFlags_AutoResizeY,
+                          ImGuiWindowFlags_NoScrollbar);
+    }
+
     int visibleCount = 0;
     const bool allowBulkSelection = state.isAdmin;
     const int tableColumns = allowBulkSelection ? 8 : 7;
@@ -1396,12 +1406,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
 
-            ImGui::TableSetColumnIndex(col++);
             const bool isExpanded = (state.tasksExpandedId == task->id);
-            if (ImGui::Selectable("##row_expand", isExpanded, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(16.0f, 0.0f))) {
-                state.tasksExpandedId = isExpanded ? std::string() : task->id;
-            }
-            ImGui::SameLine();
+
+            ImGui::TableSetColumnIndex(col++);
             const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
             ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
 
@@ -1475,7 +1482,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             ImGui::TableSetColumnIndex(col++);
-            ImGui::TextUnformatted(task->title.c_str());
+            std::string taskTitle = TaskDisplayTitle(*task);
+            if (taskTitle.empty()) taskTitle = u8"Без названия";
+            std::string taskTitleLabel = taskTitle + "##task_title";
+            if (ImGui::Selectable(taskTitleLabel.c_str(), isExpanded,
+                                  ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAvailWidth)) {
+                state.tasksExpandedId = isExpanded ? std::string() : task->id;
+            }
             if (!task->description.empty() && ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
@@ -1604,6 +1617,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
     }
 
+    if (useTaskSplitView) {
+        ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginChild("tasks_detail_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+                          ImGuiWindowFlags_NoScrollbar);
+    }
+
     const TaskEntry* expanded = nullptr;
     if (!state.tasksExpandedId.empty()) {
         for (const TaskEntry* task : filtered) {
@@ -1626,25 +1646,62 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         if (BeginCard("tasks_detail_card")) {
             DrawCardHeader(u8"Детали задачи");
-            ImGui::TextDisabled(u8"Клик по строке задачи раскрывает детали.");
+            ImGui::TextDisabled(u8"Клик по названию задачи обновляет панель.");
+            ImGui::SameLine();
+            if (ImGui::SmallButton(u8"Скрыть")) {
+                state.tasksExpandedId.clear();
+            }
             std::string title = TaskDisplayTitle(*expanded);
             if (!title.empty()) {
                 ImGui::TextUnformatted(title.c_str());
             }
             const std::string projectName = ResolveTaskProjectName(state, *expanded);
-            ImGui::TextDisabled(u8"Проект: %s", projectName.empty() ? u8"Без проекта" : projectName.c_str());
-            ImGui::TextDisabled(u8"Статус: %s", TaskStatusLabel(expanded->status));
-            ImGui::TextDisabled(u8"Приоритет: %s", TaskPriorityLabel(expanded->priority));
-            if (expanded->deadlineAt > 0) {
-                const std::string deadlineText = FormatTimestamp(expanded->deadlineAt, "%Y-%m-%d %H:%M");
-                const bool overdue = expanded->deadlineAt < NowSeconds() && NormalizeTaskStatus(expanded->status) != kTaskStatusDone;
-                if (overdue) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Дедлайн: %s", deadlineText.c_str());
+            if (ImGui::BeginTable("task_detail_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 88.0f);
+                ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Проект");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(projectName.empty() ? u8"Без проекта" : projectName.c_str());
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Статус");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(TaskStatusLabel(expanded->status));
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Приоритет");
+                ImGui::TableSetColumnIndex(1);
+                const int detailPriority = NormalizeTaskPriority(expanded->priority);
+                if (detailPriority >= kTaskPriorityCritical) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityLabel(detailPriority));
+                } else if (detailPriority >= kTaskPriorityHigh) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityLabel(detailPriority));
                 } else {
-                    ImGui::TextDisabled(u8"Дедлайн: %s", deadlineText.c_str());
+                    ImGui::TextUnformatted(TaskPriorityLabel(detailPriority));
                 }
-            } else {
-                ImGui::TextDisabled(u8"Дедлайн: не задан");
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Дедлайн");
+                ImGui::TableSetColumnIndex(1);
+                if (expanded->deadlineAt > 0) {
+                    const std::string deadlineText = FormatTimestamp(expanded->deadlineAt, "%Y-%m-%d %H:%M");
+                    const bool overdue = expanded->deadlineAt < NowSeconds() &&
+                                         NormalizeTaskStatus(expanded->status) != kTaskStatusDone;
+                    if (overdue) {
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadlineText.c_str());
+                    } else {
+                        ImGui::TextUnformatted(deadlineText.c_str());
+                    }
+                } else {
+                    ImGui::TextDisabled(u8"Не задан");
+                }
+                ImGui::EndTable();
             }
             if (!expanded->description.empty()) {
                 ImGui::Spacing();
@@ -1718,6 +1775,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
         }
         EndCard();
+    }
+    if (useTaskSplitView) {
+        if (!expanded) {
+            if (BeginCard("tasks_detail_placeholder")) {
+                DrawCardHeader(u8"Детали задачи");
+                ImGui::TextDisabled(u8"Выберите задачу по названию в таблице.");
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                ImGui::TextWrapped(u8"Справа будут показаны описание, исполнители, XP и админские действия выбранной задачи.");
+            }
+            EndCard();
+        }
+        ImGui::EndChild();
     }
 
     if (state.taskBulkDeletePopupRequest) {
