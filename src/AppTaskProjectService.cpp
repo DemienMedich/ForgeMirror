@@ -245,6 +245,13 @@ std::string ResolveProjectAuditLabel(const std::string& projectId,
     return u8"Без проекта";
 }
 
+std::string ResolvePipelineAuditLabel(const std::string& pipelineStepId,
+                                      const std::string& fallback) {
+    if (!pipelineStepId.empty() && !fallback.empty()) return fallback;
+    if (!fallback.empty()) return fallback;
+    return u8"Без этапа";
+}
+
 TaskEntry* FindTaskMutable(std::vector<TaskEntry>& tasks, const std::string& taskId) {
     auto it = std::find_if(tasks.begin(), tasks.end(), [&](const TaskEntry& item) { return item.id == taskId; });
     return (it == tasks.end()) ? nullptr : &(*it);
@@ -385,6 +392,8 @@ bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<Tas
         out << "  {\"id\":\"" << JsonEscape(entry.id)
             << "\",\"projectId\":\"" << JsonEscape(entry.projectId)
             << "\",\"project\":\"" << JsonEscape(entry.project)
+            << "\",\"pipelineStepId\":\"" << JsonEscape(entry.pipelineStepId)
+            << "\",\"pipelineStep\":\"" << JsonEscape(entry.pipelineStep)
             << "\",\"title\":\"" << JsonEscape(entry.title)
             << "\",\"description\":\"" << JsonEscape(entry.description)
             << "\",\"deadlineAt\":" << entry.deadlineAt
@@ -723,6 +732,46 @@ AppMutationResult AppUpdateTaskProject(const std::filesystem::path& storageDir,
     return result;
 }
 
+AppMutationResult AppUpdateTaskPipelineStep(const std::filesystem::path& storageDir,
+                                            std::vector<TaskEntry>& tasks,
+                                            const std::string& taskId,
+                                            const std::string& nextPipelineStepId,
+                                            const std::string& nextPipelineStepName,
+                                            const std::string& actor,
+                                            std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+    const std::string prevId = task->pipelineStepId;
+    const std::string prevName = task->pipelineStep;
+    if (prevId == nextPipelineStepId && prevName == nextPipelineStepName) {
+        result.ok = true;
+        return result;
+    }
+    task->pipelineStepId = nextPipelineStepId;
+    task->pipelineStep = nextPipelineStepName;
+    if (!AppSaveTasks(storageDir, tasks)) {
+        task->pipelineStepId = prevId;
+        task->pipelineStep = prevName;
+        result.errorMessage = u8"Не удалось сохранить этап задачи.";
+        return result;
+    }
+    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "pipeline",
+                                  ResolvePipelineAuditLabel(prevId, prevName),
+                                  ResolvePipelineAuditLabel(task->pipelineStepId, task->pipelineStep),
+                                  auditCache)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
+}
+
 AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
                                         std::vector<TaskEntry>& tasks,
                                         const std::string& taskId,
@@ -930,6 +979,53 @@ AppMutationResult AppBulkUpdateTaskProject(const std::filesystem::path& storageD
         if (!AppendTaskAuditIfChanged(storageDir, actor, prev.task->id, "project",
                                       ResolveProjectAuditLabel(prev.projectId, prev.projectName, nullptr),
                                       ResolveProjectAuditLabel(prev.task->projectId, prev.task->project, nullptr),
+                                      auditCache)) {
+            result.errorMessage = u8"Не удалось записать task-audit.log";
+            return result;
+        }
+    }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = static_cast<int>(touched.size());
+    return result;
+}
+
+AppMutationResult AppBulkUpdateTaskPipelineStep(const std::filesystem::path& storageDir,
+                                                std::vector<TaskEntry>& tasks,
+                                                const std::unordered_set<std::string>& taskIds,
+                                                const std::string& nextPipelineStepId,
+                                                const std::string& nextPipelineStepName,
+                                                const std::string& actor,
+                                                std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    struct PrevState { TaskEntry* task = nullptr; std::string pipelineStepId; std::string pipelineStepName; };
+    std::vector<PrevState> touched;
+    touched.reserve(taskIds.size());
+    for (auto& task : tasks) {
+        if (taskIds.find(task.id) == taskIds.end()) continue;
+        if (task.pipelineStepId == nextPipelineStepId && task.pipelineStep == nextPipelineStepName) continue;
+        touched.push_back({&task, task.pipelineStepId, task.pipelineStep});
+        task.pipelineStepId = nextPipelineStepId;
+        task.pipelineStep = nextPipelineStepName;
+    }
+    if (touched.empty()) {
+        result.ok = true;
+        return result;
+    }
+    if (!AppSaveTasks(storageDir, tasks)) {
+        for (const auto& prev : touched) {
+            if (!prev.task) continue;
+            prev.task->pipelineStepId = prev.pipelineStepId;
+            prev.task->pipelineStep = prev.pipelineStepName;
+        }
+        result.errorMessage = u8"Не удалось сохранить массовое изменение этапа.";
+        return result;
+    }
+    for (const auto& prev : touched) {
+        if (!prev.task) continue;
+        if (!AppendTaskAuditIfChanged(storageDir, actor, prev.task->id, "pipeline",
+                                      ResolvePipelineAuditLabel(prev.pipelineStepId, prev.pipelineStepName),
+                                      ResolvePipelineAuditLabel(prev.task->pipelineStepId, prev.task->pipelineStep),
                                       auditCache)) {
             result.errorMessage = u8"Не удалось записать task-audit.log";
             return result;

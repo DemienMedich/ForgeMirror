@@ -413,6 +413,8 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
         if (auto v = find_value("id")) entry.id = *v;
         if (auto v = find_value("projectId")) entry.projectId = *v;
         if (auto v = find_value("project")) entry.project = *v;
+        if (auto v = find_value("pipelineStepId")) entry.pipelineStepId = *v;
+        if (auto v = find_value("pipelineStep")) entry.pipelineStep = *v;
         if (auto v = find_value("title")) entry.title = *v;
         if (auto v = find_value("description")) entry.description = *v;
         if (auto v = find_value("deadlineAt")) entry.deadlineAt = tasks_parse_int64(*v, 0);
@@ -460,6 +462,8 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
         out << "  {\"id\":\"" << tasks_json_escape(entry.id)
             << "\",\"projectId\":\"" << tasks_json_escape(entry.projectId)
             << "\",\"project\":\"" << tasks_json_escape(entry.project)
+            << "\",\"pipelineStepId\":\"" << tasks_json_escape(entry.pipelineStepId)
+            << "\",\"pipelineStep\":\"" << tasks_json_escape(entry.pipelineStep)
             << "\",\"title\":\"" << tasks_json_escape(entry.title)
             << "\",\"description\":\"" << tasks_json_escape(entry.description)
             << "\",\"deadlineAt\":" << entry.deadlineAt
@@ -551,7 +555,7 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
     // UTF-8 BOM for spreadsheet tools
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-    out << "Date,Deadline,Project,Task,Description,Status,Priority,Category,Score,Participants,BaseXP,BasePool\n";
+    out << "Date,Deadline,Project,PipelineStep,Task,Description,Status,Priority,Category,Score,Participants,BaseXP,BasePool\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
         ++exportedCount;
@@ -562,6 +566,7 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
         out << CsvEscape(stampText) << ","
             << CsvEscape(deadlineText) << ","
             << CsvEscape(task->project) << ","
+            << CsvEscape(task->pipelineStep) << ","
             << CsvEscape(task->title) << ","
             << CsvEscape(task->description) << ","
             << CsvEscape(TaskStatusLabel(task->status)) << ","
@@ -604,6 +609,7 @@ static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEn
         out << "- " << stampText << " | "
             << SanitizeLogLine(deadlineText) << " | "
             << SanitizeLogLine(task->project) << " | "
+            << SanitizeLogLine(task->pipelineStep) << " | "
             << SanitizeLogLine(task->title) << " | "
             << SanitizeLogLine(TaskStatusLabel(task->status)) << " | "
             << SanitizeLogLine(TaskPriorityLabel(task->priority)) << " | "

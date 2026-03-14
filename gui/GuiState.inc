@@ -166,6 +166,7 @@ struct GuiRuntimeState {
     std::array<char, 256> taskPlanDescription{};
     std::array<char, 20> taskPlanDeadline{};
     int taskPlanProjectIndex = 0;
+    int taskPlanPipelineIndex = 0;
     int taskPlanStatus = 0;
     int taskPlanPriority = 1;
     std::vector<char> taskPlanAssignees;
@@ -187,6 +188,7 @@ struct GuiRuntimeState {
     int taskBulkStatus = 0;
     int taskBulkPriority = 1;
     int taskBulkProjectIndex = 0;
+    int taskBulkPipelineIndex = 0;
     std::array<char, 20> taskBulkDeadline{};
     std::vector<char> taskBulkAssignees;
     bool taskBulkDeletePopupRequest = false;

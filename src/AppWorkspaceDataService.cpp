@@ -920,6 +920,8 @@ std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
         if (auto v = find_value("id")) entry.id = *v;
         if (auto v = find_value("projectId")) entry.projectId = *v;
         if (auto v = find_value("project")) entry.project = *v;
+        if (auto v = find_value("pipelineStepId")) entry.pipelineStepId = *v;
+        if (auto v = find_value("pipelineStep")) entry.pipelineStep = *v;
         if (auto v = find_value("title")) entry.title = *v;
         if (auto v = find_value("description")) entry.description = *v;
         if (auto v = find_value("deadlineAt")) entry.deadlineAt = ParseInt64(*v, 0);

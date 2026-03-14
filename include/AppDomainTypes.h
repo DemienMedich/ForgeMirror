@@ -15,6 +15,8 @@ struct TaskEntry {
     std::string id;
     std::string projectId;
     std::string project;
+    std::string pipelineStepId;
+    std::string pipelineStep;
     std::string title;
     std::string description;
     std::int64_t deadlineAt = 0;

@@ -92,6 +92,14 @@ AppMutationResult AppUpdateTaskProject(const std::filesystem::path& storageDir,
                                        const std::string& actor,
                                        std::vector<TaskAuditEntry>* auditCache = nullptr);
 
+AppMutationResult AppUpdateTaskPipelineStep(const std::filesystem::path& storageDir,
+                                            std::vector<TaskEntry>& tasks,
+                                            const std::string& taskId,
+                                            const std::string& nextPipelineStepId,
+                                            const std::string& nextPipelineStepName,
+                                            const std::string& actor,
+                                            std::vector<TaskAuditEntry>* auditCache = nullptr);
+
 AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
                                         std::vector<TaskEntry>& tasks,
                                         const std::string& taskId,
@@ -127,6 +135,14 @@ AppMutationResult AppBulkUpdateTaskProject(const std::filesystem::path& storageD
                                            const std::string& nextProjectName,
                                            const std::string& actor,
                                            std::vector<TaskAuditEntry>* auditCache = nullptr);
+
+AppMutationResult AppBulkUpdateTaskPipelineStep(const std::filesystem::path& storageDir,
+                                                std::vector<TaskEntry>& tasks,
+                                                const std::unordered_set<std::string>& taskIds,
+                                                const std::string& nextPipelineStepId,
+                                                const std::string& nextPipelineStepName,
+                                                const std::string& actor,
+                                                std::vector<TaskAuditEntry>* auditCache = nullptr);
 
 AppMutationResult AppBulkUpdateTaskDeadline(const std::filesystem::path& storageDir,
                                             std::vector<TaskEntry>& tasks,
