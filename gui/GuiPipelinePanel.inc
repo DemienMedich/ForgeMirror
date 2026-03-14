@@ -1,10 +1,78 @@
+template <size_t N>
+static void CopyPipelineField(std::array<char, N>& target, const std::string& value) {
+    std::snprintf(target.data(), target.size(), "%s", value.c_str());
+}
+
+static std::string JoinPipelineValues(const std::vector<std::string>& values, const char* delimiter) {
+    std::string out;
+    bool first = true;
+    for (const auto& value : values) {
+        const std::string trimmed = TrimStringGui(value);
+        if (trimmed.empty()) continue;
+        if (!first) out += delimiter;
+        first = false;
+        out += trimmed;
+    }
+    return out;
+}
+
+static std::vector<std::string> SplitPipelineEditorText(const char* text,
+                                                        bool splitCommas = false) {
+    std::vector<std::string> values;
+    std::string current;
+    for (const char* ptr = text; ptr && *ptr != '\0'; ++ptr) {
+        const char ch = *ptr;
+        const bool split = ch == '\n' || ch == '\r' || ch == ';' || (splitCommas && ch == ',');
+        if (split) {
+            const std::string trimmed = TrimStringGui(current);
+            if (!trimmed.empty()) values.push_back(trimmed);
+            current.clear();
+            continue;
+        }
+        current.push_back(ch);
+    }
+    const std::string trimmed = TrimStringGui(current);
+    if (!trimmed.empty()) values.push_back(trimmed);
+    return values;
+}
+
+static PipelineStep BuildPipelineDraft(const GuiState& state, const PipelineStep& source) {
+    PipelineStep draft = source;
+    draft.stageCode = TrimStringGui(state.pipelineStageCode.data());
+    draft.branch = TrimStringGui(state.pipelineBranch.data());
+    draft.title = TrimStringGui(state.pipelineTitle.data());
+    draft.description = TrimStringGui(state.pipelineDescription.data());
+    draft.input = TrimStringGui(state.pipelineInput.data());
+    draft.output = TrimStringGui(state.pipelineOutput.data());
+    draft.owner = TrimStringGui(state.pipelineOwner.data());
+    draft.doneCriteria = TrimStringGui(state.pipelineDoneCriteria.data());
+    draft.engineCheck = TrimStringGui(state.pipelineEngineCheck.data());
+    draft.risk = TrimStringGui(state.pipelineRisk.data());
+    draft.nextStageLabel = TrimStringGui(state.pipelineNextStageLabel.data());
+    draft.legacyNotes = TrimStringGui(state.pipelineLegacyNotes.data());
+    draft.nextIds = SplitPipelineEditorText(state.pipelineNextIds.data(), true);
+    draft.hints = SplitPipelineEditorText(state.pipelineHints.data(), false);
+    return draft;
+}
+
 static void SyncPipelineEditBuffers(GuiState& state, int index) {
     if (index < 0 || index >= static_cast<int>(state.pipelineSteps.size())) return;
     if (state.pipelineEditIndex == index) return;
-    std::snprintf(state.pipelineTitle.data(), state.pipelineTitle.size(), "%s",
-                  state.pipelineSteps[index].title.c_str());
-    std::snprintf(state.pipelineDescription.data(), state.pipelineDescription.size(), "%s",
-                  state.pipelineSteps[index].description.c_str());
+    const PipelineStep& step = state.pipelineSteps[index];
+    CopyPipelineField(state.pipelineStageCode, step.stageCode);
+    CopyPipelineField(state.pipelineBranch, step.branch);
+    CopyPipelineField(state.pipelineTitle, step.title);
+    CopyPipelineField(state.pipelineDescription, step.description);
+    CopyPipelineField(state.pipelineInput, step.input);
+    CopyPipelineField(state.pipelineOutput, step.output);
+    CopyPipelineField(state.pipelineOwner, step.owner);
+    CopyPipelineField(state.pipelineDoneCriteria, step.doneCriteria);
+    CopyPipelineField(state.pipelineEngineCheck, step.engineCheck);
+    CopyPipelineField(state.pipelineRisk, step.risk);
+    CopyPipelineField(state.pipelineNextStageLabel, step.nextStageLabel);
+    CopyPipelineField(state.pipelineLegacyNotes, step.legacyNotes);
+    CopyPipelineField(state.pipelineNextIds, JoinPipelineValues(step.nextIds, "\n"));
+    CopyPipelineField(state.pipelineHints, JoinPipelineValues(step.hints, "\n"));
     state.pipelineEditIndex = index;
 }
 
@@ -156,8 +224,18 @@ static void DrawPipelineFieldRow(const char* label, const std::string& value) {
     DrawPipelineWrappedText(value);
 }
 
-static bool DrawPipelineStageRow(const GuiState& state, int index, bool selected) {
-    if (index < 0 || index >= static_cast<int>(state.pipelineSteps.size())) return false;
+struct PipelineStageRowAction {
+    bool select = false;
+    bool edit = false;
+};
+
+static PipelineStageRowAction DrawPipelineStageRow(const GuiState& state,
+                                                   int index,
+                                                   bool selected,
+                                                   bool adminMode,
+                                                   bool editing) {
+    PipelineStageRowAction action;
+    if (index < 0 || index >= static_cast<int>(state.pipelineSteps.size())) return action;
     const PipelineStep& step = state.pipelineSteps[index];
     const ImGuiStyle& style = ImGui::GetStyle();
     const float width = std::max(140.0f, ImGui::GetContentRegionAvail().x);
@@ -169,6 +247,7 @@ static bool DrawPipelineStageRow(const GuiState& state, int index, bool selected
     ImGui::InvisibleButton("pipeline_stage_row", size);
     const bool hovered = ImGui::IsItemHovered();
     const bool clicked = ImGui::IsItemClicked();
+    action.select = clicked;
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
@@ -209,10 +288,36 @@ static bool DrawPipelineStageRow(const GuiState& state, int index, bool selected
     drawList->AddText(ImVec2(chipMin.x + 10.0f, chipMin.y + 5.0f), ImGui::GetColorU32(style.Colors[ImGuiCol_Text]), code.c_str());
     drawList->AddText(ImVec2(textX, pos.y + padY - 1.0f), ImGui::GetColorU32(titleColor), step.title.c_str());
     drawList->AddText(ImVec2(textX, pos.y + padY + 24.0f), ImGui::GetColorU32(metaColor), subtitle.c_str());
+
+    if (adminMode) {
+        const float buttonWidth = 54.0f;
+        const float buttonHeight = 26.0f;
+        const ImVec2 editMin(p1.x - padX - buttonWidth, pos.y + padY);
+        const ImVec2 editMax(editMin.x + buttonWidth, editMin.y + buttonHeight);
+        const bool editHovered = ImGui::IsMouseHoveringRect(editMin, editMax);
+        ImVec4 editBg = editing ? accent : style.Colors[ImGuiCol_FrameBg];
+        editBg.w = editing ? 0.92f : 0.82f;
+        if (editHovered) {
+            editBg = BlendColor(editBg, accent, editing ? 0.10f : 0.22f);
+            editBg.w = 0.96f;
+        }
+        ImVec4 editBorder = editing ? accent : border;
+        editBorder.w = editing ? 0.78f : 0.38f;
+        drawList->AddRectFilled(editMin, editMax, ImGui::GetColorU32(editBg), 8.0f);
+        drawList->AddRect(editMin, editMax, ImGui::GetColorU32(editBorder), 8.0f, 0, 1.0f);
+        drawList->AddText(ImVec2(editMin.x + 9.0f, editMin.y + 6.0f),
+                          ImGui::GetColorU32(style.Colors[ImGuiCol_Text]),
+                          u8"Ред.");
+        if (editHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            action.select = true;
+            action.edit = true;
+        }
+    }
+
     drawList->PopClipRect();
 
     ImGui::PopID();
-    return clicked;
+    return action;
 }
 
 static bool DrawPipelineJumpButton(const char* id,
@@ -263,6 +368,7 @@ void DrawPipelinePanel(GuiState& state) {
                 AppPipelineMutationResult addResult = AppAddPipelineStep(state.storageDir, state.pipelineSteps, stepCount - 1);
                 if (addResult.ok) {
                     state.selectedPipelineIndex = addResult.selectedIndex;
+                    state.pipelineEditMode = true;
                     state.pipelineEditIndex = -1;
                     SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
                     SetStatus(state, u8"Блок добавлен.", 0.45f, 0.9f, 0.45f);
@@ -359,8 +465,19 @@ void DrawPipelinePanel(GuiState& state) {
                 for (int index : visibleIndices) {
                     if (PipelineGroupLabel(state.pipelineSteps[index]) != group) continue;
                     const bool selected = state.selectedPipelineIndex == index;
-                    if (DrawPipelineStageRow(state, index, selected)) {
+                    const PipelineStageRowAction rowAction = DrawPipelineStageRow(
+                        state, index, selected, state.isAdmin, state.pipelineEditMode && state.pipelineEditIndex == index);
+                    if (rowAction.select) {
                         state.selectedPipelineIndex = index;
+                        if (state.pipelineEditMode && state.pipelineEditIndex != index && !rowAction.edit) {
+                            state.pipelineEditMode = false;
+                        }
+                    }
+                    if (rowAction.edit) {
+                        state.selectedPipelineIndex = index;
+                        state.pipelineEditMode = true;
+                        state.pipelineEditIndex = -1;
+                        SyncPipelineEditBuffers(state, index);
                     }
                     ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 }
@@ -379,209 +496,298 @@ void DrawPipelinePanel(GuiState& state) {
             if (!step.branch.empty()) {
                 ImGui::TextDisabled("%s", step.branch.c_str());
             }
-            if (ImGui::BeginTable("pipeline_meta_table", 2, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("pipeline_meta_label", ImGuiTableColumnFlags_WidthFixed, 180.0f);
-                ImGui::TableSetupColumn("pipeline_meta_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                DrawPipelineFieldRow(u8"Вход", step.input);
-                DrawPipelineFieldRow(u8"Выход", step.output);
-                DrawPipelineFieldRow(u8"Ответственный", step.owner);
-                DrawPipelineFieldRow(u8"Критерий готовности", step.doneCriteria);
-                DrawPipelineFieldRow(u8"Следующий этап", step.nextStageLabel);
-                ImGui::EndTable();
-            }
+            const bool editingSelected = state.isAdmin && state.pipelineEditMode;
 
-            ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
-            DrawCardHeader(u8"Что делаем");
-            DrawPipelineWrappedText(step.description);
+            bool saveRequested = false;
+            bool cancelRequested = false;
+            bool addRequested = false;
+            bool deleteRequested = false;
+            bool startEditRequested = false;
+            int moveFrom = -1;
+            int moveTo = -1;
 
-            ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
-            DrawCardHeader(u8"Подсказки");
-            if (step.hints.empty()) {
-                ImGui::TextDisabled(u8"Для этого блока подсказки пока не заданы.");
+            if (editingSelected) {
+                SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+                ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
+                DrawCardHeader(u8"Редактирование блока");
+                ImGui::TextDisabled(u8"ID: %s", step.id.c_str());
+                ImGui::TextDisabled(u8"Все поля редактируются на месте. Следующие блоки задаются ID через ';' или новую строку.");
+
+                if (ImGui::BeginTable("pipeline_editor_grid", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("pipeline_editor_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    ImGui::TableSetupColumn("pipeline_editor_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextDisabled(u8"Код этапа");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_stage_code", state.pipelineStageCode.data(), state.pipelineStageCode.size());
+                    ImGui::TextDisabled(u8"Ветка");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_branch", state.pipelineBranch.data(), state.pipelineBranch.size());
+                    ImGui::TextDisabled(u8"Название");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_title", state.pipelineTitle.data(), state.pipelineTitle.size());
+                    ImGui::TextDisabled(u8"Следующий этап (текст)");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_next_stage_label", state.pipelineNextStageLabel.data(), state.pipelineNextStageLabel.size());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextDisabled(u8"Вход");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_input", state.pipelineInput.data(), state.pipelineInput.size());
+                    ImGui::TextDisabled(u8"Выход");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_output", state.pipelineOutput.data(), state.pipelineOutput.size());
+                    ImGui::TextDisabled(u8"Ответственный");
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputText("##pipeline_owner", state.pipelineOwner.data(), state.pipelineOwner.size());
+                    ImGui::EndTable();
+                }
+
+                ImGui::TextDisabled(u8"Описание");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_desc", state.pipelineDescription.data(),
+                                          state.pipelineDescription.size(), ImVec2(-1.0f, 110.0f));
+                ImGui::TextDisabled(u8"Критерий готовности");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_done", state.pipelineDoneCriteria.data(),
+                                          state.pipelineDoneCriteria.size(), ImVec2(-1.0f, 90.0f));
+                ImGui::TextDisabled(u8"Проверка в движке");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_engine", state.pipelineEngineCheck.data(),
+                                          state.pipelineEngineCheck.size(), ImVec2(-1.0f, 90.0f));
+                ImGui::TextDisabled(u8"Риски и возвраты");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_risk", state.pipelineRisk.data(),
+                                          state.pipelineRisk.size(), ImVec2(-1.0f, 90.0f));
+                ImGui::TextDisabled(u8"Практика Forge Mirror");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_legacy_notes", state.pipelineLegacyNotes.data(),
+                                          state.pipelineLegacyNotes.size(), ImVec2(-1.0f, 90.0f));
+                ImGui::TextDisabled(u8"Подсказки (по одной строке)");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_hints", state.pipelineHints.data(),
+                                          state.pipelineHints.size(), ImVec2(-1.0f, 90.0f));
+                ImGui::TextDisabled(u8"Следующие блоки (ID через ';' или новую строку)");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##pipeline_next_ids", state.pipelineNextIds.data(),
+                                          state.pipelineNextIds.size(), ImVec2(-1.0f, 70.0f));
             } else {
-                for (const auto& hint : step.hints) {
-                    ImGui::BulletText("%s", hint.c_str());
+                if (ImGui::BeginTable("pipeline_meta_table", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("pipeline_meta_label", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                    ImGui::TableSetupColumn("pipeline_meta_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    DrawPipelineFieldRow(u8"Вход", step.input);
+                    DrawPipelineFieldRow(u8"Выход", step.output);
+                    DrawPipelineFieldRow(u8"Ответственный", step.owner);
+                    DrawPipelineFieldRow(u8"Критерий готовности", step.doneCriteria);
+                    DrawPipelineFieldRow(u8"Следующий этап", step.nextStageLabel);
+                    ImGui::EndTable();
                 }
-            }
 
-            ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
-            DrawCardHeader(u8"Проверка в движке");
-            DrawPipelineWrappedText(step.engineCheck);
+                ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
+                DrawCardHeader(u8"Что делаем");
+                DrawPipelineWrappedText(step.description);
 
-            const std::vector<int> incoming = CollectIncomingPipelineIndices(state, step.id);
-            ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
-            DrawCardHeader(u8"Путь");
-            if (!incoming.empty()) {
-                ImGui::TextDisabled(u8"Приходит из");
-                for (int prevIndex : incoming) {
-                    const std::string label = PipelineDisplayLabel(state.pipelineSteps[prevIndex], prevIndex);
-                    if (ImGui::Button(label.c_str())) {
-                        state.selectedPipelineIndex = prevIndex;
+                ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
+                DrawCardHeader(u8"Подсказки");
+                if (step.hints.empty()) {
+                    ImGui::TextDisabled(u8"Для этого блока подсказки пока не заданы.");
+                } else {
+                    for (const auto& hint : step.hints) {
+                        ImGui::BulletText("%s", hint.c_str());
                     }
-                    if (prevIndex != incoming.back()) ImGui::SameLine();
                 }
-            }
-            if (incoming.empty()) {
-                ImGui::TextDisabled(u8"Стартовая точка пайплайна.");
-            }
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            if (!step.nextStageLabel.empty()) {
-                ImGui::TextDisabled(u8"По таблице");
-                DrawPipelineWrappedText(step.nextStageLabel);
+
+                ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
+                DrawCardHeader(u8"Проверка в движке");
+                DrawPipelineWrappedText(step.engineCheck);
+
+                const std::vector<int> incoming = CollectIncomingPipelineIndices(state, step.id);
+                ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
+                DrawCardHeader(u8"Путь");
+                if (!incoming.empty()) {
+                    ImGui::TextDisabled(u8"Приходит из");
+                    for (int prevIndex : incoming) {
+                        const std::string label = PipelineDisplayLabel(state.pipelineSteps[prevIndex], prevIndex);
+                        if (ImGui::Button(label.c_str())) {
+                            state.selectedPipelineIndex = prevIndex;
+                        }
+                        if (prevIndex != incoming.back()) ImGui::SameLine();
+                    }
+                }
+                if (incoming.empty()) {
+                    ImGui::TextDisabled(u8"Стартовая точка пайплайна.");
+                }
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            }
-            if (step.nextIds.empty()) {
-                ImGui::TextDisabled(u8"Финальная точка пайплайна.");
-            } else {
-                ImGui::TextDisabled(u8"Ведет к");
-                for (size_t nextIdx = 0; nextIdx < step.nextIds.size(); ++nextIdx) {
-                    const int targetIndex = FindPipelineStepIndexById(state, step.nextIds[nextIdx]);
-                    if (targetIndex < 0) continue;
-                    const std::string label = PipelineDisplayLabel(state.pipelineSteps[targetIndex], targetIndex);
-                    const std::string preview = BuildPipelineRoutePreview(state, targetIndex, 3);
-                    if (DrawPipelineJumpButton(("pipeline_jump_" + std::to_string(targetIndex)).c_str(),
-                                               label,
-                                               preview,
-                                               nextIdx == 0 && step.nextIds.size() == 1)) {
-                        state.selectedPipelineIndex = targetIndex;
-                    }
-                    if (nextIdx + 1 < step.nextIds.size()) {
-                        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                if (!step.nextStageLabel.empty()) {
+                    ImGui::TextDisabled(u8"По таблице");
+                    DrawPipelineWrappedText(step.nextStageLabel);
+                    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                }
+                if (step.nextIds.empty()) {
+                    ImGui::TextDisabled(u8"Финальная точка пайплайна.");
+                } else {
+                    ImGui::TextDisabled(u8"Ведет к");
+                    for (size_t nextIdx = 0; nextIdx < step.nextIds.size(); ++nextIdx) {
+                        const int targetIndex = FindPipelineStepIndexById(state, step.nextIds[nextIdx]);
+                        if (targetIndex < 0) continue;
+                        const std::string label = PipelineDisplayLabel(state.pipelineSteps[targetIndex], targetIndex);
+                        const std::string preview = BuildPipelineRoutePreview(state, targetIndex, 3);
+                        if (DrawPipelineJumpButton(("pipeline_jump_" + std::to_string(targetIndex)).c_str(),
+                                                   label,
+                                                   preview,
+                                                   nextIdx == 0 && step.nextIds.size() == 1)) {
+                            state.selectedPipelineIndex = targetIndex;
+                        }
+                        if (nextIdx + 1 < step.nextIds.size()) {
+                            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                        }
                     }
                 }
-            }
 
-            if (!step.risk.empty() && ImGui::CollapsingHeader(u8"Риски и возвраты")) {
-                DrawPipelineWrappedText(step.risk);
-            }
-            if (!step.legacyNotes.empty() && ImGui::CollapsingHeader(u8"Практика Forge Mirror")) {
-                DrawPipelineWrappedText(step.legacyNotes);
+                if (!step.risk.empty() && ImGui::CollapsingHeader(u8"Риски и возвраты")) {
+                    DrawPipelineWrappedText(step.risk);
+                }
+                if (!step.legacyNotes.empty() && ImGui::CollapsingHeader(u8"Практика Forge Mirror")) {
+                    DrawPipelineWrappedText(step.legacyNotes);
+                }
             }
 
             if (state.isAdmin) {
                 ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
-                if (ImGui::CollapsingHeader(u8"Редактирование")) {
+                if (ImGui::BeginTable("pipeline_edit_actions", 6, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    if (editingSelected) {
+                        const ImGuiStyle& style = ImGui::GetStyle();
+                        ImVec4 accentButton = style.Colors[ImGuiCol_CheckMark];
+                        accentButton.w = 0.86f;
+                        ImVec4 accentHover = BlendColor(accentButton, style.Colors[ImGuiCol_ButtonHovered], 0.35f);
+                        ImVec4 accentActive = BlendColor(accentButton, style.Colors[ImGuiCol_ButtonActive], 0.25f);
+                        ImGui::PushStyleColor(ImGuiCol_Button, accentButton);
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accentHover);
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, accentActive);
+                        if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
+                            saveRequested = true;
+                        }
+                        ImGui::PopStyleColor(3);
+                    } else if (ImGui::Button(u8"Редактировать", ImVec2(-1.0f, 0.0f))) {
+                        startEditRequested = true;
+                    }
+                    ImGui::TableNextColumn();
+                    if (editingSelected) {
+                        if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                            cancelRequested = true;
+                        }
+                    } else {
+                        ImGui::BeginDisabled();
+                        ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f));
+                        ImGui::EndDisabled();
+                    }
+                    ImGui::TableNextColumn();
+                    if (ImGui::Button(u8"Добавить", ImVec2(-1.0f, 0.0f))) {
+                        addRequested = true;
+                    }
+                    ImGui::TableNextColumn();
+                    if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                        deleteRequested = true;
+                    }
+                    ImGui::TableNextColumn();
+                    const bool canMoveUp = state.selectedPipelineIndex > 0;
+                    if (!canMoveUp) ImGui::BeginDisabled();
+                    if (ImGui::Button(u8"Вверх", ImVec2(-1.0f, 0.0f))) {
+                        moveFrom = state.selectedPipelineIndex;
+                        moveTo = state.selectedPipelineIndex - 1;
+                    }
+                    if (!canMoveUp) ImGui::EndDisabled();
+                    ImGui::TableNextColumn();
+                    const bool canMoveDown = state.selectedPipelineIndex + 1 < stepCount;
+                    if (!canMoveDown) ImGui::BeginDisabled();
+                    if (ImGui::Button(u8"Вниз", ImVec2(-1.0f, 0.0f))) {
+                        moveFrom = state.selectedPipelineIndex;
+                        moveTo = state.selectedPipelineIndex + 1;
+                    }
+                    if (!canMoveDown) ImGui::EndDisabled();
+                    ImGui::EndTable();
+                }
+            }
+
+            if (startEditRequested) {
+                state.pipelineEditMode = true;
+                state.pipelineEditIndex = -1;
+                SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+            }
+
+            if (cancelRequested) {
+                state.pipelineEditMode = false;
+                state.pipelineEditIndex = -1;
+                SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+            }
+
+            if (saveRequested) {
+                AppPipelineMutationResult saveResult = AppUpdatePipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    state.selectedPipelineIndex,
+                    BuildPipelineDraft(state, state.pipelineSteps[state.selectedPipelineIndex]));
+                if (saveResult.ok) {
+                    state.selectedPipelineIndex = saveResult.selectedIndex;
+                    state.pipelineEditIndex = -1;
                     SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                    ImGui::TextDisabled(u8"Быстрое редактирование названия и описания.");
-                    ImGui::SetNextItemWidth(-1.0f);
-                    ImGui::InputText(u8"##pipeline_title", state.pipelineTitle.data(), state.pipelineTitle.size());
-                    ImGui::TextDisabled(u8"Описание");
-                    ImGui::SetNextItemWidth(-1.0f);
-                    ImGui::InputTextMultiline(u8"##pipeline_desc", state.pipelineDescription.data(),
-                                              state.pipelineDescription.size(), ImVec2(-1.0f, 150.0f));
+                    SetStatus(state, u8"Пайплайн сохранен.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                }
+            }
 
-                    bool saveRequested = false;
-                    bool addRequested = false;
-                    bool deleteRequested = false;
-                    int moveFrom = -1;
-                    int moveTo = -1;
+            if (addRequested) {
+                AppPipelineMutationResult addResult = AppAddPipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    state.selectedPipelineIndex);
+                if (addResult.ok) {
+                    state.selectedPipelineIndex = addResult.selectedIndex;
+                    state.pipelineEditMode = true;
+                    state.pipelineEditIndex = -1;
+                    SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+                    SetStatus(state, u8"Блок добавлен.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, addResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                }
+            }
 
-                    if (ImGui::BeginTable("pipeline_edit_actions", 5, ImGuiTableFlags_SizingStretchSame)) {
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn();
-                        {
-                            const ImGuiStyle& style = ImGui::GetStyle();
-                            ImVec4 accentButton = style.Colors[ImGuiCol_CheckMark];
-                            accentButton.w = 0.86f;
-                            ImVec4 accentHover = BlendColor(accentButton, style.Colors[ImGuiCol_ButtonHovered], 0.35f);
-                            ImVec4 accentActive = BlendColor(accentButton, style.Colors[ImGuiCol_ButtonActive], 0.25f);
-                            ImGui::PushStyleColor(ImGuiCol_Button, accentButton);
-                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accentHover);
-                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, accentActive);
-                            if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
-                                saveRequested = true;
-                            }
-                            ImGui::PopStyleColor(3);
-                        }
-                        ImGui::TableNextColumn();
-                        if (ImGui::Button(u8"Добавить", ImVec2(-1.0f, 0.0f))) {
-                            addRequested = true;
-                        }
-                        ImGui::TableNextColumn();
-                        if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
-                            deleteRequested = true;
-                        }
-                        ImGui::TableNextColumn();
-                        const bool canMoveUp = state.selectedPipelineIndex > 0;
-                        if (!canMoveUp) ImGui::BeginDisabled();
-                        if (ImGui::Button(u8"Вверх", ImVec2(-1.0f, 0.0f))) {
-                            moveFrom = state.selectedPipelineIndex;
-                            moveTo = state.selectedPipelineIndex - 1;
-                        }
-                        if (!canMoveUp) ImGui::EndDisabled();
-                        ImGui::TableNextColumn();
-                        const bool canMoveDown = state.selectedPipelineIndex + 1 < stepCount;
-                        if (!canMoveDown) ImGui::BeginDisabled();
-                        if (ImGui::Button(u8"Вниз", ImVec2(-1.0f, 0.0f))) {
-                            moveFrom = state.selectedPipelineIndex;
-                            moveTo = state.selectedPipelineIndex + 1;
-                        }
-                        if (!canMoveDown) ImGui::EndDisabled();
-                        ImGui::EndTable();
+            if (deleteRequested) {
+                AppPipelineMutationResult deleteResult = AppDeletePipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    state.selectedPipelineIndex);
+                if (deleteResult.ok) {
+                    state.selectedPipelineIndex = deleteResult.selectedIndex;
+                    state.pipelineEditMode = false;
+                    state.pipelineEditIndex = -1;
+                    SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
+                    SetStatus(state, u8"Блок удален.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                }
+            }
+
+            if (moveFrom >= 0 && moveTo >= 0 &&
+                moveFrom < static_cast<int>(state.pipelineSteps.size()) &&
+                moveTo < static_cast<int>(state.pipelineSteps.size())) {
+                AppPipelineMutationResult moveResult = AppMovePipelineStep(
+                    state.storageDir,
+                    state.pipelineSteps,
+                    moveFrom,
+                    moveTo);
+                if (moveResult.ok) {
+                    state.selectedPipelineIndex = moveResult.selectedIndex;
+                    state.pipelineEditIndex = -1;
+                    if (editingSelected) {
+                        SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
                     }
-
-                    if (saveRequested) {
-                        AppPipelineMutationResult saveResult = AppUpdatePipelineStep(
-                            state.storageDir,
-                            state.pipelineSteps,
-                            state.selectedPipelineIndex,
-                            TrimStringGui(state.pipelineTitle.data()),
-                            TrimStringGui(state.pipelineDescription.data()));
-                        if (saveResult.ok) {
-                            state.selectedPipelineIndex = saveResult.selectedIndex;
-                            SetStatus(state, u8"Пайплайн сохранен.", 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
-                        }
-                    }
-
-                    if (addRequested) {
-                        AppPipelineMutationResult addResult = AppAddPipelineStep(
-                            state.storageDir,
-                            state.pipelineSteps,
-                            state.selectedPipelineIndex);
-                        if (addResult.ok) {
-                            state.selectedPipelineIndex = addResult.selectedIndex;
-                            state.pipelineEditIndex = -1;
-                            SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                            SetStatus(state, u8"Блок добавлен.", 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, addResult.errorMessage, 1.0f, 0.45f, 0.45f);
-                        }
-                    }
-
-                    if (deleteRequested) {
-                        AppPipelineMutationResult deleteResult = AppDeletePipelineStep(
-                            state.storageDir,
-                            state.pipelineSteps,
-                            state.selectedPipelineIndex);
-                        if (deleteResult.ok) {
-                            state.selectedPipelineIndex = deleteResult.selectedIndex;
-                            state.pipelineEditIndex = -1;
-                            SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                            SetStatus(state, u8"Блок удален.", 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, deleteResult.errorMessage, 1.0f, 0.45f, 0.45f);
-                        }
-                    }
-
-                    if (moveFrom >= 0 && moveTo >= 0 &&
-                        moveFrom < static_cast<int>(state.pipelineSteps.size()) &&
-                        moveTo < static_cast<int>(state.pipelineSteps.size())) {
-                        AppPipelineMutationResult moveResult = AppMovePipelineStep(
-                            state.storageDir,
-                            state.pipelineSteps,
-                            moveFrom,
-                            moveTo);
-                        if (moveResult.ok) {
-                            state.selectedPipelineIndex = moveResult.selectedIndex;
-                            state.pipelineEditIndex = -1;
-                            SyncPipelineEditBuffers(state, state.selectedPipelineIndex);
-                            SetStatus(state, u8"Порядок блоков обновлен.", 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, moveResult.errorMessage, 1.0f, 0.45f, 0.45f);
-                        }
-                    }
+                    SetStatus(state, u8"Порядок блоков обновлен.", 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, moveResult.errorMessage, 1.0f, 0.45f, 0.45f);
                 }
             }
         }

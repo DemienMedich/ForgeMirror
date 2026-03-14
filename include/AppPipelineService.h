@@ -23,8 +23,7 @@ AppPipelineMutationResult AppAddPipelineStep(const std::filesystem::path& storag
 AppPipelineMutationResult AppUpdatePipelineStep(const std::filesystem::path& storageDir,
                                                 std::vector<PipelineStep>& steps,
                                                 int index,
-                                                const std::string& title,
-                                                const std::string& description);
+                                                const PipelineStep& updatedStep);
 
 AppPipelineMutationResult AppDeletePipelineStep(const std::filesystem::path& storageDir,
                                                 std::vector<PipelineStep>& steps,

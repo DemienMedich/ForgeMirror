@@ -11,17 +11,26 @@ UI аудит:
 - Goal (incl. success criteria):
   - Стабильная Beta: корректный UI/UX, синхронизация, сборка/инсталлер, версии + patch-notes на каждую версию.
   - Система добавления опыта без «ездящих» ползунков: оценка навыков 0–5 и авто‑доли, проценты корректно отображаются.
+  - ForgeMirror pipeline: объединить текущий pipeline с Excel-схемой, заполнить недостающие поля и сделать корректные переходы между следующими возможными шагами без потери текущих данных.
+  - Pipeline admin UX: у каждого блока должна быть кнопка редактирования, а содержимое блока должно редактироваться на месте.
+  - Tasks module UX review: выдать практичные рекомендации по улучшению экрана `Задачи` без отрыва от текущего GUI-стиля.
 - Constraints/Assumptions:
   - Следовать AgentsSkills UI‑гайдам: `AGENT_UI_TOKENS.md`, `AGENT_UI_GRID.md`, `ForgeMirror_DesignCode.md`, `PR_UI_CHECKLIST.md`.
   - Версионирование: major.any.minor (minor 2‑значный).
+  - Для текущей задачи обязательно учитывать папку `AgentsSkills`.
+  - Не затрагивать другие модули вне `ForgeMirror`.
 - Key decisions:
   - Единая переменная APP_VERSION в CMake для версии приложения.
+  - Рабочая ветка: `beta`.
+  - После каждого прогона правок: поднять версию, собрать GUI, сделать commit и push.
   - Откат UI/UX изменений последних двух дней (возврат стабильного UI).
   - Добавление опыта: оценки 0–5 (ползунки), доли рассчитываются автоматически.
   - Синхронизация: whitelist профилей/skills/tasks/pipeline/gameplay/achievements/icons/meta/patch-notes, очистка лишнего (админ).
+  - Pipeline-модель расширяется структурными полями и должна оставаться обратно совместимой со старым `pipeline.json`.
+  - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
 - State:
-  - Ветка: taskmanager. Версия: 0.4.05.
-  - Последнее изменение: старые профильные CRUD/achievement-обёртки в GuiActions переведены на AppProfileMutationService; GUI больше не сохраняет профиль напрямую в этих сценариях.
+  - Ветка: beta. Версия: 0.4.06.
+  - Последнее изменение: `beta` синхронизирована с `develop`; идёт доработка pipeline admin UI и параллельный UX-анализ модуля задач.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -154,6 +163,31 @@ UI аудит:
   - Профессии: окно подтверждения нормальной ширины, текст в 2 строки.
   - Health-check: индикатор наличия проектного data/ (админ, меню облака).
   - GUI: консоль отключена всегда (Win32 subsystem + WinMain wrapper).
+  - Pipeline: добавлено поле `nextStageLabel`, отдельный финальный шаг `Релиз / handoff` и точные переходы по Excel-логике.
+  - Pipeline: загрузка теперь мержит старый `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` с новой схемой, а wrapper-формат `{\"steps\":[...]}` тоже читается.
+  - Сборка GUI: ok (Release) после второй итерации pipeline-данных.
+  - smoke_core: ok после второй итерации pipeline-данных.
+  - Beta: merged `develop -> beta`, `origin/beta` обновлена.
+- Now:
+  - Pipeline: реализован inline editor полного блока в detail-pane и кнопка `Ред.` на каждой карточке блока; идёт финальная упаковка прогона.
+  - Tasks: сформировать рекомендации по UI/UX на основе текущей структуры `GuiTasksPanel.inc`.
+- Next:
+  - Если потребуется, следующим прогоном улучшить сам модуль `Задачи` по приоритетным UX-пунктам.
+- Now:
+- Open questions (UNCONFIRMED if needed):
+  - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
+- Working set (files/ids/commands):
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiTasksPanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\include\\AppDomainTypes.h`
+  - `Z:\\CPP\\ForgeMirror\\include\\AppPipelineService.h`
+  - `Z:\\CPP\\ForgeMirror\\src\\AppPipelineService.cpp`
+  - `Z:\\CPP\\ForgeMirror\\src\\AppWorkspaceDataService.cpp`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiPipelinePanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
+  - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.06.md`
+  - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
+  - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
 - Remaining (taskmanager):
   - (пусто)
 
