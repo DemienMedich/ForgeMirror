@@ -175,6 +175,7 @@ struct GuiRuntimeState {
     std::string pendingTaskDeleteId;
     int tasksFilterProfile = 0;
     int tasksFilterProject = 0;
+    int tasksFilterPipeline = 0;
     int tasksFilterCategory = 0;
     int tasksFilterStatus = 0;
     int tasksFilterPriority = 0;

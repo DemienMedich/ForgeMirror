@@ -109,16 +109,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
-    auto ResolveTaskPipelineName = [&state](const TaskEntry& task) -> std::string {
-        if (!task.pipelineStepId.empty()) {
-            const int idx = FindPipelineStepIndexById(state, task.pipelineStepId);
-            if (idx >= 0 && idx < static_cast<int>(state.pipelineSteps.size())) {
-                return PipelineDisplayLabel(state.pipelineSteps[static_cast<size_t>(idx)], idx);
-            }
-        }
-        return task.pipelineStep;
-    };
-
     auto UpdateTaskPipeline = [&](const std::string& taskId, int pipelineIndex) -> bool {
         std::string nextPipelineId;
         std::string nextPipelineName;
@@ -129,7 +119,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 return false;
             }
             nextPipelineId = state.pipelineSteps[static_cast<size_t>(idx)].id;
-            nextPipelineName = PipelineDisplayLabel(state.pipelineSteps[static_cast<size_t>(idx)], idx);
+            nextPipelineName = TaskPipelineStepLabel(state.pipelineSteps[static_cast<size_t>(idx)], idx);
         }
         AppMutationResult mutation = AppUpdateTaskPipelineStep(
             state.storageDir, state.tasks, taskId, nextPipelineId, nextPipelineName, ResolveTaskActor(), &state.taskAudit);
@@ -199,6 +189,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         state.tasksQuickFilter = 0;
         state.tasksFilterProfile = 0;
         state.tasksFilterProject = 0;
+        state.tasksFilterPipeline = 0;
         state.tasksFilterStatus = 0;
         state.tasksFilterPriority = 0;
         state.tasksFilterDays = 0;
@@ -385,7 +376,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Задач пока нет.");
     }
 
-    auto ComputeFilteredTasks = [&state, &StartOfLocalDay, &ResolveTaskPipelineName]() {
+    auto ComputeFilteredTasks = [&state, &StartOfLocalDay]() {
         std::vector<const TaskEntry*> ordered;
         ordered.reserve(state.tasks.size());
         for (const auto& task : state.tasks) {
@@ -413,11 +404,23 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 filterProjectName = state.projects[static_cast<size_t>(idx)].name;
             }
         }
+        bool filterWithoutPipeline = false;
+        std::string filterPipelineId;
+        std::string filterPipelineName;
+        if (state.tasksFilterPipeline == 1) {
+            filterWithoutPipeline = true;
+        } else if (state.tasksFilterPipeline >= 2) {
+            const int idx = state.tasksFilterPipeline - 2;
+            if (idx >= 0 && idx < static_cast<int>(state.pipelineSteps.size())) {
+                filterPipelineId = state.pipelineSteps[static_cast<size_t>(idx)].id;
+                filterPipelineName = TaskPipelineStepLabel(state.pipelineSteps[static_cast<size_t>(idx)], idx);
+            }
+        }
         std::vector<const TaskEntry*> filtered;
         filtered.reserve(ordered.size());
         for (const TaskEntry* task : ordered) {
             const std::string resolvedProjectName = ResolveTaskProjectName(state, *task);
-            const std::string pipelineLabel = ResolveTaskPipelineName(*task);
+            const std::string pipelineLabel = ResolveTaskPipelineName(state, *task);
             const std::string filterText = resolvedProjectName + " " + pipelineLabel + " " + task->title + " " + task->description;
             if (!MatchesFilter(filterText, state.filters.tasks.data())) continue;
             if (state.tasksFilterStatus > 0 && NormalizeTaskStatus(task->status) != (state.tasksFilterStatus - 1)) continue;
@@ -433,6 +436,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (!filterProjectId.empty() && task->projectId == filterProjectId) projectMatch = true;
                 if (!projectMatch && !filterProjectName.empty() && resolvedProjectName == filterProjectName) projectMatch = true;
                 if (!projectMatch) continue;
+            }
+            if (filterWithoutPipeline) {
+                if (!pipelineLabel.empty()) continue;
+            } else if (!filterPipelineId.empty() || !filterPipelineName.empty()) {
+                bool pipelineMatch = false;
+                if (!filterPipelineId.empty() && task->pipelineStepId == filterPipelineId) pipelineMatch = true;
+                if (!pipelineMatch && !filterPipelineName.empty() && pipelineLabel == filterPipelineName) pipelineMatch = true;
+                if (!pipelineMatch) continue;
             }
             if (minTs > 0 && task->createdAt < minTs) continue;
 
@@ -503,10 +514,24 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     for (const auto& label : pipelineLabels) {
         pipelineLabelPtrs.push_back(label.c_str());
     }
+    std::vector<std::string> pipelineFilterLabels;
+    pipelineFilterLabels.reserve(pipelineLabels.size() + 1);
+    pipelineFilterLabels.push_back(u8"Все этапы");
+    pipelineFilterLabels.push_back(u8"Без этапа");
+    for (int i = 1; i < static_cast<int>(pipelineLabels.size()); ++i) {
+        pipelineFilterLabels.push_back(pipelineLabels[static_cast<size_t>(i)]);
+    }
+    std::vector<const char*> pipelineFilterLabelPtrs;
+    pipelineFilterLabelPtrs.reserve(pipelineFilterLabels.size());
+    for (const auto& label : pipelineFilterLabels) {
+        pipelineFilterLabelPtrs.push_back(label.c_str());
+    }
     state.taskPlanPipelineIndex = std::clamp(state.taskPlanPipelineIndex, 0,
         static_cast<int>(pipelineLabelPtrs.size()) - 1);
     state.taskBulkPipelineIndex = std::clamp(state.taskBulkPipelineIndex, 0,
         static_cast<int>(pipelineLabelPtrs.size()) - 1);
+    state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
+        static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
 
     const char* quickFilterLabels[] = {u8"Все", u8"Мне назначено", u8"Сегодня", u8"Просрочено", u8"7 дней", u8"Без проекта"};
     state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
@@ -708,6 +733,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
     state.tasksFilterProject = std::clamp(state.tasksFilterProject, 0,
         static_cast<int>(projectFilterLabelPtrs.size()) - 1);
+    state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
+        static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
 
     const char* statusLabelPtrs[] = {u8"Все статусы", u8"Новая", u8"В работе", u8"Выполнена"};
     state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0, static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
@@ -744,6 +771,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                          projectFilterLabelPtrs.data(), static_cast<int>(projectFilterLabelPtrs.size()))) {
             state.tasksFilterProject = std::clamp(state.tasksFilterProject, 0,
                 static_cast<int>(projectFilterLabelPtrs.size()) - 1);
+        }
+        ImGui::TextDisabled(u8"Этап пайплайна");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##tasks_pipeline", &state.tasksFilterPipeline,
+                         pipelineFilterLabelPtrs.data(), static_cast<int>(pipelineFilterLabelPtrs.size()))) {
+            state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
+                static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
         }
         ImGui::TextDisabled(u8"Статус");
         ImGui::SetNextItemWidth(-1.0f);
@@ -798,13 +832,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
             }
         }
-    } else if (ImGui::BeginTable("tasks_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("tasks_filters", 7, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.05f);
-        ImGui::TableSetupColumn("filter_profile", ImGuiTableColumnFlags_WidthStretch, 0.95f);
-        ImGui::TableSetupColumn("filter_project", ImGuiTableColumnFlags_WidthStretch, 0.95f);
-        ImGui::TableSetupColumn("filter_status", ImGuiTableColumnFlags_WidthStretch, 0.85f);
-        ImGui::TableSetupColumn("filter_priority", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+        ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("filter_profile", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("filter_project", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("filter_pipeline", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("filter_status", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableSetupColumn("filter_priority", ImGuiTableColumnFlags_WidthStretch, 0.8f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
@@ -830,6 +865,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 static_cast<int>(projectFilterLabelPtrs.size()) - 1);
         }
         ImGui::TableSetColumnIndex(4);
+        ImGui::TextDisabled(u8"Этап");
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::Combo(u8"##tasks_pipeline", &state.tasksFilterPipeline,
+                         pipelineFilterLabelPtrs.data(), static_cast<int>(pipelineFilterLabelPtrs.size()))) {
+            state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
+                static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
+        }
+        ImGui::TableSetColumnIndex(5);
         ImGui::TextDisabled(u8"Статус");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_status", &state.tasksFilterStatus,
@@ -837,7 +880,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0,
                 static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
         }
-        ImGui::TableSetColumnIndex(5);
+        ImGui::TableSetColumnIndex(6);
         ImGui::TextDisabled(u8"Приоритет");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_priority", &state.tasksFilterPriority,
@@ -1431,10 +1474,15 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     int scoreSum = 0;
     int poolSum = 0;
     std::unordered_set<std::string> uniqueProfiles;
+    std::unordered_map<std::string, int> pipelineCounts;
+    std::string topPipelineLabel;
+    int topPipelineCount = 0;
+    int unassignedPipelineCount = 0;
     std::string lastStamp;
     if (!filtered.empty()) {
         lastStamp = FormatTimestamp(filtered.front()->createdAt, "%Y-%m-%d %H:%M");
         uniqueProfiles.reserve(state.profiles.size());
+        pipelineCounts.reserve(filtered.size());
         for (const TaskEntry* task : filtered) {
             int idx = std::clamp(task->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
             categoryCounts[idx] += 1;
@@ -1451,6 +1499,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             } else {
                 for (const auto& assignee : task->assignees) {
                     uniqueProfiles.insert(assignee);
+                }
+            }
+            const std::string pipelineName = ResolveTaskPipelineName(state, *task);
+            if (pipelineName.empty()) {
+                unassignedPipelineCount += 1;
+            } else {
+                const int nextCount = ++pipelineCounts[pipelineName];
+                if (nextCount >= topPipelineCount) {
+                    topPipelineCount = nextCount;
+                    topPipelineLabel = pipelineName;
                 }
             }
         }
@@ -1526,6 +1584,19 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::TextDisabled(u8"Средний пул XP: %.0f", avgPool);
+            if (!topPipelineLabel.empty()) {
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                ImGui::TextDisabled(u8"Этап-фокус");
+                ImGui::SameLine();
+                ImGui::Text("%s (%d)", topPipelineLabel.c_str(), topPipelineCount);
+                if (unassignedPipelineCount > 0) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled(u8"без этапа: %d", unassignedPipelineCount);
+                }
+            } else if (unassignedPipelineCount > 0) {
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                ImGui::TextDisabled(u8"Пайплайн не задан у %d задач.", unassignedPipelineCount);
+            }
 
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::TextDisabled(u8"Активность за 14 дней");
@@ -1695,7 +1766,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             ImGui::TableSetColumnIndex(col++);
-            const std::string pipelineName = ResolveTaskPipelineName(*task);
+            const std::string pipelineName = ResolveTaskPipelineName(state, *task);
             if (state.isAdmin && editableTask) {
                 int pipelineIndex = 0;
                 if (!editableTask->pipelineStepId.empty()) {
@@ -1843,6 +1914,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.filters.tasks.fill('\0');
             state.tasksFilterProfile = 0;
             state.tasksFilterProject = 0;
+            state.tasksFilterPipeline = 0;
             state.tasksFilterStatus = 0;
             state.tasksFilterPriority = 0;
             state.tasksFilterDays = 0;
@@ -1880,16 +1952,31 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         if (BeginCard("tasks_detail_card")) {
             DrawCardHeader(u8"Детали задачи");
-            ImGui::TextDisabled(u8"Клик по названию задачи обновляет панель.");
-            ImGui::SameLine();
-            if (ImGui::SmallButton(u8"Скрыть")) {
-                state.tasksExpandedId.clear();
+            const float detailHeadlineWidth = ImGui::GetContentRegionAvail().x;
+            if (detailHeadlineWidth < 340.0f) {
+                ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
+                if (ImGui::Button(u8"Скрыть", ImVec2(-1.0f, 0.0f))) {
+                    state.tasksExpandedId.clear();
+                }
+            } else if (ImGui::BeginTable("task_detail_headline", 2, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("task_detail_note", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
+                ImGui::PopTextWrapPos();
+                ImGui::TableSetColumnIndex(1);
+                if (ImGui::Button(u8"Скрыть", ImVec2(-1.0f, 0.0f))) {
+                    state.tasksExpandedId.clear();
+                }
+                ImGui::EndTable();
             }
             std::string title = expanded->title;
             if (title.empty()) title = u8"Без названия";
             ImGui::TextUnformatted(title.c_str());
             const std::string projectName = ResolveTaskProjectName(state, *expanded);
-            const std::string pipelineName = ResolveTaskPipelineName(*expanded);
+            const std::string pipelineName = ResolveTaskPipelineName(state, *expanded);
             if (ImGui::BeginTable("task_detail_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 88.0f);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
@@ -1951,6 +2038,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Spacing();
                 ImGui::TextDisabled(u8"Описание");
                 ImGui::TextWrapped("%s", expanded->description.c_str());
+            }
+
+            const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *expanded);
+            if (taskPipelineIndex >= 0 && taskPipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
+                const PipelineStep& step = state.pipelineSteps[static_cast<size_t>(taskPipelineIndex)];
+                const std::string nextSummary = BuildPipelineNextSummary(state, taskPipelineIndex);
+                if (!nextSummary.empty()) {
+                    ImGui::Spacing();
+                    ImGui::TextDisabled(u8"Следующий шаг");
+                    ImGui::TextWrapped("%s", nextSummary.c_str());
+                }
+                if (!step.hints.empty()) {
+                    ImGui::Spacing();
+                    ImGui::TextDisabled(u8"Подсказки этапа");
+                    const int hintLimit = std::min(3, static_cast<int>(step.hints.size()));
+                    for (int i = 0; i < hintLimit; ++i) {
+                        ImGui::BulletText("%s", step.hints[static_cast<size_t>(i)].c_str());
+                    }
+                    if (static_cast<int>(step.hints.size()) > hintLimit) {
+                        ImGui::TextDisabled(u8"Еще: %d", static_cast<int>(step.hints.size()) - hintLimit);
+                    }
+                }
             }
 
             ImGui::Spacing();

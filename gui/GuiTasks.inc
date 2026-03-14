@@ -510,6 +510,69 @@ static std::string TaskDisplayTitle(const TaskEntry& task) {
     return task.project;
 }
 
+static std::string TaskPipelineStepLabel(const PipelineStep& step, int index) {
+    const std::string code = step.stageCode.empty() ? std::to_string(index + 1) : step.stageCode;
+    if (step.title.empty()) return code;
+    return code + "  " + step.title;
+}
+
+static int ResolveTaskPipelineIndex(const GuiState& state, const TaskEntry& task) {
+    if (!task.pipelineStepId.empty()) {
+        for (int i = 0; i < static_cast<int>(state.pipelineSteps.size()); ++i) {
+            if (state.pipelineSteps[static_cast<size_t>(i)].id == task.pipelineStepId) {
+                return i;
+            }
+        }
+    }
+    if (!task.pipelineStep.empty()) {
+        for (int i = 0; i < static_cast<int>(state.pipelineSteps.size()); ++i) {
+            const auto& step = state.pipelineSteps[static_cast<size_t>(i)];
+            if (TaskPipelineStepLabel(step, i) == task.pipelineStep || step.title == task.pipelineStep) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+static std::string ResolveTaskPipelineName(const GuiState& state, const TaskEntry& task) {
+    const int index = ResolveTaskPipelineIndex(state, task);
+    if (index >= 0 && index < static_cast<int>(state.pipelineSteps.size())) {
+        return TaskPipelineStepLabel(state.pipelineSteps[static_cast<size_t>(index)], index);
+    }
+    return task.pipelineStep;
+}
+
+static int ResolveTaskProfileFilterIndex(const GuiState& state, const std::string& profileId) {
+    if (profileId.empty()) return 0;
+    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+        if (state.profiles[static_cast<size_t>(i)].id == profileId) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+static void FocusTasksForProfile(GuiState& state,
+                                 const std::string& profileId,
+                                 const std::string& expandedTaskId = std::string()) {
+    if (!state.modules.tasks) return;
+    state.showTasks = true;
+    state.showProjects = false;
+    state.workspaceTabRequest = static_cast<int>(UiWindowId::Tasks);
+    state.filters.tasks.fill('\0');
+    state.tasksQuickFilter = 0;
+    state.tasksFilterProfile = ResolveTaskProfileFilterIndex(state, profileId);
+    state.tasksFilterProject = 0;
+    state.tasksFilterPipeline = 0;
+    state.tasksFilterCategory = 0;
+    state.tasksFilterStatus = 0;
+    state.tasksFilterPriority = 0;
+    state.tasksFilterDays = 0;
+    state.taskSelectionIds.clear();
+    state.tasksExpandedId = expandedTaskId;
+}
+
 static std::string BuildParticipantLabel(const TaskEntry& task,
                                          const std::unordered_map<std::string, std::string>& names) {
     std::ostringstream out;
