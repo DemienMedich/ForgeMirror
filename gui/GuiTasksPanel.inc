@@ -133,6 +133,97 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
+    auto CollectTaskPipelineQuickTargets = [&](const TaskEntry& task) -> std::vector<int> {
+        std::vector<int> targets;
+        if (state.pipelineSteps.empty()) return targets;
+
+        std::unordered_set<int> seen;
+        const int currentIndex = ResolveTaskPipelineIndex(state, task);
+        if (currentIndex >= 0 && currentIndex < static_cast<int>(state.pipelineSteps.size())) {
+            const PipelineStep& step = state.pipelineSteps[static_cast<size_t>(currentIndex)];
+            targets.reserve(step.nextIds.size());
+            for (const auto& nextId : step.nextIds) {
+                const int nextIndex = FindPipelineStepIndexById(state, nextId);
+                if (nextIndex < 0 || nextIndex == currentIndex) continue;
+                if (seen.insert(nextIndex).second) {
+                    targets.push_back(nextIndex);
+                }
+            }
+            return targets;
+        }
+
+        if (!task.pipelineStepId.empty() || !task.pipelineStep.empty()) {
+            return targets;
+        }
+
+        targets.reserve(state.pipelineSteps.size());
+        for (int i = 0; i < static_cast<int>(state.pipelineSteps.size()); ++i) {
+            if (!CollectIncomingPipelineIndices(state, state.pipelineSteps[static_cast<size_t>(i)].id).empty()) {
+                continue;
+            }
+            if (seen.insert(i).second) {
+                targets.push_back(i);
+            }
+        }
+        return targets;
+    };
+
+    auto DrawTaskPipelineQuickActionButtons = [&](const char* tableId,
+                                                  const std::string& taskId,
+                                                  const std::vector<int>& targetIndices) -> bool {
+        if (targetIndices.empty()) return false;
+        const float width = ImGui::GetContentRegionAvail().x;
+        const int columns = (width >= 420.0f && targetIndices.size() > 1) ? 2 : 1;
+        bool changed = false;
+        if (columns == 1) {
+            for (int idx : targetIndices) {
+                if (idx < 0 || idx >= static_cast<int>(state.pipelineSteps.size())) continue;
+                const std::string label = PipelineDisplayLabel(state.pipelineSteps[static_cast<size_t>(idx)], idx);
+                if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
+                    changed = UpdateTaskPipeline(taskId, idx + 1) || changed;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    const std::string preview = BuildPipelineRoutePreview(state, idx, 3);
+                    if (!preview.empty()) {
+                        ImGui::TextUnformatted(preview.c_str());
+                    } else {
+                        ImGui::TextUnformatted(label.c_str());
+                    }
+                    ImGui::EndTooltip();
+                }
+            }
+            return changed;
+        }
+
+        if (ImGui::BeginTable(tableId, columns, ImGuiTableFlags_SizingStretchSame)) {
+            for (size_t i = 0; i < targetIndices.size(); ++i) {
+                const int idx = targetIndices[i];
+                if (idx < 0 || idx >= static_cast<int>(state.pipelineSteps.size())) continue;
+                if (static_cast<int>(i % static_cast<size_t>(columns)) == 0) {
+                    ImGui::TableNextRow();
+                }
+                ImGui::TableSetColumnIndex(static_cast<int>(i % static_cast<size_t>(columns)));
+                const std::string label = PipelineDisplayLabel(state.pipelineSteps[static_cast<size_t>(idx)], idx);
+                if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f))) {
+                    changed = UpdateTaskPipeline(taskId, idx + 1) || changed;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    const std::string preview = BuildPipelineRoutePreview(state, idx, 3);
+                    if (!preview.empty()) {
+                        ImGui::TextUnformatted(preview.c_str());
+                    } else {
+                        ImGui::TextUnformatted(label.c_str());
+                    }
+                    ImGui::EndTooltip();
+                }
+            }
+            ImGui::EndTable();
+        }
+        return changed;
+    };
+
     auto UpdateTaskDeadline = [&](const std::string& taskId, const std::string& deadlineInput) -> bool {
         const std::string trimmed = TrimStringGui(deadlineInput);
         std::optional<std::int64_t> deadlineAt;
@@ -2113,6 +2204,38 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     UpdateTaskPriority(editableTask->id, draftPriority);
                 }
 
+                const int editablePipelineIndex = ResolveTaskPipelineIndex(state, *editableTask);
+                const std::vector<int> quickPipelineTargets = CollectTaskPipelineQuickTargets(*editableTask);
+                if (!state.pipelineSteps.empty()) {
+                    ImGui::Spacing();
+                    if (editablePipelineIndex >= 0 && editablePipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
+                        if (!quickPipelineTargets.empty()) {
+                            ImGui::TextDisabled(u8"Быстрый переход по пайплайну");
+                            DrawTaskPipelineQuickActionButtons("task_detail_pipeline_actions",
+                                                               editableTask->id,
+                                                               quickPipelineTargets);
+                        } else {
+                            ImGui::TextDisabled(u8"Пайплайн: финальный этап, дальше переходов нет.");
+                            if (NormalizeTaskStatus(editableTask->status) != kTaskStatusDone) {
+                                ImGui::TextDisabled(u8"Если handoff завершён, переведите задачу в статус 'Выполнена'.");
+                            }
+                        }
+                    } else if (editableTask->pipelineStepId.empty() && editableTask->pipelineStep.empty()) {
+                        if (!quickPipelineTargets.empty()) {
+                            ImGui::TextDisabled(u8"Стартовый этап");
+                            DrawTaskPipelineQuickActionButtons("task_detail_pipeline_start_actions",
+                                                               editableTask->id,
+                                                               quickPipelineTargets);
+                        } else {
+                            ImGui::TextDisabled(u8"Стартовый этап не найден. Используйте ручной выбор ниже.");
+                        }
+                    } else {
+                        ImGui::TextDisabled(u8"Текущий этап не найден в схеме. Используйте ручной выбор ниже.");
+                    }
+                }
+
+                ImGui::Spacing();
+                ImGui::TextDisabled(u8"Ручной выбор этапа");
                 int draftPipelineIndex = 0;
                 if (!editableTask->pipelineStepId.empty()) {
                     const int currentPipelineIndex = FindPipelineStepIndexById(state, editableTask->pipelineStepId);
