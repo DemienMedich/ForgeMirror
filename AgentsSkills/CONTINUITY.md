@@ -30,8 +30,8 @@ UI аудит:
   - Pipeline-модель расширяется структурными полями и должна оставаться обратно совместимой со старым `pipeline.json`.
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
 - State:
-  - Ветка: beta. Версия: 0.4.12.
-  - Последнее изменение: pipeline-прогресс стал заметнее в таблице задач и в профильном блоке текущих задач: у stage-ячейки показываются позиция шага, состояние старта/ветвления/финального handoff и ближайший следующий код этапа.
+  - Ветка: beta. Версия: 0.4.13.
+  - Последнее изменение: для задач на финальном handoff добавлены безопасные status-shortcuts, а задачи без этапа или с этапом вне схемы получили отдельную stage-подсветку в таблице и в профильном блоке.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -175,10 +175,11 @@ UI аудит:
   - Tasks/Profile UX: добавлены фильтр и summary по этапу пайплайна, detail-pane показывает `next-step` hints, блок `Текущие задачи` в профиле показывает статусы и ведёт в модуль `Задачи`, а кнопка скрытия detail-pane адаптирована под узкую ширину.
   - Tasks/Pipeline UX: в admin detail-pane задачи появились быстрые действия по pipeline-схеме: можно назначить стартовый этап, перейти на следующий этап по `nextIds` в один клик и держать полный manual selector как резервный режим.
   - Tasks/Profile UX: stage-ячейки в таблице задач и в блоке `Текущие задачи` профиля теперь показывают компактный pipeline-progress (`N/total`, ветвление, старт не задан, final handoff, следующий код этапа), чтобы состояние задачи читалось без открытия detail-pane.
+  - Tasks/Pipeline UX: финальный handoff получил безопасные shortcut’ы по статусу (`Новая -> В работе -> Выполнена`, reopen только в `В работе`), а для stage-состояний `без этапа` и `вне схемы` добавлена отдельная сигнальная подсветка.
 - Now:
-  - Tasks UX: верх экрана уже уплотнён, основной поток задач работает как table + detail-pane на широком экране и как stacked layout на узком, при этом проектный контекст и pipeline stage живут в одной рабочей панели, профиль показывает живой срез активных задач, detail-pane умеет вести задачу дальше по pipeline-схеме, а stage-ячейки теперь явно показывают прогресс шага.
+  - Tasks UX: верх экрана уже уплотнён, основной поток задач работает как table + detail-pane на широком экране и как stacked layout на узком, при этом проектный контекст и pipeline stage живут в одной рабочей панели, профиль показывает живой срез активных задач, detail-pane умеет вести задачу дальше по pipeline-схеме, stage-ячейки явно показывают прогресс шага, а проблемные pipeline-состояния теперь не теряются в таблице.
 - Next:
-  - Следующим прогоном логично усилить сценарий `task -> pipeline`: продумать безопасные status-shortcuts на финальном handoff и подсветку задач, застрявших без этапа или на проблемных ветках.
+  - Следующим прогоном логично усилить сценарий `task -> pipeline`: отдельно подсветить ветвящиеся и зависшие задачи, а также продумать summary по pipeline-рискам в верхней части экрана `Задачи`.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
@@ -191,7 +192,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiPipelinePanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.12.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.13.md`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
 - Remaining (taskmanager):

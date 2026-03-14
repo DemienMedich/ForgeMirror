@@ -1857,6 +1857,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             ImGui::TableSetColumnIndex(col++);
+            ImU32 pipelineAttentionBg = 0;
+            if (TryGetTaskPipelineAttentionCellBg(state, *task, pipelineAttentionBg)) {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, pipelineAttentionBg);
+            }
             const std::string pipelineName = ResolveTaskPipelineName(state, *task);
             if (state.isAdmin && editableTask) {
                 int pipelineIndex = 0;
@@ -2071,6 +2075,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextUnformatted(title.c_str());
             const std::string projectName = ResolveTaskProjectName(state, *expanded);
             const std::string pipelineName = ResolveTaskPipelineName(state, *expanded);
+            const TaskPipelineProgressInfo expandedPipelineProgress = DescribeTaskPipelineProgress(state, *expanded);
             if (ImGui::BeginTable("task_detail_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 88.0f);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
@@ -2127,6 +2132,15 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::TextDisabled(u8"Не задан");
                 }
                 ImGui::EndTable();
+            }
+            if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing) {
+                ImGui::Spacing();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Задача пока вне пайплайна.");
+                ImGui::TextWrapped(u8"Назначьте стартовый этап, чтобы отслеживать движение задачи по pipeline.");
+            } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Unknown) {
+                ImGui::Spacing();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Этап задачи не найден в текущей схеме.");
+                ImGui::TextWrapped(u8"Лучше переназначить шаг вручную, иначе быстрые переходы pipeline будут непредсказуемы.");
             }
             if (!expanded->description.empty()) {
                 ImGui::Spacing();
@@ -2192,6 +2206,29 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::TextDisabled(u8"Действия");
+
+                const TaskPipelineProgressInfo editablePipelineProgress = DescribeTaskPipelineProgress(state, *editableTask);
+                const int currentEditableStatus = NormalizeTaskStatus(editableTask->status);
+                if (editablePipelineProgress.state == TaskPipelineProgressState::Final) {
+                    ImGui::Spacing();
+                    ImGui::TextDisabled(u8"Статус финального handoff");
+                    if (currentEditableStatus == kTaskStatusNew) {
+                        if (ImGui::Button(u8"Начать handoff", ImVec2(-1.0f, 0.0f))) {
+                            UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
+                        }
+                        ImGui::TextDisabled(u8"Shortcut не пропускает этапы: сначала 'В работе', затем 'Выполнена'.");
+                    } else if (currentEditableStatus == kTaskStatusInProgress) {
+                        if (ImGui::Button(u8"Закрыть после handoff", ImVec2(-1.0f, 0.0f))) {
+                            UpdateTaskStatus(editableTask->id, kTaskStatusDone);
+                        }
+                        ImGui::TextDisabled(u8"Используйте это после завершения финального handoff.");
+                    } else {
+                        if (ImGui::Button(u8"Вернуть в работу", ImVec2(-1.0f, 0.0f))) {
+                            UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
+                        }
+                        ImGui::TextDisabled(u8"Новая из 'Выполнена' недоступна по правилам, поэтому shortcut возвращает в 'В работе'.");
+                    }
+                }
 
                 int draftStatus = NormalizeTaskStatus(editableTask->status);
                 const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};

@@ -1214,6 +1214,10 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                     }
 
                     ImGui::TableSetColumnIndex(3);
+                    ImU32 pipelineAttentionBg = 0;
+                    if (TryGetTaskPipelineAttentionCellBg(state, *task, pipelineAttentionBg)) {
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, pipelineAttentionBg);
+                    }
                     const std::string pipelineName = ResolveTaskPipelineName(state, *task);
                     if (pipelineName.empty()) {
                         ImGui::TextDisabled(u8"Без этапа");

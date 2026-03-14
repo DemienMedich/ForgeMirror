@@ -620,7 +620,7 @@ static void DrawTaskPipelineProgressHint(const GuiState& state, const TaskEntry&
     if (info.state == TaskPipelineProgressState::Missing) {
         color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
     } else if (info.state == TaskPipelineProgressState::Unknown) {
-        color = LogLevelColor(AppLogLevel::Warning);
+        color = LogLevelColor(AppLogLevel::Error);
     } else if (info.state == TaskPipelineProgressState::Final) {
         color = LogLevelColor(AppLogLevel::Info);
     }
@@ -637,6 +637,24 @@ static void DrawTaskPipelineProgressHint(const GuiState& state, const TaskEntry&
         }
         ImGui::TextDisabled("%s", info.secondary.c_str());
     }
+}
+
+static bool TryGetTaskPipelineAttentionCellBg(const GuiState& state,
+                                              const TaskEntry& task,
+                                              ImU32& bgColor) {
+    const TaskPipelineProgressInfo info = DescribeTaskPipelineProgress(state, task);
+    ImVec4 tint;
+    if (info.state == TaskPipelineProgressState::Missing) {
+        tint = LogLevelColor(AppLogLevel::Warning);
+        tint.w = std::clamp(tint.w * 0.10f, 0.05f, 0.12f);
+    } else if (info.state == TaskPipelineProgressState::Unknown) {
+        tint = LogLevelColor(AppLogLevel::Error);
+        tint.w = std::clamp(tint.w * 0.14f, 0.06f, 0.18f);
+    } else {
+        return false;
+    }
+    bgColor = ImGui::GetColorU32(tint);
+    return true;
 }
 
 static int ResolveTaskProfileFilterIndex(const GuiState& state, const std::string& profileId) {
