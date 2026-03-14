@@ -161,6 +161,7 @@ struct GuiRuntimeState {
     std::array<char, 128> taskProject{};
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
+    bool showTaskCreateForm = false;
     std::array<char, 128> taskPlanTitle{};
     std::array<char, 256> taskPlanDescription{};
     std::array<char, 20> taskPlanDeadline{};

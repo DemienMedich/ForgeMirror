@@ -14,6 +14,7 @@ UI аудит:
   - ForgeMirror pipeline: объединить текущий pipeline с Excel-схемой, заполнить недостающие поля и сделать корректные переходы между следующими возможными шагами без потери текущих данных.
   - Pipeline admin UX: у каждого блока должна быть кнопка редактирования, а содержимое блока должно редактироваться на месте.
   - Tasks module UX review: выдать практичные рекомендации по улучшению экрана `Задачи` без отрыва от текущего GUI-стиля.
+  - Tasks UX pass: сделать экран `Задачи` компактнее сверху, скрыть тяжёлую форму создания, а служебные блоки перевести в контекстный/collapsible режим.
 - Constraints/Assumptions:
   - Следовать AgentsSkills UI‑гайдам: `AGENT_UI_TOKENS.md`, `AGENT_UI_GRID.md`, `ForgeMirror_DesignCode.md`, `PR_UI_CHECKLIST.md`.
   - Версионирование: major.any.minor (minor 2‑значный).
@@ -29,8 +30,8 @@ UI аудит:
   - Pipeline-модель расширяется структурными полями и должна оставаться обратно совместимой со старым `pipeline.json`.
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
 - State:
-  - Ветка: beta. Версия: 0.4.06.
-  - Последнее изменение: `beta` синхронизирована с `develop`; идёт доработка pipeline admin UI и параллельный UX-анализ модуля задач.
+  - Ветка: beta. Версия: 0.4.07.
+  - Последнее изменение: pipeline admin inline editor уже в `beta`; выполнен первый UX-pass по модулю `Задачи`.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -168,16 +169,17 @@ UI аудит:
   - Сборка GUI: ok (Release) после второй итерации pipeline-данных.
   - smoke_core: ok после второй итерации pipeline-данных.
   - Beta: merged `develop -> beta`, `origin/beta` обновлена.
+  - Pipeline admin UX: у каждого блока есть кнопка `Ред.`, detail-pane умеет inline-редактирование полного блока; версия 0.4.06 запушена в `beta`.
 - Now:
-  - Pipeline: реализован inline editor полного блока в detail-pane и кнопка `Ред.` на каждой карточке блока; идёт финальная упаковка прогона.
-  - Tasks: сформировать рекомендации по UI/UX на основе текущей структуры `GuiTasksPanel.inc`.
+  - Tasks UX: toolbar с быстрым фильтром и CTA, форма создания скрывается, сводка/дедлайны/аудит стали collapsible, массовые действия показываются только при выборе задач.
 - Next:
-  - Если потребуется, следующим прогоном улучшить сам модуль `Задачи` по приоритетным UX-пунктам.
+  - При необходимости следующим прогоном добрать второй UX-pass по `Задачам`: master-detail layout, поиск по назначению и облегчение таблицы создания.
 - Now:
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiTasksPanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiState.inc`
   - `Z:\\CPP\\ForgeMirror\\include\\AppDomainTypes.h`
   - `Z:\\CPP\\ForgeMirror\\include\\AppPipelineService.h`
   - `Z:\\CPP\\ForgeMirror\\src\\AppPipelineService.cpp`
@@ -185,7 +187,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiPipelinePanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.06.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.07.md`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
 - Remaining (taskmanager):

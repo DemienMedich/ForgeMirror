@@ -161,7 +161,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return static_cast<std::int64_t>(std::mktime(&localTm));
     };
 
-    if (state.isAdmin) {
+    auto ResetTaskFilters = [&state]() {
+        state.tasksQuickFilter = 0;
+        state.tasksFilterProfile = 0;
+        state.tasksFilterProject = 0;
+        state.tasksFilterStatus = 0;
+        state.tasksFilterPriority = 0;
+        state.tasksFilterDays = 0;
+        state.tasksSortMode = 0;
+        state.filters.tasks.fill('\0');
+    };
+
+    if (state.isAdmin && state.showTaskCreateForm) {
         if (BeginCard("tasks_create_card")) {
             DrawCardHeader(u8"Создать задачу");
             EnsureTaskPlanAssigneesSize(state);
@@ -287,6 +298,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         state.storageDir, state.tasks, task, ResolveTaskActor(), &state.taskAudit);
                     if (mutation.ok) {
                         SetStatus(state, u8"Задача создана.", 0.45f, 0.9f, 0.45f);
+                        state.showTaskCreateForm = false;
                         state.taskPlanTitle.fill('\0');
                         state.taskPlanDescription.fill('\0');
                         state.taskPlanStatus = kTaskStatusNew;
@@ -418,43 +430,81 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     state.taskBulkProjectIndex = std::clamp(state.taskBulkProjectIndex, 0,
         static_cast<int>(projectLabelPtrs.size()) - 1);
 
-    DrawCardHeader(u8"Быстрые фильтры");
-    if (ImGui::Button(u8"Все", ImVec2(96.0f, 0.0f))) {
-        state.tasksQuickFilter = 0;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Мне назначено", ImVec2(140.0f, 0.0f))) {
-        if (state.active) {
-            state.tasksQuickFilter = 1;
-        } else {
-            SetStatus(state, u8"Выберите активный профиль для фильтра 'Мне назначено'.", 1.0f, 0.75f, 0.35f);
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Сегодня", ImVec2(96.0f, 0.0f))) {
-        state.tasksQuickFilter = 2;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Просрочено", ImVec2(116.0f, 0.0f))) {
-        state.tasksQuickFilter = 3;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"7 дней", ImVec2(96.0f, 0.0f))) {
-        state.tasksQuickFilter = 4;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"Без проекта", ImVec2(140.0f, 0.0f))) {
-        state.tasksQuickFilter = 5;
-    }
     const char* quickFilterLabels[] = {u8"Все", u8"Мне назначено", u8"Сегодня", u8"Просрочено", u8"7 дней", u8"Без проекта"};
     state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
-    ImGui::TextDisabled(u8"Активный быстрый фильтр: %s", quickFilterLabels[state.tasksQuickFilter]);
+    if (BeginCard("tasks_toolbar_card")) {
+        DrawCardHeader(u8"Быстрый доступ");
+        const bool compactToolbar = ImGui::GetContentRegionAvail().x < 760.0f;
+        int requestedQuickFilter = state.tasksQuickFilter;
+        if (compactToolbar) {
+            ImGui::TextDisabled(u8"Быстрый фильтр");
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo("##tasks_quick_filter", &requestedQuickFilter,
+                             quickFilterLabels, IM_ARRAYSIZE(quickFilterLabels))) {
+                if (requestedQuickFilter == 1 && !state.active) {
+                    SetStatus(state, u8"Выберите активный профиль для фильтра 'Мне назначено'.", 1.0f, 0.75f, 0.35f);
+                } else {
+                    state.tasksQuickFilter = requestedQuickFilter;
+                }
+            }
+            if (state.isAdmin) {
+                const char* createLabel = state.showTaskCreateForm ? u8"Скрыть форму" : u8"Новая задача";
+                if (ImGui::Button(createLabel, ImVec2(-1.0f, 0.0f))) {
+                    state.showTaskCreateForm = !state.showTaskCreateForm;
+                }
+            }
+            if (ImGui::Button(u8"Сбросить фильтры", ImVec2(-1.0f, 0.0f))) {
+                ResetTaskFilters();
+            }
+        } else if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 4 : 3,
+                                     ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("tasks_toolbar_filter", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            ImGui::TableSetupColumn("tasks_toolbar_hint", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            if (state.isAdmin) {
+                ImGui::TableSetupColumn("tasks_toolbar_create", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            }
+            ImGui::TableSetupColumn("tasks_toolbar_reset", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Быстрый фильтр");
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::Combo("##tasks_quick_filter", &requestedQuickFilter,
+                             quickFilterLabels, IM_ARRAYSIZE(quickFilterLabels))) {
+                if (requestedQuickFilter == 1 && !state.active) {
+                    SetStatus(state, u8"Выберите активный профиль для фильтра 'Мне назначено'.", 1.0f, 0.75f, 0.35f);
+                } else {
+                    state.tasksQuickFilter = requestedQuickFilter;
+                }
+            }
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextDisabled(u8"Сейчас");
+            ImGui::TextUnformatted(quickFilterLabels[state.tasksQuickFilter]);
+            if (state.isAdmin) {
+                ImGui::TableSetColumnIndex(2);
+                const char* createLabel = state.showTaskCreateForm ? u8"Скрыть форму" : u8"Новая задача";
+                if (ImGui::Button(createLabel, ImVec2(-1.0f, 0.0f))) {
+                    state.showTaskCreateForm = !state.showTaskCreateForm;
+                }
+                ImGui::TableSetColumnIndex(3);
+            } else {
+                ImGui::TableSetColumnIndex(2);
+            }
+            if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+                ResetTaskFilters();
+            }
+            ImGui::EndTable();
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
 
-    DrawCardHeader(u8"Фильтр");
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+
+    if (ImGui::CollapsingHeader(u8"Фильтры и экспорт")) {
+        DrawCardHeader(u8"Фильтр");
     const float filtersWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilters = filtersWidth < 620.0f;
     std::vector<std::string> profileLabels;
@@ -676,6 +726,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::EndTable();
         }
     }
+    }
 
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
@@ -781,8 +832,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
     }
 
-    if (BeginCard("tasks_upcoming_deadlines")) {
-        DrawCardHeader(u8"Скоро дедлайн");
+    std::string deadlinesHeader = u8"Скоро дедлайн (" +
+        std::to_string(static_cast<int>(overdueDeadlines.size() + upcoming2h.size() + upcoming24h.size())) + ")";
+    if (ImGui::CollapsingHeader(deadlinesHeader.c_str())) {
+        if (BeginCard("tasks_upcoming_deadlines")) {
         ImGui::TextDisabled(u8"Просрочено: %d | <2ч: %d | <24ч: %d",
                             static_cast<int>(overdueDeadlines.size()),
                             static_cast<int>(upcoming2h.size()),
@@ -829,12 +882,15 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (overdueDeadlines.empty() && upcoming2h.empty() && upcoming24h.empty()) {
             ImGui::TextDisabled(u8"Критичных дедлайнов нет.");
         }
+        }
+        EndCard();
+        ImGui::Spacing();
     }
-    EndCard();
-    ImGui::Spacing();
 
-    if (BeginCard("tasks_audit_card")) {
-        DrawCardHeader(u8"Последние изменения");
+    std::string auditHeader = u8"Последние изменения (" +
+        std::to_string(static_cast<int>(state.taskAudit.size())) + ")";
+    if (ImGui::CollapsingHeader(auditHeader.c_str())) {
+        if (BeginCard("tasks_audit_card")) {
         constexpr int kTaskAuditPreview = 8;
         if (state.taskAudit.empty()) {
             ImGui::TextDisabled(u8"Изменений пока нет.");
@@ -877,9 +933,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             ImGui::EndTable();
         }
+        }
+        EndCard();
+        ImGui::Spacing();
     }
-    EndCard();
-    ImGui::Spacing();
 
     auto ApplyBulkStatus = [&]() -> bool {
         AppMutationResult mutation = AppBulkUpdateTaskStatus(
@@ -1002,9 +1059,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return true;
     };
 
-    if (state.isAdmin) {
-        if (BeginCard("tasks_bulk_actions")) {
-            DrawCardHeader(u8"Массовые действия");
+    if (state.isAdmin && !state.taskSelectionIds.empty()) {
+        std::string bulkHeader = u8"Массовые действия (" +
+            std::to_string(static_cast<int>(state.taskSelectionIds.size())) + ")";
+        if (ImGui::CollapsingHeader(bulkHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (BeginCard("tasks_bulk_actions")) {
             const int selectedCount = static_cast<int>(state.taskSelectionIds.size());
             ImGui::TextDisabled(u8"Выбрано: %d", selectedCount);
             ImGui::SameLine();
@@ -1144,9 +1203,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             if (!hasSelection) ImGui::EndDisabled();
+            }
+            EndCard();
+            ImGui::Spacing();
         }
-        EndCard();
-        ImGui::Spacing();
     }
 
     std::array<int, Profile::kCategoryCount> categoryCounts{};
@@ -1197,8 +1257,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
     const bool hasAttention = (activeCategories >= 2) && (topCount - minCount >= 2) && (minIdx >= 0);
 
-    if (BeginCard("tasks_summary_card")) {
-        DrawCardHeader(u8"Сводка");
+    std::string summaryHeader = u8"Сводка (" + std::to_string(filteredCount) + ")";
+    if (ImGui::CollapsingHeader(summaryHeader.c_str())) {
+        if (BeginCard("tasks_summary_card")) {
         if (filtered.empty()) {
             ImGui::TextDisabled(u8"Нет задач по фильтру.");
         } else {
@@ -1279,13 +1340,22 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                               static_cast<float>(maxCount), accent, 36.0f);
             }
         }
+        }
+        EndCard();
+        ImGui::Spacing();
     }
-    EndCard();
-    ImGui::Spacing();
 
     int visibleCount = 0;
     const bool allowBulkSelection = state.isAdmin;
     const int tableColumns = allowBulkSelection ? 8 : 7;
+    if (allowBulkSelection && !state.taskSelectionIds.empty()) {
+        ImGui::TextDisabled(u8"Выбрано задач: %d", static_cast<int>(state.taskSelectionIds.size()));
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Снять выбор")) {
+            state.taskSelectionIds.clear();
+        }
+        ImGui::Spacing();
+    }
     if (ImGui::BeginTable("tasks_table", tableColumns, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
         if (allowBulkSelection) {
