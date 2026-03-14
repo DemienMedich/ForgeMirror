@@ -1220,6 +1220,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                     } else {
                         ImGui::TextUnformatted(pipelineName.c_str());
                     }
+                    DrawTaskPipelineProgressHint(state, *task);
 
                     ImGui::TableSetColumnIndex(4);
                     std::string title = task->title.empty() ? std::string(u8"Без названия") : task->title;

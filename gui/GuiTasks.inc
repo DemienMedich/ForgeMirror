@@ -516,6 +516,11 @@ static std::string TaskPipelineStepLabel(const PipelineStep& step, int index) {
     return code + "  " + step.title;
 }
 
+static std::string TaskPipelineStepCode(const PipelineStep& step, int index) {
+    if (!step.stageCode.empty()) return step.stageCode;
+    return std::to_string(index + 1);
+}
+
 static int ResolveTaskPipelineIndex(const GuiState& state, const TaskEntry& task) {
     if (!task.pipelineStepId.empty()) {
         for (int i = 0; i < static_cast<int>(state.pipelineSteps.size()); ++i) {
@@ -541,6 +546,97 @@ static std::string ResolveTaskPipelineName(const GuiState& state, const TaskEntr
         return TaskPipelineStepLabel(state.pipelineSteps[static_cast<size_t>(index)], index);
     }
     return task.pipelineStep;
+}
+
+enum class TaskPipelineProgressState {
+    None,
+    Missing,
+    Unknown,
+    Active,
+    Branching,
+    Final
+};
+
+struct TaskPipelineProgressInfo {
+    std::string primary;
+    std::string secondary;
+    TaskPipelineProgressState state = TaskPipelineProgressState::None;
+};
+
+static TaskPipelineProgressInfo DescribeTaskPipelineProgress(const GuiState& state, const TaskEntry& task) {
+    TaskPipelineProgressInfo info;
+    const int totalSteps = static_cast<int>(state.pipelineSteps.size());
+    if (totalSteps <= 0) {
+        return info;
+    }
+
+    const int index = ResolveTaskPipelineIndex(state, task);
+    if (index < 0 || index >= totalSteps) {
+        info.primary = "0/" + std::to_string(totalSteps);
+        if (!task.pipelineStepId.empty() || !task.pipelineStep.empty()) {
+            info.secondary = u8"этап вне схемы";
+            info.state = TaskPipelineProgressState::Unknown;
+        } else {
+            info.secondary = u8"старт не задан";
+            info.state = TaskPipelineProgressState::Missing;
+        }
+        return info;
+    }
+
+    info.primary = std::to_string(index + 1) + "/" + std::to_string(totalSteps);
+    const PipelineStep& step = state.pipelineSteps[static_cast<size_t>(index)];
+    if (step.nextIds.empty()) {
+        info.secondary = u8"финальный handoff";
+        info.state = TaskPipelineProgressState::Final;
+        return info;
+    }
+    if (step.nextIds.size() > 1) {
+        info.secondary = u8"ветвление: " + std::to_string(step.nextIds.size());
+        info.state = TaskPipelineProgressState::Branching;
+        return info;
+    }
+
+    for (int i = 0; i < totalSteps; ++i) {
+        if (state.pipelineSteps[static_cast<size_t>(i)].id == step.nextIds.front()) {
+            info.secondary = u8"дальше: " + TaskPipelineStepCode(state.pipelineSteps[static_cast<size_t>(i)], i);
+            info.state = TaskPipelineProgressState::Active;
+            return info;
+        }
+    }
+
+    info.secondary = u8"следующий этап не найден";
+    info.state = TaskPipelineProgressState::Unknown;
+    return info;
+}
+
+static void DrawTaskPipelineProgressHint(const GuiState& state, const TaskEntry& task) {
+    const TaskPipelineProgressInfo info = DescribeTaskPipelineProgress(state, task);
+    if (info.primary.empty() && info.secondary.empty()) {
+        return;
+    }
+
+    ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    color.w = 1.0f;
+    if (info.state == TaskPipelineProgressState::Missing) {
+        color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+    } else if (info.state == TaskPipelineProgressState::Unknown) {
+        color = LogLevelColor(AppLogLevel::Warning);
+    } else if (info.state == TaskPipelineProgressState::Final) {
+        color = LogLevelColor(AppLogLevel::Info);
+    }
+
+    if (!info.primary.empty()) {
+        ImGui::TextColored(color, "%s", info.primary.c_str());
+    }
+    if (!info.secondary.empty()) {
+        if (!info.primary.empty()) {
+            const float secondaryWidth = ImGui::CalcTextSize(info.secondary.c_str()).x;
+            if (ImGui::GetContentRegionAvail().x >= secondaryWidth + ImGui::GetStyle().ItemSpacing.x) {
+                ImGui::SameLine();
+            }
+        }
+        ImGui::TextDisabled("%s", info.secondary.c_str());
+    }
 }
 
 static int ResolveTaskProfileFilterIndex(const GuiState& state, const std::string& profileId) {

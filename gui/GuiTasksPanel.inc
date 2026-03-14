@@ -1871,10 +1871,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                  pipelineLabelPtrs.data(), static_cast<int>(pipelineLabelPtrs.size()))) {
                     UpdateTaskPipeline(task->id, pipelineIndex);
                 }
+                DrawTaskPipelineProgressHint(state, *task);
             } else if (pipelineName.empty()) {
                 ImGui::TextDisabled(u8"Без этапа");
+                DrawTaskPipelineProgressHint(state, *task);
             } else {
                 ImGui::TextUnformatted(pipelineName.c_str());
+                DrawTaskPipelineProgressHint(state, *task);
             }
 
             ImGui::TableSetColumnIndex(col++);
