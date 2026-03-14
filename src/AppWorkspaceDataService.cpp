@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdio>
 #include <fstream>
+#include <initializer_list>
 #include <locale>
 #include <optional>
 #include <sstream>
@@ -265,24 +266,143 @@ std::filesystem::path PipelineStoragePath(const std::filesystem::path& storageDi
     return storageDir / "meta" / "pipeline.json";
 }
 
+std::vector<std::string> SplitStringList(const std::string& text, char delimiter) {
+    std::vector<std::string> out;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find(delimiter, start);
+        if (end == std::string::npos) end = text.size();
+        std::string token = TrimCopy(text.substr(start, end - start));
+        if (!token.empty()) out.push_back(std::move(token));
+        if (end == text.size()) break;
+        start = end + 1;
+    }
+    return out;
+}
+
+PipelineStep MakePipelineStep(const char* id,
+                              const char* stageCode,
+                              const char* branch,
+                              const char* title,
+                              const char* description,
+                              const char* input,
+                              const char* output,
+                              const char* owner,
+                              const char* doneCriteria,
+                              const char* engineCheck,
+                              const char* risk,
+                              const char* nextStageLabel = "",
+                              std::initializer_list<const char*> nextIds = {},
+                              std::initializer_list<const char*> hints = {},
+                              const char* legacyNotes = "") {
+    PipelineStep step;
+    step.id = id ? id : "";
+    step.stageCode = stageCode ? stageCode : "";
+    step.branch = branch ? branch : "";
+    step.title = title ? title : "";
+    step.description = description ? description : "";
+    step.input = input ? input : "";
+    step.output = output ? output : "";
+    step.owner = owner ? owner : "";
+    step.doneCriteria = doneCriteria ? doneCriteria : "";
+    step.engineCheck = engineCheck ? engineCheck : "";
+    step.risk = risk ? risk : "";
+    step.nextStageLabel = nextStageLabel ? nextStageLabel : "";
+    step.legacyNotes = legacyNotes ? legacyNotes : "";
+    for (const char* next : nextIds) {
+        if (next && next[0] != '\0') step.nextIds.emplace_back(next);
+    }
+    for (const char* hint : hints) {
+        if (hint && hint[0] != '\0') step.hints.emplace_back(hint);
+    }
+    return step;
+}
+
 const std::vector<PipelineStep>& DefaultPipelineSteps() {
     static const std::vector<PipelineStep> kDefaultPipelineSteps = {
-        {"0. Реф-борд", R"(Сборка реф-листа, наряду с блокингом - важнейшие этапы!
-При надобности, создается отдельный! муд-борд!)"},
-        {"1. Блокинг", R"(Блокинг - это процесс создания базовых пропорций и соотношений между моделями и сценами.
+        MakePipelineStep(
+            "brief_constraints", "1", u8"Общее", u8"ТЗ и техограничения",
+            u8"До старта производства фиксируем технические рамки, чтобы весь пайплайн опирался на согласованные лимиты и правила экспорта.",
+            u8"Бриф", u8"Согласованные ограничения", u8"Лид / техарт / продюсер",
+            u8"Poly budget, texel density, skeleton, naming и формат экспорта подтверждены до старта.",
+            u8"Заранее определяем, что валидируем в движке: scale, naming, pivots, import и perf.",
+            u8"Поздние техограничения ломают весь пайплайн и делают возвраты дорогими.",
+            u8"Реф-борд",
+            {"ref_board"},
+            {
+                u8"Не начинайте производство без подтверждённых техлимитов.",
+                u8"Сразу зафиксируйте naming, skeleton и формат экспорта."
+            }),
+        MakePipelineStep(
+            "ref_board", "2", u8"Общее", u8"Реф-борд",
+            u8"Собираем визуальные и анимационные референсы, чтобы всем участникам было одинаково понятно, какой образ и движение нужны ассету.",
+            u8"ТЗ, стиль проекта", u8"Согласованный пакет рефов", u8"Концепт / лид",
+            u8"Понятны форма, материалы и характер движения.",
+            u8"Подбираем эталон для будущей визуальной сверки уже в тестовой сцене движка.",
+            u8"Расплывчатый визуал и спорный стиль ведут к неверному блокингу.",
+            u8"Блокинг",
+            {"blocking"},
+            {
+                u8"Сверяйте не только форму, но и материал, масштаб и поведение в движении.",
+                u8"Если визуал сложный, собирайте отдельный mood-board по материалам."
+            },
+            R"FM(Сборка реф-листа, наряду с блокингом - важнейшие этапы!
+При надобности, создается отдельный! муд-борд!)FM"),
+        MakePipelineStep(
+            "blocking", "3", u8"Общее", u8"Блокинг",
+            u8"Собираем грубую форму, силуэт, пропорции и масштаб. Это точка, где дешевле всего исправлять направление.",
+            u8"Рефы и ограничения", u8"Утвержденный блокинг", u8"3D artist",
+            u8"Пропорции и масштаб согласованы, силуэт читается.",
+            u8"Проверяем масштаб, силуэт, читаемость форм и общую сборку в тестовой сцене.",
+            u8"Неверный масштаб и силуэт создают цепочку возвратов на всех ветках.",
+            u8"Развилка на ветку 1 или 2",
+            {"hs_low_base", "sculpt_master"},
+            {
+                u8"На блокинге важнее точность пропорций и скорость, чем чистая сетка.",
+                u8"Не уходите в детали, пока не подтверждены силуэт и масштаб."
+            },
+            R"FM(Блокинг - это процесс создания базовых пропорций и соотношений между моделями и сценами.
 
 На этом этапе особенно важно правильно отобразить пропорции отдельных деталей и модели в целом. В отличие от других этапов, здесь не так важно уделять внимание сетке, как точности и скорости.
 
 Блокинг позволяет увидеть общую форму и силуэт будущей модели, что дает возможность внести необходимые коррективы, если это необходимо.
 
-!!!Важно не вдаваться в детали на данном этапе!!!)"},
-        {"2. Создание Low-Poly", R"(На этом этапе каждый элемент прорабатывается отдельно. Формы уточняются, а топология модели приводится в порядок.
+!!!Важно не вдаваться в детали на данном этапе!!!)FM"),
+        MakePipelineStep(
+            "hs_low_base", "4A", u8"Ветка 1: hard-surface", u8"Low-Poly база",
+            u8"Строим чистую игровую сетку как базу под hard-surface high-poly, приводим в порядок топологию и подготавливаем low-poly к корректному шейдингу.",
+            u8"Утвержденный блокинг", u8"Low-Poly база", u8"3D artist",
+            u8"Сетка чистая, scale применён, пропорции выдержаны, шейдинг low-poly читается.",
+            u8"Проверяем силуэт, scale, посадку в сцене и общий игровой вид.",
+            u8"Ранний уход в детали без чистой базы и сломанный scale удорожают всё, что идёт дальше.",
+            u8"Hard-surface / High-Poly",
+            {"hs_high_poly"},
+            {
+                u8"Всё симметричное ведите через Mirror + Clipping.",
+                u8"Перед продолжением применяйте scale: Ctrl+A -> Scale.",
+                u8"Проверьте sharp edges и smoothing до ухода в high-poly."
+            },
+            R"FM(На этом этапе каждый элемент прорабатывается отдельно. Формы уточняются, а топология модели приводится в порядок.
 
 Всё, что требует симметрии, выполняется с помощью модификатора Mirror и включённого параметра Clipping. Для удобства можно добавить объект-пустышку в нулевой координате, чтобы настроить зеркальное отражение на него.
 
-ДЕЛАЕМ CNTRL+A -> SCALE)"},
-        {"3. Шейдинг", R"(На этом этапе мы расставляем шарпэджи, проверяем шейдинг модели и устанавливаем параметры сглаживания.)"},
-        {"4. High-poly", R"(В нашей сцене мы присваиваем всем объектам суффикс "_low" и создаем их дубликат. В копиях меняем суффикс на "_high", используя встроенный инструмент Blender - Batch Rename.
+ДЕЛАЕМ CNTRL+A -> SCALE
+
+На этом этапе мы расставляем шарпэджи, проверяем шейдинг модели и устанавливаем параметры сглаживания.)FM"),
+        MakePipelineStep(
+            "hs_high_poly", "5A", u8"Ветка 1: hard-surface", u8"Hard-surface / High-Poly",
+            u8"На основе low-poly собираем high-poly, добавляем фаски и плавающую геометрию и готовим источник для bake.",
+            u8"Low-Poly база", u8"High-Poly для bake", u8"3D artist",
+            u8"Форма соответствует техтребованиям и не ломает исходный игровой силуэт.",
+            u8"Сверяем, не уводят ли новые детали силуэт и читаемость ассета в движке.",
+            u8"Изменения формы на этой стадии уже дорогие и тянут возвраты назад.",
+            u8"UV",
+            {"hs_uv"},
+            {
+                u8"Следите, чтобы high-poly уточнял форму, а не менял утверждённый образ.",
+                u8"Проверяйте соответствие low/high по ключевым ребрам и фаскам."
+            },
+            R"FM(В нашей сцене мы присваиваем всем объектам суффикс "_low" и создаем их дубликат. В копиях меняем суффикс на "_high", используя встроенный инструмент Blender - Batch Rename.
 
 На одном из объектов мы настраиваем модификаторы Bevel и Subdivision Surface:
 
@@ -293,8 +413,21 @@ const std::vector<PipelineStep>& DefaultPipelineSteps() {
 
 После этого мы проходим по каждому объекту и устанавливаем значение Bevel Weight (вкладка Item, меню "N") на 1, применяя этот параметр ко всем шарпэджам.
 
-Если требуется, мы модифицируем сетку, чтобы модель соответствовала Low-poly версии.)"},
-        {"5. UV-развертка", R"(Производится только на Low-poly.
+Если требуется, мы модифицируем сетку, чтобы модель соответствовала Low-poly версии.)FM"),
+        MakePipelineStep(
+            "hs_uv", "6A", u8"Ветка 1: hard-surface", u8"UV",
+            u8"Делаем развертку под texel density, швы и упаковку, чтобы bake и текстуры читались без артефактов.",
+            u8"Финальный low-poly", u8"Чистая UV-развертка", u8"3D artist",
+            u8"Нет критичных растяжений, паддинг выдержан, плотность texel контролируется.",
+            u8"Проверяем texel density и читаемость на checker-материале.",
+            u8"Плохой шов ломает bake и текстуры, а неравномерный TD разрушает читаемость.",
+            u8"Bake",
+            {"hs_bake"},
+            {
+                u8"Швы удобно выравнивать по sharp edges и проверять по UV-Stretch.",
+                u8"Average Islands Scale и финальная упаковка обязательны перед bake."
+            },
+            R"FM(Производится только на Low-poly.
 
 Проходим по всем объектам, выравнивая швы на шарпэдах. При необходимости добавляем дополнительные швы.
 
@@ -314,25 +447,419 @@ margin - 0.004
 
 Texel Density (TD) - 2px/cm при разрешении 4k (средний параметр, для каждого проекта рассчитывается отдельно)
 
-Если необходимо достичь заданной плотности Texels, делим UV на несколько частей.)"},
-        {"6. Запекание и текстурирование", R"(Более подробно я расскажу об этом позже, а сейчас поделюсь основными шагами:
+Если необходимо достичь заданной плотности Texels, делим UV на несколько частей.)FM"),
+        MakePipelineStep(
+            "hs_bake", "7A", u8"Ветка 1: hard-surface", u8"Bake",
+            u8"Запекаем normal, AO и нужные карты и снимаем артефакты до перехода к материалам.",
+            u8"High-Poly, Low-Poly, UV", u8"Bake maps", u8"3D / texture artist",
+            u8"Артефакты устранены, карты дают ожидаемую форму и объём.",
+            u8"Проверяем normal и AO на тестовом шейдере в движке.",
+            u8"Швы, cage-проблемы и неверные smoothing groups быстро размножают дефекты.",
+            u8"Текстуры / материалы",
+            {"hs_textures"},
+            {
+                u8"Сначала делайте пробные bake, только потом финальный.",
+                u8"Контролируйте пересечения high/low перед длинными запеканиями."
+            },
+            R"FM(1. Проводим запекание по всем объектам, используя минимальную длину луча. Проверяем, чтобы области High и Low не пересекались.
+2. Выполняем пробные запекания, анализируем результаты и завершаем финальное запекание на уровне 8k.)FM"),
+        MakePipelineStep(
+            "hs_textures", "8A", u8"Ветка 1: hard-surface", u8"Текстуры / материалы",
+            u8"Собираем PBR-текстуры и material slots, проверяем стиль, roughness/metalness и сценовое освещение.",
+            u8"Bake maps и рефы", u8"Набор текстур и material slots", u8"Texture artist",
+            u8"Материалы читаются, соответствуют стилю и не перегружают пайплайн ассета.",
+            u8"Проверяем материалы, roughness/metalness и вид под сценовым светом.",
+            u8"Несоответствие стилю и лишний размер карт ведут к переработкам и perf-проблемам.",
+            u8"Риг / интеграция",
+            {"rig"},
+            {
+                u8"Финальный вид проверяйте не в изоляции, а под сценовым светом.",
+                u8"Следите за количеством карт и размером текстур ещё до интеграции."
+            },
+            R"FM(3. Приступаем к текстурированию. В конце добавляем постобработку в виде Ambient Occlusion и, при необходимости, дополнительные затенения к текстурам.)FM"),
+        MakePipelineStep(
+            "sculpt_master", "4B", u8"Ветка 2: sculpt", u8"Скульпт",
+            u8"Детализируем форму через скульпт и уточняем объём, не теряя утверждённый игровой образ.",
+            u8"Утвержденный блокинг", u8"Скульпт-master", u8"3D artist",
+            u8"Форма и пластика готовы для ретопа и не расходятся с техограничениями.",
+            u8"Сверяем форму и пластику на тестовой сборке, чтобы не уйти от игрового образа.",
+            u8"Скульпт, ушедший от техлимитов, делает ретоп дорогим и затягивает сроки.",
+            u8"Retopo / Low-Poly",
+            {"retopo_low"},
+            {
+                u8"Детализация должна усиливать форму, а не ломать approved silhouette.",
+                u8"Регулярно сверяйтесь с рефами и блокингом, а не только с красивым скульптом."
+            }),
+        MakePipelineStep(
+            "retopo_low", "5B", u8"Ветка 2: sculpt", u8"Retopo / Low-Poly",
+            u8"Строим игровую топологию по скульпту и готовим mesh к деформациям и следующему UV-циклу.",
+            u8"Скульпт и лимиты проекта", u8"Low-Poly mesh", u8"3D artist",
+            u8"Сетка чистая, деформируемые зоны подготовлены, silhouette совпадает со скульптом.",
+            u8"Проверяем силуэт, scale и базовую деформацию на тестовой сборке.",
+            u8"Перегруженный скульпт делает ретоп избыточно дорогим и медленным.",
+            u8"UV",
+            {"sculpt_uv"},
+            {
+                u8"Retopo должен поддерживать анимацию, а не только повторять скульпт.",
+                u8"Сразу контролируйте петли в деформируемых зонах."
+            },
+            R"FM(На этом этапе каждый элемент прорабатывается отдельно. Формы уточняются, а топология модели приводится в порядок.
 
-1. Проводим запекание по всем объектам, используя минимальную длину луча. Проверяем, чтобы области High и Low не пересекались.
-2. Выполняем пробные запекания, анализируем результаты и завершаем финальное запекание на уровне 8k.
-3. Приступаем к текстурированию. В конце добавляем постобработку в виде Ambient Occlusion и, при необходимости, дополнительные затенения к текстурам.)"},
-        {"7. Экспорт в движок", R"(????При экспорте из Blender, в настройках эспорта во вкладке Geometry, Smoothing меняем на Face.
+Всё, что требует симметрии, выполняется с помощью модификатора Mirror и включённого параметра Clipping. Для удобства можно добавить объект-пустышку в нулевой координате, чтобы настроить зеркальное отражение на него.
+
+ДЕЛАЕМ CNTRL+A -> SCALE)FM"),
+        MakePipelineStep(
+            "sculpt_uv", "6B", u8"Ветка 2: sculpt", u8"UV",
+            u8"Делаем развертку под texel density и швы для ветки sculpt, чтобы bake прошёл без искажений.",
+            u8"Low-Poly", u8"Чистая UV-развертка", u8"3D artist",
+            u8"Нет критичных растяжений, паддинг соблюден, плотность texel выдержана.",
+            u8"Проверяем texel density и читаемость на тестовом материале.",
+            u8"Пересечения и неравномерная плотность texel ломают bake и текстуры.",
+            u8"Bake",
+            {"sculpt_bake"},
+            {
+                u8"UV в sculpt-ветке должен поддерживать и bake, и анимационные деформации.",
+                u8"Контролируйте паддинг и упаковку до запуска bake."
+            },
+            R"FM(Производится только на Low-poly.
+
+Проходим по всем объектам, выравнивая швы на шарпэдах. При необходимости добавляем дополнительные швы.
+
+Затем разворачиваем объект и проверяем цвет UV-Stretch. Он должен быть максимально холодным.
+
+Проверяем, нет ли искажений или деформаций на островках. При необходимости выравниваем их и, если нужно, поворачиваем в нужные нам координаты.
+
+Когда развертка нас устраивает, применяем Mirror, создавая Overlaps.
+
+После завершения работы со всеми объектами, мы приступаем к общей упаковке:
+
+1. Нажимаем CNTRL+A и выбираем SCALE.
+2. Выделяем все объекты, переключаемся в Edit Mode и в меню UV выбираем Average Islands Scale.
+3. Упаковываем, отключив поворот островков.
+
+margin - 0.004
+
+Texel Density (TD) - 2px/cm при разрешении 4k (средний параметр, для каждого проекта рассчитывается отдельно)
+
+Если необходимо достичь заданной плотности Texels, делим UV на несколько частей.)FM"),
+        MakePipelineStep(
+            "sculpt_bake", "7B", u8"Ветка 2: sculpt", u8"Bake",
+            u8"Запекаем карты со скульпта на low-poly и устраняем артефакты до перехода к материалам.",
+            u8"Скульпт, Low-Poly, UV", u8"Bake maps", u8"3D / texture artist",
+            u8"Артефакты устранены, normal data читается стабильно.",
+            u8"Проверяем normal и AO на тестовом шейдере в движке.",
+            u8"Швы, cage-проблемы и неверные normal data быстро ломают весь материал.",
+            u8"Текстуры / материалы",
+            {"sculpt_textures"},
+            {
+                u8"Пробные bake обязательны перед финальным прогоном.",
+                u8"Следите за согласованностью cage и low/high соответствия."
+            },
+            R"FM(1. Проводим запекание по всем объектам, используя минимальную длину луча. Проверяем, чтобы области High и Low не пересекались.
+2. Выполняем пробные запекания, анализируем результаты и завершаем финальное запекание на уровне 8k.)FM"),
+        MakePipelineStep(
+            "sculpt_textures", "8B", u8"Ветка 2: sculpt", u8"Текстуры / материалы",
+            u8"Собираем PBR-текстуры и material slots, проверяем, что ветка sculpt попадает в стиль и бюджет.",
+            u8"Bake maps и рефы", u8"Набор текстур и material slots", u8"Texture artist",
+            u8"Материалы читаются и соответствуют стилю проекта.",
+            u8"Проверяем материалы, roughness/metalness и вид под сценовым светом.",
+            u8"Несоответствие стилю и перегрузка текстур сдвигают и арт, и perf.",
+            u8"Риг / интеграция",
+            {"rig"},
+            {
+                u8"Материал должен подчёркивать форму скульпта, а не маскировать её.",
+                u8"Контролируйте размер карт до интеграции в движок."
+            },
+            R"FM(3. Приступаем к текстурированию. В конце добавляем постобработку в виде Ambient Occlusion и, при необходимости, дополнительные затенения к текстурам.)FM"),
+        MakePipelineStep(
+            "rig", "9", u8"Общее после веток", u8"Риг",
+            u8"Собираем скелет, контроллеры и constraints и сразу проверяем совместимость структуры с движком.",
+            u8"Финальная модель и техтребования", u8"Рабочий риг", u8"Rigger / tech artist",
+            u8"Кости, pivots и иерархия соответствуют требованиям движка.",
+            u8"Проверяем hierarchy, pivots и совместимость импорта на тестовой сцене.",
+            u8"Несовместимость со скелетом движка возвращает нас сразу на предыдущие этапы.",
+            u8"Skinning / веса",
+            {"skinning"},
+            {
+                u8"Не тяните проверку иерархии до конца: импорт-совместимость нужна сразу.",
+                u8"Проверяйте pivots и naming вместе с hierarchy."
+            }),
+        MakePipelineStep(
+            "skinning", "10", u8"Общее после веток", u8"Skinning / веса",
+            u8"Настраиваем веса и деформации так, чтобы модель спокойно переживала ключевые позы и экспорт.",
+            u8"Рабочий риг и low-poly", u8"Подготовленная к анимации модель", u8"Rigger / animator",
+            u8"Деформации чистые в ключевых позах.",
+            u8"Гоняем ключевые позы и смотрим деформации уже в движке.",
+            u8"Ломаются локти, плечи и пальцы, если веса не проверять в реальных позах.",
+            u8"Анимация",
+            {"animation"},
+            {
+                u8"Проверяйте веса в граничных позах, а не только в нейтрали.",
+                u8"Лучше поймать проблемы в движке сразу, чем после пакета анимаций."
+            }),
+        MakePipelineStep(
+            "animation", "11", u8"Общее после веток", u8"Анимация",
+            u8"Делаем клипы, циклы и экспортные наборы и проверяем поведение ассета как набора состояний, а не отдельных сцен.",
+            u8"Риг и список клипов", u8"Экспортный пакет анимаций", u8"Animator",
+            u8"Ключевые состояния закрыты, циклы чистые, экспортные наборы собраны.",
+            u8"Проверяем клипы, transitions, root motion и events.",
+            u8"Разный FPS, root motion и naming ломают интеграцию уже на импорте.",
+            u8"Импорт в движок",
+            {"engine_import"},
+            {
+                u8"Сразу фиксируйте экспортные пресеты и FPS для всех клипов.",
+                u8"Проверяйте events и root motion до интеграции."
+            }),
+        MakePipelineStep(
+            "engine_import", "12", u8"Общее после веток", u8"Импорт в движок",
+            u8"Импортируем модель, риг, анимации и текстуры и собираем чистую структуру файлов проекта.",
+            u8"Модель, риг, анимации, текстуры", u8"Ассет в проекте", u8"Tech artist / integrator",
+            u8"Имена, scale, pivots и hierarchy корректны уже на импортированном ассете.",
+            u8"Это основной контур проверки: все отклонения фиксируем сразу после импорта.",
+            u8"Ломаются ссылки, scale и файловая структура, если импорт делают без строгих правил.",
+            u8"Настройка в движке",
+            {"engine_setup"},
+            {
+                u8"После импорта сразу проверяйте scale, pivots и иерархию.",
+                u8"Держите единый нейминг папок, файлов и мешей."
+            },
+            R"FM(????При экспорте из Blender, в настройках эспорта во вкладке Geometry, Smoothing меняем на Face.
 
 Экспорт модели и текстур в движок: Модель и текстуры распределяются по соответствующим папкам (Mesh, Material, Texture). Я отдельно опубликую информацию о том, как именовать текстуры и меш.
 
-Настройка шейдеров (материалов) и текстур, анимаций: На этом этапе мы настраиваем шейдеры и текстуры, а затем проверяем результат.
+????Соблюдаем нейминг папок, файлов, иерархию.)FM"),
+        MakePipelineStep(
+            "engine_setup", "13", u8"Общее после веток", u8"Настройка в движке",
+            u8"Подключаем шейдеры, controller, events и коллизии, чтобы ассет начал работать как игровой объект.",
+            u8"Импортированный ассет", u8"Игровая сборка ассета", u8"Tech artist / integrator",
+            u8"Ассет работает в целевой сцене и использует правильные материалы и контроллеры.",
+            u8"Проверяем шейдеры, controller, collisions и perf.",
+            u8"Не совпадают материалы, события и коллизии, если настройка отрывается от импортированного пакета.",
+            u8"Тестирование в движке",
+            {"engine_test"},
+            {
+                u8"Настройку материалов и контроллеров делайте сразу на целевой сцене.",
+                u8"Не забывайте проверить collisions и perf вместе с визуалом."
+            },
+            R"FM(Настройка шейдеров (материалов) и текстур, анимаций: На этом этапе мы настраиваем шейдеры и текстуры, а затем проверяем результат.)FM"),
+        MakePipelineStep(
+            "engine_test", "14", u8"Общее после веток", u8"Тестирование в движке",
+            u8"Проверяем сцену, свет, камеру, perf и геймплейные кейсы по явному чеклисту, а не по ощущению готовности.",
+            u8"Настроенный ассет", u8"Список найденных проблем или отметка OK", u8"QA / lead / integrator",
+            u8"Нет критических багов, список правок прозрачен и воспроизводим.",
+            u8"Полная регрессия по чеклисту: визуал, collisions, animation, perf и интеграционные кейсы.",
+            u8"Тест без чеклиста даёт ложное ощущение готовности и пропускает регрессии.",
+            u8"Правки и финальная приемка",
+            {"final_handoff"},
+            {
+                u8"Проверяйте ассет в целевых камерах, свете и gameplay-кейсах.",
+                u8"Без чеклиста тестирование теряет повторяемость."
+            }),
+        MakePipelineStep(
+            "final_handoff", "15", u8"Общее после веток", u8"Правки и финальная приемка",
+            u8"Возвращаем задачи в нужный этап, закрываем замечания повторным тестом и готовим финальный handoff.",
+            u8"Список замечаний", u8"Финальная версия ассета", u8"Владелец этапа + lead",
+            u8"Все критические замечания закрыты, ассет повторно проверен на затронутом контуре.",
+            u8"После каждой правки повторно тестируем затронутый контур и финальную сборку.",
+            u8"Чаще всего возвраты приходят в риг, анимацию, материалы и импорт.",
+            u8"Релиз / handoff",
+            {"release_handoff"},
+            {
+                u8"Возврат всегда должен идти в конкретный этап, а не «назад в пайплайн вообще».",
+                u8"Финальный handoff делайте только после повторного теста."
+            },
+            R"FM(Упаковка, создание PreFab и отправка разработчикам: все необходимые файлы упаковываются и отправляются разработчикам для дальнейшей работы.
 
-????Соблюдаем нейминг папок, файлов, иерархию.
-
-Упаковка, создание PreFab и отправка разработчикам: все необходимые файлы упаковываются и отправляются разработчикам для дальнейшей работы.
-
-?Каждый этап отправляется Арт-лиду на одобрение!)"}
+?Каждый этап отправляется Арт-лиду на одобрение!)FM")
+        ,
+        MakePipelineStep(
+            "release_handoff", "16", u8"Общее после веток", u8"Релиз / handoff",
+            u8"Упаковываем финальные файлы, prefab и документацию и передаем ассет в разработку или релизный контур.",
+            u8"Финальная версия ассета", u8"Релизный пакет / handoff", u8"Lead / tech artist / producer",
+            u8"Все файлы, зависимости и договоренности по handoff подтверждены принимающей стороной.",
+            u8"Делаем финальную smoke-проверку импортированной релизной сборки, ссылок и prefab/scene wiring.",
+            u8"Потеря зависимостей, путаница версий и неполный handoff ломают интеграцию уже после приемки.",
+            u8"",
+            {},
+            {
+                u8"Перед handoff проверьте финальный комплект файлов и их версии.",
+                u8"Список передаваемых артефактов и ответственных лучше фиксировать явно."
+            })
     };
     return kDefaultPipelineSteps;
+}
+
+bool PipelineStepHasRichData(const PipelineStep& step) {
+    return !step.id.empty() ||
+           !step.stageCode.empty() ||
+           !step.branch.empty() ||
+           !step.input.empty() ||
+           !step.output.empty() ||
+           !step.owner.empty() ||
+           !step.doneCriteria.empty() ||
+           !step.engineCheck.empty() ||
+           !step.risk.empty() ||
+           !step.nextStageLabel.empty() ||
+           !step.legacyNotes.empty() ||
+           !step.nextIds.empty() ||
+           !step.hints.empty();
+}
+
+int FindPipelineStepIndexById(const std::vector<PipelineStep>& steps, const std::string& id) {
+    if (id.empty()) return -1;
+    for (int i = 0; i < static_cast<int>(steps.size()); ++i) {
+        if (steps[i].id == id) return i;
+    }
+    return -1;
+}
+
+int FindPipelineStepIndexByStageCode(const std::vector<PipelineStep>& steps, const std::string& stageCode) {
+    if (stageCode.empty()) return -1;
+    for (int i = 0; i < static_cast<int>(steps.size()); ++i) {
+        if (steps[i].stageCode == stageCode) return i;
+    }
+    return -1;
+}
+
+int FindPipelineStepIndexByTitle(const std::vector<PipelineStep>& steps, const std::string& title) {
+    if (title.empty()) return -1;
+    for (int i = 0; i < static_cast<int>(steps.size()); ++i) {
+        if (steps[i].title == title) return i;
+    }
+    return -1;
+}
+
+void AssignIfEmpty(std::string& target, const std::string& fallback) {
+    if (target.empty()) target = fallback;
+}
+
+std::string AppendPipelineNotes(std::string base, const std::string& title, const std::string& body) {
+    if (title.empty() && body.empty()) return base;
+    std::string chunk;
+    if (!title.empty()) {
+        chunk += title;
+        if (!body.empty()) chunk += "\n";
+    }
+    chunk += body;
+    if (chunk.empty()) return base;
+    if (!base.empty()) base += "\n\n";
+    base += chunk;
+    return base;
+}
+
+std::vector<std::string> LegacyPipelineTargets(const std::string& title) {
+    if (title == "0. Реф-борд") return {"ref_board"};
+    if (title == "1. Блокинг") return {"blocking"};
+    if (title == "2. Создание Low-Poly") return {"hs_low_base", "retopo_low"};
+    if (title == "3. Шейдинг") return {"hs_low_base"};
+    if (title == "4. High-poly") return {"hs_high_poly"};
+    if (title == "5. UV-развертка") return {"hs_uv", "sculpt_uv"};
+    if (title == "6. Запекание и текстурирование") return {"hs_bake", "hs_textures", "sculpt_bake", "sculpt_textures"};
+    if (title == "7. Экспорт в движок") return {"engine_import", "engine_setup", "release_handoff"};
+    return {};
+}
+
+void FillPipelineStepMissingFields(PipelineStep& step, const PipelineStep& defaults) {
+    AssignIfEmpty(step.id, defaults.id);
+    AssignIfEmpty(step.stageCode, defaults.stageCode);
+    AssignIfEmpty(step.branch, defaults.branch);
+    AssignIfEmpty(step.title, defaults.title);
+    AssignIfEmpty(step.description, defaults.description);
+    AssignIfEmpty(step.input, defaults.input);
+    AssignIfEmpty(step.output, defaults.output);
+    AssignIfEmpty(step.owner, defaults.owner);
+    AssignIfEmpty(step.doneCriteria, defaults.doneCriteria);
+    AssignIfEmpty(step.engineCheck, defaults.engineCheck);
+    AssignIfEmpty(step.risk, defaults.risk);
+    AssignIfEmpty(step.nextStageLabel, defaults.nextStageLabel);
+    if (step.nextIds.empty()) step.nextIds = defaults.nextIds;
+    if (step.hints.empty()) step.hints = defaults.hints;
+    if (step.legacyNotes.empty()) {
+        step.legacyNotes = defaults.legacyNotes;
+    } else if (!defaults.legacyNotes.empty() && step.legacyNotes.find(defaults.legacyNotes) == std::string::npos) {
+        step.legacyNotes = AppendPipelineNotes(step.legacyNotes, u8"Встроенные заметки Forge Mirror", defaults.legacyNotes);
+    }
+}
+
+void OverlayPipelineStep(PipelineStep& target, const PipelineStep& loaded) {
+    auto assign = [](std::string& dst, const std::string& src) {
+        if (!src.empty()) dst = src;
+    };
+    assign(target.id, loaded.id);
+    assign(target.stageCode, loaded.stageCode);
+    assign(target.branch, loaded.branch);
+    assign(target.title, loaded.title);
+    assign(target.description, loaded.description);
+    assign(target.input, loaded.input);
+    assign(target.output, loaded.output);
+    assign(target.owner, loaded.owner);
+    assign(target.doneCriteria, loaded.doneCriteria);
+    assign(target.engineCheck, loaded.engineCheck);
+    assign(target.risk, loaded.risk);
+    assign(target.nextStageLabel, loaded.nextStageLabel);
+    assign(target.legacyNotes, loaded.legacyNotes);
+    if (!loaded.nextIds.empty()) target.nextIds = loaded.nextIds;
+    if (!loaded.hints.empty()) target.hints = loaded.hints;
+}
+
+std::vector<PipelineStep> MergeLoadedPipelineWithDefaults(const std::vector<PipelineStep>& loaded) {
+    const auto& defaults = DefaultPipelineSteps();
+    if (loaded.empty()) return defaults;
+
+    const bool legacyOnly = std::all_of(loaded.begin(), loaded.end(), [](const PipelineStep& step) {
+        return !PipelineStepHasRichData(step);
+    });
+
+    if (legacyOnly) {
+        std::vector<PipelineStep> merged = defaults;
+        int customIndex = 0;
+        for (const auto& step : loaded) {
+            const auto targets = LegacyPipelineTargets(step.title);
+            if (targets.empty()) {
+                PipelineStep extra = step;
+                extra.id = "legacy-custom-" + std::to_string(++customIndex);
+                extra.stageCode = "L" + std::to_string(customIndex);
+                extra.branch = u8"Наследие Forge Mirror";
+                extra.nextStageLabel = u8"Уточнить вручную";
+                merged.push_back(std::move(extra));
+                continue;
+            }
+            for (const auto& targetId : targets) {
+                const int idx = FindPipelineStepIndexById(merged, targetId);
+                if (idx < 0) continue;
+                merged[idx].legacyNotes = AppendPipelineNotes(merged[idx].legacyNotes, step.title, step.description);
+            }
+        }
+        return merged;
+    }
+
+    std::vector<PipelineStep> merged = defaults;
+    std::vector<bool> consumed(loaded.size(), false);
+    for (size_t i = 0; i < loaded.size(); ++i) {
+        const auto& step = loaded[i];
+        int idx = FindPipelineStepIndexById(merged, step.id);
+        if (idx < 0) idx = FindPipelineStepIndexByStageCode(merged, step.stageCode);
+        if (idx < 0) idx = FindPipelineStepIndexByTitle(merged, step.title);
+        if (idx < 0) continue;
+        OverlayPipelineStep(merged[static_cast<size_t>(idx)], step);
+        FillPipelineStepMissingFields(merged[static_cast<size_t>(idx)], defaults[static_cast<size_t>(idx)]);
+        consumed[i] = true;
+    }
+
+    for (size_t i = 0; i < merged.size(); ++i) {
+        FillPipelineStepMissingFields(merged[i], defaults[i]);
+    }
+
+    int customIndex = 0;
+    for (size_t i = 0; i < loaded.size(); ++i) {
+        if (consumed[i]) continue;
+        PipelineStep extra = loaded[i];
+        if (extra.id.empty()) extra.id = "custom-merged-" + std::to_string(++customIndex);
+        if (extra.stageCode.empty()) extra.stageCode = "C" + std::to_string(customIndex);
+        if (extra.branch.empty()) extra.branch = u8"Пользовательские блоки";
+        merged.push_back(std::move(extra));
+    }
+    return merged;
 }
 
 } // namespace
@@ -510,7 +1037,15 @@ std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageD
     if (content.empty()) {
         return DefaultPipelineSteps();
     }
-    const auto objects = ParseJsonObjectArray(content);
+    auto objects = ParseJsonObjectArray(content);
+    if (objects.empty()) {
+        const size_t stepsPos = content.find("\"steps\"");
+        const size_t lb = content.find('[', stepsPos);
+        const size_t rb = content.rfind(']');
+        if (stepsPos != std::string::npos && lb != std::string::npos && rb != std::string::npos && rb > lb) {
+            objects = ParseJsonObjectArray(content.substr(lb, rb - lb + 1));
+        }
+    }
     for (const auto& obj : objects) {
         auto find_value = [&](const char* key) -> std::optional<std::string> {
             auto it = obj.find(key);
@@ -518,15 +1053,28 @@ std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageD
             return it->second;
         };
         PipelineStep step;
+        if (auto v = find_value("id")) step.id = *v;
+        if (auto v = find_value("stage_code")) step.stageCode = *v;
+        if (auto v = find_value("branch")) step.branch = *v;
         if (auto v = find_value("title")) step.title = *v;
         if (auto v = find_value("description")) step.description = *v;
+        if (auto v = find_value("input")) step.input = *v;
+        if (auto v = find_value("output")) step.output = *v;
+        if (auto v = find_value("owner")) step.owner = *v;
+        if (auto v = find_value("done_criteria")) step.doneCriteria = *v;
+        if (auto v = find_value("engine_check")) step.engineCheck = *v;
+        if (auto v = find_value("risk")) step.risk = *v;
+        if (auto v = find_value("next_stage_label")) step.nextStageLabel = *v;
+        if (auto v = find_value("legacy_notes")) step.legacyNotes = *v;
+        if (auto v = find_value("next_ids")) step.nextIds = SplitStringList(*v, ';');
+        if (auto v = find_value("hints")) step.hints = SplitStringList(*v, '\n');
         if (step.title.empty()) continue;
         out.push_back(std::move(step));
     }
     if (out.empty()) {
         return DefaultPipelineSteps();
     }
-    return out;
+    return MergeLoadedPipelineWithDefaults(out);
 }
 
 WorkspaceDataSnapshot LoadWorkspaceDataSnapshot(const std::filesystem::path& storageDir,

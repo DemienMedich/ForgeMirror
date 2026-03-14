@@ -58,8 +58,21 @@ struct ProfessionEntry {
 };
 
 struct PipelineStep {
+    std::string id;
+    std::string stageCode;
+    std::string branch;
     std::string title;
     std::string description;
+    std::string input;
+    std::string output;
+    std::string owner;
+    std::string doneCriteria;
+    std::string engineCheck;
+    std::string risk;
+    std::string nextStageLabel;
+    std::string legacyNotes;
+    std::vector<std::string> nextIds;
+    std::vector<std::string> hints;
 };
 
 enum class AppLogLevel {

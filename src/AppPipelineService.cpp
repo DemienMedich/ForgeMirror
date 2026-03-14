@@ -66,6 +66,30 @@ bool IsValidIndex(const std::vector<PipelineStep>& steps, int index) {
     return index >= 0 && index < static_cast<int>(steps.size());
 }
 
+std::string JoinStringList(const std::vector<std::string>& values, const char* delimiter) {
+    std::ostringstream out;
+    bool first = true;
+    for (const auto& value : values) {
+        if (value.empty()) continue;
+        if (!first) out << delimiter;
+        first = false;
+        out << value;
+    }
+    return out.str();
+}
+
+std::string MakeUniqueStepId(const std::vector<PipelineStep>& steps) {
+    int index = static_cast<int>(steps.size()) + 1;
+    while (true) {
+        std::string candidate = "custom-step-" + std::to_string(index);
+        bool exists = std::any_of(steps.begin(), steps.end(), [&](const PipelineStep& step) {
+            return step.id == candidate;
+        });
+        if (!exists) return candidate;
+        ++index;
+    }
+}
+
 } // namespace
 
 bool AppSavePipelineData(const std::filesystem::path& storageDir,
@@ -75,8 +99,23 @@ bool AppSavePipelineData(const std::filesystem::path& storageDir,
     out << "[\n";
     for (size_t i = 0; i < steps.size(); ++i) {
         const auto& step = steps[i];
-        out << "  {\"title\":\"" << EscapeJson(step.title)
-            << "\",\"description\":\"" << EscapeJson(step.description) << "\"}";
+        out << "  {"
+            << "\"id\":\"" << EscapeJson(step.id)
+            << "\",\"stage_code\":\"" << EscapeJson(step.stageCode)
+            << "\",\"branch\":\"" << EscapeJson(step.branch)
+            << "\",\"title\":\"" << EscapeJson(step.title)
+            << "\",\"description\":\"" << EscapeJson(step.description)
+            << "\",\"input\":\"" << EscapeJson(step.input)
+            << "\",\"output\":\"" << EscapeJson(step.output)
+            << "\",\"owner\":\"" << EscapeJson(step.owner)
+            << "\",\"done_criteria\":\"" << EscapeJson(step.doneCriteria)
+            << "\",\"engine_check\":\"" << EscapeJson(step.engineCheck)
+            << "\",\"risk\":\"" << EscapeJson(step.risk)
+            << "\",\"next_stage_label\":\"" << EscapeJson(step.nextStageLabel)
+            << "\",\"legacy_notes\":\"" << EscapeJson(step.legacyNotes)
+            << "\",\"next_ids\":\"" << EscapeJson(JoinStringList(step.nextIds, ";"))
+            << "\",\"hints\":\"" << EscapeJson(JoinStringList(step.hints, "\n"))
+            << "\"}";
         if (i + 1 < steps.size()) out << ",";
         out << "\n";
     }
@@ -90,8 +129,10 @@ AppPipelineMutationResult AppAddPipelineStep(const std::filesystem::path& storag
     AppPipelineMutationResult result;
     std::vector<PipelineStep> backup = steps;
     PipelineStep step;
-    step.title = u8"Новый этап";
-    step.description = u8"Описание этапа.";
+    step.id = MakeUniqueStepId(steps);
+    step.branch = u8"Пользовательский блок";
+    step.title = u8"Новый блок";
+    step.description = u8"Краткое описание блока.";
     const int insertPos = std::clamp(insertAfterIndex + 1, 0, static_cast<int>(steps.size()));
     steps.insert(steps.begin() + insertPos, std::move(step));
     if (!AppSavePipelineData(storageDir, steps)) {
