@@ -32,8 +32,8 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.25.
-  - Последнее изменение: confirm-modal облачных действий получил quick-diff по ключевым метрикам (`target -> source`) и умеет одинаково показывать изменения для live-файлов и backup-снимков `tasks.json` / `pipeline.json`.
+  - Ветка: beta. Версия: 0.4.26.
+  - Последнее изменение: detail-pane задач уплотнён: верхняя мета-сводка собрана в компактную 2x4 сетку, контекст задачи вынесен в отдельную секцию, а вторичные админские действия разложены по collapsible-блокам `Параметры`, `Навыки`, `Пайплайн и handoff`, `Удаление и откат`.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -192,10 +192,11 @@ UI аудит:
   - Cloud restore UX: меню `Облако` показывает backup-копии `tasks.json` и `pipeline.json` из `meta/updates` и умеет восстановить выбранный локальный или облачный снимок обратно в локальный workspace без автоматической перезаписи облака.
   - Cloud preview UX: любые destructive sync-действия теперь проходят через confirm-modal с preview метаданных источника и цели; для задач показываются `всего` и `ждут XP`, для пайплайна — `этапов`, `ветвлений`, `финалов`.
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
+  - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Tasks UX, project handoff-срез и sync-контур теперь покрывают основной flow, диагностику критичных файлов, явную индикацию drift/conflict, resolve локальной/облачной версии, restore по нескольким backup-копиям, preview/confirm и quick-diff перед применением версии.
+  - Tasks UX, project handoff-срез и sync-контур теперь покрывают основной flow, диагностику критичных файлов, явную индикацию drift/conflict, resolve локальной/облачной версии, restore по нескольким backup-копиям, preview/confirm и quick-diff перед применением версии; detail-pane задач тоже приведён к более компактному рабочему виду.
 - Next:
-  - Следующим UX-прогоном логично вернуться к `Задачам` и облегчить detail-pane: собрать метаданные в более компактный верхний блок и разгрузить вторичные админские действия.
+  - Следующим UX-прогоном логично дочистить читаемость таблицы задач: лучше развести статус, XP handoff и pipeline-state по визуальным акцентам прямо в строке таблицы.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
@@ -207,7 +208,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\src\\AppWorkspaceDataService.cpp`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.25.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.26.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
