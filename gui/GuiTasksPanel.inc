@@ -1038,6 +1038,82 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
+    int filteredActiveTasks = 0;
+    int filteredPipelineMissing = 0;
+    int filteredPipelineUnknown = 0;
+    int filteredPipelineBranching = 0;
+    int filteredPipelineFinalOpen = 0;
+    for (const TaskEntry* task : filtered) {
+        if (!task) continue;
+        if (NormalizeTaskStatus(task->status) == kTaskStatusDone) continue;
+        ++filteredActiveTasks;
+        const TaskPipelineProgressInfo progress = DescribeTaskPipelineProgress(state, *task);
+        if (progress.state == TaskPipelineProgressState::Missing) {
+            filteredPipelineMissing += 1;
+        } else if (progress.state == TaskPipelineProgressState::Unknown) {
+            filteredPipelineUnknown += 1;
+        } else if (progress.state == TaskPipelineProgressState::Branching) {
+            filteredPipelineBranching += 1;
+        } else if (progress.state == TaskPipelineProgressState::Final) {
+            filteredPipelineFinalOpen += 1;
+        }
+    }
+
+    if (BeginCard("tasks_pipeline_risks_card")) {
+        DrawCardHeader(u8"Пайплайн-риски");
+        if (state.pipelineSteps.empty()) {
+            ImGui::TextDisabled(u8"Пайплайн не настроен.");
+        } else if (filteredActiveTasks == 0) {
+            ImGui::TextDisabled(u8"По текущему фильтру нет активных задач.");
+        } else {
+            const int totalSignals = filteredPipelineMissing + filteredPipelineUnknown +
+                filteredPipelineBranching + filteredPipelineFinalOpen;
+            ImGui::TextDisabled(u8"Активных задач по фильтру: %d | сигналов: %d",
+                                filteredActiveTasks, totalSignals);
+            const int riskColumns = ImGui::GetContentRegionAvail().x < 760.0f ? 2 : 4;
+            if (ImGui::BeginTable("tasks_pipeline_risks_table", riskColumns, ImGuiTableFlags_SizingStretchSame)) {
+                int metricIndex = 0;
+                auto drawRiskMetric = [&](const char* title,
+                                          int value,
+                                          const ImVec4& baseColor,
+                                          const char* hint) {
+                    if ((metricIndex % riskColumns) == 0) {
+                        ImGui::TableNextRow();
+                    }
+                    ImGui::TableSetColumnIndex(metricIndex % riskColumns);
+                    ImVec4 bg = baseColor;
+                    bg.w = value > 0
+                        ? std::clamp(bg.w * 0.14f, 0.06f, 0.18f)
+                        : std::clamp(bg.w * 0.05f, 0.03f, 0.06f);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, ImGui::GetColorU32(bg));
+                    ImGui::TextDisabled("%s", title);
+                    if (value > 0) {
+                        ImGui::TextColored(baseColor, "%d", value);
+                    } else {
+                        ImGui::TextDisabled("0");
+                    }
+                    ImGui::TextDisabled("%s", hint);
+                    ++metricIndex;
+                };
+
+                drawRiskMetric(u8"Без этапа", filteredPipelineMissing,
+                               LogLevelColor(AppLogLevel::Warning), u8"назначить старт");
+                drawRiskMetric(u8"Вне схемы", filteredPipelineUnknown,
+                               LogLevelColor(AppLogLevel::Error), u8"переназначить шаг");
+                drawRiskMetric(u8"Ветвление", filteredPipelineBranching,
+                               LogLevelColor(AppLogLevel::Info), u8"нужен выбор next");
+                drawRiskMetric(u8"Финал открыт", filteredPipelineFinalOpen,
+                               LogLevelColor(AppLogLevel::Info), u8"handoff не закрыт");
+                ImGui::EndTable();
+            }
+            if (totalSignals == 0) {
+                ImGui::TextDisabled(u8"Критичных pipeline-сигналов по текущему фильтру нет.");
+            }
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
     for (auto it = state.taskSelectionIds.begin(); it != state.taskSelectionIds.end();) {
         const bool exists = std::any_of(state.tasks.begin(), state.tasks.end(),
                                         [&](const TaskEntry& item) { return item.id == *it; });
