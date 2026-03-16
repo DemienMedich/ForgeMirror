@@ -15,10 +15,18 @@ static bool RollbackTask(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             break;
         }
         Profile profile = *profileOpt;
-        const int newTotalXp = std::max(0, profile.total_xp() - participant.globalXp);
-        const int newTasks = std::max(0, profile.tasks_completed() - 1);
-        profile.set_total_xp(newTotalXp);
-        profile.set_tasks_completed(newTasks);
+        if (!participant.rollbackSnapshot.empty()) {
+            if (!ApplyProfileTaskRollbackSnapshot(participant.rollbackSnapshot, profile)) {
+                SetStatus(state, u8"Не удалось восстановить snapshot профиля для отката XP.", 1.0f, 0.45f, 0.45f);
+                ok = false;
+                break;
+            }
+        } else {
+            const int newTotalXp = std::max(0, profile.total_xp() - participant.globalXp);
+            const int newTasks = std::max(0, profile.tasks_completed() - 1);
+            profile.set_total_xp(newTotalXp);
+            profile.set_tasks_completed(newTasks);
+        }
         AppProfileMutationResult mutation = AppSaveProfileSnapshot(storage, previousActive, participant.profileId, profile);
         if (!mutation.ok) {
             SetStatus(state,

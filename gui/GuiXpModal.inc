@@ -597,6 +597,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         auto profileOpt = storage.load_profile();
                         if (!profileOpt) continue;
                         Profile& profile = *profileOpt;
+                        const std::string rollbackSnapshot = SerializeProfileTaskRollbackSnapshot(profile);
 
                         const int storedBest = profile.category_best_score(static_cast<size_t>(readyCategory));
                         const bool penaltiesEnabled = profile.penalties_enabled();
@@ -732,7 +733,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                                       1.0f, 0.45f, 0.45f);
                             continue;
                         }
-                        participants.push_back(TaskParticipant{share.id, share.percent, effectiveXp, skillXpTotal});
+                        TaskParticipant participant;
+                        participant.profileId = share.id;
+                        participant.percent = share.percent;
+                        participant.globalXp = effectiveXp;
+                        participant.skillXp = skillXpTotal;
+                        participant.rollbackSnapshot = rollbackSnapshot;
+                        participants.push_back(std::move(participant));
                     }
 
                     if (!participants.empty()) {

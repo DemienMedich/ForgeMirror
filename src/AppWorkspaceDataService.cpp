@@ -1,4 +1,5 @@
 #include "AppWorkspaceDataService.h"
+#include "AppUtils.h"
 
 #include <algorithm>
 #include <array>
@@ -187,7 +188,8 @@ std::string SerializeParticipants(const std::vector<TaskParticipant>& participan
     for (const auto& p : participants) {
         if (!first) out << ';';
         first = false;
-        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp;
+        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp
+            << "|" << EncodePassword(p.rollbackSnapshot);
     }
     return out.str();
 }
@@ -215,7 +217,14 @@ std::vector<TaskParticipant> ParseParticipants(const std::string& text) {
         if (sep == std::string::npos) continue;
         p.globalXp = ParseInt(token.substr(pos, sep - pos), 0);
         pos = sep + 1;
-        p.skillXp = ParseInt(token.substr(pos), 0);
+        sep = token.find('|', pos);
+        if (sep == std::string::npos) {
+            p.skillXp = ParseInt(token.substr(pos), 0);
+        } else {
+            p.skillXp = ParseInt(token.substr(pos, sep - pos), 0);
+            pos = sep + 1;
+            p.rollbackSnapshot = DecodePassword(token.substr(pos));
+        }
         out.push_back(std::move(p));
     }
     return out;

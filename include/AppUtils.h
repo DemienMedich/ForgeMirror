@@ -67,6 +67,8 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
 std::string EncodePassword(const std::string& password);
 std::string DecodePassword(const std::string& value);
 std::string GenerateRandomPassword(size_t length = 10);
+std::string SerializeProfileTaskRollbackSnapshot(const Profile& profile);
+bool ApplyProfileTaskRollbackSnapshot(const std::string& snapshot, Profile& profile);
 void AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
                         const std::string& action, const std::string& details = {});
 

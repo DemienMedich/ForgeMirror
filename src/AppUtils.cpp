@@ -514,6 +514,177 @@ std::string GenerateRandomPassword(size_t length) {
     return out;
 }
 
+std::string SerializeProfileTaskRollbackSnapshot(const Profile& profile) {
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss << "[task_rollback]\n";
+    ss << "totalXp=" << profile.total_xp() << "\n";
+    ss << "lastTaskTs=" << profile.last_task_timestamp() << "\n";
+    ss << "inertiaTasks=" << profile.inactivity_tasks() << "\n";
+    ss << "recoveryTasks=" << profile.recovery_tasks_remaining() << "\n";
+    ss << "tasksCompleted=" << profile.tasks_completed() << "\n";
+
+    ss << "\n[skills]\n";
+    const auto skills = profile.list_skills();
+    ss << "names=";
+    for (size_t i = 0; i < skills.size(); ++i) {
+        if (i) ss << ",";
+        ss << skills[i].name;
+    }
+    ss << "\n";
+    for (const auto& skill : skills) {
+        ss << "level_" << skill.name << "=" << skill.level << "\n";
+        ss << "xp_" << skill.name << "=" << skill.xp << "\n";
+        ss << "xpToNext_" << skill.name << "=" << skill.xpToNext << "\n";
+        ss << "weight_" << skill.name << "=" << skill.weight << "\n";
+    }
+
+    ss << "\n[categories]\n";
+    const auto& scores = profile.category_best_scores();
+    const auto& cooldowns = profile.category_cooldowns();
+    for (size_t idx = 0; idx < scores.size(); ++idx) {
+        ss << "score_" << Profile::kCategoryLabels[idx] << "=" << scores[idx] << "\n";
+    }
+    for (size_t idx = 0; idx < cooldowns.size(); ++idx) {
+        ss << "cooldown_" << Profile::kCategoryLabels[idx] << "=" << cooldowns[idx] << "\n";
+    }
+    return ss.str();
+}
+
+bool ApplyProfileTaskRollbackSnapshot(const std::string& snapshot, Profile& profile) {
+    if (snapshot.empty()) return false;
+    auto trim = [](std::string value) {
+        auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
+        value.erase(value.begin(), std::find_if(value.begin(), value.end(),
+                                                [&](unsigned char c) { return !is_space(c); }));
+        value.erase(std::find_if(value.rbegin(), value.rend(),
+                                 [&](unsigned char c) { return !is_space(c); }).base(),
+                    value.end());
+        return value;
+    };
+    auto parse_int = [](const std::string& value, int fallback) {
+        try {
+            return std::stoi(value);
+        } catch (...) {
+            return fallback;
+        }
+    };
+    auto parse_int64 = [](const std::string& value, std::int64_t fallback) {
+        try {
+            return std::stoll(value);
+        } catch (...) {
+            return fallback;
+        }
+    };
+    auto parse_double = [](const std::string& value, double fallback) {
+        try {
+            return std::stod(value);
+        } catch (...) {
+            return fallback;
+        }
+    };
+
+    std::istringstream in(snapshot);
+    std::string line;
+    std::string section;
+    int totalXp = profile.total_xp();
+    std::int64_t lastTaskTs = profile.last_task_timestamp();
+    int inertiaTasks = profile.inactivity_tasks();
+    int recoveryTasks = profile.recovery_tasks_remaining();
+    int tasksCompleted = profile.tasks_completed();
+    std::vector<std::string> skillNames;
+    std::unordered_map<std::string, int> levelBySkill;
+    std::unordered_map<std::string, int> xpBySkill;
+    std::unordered_map<std::string, int> xpNextBySkill;
+    std::unordered_map<std::string, double> weightBySkill;
+    std::array<int, Profile::kCategoryCount> categoryScores = profile.category_best_scores();
+    std::array<int, Profile::kCategoryCount> categoryCooldowns = profile.category_cooldowns();
+
+    while (std::getline(in, line)) {
+        std::string t = trim(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.front() == '[' && t.back() == ']') {
+            section = t.substr(1, t.size() - 2);
+            continue;
+        }
+        const size_t eq = t.find('=');
+        if (eq == std::string::npos) continue;
+        const std::string key = trim(t.substr(0, eq));
+        const std::string val = trim(t.substr(eq + 1));
+
+        if (section == "task_rollback") {
+            if (key == "totalXp") totalXp = parse_int(val, totalXp);
+            else if (key == "lastTaskTs") lastTaskTs = parse_int64(val, lastTaskTs);
+            else if (key == "inertiaTasks") inertiaTasks = parse_int(val, inertiaTasks);
+            else if (key == "recoveryTasks") recoveryTasks = parse_int(val, recoveryTasks);
+            else if (key == "tasksCompleted") tasksCompleted = parse_int(val, tasksCompleted);
+        } else if (section == "skills") {
+            if (key == "names") {
+                skillNames.clear();
+                std::istringstream ss(val);
+                std::string item;
+                while (std::getline(ss, item, ',')) {
+                    item = trim(item);
+                    if (!item.empty()) skillNames.push_back(item);
+                }
+            } else if (key.rfind("level_", 0) == 0) {
+                levelBySkill[key.substr(6)] = parse_int(val, 1);
+            } else if (key.rfind("xp_", 0) == 0) {
+                xpBySkill[key.substr(3)] = parse_int(val, 0);
+            } else if (key.rfind("xpToNext_", 0) == 0) {
+                xpNextBySkill[key.substr(9)] = parse_int(val, 0);
+            } else if (key.rfind("weight_", 0) == 0) {
+                weightBySkill[key.substr(7)] = parse_double(val, 1.0);
+            }
+        } else if (section == "categories") {
+            if (key.rfind("score_", 0) == 0) {
+                const std::string label = key.substr(6);
+                for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                    if (label == Profile::kCategoryLabels[idx]) {
+                        categoryScores[idx] = std::clamp(parse_int(val, categoryScores[idx]), 0, Profile::kMaxCategoryScore);
+                        break;
+                    }
+                }
+            } else if (key.rfind("cooldown_", 0) == 0) {
+                const std::string label = key.substr(9);
+                for (size_t idx = 0; idx < Profile::kCategoryCount; ++idx) {
+                    if (label == Profile::kCategoryLabels[idx]) {
+                        categoryCooldowns[idx] = parse_int(val, categoryCooldowns[idx]);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<Skill> restoredSkills;
+    restoredSkills.reserve(skillNames.size());
+    for (const auto& skillName : skillNames) {
+        const int level = std::max(1, parse_int(std::to_string(levelBySkill[skillName]), 1));
+        const double weight = weightBySkill.count(skillName) ? weightBySkill[skillName] : 1.0;
+        Skill skill(skillName, level, weight);
+        if (auto it = xpBySkill.find(skillName); it != xpBySkill.end() && it->second >= 0) {
+            skill.xp = it->second;
+        }
+        if (auto it = xpNextBySkill.find(skillName); it != xpNextBySkill.end() && it->second > 0) {
+            skill.xpToNext = it->second;
+        } else {
+            skill.xpToNext = Skill::required_xp_for(skill.level + 1);
+        }
+        restoredSkills.push_back(skill);
+    }
+
+    profile.set_skills(restoredSkills);
+    profile.set_total_xp(totalXp);
+    profile.set_category_best_scores(categoryScores);
+    profile.set_category_cooldowns(categoryCooldowns);
+    profile.set_last_task_timestamp(lastTaskTs);
+    profile.set_inactivity_tasks(inertiaTasks);
+    profile.start_penalty_recovery(recoveryTasks);
+    profile.set_tasks_completed(tasksCompleted);
+    return true;
+}
+
 
 std::string LoadAdminPassword(const std::filesystem::path& storageDir) {
     if (const char* env = std::getenv("FORGEMIRROR_ADMIN_PASSWORD")) {

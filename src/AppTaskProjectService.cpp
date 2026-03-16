@@ -1,4 +1,5 @@
 #include "AppTaskProjectService.h"
+#include "AppUtils.h"
 #include "Profile.h"
 
 #include <algorithm>
@@ -136,7 +137,8 @@ std::string SerializeParticipants(const std::vector<TaskParticipant>& participan
     for (const auto& p : participants) {
         if (!first) out << ';';
         first = false;
-        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp;
+        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp
+            << "|" << EncodePassword(p.rollbackSnapshot);
     }
     return out.str();
 }

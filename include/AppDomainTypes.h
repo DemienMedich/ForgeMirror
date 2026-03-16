@@ -9,6 +9,7 @@ struct TaskParticipant {
     int percent = 0;
     int globalXp = 0;
     int skillXp = 0;
+    std::string rollbackSnapshot;
 };
 
 struct TaskEntry {

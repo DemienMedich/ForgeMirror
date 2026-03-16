@@ -337,7 +337,8 @@ static std::string SerializeParticipants(const std::vector<TaskParticipant>& par
     for (const auto& p : participants) {
         if (!first) out << ';';
         first = false;
-        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp;
+        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp
+            << "|" << EncodePassword(p.rollbackSnapshot);
     }
     return out.str();
 }
@@ -365,7 +366,14 @@ static std::vector<TaskParticipant> ParseParticipants(const std::string& text) {
         if (sep == std::string::npos) continue;
         p.globalXp = tasks_parse_int(token.substr(pos, sep - pos), 0);
         pos = sep + 1;
-        p.skillXp = tasks_parse_int(token.substr(pos), 0);
+        sep = token.find('|', pos);
+        if (sep == std::string::npos) {
+            p.skillXp = tasks_parse_int(token.substr(pos), 0);
+        } else {
+            p.skillXp = tasks_parse_int(token.substr(pos, sep - pos), 0);
+            pos = sep + 1;
+            p.rollbackSnapshot = DecodePassword(token.substr(pos));
+        }
         out.push_back(std::move(p));
     }
     return out;
