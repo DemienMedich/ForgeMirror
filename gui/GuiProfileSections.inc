@@ -1096,9 +1096,13 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         int newTasks = 0;
         int inProgressTasks = 0;
         int overdueTasks = 0;
+        int xpPendingTasks = 0;
         for (const auto& task : state.tasks) {
             if (!TaskHasAssignee(task, profileId)) continue;
             const int status = NormalizeTaskStatus(task.status);
+            if (TaskNeedsXpAward(task)) {
+                xpPendingTasks += 1;
+            }
             if (status == kTaskStatusDone) continue;
             activeItems.push_back(&task);
             if (status == kTaskStatusInProgress) {
@@ -1135,6 +1139,9 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         const bool stackHeader = ImGui::GetContentRegionAvail().x < 460.0f;
         if (stackHeader) {
             ImGui::TextDisabled("%s", activeSummary.c_str());
+            if (xpPendingTasks > 0) {
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Закрыты без XP: %d", xpPendingTasks);
+            }
             if (state.modules.tasks && ImGui::Button(u8"К задачам##profile_active_tasks", ImVec2(-1.0f, 0.0f))) {
                 FocusTasksForProfile(state, profileId);
             }
@@ -1144,6 +1151,10 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("%s", activeSummary.c_str());
+            if (xpPendingTasks > 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", xpPendingTasks);
+            }
             ImGui::TableSetColumnIndex(1);
             if (state.modules.tasks) {
                 if (ImGui::Button(u8"К задачам##profile_active_tasks", ImVec2(-1.0f, 0.0f))) {
@@ -1254,8 +1265,14 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
     if (ImGui::CollapsingHeader(u8"Выполненные задачи")) {
         std::vector<const TaskEntry*> items;
         items.reserve(state.tasks.size());
+        int pendingXpTasks = 0;
         for (const auto& task : state.tasks) {
-            if (FindTaskParticipant(task, profileId)) {
+            const bool hasParticipant = FindTaskParticipant(task, profileId) != nullptr;
+            const bool awaitingXp = TaskNeedsXpAward(task) && TaskHasAssignee(task, profileId);
+            if (awaitingXp) {
+                pendingXpTasks += 1;
+            }
+            if (hasParticipant || awaitingXp) {
                 items.push_back(&task);
             }
         }
@@ -1270,6 +1287,10 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             items.resize(5);
         }
         ImGui::TextDisabled(u8"Последние 5 задач.");
+        if (pendingXpTasks > 0) {
+            ImGui::SameLine();
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан: %d", pendingXpTasks);
+        }
         if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1279,7 +1300,8 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             ImGui::TableHeadersRow();
             for (const TaskEntry* task : items) {
                 const TaskParticipant* participant = FindTaskParticipant(*task, profileId);
-                if (!participant) continue;
+                const bool awaitingXp = TaskNeedsXpAward(*task);
+                if (!participant && !awaitingXp) continue;
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
@@ -1302,11 +1324,22 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                     ImGui::EndTooltip();
                 }
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%d%%", participant->percent);
+                if (participant) {
+                    ImGui::Text("%d%%", participant->percent);
+                } else {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Ожидает");
+                }
                 ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%d", participant->globalXp);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(u8"Навыки: %d XP", participant->skillXp);
+                if (awaitingXp) {
+                    DrawTaskXpPendingBadge(*task);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(u8"XP будет назначен после завершения handoff через модуль опыта.");
+                    }
+                } else if (participant) {
+                    ImGui::Text("%d", participant->globalXp);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(u8"Навыки: %d XP", participant->skillXp);
+                    }
                 }
             }
             ImGui::EndTable();

@@ -944,6 +944,15 @@ static bool TaskHasRecordedXp(const TaskEntry& task) {
     return false;
 }
 
+static bool TaskNeedsXpAward(const TaskEntry& task) {
+    return NormalizeTaskStatus(task.status) == kTaskStatusDone && !TaskHasRecordedXp(task);
+}
+
+static void DrawTaskXpPendingBadge(const TaskEntry& task) {
+    if (!TaskNeedsXpAward(task)) return;
+    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан");
+}
+
 static void PrepareXpEntriesFromTask(GuiState& state,
                                      const TaskEntry& task,
                                      const SkillCatalog& catalog) {

@@ -32,8 +32,8 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.16.
-  - Последнее изменение: исправлен корректный rollback XP по задачам: у участников теперь сохраняется rollback-snapshot XP-зависимого состояния профиля, и удаление задачи восстанавливает навыки, category progress, penalty/recovery и task counters без затирания сторонних полей профиля.
+  - Ветка: beta. Версия: 0.4.17.
+  - Последнее изменение: задачи, проекты и профиль теперь явно показывают закрытые задачи без выданного XP через warning-badge `XP не выдан`, чтобы pending handoff был виден без открытия detail-pane.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -182,10 +182,11 @@ UI аудит:
   - Task-manager flow: `TaskEntry` расширен полями `category`, `deadlinePenaltyPercent` и `skillIds`, форма создания задачи умеет inline-создание проекта, а detail-pane позволяет администратору редактировать категорию, penalty и навыки задачи.
   - XP handoff: перевод задачи в `Выполнена` теперь открывает модал распределения XP по существующей задаче, записывает участников/навыки/итоговый пул обратно в неё и учитывает deadline-penalty как процентное снижение итогового XP.
   - Tasks rollback: `TaskParticipant` получил rollback-snapshot, а удаление задач с XP теперь восстанавливает XP-зависимое состояние профиля по snapshot вместо частичного вычитания только `total_xp/tasks_completed`.
+  - Tasks/Profile/Projects UX: закрытые задачи без выданного XP теперь подсвечиваются warning-badge'ем в таблице задач, проектных сводках и профильных блоках, включая секцию `Выполненные задачи`.
 - Now:
-  - Tasks UX: экран задач закрывает основной продактовый сценарий от постановки до выдачи XP, а rollback удалённых задач снова консистентен с текущей XP-моделью профиля.
+  - Tasks UX: основной task-flow уже доведён от постановки до выдачи XP, а pending handoff теперь видно в задачах, проектах и профиле без скрытых состояний.
 - Next:
-  - Следующим прогоном логично добить полировку task-manager: показать в таблице и профиле явный badge `XP не выдан`, чтобы было видно закрытые задачи без выданного XP и pending handoff на одном экране.
+  - Следующим прогоном логично вынести `XP не выдан` в более явный статус-срез проектов и подготовить следующий слой надёжности: health-check/smoke-проверки синхронизации `tasks.json`, `pipeline.json` и `task-audit.log`.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
@@ -198,7 +199,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiPipelinePanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.16.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.17.md`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
 - Remaining (taskmanager):

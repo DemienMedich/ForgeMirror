@@ -87,6 +87,7 @@ struct ProjectTaskStats {
     int inProgress = 0;
     int done = 0;
     int overdue = 0;
+    int xpPending = 0;
 };
 
 static ProjectTaskStats BuildProjectTaskStats(const GuiState& state, const std::string& projectId) {
@@ -105,6 +106,9 @@ static ProjectTaskStats BuildProjectTaskStats(const GuiState& state, const std::
             stats.inProgress += 1;
         } else {
             stats.created += 1;
+        }
+        if (TaskNeedsXpAward(task)) {
+            stats.xpPending += 1;
         }
         if (task.deadlineAt > 0 && task.deadlineAt < nowSec && status != kTaskStatusDone) {
             stats.overdue += 1;
@@ -286,12 +290,16 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::TextDisabled(u8"Н:%d  В:%d  Г:%d", taskStats.created, taskStats.inProgress, taskStats.done);
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
-                ImGui::TextUnformatted(u8"Н = новые, В = в работе, Г = готово, П = просроченные");
+                ImGui::TextUnformatted(u8"Н = новые, В = в работе, Г = готово, П = просроченные, XP = ждут выдачи опыта");
                 ImGui::EndTooltip();
             }
             if (taskStats.overdue > 0) {
                 ImGui::SameLine();
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", taskStats.overdue);
+            }
+            if (taskStats.xpPending > 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", taskStats.xpPending);
             }
 
             ImGui::TableSetColumnIndex(4);

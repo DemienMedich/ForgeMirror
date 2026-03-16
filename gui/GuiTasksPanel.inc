@@ -893,6 +893,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::SameLine();
                         ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", stats.overdue);
                     }
+                    if (stats.xpPending > 0) {
+                        ImGui::SameLine();
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", stats.xpPending);
+                    }
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%d", stats.total);
                     ImGui::TableSetColumnIndex(3);
@@ -1822,6 +1826,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     std::string topPipelineLabel;
     int topPipelineCount = 0;
     int unassignedPipelineCount = 0;
+    int xpPendingCount = 0;
     std::string lastStamp;
     if (!filtered.empty()) {
         lastStamp = FormatTimestamp(filtered.front()->createdAt, "%Y-%m-%d %H:%M");
@@ -1844,6 +1849,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 for (const auto& assignee : task->assignees) {
                     uniqueProfiles.insert(assignee);
                 }
+            }
+            if (TaskNeedsXpAward(*task)) {
+                xpPendingCount += 1;
             }
             const std::string pipelineName = ResolveTaskPipelineName(state, *task);
             if (pipelineName.empty()) {
@@ -1928,6 +1936,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::TextDisabled(u8"Средний пул XP: %.0f", avgPool);
+            if (xpPendingCount > 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан: %d", xpPendingCount);
+            }
             if (!topPipelineLabel.empty()) {
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
                 ImGui::TextDisabled(u8"Этап-фокус");
@@ -2005,7 +2017,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn(u8"Приоритет", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 156.0f);
         ImGui::TableHeadersRow();
         const std::int64_t nowSec = NowSeconds();
         for (const TaskEntry* task : filtered) {
@@ -2244,8 +2256,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (ImGui::Combo("##task_status_row", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
                     UpdateTaskStatus(task->id, draftStatus);
                 }
+                DrawTaskXpPendingBadge(*task);
             } else if (normalizedStatus == kTaskStatusDone) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusLabel(normalizedStatus));
+                DrawTaskXpPendingBadge(*task);
             } else if (overdue) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusLabel(normalizedStatus));
             } else {

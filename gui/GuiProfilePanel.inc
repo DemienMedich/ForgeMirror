@@ -521,10 +521,14 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         int newTasks = 0;
         int inProgressTasks = 0;
         int overdueTasks = 0;
+        int xpPendingTasks = 0;
         const std::int64_t nowTs = NowSeconds();
         for (const auto& task : state.tasks) {
             if (!TaskHasAssignee(task, state.active->id)) continue;
             const int status = NormalizeTaskStatus(task.status);
+            if (TaskNeedsXpAward(task)) {
+                xpPendingTasks += 1;
+            }
             if (status == kTaskStatusDone) continue;
             activeTasks += 1;
             if (status == kTaskStatusInProgress) {
@@ -540,6 +544,10 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         if (overdueTasks > 0) {
             ImGui::SameLine();
             ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", overdueTasks);
+        }
+        if (xpPendingTasks > 0) {
+            ImGui::SameLine();
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", xpPendingTasks);
         }
         if (ImGui::GetContentRegionAvail().x > 140.0f) {
             ImGui::SameLine();
