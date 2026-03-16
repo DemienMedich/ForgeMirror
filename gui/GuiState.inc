@@ -157,6 +157,8 @@ struct GuiRuntimeState {
     int selectedAchievementIndex = -1;
     std::vector<XpEntry> xpEntries;
     std::string xpProfessionId;
+    std::string xpSourceTaskId;
+    int xpTaskPenaltyPercent = 0;
     std::string catalogProfessionId;
     std::array<char, 128> taskProject{};
     std::array<char, 128> taskTitle{};
@@ -169,7 +171,14 @@ struct GuiRuntimeState {
     int taskPlanPipelineIndex = 0;
     int taskPlanStatus = 0;
     int taskPlanPriority = 1;
+    int taskPlanCategory = 0;
+    int taskPlanPenaltyPercent = 0;
+    bool taskPlanCreateProjectInline = false;
+    std::array<char, 128> taskPlanProjectName{};
+    std::array<char, 256> taskPlanProjectDesc{};
     std::vector<char> taskPlanAssignees;
+    std::vector<char> taskPlanSkillFlags;
+    std::array<char, 64> taskPlanSkillFilter{};
     std::vector<TaskProfileShare> taskShares;
     bool taskDeletePopupRequest = false;
     std::string pendingTaskDeleteId;
@@ -197,6 +206,9 @@ struct GuiRuntimeState {
     std::string taskInlineDeadlineEditId;
     std::vector<char> taskInlineAssigneeFlags;
     std::string taskInlineAssigneeEditId;
+    std::vector<char> taskInlineSkillFlags;
+    std::string taskInlineSkillEditId;
+    std::array<char, 64> taskInlineSkillFilter{};
     std::string tasksExpandedId;
     std::array<char, 128> shortcutLabel{};
     std::array<char, 260> shortcutPath{};

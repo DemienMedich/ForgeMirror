@@ -237,6 +237,10 @@ std::vector<std::string> ParseAssignees(const std::string& text) {
     return out;
 }
 
+std::vector<std::string> ParseSkillIds(const std::string& text) {
+    return ParseAssignees(text);
+}
+
 constexpr int kTaskStatusNew = 0;
 constexpr int kTaskStatusInProgress = 1;
 constexpr int kTaskStatusDone = 2;
@@ -936,11 +940,13 @@ std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
             entry.priority = kTaskPriorityMedium;
         }
         if (auto v = find_value("category")) entry.category = ParseInt(*v, 0);
+        if (auto v = find_value("deadlinePenaltyPercent")) entry.deadlinePenaltyPercent = std::clamp(ParseInt(*v, 0), 0, 100);
         if (auto v = find_value("score")) entry.score = ParseInt(*v, 0);
         if (auto v = find_value("baseXp")) entry.baseXp = ParseInt(*v, 0);
         if (auto v = find_value("basePool")) entry.basePool = ParseInt(*v, 0);
         if (auto v = find_value("createdAt")) entry.createdAt = ParseInt64(*v, 0);
         if (auto v = find_value("assignees")) entry.assignees = ParseAssignees(*v);
+        if (auto v = find_value("skillIds")) entry.skillIds = ParseSkillIds(*v);
         if (auto v = find_value("participants")) entry.participants = ParseParticipants(*v);
         if (entry.id.empty()) continue;
         if (entry.assignees.empty()) {

@@ -107,12 +107,46 @@ AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
                                         const std::string& actor,
                                         std::vector<TaskAuditEntry>* auditCache = nullptr);
 
+AppMutationResult AppUpdateTaskCategory(const std::filesystem::path& storageDir,
+                                        std::vector<TaskEntry>& tasks,
+                                        const std::string& taskId,
+                                        int newCategory,
+                                        const std::string& actor,
+                                        std::vector<TaskAuditEntry>* auditCache = nullptr);
+
+AppMutationResult AppUpdateTaskPenaltyPercent(const std::filesystem::path& storageDir,
+                                              std::vector<TaskEntry>& tasks,
+                                              const std::string& taskId,
+                                              int newPenaltyPercent,
+                                              const std::string& actor,
+                                              std::vector<TaskAuditEntry>* auditCache = nullptr);
+
+AppMutationResult AppUpdateTaskSkillIds(const std::filesystem::path& storageDir,
+                                        std::vector<TaskEntry>& tasks,
+                                        const std::string& taskId,
+                                        const std::vector<std::string>& skillIds,
+                                        const std::string& actor,
+                                        std::vector<TaskAuditEntry>* auditCache = nullptr);
+
 AppMutationResult AppUpdateTaskAssignees(const std::filesystem::path& storageDir,
                                          std::vector<TaskEntry>& tasks,
                                          const std::string& taskId,
                                          const std::vector<std::string>& assignees,
                                          const std::string& actor,
                                          std::vector<TaskAuditEntry>* auditCache = nullptr);
+
+AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
+                                    std::vector<TaskEntry>& tasks,
+                                    const std::string& taskId,
+                                    int category,
+                                    int score,
+                                    int baseXp,
+                                    int basePool,
+                                    const std::vector<std::string>& assignees,
+                                    const std::vector<std::string>& skillIds,
+                                    const std::vector<TaskParticipant>& participants,
+                                    const std::string& actor,
+                                    std::vector<TaskAuditEntry>* auditCache = nullptr);
 
 AppMutationResult AppBulkUpdateTaskStatus(const std::filesystem::path& storageDir,
                                           std::vector<TaskEntry>& tasks,

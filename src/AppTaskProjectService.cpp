@@ -1,4 +1,5 @@
 #include "AppTaskProjectService.h"
+#include "Profile.h"
 
 #include <algorithm>
 #include <cctype>
@@ -138,6 +139,67 @@ std::string SerializeParticipants(const std::vector<TaskParticipant>& participan
         out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp;
     }
     return out.str();
+}
+
+std::string SerializeSkillIds(const std::vector<std::string>& skillIds) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    bool first = true;
+    for (const auto& id : skillIds) {
+        if (id.empty()) continue;
+        if (!first) out << ';';
+        first = false;
+        out << id;
+    }
+    return out.str();
+}
+
+int ClampTaskCategory(int value) {
+    return std::clamp(value, 0, static_cast<int>(Profile::kCategoryCount - 1));
+}
+
+int ClampTaskPenaltyPercent(int value) {
+    return std::clamp(value, 0, 100);
+}
+
+std::string FormatCategoryAudit(int category) {
+    const int normalized = ClampTaskCategory(category);
+    return Profile::kCategoryLabels[static_cast<size_t>(normalized)];
+}
+
+std::string FormatPenaltyAudit(int penaltyPercent) {
+    return std::to_string(ClampTaskPenaltyPercent(penaltyPercent)) + "%";
+}
+
+std::string FormatSkillIds(const std::vector<std::string>& skillIds) {
+    if (skillIds.empty()) return std::string(u8"—");
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    bool first = true;
+    for (const auto& skillId : skillIds) {
+        if (skillId.empty()) continue;
+        if (!first) out << ", ";
+        first = false;
+        out << skillId;
+    }
+    const std::string value = out.str();
+    return value.empty() ? std::string(u8"—") : value;
+}
+
+std::string FormatParticipantsAudit(const std::vector<TaskParticipant>& participants) {
+    if (participants.empty()) return std::string(u8"—");
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    bool first = true;
+    for (const auto& participant : participants) {
+        if (participant.profileId.empty()) continue;
+        if (!first) out << ", ";
+        first = false;
+        out << participant.profileId << " " << participant.percent << "%"
+            << " xp:" << participant.globalXp << "/" << participant.skillXp;
+    }
+    const std::string value = out.str();
+    return value.empty() ? std::string(u8"—") : value;
 }
 
 std::string ToLowerUtf8Copy(std::string s) {
@@ -399,12 +461,14 @@ bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<Tas
             << "\",\"deadlineAt\":" << entry.deadlineAt
             << ",\"status\":" << AppNormalizeTaskStatus(entry.status)
             << ",\"priority\":" << AppNormalizeTaskPriority(entry.priority)
-            << ",\"category\":" << entry.category
+            << ",\"category\":" << ClampTaskCategory(entry.category)
+            << ",\"deadlinePenaltyPercent\":" << ClampTaskPenaltyPercent(entry.deadlinePenaltyPercent)
             << ",\"score\":" << entry.score
             << ",\"baseXp\":" << entry.baseXp
             << ",\"basePool\":" << entry.basePool
             << ",\"createdAt\":" << entry.createdAt
             << ",\"assignees\":\"" << JsonEscape(SerializeAssignees(entry.assignees)) << "\""
+            << ",\"skillIds\":\"" << JsonEscape(SerializeSkillIds(entry.skillIds)) << "\""
             << ",\"participants\":\"" << JsonEscape(SerializeParticipants(entry.participants)) << "\"}";
         if (i + 1 < tasks.size()) out << ",";
         out << "\n";
@@ -808,6 +872,113 @@ AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
     return result;
 }
 
+AppMutationResult AppUpdateTaskCategory(const std::filesystem::path& storageDir,
+                                        std::vector<TaskEntry>& tasks,
+                                        const std::string& taskId,
+                                        int newCategory,
+                                        const std::string& actor,
+                                        std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+    const int prevCategory = ClampTaskCategory(task->category);
+    const int nextCategory = ClampTaskCategory(newCategory);
+    if (prevCategory == nextCategory) {
+        result.ok = true;
+        return result;
+    }
+    task->category = nextCategory;
+    if (!AppSaveTasks(storageDir, tasks)) {
+        task->category = prevCategory;
+        result.errorMessage = u8"Не удалось сохранить категорию задачи.";
+        return result;
+    }
+    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "category",
+                                  FormatCategoryAudit(prevCategory), FormatCategoryAudit(nextCategory),
+                                  auditCache)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
+}
+
+AppMutationResult AppUpdateTaskPenaltyPercent(const std::filesystem::path& storageDir,
+                                              std::vector<TaskEntry>& tasks,
+                                              const std::string& taskId,
+                                              int newPenaltyPercent,
+                                              const std::string& actor,
+                                              std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+    const int prevPenalty = ClampTaskPenaltyPercent(task->deadlinePenaltyPercent);
+    const int nextPenalty = ClampTaskPenaltyPercent(newPenaltyPercent);
+    if (prevPenalty == nextPenalty) {
+        result.ok = true;
+        return result;
+    }
+    task->deadlinePenaltyPercent = nextPenalty;
+    if (!AppSaveTasks(storageDir, tasks)) {
+        task->deadlinePenaltyPercent = prevPenalty;
+        result.errorMessage = u8"Не удалось сохранить штраф дедлайна.";
+        return result;
+    }
+    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "deadlinePenalty",
+                                  FormatPenaltyAudit(prevPenalty), FormatPenaltyAudit(nextPenalty),
+                                  auditCache)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
+}
+
+AppMutationResult AppUpdateTaskSkillIds(const std::filesystem::path& storageDir,
+                                        std::vector<TaskEntry>& tasks,
+                                        const std::string& taskId,
+                                        const std::vector<std::string>& skillIds,
+                                        const std::string& actor,
+                                        std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+    const auto prevSkillIds = task->skillIds;
+    if (prevSkillIds == skillIds) {
+        result.ok = true;
+        return result;
+    }
+    task->skillIds = skillIds;
+    if (!AppSaveTasks(storageDir, tasks)) {
+        task->skillIds = prevSkillIds;
+        result.errorMessage = u8"Не удалось сохранить навыки задачи.";
+        return result;
+    }
+    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "skills",
+                                  FormatSkillIds(prevSkillIds), FormatSkillIds(skillIds),
+                                  auditCache)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
+}
+
 AppMutationResult AppUpdateTaskAssignees(const std::filesystem::path& storageDir,
                                          std::vector<TaskEntry>& tasks,
                                          const std::string& taskId,
@@ -845,6 +1016,85 @@ AppMutationResult AppUpdateTaskAssignees(const std::filesystem::path& storageDir
         result.errorMessage = u8"Не удалось записать task-audit.log";
         return result;
     }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
+}
+
+AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
+                                    std::vector<TaskEntry>& tasks,
+                                    const std::string& taskId,
+                                    int category,
+                                    int score,
+                                    int baseXp,
+                                    int basePool,
+                                    const std::vector<std::string>& assignees,
+                                    const std::vector<std::string>& skillIds,
+                                    const std::vector<TaskParticipant>& participants,
+                                    const std::string& actor,
+                                    std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    if (participants.empty()) {
+        result.errorMessage = u8"Нет участников для записи XP.";
+        return result;
+    }
+    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+
+    const auto prevAssignees = task->assignees;
+    const auto prevSkillIds = task->skillIds;
+    const auto prevParticipants = task->participants;
+    const int prevStatus = task->status;
+    const int prevCategory = task->category;
+    const int prevScore = task->score;
+    const int prevBaseXp = task->baseXp;
+    const int prevBasePool = task->basePool;
+
+    task->status = kTaskStatusDone;
+    task->category = ClampTaskCategory(category);
+    task->score = score;
+    task->baseXp = std::max(0, baseXp);
+    task->basePool = std::max(0, basePool);
+    task->assignees = assignees;
+    task->skillIds = skillIds;
+    task->participants = participants;
+
+    if (!AppSaveTasks(storageDir, tasks)) {
+        task->status = prevStatus;
+        task->category = prevCategory;
+        task->score = prevScore;
+        task->baseXp = prevBaseXp;
+        task->basePool = prevBasePool;
+        task->assignees = prevAssignees;
+        task->skillIds = prevSkillIds;
+        task->participants = prevParticipants;
+        result.errorMessage = u8"Не удалось сохранить закрытие задачи с XP.";
+        return result;
+    }
+
+    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "status",
+                                  AppTaskStatusLabel(prevStatus), AppTaskStatusLabel(task->status),
+                                  auditCache) ||
+        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "category",
+                                  FormatCategoryAudit(prevCategory), FormatCategoryAudit(task->category),
+                                  auditCache) ||
+        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "assignees",
+                                  FormatAssignees(prevAssignees), FormatAssignees(task->assignees),
+                                  auditCache) ||
+        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "skills",
+                                  FormatSkillIds(prevSkillIds), FormatSkillIds(task->skillIds),
+                                  auditCache) ||
+        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "participants",
+                                  FormatParticipantsAudit(prevParticipants), FormatParticipantsAudit(task->participants),
+                                  auditCache)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+
     result.ok = true;
     result.changed = true;
     result.changedCount = 1;

@@ -1,5 +1,8 @@
 int CountSelectedProfileShares(const std::vector<TaskProfileShare>& shares);
 void BalanceProfileShares(std::vector<TaskProfileShare>& shares, int fixedIndex);
+void NormalizeProfileShares(std::vector<TaskProfileShare>& shares);
+void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog);
+void RecalculateXpPercentages(std::vector<XpEntry>& entries);
 
 static constexpr int kTaskStatusNew = 0;
 static constexpr int kTaskStatusInProgress = 1;
@@ -397,6 +400,14 @@ static std::vector<std::string> ParseAssignees(const std::string& text) {
     return out;
 }
 
+static std::vector<std::string> ParseSkillIds(const std::string& text) {
+    return ParseAssignees(text);
+}
+
+static std::string SerializeSkillIds(const std::vector<std::string>& skillIds) {
+    return SerializeAssignees(skillIds);
+}
+
 static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir) {
     std::vector<TaskEntry> out;
     const auto path = TasksStoragePath(storageDir);
@@ -429,11 +440,15 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
             entry.priority = kTaskPriorityMedium;
         }
         if (auto v = find_value("category")) entry.category = tasks_parse_int(*v, 0);
+        if (auto v = find_value("deadlinePenaltyPercent")) {
+            entry.deadlinePenaltyPercent = std::clamp(tasks_parse_int(*v, 0), 0, 100);
+        }
         if (auto v = find_value("score")) entry.score = tasks_parse_int(*v, 0);
         if (auto v = find_value("baseXp")) entry.baseXp = tasks_parse_int(*v, 0);
         if (auto v = find_value("basePool")) entry.basePool = tasks_parse_int(*v, 0);
         if (auto v = find_value("createdAt")) entry.createdAt = tasks_parse_int64(*v, 0);
         if (auto v = find_value("assignees")) entry.assignees = ParseAssignees(*v);
+        if (auto v = find_value("skillIds")) entry.skillIds = ParseSkillIds(*v);
         if (auto v = find_value("participants")) entry.participants = ParseParticipants(*v);
         if (entry.id.empty()) continue;
         if (entry.assignees.empty()) {
@@ -470,11 +485,13 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
             << ",\"status\":" << NormalizeTaskStatus(entry.status)
             << ",\"priority\":" << NormalizeTaskPriority(entry.priority)
             << ",\"category\":" << entry.category
+            << ",\"deadlinePenaltyPercent\":" << std::clamp(entry.deadlinePenaltyPercent, 0, 100)
             << ",\"score\":" << entry.score
             << ",\"baseXp\":" << entry.baseXp
             << ",\"basePool\":" << entry.basePool
             << ",\"createdAt\":" << entry.createdAt
             << ",\"assignees\":\"" << tasks_json_escape(SerializeAssignees(entry.assignees)) << "\""
+            << ",\"skillIds\":\"" << tasks_json_escape(SerializeSkillIds(entry.skillIds)) << "\""
             << ",\"participants\":\"" << tasks_json_escape(SerializeParticipants(entry.participants)) << "\"}";
         if (i + 1 < tasks.size()) out << ",";
         out << "\n";
@@ -849,5 +866,124 @@ static void PrepareTaskShares(GuiState& state) {
     }
     if (CountSelectedProfileShares(state.taskShares) > 0) {
         BalanceProfileShares(state.taskShares, 0);
+    }
+}
+
+static void EnsureTaskSkillFlagsSize(std::vector<char>& flags, size_t requiredSize) {
+    if (flags.size() == requiredSize) return;
+    std::vector<char> next(requiredSize, 0);
+    for (size_t i = 0; i < std::min(requiredSize, flags.size()); ++i) {
+        next[i] = flags[i] ? 1 : 0;
+    }
+    flags = std::move(next);
+}
+
+static void ApplyTaskSkillIdsToFlags(const SkillCatalog& catalog,
+                                     const std::vector<std::string>& skillIds,
+                                     std::vector<char>& flags) {
+    const auto& catalogSkills = catalog.skills();
+    EnsureTaskSkillFlagsSize(flags, catalogSkills.size());
+    std::fill(flags.begin(), flags.end(), 0);
+    if (skillIds.empty()) return;
+    for (size_t i = 0; i < catalogSkills.size(); ++i) {
+        if (std::find(skillIds.begin(), skillIds.end(), catalogSkills[i]) != skillIds.end()) {
+            flags[i] = 1;
+        }
+    }
+}
+
+static std::vector<std::string> CollectSelectedTaskSkillIds(const SkillCatalog& catalog,
+                                                            const std::vector<char>& flags) {
+    std::vector<std::string> selected;
+    const auto& catalogSkills = catalog.skills();
+    const size_t count = std::min(flags.size(), catalogSkills.size());
+    selected.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        if (!flags[i]) continue;
+        selected.push_back(catalogSkills[i]);
+    }
+    return selected;
+}
+
+static std::string BuildTaskSkillSummary(const std::vector<std::string>& skillIds,
+                                         const SkillCatalog& catalog,
+                                         int maxVisible = 3) {
+    if (skillIds.empty()) return std::string(u8"Не выбраны");
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    int shown = 0;
+    for (const auto& skillId : skillIds) {
+        if (skillId.empty()) continue;
+        if (shown > 0) out << ", ";
+        out << catalog.display_name(skillId);
+        ++shown;
+        if (shown >= maxVisible) break;
+    }
+    const int remaining = static_cast<int>(skillIds.size()) - shown;
+    if (remaining > 0) {
+        out << " +" << remaining;
+    }
+    const std::string summary = out.str();
+    return summary.empty() ? std::string(u8"Не выбраны") : summary;
+}
+
+static bool TaskHasRecordedXp(const TaskEntry& task) {
+    for (const auto& participant : task.participants) {
+        if (participant.globalXp > 0 || participant.skillXp > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void PrepareXpEntriesFromTask(GuiState& state,
+                                     const TaskEntry& task,
+                                     const SkillCatalog& catalog) {
+    PrepareXpEntries(state, catalog);
+    state.xpSourceTaskId = task.id;
+    std::snprintf(state.taskProject.data(), state.taskProject.size(), "%s", task.project.c_str());
+    std::snprintf(state.taskTitle.data(), state.taskTitle.size(), "%s", task.title.c_str());
+    std::snprintf(state.taskDescription.data(), state.taskDescription.size(), "%s", task.description.c_str());
+    state.taskCategoryIndex = std::clamp(task.category, 0, static_cast<int>(Profile::kCategoryCount - 1));
+    state.taskScore = std::clamp(task.score > 0 ? task.score : Profile::kMaxCategoryScore,
+                                 1, Profile::kMaxCategoryScore);
+    state.xpTaskPenaltyPercent = std::clamp(task.deadlinePenaltyPercent, 0, 100);
+
+    PrepareTaskShares(state);
+    for (auto& share : state.taskShares) {
+        share.selected = false;
+        share.percent = 0;
+    }
+    if (!task.participants.empty()) {
+        for (auto& share : state.taskShares) {
+            auto it = std::find_if(task.participants.begin(), task.participants.end(),
+                                   [&](const TaskParticipant& participant) { return participant.profileId == share.id; });
+            if (it == task.participants.end()) continue;
+            share.selected = true;
+            share.percent = std::clamp(it->percent, 0, 100);
+        }
+    } else {
+        for (auto& share : state.taskShares) {
+            if (std::find(task.assignees.begin(), task.assignees.end(), share.id) == task.assignees.end()) continue;
+            share.selected = true;
+        }
+        NormalizeProfileShares(state.taskShares);
+    }
+    if (CountSelectedProfileShares(state.taskShares) > 0) {
+        BalanceProfileShares(state.taskShares, 0);
+    }
+
+    if (!task.skillIds.empty()) {
+        const auto& catalogSkills = catalog.skills();
+        for (auto& entry : state.xpEntries) {
+            entry.rating = 0;
+            entry.percent = 0;
+        }
+        for (size_t i = 0; i < catalogSkills.size() && i < state.xpEntries.size(); ++i) {
+            if (std::find(task.skillIds.begin(), task.skillIds.end(), catalogSkills[i]) != task.skillIds.end()) {
+                state.xpEntries[i].rating = 1;
+            }
+        }
+        RecalculateXpPercentages(state.xpEntries);
     }
 }

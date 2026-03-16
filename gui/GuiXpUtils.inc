@@ -14,6 +14,8 @@ void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog) {
     state.xpEntries.assign(skills.size(), {});
     state.taskScore = 10;
     state.taskCategoryIndex = 0;
+    state.xpSourceTaskId.clear();
+    state.xpTaskPenaltyPercent = 0;
     const int count = static_cast<int>(skills.size());
     if (count <= 0) return;
     for (int i = 0; i < count; ++i) {

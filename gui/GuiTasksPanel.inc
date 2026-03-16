@@ -59,6 +59,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     };
 
     auto UpdateTaskStatus = [&](const std::string& taskId, int newStatus) -> bool {
+        auto existingTask = std::find_if(state.tasks.begin(), state.tasks.end(),
+                                         [&](const TaskEntry& item) { return item.id == taskId; });
+        if (existingTask == state.tasks.end()) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        if (AppNormalizeTaskStatus(newStatus) == kTaskStatusDone && !TaskHasRecordedXp(*existingTask)) {
+            PrepareXpEntriesFromTask(state, *existingTask, catalog);
+            state.xpPopupRequest = true;
+            SetStatus(state, u8"Перед закрытием распределите XP по задаче.", 0.45f, 0.9f, 0.45f);
+            return true;
+        }
         AppMutationResult mutation = AppUpdateTaskStatus(
             state.storageDir, state.tasks, taskId, newStatus, ResolveTaskActor(), &state.taskAudit);
         if (mutation.ok) {
@@ -247,6 +259,32 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
+    auto UpdateTaskCategory = [&](const std::string& taskId, int newCategory) -> bool {
+        AppMutationResult mutation = AppUpdateTaskCategory(
+            state.storageDir, state.tasks, taskId, newCategory, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Категория задачи обновлена.", 0.45f, 0.9f, 0.45f);
+            }
+            return true;
+        }
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto UpdateTaskPenalty = [&](const std::string& taskId, int newPenaltyPercent) -> bool {
+        AppMutationResult mutation = AppUpdateTaskPenaltyPercent(
+            state.storageDir, state.tasks, taskId, newPenaltyPercent, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Штраф дедлайна обновлён.", 0.45f, 0.9f, 0.45f);
+            }
+            return true;
+        }
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
     auto UpdateTaskAssignees = [&](const std::string& taskId, const std::vector<std::string>& assignees) -> bool {
         AppMutationResult mutation = AppUpdateTaskAssignees(
             state.storageDir, state.tasks, taskId, assignees, ResolveTaskActor(), &state.taskAudit);
@@ -259,6 +297,39 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         const bool warn = (mutation.errorMessage == u8"Для этой задачи исполнители зафиксированы по записи XP.");
         SetStatus(state, mutation.errorMessage, 1.0f, warn ? 0.75f : 0.45f, warn ? 0.35f : 0.45f);
         return false;
+    };
+
+    auto UpdateTaskSkills = [&](const std::string& taskId, const std::vector<std::string>& skillIds) -> bool {
+        AppMutationResult mutation = AppUpdateTaskSkillIds(
+            state.storageDir, state.tasks, taskId, skillIds, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Навыки задачи обновлены.", 0.45f, 0.9f, 0.45f);
+            }
+            return true;
+        }
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
+    auto StartTaskXpFlow = [&](const std::string& taskId, bool closingTask) -> bool {
+        auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
+                               [&](const TaskEntry& item) { return item.id == taskId; });
+        if (it == state.tasks.end()) {
+            SetStatus(state, u8"Задача не найдена.", 1.0f, 0.45f, 0.45f);
+            return false;
+        }
+        if (TaskHasRecordedXp(*it)) {
+            if (closingTask) {
+                return UpdateTaskStatus(taskId, kTaskStatusDone);
+            }
+            SetStatus(state, u8"Для этой задачи XP уже записан.", 1.0f, 0.75f, 0.35f);
+            return false;
+        }
+        PrepareXpEntriesFromTask(state, *it, catalog);
+        state.xpPopupRequest = true;
+        SetStatus(state, u8"Открыт контур выдачи XP по задаче.", 0.45f, 0.9f, 0.45f);
+        return true;
     };
 
     auto StartOfLocalDay = [](std::int64_t ts) -> std::int64_t {
@@ -292,6 +363,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (BeginCard("tasks_create_card")) {
             DrawCardHeader(u8"Создать задачу");
             EnsureTaskPlanAssigneesSize(state);
+            EnsureTaskSkillFlagsSize(state.taskPlanSkillFlags, catalog.skills().size());
             std::vector<std::string> projectLabels;
             projectLabels.reserve(state.projects.size() + 1);
             projectLabels.push_back(u8"Без проекта");
@@ -320,6 +392,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 static_cast<int>(pipelineLabelPtrs.size()) - 1);
             state.taskPlanStatus = NormalizeTaskStatus(state.taskPlanStatus);
             state.taskPlanPriority = NormalizeTaskPriority(state.taskPlanPriority);
+            state.taskPlanCategory = std::clamp(state.taskPlanCategory, 0, static_cast<int>(Profile::kCategoryCount - 1));
+            state.taskPlanPenaltyPercent = std::clamp(state.taskPlanPenaltyPercent, 0, 100);
 
             if (ImGui::BeginTable("tasks_create_form", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("create_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -333,10 +407,22 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo("##task_plan_project", &state.taskPlanProjectIndex,
                              projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
+                if (state.isAdmin) {
+                    const char* projectToggleLabel = state.taskPlanCreateProjectInline
+                        ? u8"Скрыть создание проекта"
+                        : u8"Создать проект для задачи";
+                    if (ImGui::SmallButton(projectToggleLabel)) {
+                        state.taskPlanCreateProjectInline = !state.taskPlanCreateProjectInline;
+                    }
+                }
                 ImGui::TextDisabled(u8"Этап пайплайна");
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo("##task_plan_pipeline", &state.taskPlanPipelineIndex,
                              pipelineLabelPtrs.data(), static_cast<int>(pipelineLabelPtrs.size()));
+                ImGui::TextDisabled(u8"Категория XP");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::Combo("##task_plan_category", &state.taskPlanCategory,
+                             Profile::kCategoryLabels.data(), Profile::kCategoryCount);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TextDisabled(u8"Дедлайн (YYYY-MM-DD HH:MM)");
                 ImGui::SetNextItemWidth(-1.0f);
@@ -350,7 +436,38 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo("##task_plan_priority", &state.taskPlanPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels));
+                ImGui::TextDisabled(u8"Штраф дедлайна");
+                ImGui::SliderInt("##task_plan_penalty", &state.taskPlanPenaltyPercent, 0, 100, "%d%%",
+                                 ImGuiSliderFlags_AlwaysClamp);
                 ImGui::EndTable();
+            }
+
+            if (state.taskPlanCreateProjectInline) {
+                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::Separator();
+                ImGui::TextDisabled(u8"Новый проект из задачи");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputText("##task_plan_project_name", state.taskPlanProjectName.data(), state.taskPlanProjectName.size());
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline("##task_plan_project_desc", state.taskPlanProjectDesc.data(),
+                                          state.taskPlanProjectDesc.size(), ImVec2(-1.0f, 64.0f));
+                if (ImGui::Button(u8"Сохранить и выбрать проект", ImVec2(-1.0f, 0.0f))) {
+                    AppProjectSaveResult saveResult = AppSaveProjectEntry(
+                        state.storageDir,
+                        state.projects,
+                        -1,
+                        TrimStringGui(state.taskPlanProjectName.data()),
+                        TrimStringGui(state.taskPlanProjectDesc.data()));
+                    if (saveResult.ok) {
+                        state.taskPlanProjectIndex = saveResult.projectIndex + 1;
+                        state.taskPlanCreateProjectInline = false;
+                        state.taskPlanProjectName.fill('\0');
+                        state.taskPlanProjectDesc.fill('\0');
+                        SetStatus(state, u8"Проект создан и выбран для задачи.", 0.45f, 0.9f, 0.45f);
+                    } else {
+                        SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
+                    }
+                }
             }
 
             ImGui::TextDisabled(u8"Краткое описание");
@@ -390,11 +507,33 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::EndTable();
             }
 
+            ImGui::TextDisabled(u8"Навыки задачи");
+            const std::string plannedSkillSummary = BuildTaskSkillSummary(
+                CollectSelectedTaskSkillIds(catalog, state.taskPlanSkillFlags), catalog, 4);
+            ImGui::TextWrapped("%s", plannedSkillSummary.c_str());
+            ImGui::InputTextWithHint("##task_plan_skill_filter", u8"Фильтр навыков",
+                                     state.taskPlanSkillFilter.data(), state.taskPlanSkillFilter.size());
+            if (ImGui::BeginChild("task_plan_skills", ImVec2(0.0f, 132.0f), true)) {
+                const auto& catalogSkills = catalog.skills();
+                for (size_t i = 0; i < catalogSkills.size(); ++i) {
+                    const std::string displayName = catalog.display_name(catalogSkills[i]);
+                    if (!MatchesFilter(displayName, state.taskPlanSkillFilter.data())) continue;
+                    bool checked = (i < state.taskPlanSkillFlags.size() && state.taskPlanSkillFlags[i] != 0);
+                    if (ImGui::Checkbox((displayName + "##task_plan_skill").c_str(), &checked)) {
+                        if (i < state.taskPlanSkillFlags.size()) {
+                            state.taskPlanSkillFlags[i] = checked ? 1 : 0;
+                        }
+                    }
+                }
+            }
+            ImGui::EndChild();
+
             if (ImGui::Button(u8"Создать задачу", ImVec2(-1.0f, 0.0f))) {
                 const std::string title = TrimStringGui(state.taskPlanTitle.data());
                 const std::string description = TrimStringGui(state.taskPlanDescription.data());
                 const std::string deadlineInput = TrimStringGui(state.taskPlanDeadline.data());
                 std::int64_t deadlineTs = 0;
+                const std::vector<std::string> taskSkillIds = CollectSelectedTaskSkillIds(catalog, state.taskPlanSkillFlags);
                 std::vector<std::string> assignees;
                 for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
                     if (i < static_cast<int>(state.taskPlanAssignees.size()) && state.taskPlanAssignees[i] && !state.profiles[i].archived) {
@@ -418,8 +557,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     task.deadlineAt = deadlineTs;
                     task.status = AppNormalizeTaskStatus(state.taskPlanStatus);
                     task.priority = AppNormalizeTaskPriority(state.taskPlanPriority);
+                    task.category = state.taskPlanCategory;
+                    task.deadlinePenaltyPercent = state.taskPlanPenaltyPercent;
                     task.createdAt = nowSec;
                     task.assignees = assignees;
+                    task.skillIds = taskSkillIds;
                     if (state.taskPlanProjectIndex > 0) {
                         const int projectIdx = state.taskPlanProjectIndex - 1;
                         if (projectIdx >= 0 && projectIdx < static_cast<int>(state.projects.size())) {
@@ -437,6 +579,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     AppMutationResult mutation = AppCreateTaskEntry(
                         state.storageDir, state.tasks, task, ResolveTaskActor(), &state.taskAudit);
                     if (mutation.ok) {
+                        const std::string createdTaskId = task.id;
+                        const bool launchXpAfterCreate = (NormalizeTaskStatus(task.status) == kTaskStatusDone);
                         SetStatus(state, u8"Задача создана.", 0.45f, 0.9f, 0.45f);
                         state.showTaskCreateForm = false;
                         state.taskPlanTitle.fill('\0');
@@ -446,8 +590,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         state.taskPlanPipelineIndex = 0;
                         state.taskPlanStatus = kTaskStatusNew;
                         state.taskPlanPriority = kTaskPriorityMedium;
+                        state.taskPlanCategory = 0;
+                        state.taskPlanPenaltyPercent = 0;
+                        state.taskPlanCreateProjectInline = false;
+                        state.taskPlanProjectName.fill('\0');
+                        state.taskPlanProjectDesc.fill('\0');
+                        state.taskPlanSkillFilter.fill('\0');
+                        std::fill(state.taskPlanSkillFlags.begin(), state.taskPlanSkillFlags.end(), 0);
                         for (auto& flag : state.taskPlanAssignees) flag = 0;
                         EnsureTaskPlanAssigneesSize(state);
+                        if (launchXpAfterCreate) {
+                            StartTaskXpFlow(createdTaskId, true);
+                        }
                     } else {
                         SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
                     }
@@ -1323,6 +1477,21 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
 
     auto ApplyBulkStatus = [&]() -> bool {
+        if (NormalizeTaskStatus(state.taskBulkStatus) == kTaskStatusDone) {
+            int pendingXpCount = 0;
+            for (const auto& task : state.tasks) {
+                if (state.taskSelectionIds.find(task.id) == state.taskSelectionIds.end()) continue;
+                if (!TaskHasRecordedXp(task)) {
+                    pendingXpCount += 1;
+                }
+            }
+            if (pendingXpCount > 0) {
+                SetStatus(state,
+                          u8"Массовое закрытие отключено: сначала закройте задачи через detail-pane и выдайте XP.",
+                          1.0f, 0.75f, 0.35f);
+                return false;
+            }
+        }
         AppMutationResult mutation = AppBulkUpdateTaskStatus(
             state.storageDir, state.tasks, state.taskSelectionIds, state.taskBulkStatus, ResolveTaskActor(), &state.taskAudit);
         if (!mutation.ok) {
@@ -2129,19 +2298,19 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const float detailHeadlineWidth = ImGui::GetContentRegionAvail().x;
             if (detailHeadlineWidth < 340.0f) {
                 ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
-                if (ImGui::Button(u8"Скрыть", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Свернуть детали", ImVec2(-1.0f, 0.0f))) {
                     state.tasksExpandedId.clear();
                 }
             } else if (ImGui::BeginTable("task_detail_headline", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("task_detail_note", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed, 118.0f);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::PushTextWrapPos(0.0f);
                 ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
                 ImGui::PopTextWrapPos();
                 ImGui::TableSetColumnIndex(1);
-                if (ImGui::Button(u8"Скрыть", ImVec2(-1.0f, 0.0f))) {
+                if (ImGui::Button(u8"Свернуть детали", ImVec2(-1.0f, 0.0f))) {
                     state.tasksExpandedId.clear();
                 }
                 ImGui::EndTable();
@@ -2207,6 +2376,22 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 } else {
                     ImGui::TextDisabled(u8"Не задан");
                 }
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Категория");
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(ClassificationLabel(expanded->category));
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Штраф XP");
+                ImGui::TableSetColumnIndex(1);
+                if (expanded->deadlinePenaltyPercent > 0) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"-%d%% за дедлайн", expanded->deadlinePenaltyPercent);
+                } else {
+                    ImGui::TextDisabled(u8"Не назначен");
+                }
                 ImGui::EndTable();
             }
             if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing) {
@@ -2222,6 +2407,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Spacing();
                 ImGui::TextDisabled(u8"Описание");
                 ImGui::TextWrapped("%s", expanded->description.c_str());
+            }
+            ImGui::Spacing();
+            ImGui::TextDisabled(u8"Навыки задачи");
+            ImGui::TextWrapped("%s", BuildTaskSkillSummary(expanded->skillIds, catalog, 6).c_str());
+            if (NormalizeTaskStatus(expanded->status) == kTaskStatusDone && !TaskHasRecordedXp(*expanded)) {
+                ImGui::Spacing();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Задача закрыта, но XP ещё не выдан.");
             }
 
             const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *expanded);
@@ -2295,7 +2487,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::TextDisabled(u8"Shortcut не пропускает этапы: сначала 'В работе', затем 'Выполнена'.");
                     } else if (currentEditableStatus == kTaskStatusInProgress) {
                         if (ImGui::Button(u8"Закрыть после handoff", ImVec2(-1.0f, 0.0f))) {
-                            UpdateTaskStatus(editableTask->id, kTaskStatusDone);
+                            StartTaskXpFlow(editableTask->id, true);
                         }
                         ImGui::TextDisabled(u8"Используйте это после завершения финального handoff.");
                     } else {
@@ -2318,6 +2510,61 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_detail_priority", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
                     UpdateTaskPriority(editableTask->id, draftPriority);
+                }
+
+                int draftCategory = std::clamp(editableTask->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##task_detail_category", &draftCategory,
+                                 Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
+                    UpdateTaskCategory(editableTask->id, draftCategory);
+                }
+
+                int draftPenalty = std::clamp(editableTask->deadlinePenaltyPercent, 0, 100);
+                if (ImGui::SliderInt(u8"Штраф дедлайна##task_detail_penalty", &draftPenalty, 0, 100, "%d%%",
+                                     ImGuiSliderFlags_AlwaysClamp)) {
+                    UpdateTaskPenalty(editableTask->id, draftPenalty);
+                }
+                if (draftPenalty > 0) {
+                    ImGui::TextDisabled(u8"Штраф уменьшит итоговый XP-пул задачи на %d%%.", draftPenalty);
+                }
+
+                ImGui::Spacing();
+                ImGui::TextDisabled(u8"Навыки задачи");
+                ImGui::TextWrapped("%s", BuildTaskSkillSummary(editableTask->skillIds, catalog, 6).c_str());
+                if (state.taskInlineSkillEditId != editableTask->id) {
+                    if (ImGui::Button(u8"Редактировать навыки", ImVec2(-1.0f, 0.0f))) {
+                        state.taskInlineSkillEditId = editableTask->id;
+                        state.taskInlineSkillFilter.fill('\0');
+                        ApplyTaskSkillIdsToFlags(catalog, editableTask->skillIds, state.taskInlineSkillFlags);
+                    }
+                } else {
+                    ImGui::InputTextWithHint("##task_detail_skill_filter", u8"Фильтр навыков",
+                                             state.taskInlineSkillFilter.data(), state.taskInlineSkillFilter.size());
+                    if (ImGui::BeginChild("task_detail_skills", ImVec2(0.0f, 150.0f), true)) {
+                        const auto& catalogSkills = catalog.skills();
+                        for (size_t i = 0; i < catalogSkills.size(); ++i) {
+                            const std::string displayName = catalog.display_name(catalogSkills[i]);
+                            if (!MatchesFilter(displayName, state.taskInlineSkillFilter.data())) continue;
+                            bool checked = (i < state.taskInlineSkillFlags.size() && state.taskInlineSkillFlags[i] != 0);
+                            if (ImGui::Checkbox((displayName + "##task_detail_skill").c_str(), &checked)) {
+                                if (i < state.taskInlineSkillFlags.size()) {
+                                    state.taskInlineSkillFlags[i] = checked ? 1 : 0;
+                                }
+                            }
+                        }
+                    }
+                    ImGui::EndChild();
+                    if (ImGui::Button(u8"Сохранить навыки", ImVec2(-1.0f, 0.0f))) {
+                        const std::vector<std::string> skillIds =
+                            CollectSelectedTaskSkillIds(catalog, state.taskInlineSkillFlags);
+                        if (UpdateTaskSkills(editableTask->id, skillIds)) {
+                            state.taskInlineSkillEditId.clear();
+                        }
+                    }
+                    if (ImGui::Button(u8"Отмена навыков", ImVec2(-1.0f, 0.0f))) {
+                        state.taskInlineSkillEditId.clear();
+                        state.taskInlineSkillFilter.fill('\0');
+                    }
                 }
 
                 const int editablePipelineIndex = ResolveTaskPipelineIndex(state, *editableTask);
@@ -2363,6 +2610,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (ImGui::Combo("##task_detail_pipeline", &draftPipelineIndex,
                                  pipelineLabelPtrs.data(), static_cast<int>(pipelineLabelPtrs.size()))) {
                     UpdateTaskPipeline(editableTask->id, draftPipelineIndex);
+                }
+
+                if (NormalizeTaskStatus(editableTask->status) != kTaskStatusDone || !TaskHasRecordedXp(*editableTask)) {
+                    if (ImGui::Button(u8"Закрыть и выдать XP", ImVec2(-1.0f, 0.0f))) {
+                        StartTaskXpFlow(editableTask->id, true);
+                    }
                 }
 
                 bool hasXp = false;

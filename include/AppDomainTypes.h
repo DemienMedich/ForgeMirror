@@ -23,11 +23,13 @@ struct TaskEntry {
     int status = 0;
     int priority = 1;
     int category = 0;
+    int deadlinePenaltyPercent = 0;
     int score = 0;
     int baseXp = 0;
     int basePool = 0;
     std::int64_t createdAt = 0;
     std::vector<std::string> assignees;
+    std::vector<std::string> skillIds;
     std::vector<TaskParticipant> participants;
 };
 
