@@ -32,8 +32,8 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.21.
-  - Последнее изменение: cloud drift для `tasks.json` и `pipeline.json` доведён до действий: в меню `Облако` по каждому sync-файлу появились переход в модуль, `Принять облачную` и `Оставить локальную/Выгрузить локальную`, а перед заменой версии создаются резервные копии в `meta/updates`.
+  - Ветка: beta. Версия: 0.4.22.
+  - Последнее изменение: в меню `Облако` добавлен restore-flow из `meta/updates` для `tasks.json` и `pipeline.json`: можно восстановить последний локальный или облачный backup обратно в локальный workspace, а текущая локальная версия перед этим тоже сохраняется как новый снимок.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -189,10 +189,11 @@ UI аудит:
   - Tasks/Projects UX: блок `Проекты в задачах` теперь показывает тот же handoff-срез по проектам, чтобы pending XP было видно прямо из task-manager без переключения в модуль проектов.
   - Cloud drift UX: `CloudSync` теперь умеет собирать drift-summary по `meta/tasks.json` и `meta/pipeline.json`; GUI выводит эти расхождения в cloud-menu, sync-tooltip и расширенный отчёт, различая `локально новее`, `в облаке новее` и `обе версии изменились`.
   - Cloud resolve UX: меню `Облако` теперь показывает file-level drift-блоки по задачам и пайплайну, даёт быстрый переход в соответствующий модуль и умеет безопасно применять локальную или облачную версию с бэкапом в `meta/updates`.
+  - Cloud restore UX: меню `Облако` показывает последние backup-копии `tasks.json` и `pipeline.json` из `meta/updates` и умеет восстановить выбранный локальный или облачный снимок обратно в локальный workspace без автоматической перезаписи облака.
 - Now:
-  - Tasks UX, project handoff-срез и sync-контур теперь покрывают основной flow, диагностику критичных файлов, явную индикацию drift/conflict и быстрый resolve локальной/облачной версии для задач и пайплайна.
+  - Tasks UX, project handoff-срез и sync-контур теперь покрывают основной flow, диагностику критичных файлов, явную индикацию drift/conflict, resolve локальной/облачной версии и локальный restore из backup-копий для задач и пайплайна.
 - Next:
-  - Следующим прогоном логично усилить этот resolve-flow: показать более явную подсказку о том, какая версия будет принята, и при необходимости дать быстрый restore из последних backup-копий в `meta/updates`.
+  - Следующим прогоном логично усилить restore-flow: добавить более явный preview по содержимому/времени снимка и при необходимости быстрый restore не только последнего, но и одного из нескольких последних backup'ов прямо из GUI.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
@@ -202,7 +203,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\src\\AppWorkspaceDataService.cpp`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.21.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.22.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`

@@ -74,6 +74,13 @@ struct CloudWorkspaceResolveResult {
     std::vector<std::filesystem::path> backupPaths;
 };
 
+struct CloudWorkspaceBackupEntry {
+    std::string relativePath;
+    std::string sourceKind;
+    std::int64_t createdAt = 0;
+    std::filesystem::path path;
+};
+
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir);
 bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config);
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
@@ -87,6 +94,11 @@ CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConf
                                                              const std::filesystem::path& storageDir,
                                                              const std::string& relativePath,
                                                              bool preferCloud);
+std::vector<CloudWorkspaceBackupEntry> ListCloudWorkspaceBackups(const std::filesystem::path& storageDir,
+                                                                 const std::string& relativePath = std::string());
+CloudWorkspaceResolveResult RestoreCloudWorkspaceBackup(const std::filesystem::path& storageDir,
+                                                        const std::string& relativePath,
+                                                        const std::filesystem::path& backupPath);
 CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::filesystem::path& storageDir,
                                      const CloudManifest& manifest, std::filesystem::path& outPath);
 CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);

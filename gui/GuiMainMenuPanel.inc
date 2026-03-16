@@ -69,11 +69,16 @@ static void OpenCloudDriftTarget(GuiState& state, const std::string& relativePat
     }
 }
 
-static void FinalizeCloudWorkspaceResolve(GuiState& state, AppContext& app, bool reloadWorkspaceData) {
-    const std::int64_t now = NowSeconds();
-    state.lastCloudSyncAt = now;
-    state.lastCloudSyncOk = true;
-    state.lastCloudSyncOkAt = now;
+static void RefreshCloudWorkspaceUiState(GuiState& state,
+                                         AppContext& app,
+                                         bool reloadWorkspaceData,
+                                         bool markSyncSuccess) {
+    if (markSyncSuccess) {
+        const std::int64_t now = NowSeconds();
+        state.lastCloudSyncAt = now;
+        state.lastCloudSyncOk = true;
+        state.lastCloudSyncOkAt = now;
+    }
     if (reloadWorkspaceData) {
         ReloadSyncedWorkspaceData(state, app, false);
     } else {
@@ -660,6 +665,8 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 std::string openDriftPath;
                 std::string resolveDriftPath;
                 int resolveDriftMode = 0;
+                std::string restoreBackupRelativePath;
+                std::filesystem::path restoreBackupPath;
                 if (state.cloudWorkspaceDrift.issueCount > 0) {
                     ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
                     if (state.cloudWorkspaceDrift.conflictCount > 0) {
@@ -721,7 +728,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                         const CloudWorkspaceResolveResult resolveResult =
                             ResolveCloudWorkspaceFileVersion(state.cloudConfig, state.storageDir, resolveDriftPath, preferCloud);
                         if (resolveResult.ok) {
-                            FinalizeCloudWorkspaceResolve(state, app, preferCloud);
+                            RefreshCloudWorkspaceUiState(state, app, preferCloud, true);
                             SetStatus(state, resolveResult.message, 0.45f, 0.9f, 0.45f);
                         } else {
                             SetStatus(state, resolveResult.message, 1.0f, 0.75f, 0.35f);
@@ -730,6 +737,72 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                     ImGui::Separator();
                 } else {
                     ImGui::TextDisabled(u8"Локально/облако: ok");
+                    ImGui::Separator();
+                }
+                bool hasWorkspaceBackups = false;
+                for (const std::string& backupRelativePath : {std::string("meta/tasks.json"), std::string("meta/pipeline.json")}) {
+                    const std::vector<CloudWorkspaceBackupEntry> backups = ListCloudWorkspaceBackups(state.storageDir, backupRelativePath);
+                    CloudWorkspaceBackupEntry latestLocal;
+                    CloudWorkspaceBackupEntry latestCloud;
+                    CloudWorkspaceBackupEntry latestRestore;
+                    bool hasLocalBackup = false;
+                    bool hasCloudBackup = false;
+                    bool hasRestoreBackup = false;
+                    for (const auto& backup : backups) {
+                        if (!hasLocalBackup && backup.sourceKind == "local") {
+                            latestLocal = backup;
+                            hasLocalBackup = true;
+                        } else if (!hasCloudBackup && backup.sourceKind == "cloud") {
+                            latestCloud = backup;
+                            hasCloudBackup = true;
+                        } else if (!hasRestoreBackup && backup.sourceKind == "restore") {
+                            latestRestore = backup;
+                            hasRestoreBackup = true;
+                        }
+                        if (hasLocalBackup && hasCloudBackup && hasRestoreBackup) break;
+                    }
+                    if (!hasLocalBackup && !hasCloudBackup && !hasRestoreBackup) continue;
+                    hasWorkspaceBackups = true;
+                    const char* targetLabel = CloudDriftTargetLabel(backupRelativePath);
+                    ImGui::PushID(backupRelativePath.c_str());
+                    ImGui::Text("%s", targetLabel != nullptr ? targetLabel : backupRelativePath.c_str());
+                    ImGui::SameLine();
+                    ImGui::TextDisabled(u8"[backup]");
+                    if (hasLocalBackup) {
+                        ImGui::TextDisabled(u8"Локальный: %s", FormatTimestamp(latestLocal.createdAt, "%Y-%m-%d %H:%M").c_str());
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(u8"Восстановить локальный")) {
+                            restoreBackupRelativePath = backupRelativePath;
+                            restoreBackupPath = latestLocal.path;
+                        }
+                    }
+                    if (hasCloudBackup) {
+                        ImGui::TextDisabled(u8"Облачный: %s", FormatTimestamp(latestCloud.createdAt, "%Y-%m-%d %H:%M").c_str());
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(u8"Восстановить облачный")) {
+                            restoreBackupRelativePath = backupRelativePath;
+                            restoreBackupPath = latestCloud.path;
+                        }
+                    }
+                    if (hasRestoreBackup) {
+                        ImGui::TextDisabled(u8"Снимок перед восстановлением: %s", FormatTimestamp(latestRestore.createdAt, "%Y-%m-%d %H:%M").c_str());
+                    }
+                    ImGui::PopID();
+                    ImGui::Separator();
+                }
+                if (hasWorkspaceBackups) {
+                    ImGui::TextDisabled(u8"Восстановление меняет только локальный workspace; облако можно синхронизировать после проверки.");
+                    if (!restoreBackupRelativePath.empty() && !restoreBackupPath.empty()) {
+                        const CloudWorkspaceResolveResult restoreResult =
+                            RestoreCloudWorkspaceBackup(state.storageDir, restoreBackupRelativePath, restoreBackupPath);
+                        if (restoreResult.ok) {
+                            RefreshCloudWorkspaceUiState(state, app, true, false);
+                            OpenCloudDriftTarget(state, restoreBackupRelativePath);
+                            SetStatus(state, restoreResult.message, 0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state, restoreResult.message, 1.0f, 0.75f, 0.35f);
+                        }
+                    }
                     ImGui::Separator();
                 }
                 if (state.syncHealth.issueCount > 0) {

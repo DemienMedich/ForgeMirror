@@ -280,6 +280,59 @@ std::string SanitizeRelativePathForFilename(const std::string& relativePath) {
     return value;
 }
 
+std::array<std::string, 2> CloudTrackedWorkspaceFiles() {
+    return {
+        "meta/tasks.json",
+        "meta/pipeline.json"
+    };
+}
+
+std::string LowerAsciiCopy(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+bool IsPathInsideDirectory(const std::filesystem::path& path, const std::filesystem::path& dir) {
+    const auto canonicalPath = CanonicalSafe(path);
+    const auto canonicalDir = CanonicalSafe(dir);
+    if (canonicalPath.empty() || canonicalDir.empty()) return false;
+    std::string pathStr = canonicalPath.generic_string();
+    std::string dirStr = canonicalDir.generic_string();
+    if (!dirStr.empty() && dirStr.back() != '/') dirStr.push_back('/');
+    return pathStr == canonicalDir.generic_string() || pathStr.rfind(dirStr, 0) == 0;
+}
+
+bool ParseCloudWorkspaceBackupFilename(const std::string& fileName,
+                                       CloudWorkspaceBackupEntry& outEntry) {
+    for (const auto& relativePath : CloudTrackedWorkspaceFiles()) {
+        const std::filesystem::path relPath = std::filesystem::u8path(relativePath);
+        const std::string extension = relPath.extension().string();
+        const std::string stem = SanitizeRelativePathForFilename(relativePath);
+        for (const char* kind : {"local", "cloud", "restore"}) {
+            const std::string prefix = stem + "." + kind + ".";
+            if (fileName.rfind(prefix, 0) != 0) continue;
+            if (!extension.empty()) {
+                const std::string lowerName = LowerAsciiCopy(fileName);
+                const std::string lowerExt = LowerAsciiCopy(extension);
+                if (lowerName.size() <= prefix.size() + lowerExt.size()) continue;
+                if (lowerName.compare(lowerName.size() - lowerExt.size(), lowerExt.size(), lowerExt) != 0) continue;
+                const std::string stampText = fileName.substr(prefix.size(),
+                                                              fileName.size() - prefix.size() - extension.size());
+                if (stampText.empty()) continue;
+                if (!std::all_of(stampText.begin(), stampText.end(), [](unsigned char c) { return std::isdigit(c) != 0; })) {
+                    continue;
+                }
+                outEntry.relativePath = relativePath;
+                outEntry.sourceKind = kind;
+                outEntry.createdAt = ParseInt64(stampText, 0);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool SaveCloudWorkspaceBackup(const std::filesystem::path& source,
                               const std::filesystem::path& backupDir,
                               const std::string& relativePath,
@@ -1108,10 +1161,7 @@ CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& con
         return summary;
     }
 
-    const std::array<std::string, 2> trackedFiles = {
-        "meta/tasks.json",
-        "meta/pipeline.json"
-    };
+    const auto trackedFiles = CloudTrackedWorkspaceFiles();
     for (const auto& relativePath : trackedFiles) {
         CloudWorkspaceFileDrift file = BuildCloudWorkspaceFileDrift(storageDir, cloudRoot, relativePath, lastSuccessfulSyncAt);
         if (file.hasIssue) {
@@ -1197,6 +1247,94 @@ CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConf
                                  : std::string(u8"Локальная версия ") + relativePath + u8" выгружена в облако.";
     if (!result.backupPaths.empty()) {
         result.message += u8" Резервные копии сохранены в meta/updates.";
+    }
+    return result;
+}
+
+std::vector<CloudWorkspaceBackupEntry> ListCloudWorkspaceBackups(const std::filesystem::path& storageDir,
+                                                                 const std::string& relativePath) {
+    std::vector<CloudWorkspaceBackupEntry> backups;
+    const auto backupDir = storageDir / "meta" / "updates";
+    std::error_code ec;
+    if (!std::filesystem::exists(backupDir, ec)) return backups;
+
+    const auto trackedFiles = CloudTrackedWorkspaceFiles();
+    const bool filterByPath = !relativePath.empty();
+    if (filterByPath &&
+        std::find(trackedFiles.begin(), trackedFiles.end(), relativePath) == trackedFiles.end()) {
+        return backups;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(backupDir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+        CloudWorkspaceBackupEntry backup;
+        if (!ParseCloudWorkspaceBackupFilename(entry.path().filename().string(), backup)) continue;
+        if (filterByPath && backup.relativePath != relativePath) continue;
+        backup.path = entry.path();
+        backups.push_back(std::move(backup));
+    }
+
+    std::sort(backups.begin(), backups.end(), [](const CloudWorkspaceBackupEntry& lhs, const CloudWorkspaceBackupEntry& rhs) {
+        if (lhs.relativePath != rhs.relativePath) return lhs.relativePath < rhs.relativePath;
+        if (lhs.createdAt != rhs.createdAt) return lhs.createdAt > rhs.createdAt;
+        return lhs.sourceKind < rhs.sourceKind;
+    });
+    return backups;
+}
+
+CloudWorkspaceResolveResult RestoreCloudWorkspaceBackup(const std::filesystem::path& storageDir,
+                                                        const std::string& relativePath,
+                                                        const std::filesystem::path& backupPath) {
+    CloudWorkspaceResolveResult result;
+    const std::filesystem::path relative = std::filesystem::u8path(relativePath).lexically_normal();
+    if (!IsSafeWorkspaceRelativePath(relative)) {
+        result.message = u8"Некорректный путь sync-файла.";
+        return result;
+    }
+
+    const auto backupDir = storageDir / "meta" / "updates";
+    std::error_code ec;
+    if (!std::filesystem::exists(backupPath, ec)) {
+        result.message = u8"Backup-файл не найден.";
+        return result;
+    }
+    if (!IsPathInsideDirectory(backupPath, backupDir)) {
+        result.message = u8"Backup-файл должен находиться в meta/updates.";
+        return result;
+    }
+
+    CloudWorkspaceBackupEntry backupEntry;
+    if (!ParseCloudWorkspaceBackupFilename(backupPath.filename().string(), backupEntry) ||
+        backupEntry.relativePath != relativePath) {
+        result.message = u8"Backup не соответствует выбранному sync-файлу.";
+        return result;
+    }
+
+    const auto target = storageDir / relative;
+    std::filesystem::create_directories(target.parent_path(), ec);
+    if (ec) {
+        result.message = u8"Не удалось подготовить путь восстановления.";
+        return result;
+    }
+
+    const std::int64_t ts = NowSeconds();
+    std::filesystem::path currentBackupPath;
+    if (SaveCloudWorkspaceBackup(target, backupDir, relativePath, "restore", ts, currentBackupPath)) {
+        result.backupPaths.push_back(currentBackupPath);
+    }
+
+    std::filesystem::copy_file(backupPath, target, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+        result.message = u8"Не удалось восстановить локальный sync-файл из backup.";
+        return result;
+    }
+
+    result.ok = true;
+    result.changed = true;
+    result.message = std::string(u8"Локальная версия ") + relativePath + u8" восстановлена из backup.";
+    if (!result.backupPaths.empty()) {
+        result.message += u8" Предыдущее состояние сохранено в meta/updates.";
     }
     return result;
 }
