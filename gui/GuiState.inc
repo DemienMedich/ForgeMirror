@@ -40,6 +40,7 @@ struct GuiRuntimeState {
     std::int64_t lastCloudSyncAt = 0;
     std::int64_t lastCloudSyncOkAt = 0;
     bool lastCloudSyncOk = false;
+    CloudWorkspaceDriftSummary cloudWorkspaceDrift;
     std::int64_t lastStorageScanAt = 0;
     std::int64_t lastStorageDataAt = 0;
     UiSettings ui;

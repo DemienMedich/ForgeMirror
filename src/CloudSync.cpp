@@ -2,6 +2,7 @@
 #include "AppUtils.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -236,6 +237,29 @@ std::string ReadStorageContentHash(const std::filesystem::path& path) {
     return ToHex64(Fnv1a64Hash(content));
 }
 
+std::string ReadTextFileNormalized(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {};
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    std::string data = ss.str();
+    StripUtf8Bom(data);
+    return data;
+}
+
+std::int64_t ToUnixSeconds(const std::filesystem::file_time_type& time) {
+    using namespace std::chrono;
+    const auto sys = time_point_cast<seconds>(time - std::filesystem::file_time_type::clock::now()
+                                              + system_clock::now());
+    return sys.time_since_epoch().count();
+}
+
+std::string ComputeNormalizedFileHash(const std::filesystem::path& path) {
+    const std::string content = ReadTextFileNormalized(path);
+    if (content.empty() && !std::filesystem::exists(path)) return {};
+    return ToHex64(Fnv1a64Hash(content));
+}
+
 std::int64_t NowSeconds() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
@@ -265,6 +289,64 @@ std::filesystem::path ResolveCloudRoot(const CloudSyncConfig& config, const std:
         return storageDir / config.root;
     }
     return storageDir / "cloud";
+}
+
+CloudWorkspaceFileDrift BuildCloudWorkspaceFileDrift(const std::filesystem::path& storageDir,
+                                                     const std::filesystem::path& cloudRoot,
+                                                     const std::string& relativePath,
+                                                     std::int64_t lastSuccessfulSyncAt) {
+    CloudWorkspaceFileDrift file;
+    file.relativePath = relativePath;
+    const auto localPath = storageDir / std::filesystem::u8path(relativePath);
+    const auto cloudPath = cloudRoot / std::filesystem::u8path(relativePath);
+    std::error_code ec;
+    file.localExists = std::filesystem::exists(localPath, ec);
+    ec.clear();
+    file.cloudExists = std::filesystem::exists(cloudPath, ec);
+    if (!file.localExists && !file.cloudExists) {
+        return file;
+    }
+
+    const std::string localHash = file.localExists ? ComputeNormalizedFileHash(localPath) : std::string();
+    const std::string cloudHash = file.cloudExists ? ComputeNormalizedFileHash(cloudPath) : std::string();
+    const bool differs = file.localExists != file.cloudExists || localHash != cloudHash;
+
+    if (file.localExists && lastSuccessfulSyncAt > 0) {
+        ec.clear();
+        const auto stamp = ToUnixSeconds(std::filesystem::last_write_time(localPath, ec));
+        if (!ec) {
+            file.localChanged = stamp > lastSuccessfulSyncAt;
+        }
+    }
+    if (file.cloudExists && lastSuccessfulSyncAt > 0) {
+        ec.clear();
+        const auto stamp = ToUnixSeconds(std::filesystem::last_write_time(cloudPath, ec));
+        if (!ec) {
+            file.cloudChanged = stamp > lastSuccessfulSyncAt;
+        }
+    }
+
+    if (!differs) {
+        file.message = u8"версии совпадают.";
+        return file;
+    }
+    if (file.localChanged && file.cloudChanged) {
+        file.conflict = true;
+        file.message = u8"локальная и облачная версии обе изменились.";
+    } else if (file.localChanged) {
+        file.message = u8"есть локальные изменения, не выгруженные в облако.";
+    } else if (file.cloudChanged) {
+        file.message = u8"в облаке есть более новая версия.";
+    } else if (!file.localExists && file.cloudExists) {
+        file.message = u8"файл есть только в облаке.";
+    } else if (file.localExists && !file.cloudExists) {
+        file.message = u8"файл есть только локально.";
+    } else {
+        file.message = lastSuccessfulSyncAt > 0
+            ? std::string(u8"локальная и облачная версии расходятся после последней синхронизации.")
+            : std::string(u8"локальная и облачная версии расходятся.");
+    }
+    return file;
 }
 
 std::filesystem::path ResolveCloudManifestPath(const CloudSyncConfig& config,
@@ -955,6 +1037,40 @@ int CompareVersions(const std::string& a, const std::string& b) {
 }
 
 } // namespace
+
+std::filesystem::path ResolveCloudRootPath(const CloudSyncConfig& config, const std::filesystem::path& storageDir) {
+    return ResolveCloudRoot(config, storageDir);
+}
+
+CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& config,
+                                                      const std::filesystem::path& storageDir,
+                                                      std::int64_t lastSuccessfulSyncAt) {
+    CloudWorkspaceDriftSummary summary;
+    if (!config.enabled) return summary;
+    const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    std::error_code ec;
+    if (!std::filesystem::exists(cloudRoot, ec)) {
+        return summary;
+    }
+
+    const std::array<std::string, 2> trackedFiles = {
+        "meta/tasks.json",
+        "meta/pipeline.json"
+    };
+    for (const auto& relativePath : trackedFiles) {
+        CloudWorkspaceFileDrift file = BuildCloudWorkspaceFileDrift(storageDir, cloudRoot, relativePath, lastSuccessfulSyncAt);
+        const bool hasIssue = file.conflict || (!file.message.empty() && file.message != u8"версии совпадают.");
+        if (hasIssue) {
+            summary.issueCount += 1;
+            if (file.conflict) {
+                summary.conflictCount += 1;
+            }
+            summary.issues.push_back(file.relativePath + ": " + file.message);
+        }
+        summary.files.push_back(std::move(file));
+    }
+    return summary;
+}
 
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
     CloudSyncConfig config;

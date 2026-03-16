@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 enum class CloudRole {
     Viewer,
@@ -48,11 +49,32 @@ struct CloudManifest {
     std::string notes;
 };
 
+struct CloudWorkspaceFileDrift {
+    std::string relativePath;
+    bool localExists = false;
+    bool cloudExists = false;
+    bool localChanged = false;
+    bool cloudChanged = false;
+    bool conflict = false;
+    std::string message;
+};
+
+struct CloudWorkspaceDriftSummary {
+    int issueCount = 0;
+    int conflictCount = 0;
+    std::vector<CloudWorkspaceFileDrift> files;
+    std::vector<std::string> issues;
+};
+
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir);
 bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config);
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
 bool SaveCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir, const CloudManifest& manifest);
 bool IsUpdateAvailable(const CloudManifest& manifest, const std::string& currentVersion);
+std::filesystem::path ResolveCloudRootPath(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
+CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& config,
+                                                      const std::filesystem::path& storageDir,
+                                                      std::int64_t lastSuccessfulSyncAt);
 CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::filesystem::path& storageDir,
                                      const CloudManifest& manifest, std::filesystem::path& outPath);
 CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);

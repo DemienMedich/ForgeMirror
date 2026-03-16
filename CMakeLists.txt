@@ -34,7 +34,7 @@ add_executable(ForgeMirror
 target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.4.19")
+set(APP_VERSION "0.4.20")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 

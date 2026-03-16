@@ -121,6 +121,7 @@ static void RunCloudPull(GuiState& state, AppContext& app) {
     if (result.ok) {
         state.lastCloudSyncOkAt = state.lastCloudSyncAt;
     }
+    state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, state.storageDir, state.lastCloudSyncOkAt);
 }
 
 
@@ -134,6 +135,7 @@ static void RunCloudPush(GuiState& state, const AppContext& app) {
     if (result.ok) {
         state.lastCloudSyncOkAt = state.lastCloudSyncAt;
     }
+    state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, state.storageDir, state.lastCloudSyncOkAt);
 }
 
 
@@ -214,6 +216,7 @@ static void RunCloudQuickSync(GuiState& state, AppContext& app, bool showStatus)
             state.lastCloudSyncOkAt = state.lastCloudSyncAt;
         }
     }
+    state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, state.storageDir, state.lastCloudSyncOkAt);
 }
 
 
@@ -303,6 +306,7 @@ static std::int64_t GetStorageStamp(GuiState& state) {
         state.lastStorageScanAt = now;
         state.lastStorageDataAt = ComputeStorageStamp(state.storageDir);
         state.syncHealth = InspectWorkspaceSyncHealth(state.storageDir, state.modules);
+        state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, state.storageDir, state.lastCloudSyncOkAt);
     }
     return state.lastStorageDataAt;
 }
@@ -429,12 +433,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
-    std::filesystem::path resolvedCloudRoot = state.cloudConfig.root;
-    if (resolvedCloudRoot.empty()) {
-        resolvedCloudRoot = state.storageDir / "cloud";
-    } else if (!resolvedCloudRoot.is_absolute()) {
-        resolvedCloudRoot = state.storageDir / resolvedCloudRoot;
-    }
+    std::filesystem::path resolvedCloudRoot = ResolveCloudRootPath(state.cloudConfig, state.storageDir);
     const std::string cloudRootLabel = resolvedCloudRoot.u8string();
     RefreshUpdateNotice(state, resolvedCloudRoot);
 
@@ -612,9 +611,28 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
         }
 
         if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
+            const std::int64_t menuStorageStamp = GetStorageStamp(state);
             ImGui::TextDisabled(u8"Папка: %s", cloudRootLabel.c_str());
             ImGui::Separator();
             if (state.isAdmin) {
+                if (state.cloudWorkspaceDrift.issueCount > 0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
+                    if (state.cloudWorkspaceDrift.conflictCount > 0) {
+                        ImGui::Text(u8"Локально/облако: %d конфликтов, %d расхождений",
+                                    state.cloudWorkspaceDrift.conflictCount,
+                                    state.cloudWorkspaceDrift.issueCount);
+                    } else {
+                        ImGui::Text(u8"Локально/облако: %d расхождений", state.cloudWorkspaceDrift.issueCount);
+                    }
+                    ImGui::PopStyleColor();
+                    for (const auto& issue : state.cloudWorkspaceDrift.issues) {
+                        ImGui::BulletText("%s", issue.c_str());
+                    }
+                    ImGui::Separator();
+                } else {
+                    ImGui::TextDisabled(u8"Локально/облако: ok");
+                    ImGui::Separator();
+                }
                 if (state.syncHealth.issueCount > 0) {
                     ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
                     ImGui::Text(u8"Sync-файлы: %d проблем", state.syncHealth.issueCount);
@@ -644,7 +662,6 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
 #ifdef APP_VERSION
                 ImGui::TextDisabled(u8"Версия приложения: %s", APP_VERSION);
 #endif
-                const std::int64_t dataStamp = GetStorageStamp(state);
                 const std::filesystem::path legacyDir = ProjectSeedDataDir();
                 const bool legacyHasData = HasProjectSeedData();
                 ImGui::TextDisabled(u8"Проектный data/: %s", legacyHasData ? u8"обнаружен" : u8"нет");
@@ -656,7 +673,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                     }
                 }
                 ImGui::TextDisabled(u8"Штамп данных: %s",
-                    dataStamp > 0 ? FormatTimestamp(dataStamp, "%Y-%m-%d %H:%M").c_str() : u8"(нет данных)");
+                    menuStorageStamp > 0 ? FormatTimestamp(menuStorageStamp, "%Y-%m-%d %H:%M").c_str() : u8"(нет данных)");
                 ImGui::Separator();
             }
             if (ImGui::MenuItem(u8"Обновить из облака")) {
@@ -677,6 +694,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             if (ImGui::MenuItem(u8"Расширенный отчет")) {
                 std::vector<std::string> strayList;
                 const WorkspaceSyncHealth syncHealth = InspectWorkspaceSyncHealth(state.storageDir, state.modules);
+                const CloudWorkspaceDriftSummary cloudDrift = InspectCloudWorkspaceDrift(state.cloudConfig, state.storageDir, state.lastCloudSyncOkAt);
                 if (CollectStrayStorageFiles(state.storageDir, strayList)) {
                     std::error_code ec;
                     auto reportDir = state.storageDir / "meta" / "reports";
@@ -697,6 +715,15 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                             out << "Отчет хранилища\n";
                             out << "Папка: " << state.storageDir.u8string() << "\n";
                             out << "Дата: " << FormatTimestamp(NowSeconds(), "%Y-%m-%d %H:%M") << "\n";
+                            out << "Расхождения локально/облако: " << cloudDrift.issueCount << "\n";
+                            if (cloudDrift.issues.empty()) {
+                                out << "Локально/облако: ok\n";
+                            } else {
+                                for (const auto& issue : cloudDrift.issues) {
+                                    out << issue << "\n";
+                                }
+                            }
+                            out << "\n";
                             out << "Проблемы sync-файлов: " << syncHealth.issueCount << "\n";
                             if (syncHealth.issues.empty()) {
                                 out << "Sync-файлы: ok\n";
@@ -844,19 +871,40 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             const bool hasOk = state.lastCloudSyncOk && state.lastCloudSyncOkAt > 0;
             const bool synced = hasOk && storageStamp <= state.lastCloudSyncOkAt;
             const bool hasSyncHealthIssues = state.syncHealth.issueCount > 0;
+            const bool hasCloudDriftIssues = state.cloudWorkspaceDrift.issueCount > 0;
             if (!hasOk) {
                 dotColor = warnColor;
                 tooltip = u8"Синхронизация ещё не выполнялась.";
-            } else if (synced && !hasSyncHealthIssues) {
+            } else if (synced && !hasSyncHealthIssues && !hasCloudDriftIssues) {
                 dotColor = okColor;
                 tooltip = u8"Синхронизировано.";
             } else {
                 dotColor = warnColor;
-                tooltip = hasSyncHealthIssues ? u8"Sync-файлы требуют внимания." : u8"Есть несинхронизированные данные.";
+                if (hasCloudDriftIssues) {
+                    tooltip = u8"Локальное и облачное состояние задач/пайплайна расходится.";
+                } else {
+                    tooltip = hasSyncHealthIssues ? u8"Sync-файлы требуют внимания." : u8"Есть несинхронизированные данные.";
+                }
             }
             if (state.lastCloudSyncOkAt > 0) {
                 tooltip += u8"\nПоследняя синхронизация: ";
                 tooltip += FormatTimestamp(state.lastCloudSyncOkAt, "%Y-%m-%d %H:%M");
+            }
+            if (hasCloudDriftIssues) {
+                tooltip += u8"\nЛокально/облако: ";
+                tooltip += std::to_string(state.cloudWorkspaceDrift.issueCount);
+                if (state.cloudWorkspaceDrift.conflictCount > 0) {
+                    tooltip += u8", конфликтов: ";
+                    tooltip += std::to_string(state.cloudWorkspaceDrift.conflictCount);
+                }
+                const size_t shown = std::min<size_t>(3, state.cloudWorkspaceDrift.issues.size());
+                for (size_t i = 0; i < shown; ++i) {
+                    tooltip += "\n- ";
+                    tooltip += state.cloudWorkspaceDrift.issues[i];
+                }
+                if (state.cloudWorkspaceDrift.issues.size() > shown) {
+                    tooltip += u8"\n- ...";
+                }
             }
             if (hasSyncHealthIssues) {
                 tooltip += u8"\nПроблемы sync-файлов: ";
