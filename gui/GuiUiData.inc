@@ -84,6 +84,7 @@ struct UiSettings {
     bool logCompactView = false;
     std::string projectsFilter;
     bool projectsOverdueOnly = false;
+    bool projectsXpPendingOnly = false;
     int projectsSortMode = 0;
     std::string adminStatsFilter;
     bool adminStatsIncludeArchived = true;

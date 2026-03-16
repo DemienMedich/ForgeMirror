@@ -32,8 +32,8 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.18.
-  - Последнее изменение: добавлен единый health-check sync-файлов `tasks.json` / `pipeline.json` / `task-audit.log`, который ловит пустые/битые файлы и проблемы с audit-логом, виден в облачном меню и верхнем sync-индикаторе, а `smoke_core` теперь проверяет и корректный, и повреждённый сценарий этих файлов.
+  - Ветка: beta. Версия: 0.4.19.
+  - Последнее изменение: в `Проектах` и проектном мосте `Задач` появился явный status-slice по `XP handoff`: отдельная summary-сводка, persistent-фильтр `Только ждут XP`, сортировка по handoff и более читаемое состояние проектов, где выдача XP ещё не завершена.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -185,10 +185,12 @@ UI аудит:
   - Tasks/Profile/Projects UX: закрытые задачи без выданного XP теперь подсвечиваются warning-badge'ем в таблице задач, проектных сводках и профильных блоках, включая секцию `Выполненные задачи`.
   - Sync health: `InspectWorkspaceSyncHealth` проверяет sync-файлы задач и пайплайна на пустоту и повреждение, а `task-audit.log` на отсутствие/битые строки при наличии задач; верхний индикатор sync теперь реагирует и на `task-audit.log`, а cloud report включает список проблем sync-файлов.
   - smoke_core: тесты расширены сценариями для валидного и повреждённого набора `tasks.json` / `pipeline.json` / `task-audit.log`, плюс whitelist отдельно подтверждает, что `task-audit.log` не удаляется cleanup'ом.
+  - Projects UX: модуль `Проекты` получил project-level status-slice по handoff (`Активный поток`, `XP handoff`, `Просрочка`), отдельный фильтр `Только ждут XP`, сортировку `По XP handoff` и более явное строковое состояние `Handoff ждёт`.
+  - Tasks/Projects UX: блок `Проекты в задачах` теперь показывает тот же handoff-срез по проектам, чтобы pending XP было видно прямо из task-manager без переключения в модуль проектов.
 - Now:
-  - Tasks UX и sync-контур теперь закрывают не только основной flow, но и явную диагностику битых/пустых файлов задач и пайплайна.
+  - Tasks UX, project handoff-срез и sync-контур уже покрывают основной flow от постановки до выдачи XP и диагностику критичных файлов.
 - Next:
-  - Следующим прогоном логично добить project-level статус-срез по `XP не выдан` и поверх него добавить более явную индикацию конфликтов между локальным и облачным состоянием задач/пайплайна.
+  - Следующим прогоном логично добавить более явную индикацию конфликтов между локальным и облачным состоянием задач/пайплайна и при необходимости быстрый переход к таким конфликтным задачам.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
@@ -201,7 +203,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiPipelinePanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.18.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.19.md`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
 - Remaining (taskmanager):

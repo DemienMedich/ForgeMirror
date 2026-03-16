@@ -857,6 +857,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     std::string projectsHeader = u8"Проекты в задачах (" + std::to_string(static_cast<int>(state.projects.size())) + ")";
     if (ImGui::CollapsingHeader(projectsHeader.c_str())) {
         if (BeginCard("tasks_projects_bridge")) {
+            std::vector<ProjectTaskStats> bridgeProjectStats;
+            bridgeProjectStats.reserve(state.projects.size());
+            for (const auto& project : state.projects) {
+                bridgeProjectStats.push_back(BuildProjectTaskStats(state, project.id));
+            }
+            const ProjectPortfolioStats bridgePortfolio = BuildProjectPortfolioStats(bridgeProjectStats);
+
             if (state.tasksFilterProject > 0) {
                 ImGui::TextDisabled(u8"Активный проектный фокус");
                 if (ImGui::Button(u8"Снять проектный фильтр", ImVec2(-1.0f, 0.0f))) {
@@ -864,6 +871,38 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
             }
+
+            if (ImGui::BeginTable("tasks_projects_bridge_summary", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("bridge_summary_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("bridge_summary_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("bridge_summary_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled(u8"Активный поток");
+                ImGui::Text(u8"%d проектов / %d задач", bridgePortfolio.activeProjects, bridgePortfolio.totalActiveTasks);
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextDisabled(u8"XP handoff");
+                if (bridgePortfolio.xpPendingProjects > 0) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                       u8"%d проектов / %d задач",
+                                       bridgePortfolio.xpPendingProjects,
+                                       bridgePortfolio.totalXpPendingTasks);
+                } else {
+                    ImGui::TextDisabled(u8"Нет ожидания");
+                }
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextDisabled(u8"Просрочка");
+                if (bridgePortfolio.overdueProjects > 0) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d проектов", bridgePortfolio.overdueProjects);
+                } else {
+                    ImGui::TextDisabled(u8"Нет риска");
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
             if (state.projects.empty()) {
                 ImGui::TextDisabled(u8"Проектов пока нет.");
@@ -875,7 +914,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TableHeadersRow();
                 for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
                     const auto& project = state.projects[static_cast<size_t>(i)];
-                    const ProjectTaskStats stats = BuildProjectTaskStats(state, project.id);
+                    const ProjectTaskStats stats = bridgeProjectStats[static_cast<size_t>(i)];
                     ImGui::TableNextRow();
                     ImGui::PushID(project.id.c_str());
                     ImGui::TableSetColumnIndex(0);
@@ -896,6 +935,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     if (stats.xpPending > 0) {
                         ImGui::SameLine();
                         ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", stats.xpPending);
+                    }
+                    if (stats.xpPending > 0) {
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Handoff ждёт: %d", stats.xpPending);
                     }
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%d", stats.total);

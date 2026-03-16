@@ -90,6 +90,15 @@ struct ProjectTaskStats {
     int xpPending = 0;
 };
 
+struct ProjectPortfolioStats {
+    int totalProjects = 0;
+    int activeProjects = 0;
+    int overdueProjects = 0;
+    int xpPendingProjects = 0;
+    int totalActiveTasks = 0;
+    int totalXpPendingTasks = 0;
+};
+
 static ProjectTaskStats BuildProjectTaskStats(const GuiState& state, const std::string& projectId) {
     ProjectTaskStats stats{};
     if (projectId.empty()) return stats;
@@ -115,6 +124,26 @@ static ProjectTaskStats BuildProjectTaskStats(const GuiState& state, const std::
         }
     }
     return stats;
+}
+
+static ProjectPortfolioStats BuildProjectPortfolioStats(const std::vector<ProjectTaskStats>& projectStats) {
+    ProjectPortfolioStats summary{};
+    summary.totalProjects = static_cast<int>(projectStats.size());
+    for (const auto& stats : projectStats) {
+        const int activeTasks = stats.created + stats.inProgress;
+        if (activeTasks > 0) {
+            summary.activeProjects += 1;
+            summary.totalActiveTasks += activeTasks;
+        }
+        if (stats.overdue > 0) {
+            summary.overdueProjects += 1;
+        }
+        if (stats.xpPending > 0) {
+            summary.xpPendingProjects += 1;
+            summary.totalXpPendingTasks += stats.xpPending;
+        }
+    }
+    return summary;
 }
 
 static void EnsureTaskPlanAssigneesSize(GuiState& state) {
@@ -188,30 +217,102 @@ void DrawProjectsPanel(GuiState& state) {
     }
     ImGui::TextDisabled(u8"Хранятся в meta/projects.json, синхронизируются через облако.");
 
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const float checkboxWidth = 210.0f;
-    const float resetWidth = 72.0f;
-    const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const float inputWidth = std::max(160.0f, avail - checkboxWidth - resetWidth - spacing * 2.0f);
-    ImGui::SetNextItemWidth(inputWidth);
-    bool projectsFilterChanged = ImGui::InputTextWithHint("##projects_filter", u8"Поиск проекта", state.filters.projects.data(), state.filters.projects.size());
-    ImGui::SameLine();
-    if (ImGui::SmallButton(u8"Сброс##projects_filter")) {
-        state.filters.projects.fill('\0');
-        state.projectsFilterOverdueOnly = false;
-        projectsFilterChanged = true;
+    std::vector<ProjectTaskStats> projectStats;
+    projectStats.reserve(state.projects.size());
+    std::vector<std::string> projectNamesLower;
+    projectNamesLower.reserve(state.projects.size());
+    std::vector<int> projectOrder;
+    projectOrder.reserve(state.projects.size());
+    for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
+        const auto& project = state.projects[static_cast<size_t>(i)];
+        projectStats.push_back(BuildProjectTaskStats(state, project.id));
+        projectNamesLower.push_back(ToLowerUtf8(project.name));
+        projectOrder.push_back(i);
     }
-    ImGui::SameLine();
-    bool overdueChanged = ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
+    const ProjectPortfolioStats portfolio = BuildProjectPortfolioStats(projectStats);
+
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const bool stackFilters = avail < 780.0f;
+    bool projectsFilterChanged = false;
+    bool overdueChanged = false;
+    bool xpPendingChanged = false;
+    if (stackFilters) {
+        ImGui::SetNextItemWidth(-1.0f);
+        projectsFilterChanged = ImGui::InputTextWithHint("##projects_filter", u8"Поиск проекта", state.filters.projects.data(), state.filters.projects.size());
+        if (ImGui::SmallButton(u8"Сброс##projects_filter")) {
+            state.filters.projects.fill('\0');
+            state.projectsFilterOverdueOnly = false;
+            state.projectsFilterXpPendingOnly = false;
+            projectsFilterChanged = true;
+        }
+        overdueChanged = ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
+        xpPendingChanged = ImGui::Checkbox(u8"Только ждут XP", &state.projectsFilterXpPendingOnly);
+    } else {
+        const float overdueWidth = 210.0f;
+        const float xpPendingWidth = 170.0f;
+        const float resetWidth = 72.0f;
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float inputWidth = std::max(160.0f, avail - overdueWidth - xpPendingWidth - resetWidth - spacing * 3.0f);
+        ImGui::SetNextItemWidth(inputWidth);
+        projectsFilterChanged = ImGui::InputTextWithHint("##projects_filter", u8"Поиск проекта", state.filters.projects.data(), state.filters.projects.size());
+        ImGui::SameLine();
+        overdueChanged = ImGui::Checkbox(u8"Только просроченные", &state.projectsFilterOverdueOnly);
+        ImGui::SameLine();
+        xpPendingChanged = ImGui::Checkbox(u8"Только ждут XP", &state.projectsFilterXpPendingOnly);
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"Сброс##projects_filter")) {
+            state.filters.projects.fill('\0');
+            state.projectsFilterOverdueOnly = false;
+            state.projectsFilterXpPendingOnly = false;
+            projectsFilterChanged = true;
+        }
+    }
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
     ImGui::TextDisabled(u8"Сортировка");
     ImGui::SetNextItemWidth(220.0f);
-    const char* projectSortLabels[] = {u8"По названию", u8"По задачам", u8"По просроченным"};
-    state.projectsSortMode = std::clamp(state.projectsSortMode, 0, 2);
+    const char* projectSortLabels[] = {u8"По названию", u8"По задачам", u8"По просроченным", u8"По XP handoff"};
+    state.projectsSortMode = std::clamp(state.projectsSortMode, 0, 3);
     bool sortChanged = ImGui::Combo("##projects_sort", &state.projectsSortMode, projectSortLabels, IM_ARRAYSIZE(projectSortLabels));
-    if (projectsFilterChanged || overdueChanged || sortChanged) {
+    if (projectsFilterChanged || overdueChanged || xpPendingChanged || sortChanged) {
         SyncFiltersToUi(state);
         state.uiDirty = true;
+    }
+    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+
+    if (ImGui::BeginTable("projects_status_slice", 4, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("projects_total", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+        ImGui::TableSetupColumn("projects_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("projects_xp_pending", ImGuiTableColumnFlags_WidthStretch, 1.05f);
+        ImGui::TableSetupColumn("projects_overdue", ImGuiTableColumnFlags_WidthStretch, 0.95f);
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextDisabled(u8"Проектов");
+        ImGui::Text("%d", portfolio.totalProjects);
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextDisabled(u8"Активный поток");
+        ImGui::Text(u8"%d проектов / %d задач", portfolio.activeProjects, portfolio.totalActiveTasks);
+
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextDisabled(u8"XP handoff");
+        if (portfolio.xpPendingProjects > 0) {
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                               u8"%d проектов / %d задач",
+                               portfolio.xpPendingProjects,
+                               portfolio.totalXpPendingTasks);
+        } else {
+            ImGui::TextDisabled(u8"Нет ожидания");
+        }
+
+        ImGui::TableSetColumnIndex(3);
+        ImGui::TextDisabled(u8"Просрочка");
+        if (portfolio.overdueProjects > 0) {
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d проектов", portfolio.overdueProjects);
+        } else {
+            ImGui::TextDisabled(u8"Нет риска");
+        }
+        ImGui::EndTable();
     }
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
@@ -224,19 +325,7 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 170.0f);
         ImGui::TableHeadersRow();
 
-        std::vector<ProjectTaskStats> projectStats;
-        projectStats.reserve(state.projects.size());
-        std::vector<std::string> projectNamesLower;
-        projectNamesLower.reserve(state.projects.size());
-        std::vector<int> projectOrder;
-        projectOrder.reserve(state.projects.size());
-        for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
-            const auto& project = state.projects[i];
-            projectStats.push_back(BuildProjectTaskStats(state, project.id));
-            projectNamesLower.push_back(ToLowerUtf8(project.name));
-            projectOrder.push_back(i);
-        }
-        const int sortMode = std::clamp(state.projectsSortMode, 0, 2);
+        const int sortMode = std::clamp(state.projectsSortMode, 0, 3);
         if (sortMode == 1) {
             std::sort(projectOrder.begin(), projectOrder.end(), [&](int a, int b) {
                 const auto& sa = projectStats[a];
@@ -248,6 +337,16 @@ void DrawProjectsPanel(GuiState& state) {
             std::sort(projectOrder.begin(), projectOrder.end(), [&](int a, int b) {
                 const auto& sa = projectStats[a];
                 const auto& sb = projectStats[b];
+                if (sa.overdue != sb.overdue) return sa.overdue > sb.overdue;
+                if (sa.xpPending != sb.xpPending) return sa.xpPending > sb.xpPending;
+                return projectNamesLower[a] < projectNamesLower[b];
+            });
+        } else if (sortMode == 3) {
+            std::sort(projectOrder.begin(), projectOrder.end(), [&](int a, int b) {
+                const auto& sa = projectStats[a];
+                const auto& sb = projectStats[b];
+                if (sa.xpPending != sb.xpPending) return sa.xpPending > sb.xpPending;
+                if (sa.done != sb.done) return sa.done > sb.done;
                 if (sa.overdue != sb.overdue) return sa.overdue > sb.overdue;
                 return projectNamesLower[a] < projectNamesLower[b];
             });
@@ -266,11 +365,18 @@ void DrawProjectsPanel(GuiState& state) {
             if (state.projectsFilterOverdueOnly && taskStats.overdue <= 0) {
                 continue;
             }
+            if (state.projectsFilterXpPendingOnly && taskStats.xpPending <= 0) {
+                continue;
+            }
             shownProjects += 1;
             ImGui::TableNextRow();
             if (taskStats.overdue > 0) {
                 ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+            } else if (taskStats.xpPending > 0) {
+                ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
+                rowHighlight.w = std::clamp(rowHighlight.w * 0.08f, 0.04f, 0.10f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
             }
             ImGui::PushID(project.id.c_str());
@@ -300,6 +406,11 @@ void DrawProjectsPanel(GuiState& state) {
             if (taskStats.xpPending > 0) {
                 ImGui::SameLine();
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", taskStats.xpPending);
+            }
+            if (taskStats.xpPending > 0) {
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Handoff ждёт: %d", taskStats.xpPending);
+            } else if (taskStats.done > 0) {
+                ImGui::TextDisabled(u8"Handoff закрыт");
             }
 
             ImGui::TableSetColumnIndex(4);

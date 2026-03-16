@@ -135,6 +135,7 @@ struct GuiRuntimeState {
     int pendingDeleteProjectIndex = -1;
     std::string pendingDeleteProjectId;
     bool projectsFilterOverdueOnly = false;
+    bool projectsFilterXpPendingOnly = false;
     int projectsSortMode = 0;
     float newSkillWeight = 1.0f;
     std::vector<char> newSkillProfessionFlags;
