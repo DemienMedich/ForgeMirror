@@ -44,6 +44,48 @@ static void CloseWorkspaceWindows(GuiState& state) {
     state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
 }
 
+static void RefreshCloudState(GuiState& state, const AppContext& app);
+
+static const char* CloudDriftTargetLabel(const std::string& relativePath) {
+    if (relativePath == "meta/tasks.json") return u8"Задачи";
+    if (relativePath == "meta/pipeline.json") return u8"Пайплайн";
+    return nullptr;
+}
+
+static bool CanOpenCloudDriftTarget(const GuiState& state, const std::string& relativePath) {
+    if (relativePath == "meta/tasks.json") return state.modules.tasks;
+    if (relativePath == "meta/pipeline.json") return state.modules.pipeline;
+    return false;
+}
+
+static void OpenCloudDriftTarget(GuiState& state, const std::string& relativePath) {
+    if (relativePath == "meta/tasks.json" && state.modules.tasks) {
+        state.showProjects = false;
+        OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
+        return;
+    }
+    if (relativePath == "meta/pipeline.json" && state.modules.pipeline) {
+        OpenWorkspaceTab(state, state.showPipeline, UiWindowId::Pipeline);
+    }
+}
+
+static void FinalizeCloudWorkspaceResolve(GuiState& state, AppContext& app, bool reloadWorkspaceData) {
+    const std::int64_t now = NowSeconds();
+    state.lastCloudSyncAt = now;
+    state.lastCloudSyncOk = true;
+    state.lastCloudSyncOkAt = now;
+    if (reloadWorkspaceData) {
+        ReloadSyncedWorkspaceData(state, app, false);
+    } else {
+        state.syncHealth = InspectWorkspaceSyncHealth(state.storageDir, state.modules);
+        FindStrayStorageFiles(state.storageDir, 5, state.straySamples, state.strayFileCount);
+    }
+    RefreshCloudState(state, app);
+    state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, state.storageDir, state.lastCloudSyncOkAt);
+    state.lastStorageScanAt = 0;
+    state.lastStorageDataAt = 0;
+}
+
 static void RefreshCloudState(GuiState& state, const AppContext& app) {
     RefreshCloudManifestState(state, app);
 }
@@ -615,6 +657,9 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             ImGui::TextDisabled(u8"Папка: %s", cloudRootLabel.c_str());
             ImGui::Separator();
             if (state.isAdmin) {
+                std::string openDriftPath;
+                std::string resolveDriftPath;
+                int resolveDriftMode = 0;
                 if (state.cloudWorkspaceDrift.issueCount > 0) {
                     ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
                     if (state.cloudWorkspaceDrift.conflictCount > 0) {
@@ -625,8 +670,62 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                         ImGui::Text(u8"Локально/облако: %d расхождений", state.cloudWorkspaceDrift.issueCount);
                     }
                     ImGui::PopStyleColor();
-                    for (const auto& issue : state.cloudWorkspaceDrift.issues) {
-                        ImGui::BulletText("%s", issue.c_str());
+                    ImGui::TextDisabled(u8"Файлы:");
+                    for (const auto& driftItem : state.cloudWorkspaceDrift.files) {
+                        CloudWorkspaceFileDrift file = driftItem;
+                        if (!file.hasIssue) continue;
+                        ImGui::PushID(file.relativePath.c_str());
+                        const char* targetLabel = CloudDriftTargetLabel(file.relativePath);
+                        if (targetLabel != nullptr) {
+                            ImGui::Text("%s", targetLabel);
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("[%s]", file.relativePath.c_str());
+                        } else {
+                            ImGui::Text("%s", file.relativePath.c_str());
+                        }
+                        ImGui::TextWrapped("%s", file.message.c_str());
+
+                        const bool canOpenTarget = CanOpenCloudDriftTarget(state, file.relativePath);
+                        if (!canOpenTarget) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton(u8"Открыть модуль")) {
+                            openDriftPath = file.relativePath;
+                        }
+                        if (!canOpenTarget) ImGui::EndDisabled();
+
+                        if (file.cloudExists) {
+                            ImGui::SameLine();
+                            const char* cloudLabel = file.localExists ? u8"Принять облачную" : u8"Загрузить из облака";
+                            if (ImGui::SmallButton(cloudLabel)) {
+                                resolveDriftPath = file.relativePath;
+                                resolveDriftMode = 1;
+                            }
+                        }
+                        if (file.localExists) {
+                            ImGui::SameLine();
+                            const char* localLabel = file.cloudExists ? u8"Оставить локальную" : u8"Выгрузить локальную";
+                            if (ImGui::SmallButton(localLabel)) {
+                                resolveDriftPath = file.relativePath;
+                                resolveDriftMode = -1;
+                            }
+                        }
+                        ImGui::TextDisabled(u8"Перед заменой версия сохраняется в meta/updates.");
+                        ImGui::Separator();
+                        ImGui::PopID();
+                    }
+
+                    if (!openDriftPath.empty()) {
+                        OpenCloudDriftTarget(state, openDriftPath);
+                    }
+                    if (!resolveDriftPath.empty() && resolveDriftMode != 0) {
+                        const bool preferCloud = resolveDriftMode > 0;
+                        const CloudWorkspaceResolveResult resolveResult =
+                            ResolveCloudWorkspaceFileVersion(state.cloudConfig, state.storageDir, resolveDriftPath, preferCloud);
+                        if (resolveResult.ok) {
+                            FinalizeCloudWorkspaceResolve(state, app, preferCloud);
+                            SetStatus(state, resolveResult.message, 0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state, resolveResult.message, 1.0f, 0.75f, 0.35f);
+                        }
                     }
                     ImGui::Separator();
                 } else {

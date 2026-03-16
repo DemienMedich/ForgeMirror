@@ -55,6 +55,7 @@ struct CloudWorkspaceFileDrift {
     bool cloudExists = false;
     bool localChanged = false;
     bool cloudChanged = false;
+    bool hasIssue = false;
     bool conflict = false;
     std::string message;
 };
@@ -66,6 +67,13 @@ struct CloudWorkspaceDriftSummary {
     std::vector<std::string> issues;
 };
 
+struct CloudWorkspaceResolveResult {
+    bool ok = false;
+    bool changed = false;
+    std::string message;
+    std::vector<std::filesystem::path> backupPaths;
+};
+
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir);
 bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config);
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
@@ -75,6 +83,10 @@ std::filesystem::path ResolveCloudRootPath(const CloudSyncConfig& config, const 
 CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& config,
                                                       const std::filesystem::path& storageDir,
                                                       std::int64_t lastSuccessfulSyncAt);
+CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConfig& config,
+                                                             const std::filesystem::path& storageDir,
+                                                             const std::string& relativePath,
+                                                             bool preferCloud);
 CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::filesystem::path& storageDir,
                                      const CloudManifest& manifest, std::filesystem::path& outPath);
 CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);

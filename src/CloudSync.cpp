@@ -260,6 +260,60 @@ std::string ComputeNormalizedFileHash(const std::filesystem::path& path) {
     return ToHex64(Fnv1a64Hash(content));
 }
 
+bool IsSafeWorkspaceRelativePath(const std::filesystem::path& path) {
+    if (path.empty() || path.is_absolute()) return false;
+    for (const auto& part : path) {
+        if (part == "..") return false;
+    }
+    return true;
+}
+
+std::string SanitizeRelativePathForFilename(const std::string& relativePath) {
+    std::string value = relativePath;
+    for (char& c : value) {
+        const bool ascii = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9');
+        if (ascii || c == '-' || c == '_') continue;
+        c = '_';
+    }
+    if (value.empty()) return "workspace_file";
+    return value;
+}
+
+bool SaveCloudWorkspaceBackup(const std::filesystem::path& source,
+                              const std::filesystem::path& backupDir,
+                              const std::string& relativePath,
+                              const char* suffix,
+                              std::int64_t timestamp,
+                              std::filesystem::path& outPath) {
+    std::error_code ec;
+    if (!std::filesystem::exists(source, ec)) return false;
+    std::filesystem::create_directories(backupDir, ec);
+    if (ec) return false;
+
+    const std::filesystem::path relPath = std::filesystem::u8path(relativePath);
+    const std::string extension = relPath.extension().string();
+    std::string stem = SanitizeRelativePathForFilename(relativePath);
+    if (!extension.empty() && stem.size() > extension.size()) {
+        auto lowerCopy = [](std::string value) {
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return value;
+        };
+        const std::string lowerStem = lowerCopy(stem);
+        const std::string lowerExt = lowerCopy(extension);
+        if (lowerStem.size() >= lowerExt.size() &&
+            lowerStem.compare(lowerStem.size() - lowerExt.size(), lowerExt.size(), lowerExt) == 0) {
+            stem.erase(stem.size() - extension.size());
+        }
+    }
+    if (stem.empty()) stem = "workspace_file";
+    const std::string backupName = stem + "." + suffix + "." + std::to_string(timestamp)
+        + (extension.empty() ? std::string(".bak") : extension);
+    outPath = backupDir / backupName;
+    return std::filesystem::copy_file(source, outPath, std::filesystem::copy_options::overwrite_existing, ec);
+}
+
 std::int64_t NowSeconds() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
@@ -330,6 +384,7 @@ CloudWorkspaceFileDrift BuildCloudWorkspaceFileDrift(const std::filesystem::path
         file.message = u8"версии совпадают.";
         return file;
     }
+    file.hasIssue = true;
     if (file.localChanged && file.cloudChanged) {
         file.conflict = true;
         file.message = u8"локальная и облачная версии обе изменились.";
@@ -1059,8 +1114,7 @@ CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& con
     };
     for (const auto& relativePath : trackedFiles) {
         CloudWorkspaceFileDrift file = BuildCloudWorkspaceFileDrift(storageDir, cloudRoot, relativePath, lastSuccessfulSyncAt);
-        const bool hasIssue = file.conflict || (!file.message.empty() && file.message != u8"версии совпадают.");
-        if (hasIssue) {
+        if (file.hasIssue) {
             summary.issueCount += 1;
             if (file.conflict) {
                 summary.conflictCount += 1;
@@ -1070,6 +1124,81 @@ CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& con
         summary.files.push_back(std::move(file));
     }
     return summary;
+}
+
+CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConfig& config,
+                                                             const std::filesystem::path& storageDir,
+                                                             const std::string& relativePath,
+                                                             bool preferCloud) {
+    CloudWorkspaceResolveResult result;
+    if (!config.enabled) {
+        result.message = u8"Облако отключено.";
+        return result;
+    }
+
+    const std::filesystem::path relative = std::filesystem::u8path(relativePath).lexically_normal();
+    if (!IsSafeWorkspaceRelativePath(relative)) {
+        result.message = u8"Некорректный путь sync-файла.";
+        return result;
+    }
+
+    const auto cloudRoot = ResolveCloudRoot(config, storageDir);
+    if (PathsOverlap(cloudRoot, storageDir)) {
+        result.message = u8"Путь облака не должен совпадать или быть вложенным в локальное хранилище.";
+        return result;
+    }
+
+    const auto localPath = storageDir / relative;
+    const auto cloudPath = cloudRoot / relative;
+    const auto& source = preferCloud ? cloudPath : localPath;
+    const auto& target = preferCloud ? localPath : cloudPath;
+
+    std::error_code ec;
+    if (!std::filesystem::exists(source, ec)) {
+        result.message = preferCloud ? u8"Облачная версия файла не найдена."
+                                     : u8"Локальная версия файла не найдена.";
+        return result;
+    }
+
+    const std::string sourceHash = ComputeNormalizedFileHash(source);
+    const std::string targetHash = ComputeNormalizedFileHash(target);
+    if (!sourceHash.empty() && !targetHash.empty() && sourceHash == targetHash) {
+        result.ok = true;
+        result.message = u8"Локальная и облачная версии уже совпадают.";
+        return result;
+    }
+
+    const auto backupDir = storageDir / "meta" / "updates";
+    const std::int64_t ts = NowSeconds();
+    std::filesystem::path backupPath;
+    if (SaveCloudWorkspaceBackup(localPath, backupDir, relativePath, "local", ts, backupPath)) {
+        result.backupPaths.push_back(backupPath);
+    }
+    backupPath.clear();
+    if (SaveCloudWorkspaceBackup(cloudPath, backupDir, relativePath, "cloud", ts, backupPath)) {
+        result.backupPaths.push_back(backupPath);
+    }
+
+    std::filesystem::create_directories(target.parent_path(), ec);
+    if (ec) {
+        result.message = u8"Не удалось подготовить путь для применения версии.";
+        return result;
+    }
+    std::filesystem::copy_file(source, target, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+        result.message = preferCloud ? u8"Не удалось применить облачную версию файла."
+                                     : u8"Не удалось выгрузить локальную версию файла.";
+        return result;
+    }
+
+    result.ok = true;
+    result.changed = true;
+    result.message = preferCloud ? std::string(u8"Применена облачная версия ") + relativePath + "."
+                                 : std::string(u8"Локальная версия ") + relativePath + u8" выгружена в облако.";
+    if (!result.backupPaths.empty()) {
+        result.message += u8" Резервные копии сохранены в meta/updates.";
+    }
+    return result;
 }
 
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
