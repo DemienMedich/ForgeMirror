@@ -52,6 +52,13 @@ static const char* CloudDriftTargetLabel(const std::string& relativePath) {
     return nullptr;
 }
 
+static const char* CloudBackupSourceLabel(const std::string& sourceKind) {
+    if (sourceKind == "local") return u8"Локальный снимок";
+    if (sourceKind == "cloud") return u8"Облачный снимок";
+    if (sourceKind == "restore") return u8"Снимок перед восстановлением";
+    return u8"Backup";
+}
+
 static bool CanOpenCloudDriftTarget(const GuiState& state, const std::string& relativePath) {
     if (relativePath == "meta/tasks.json") return state.modules.tasks;
     if (relativePath == "meta/pipeline.json") return state.modules.pipeline;
@@ -742,50 +749,34 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 bool hasWorkspaceBackups = false;
                 for (const std::string& backupRelativePath : {std::string("meta/tasks.json"), std::string("meta/pipeline.json")}) {
                     const std::vector<CloudWorkspaceBackupEntry> backups = ListCloudWorkspaceBackups(state.storageDir, backupRelativePath);
-                    CloudWorkspaceBackupEntry latestLocal;
-                    CloudWorkspaceBackupEntry latestCloud;
-                    CloudWorkspaceBackupEntry latestRestore;
-                    bool hasLocalBackup = false;
-                    bool hasCloudBackup = false;
-                    bool hasRestoreBackup = false;
-                    for (const auto& backup : backups) {
-                        if (!hasLocalBackup && backup.sourceKind == "local") {
-                            latestLocal = backup;
-                            hasLocalBackup = true;
-                        } else if (!hasCloudBackup && backup.sourceKind == "cloud") {
-                            latestCloud = backup;
-                            hasCloudBackup = true;
-                        } else if (!hasRestoreBackup && backup.sourceKind == "restore") {
-                            latestRestore = backup;
-                            hasRestoreBackup = true;
-                        }
-                        if (hasLocalBackup && hasCloudBackup && hasRestoreBackup) break;
-                    }
-                    if (!hasLocalBackup && !hasCloudBackup && !hasRestoreBackup) continue;
+                    if (backups.empty()) continue;
                     hasWorkspaceBackups = true;
                     const char* targetLabel = CloudDriftTargetLabel(backupRelativePath);
                     ImGui::PushID(backupRelativePath.c_str());
                     ImGui::Text("%s", targetLabel != nullptr ? targetLabel : backupRelativePath.c_str());
                     ImGui::SameLine();
                     ImGui::TextDisabled(u8"[backup]");
-                    if (hasLocalBackup) {
-                        ImGui::TextDisabled(u8"Локальный: %s", FormatTimestamp(latestLocal.createdAt, "%Y-%m-%d %H:%M").c_str());
+                    constexpr size_t kShownBackups = 5;
+                    const size_t shownCount = std::min(kShownBackups, backups.size());
+                    ImGui::TextDisabled(u8"Последние снимки: %d из %d", static_cast<int>(shownCount), static_cast<int>(backups.size()));
+                    for (size_t backupIndex = 0; backupIndex < shownCount; ++backupIndex) {
+                        const CloudWorkspaceBackupEntry& backup = backups[backupIndex];
+                        ImGui::PushID(static_cast<int>(backupIndex));
+                        const std::string timestamp = FormatTimestamp(backup.createdAt, "%Y-%m-%d %H:%M");
+                        ImGui::TextDisabled("%s", timestamp.empty() ? u8"(без даты)" : timestamp.c_str());
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(u8"Восстановить локальный")) {
-                            restoreBackupRelativePath = backupRelativePath;
-                            restoreBackupPath = latestLocal.path;
-                        }
-                    }
-                    if (hasCloudBackup) {
-                        ImGui::TextDisabled(u8"Облачный: %s", FormatTimestamp(latestCloud.createdAt, "%Y-%m-%d %H:%M").c_str());
+                        ImGui::Text("%s", CloudBackupSourceLabel(backup.sourceKind));
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(u8"Восстановить облачный")) {
+                        ImGui::TextDisabled("[%s]", backup.path.filename().string().c_str());
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(u8"Восстановить")) {
                             restoreBackupRelativePath = backupRelativePath;
-                            restoreBackupPath = latestCloud.path;
+                            restoreBackupPath = backup.path;
                         }
+                        ImGui::PopID();
                     }
-                    if (hasRestoreBackup) {
-                        ImGui::TextDisabled(u8"Снимок перед восстановлением: %s", FormatTimestamp(latestRestore.createdAt, "%Y-%m-%d %H:%M").c_str());
+                    if (backups.size() > shownCount) {
+                        ImGui::TextDisabled(u8"Еще %d backup-файлов лежат в meta/updates.", static_cast<int>(backups.size() - shownCount));
                     }
                     ImGui::PopID();
                     ImGui::Separator();
