@@ -32,8 +32,8 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.23.
-  - Последнее изменение: restore-flow в меню `Облако` расширен до истории последних backup'ов: для `tasks.json` и `pipeline.json` теперь видно несколько последних снимков с временем и типом источника, а восстановление можно делать по конкретному snapshot, а не только по последнему.
+  - Ветка: beta. Версия: 0.4.24.
+  - Последнее изменение: cloud-flow переведён на preview/confirm UX: `Принять облачную`, `Оставить локальную` и `Восстановить snapshot` теперь сначала открывают modal с preview источника и цели, где видно метаданные файла и краткую доменную сводку по задачам или этапам пайплайна.
 - Done:
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
@@ -190,20 +190,23 @@ UI аудит:
   - Cloud drift UX: `CloudSync` теперь умеет собирать drift-summary по `meta/tasks.json` и `meta/pipeline.json`; GUI выводит эти расхождения в cloud-menu, sync-tooltip и расширенный отчёт, различая `локально новее`, `в облаке новее` и `обе версии изменились`.
   - Cloud resolve UX: меню `Облако` теперь показывает file-level drift-блоки по задачам и пайплайну, даёт быстрый переход в соответствующий модуль и умеет безопасно применять локальную или облачную версию с бэкапом в `meta/updates`.
   - Cloud restore UX: меню `Облако` показывает backup-копии `tasks.json` и `pipeline.json` из `meta/updates` и умеет восстановить выбранный локальный или облачный снимок обратно в локальный workspace без автоматической перезаписи облака.
+  - Cloud preview UX: любые destructive sync-действия теперь проходят через confirm-modal с preview метаданных источника и цели; для задач показываются `всего` и `ждут XP`, для пайплайна — `этапов`, `ветвлений`, `финалов`.
 - Now:
-  - Tasks UX, project handoff-срез и sync-контур теперь покрывают основной flow, диагностику критичных файлов, явную индикацию drift/conflict, resolve локальной/облачной версии и restore по нескольким backup-копиям для задач и пайплайна.
+  - Tasks UX, project handoff-срез и sync-контур теперь покрывают основной flow, диагностику критичных файлов, явную индикацию drift/conflict, resolve локальной/облачной версии, restore по нескольким backup-копиям и preview/confirm перед применением версии.
 - Next:
-  - Следующим прогоном логично усилить restore-flow ещё на шаг: добавить более явный preview по содержимому snapshot'а или хотя бы quick-diff метаданных перед восстановлением.
+  - Следующим прогоном логично усилить confirm-preview ещё на шаг: добавить более явный quick-diff между источником и целью, а не только отдельные метаданные блоков.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiMainMenuPanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiMainLoop.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiState.inc`
   - `Z:\\CPP\\ForgeMirror\\include\\CloudSync.h`
   - `Z:\\CPP\\ForgeMirror\\src\\CloudSync.cpp`
   - `Z:\\CPP\\ForgeMirror\\src\\AppWorkspaceDataService.cpp`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.23.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.24.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
   - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
   - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`

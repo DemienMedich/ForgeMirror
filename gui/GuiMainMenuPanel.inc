@@ -45,6 +45,23 @@ static void CloseWorkspaceWindows(GuiState& state) {
 }
 
 static void RefreshCloudState(GuiState& state, const AppContext& app);
+static void DrawCloudWorkspaceActionModal(GuiState& state, AppContext& app);
+static std::int64_t ToUnixSeconds(std::filesystem::file_time_type time);
+
+static constexpr int kCloudWorkspaceActionApplyCloud = 1;
+static constexpr int kCloudWorkspaceActionPushLocal = 2;
+static constexpr int kCloudWorkspaceActionRestoreBackup = 3;
+
+struct CloudWorkspacePreviewInfo {
+    bool exists = false;
+    std::filesystem::path path;
+    std::uintmax_t sizeBytes = 0;
+    std::int64_t modifiedAt = 0;
+    int entryCount = -1;
+    int secondaryCount = -1;
+    std::string summary;
+    std::string detail;
+};
 
 static const char* CloudDriftTargetLabel(const std::string& relativePath) {
     if (relativePath == "meta/tasks.json") return u8"Задачи";
@@ -57,6 +74,114 @@ static const char* CloudBackupSourceLabel(const std::string& sourceKind) {
     if (sourceKind == "cloud") return u8"Облачный снимок";
     if (sourceKind == "restore") return u8"Снимок перед восстановлением";
     return u8"Backup";
+}
+
+static const char* CloudWorkspaceActionLabel(int mode) {
+    switch (mode) {
+        case kCloudWorkspaceActionApplyCloud: return u8"Принять облачную";
+        case kCloudWorkspaceActionPushLocal: return u8"Оставить локальную";
+        case kCloudWorkspaceActionRestoreBackup: return u8"Восстановить снимок";
+        default: return u8"Действие";
+    }
+}
+
+static std::string FormatCloudPreviewSize(std::uintmax_t sizeBytes) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    if (sizeBytes >= 1024ull * 1024ull) {
+        out << std::fixed << std::setprecision(1) << (static_cast<double>(sizeBytes) / (1024.0 * 1024.0)) << " MB";
+    } else if (sizeBytes >= 1024ull) {
+        out << std::fixed << std::setprecision(1) << (static_cast<double>(sizeBytes) / 1024.0) << " KB";
+    } else {
+        out << sizeBytes << " B";
+    }
+    return out.str();
+}
+
+static CloudWorkspacePreviewInfo InspectWorkspaceFilePreview(const std::filesystem::path& storageRoot,
+                                                             const std::string& relativePath) {
+    CloudWorkspacePreviewInfo info;
+    info.path = storageRoot / std::filesystem::u8path(relativePath);
+    std::error_code ec;
+    info.exists = std::filesystem::exists(info.path, ec);
+    if (!info.exists || ec) return info;
+
+    info.sizeBytes = std::filesystem::file_size(info.path, ec);
+    ec.clear();
+    const auto stamp = std::filesystem::last_write_time(info.path, ec);
+    if (!ec) {
+        info.modifiedAt = ToUnixSeconds(stamp);
+    }
+
+    if (relativePath == "meta/tasks.json") {
+        const auto tasks = LoadTasksData(storageRoot);
+        int xpPendingCount = 0;
+        for (const auto& task : tasks) {
+            if (TaskNeedsXpAward(task)) xpPendingCount += 1;
+        }
+        info.entryCount = static_cast<int>(tasks.size());
+        info.secondaryCount = xpPendingCount;
+        info.summary = u8"Задач: " + std::to_string(info.entryCount);
+        info.detail = u8"Ждут XP: " + std::to_string(xpPendingCount);
+    } else if (relativePath == "meta/pipeline.json") {
+        const auto steps = LoadPipelineData(storageRoot);
+        int branchingCount = 0;
+        int finalCount = 0;
+        for (const auto& step : steps) {
+            if (step.nextIds.empty()) {
+                finalCount += 1;
+            } else if (step.nextIds.size() > 1) {
+                branchingCount += 1;
+            }
+        }
+        info.entryCount = static_cast<int>(steps.size());
+        info.secondaryCount = branchingCount;
+        info.summary = u8"Этапов: " + std::to_string(info.entryCount);
+        info.detail = u8"Ветвлений: " + std::to_string(branchingCount) + u8", финалов: " + std::to_string(finalCount);
+    }
+    return info;
+}
+
+static CloudWorkspacePreviewInfo InspectBackupFilePreview(const CloudWorkspaceBackupEntry& backup) {
+    CloudWorkspacePreviewInfo info;
+    info.path = backup.path;
+    std::error_code ec;
+    info.exists = std::filesystem::exists(backup.path, ec);
+    if (!info.exists || ec) return info;
+    info.sizeBytes = std::filesystem::file_size(backup.path, ec);
+    info.modifiedAt = backup.createdAt;
+    info.summary = CloudBackupSourceLabel(backup.sourceKind);
+    std::string stamp = FormatTimestamp(backup.createdAt, "%Y-%m-%d %H:%M");
+    if (!stamp.empty()) {
+        info.detail = u8"Создан: " + stamp;
+    }
+    return info;
+}
+
+static void QueueCloudWorkspaceAction(GuiState& state,
+                                      int mode,
+                                      const std::string& relativePath,
+                                      const std::string& context = std::string(),
+                                      const std::string& sourceKind = std::string(),
+                                      std::int64_t sourceCreatedAt = 0,
+                                      const std::filesystem::path& backupPath = std::filesystem::path()) {
+    state.cloudWorkspaceActionPopupRequest = true;
+    state.cloudWorkspaceActionMode = mode;
+    state.cloudWorkspaceActionRelativePath = relativePath;
+    state.cloudWorkspaceActionContext = context;
+    state.cloudWorkspaceActionSourceKind = sourceKind;
+    state.cloudWorkspaceActionSourceCreatedAt = sourceCreatedAt;
+    state.cloudWorkspaceActionBackupPath = backupPath;
+}
+
+static void ResetCloudWorkspaceAction(GuiState& state) {
+    state.cloudWorkspaceActionPopupRequest = false;
+    state.cloudWorkspaceActionMode = 0;
+    state.cloudWorkspaceActionRelativePath.clear();
+    state.cloudWorkspaceActionContext.clear();
+    state.cloudWorkspaceActionSourceKind.clear();
+    state.cloudWorkspaceActionSourceCreatedAt = 0;
+    state.cloudWorkspaceActionBackupPath.clear();
 }
 
 static bool CanOpenCloudDriftTarget(const GuiState& state, const std::string& relativePath) {
@@ -154,6 +279,132 @@ static void DrawStorageConflictModal(GuiState& state) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
+    }
+}
+
+static void DrawCloudWorkspacePreviewBlock(const char* label, const CloudWorkspacePreviewInfo& info) {
+    ImGui::TextDisabled("%s", label);
+    if (!info.exists) {
+        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Файл отсутствует");
+        return;
+    }
+    if (!info.summary.empty()) {
+        ImGui::Text("%s", info.summary.c_str());
+    }
+    if (!info.detail.empty()) {
+        ImGui::TextDisabled("%s", info.detail.c_str());
+    }
+    if (info.modifiedAt > 0) {
+        ImGui::TextDisabled(u8"Изменён: %s", FormatTimestamp(info.modifiedAt, "%Y-%m-%d %H:%M").c_str());
+    }
+    ImGui::TextDisabled(u8"Размер: %s", FormatCloudPreviewSize(info.sizeBytes).c_str());
+    ImGui::TextDisabled("%s", info.path.u8string().c_str());
+}
+
+static void DrawCloudWorkspaceActionModal(GuiState& state, AppContext& app) {
+    bool open = state.cloudWorkspaceActionPopupRequest;
+    if (open) {
+        ImGui::OpenPopup(u8"Подтвердить sync-действие");
+        state.cloudWorkspaceActionPopupRequest = false;
+    }
+
+    bool popupOpen = true;
+    if (ImGui::BeginPopupModal(u8"Подтвердить sync-действие", &popupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+        DrawModalShadow();
+        const std::string& relativePath = state.cloudWorkspaceActionRelativePath;
+        const char* targetLabel = CloudDriftTargetLabel(relativePath);
+        const std::filesystem::path cloudRoot = ResolveCloudRootPath(state.cloudConfig, state.storageDir);
+        const int actionMode = state.cloudWorkspaceActionMode;
+        const bool canProceed = !relativePath.empty() && actionMode != 0;
+
+        ImGui::Text("%s", CloudWorkspaceActionLabel(actionMode));
+        if (targetLabel != nullptr) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("[%s]", targetLabel);
+        }
+        if (!relativePath.empty()) {
+            ImGui::TextDisabled("%s", relativePath.c_str());
+        }
+        if (!state.cloudWorkspaceActionContext.empty()) {
+            ImGui::TextWrapped("%s", state.cloudWorkspaceActionContext.c_str());
+        }
+        ImGui::Spacing();
+
+        CloudWorkspacePreviewInfo sourcePreview;
+        CloudWorkspacePreviewInfo targetPreview;
+        std::string sourceLabel;
+        std::string targetAreaLabel;
+
+        if (actionMode == kCloudWorkspaceActionApplyCloud) {
+            sourcePreview = InspectWorkspaceFilePreview(cloudRoot, relativePath);
+            targetPreview = InspectWorkspaceFilePreview(state.storageDir, relativePath);
+            sourceLabel = u8"Источник: облако";
+            targetAreaLabel = u8"Будет заменено: локальный workspace";
+        } else if (actionMode == kCloudWorkspaceActionPushLocal) {
+            sourcePreview = InspectWorkspaceFilePreview(state.storageDir, relativePath);
+            targetPreview = InspectWorkspaceFilePreview(cloudRoot, relativePath);
+            sourceLabel = u8"Источник: локальный workspace";
+            targetAreaLabel = u8"Будет заменено: облако";
+        } else if (actionMode == kCloudWorkspaceActionRestoreBackup) {
+            CloudWorkspaceBackupEntry backupEntry;
+            backupEntry.relativePath = relativePath;
+            backupEntry.sourceKind = state.cloudWorkspaceActionSourceKind;
+            backupEntry.createdAt = state.cloudWorkspaceActionSourceCreatedAt;
+            backupEntry.path = state.cloudWorkspaceActionBackupPath;
+            sourcePreview = InspectBackupFilePreview(backupEntry);
+            targetPreview = InspectWorkspaceFilePreview(state.storageDir, relativePath);
+            sourceLabel = std::string(u8"Источник: ") + CloudBackupSourceLabel(state.cloudWorkspaceActionSourceKind);
+            targetAreaLabel = u8"Будет заменено: локальный workspace";
+        }
+
+        DrawCloudWorkspacePreviewBlock(sourceLabel.c_str(), sourcePreview);
+        ImGui::Spacing();
+        DrawCloudWorkspacePreviewBlock(targetAreaLabel.c_str(), targetPreview);
+        ImGui::Spacing();
+        if (actionMode == kCloudWorkspaceActionRestoreBackup) {
+            ImGui::TextWrapped(u8"Восстановление меняет только локальный workspace. Облако можно синхронизировать после проверки.");
+        } else {
+            ImGui::TextWrapped(u8"Перед заменой актуальные версии будут сохранены в meta/updates.");
+        }
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+
+        if (!canProceed) ImGui::BeginDisabled();
+        if (ImGui::Button(CloudWorkspaceActionLabel(actionMode), ImVec2(220.0f, 0.0f))) {
+            if (actionMode == kCloudWorkspaceActionApplyCloud || actionMode == kCloudWorkspaceActionPushLocal) {
+                const bool preferCloud = actionMode == kCloudWorkspaceActionApplyCloud;
+                const CloudWorkspaceResolveResult result =
+                    ResolveCloudWorkspaceFileVersion(state.cloudConfig, state.storageDir, relativePath, preferCloud);
+                if (result.ok) {
+                    RefreshCloudWorkspaceUiState(state, app, preferCloud, true);
+                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
+                }
+            } else if (actionMode == kCloudWorkspaceActionRestoreBackup) {
+                const CloudWorkspaceResolveResult result =
+                    RestoreCloudWorkspaceBackup(state.storageDir, relativePath, state.cloudWorkspaceActionBackupPath);
+                if (result.ok) {
+                    RefreshCloudWorkspaceUiState(state, app, true, false);
+                    OpenCloudDriftTarget(state, relativePath);
+                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f);
+                } else {
+                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f);
+                }
+            }
+            ResetCloudWorkspaceAction(state);
+            ImGui::CloseCurrentPopup();
+        }
+        if (!canProceed) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button(u8"Отмена", ImVec2(180.0f, 0.0f))) {
+            ResetCloudWorkspaceAction(state);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    if (!popupOpen && ImGui::IsPopupOpen(u8"Подтвердить sync-действие")) {
+        ResetCloudWorkspaceAction(state);
+        ImGui::CloseCurrentPopup();
     }
 }
 
@@ -671,9 +922,12 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             if (state.isAdmin) {
                 std::string openDriftPath;
                 std::string resolveDriftPath;
+                std::string resolveDriftContext;
                 int resolveDriftMode = 0;
                 std::string restoreBackupRelativePath;
                 std::filesystem::path restoreBackupPath;
+                std::string restoreBackupSourceKind;
+                std::int64_t restoreBackupCreatedAt = 0;
                 if (state.cloudWorkspaceDrift.issueCount > 0) {
                     ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
                     if (state.cloudWorkspaceDrift.conflictCount > 0) {
@@ -711,6 +965,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                             const char* cloudLabel = file.localExists ? u8"Принять облачную" : u8"Загрузить из облака";
                             if (ImGui::SmallButton(cloudLabel)) {
                                 resolveDriftPath = file.relativePath;
+                                resolveDriftContext = file.message;
                                 resolveDriftMode = 1;
                             }
                         }
@@ -719,6 +974,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                             const char* localLabel = file.cloudExists ? u8"Оставить локальную" : u8"Выгрузить локальную";
                             if (ImGui::SmallButton(localLabel)) {
                                 resolveDriftPath = file.relativePath;
+                                resolveDriftContext = file.message;
                                 resolveDriftMode = -1;
                             }
                         }
@@ -731,15 +987,11 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                         OpenCloudDriftTarget(state, openDriftPath);
                     }
                     if (!resolveDriftPath.empty() && resolveDriftMode != 0) {
-                        const bool preferCloud = resolveDriftMode > 0;
-                        const CloudWorkspaceResolveResult resolveResult =
-                            ResolveCloudWorkspaceFileVersion(state.cloudConfig, state.storageDir, resolveDriftPath, preferCloud);
-                        if (resolveResult.ok) {
-                            RefreshCloudWorkspaceUiState(state, app, preferCloud, true);
-                            SetStatus(state, resolveResult.message, 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, resolveResult.message, 1.0f, 0.75f, 0.35f);
-                        }
+                        QueueCloudWorkspaceAction(
+                            state,
+                            resolveDriftMode > 0 ? kCloudWorkspaceActionApplyCloud : kCloudWorkspaceActionPushLocal,
+                            resolveDriftPath,
+                            resolveDriftContext);
                     }
                     ImGui::Separator();
                 } else {
@@ -772,6 +1024,8 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                         if (ImGui::SmallButton(u8"Восстановить")) {
                             restoreBackupRelativePath = backupRelativePath;
                             restoreBackupPath = backup.path;
+                            restoreBackupSourceKind = backup.sourceKind;
+                            restoreBackupCreatedAt = backup.createdAt;
                         }
                         ImGui::PopID();
                     }
@@ -784,15 +1038,14 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 if (hasWorkspaceBackups) {
                     ImGui::TextDisabled(u8"Восстановление меняет только локальный workspace; облако можно синхронизировать после проверки.");
                     if (!restoreBackupRelativePath.empty() && !restoreBackupPath.empty()) {
-                        const CloudWorkspaceResolveResult restoreResult =
-                            RestoreCloudWorkspaceBackup(state.storageDir, restoreBackupRelativePath, restoreBackupPath);
-                        if (restoreResult.ok) {
-                            RefreshCloudWorkspaceUiState(state, app, true, false);
-                            OpenCloudDriftTarget(state, restoreBackupRelativePath);
-                            SetStatus(state, restoreResult.message, 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state, restoreResult.message, 1.0f, 0.75f, 0.35f);
-                        }
+                        QueueCloudWorkspaceAction(
+                            state,
+                            kCloudWorkspaceActionRestoreBackup,
+                            restoreBackupRelativePath,
+                            std::string(u8"Будет восстановлен выбранный snapshot поверх локальной версии."),
+                            restoreBackupSourceKind,
+                            restoreBackupCreatedAt,
+                            restoreBackupPath);
                     }
                     ImGui::Separator();
                 }

@@ -290,6 +290,13 @@ struct GuiRuntimeState {
     std::int64_t updateNoticeCheckedAt = 0;
     bool storageConflictPopupRequest = false;
     std::filesystem::path storageConflictPath;
+    bool cloudWorkspaceActionPopupRequest = false;
+    int cloudWorkspaceActionMode = 0;
+    std::string cloudWorkspaceActionRelativePath;
+    std::string cloudWorkspaceActionContext;
+    std::string cloudWorkspaceActionSourceKind;
+    std::filesystem::path cloudWorkspaceActionBackupPath;
+    std::int64_t cloudWorkspaceActionSourceCreatedAt = 0;
     bool requestExit = false;
 };
 
