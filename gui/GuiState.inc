@@ -21,6 +21,7 @@ struct GuiDataState {
     std::vector<PipelineStep> pipelineSteps;
     std::vector<ProfessionEntry> professions;
     std::vector<std::string> bannerTexts;
+    WorkspaceSyncHealth syncHealth;
     std::unordered_map<std::string, std::string> profileProfessionCache;
     std::unordered_map<std::string, std::string> profileLoginCache;
     std::unordered_map<std::string, bool> profileBlockedCache;

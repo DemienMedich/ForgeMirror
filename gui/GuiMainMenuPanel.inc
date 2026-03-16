@@ -273,6 +273,13 @@ static std::int64_t ComputeStorageStamp(const std::filesystem::path& storageDir)
             latest = std::max(latest, stamp);
         }
     }
+    auto taskAuditPath = storageDir / "meta" / "task-audit.log";
+    if (std::filesystem::exists(taskAuditPath, ec)) {
+        auto stamp = ToUnixSeconds(std::filesystem::last_write_time(taskAuditPath, ec));
+        if (!ec) {
+            latest = std::max(latest, stamp);
+        }
+    }
     auto gameplayPath = storageDir / "meta" / "gameplay.ini";
     if (std::filesystem::exists(gameplayPath, ec)) {
         auto stamp = ToUnixSeconds(std::filesystem::last_write_time(gameplayPath, ec));
@@ -295,6 +302,7 @@ static std::int64_t GetStorageStamp(GuiState& state) {
     if (state.lastStorageScanAt <= 0 || now - state.lastStorageScanAt >= 2) {
         state.lastStorageScanAt = now;
         state.lastStorageDataAt = ComputeStorageStamp(state.storageDir);
+        state.syncHealth = InspectWorkspaceSyncHealth(state.storageDir, state.modules);
     }
     return state.lastStorageDataAt;
 }
@@ -606,6 +614,20 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
         if (state.cloudConfig.enabled && ImGui::BeginMenu(u8"Облако")) {
             ImGui::TextDisabled(u8"Папка: %s", cloudRootLabel.c_str());
             ImGui::Separator();
+            if (state.isAdmin) {
+                if (state.syncHealth.issueCount > 0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
+                    ImGui::Text(u8"Sync-файлы: %d проблем", state.syncHealth.issueCount);
+                    ImGui::PopStyleColor();
+                    for (const auto& issue : state.syncHealth.issues) {
+                        ImGui::BulletText("%s", issue.c_str());
+                    }
+                    ImGui::Separator();
+                } else {
+                    ImGui::TextDisabled(u8"Sync-файлы: ok");
+                    ImGui::Separator();
+                }
+            }
             if (state.isAdmin && state.strayFileCount > 0) {
                 ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(AppLogLevel::Warning));
                 ImGui::Text(u8"Лишние файлы: %d", state.strayFileCount);
@@ -654,6 +676,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             }
             if (ImGui::MenuItem(u8"Расширенный отчет")) {
                 std::vector<std::string> strayList;
+                const WorkspaceSyncHealth syncHealth = InspectWorkspaceSyncHealth(state.storageDir, state.modules);
                 if (CollectStrayStorageFiles(state.storageDir, strayList)) {
                     std::error_code ec;
                     auto reportDir = state.storageDir / "meta" / "reports";
@@ -674,6 +697,15 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                             out << "Отчет хранилища\n";
                             out << "Папка: " << state.storageDir.u8string() << "\n";
                             out << "Дата: " << FormatTimestamp(NowSeconds(), "%Y-%m-%d %H:%M") << "\n";
+                            out << "Проблемы sync-файлов: " << syncHealth.issueCount << "\n";
+                            if (syncHealth.issues.empty()) {
+                                out << "Sync-файлы: ok\n";
+                            } else {
+                                for (const auto& issue : syncHealth.issues) {
+                                    out << issue << "\n";
+                                }
+                            }
+                            out << "\n";
                             out << "Лишние элементы: " << strayList.size() << "\n\n";
                             if (strayList.empty()) {
                                 out << "Лишние файлы не найдены.\n";
@@ -811,19 +843,32 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             const std::int64_t storageStamp = GetStorageStamp(state);
             const bool hasOk = state.lastCloudSyncOk && state.lastCloudSyncOkAt > 0;
             const bool synced = hasOk && storageStamp <= state.lastCloudSyncOkAt;
+            const bool hasSyncHealthIssues = state.syncHealth.issueCount > 0;
             if (!hasOk) {
                 dotColor = warnColor;
                 tooltip = u8"Синхронизация ещё не выполнялась.";
-            } else if (synced) {
+            } else if (synced && !hasSyncHealthIssues) {
                 dotColor = okColor;
                 tooltip = u8"Синхронизировано.";
             } else {
                 dotColor = warnColor;
-                tooltip = u8"Есть несинхронизированные данные.";
+                tooltip = hasSyncHealthIssues ? u8"Sync-файлы требуют внимания." : u8"Есть несинхронизированные данные.";
             }
             if (state.lastCloudSyncOkAt > 0) {
                 tooltip += u8"\nПоследняя синхронизация: ";
                 tooltip += FormatTimestamp(state.lastCloudSyncOkAt, "%Y-%m-%d %H:%M");
+            }
+            if (hasSyncHealthIssues) {
+                tooltip += u8"\nПроблемы sync-файлов: ";
+                tooltip += std::to_string(state.syncHealth.issueCount);
+                const size_t shown = std::min<size_t>(3, state.syncHealth.issues.size());
+                for (size_t i = 0; i < shown; ++i) {
+                    tooltip += "\n- ";
+                    tooltip += state.syncHealth.issues[i];
+                }
+                if (state.syncHealth.issues.size() > shown) {
+                    tooltip += u8"\n- ...";
+                }
             }
         }
         if (state.strayFileCount > 0) {

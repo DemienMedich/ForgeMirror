@@ -1048,6 +1048,160 @@ std::vector<ProfessionEntry> LoadProfessionsData(const std::filesystem::path& st
     return out;
 }
 
+WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& storageDir,
+                                               const ModuleToggles& modules) {
+    WorkspaceSyncHealth health;
+    auto append_issue = [&](WorkspaceSyncFileHealth file, const std::string& details) {
+        file.valid = false;
+        file.message = details;
+        health.issues.push_back(file.relativePath + ": " + details);
+        health.files.push_back(std::move(file));
+        health.issueCount = static_cast<int>(health.issues.size());
+    };
+    auto append_ok = [&](WorkspaceSyncFileHealth file, const std::string& details) {
+        file.valid = true;
+        file.message = details;
+        health.files.push_back(std::move(file));
+    };
+    auto count_non_empty_lines = [&](const std::string& content) {
+        size_t count = 0;
+        std::istringstream in(content);
+        std::string line;
+        bool firstLine = true;
+        while (std::getline(in, line)) {
+            if (firstLine) {
+                StripUtf8Bom(line);
+                firstLine = false;
+            }
+            if (!TrimCopy(line).empty()) {
+                count += 1;
+            }
+        }
+        return count;
+    };
+    auto parse_pipeline_objects = [&](const std::string& content) {
+        auto objects = ParseJsonObjectArray(content);
+        if (!objects.empty()) {
+            return objects;
+        }
+        const size_t stepsPos = content.find("\"steps\"");
+        const size_t lb = content.find('[', stepsPos);
+        const size_t rb = content.rfind(']');
+        if (stepsPos != std::string::npos && lb != std::string::npos && rb != std::string::npos && rb > lb) {
+            return ParseJsonObjectArray(content.substr(lb, rb - lb + 1));
+        }
+        return objects;
+    };
+
+    if (modules.tasks) {
+        WorkspaceSyncFileHealth tasksFile;
+        tasksFile.relativePath = "meta/tasks.json";
+        const auto tasksPath = TasksStoragePath(storageDir);
+        std::error_code ec;
+        tasksFile.exists = std::filesystem::exists(tasksPath, ec);
+        bool tasksDataPresent = false;
+        size_t loadedTaskCount = 0;
+        if (!tasksFile.exists || ec) {
+            append_ok(std::move(tasksFile), u8"файл ещё не создан.");
+        } else {
+            const std::string content = ReadAllText(tasksPath);
+            const std::string trimmed = TrimCopy(content);
+            tasksFile.empty = trimmed.empty();
+            if (trimmed.empty()) {
+                append_issue(std::move(tasksFile), u8"файл пустой.");
+            } else {
+                const auto objects = ParseJsonObjectArray(content);
+                tasksFile.rawEntries = objects.size();
+                const auto loaded = LoadTasksData(storageDir);
+                loadedTaskCount = loaded.size();
+                tasksFile.loadedEntries = loadedTaskCount;
+                tasksDataPresent = trimmed != "[]" || loadedTaskCount > 0;
+                if (objects.empty() && trimmed != "[]") {
+                    append_issue(std::move(tasksFile), u8"JSON не распознан.");
+                } else if (!objects.empty() && loadedTaskCount == 0) {
+                    append_issue(std::move(tasksFile), u8"все записи отброшены при загрузке.");
+                } else if (loadedTaskCount < objects.size()) {
+                    append_issue(std::move(tasksFile), u8"часть задач пропущена при загрузке.");
+                } else {
+                    append_ok(std::move(tasksFile),
+                              loadedTaskCount > 0 ? u8"файл читается корректно." : u8"корректный пустой список.");
+                }
+            }
+        }
+
+        WorkspaceSyncFileHealth auditFile;
+        auditFile.relativePath = "meta/task-audit.log";
+        const auto auditPath = TaskAuditStoragePath(storageDir);
+        ec.clear();
+        auditFile.exists = std::filesystem::exists(auditPath, ec);
+        if (!auditFile.exists || ec) {
+            if (tasksDataPresent && loadedTaskCount > 0) {
+                append_issue(std::move(auditFile), u8"журнал отсутствует при наличии задач.");
+            } else {
+                append_ok(std::move(auditFile), u8"журнал ещё не создан.");
+            }
+        } else {
+            const std::string content = ReadAllText(auditPath);
+            auditFile.empty = TrimCopy(content).empty();
+            auditFile.rawEntries = count_non_empty_lines(content);
+            const auto loadedAudit = LoadTaskAuditData(storageDir, 0);
+            auditFile.loadedEntries = loadedAudit.size();
+            if (auditFile.rawEntries == 0) {
+                if (tasksDataPresent && loadedTaskCount > 0) {
+                    append_issue(std::move(auditFile), u8"журнал пустой при наличии задач.");
+                } else {
+                    append_ok(std::move(auditFile), u8"журнал пуст, но задач ещё нет.");
+                }
+            } else if (auditFile.loadedEntries < auditFile.rawEntries) {
+                append_issue(std::move(auditFile), u8"часть строк журнала не распознана.");
+            } else {
+                append_ok(std::move(auditFile), u8"журнал читается корректно.");
+            }
+        }
+    }
+
+    if (modules.pipeline) {
+        WorkspaceSyncFileHealth pipelineFile;
+        pipelineFile.relativePath = "meta/pipeline.json";
+        const auto pipelinePath = PipelineStoragePath(storageDir);
+        std::error_code ec;
+        pipelineFile.exists = std::filesystem::exists(pipelinePath, ec);
+        if (!pipelineFile.exists || ec) {
+            append_ok(std::move(pipelineFile), u8"файл ещё не создан; используется встроенный пайплайн.");
+        } else {
+            const std::string content = ReadAllText(pipelinePath);
+            const std::string trimmed = TrimCopy(content);
+            pipelineFile.empty = trimmed.empty();
+            if (trimmed.empty()) {
+                append_issue(std::move(pipelineFile), u8"файл пустой.");
+            } else {
+                const auto objects = parse_pipeline_objects(content);
+                pipelineFile.rawEntries = objects.size();
+                size_t titledEntries = 0;
+                for (const auto& obj : objects) {
+                    auto it = obj.find("title");
+                    if (it != obj.end() && !it->second.empty()) {
+                        titledEntries += 1;
+                    }
+                }
+                pipelineFile.loadedEntries = LoadPipelineData(storageDir).size();
+                if (objects.empty()) {
+                    append_issue(std::move(pipelineFile),
+                                 trimmed == "[]" ? u8"список этапов пустой." : u8"JSON не распознан.");
+                } else if (titledEntries == 0) {
+                    append_issue(std::move(pipelineFile), u8"нет ни одного валидного этапа.");
+                } else if (titledEntries < objects.size()) {
+                    append_issue(std::move(pipelineFile), u8"часть этапов будет проигнорирована при загрузке.");
+                } else {
+                    append_ok(std::move(pipelineFile), u8"файл читается корректно.");
+                }
+            }
+        }
+    }
+
+    return health;
+}
+
 std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir) {
     std::vector<PipelineStep> out;
     const std::string content = ReadAllText(PipelineStoragePath(storageDir));
