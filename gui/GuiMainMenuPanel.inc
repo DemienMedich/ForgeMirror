@@ -9,10 +9,6 @@
 
 static bool LaunchPath(const std::filesystem::path& path) {
     if (path.empty()) return false;
-#include <algorithm>
-#include <cctype>
-#include <vector>
-
 #if defined(_WIN32)
     std::filesystem::path full(path);
     std::error_code ec;
@@ -59,6 +55,10 @@ struct CloudWorkspacePreviewInfo {
     std::int64_t modifiedAt = 0;
     int entryCount = -1;
     int secondaryCount = -1;
+    int tertiaryCount = -1;
+    std::string entryLabel;
+    std::string secondaryLabel;
+    std::string tertiaryLabel;
     std::string summary;
     std::string detail;
 };
@@ -98,10 +98,28 @@ static std::string FormatCloudPreviewSize(std::uintmax_t sizeBytes) {
     return out.str();
 }
 
-static CloudWorkspacePreviewInfo InspectWorkspaceFilePreview(const std::filesystem::path& storageRoot,
-                                                             const std::string& relativePath) {
+static std::string FormatCloudPreviewCountDelta(int delta) {
+    if (delta > 0) return "+" + std::to_string(delta);
+    return std::to_string(delta);
+}
+
+static std::string FormatCloudPreviewMetricValue(int value) {
+    return value >= 0 ? std::to_string(value) : std::string(u8"нет");
+}
+
+static std::string FormatCloudPreviewSizeDelta(std::int64_t delta) {
+    const std::uintmax_t absValue =
+        static_cast<std::uintmax_t>(delta < 0 ? -delta : delta);
+    const std::string amount = FormatCloudPreviewSize(absValue);
+    if (delta > 0) return "+" + amount;
+    if (delta < 0) return "-" + amount;
+    return amount;
+}
+
+static CloudWorkspacePreviewInfo InspectWorkspacePreviewPath(const std::filesystem::path& filePath,
+                                                            const std::string& relativePath) {
     CloudWorkspacePreviewInfo info;
-    info.path = storageRoot / std::filesystem::u8path(relativePath);
+    info.path = filePath;
     std::error_code ec;
     info.exists = std::filesystem::exists(info.path, ec);
     if (!info.exists || ec) return info;
@@ -114,17 +132,19 @@ static CloudWorkspacePreviewInfo InspectWorkspaceFilePreview(const std::filesyst
     }
 
     if (relativePath == "meta/tasks.json") {
-        const auto tasks = LoadTasksData(storageRoot);
+        const auto tasks = LoadTasksDataFromFile(info.path);
         int xpPendingCount = 0;
         for (const auto& task : tasks) {
             if (TaskNeedsXpAward(task)) xpPendingCount += 1;
         }
         info.entryCount = static_cast<int>(tasks.size());
         info.secondaryCount = xpPendingCount;
+        info.entryLabel = u8"Задач";
+        info.secondaryLabel = u8"Ждут XP";
         info.summary = u8"Задач: " + std::to_string(info.entryCount);
         info.detail = u8"Ждут XP: " + std::to_string(xpPendingCount);
     } else if (relativePath == "meta/pipeline.json") {
-        const auto steps = LoadPipelineData(storageRoot);
+        const auto steps = LoadPipelineDataFromFile(info.path);
         int branchingCount = 0;
         int finalCount = 0;
         for (const auto& step : steps) {
@@ -136,24 +156,34 @@ static CloudWorkspacePreviewInfo InspectWorkspaceFilePreview(const std::filesyst
         }
         info.entryCount = static_cast<int>(steps.size());
         info.secondaryCount = branchingCount;
+        info.tertiaryCount = finalCount;
+        info.entryLabel = u8"Этапов";
+        info.secondaryLabel = u8"Ветвлений";
+        info.tertiaryLabel = u8"Финалов";
         info.summary = u8"Этапов: " + std::to_string(info.entryCount);
         info.detail = u8"Ветвлений: " + std::to_string(branchingCount) + u8", финалов: " + std::to_string(finalCount);
     }
     return info;
 }
 
+static CloudWorkspacePreviewInfo InspectWorkspaceFilePreview(const std::filesystem::path& storageRoot,
+                                                             const std::string& relativePath) {
+    return InspectWorkspacePreviewPath(storageRoot / std::filesystem::u8path(relativePath), relativePath);
+}
+
 static CloudWorkspacePreviewInfo InspectBackupFilePreview(const CloudWorkspaceBackupEntry& backup) {
-    CloudWorkspacePreviewInfo info;
-    info.path = backup.path;
-    std::error_code ec;
-    info.exists = std::filesystem::exists(backup.path, ec);
-    if (!info.exists || ec) return info;
-    info.sizeBytes = std::filesystem::file_size(backup.path, ec);
-    info.modifiedAt = backup.createdAt;
-    info.summary = CloudBackupSourceLabel(backup.sourceKind);
-    std::string stamp = FormatTimestamp(backup.createdAt, "%Y-%m-%d %H:%M");
-    if (!stamp.empty()) {
-        info.detail = u8"Создан: " + stamp;
+    CloudWorkspacePreviewInfo info = InspectWorkspacePreviewPath(backup.path, backup.relativePath);
+    if (backup.createdAt > 0) {
+        info.modifiedAt = backup.createdAt;
+    }
+    if (info.summary.empty()) {
+        info.summary = CloudBackupSourceLabel(backup.sourceKind);
+    }
+    if (info.detail.empty() && backup.createdAt > 0) {
+        const std::string stamp = FormatTimestamp(backup.createdAt, "%Y-%m-%d %H:%M");
+        if (!stamp.empty()) {
+            info.detail = u8"Создан: " + stamp;
+        }
     }
     return info;
 }
@@ -301,6 +331,74 @@ static void DrawCloudWorkspacePreviewBlock(const char* label, const CloudWorkspa
     ImGui::TextDisabled("%s", info.path.u8string().c_str());
 }
 
+static bool DrawCloudWorkspacePreviewDiffRow(const std::string& label, int beforeValue, int afterValue) {
+    if (label.empty() || (beforeValue < 0 && afterValue < 0)) return false;
+    const std::string beforeText = FormatCloudPreviewMetricValue(beforeValue);
+    const std::string afterText = FormatCloudPreviewMetricValue(afterValue);
+    const bool changed = beforeValue != afterValue;
+    if (changed && beforeValue >= 0 && afterValue >= 0) {
+        const std::string delta = FormatCloudPreviewCountDelta(afterValue - beforeValue);
+        ImGui::BulletText("%s: %s -> %s (%s)", label.c_str(), beforeText.c_str(), afterText.c_str(), delta.c_str());
+    } else if (changed) {
+        ImGui::BulletText("%s: %s -> %s", label.c_str(), beforeText.c_str(), afterText.c_str());
+    } else {
+        ImGui::TextDisabled("%s: %s -> %s", label.c_str(), beforeText.c_str(), afterText.c_str());
+    }
+    return changed;
+}
+
+static bool DrawCloudWorkspacePreviewSizeDiffRow(const CloudWorkspacePreviewInfo& sourcePreview,
+                                                 const CloudWorkspacePreviewInfo& targetPreview) {
+    if (!sourcePreview.exists && !targetPreview.exists) return false;
+    const std::string beforeText = targetPreview.exists ? FormatCloudPreviewSize(targetPreview.sizeBytes) : std::string(u8"нет");
+    const std::string afterText = sourcePreview.exists ? FormatCloudPreviewSize(sourcePreview.sizeBytes) : std::string(u8"нет");
+    const bool changed = !sourcePreview.exists || !targetPreview.exists || sourcePreview.sizeBytes != targetPreview.sizeBytes;
+    if (changed && sourcePreview.exists && targetPreview.exists) {
+        const std::int64_t delta = static_cast<std::int64_t>(sourcePreview.sizeBytes) -
+                                   static_cast<std::int64_t>(targetPreview.sizeBytes);
+        const std::string deltaText = FormatCloudPreviewSizeDelta(delta);
+        ImGui::BulletText(u8"Размер: %s -> %s (%s)", beforeText.c_str(), afterText.c_str(), deltaText.c_str());
+    } else if (changed) {
+        ImGui::BulletText(u8"Размер: %s -> %s", beforeText.c_str(), afterText.c_str());
+    } else {
+        ImGui::TextDisabled(u8"Размер: %s -> %s", beforeText.c_str(), afterText.c_str());
+    }
+    return changed;
+}
+
+static void DrawCloudWorkspacePreviewDiff(const CloudWorkspacePreviewInfo& sourcePreview,
+                                          const CloudWorkspacePreviewInfo& targetPreview) {
+    ImGui::TextDisabled(u8"Ключевые изменения");
+    bool shown = false;
+    bool changed = false;
+
+    if (!sourcePreview.entryLabel.empty() || !targetPreview.entryLabel.empty()) {
+        shown = true;
+        changed = DrawCloudWorkspacePreviewDiffRow(!sourcePreview.entryLabel.empty() ? sourcePreview.entryLabel : targetPreview.entryLabel,
+                                                   targetPreview.entryCount, sourcePreview.entryCount) || changed;
+    }
+    if (!sourcePreview.secondaryLabel.empty() || !targetPreview.secondaryLabel.empty()) {
+        shown = true;
+        changed = DrawCloudWorkspacePreviewDiffRow(!sourcePreview.secondaryLabel.empty() ? sourcePreview.secondaryLabel : targetPreview.secondaryLabel,
+                                                   targetPreview.secondaryCount, sourcePreview.secondaryCount) || changed;
+    }
+    if (!sourcePreview.tertiaryLabel.empty() || !targetPreview.tertiaryLabel.empty()) {
+        shown = true;
+        changed = DrawCloudWorkspacePreviewDiffRow(!sourcePreview.tertiaryLabel.empty() ? sourcePreview.tertiaryLabel : targetPreview.tertiaryLabel,
+                                                   targetPreview.tertiaryCount, sourcePreview.tertiaryCount) || changed;
+    }
+
+    if (sourcePreview.exists || targetPreview.exists) {
+        shown = true;
+        changed = DrawCloudWorkspacePreviewSizeDiffRow(sourcePreview, targetPreview) || changed;
+    }
+    if (!shown) {
+        ImGui::TextDisabled(u8"Ключевые метрики недоступны для сравнения.");
+    } else if (!changed) {
+        ImGui::TextDisabled(u8"По ключевым метрикам различий нет.");
+    }
+}
+
 static void DrawCloudWorkspaceActionModal(GuiState& state, AppContext& app) {
     bool open = state.cloudWorkspaceActionPopupRequest;
     if (open) {
@@ -360,6 +458,8 @@ static void DrawCloudWorkspaceActionModal(GuiState& state, AppContext& app) {
         DrawCloudWorkspacePreviewBlock(sourceLabel.c_str(), sourcePreview);
         ImGui::Spacing();
         DrawCloudWorkspacePreviewBlock(targetAreaLabel.c_str(), targetPreview);
+        ImGui::Spacing();
+        DrawCloudWorkspacePreviewDiff(sourcePreview, targetPreview);
         ImGui::Spacing();
         if (actionMode == kCloudWorkspaceActionRestoreBackup) {
             ImGui::TextWrapped(u8"Восстановление меняет только локальный workspace. Облако можно синхронизировать после проверки.");

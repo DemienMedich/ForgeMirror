@@ -153,6 +153,20 @@ std::vector<std::unordered_map<std::string, std::string>> ParseJsonObjectArray(c
     return objects;
 }
 
+std::vector<std::unordered_map<std::string, std::string>> ParsePipelineObjectsFromContent(const std::string& content) {
+    auto objects = ParseJsonObjectArray(content);
+    if (!objects.empty()) {
+        return objects;
+    }
+    const size_t stepsPos = content.find("\"steps\"");
+    const size_t lb = content.find('[', stepsPos);
+    const size_t rb = content.rfind(']');
+    if (stepsPos != std::string::npos && lb != std::string::npos && rb != std::string::npos && rb > lb) {
+        return ParseJsonObjectArray(content.substr(lb, rb - lb + 1));
+    }
+    return objects;
+}
+
 int ParseInt(const std::string& value, int fallback = 0) {
     try {
         return std::stoi(value);
@@ -918,9 +932,9 @@ std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& stora
     return out;
 }
 
-std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
+std::vector<TaskEntry> LoadTasksDataFromFile(const std::filesystem::path& filePath) {
     std::vector<TaskEntry> out;
-    const std::string content = ReadAllText(TasksStoragePath(storageDir));
+    const std::string content = ReadAllText(filePath);
     if (content.empty()) return out;
     const auto objects = ParseJsonObjectArray(content);
     for (const auto& obj : objects) {
@@ -971,6 +985,10 @@ std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
         out.push_back(std::move(entry));
     }
     return out;
+}
+
+std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
+    return LoadTasksDataFromFile(TasksStoragePath(storageDir));
 }
 
 std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageDir) {
@@ -1079,19 +1097,6 @@ WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& stor
         }
         return count;
     };
-    auto parse_pipeline_objects = [&](const std::string& content) {
-        auto objects = ParseJsonObjectArray(content);
-        if (!objects.empty()) {
-            return objects;
-        }
-        const size_t stepsPos = content.find("\"steps\"");
-        const size_t lb = content.find('[', stepsPos);
-        const size_t rb = content.rfind(']');
-        if (stepsPos != std::string::npos && lb != std::string::npos && rb != std::string::npos && rb > lb) {
-            return ParseJsonObjectArray(content.substr(lb, rb - lb + 1));
-        }
-        return objects;
-    };
 
     if (modules.tasks) {
         WorkspaceSyncFileHealth tasksFile;
@@ -1112,7 +1117,7 @@ WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& stor
             } else {
                 const auto objects = ParseJsonObjectArray(content);
                 tasksFile.rawEntries = objects.size();
-                const auto loaded = LoadTasksData(storageDir);
+                const auto loaded = LoadTasksDataFromFile(tasksPath);
                 loadedTaskCount = loaded.size();
                 tasksFile.loadedEntries = loadedTaskCount;
                 tasksDataPresent = trimmed != "[]" || loadedTaskCount > 0;
@@ -1175,7 +1180,7 @@ WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& stor
             if (trimmed.empty()) {
                 append_issue(std::move(pipelineFile), u8"файл пустой.");
             } else {
-                const auto objects = parse_pipeline_objects(content);
+                const auto objects = ParsePipelineObjectsFromContent(content);
                 pipelineFile.rawEntries = objects.size();
                 size_t titledEntries = 0;
                 for (const auto& obj : objects) {
@@ -1184,7 +1189,7 @@ WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& stor
                         titledEntries += 1;
                     }
                 }
-                pipelineFile.loadedEntries = LoadPipelineData(storageDir).size();
+                pipelineFile.loadedEntries = LoadPipelineDataFromFile(pipelinePath).size();
                 if (objects.empty()) {
                     append_issue(std::move(pipelineFile),
                                  trimmed == "[]" ? u8"список этапов пустой." : u8"JSON не распознан.");
@@ -1202,21 +1207,13 @@ WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& stor
     return health;
 }
 
-std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir) {
+std::vector<PipelineStep> LoadPipelineDataFromFile(const std::filesystem::path& filePath) {
     std::vector<PipelineStep> out;
-    const std::string content = ReadAllText(PipelineStoragePath(storageDir));
+    const std::string content = ReadAllText(filePath);
     if (content.empty()) {
         return DefaultPipelineSteps();
     }
-    auto objects = ParseJsonObjectArray(content);
-    if (objects.empty()) {
-        const size_t stepsPos = content.find("\"steps\"");
-        const size_t lb = content.find('[', stepsPos);
-        const size_t rb = content.rfind(']');
-        if (stepsPos != std::string::npos && lb != std::string::npos && rb != std::string::npos && rb > lb) {
-            objects = ParseJsonObjectArray(content.substr(lb, rb - lb + 1));
-        }
-    }
+    auto objects = ParsePipelineObjectsFromContent(content);
     for (const auto& obj : objects) {
         auto find_value = [&](const char* key) -> std::optional<std::string> {
             auto it = obj.find(key);
@@ -1246,6 +1243,10 @@ std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageD
         return DefaultPipelineSteps();
     }
     return MergeLoadedPipelineWithDefaults(out);
+}
+
+std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir) {
+    return LoadPipelineDataFromFile(PipelineStoragePath(storageDir));
 }
 
 WorkspaceDataSnapshot LoadWorkspaceDataSnapshot(const std::filesystem::path& storageDir,
