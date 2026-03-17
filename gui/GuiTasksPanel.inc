@@ -2036,6 +2036,39 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                           ImGuiWindowFlags_NoScrollbar);
     }
 
+    auto CollectTaskTableAssigneeNames = [&](const TaskEntry& task) -> std::vector<std::string> {
+        std::vector<std::string> ids = task.assignees;
+        if (ids.empty()) {
+            for (const auto& participant : task.participants) {
+                if (!participant.profileId.empty()) {
+                    ids.push_back(participant.profileId);
+                }
+            }
+        }
+        std::vector<std::string> names;
+        names.reserve(ids.size());
+        for (const auto& profileId : ids) {
+            auto it = nameById.find(profileId);
+            names.push_back((it == nameById.end()) ? profileId : it->second);
+        }
+        return names;
+    };
+    auto BuildTaskTableAssigneeSummary = [&](const TaskEntry& task, int maxVisible) -> std::string {
+        const std::vector<std::string> names = CollectTaskTableAssigneeNames(task);
+        if (names.empty()) return u8"Не назначена";
+        std::ostringstream out;
+        out.imbue(std::locale::classic());
+        const int visible = std::min(maxVisible, static_cast<int>(names.size()));
+        for (int i = 0; i < visible; ++i) {
+            if (i > 0) out << ", ";
+            out << names[static_cast<size_t>(i)];
+        }
+        if (static_cast<int>(names.size()) > visible) {
+            out << u8" +" << (static_cast<int>(names.size()) - visible);
+        }
+        return out.str();
+    };
+
     int visibleCount = 0;
     const bool allowBulkSelection = state.isAdmin;
     const int tableColumns = allowBulkSelection ? 9 : 8;
@@ -2089,6 +2122,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             const bool isExpanded = (state.tasksExpandedId == task->id);
+            const bool xpPending = TaskNeedsXpAward(*task);
+            const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *task);
 
             ImGui::TableSetColumnIndex(col++);
             const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
@@ -2183,6 +2218,19 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     UpdateTaskPipeline(task->id, pipelineIndex);
                 }
                 DrawTaskPipelineProgressHint(state, *task);
+            } else if (taskPipelineIndex >= 0 && taskPipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
+                const PipelineStep& step = state.pipelineSteps[static_cast<size_t>(taskPipelineIndex)];
+                const std::string stageCode = TaskPipelineStepCode(step, taskPipelineIndex);
+                const std::string stageTitle = step.title.empty() ? pipelineName : step.title;
+                ImGui::Text("%s", stageCode.c_str());
+                if (!stageTitle.empty() && stageTitle != stageCode && stageTitle != pipelineName) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s", stageTitle.c_str());
+                } else if (!stageTitle.empty() && stageTitle != stageCode) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s", stageTitle.c_str());
+                }
+                DrawTaskPipelineProgressHint(state, *task);
             } else if (pipelineName.empty()) {
                 ImGui::TextDisabled(u8"Без этапа");
                 DrawTaskPipelineProgressHint(state, *task);
@@ -2199,7 +2247,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                   ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAvailWidth)) {
                 state.tasksExpandedId = isExpanded ? std::string() : task->id;
             }
-            if (!task->description.empty() && ImGui::IsItemHovered()) {
+            const bool taskTitleHovered = ImGui::IsItemHovered();
+            ImGui::TextDisabled("%s", ClassificationLabel(task->category));
+            if (xpPending) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP handoff");
+            }
+            if (!task->description.empty() && taskTitleHovered) {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
                 ImGui::TextUnformatted(task->description.c_str());
@@ -2209,10 +2263,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::TableSetColumnIndex(col++);
             const std::string participants = BuildParticipantLabel(*task, nameById);
-            if (participants.empty()) {
-                ImGui::TextDisabled(u8"Не назначена");
-            } else {
-                ImGui::TextUnformatted(participants.c_str());
+            const std::string participantSummary = BuildTaskTableAssigneeSummary(*task, 2);
+            ImGui::TextUnformatted(participantSummary.c_str());
+            if (!participants.empty() && participants != participantSummary && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", participants.c_str());
             }
             if (state.isAdmin && editableTask && task->participants.empty()) {
                 ImGui::SameLine();
@@ -2298,12 +2352,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (ImGui::Combo("##task_status_row", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
                     UpdateTaskStatus(task->id, draftStatus);
                 }
-                DrawTaskXpPendingBadge(*task);
+                if (overdue) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Дедлайн сорван");
+                }
             } else if (normalizedStatus == kTaskStatusDone) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusLabel(normalizedStatus));
-                DrawTaskXpPendingBadge(*task);
             } else if (overdue) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusLabel(normalizedStatus));
+                ImGui::TextDisabled(u8"Дедлайн сорван");
             } else {
                 ImGui::TextUnformatted(TaskStatusLabel(normalizedStatus));
             }

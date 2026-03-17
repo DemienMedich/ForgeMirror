@@ -32,9 +32,10 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.26.
-  - Последнее изменение: detail-pane задач уплотнён: верхняя мета-сводка собрана в компактную 2x4 сетку, контекст задачи вынесен в отдельную секцию, а вторичные админские действия разложены по collapsible-блокам `Параметры`, `Навыки`, `Пайплайн и handoff`, `Удаление и откат`.
+  - Ветка: beta. Версия: 0.4.27.
+  - Последнее изменение: таблица задач стала читаться быстрее: lifecycle-статус очищен от XP-handoff, handoff вынесен под название задачи, pipeline показывает короткий code/title, а колонка исполнителей сжимает длинные списки до компактного summary с tooltip.
 - Done:
+  - Задачи UX: таблица задач разделяет три сигнала по разным зонам строки: статус жизненного цикла, XP handoff и pipeline-state; длинные списки исполнителей схлопываются в summary `имя, имя +N`.
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
   - Архитектура GUI: добавлен `AppTaskProjectService`, создание/обновление/массовые операции/удаление задач и сохранение/удаление проектов переведены из GUI в app-service слой.
   - Архитектура GUI: добавлен `AppProfessionService`, сохранение/удаление профессий и назначение профессии профилям вынесены из GUI в app-service с rollback при ошибке.
@@ -200,18 +201,11 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiMainMenuPanel.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiMainLoop.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiState.inc`
-  - `Z:\\CPP\\ForgeMirror\\include\\CloudSync.h`
-  - `Z:\\CPP\\ForgeMirror\\src\\CloudSync.cpp`
-  - `Z:\\CPP\\ForgeMirror\\src\\AppWorkspaceDataService.cpp`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiTasksPanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.26.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.27.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
-  - `C:\\Users\\mrdem\\Documents\\Таблицы\\Пайплайн\\2026-01-27_Пайплайн_схема_v1.xlsx`
-  - `C:\\Users\\mrdem\\AppData\\Roaming\\ForgeMirror\\meta\\pipeline.json`
 - Remaining (taskmanager):
   - (пусто)
 
