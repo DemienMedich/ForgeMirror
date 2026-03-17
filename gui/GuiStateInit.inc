@@ -65,8 +65,9 @@ void InitGuiState(GuiState& state, AppContext& app,
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
     state.windowFullscreenLast = state.ui.windowFullscreen;
-    glfwSetWindowAttrib(window, GLFW_DECORATED, state.ui.windowDecorated ? GLFW_TRUE : GLFW_FALSE);
-    state.windowDecoratedLast = state.ui.windowDecorated;
+    const bool effectiveDecorated = state.ui.windowDecorated && !state.ui.windowFullscreen;
+    glfwSetWindowAttrib(window, GLFW_DECORATED, effectiveDecorated ? GLFW_TRUE : GLFW_FALSE);
+    state.windowDecoratedLast = effectiveDecorated;
     if (state.ui.windowFullscreen) {
         state.windowFullscreenLast = false;
         ApplyWindowMode(window, state);

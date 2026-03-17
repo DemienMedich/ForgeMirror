@@ -125,7 +125,11 @@ void ApplyWindowMode(GLFWwindow* window, GuiState& state) {
         GLFWmonitor* monitor = FindMonitorForWindow(window);
         const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
         if (monitor && mode) {
-            glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+            int mx = 0;
+            int my = 0;
+            glfwGetMonitorPos(monitor, &mx, &my);
+            // Prefer windowed fullscreen over exclusive monitor mode so OS capture keeps seeing a normal window.
+            glfwSetWindowMonitor(window, nullptr, mx, my, mode->width, mode->height, 0);
         }
     } else {
         int restoreW = state.windowedW > 0 ? state.windowedW : 1280;
