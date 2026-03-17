@@ -96,6 +96,7 @@ struct ProjectPortfolioStats {
     int overdueProjects = 0;
     int xpPendingProjects = 0;
     int totalActiveTasks = 0;
+    int totalOverdueTasks = 0;
     int totalXpPendingTasks = 0;
 };
 
@@ -137,6 +138,7 @@ static ProjectPortfolioStats BuildProjectPortfolioStats(const std::vector<Projec
         }
         if (stats.overdue > 0) {
             summary.overdueProjects += 1;
+            summary.totalOverdueTasks += stats.overdue;
         }
         if (stats.xpPending > 0) {
             summary.xpPendingProjects += 1;
@@ -144,6 +146,22 @@ static ProjectPortfolioStats BuildProjectPortfolioStats(const std::vector<Projec
         }
     }
     return summary;
+}
+
+static void OpenTasksFromProjectHub(GuiState& state, int projectFilterIndex, int quickFilter) {
+    state.showProjects = false;
+    state.showTasks = true;
+    state.tasksQuickFilter = quickFilter;
+    state.tasksFilterProfile = 0;
+    state.tasksFilterProject = projectFilterIndex;
+    state.tasksFilterPipeline = 0;
+    state.tasksFilterStatus = 0;
+    state.tasksFilterPriority = 0;
+    state.tasksFilterDays = 0;
+    state.tasksSortMode = 0;
+    state.filters.tasks.fill('\0');
+    state.tasksExpandedId.clear();
+    state.taskSelectionIds.clear();
 }
 
 static void EnsureTaskPlanAssigneesSize(GuiState& state) {
@@ -315,6 +333,49 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::EndTable();
     }
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
+    if (ImGui::BeginTable("projects_hub_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
+        const bool canUseTasksHub = state.modules.tasks;
+        ImGui::TableSetupColumn("projects_open_all", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("projects_open_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("projects_open_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("projects_open_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        if (!canUseTasksHub) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Все задачи", ImVec2(-1.0f, 0.0f))) {
+            OpenTasksFromProjectHub(state, 0, 0);
+        }
+        if (!canUseTasksHub) ImGui::EndDisabled();
+        ImGui::TextDisabled(u8"%d проектов", portfolio.totalProjects);
+
+        ImGui::TableSetColumnIndex(1);
+        if (!canUseTasksHub || portfolio.totalActiveTasks <= 0) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Активные", ImVec2(-1.0f, 0.0f))) {
+            OpenTasksFromProjectHub(state, 0, 7);
+        }
+        if (!canUseTasksHub || portfolio.totalActiveTasks <= 0) ImGui::EndDisabled();
+        ImGui::TextDisabled(u8"%d задач", portfolio.totalActiveTasks);
+
+        ImGui::TableSetColumnIndex(2);
+        if (!canUseTasksHub || portfolio.totalXpPendingTasks <= 0) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Ждут XP", ImVec2(-1.0f, 0.0f))) {
+            OpenTasksFromProjectHub(state, 0, 6);
+        }
+        if (!canUseTasksHub || portfolio.totalXpPendingTasks <= 0) ImGui::EndDisabled();
+        ImGui::TextDisabled(u8"%d задач", portfolio.totalXpPendingTasks);
+
+        ImGui::TableSetColumnIndex(3);
+        if (!canUseTasksHub || portfolio.totalOverdueTasks <= 0) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Просрочка", ImVec2(-1.0f, 0.0f))) {
+            OpenTasksFromProjectHub(state, 0, 3);
+        }
+        if (!canUseTasksHub || portfolio.totalOverdueTasks <= 0) ImGui::EndDisabled();
+        ImGui::TextDisabled(u8"%d задач", portfolio.totalOverdueTasks);
+
+        ImGui::EndTable();
+    }
+    ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
     int shownProjects = 0;
     if (ImGui::BeginTable("projects_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
@@ -322,7 +383,7 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn("tasks", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 170.0f);
+        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 240.0f);
         ImGui::TableHeadersRow();
 
         const int sortMode = std::clamp(state.projectsSortMode, 0, 3);
@@ -358,6 +419,8 @@ void DrawProjectsPanel(GuiState& state) {
         for (int idx : projectOrder) {
             const auto& project = state.projects[idx];
             const auto& taskStats = projectStats[idx];
+            const int projectFilterIndex = 2 + idx;
+            const int activeTasks = taskStats.created + taskStats.inProgress;
             const std::string hay = project.name + " " + project.description;
             if (!MatchesFilter(hay, state.filters.projects.data())) {
                 continue;
@@ -417,9 +480,23 @@ void DrawProjectsPanel(GuiState& state) {
             const bool canOpenTasks = state.modules.tasks;
             if (!canOpenTasks) ImGui::BeginDisabled();
             if (ImGui::SmallButton(u8"К задачам##open_tasks_project")) {
-                state.showProjects = false;
-                state.showTasks = true;
-                state.tasksFilterProject = 2 + idx;
+                OpenTasksFromProjectHub(state, projectFilterIndex, 0);
+            }
+            if (canOpenTasks && taskStats.xpPending > 0) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton(u8"XP##open_tasks_project_xp")) {
+                    OpenTasksFromProjectHub(state, projectFilterIndex, 6);
+                }
+            } else if (canOpenTasks && taskStats.overdue > 0) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton(u8"Срок##open_tasks_project_deadline")) {
+                    OpenTasksFromProjectHub(state, projectFilterIndex, 3);
+                }
+            } else if (canOpenTasks && activeTasks > 0) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton(u8"Актив##open_tasks_project_active")) {
+                    OpenTasksFromProjectHub(state, projectFilterIndex, 7);
+                }
             }
             if (!canOpenTasks) ImGui::EndDisabled();
             ImGui::SameLine();

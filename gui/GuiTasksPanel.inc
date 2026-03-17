@@ -709,6 +709,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             } else if (state.tasksQuickFilter == 4) {
                 const std::int64_t nextWeekEnd = dayStart + 7 * 86400;
                 if (task->deadlineAt <= 0 || task->deadlineAt < dayStart || task->deadlineAt >= nextWeekEnd) continue;
+            } else if (state.tasksQuickFilter == 6) {
+                if (!TaskNeedsXpAward(*task)) continue;
+            } else if (state.tasksQuickFilter == 7) {
+                if (NormalizeTaskStatus(task->status) == kTaskStatusDone) continue;
             }
 
             filtered.push_back(task);
@@ -786,7 +790,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
         static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
 
-    const char* quickFilterLabels[] = {u8"Все", u8"Мне назначено", u8"Сегодня", u8"Просрочено", u8"7 дней", u8"Без проекта"};
+    const char* quickFilterLabels[] = {
+        u8"Все",
+        u8"Мне назначено",
+        u8"Сегодня",
+        u8"Просрочено",
+        u8"7 дней",
+        u8"Без проекта",
+        u8"Ждут XP",
+        u8"Активные"
+    };
     state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
     if (BeginCard("tasks_toolbar_card")) {
         DrawCardHeader(u8"Быстрый доступ");
