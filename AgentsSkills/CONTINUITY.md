@@ -32,9 +32,10 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.28.
-  - Последнее изменение: модуль `Проекты` стал navigation hub для `Задач`: верхняя summary-панель открывает общий поток, активные, XP handoff и просрочку, а строки проекта дают быстрые переходы в соответствующий task-focus по самому проекту.
+  - Ветка: beta. Версия: 0.4.29.
+  - Последнее изменение: профильный блок задач стал ближе к task-manager: добавлены summary-метрики по активным/просрочке/XP handoff/главному фокусу, быстрые переходы в профильный task-focus и более читаемое отображение этапа и категории в списке активных задач.
 - Done:
+  - Профиль UX: блок задач получил overview-сводку, кнопки `Все / Активные / Просрочка / Ждут XP`, quick-pереход из `Выполненных задач` в pending XP и более информативные строки активных задач.
   - Проекты UX: добавлены hub-переходы из summary и строк проекта в модуль `Задачи`; task quick filters расширены режимами `Ждут XP` и `Активные`.
   - Задачи UX: таблица задач разделяет три сигнала по разным зонам строки: статус жизненного цикла, XP handoff и pipeline-state; длинные списки исполнителей схлопываются в summary `имя, имя +N`.
   - Архитектура GUI: добавлен `AppWorkspaceDataService`, загрузка tasks/projects/shortcuts/pipeline/professions/banner/rules/storage сведена в snapshot-вызов вне GUI-слоя.
@@ -202,12 +203,12 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProjects.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiTasksPanel.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiState.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiTasks.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfilePanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfileSections.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.28.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.29.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)

@@ -1091,80 +1091,111 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
     const std::int64_t nowSec = NowSeconds();
 
     if (ImGui::CollapsingHeader(u8"Текущие задачи", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const ProfileTaskOverview taskOverview = BuildProfileTaskOverview(state, profileId);
         std::vector<const TaskEntry*> activeItems;
         activeItems.reserve(state.tasks.size());
-        int newTasks = 0;
-        int inProgressTasks = 0;
-        int overdueTasks = 0;
-        int xpPendingTasks = 0;
         for (const auto& task : state.tasks) {
             if (!TaskHasAssignee(task, profileId)) continue;
             const int status = NormalizeTaskStatus(task.status);
-            if (TaskNeedsXpAward(task)) {
-                xpPendingTasks += 1;
-            }
             if (status == kTaskStatusDone) continue;
             activeItems.push_back(&task);
-            if (status == kTaskStatusInProgress) {
-                inProgressTasks += 1;
-            } else {
-                newTasks += 1;
-            }
-            if (task.deadlineAt > 0 && task.deadlineAt < nowSec) {
-                overdueTasks += 1;
-            }
         }
 
         std::sort(activeItems.begin(), activeItems.end(), [nowSec](const TaskEntry* a, const TaskEntry* b) {
-            const bool aOverdue = a->deadlineAt > 0 && a->deadlineAt < nowSec;
-            const bool bOverdue = b->deadlineAt > 0 && b->deadlineAt < nowSec;
-            if (aOverdue != bOverdue) return aOverdue > bOverdue;
-            const bool aHasDeadline = a->deadlineAt > 0;
-            const bool bHasDeadline = b->deadlineAt > 0;
-            if (aHasDeadline != bHasDeadline) return aHasDeadline > bHasDeadline;
-            if (aHasDeadline && bHasDeadline && a->deadlineAt != b->deadlineAt) {
-                return a->deadlineAt < b->deadlineAt;
-            }
-            return a->createdAt > b->createdAt;
+            return ShouldRankProfileTaskEarlier(*a, *b, nowSec);
         });
 
         const int totalActiveCount = static_cast<int>(activeItems.size());
-        std::string activeSummary = u8"Активных: " + std::to_string(totalActiveCount) +
-            u8" | Н:" + std::to_string(newTasks) +
-            u8" | В:" + std::to_string(inProgressTasks);
-        if (overdueTasks > 0) {
-            activeSummary += u8" | П:" + std::to_string(overdueTasks);
-        }
-
-        const bool stackHeader = ImGui::GetContentRegionAvail().x < 460.0f;
-        if (stackHeader) {
-            ImGui::TextDisabled("%s", activeSummary.c_str());
-            if (xpPendingTasks > 0) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Закрыты без XP: %d", xpPendingTasks);
-            }
-            if (state.modules.tasks && ImGui::Button(u8"К задачам##profile_active_tasks", ImVec2(-1.0f, 0.0f))) {
-                FocusTasksForProfile(state, profileId);
-            }
-        } else if (ImGui::BeginTable("profile_active_tasks_header", 2, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("profile_active_tasks_summary", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("profile_active_tasks_action", ImGuiTableColumnFlags_WidthFixed, 124.0f);
+        if (ImGui::BeginTable("profile_active_tasks_summary", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("profile_active_total", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("profile_active_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("profile_active_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("profile_active_focus", ImGuiTableColumnFlags_WidthStretch, 1.15f);
             ImGui::TableNextRow();
+
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("%s", activeSummary.c_str());
-            if (xpPendingTasks > 0) {
-                ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", xpPendingTasks);
-            }
+            ImGui::TextDisabled(u8"Активные");
+            ImGui::Text("%d", totalActiveCount);
+            ImGui::TextDisabled(u8"Н:%d | В:%d", taskOverview.created, taskOverview.inProgress);
+
             ImGui::TableSetColumnIndex(1);
-            if (state.modules.tasks) {
-                if (ImGui::Button(u8"К задачам##profile_active_tasks", ImVec2(-1.0f, 0.0f))) {
-                    FocusTasksForProfile(state, profileId);
+            ImGui::TextDisabled(u8"Просрочка");
+            if (taskOverview.overdue > 0) {
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%d", taskOverview.overdue);
+                ImGui::TextDisabled(u8"нужен разбор");
+            } else {
+                ImGui::TextDisabled(u8"Нет");
+                ImGui::TextDisabled(u8"дедлайны в норме");
+            }
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextDisabled(u8"XP handoff");
+            if (taskOverview.xpPending > 0) {
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%d", taskOverview.xpPending);
+                ImGui::TextDisabled(u8"закрыты без XP");
+            } else {
+                ImGui::TextDisabled(u8"Нет");
+                ImGui::TextDisabled(u8"хвостов нет");
+            }
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::TextDisabled(u8"Фокус");
+            if (taskOverview.primaryTask) {
+                std::string focusTitle = taskOverview.primaryTask->title.empty()
+                    ? std::string(u8"Без названия")
+                    : taskOverview.primaryTask->title;
+                ImGui::TextUnformatted(focusTitle.c_str());
+                if (taskOverview.primaryTask->deadlineAt > 0) {
+                    const std::string focusDeadline = FormatTimestamp(taskOverview.primaryTask->deadlineAt, "%d.%m %H:%M");
+                    const bool focusOverdue = taskOverview.primaryTask->deadlineAt < nowSec;
+                    if (focusOverdue) {
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", focusDeadline.c_str());
+                    } else {
+                        ImGui::TextDisabled("%s", focusDeadline.c_str());
+                    }
+                } else {
+                    ImGui::TextDisabled(u8"без дедлайна");
                 }
             } else {
-                ImGui::BeginDisabled();
-                ImGui::Button(u8"К задачам##profile_active_tasks", ImVec2(-1.0f, 0.0f));
-                ImGui::EndDisabled();
+                ImGui::TextDisabled(u8"Нет активных задач");
+                ImGui::TextDisabled(u8"можно взять новую");
             }
+            ImGui::EndTable();
+        }
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        if (state.modules.tasks && ImGui::BeginTable("profile_active_tasks_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("profile_tasks_open_all", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("profile_tasks_open_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("profile_tasks_open_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("profile_tasks_open_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            if (ImGui::Button(u8"Все##profile_tasks_all", ImVec2(-1.0f, 0.0f))) {
+                FocusTasksForProfile(state, profileId);
+            }
+
+            ImGui::TableSetColumnIndex(1);
+            if (taskOverview.active <= 0) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Активные##profile_tasks_active", ImVec2(-1.0f, 0.0f))) {
+                FocusTasksForProfile(state, profileId, 7);
+            }
+            if (taskOverview.active <= 0) ImGui::EndDisabled();
+
+            ImGui::TableSetColumnIndex(2);
+            if (taskOverview.overdue <= 0) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Просрочка##profile_tasks_overdue", ImVec2(-1.0f, 0.0f))) {
+                FocusTasksForProfile(state, profileId, 3);
+            }
+            if (taskOverview.overdue <= 0) ImGui::EndDisabled();
+
+            ImGui::TableSetColumnIndex(3);
+            if (taskOverview.xpPending <= 0) ImGui::BeginDisabled();
+            if (ImGui::Button(u8"Ждут XP##profile_tasks_xp", ImVec2(-1.0f, 0.0f))) {
+                FocusTasksForProfile(state, profileId, 6);
+            }
+            if (taskOverview.xpPending <= 0) ImGui::EndDisabled();
+
             ImGui::EndTable();
         }
 
@@ -1230,7 +1261,17 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, pipelineAttentionBg);
                     }
                     const std::string pipelineName = ResolveTaskPipelineName(state, *task);
-                    if (pipelineName.empty()) {
+                    const int pipelineIndex = ResolveTaskPipelineIndex(state, *task);
+                    if (pipelineIndex >= 0 && pipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
+                        const PipelineStep& step = state.pipelineSteps[static_cast<size_t>(pipelineIndex)];
+                        const std::string stageCode = TaskPipelineStepCode(step, pipelineIndex);
+                        const std::string stageTitle = step.title.empty() ? pipelineName : step.title;
+                        ImGui::Text("%s", stageCode.c_str());
+                        if (!stageTitle.empty() && stageTitle != stageCode) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("%s", stageTitle.c_str());
+                        }
+                    } else if (pipelineName.empty()) {
                         ImGui::TextDisabled(u8"Без этапа");
                     } else {
                         ImGui::TextUnformatted(pipelineName.c_str());
@@ -1239,15 +1280,23 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
 
                     ImGui::TableSetColumnIndex(4);
                     std::string title = task->title.empty() ? std::string(u8"Без названия") : task->title;
+                    bool titleHovered = false;
                     if (state.modules.tasks) {
                         std::string label = title + "##profile_active_task_" + task->id;
                         if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_SpanAvailWidth)) {
-                            FocusTasksForProfile(state, profileId, task->id);
+                            FocusTasksForProfile(state, profileId, 0, task->id);
                         }
+                        titleHovered = ImGui::IsItemHovered();
                     } else {
                         ImGui::TextUnformatted(title.c_str());
+                        titleHovered = ImGui::IsItemHovered();
                     }
-                    if (!task->description.empty() && ImGui::IsItemHovered()) {
+                    ImGui::TextDisabled("%s", ClassificationLabel(task->category));
+                    if (task->deadlinePenaltyPercent > 0) {
+                        ImGui::SameLine();
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"-%d%%", task->deadlinePenaltyPercent);
+                    }
+                    if (!task->description.empty() && titleHovered) {
                         ImGui::BeginTooltip();
                         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
                         ImGui::TextUnformatted(task->description.c_str());
@@ -1290,6 +1339,12 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         if (pendingXpTasks > 0) {
             ImGui::SameLine();
             ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан: %d", pendingXpTasks);
+            if (state.modules.tasks) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton(u8"Ждут XP##profile_done_tasks_xp")) {
+                    FocusTasksForProfile(state, profileId, 6);
+                }
+            }
         }
         if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);

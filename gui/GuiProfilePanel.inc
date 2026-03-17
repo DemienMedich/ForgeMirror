@@ -517,37 +517,27 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
     if (state.modules.tasks && state.active) {
-        int activeTasks = 0;
-        int newTasks = 0;
-        int inProgressTasks = 0;
-        int overdueTasks = 0;
-        int xpPendingTasks = 0;
-        const std::int64_t nowTs = NowSeconds();
-        for (const auto& task : state.tasks) {
-            if (!TaskHasAssignee(task, state.active->id)) continue;
-            const int status = NormalizeTaskStatus(task.status);
-            if (TaskNeedsXpAward(task)) {
-                xpPendingTasks += 1;
-            }
-            if (status == kTaskStatusDone) continue;
-            activeTasks += 1;
-            if (status == kTaskStatusInProgress) {
-                inProgressTasks += 1;
+        const ProfileTaskOverview taskOverview = BuildProfileTaskOverview(state, state.active->id);
+        ImGui::TextDisabled(u8"Текущие задачи: %d | Н:%d | В:%d",
+                            taskOverview.active, taskOverview.created, taskOverview.inProgress);
+        if (taskOverview.overdue > 0) {
+            ImGui::SameLine();
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", taskOverview.overdue);
+        }
+        if (taskOverview.xpPending > 0) {
+            ImGui::SameLine();
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", taskOverview.xpPending);
+        }
+        if (taskOverview.primaryTask) {
+            std::string focusTitle = taskOverview.primaryTask->title.empty()
+                ? std::string(u8"Без названия")
+                : taskOverview.primaryTask->title;
+            if (taskOverview.primaryTask->deadlineAt > 0) {
+                const std::string deadlineText = FormatTimestamp(taskOverview.primaryTask->deadlineAt, "%d.%m %H:%M");
+                ImGui::TextDisabled(u8"Фокус: %s | %s", focusTitle.c_str(), deadlineText.c_str());
             } else {
-                newTasks += 1;
+                ImGui::TextDisabled(u8"Фокус: %s | без дедлайна", focusTitle.c_str());
             }
-            if (task.deadlineAt > 0 && task.deadlineAt < nowTs) {
-                overdueTasks += 1;
-            }
-        }
-        ImGui::TextDisabled(u8"Текущие задачи: %d | Н:%d | В:%d", activeTasks, newTasks, inProgressTasks);
-        if (overdueTasks > 0) {
-            ImGui::SameLine();
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", overdueTasks);
-        }
-        if (xpPendingTasks > 0) {
-            ImGui::SameLine();
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", xpPendingTasks);
         }
         if (ImGui::GetContentRegionAvail().x > 140.0f) {
             ImGui::SameLine();

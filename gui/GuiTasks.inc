@@ -692,15 +692,69 @@ static int ResolveTaskProfileFilterIndex(const GuiState& state, const std::strin
     return 0;
 }
 
+static bool TaskNeedsXpAward(const TaskEntry& task);
+
+struct ProfileTaskOverview {
+    int active = 0;
+    int created = 0;
+    int inProgress = 0;
+    int overdue = 0;
+    int xpPending = 0;
+    const TaskEntry* primaryTask = nullptr;
+};
+
+static bool ShouldRankProfileTaskEarlier(const TaskEntry& a,
+                                         const TaskEntry& b,
+                                         std::int64_t nowSec) {
+    const bool aOverdue = a.deadlineAt > 0 && a.deadlineAt < nowSec;
+    const bool bOverdue = b.deadlineAt > 0 && b.deadlineAt < nowSec;
+    if (aOverdue != bOverdue) return aOverdue > bOverdue;
+    const bool aHasDeadline = a.deadlineAt > 0;
+    const bool bHasDeadline = b.deadlineAt > 0;
+    if (aHasDeadline != bHasDeadline) return aHasDeadline > bHasDeadline;
+    if (aHasDeadline && bHasDeadline && a.deadlineAt != b.deadlineAt) {
+        return a.deadlineAt < b.deadlineAt;
+    }
+    return a.createdAt > b.createdAt;
+}
+
+static ProfileTaskOverview BuildProfileTaskOverview(const GuiState& state, const std::string& profileId) {
+    ProfileTaskOverview overview{};
+    if (profileId.empty()) return overview;
+    const std::int64_t nowSec = NowSeconds();
+    for (const auto& task : state.tasks) {
+        if (!TaskHasAssignee(task, profileId)) continue;
+        if (TaskNeedsXpAward(task)) {
+            overview.xpPending += 1;
+        }
+        const int status = NormalizeTaskStatus(task.status);
+        if (status == kTaskStatusDone) continue;
+        overview.active += 1;
+        if (status == kTaskStatusInProgress) {
+            overview.inProgress += 1;
+        } else {
+            overview.created += 1;
+        }
+        if (task.deadlineAt > 0 && task.deadlineAt < nowSec) {
+            overview.overdue += 1;
+        }
+        if (!overview.primaryTask || ShouldRankProfileTaskEarlier(task, *overview.primaryTask, nowSec)) {
+            overview.primaryTask = &task;
+        }
+    }
+    return overview;
+}
+
 static void FocusTasksForProfile(GuiState& state,
                                  const std::string& profileId,
+                                 int quickFilter = 0,
                                  const std::string& expandedTaskId = std::string()) {
     if (!state.modules.tasks) return;
     state.showTasks = true;
     state.showProjects = false;
     state.workspaceTabRequest = static_cast<int>(UiWindowId::Tasks);
     state.filters.tasks.fill('\0');
-    state.tasksQuickFilter = 0;
+    state.tasksQuickFilter = quickFilter;
     state.tasksFilterProfile = ResolveTaskProfileFilterIndex(state, profileId);
     state.tasksFilterProject = 0;
     state.tasksFilterPipeline = 0;
