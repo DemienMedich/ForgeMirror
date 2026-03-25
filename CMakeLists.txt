@@ -34,7 +34,7 @@ add_executable(ForgeMirror
 target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.4.30")
+set(APP_VERSION "0.4.31")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
@@ -88,7 +88,7 @@ if(BUILD_IMGUI_GUI)
     set_target_properties(ForgeMirrorGui PROPERTIES OUTPUT_NAME "ForgeMirrorGui")
     target_link_libraries(ForgeMirrorGui PRIVATE glfw OpenGL::GL)
     if (WIN32)
-        target_link_libraries(ForgeMirrorGui PRIVATE opengl32 winmm comdlg32 shell32)
+        target_link_libraries(ForgeMirrorGui PRIVATE opengl32 winmm comdlg32 shell32 dwmapi)
     endif()
 
     add_custom_command(TARGET ForgeMirrorGui POST_BUILD

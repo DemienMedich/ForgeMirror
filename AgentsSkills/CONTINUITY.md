@@ -32,9 +32,10 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.30.
-  - Последнее изменение: fullscreen-режим ForgeMirror переведён с exclusive monitor mode на windowed fullscreen, чтобы системный захват окна корректнее видел приложение и `Alt+PrtScn` не терял активное окно.
+  - Ветка: beta. Версия: 0.4.31.
+  - Последнее изменение: для Win32/OpenGL fullscreen добавлена принудительная синхронизация GPU и DWM вокруг present, чтобы `Alt+PrtScn` с меньшей вероятностью снимал устаревший кадр ForgeMirror.
 - Done:
+  - Capture UX: в fullscreen-path перед `glfwSwapBuffers` добавлен `glFinish`, а после present — `DwmFlush`; GUI-сборка теперь явно линкуется с `dwmapi`.
   - Window UX: `F11` теперь использует capture-friendly windowed fullscreen вместо exclusive monitor mode; effective decorations во fullscreen принудительно выключаются и корректно восстанавливаются после выхода.
   - Профиль UX: блок задач получил overview-сводку, кнопки `Все / Активные / Просрочка / Ждут XP`, quick-pереход из `Выполненных задач` в pending XP и более информативные строки активных задач.
   - Проекты UX: добавлены hub-переходы из summary и строк проекта в модуль `Задачи`; task quick filters расширены режимами `Ждут XP` и `Активные`.
@@ -204,12 +205,11 @@ UI аудит:
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiUiHelpers.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiHeader.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiStateInit.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiApp.cpp`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiRender.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.30.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.31.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)
