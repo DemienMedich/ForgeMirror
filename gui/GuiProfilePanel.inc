@@ -41,6 +41,53 @@ static void DrawKpiCardIcon(const char* id, UiIcon icon, const char* title, cons
     ImGui::PopID();
 }
 
+static void DrawProfileSignalCard(const char* id,
+                                  UiIcon icon,
+                                  const char* title,
+                                  const std::string& value,
+                                  const std::string& detail,
+                                  const ImVec4& accent,
+                                  float height = 90.0f) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float rounding = std::max(10.0f, style.FrameRounding + 4.0f);
+    ImVec4 bg = CardBackgroundColor();
+    ImVec4 border = CardBorderColor();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+    if (ImGui::BeginChild("profile_signal_card", ImVec2(0.0f, height), ImGuiChildFlags_Border,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const float contentH = std::max(0.0f, ImGui::GetContentRegionAvail().y);
+        const float badgeSize = std::clamp(height - 40.0f, 30.0f, 42.0f);
+        const float badgeRadius = badgeSize * 0.5f;
+        const ImVec2 badgePos = ImGui::GetCursorScreenPos();
+        const ImVec2 badgeCenter(badgePos.x + badgeRadius, badgePos.y + contentH * 0.5f);
+        DrawIconBadge(drawList, icon, badgeCenter, badgeRadius, accent, true);
+
+        ImGui::Dummy(ImVec2(badgeSize + 10.0f, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("%s", title);
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::TextWrapped("%s", value.c_str());
+        ImGui::PopStyleColor();
+        if (!detail.empty()) {
+            ImGui::TextDisabled("%s", detail.c_str());
+        } else {
+            ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+        }
+        ImGui::EndGroup();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopID();
+}
+
 void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     DrawWindowBackground(state.ui, UiWindowId::Profile, state.storageDir);
 
@@ -500,6 +547,87 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         std::string bonusLabel = activeBonus > 0.0
         ? ("+" + bonusStream.str() + "%")
         : std::string("0%");
+        const ProfileTaskOverview taskOverview =
+            (state.modules.tasks && state.active) ? BuildProfileTaskOverview(state, state.active->id) : ProfileTaskOverview{};
+        const RankSpan rankSpan = ComputeRankSpan(overallLevel);
+        const auto& summaryCatScores = profile.category_best_scores();
+        int weakestCategoryIndex = 0;
+        int weakestCategoryScore = Profile::kMaxCategoryScore;
+        for (size_t i = 0; i < summaryCatScores.size(); ++i) {
+            if (summaryCatScores[i] <= weakestCategoryScore) {
+                weakestCategoryScore = summaryCatScores[i];
+                weakestCategoryIndex = static_cast<int>(i);
+            }
+        }
+        const int recoveryLeft = profile.penalties_enabled() ? profile.recovery_tasks_remaining() : 0;
+        std::string milestoneValue;
+        std::string milestoneDetail;
+        ImVec4 milestoneAccent = accent;
+        if (recoveryLeft > 0) {
+            milestoneValue = u8"Прогрев";
+            milestoneDetail = u8"Осталось задач: " + std::to_string(recoveryLeft);
+            milestoneAccent = LogLevelColor(AppLogLevel::Warning);
+        } else if (rankSpan.hasNext && rankSpan.nextLevel > overallLevel) {
+            milestoneValue = rankSpan.nextLabel;
+            milestoneDetail = u8"Еще " + std::to_string(rankSpan.nextLevel - overallLevel) + u8" ур.";
+        } else {
+            milestoneValue = u8"Потолок ранга";
+            milestoneDetail = u8"Сейчас важнее удерживать форму.";
+            milestoneAccent = BlendColor(style.Colors[ImGuiCol_TextDisabled], accent, 0.25f);
+        }
+
+        std::string focusValue = u8"Свободное окно";
+        std::string focusDetail = u8"Можно брать новую задачу.";
+        ImVec4 focusAccent = accent;
+        if (taskOverview.primaryTask) {
+            focusValue = taskOverview.primaryTask->title.empty()
+                ? std::string(u8"Без названия")
+                : taskOverview.primaryTask->title;
+            const std::string projectName = ResolveTaskProjectName(state, *taskOverview.primaryTask);
+            const std::string pipelineName = ResolveTaskPipelineName(state, *taskOverview.primaryTask);
+            focusDetail = projectName.empty() ? std::string(u8"Без проекта") : projectName;
+            if (!pipelineName.empty()) {
+                focusDetail += u8" · " + pipelineName;
+            }
+            if (taskOverview.primaryTask->deadlineAt > 0) {
+                const std::string deadlineText = FormatTimestamp(taskOverview.primaryTask->deadlineAt, "%d.%m %H:%M");
+                focusDetail += u8" · " + deadlineText;
+                if (taskOverview.primaryTask->deadlineAt < nowSec) {
+                    focusAccent = LogLevelColor(AppLogLevel::Warning);
+                }
+            }
+        }
+
+        std::string workloadValue = taskOverview.active > 0
+            ? std::to_string(taskOverview.active) + u8" активных"
+            : std::string(u8"Нагрузка свободна");
+        std::ostringstream workloadDetail;
+        workloadDetail.imbue(std::locale::classic());
+        workloadDetail << u8"Н:" << taskOverview.created << u8" | В:" << taskOverview.inProgress;
+        if (taskOverview.overdue > 0) {
+            workloadDetail << u8" | П:" << taskOverview.overdue;
+        }
+        if (taskOverview.xpPending > 0) {
+            workloadDetail << u8" | XP:" << taskOverview.xpPending;
+        }
+        ImVec4 workloadAccent = taskOverview.overdue > 0
+            ? LogLevelColor(AppLogLevel::Warning)
+            : accent;
+
+        std::string balanceValue;
+        std::string balanceDetail;
+        ImVec4 balanceAccent = accent;
+        if (weakestCategoryScore < Profile::kMaxCategoryScore) {
+            balanceValue = std::string(u8"Категория ") + Profile::kCategoryLabels[weakestCategoryIndex];
+            balanceDetail = std::to_string(weakestCategoryScore) + u8"/10, добрать до 10/10";
+            if (weakestCategoryScore <= 6) {
+                balanceAccent = LogLevelColor(AppLogLevel::Warning);
+            }
+        } else {
+            balanceValue = u8"Баланс закрыт";
+            balanceDetail = u8"Все категории уже на 10/10.";
+            balanceAccent = BlendColor(style.Colors[ImGuiCol_TextDisabled], accent, 0.25f);
+        }
         if (ImGui::BeginTable("profile_kpi", 2, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -513,11 +641,108 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
         ImGui::EndTable();
     }
+    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+    const float signalAvail = ImGui::GetContentRegionAvail().x;
+    const int signalColumns = signalAvail >= 1120.0f ? 4 : (signalAvail >= 620.0f ? 2 : 1);
+    struct ProfileSignalCardData {
+        const char* id;
+        UiIcon icon;
+        const char* title;
+        std::string value;
+        std::string detail;
+        ImVec4 accent;
+    };
+    std::vector<ProfileSignalCardData> signalCards;
+    signalCards.push_back({"profile_signal_milestone", UiIcon::Chart, u8"Следующий рубеж", milestoneValue, milestoneDetail, milestoneAccent});
+    signalCards.push_back({"profile_signal_focus", UiIcon::Flow, u8"Рабочий фокус", focusValue, focusDetail, focusAccent});
+    signalCards.push_back({"profile_signal_load", UiIcon::List, u8"Нагрузка", workloadValue, workloadDetail.str(), workloadAccent});
+    signalCards.push_back({"profile_signal_balance", UiIcon::Bell, u8"Слабая зона", balanceValue, balanceDetail, balanceAccent});
+    if (ImGui::BeginTable("profile_signal_cards", signalColumns, ImGuiTableFlags_SizingStretchSame)) {
+        for (int i = 0; i < static_cast<int>(signalCards.size()); ++i) {
+            if (i % signalColumns == 0) {
+                ImGui::TableNextRow();
+            }
+            ImGui::TableSetColumnIndex(i % signalColumns);
+            const auto& card = signalCards[static_cast<size_t>(i)];
+            DrawProfileSignalCard(card.id, card.icon, card.title, card.value, card.detail, card.accent);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::TextDisabled(u8"Быстрые действия");
+    const float actionsAvail = ImGui::GetContentRegionAvail().x;
+    const bool stackActions = actionsAvail < 640.0f;
+    if (stackActions) {
+        const bool xpEnabled = state.isAdmin;
+        if (!xpEnabled) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+            PrepareXpEntries(state, catalog);
+            state.xpPopupRequest = true;
+        }
+        if (!xpEnabled) {
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip(u8"Доступно только администратору.");
+            }
+            ImGui::EndDisabled();
+        }
+        if (state.modules.tasks) {
+            const char* taskButtonLabel = taskOverview.primaryTask ? u8"Фокус-задача" : u8"К задачам";
+            if (ImGui::Button(taskButtonLabel, ImVec2(-1.0f, 0.0f))) {
+                if (taskOverview.primaryTask) {
+                    FocusTasksForProfile(state, state.active->id, 0, taskOverview.primaryTask->id);
+                } else {
+                    FocusTasksForProfile(state, state.active->id);
+                }
+            }
+        }
+        if (ImGui::Button(u8"Графики и категории", ImVec2(-1.0f, 0.0f))) {
+            state.ui.profileViewMode = 1;
+            state.ui.profileTab = 3;
+            state.profileSection = 3;
+            state.profileTabRequest = 3;
+            state.uiDirty = true;
+        }
+    } else if (ImGui::BeginTable("profile_quick_actions", state.modules.tasks ? 3 : 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        const bool xpEnabled = state.isAdmin;
+        if (!xpEnabled) ImGui::BeginDisabled();
+        if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+            PrepareXpEntries(state, catalog);
+            state.xpPopupRequest = true;
+        }
+        if (!xpEnabled) {
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip(u8"Доступно только администратору.");
+            }
+            ImGui::EndDisabled();
+        }
+        int actionColumn = 1;
+        if (state.modules.tasks) {
+            ImGui::TableSetColumnIndex(actionColumn++);
+            const char* taskButtonLabel = taskOverview.primaryTask ? u8"Фокус-задача" : u8"К задачам";
+            if (ImGui::Button(taskButtonLabel, ImVec2(-1.0f, 0.0f))) {
+                if (taskOverview.primaryTask) {
+                    FocusTasksForProfile(state, state.active->id, 0, taskOverview.primaryTask->id);
+                } else {
+                    FocusTasksForProfile(state, state.active->id);
+                }
+            }
+        }
+        ImGui::TableSetColumnIndex(actionColumn);
+        if (ImGui::Button(u8"Графики и категории", ImVec2(-1.0f, 0.0f))) {
+            state.ui.profileViewMode = 1;
+            state.ui.profileTab = 3;
+            state.profileSection = 3;
+            state.profileTabRequest = 3;
+            state.uiDirty = true;
+        }
+        ImGui::EndTable();
+    }
     ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
     if (state.modules.tasks && state.active) {
-        const ProfileTaskOverview taskOverview = BuildProfileTaskOverview(state, state.active->id);
         ImGui::TextDisabled(u8"Текущие задачи: %d | Н:%d | В:%d",
                             taskOverview.active, taskOverview.created, taskOverview.inProgress);
         if (taskOverview.overdue > 0) {

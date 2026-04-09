@@ -32,9 +32,11 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: beta. Версия: 0.4.33.
-  - Последнее изменение: в cloud-слое починена безопасная повторная запись `cloud.ini` и `manifest.ini` на Windows через replace-existing move, а smoke-тесты теперь отдельно проверяют overwrite этого контура.
+  - Ветка: beta. Версия: 0.4.34.
+  - Последнее изменение: `smoke_core` теперь покрывает full flow `drift -> resolve -> restore` для `tasks.json` и `pipeline.json`, а в профиле summary-блок переделан в более плотный центр с рабочими сигналами и быстрыми действиями.
 - Done:
+  - Cloud QA: `smoke_core` теперь проверяет drift/conflict, cloud->local resolve, local->cloud push и backup-restore отдельно для `meta/tasks.json` и `meta/pipeline.json`.
+  - Profile UX: summary-блок профиля получил 4 оперативные сигнальные карточки (`следующий рубеж`, `рабочий фокус`, `нагрузка`, `слабая зона`) и быстрые действия `Добавить опыт / Фокус-задача / Графики и категории`.
   - Cloud stability: атомарная запись `meta/cloud.ini` и cloud manifest на Windows теперь использует replace-existing move вместо `std::filesystem::rename`, поэтому повторное сохранение не ломается на существующем файле.
   - QA: `smoke_core` расширен кейсом на повторное сохранение `cloud.ini` и `manifest.ini`, включая merge-сценарий `notes/releaseFile`.
   - Repo hygiene: `build-test/` добавлен в `.gitignore`, чтобы smoke-сборка не оставляла шум в рабочем дереве.
@@ -203,18 +205,18 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Cloud sync-контур стал надёжнее на Windows: конфиг и манифест можно безопасно перезаписывать повторно, а smoke-покрытие теперь ловит регресс именно в этом сценарии.
+  - Cloud sync-контур покрыт базовыми smoke-сценариями полного жизненного цикла workspace-файлов, а профильный стартовый экран стал более предметным и менее пустым по центру.
 - Next:
-  - Следующим прогоном логично заняться стартовым экраном и центральным контентом профиля, либо добрать smoke-покрытие для drift/restore сценариев задач и пайплайна.
+  - Следующим прогоном логично дожать стартовый экран вне профиля или расширить smoke-покрытие на edge-case конфликты `task-audit.log` и mixed-state backup history.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
   - `Z:\\CPP\\ForgeMirror\\src\\CloudSync.cpp`
   - `Z:\\CPP\\ForgeMirror\\tests\\smoke_core.cpp`
-  - `Z:\\CPP\\ForgeMirror\\.gitignore`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfilePanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.33.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.34.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)

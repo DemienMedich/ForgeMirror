@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
@@ -25,6 +26,29 @@ static bool ReadFile(const std::filesystem::path& path, std::string& outData) {
     if (!in) return false;
     outData.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     return true;
+}
+
+static bool SetFileUnixTimestamp(const std::filesystem::path& path, std::int64_t unixSeconds) {
+    using namespace std::chrono;
+    std::error_code ec;
+    const auto sysTarget = system_clock::time_point(seconds(unixSeconds));
+    const auto delta = sysTarget - system_clock::now();
+    const auto fsTarget = std::filesystem::file_time_type::clock::now()
+        + duration_cast<std::filesystem::file_time_type::duration>(delta);
+    std::filesystem::last_write_time(path, fsTarget, ec);
+    return !ec;
+}
+
+static std::filesystem::path FindBackupByKind(const std::vector<std::filesystem::path>& backups,
+                                              const std::string& kind) {
+    const std::string token = "." + kind + ".";
+    for (const auto& path : backups) {
+        const std::string name = path.filename().string();
+        if (name.find(token) != std::string::npos) {
+            return path;
+        }
+    }
+    return {};
 }
 
 static bool TestGameplayConfig(const std::filesystem::path& dir) {
@@ -162,6 +186,80 @@ static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
     return true;
 }
 
+static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
+    CloudSyncConfig config;
+    config.enabled = true;
+    config.root = "cloud";
+
+    const std::string localTasksOriginal = R"([{"id":"t1","title":"Local task"}])";
+    const std::string cloudTasksVersion = R"([{"id":"t1","title":"Cloud task"}])";
+    const std::string localPipelineOriginal = R"({"steps":[{"id":"p1","title":"Local old"}]})";
+    const std::string cloudPipelineOriginal = R"({"steps":[{"id":"p1","title":"Cloud old"}]})";
+    const std::string localPipelinePushed = R"({"steps":[{"id":"p1","title":"Local pushed"}]})";
+
+    const auto localTasksPath = dir / "meta" / "tasks.json";
+    const auto localPipelinePath = dir / "meta" / "pipeline.json";
+    const auto cloudTasksPath = dir / "cloud" / "meta" / "tasks.json";
+    const auto cloudPipelinePath = dir / "cloud" / "meta" / "pipeline.json";
+
+    if (!WriteFile(localTasksPath, localTasksOriginal)) return false;
+    if (!WriteFile(cloudTasksPath, cloudTasksVersion)) return false;
+    if (!WriteFile(localPipelinePath, localPipelineOriginal)) return false;
+    if (!WriteFile(cloudPipelinePath, cloudPipelineOriginal)) return false;
+
+    const std::int64_t lastSyncAt = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count() - 300;
+    if (!SetFileUnixTimestamp(localTasksPath, lastSyncAt + 60)) return false;
+    if (!SetFileUnixTimestamp(cloudTasksPath, lastSyncAt + 120)) return false;
+    if (!SetFileUnixTimestamp(localPipelinePath, lastSyncAt - 120)) return false;
+    if (!SetFileUnixTimestamp(cloudPipelinePath, lastSyncAt + 120)) return false;
+
+    const CloudWorkspaceDriftSummary drift = InspectCloudWorkspaceDrift(config, dir, lastSyncAt);
+    bool tasksConflict = false;
+    bool pipelineCloudNewer = false;
+    for (const auto& file : drift.files) {
+        if (file.relativePath == "meta/tasks.json") {
+            tasksConflict = file.hasIssue && file.conflict && file.localChanged && file.cloudChanged;
+        } else if (file.relativePath == "meta/pipeline.json") {
+            pipelineCloudNewer = file.hasIssue && !file.conflict && !file.localChanged && file.cloudChanged;
+        }
+    }
+    if (drift.issueCount < 2 || drift.conflictCount < 1 || !tasksConflict || !pipelineCloudNewer) return false;
+
+    const CloudWorkspaceResolveResult pullTasks =
+        ResolveCloudWorkspaceFileVersion(config, dir, "meta/tasks.json", true);
+    if (!pullTasks.ok || !pullTasks.changed) return false;
+    std::string tasksAfterPull;
+    if (!ReadFile(localTasksPath, tasksAfterPull) || tasksAfterPull != cloudTasksVersion) return false;
+    if (ListCloudWorkspaceBackups(dir, "meta/tasks.json").size() < 2) return false;
+
+    const std::filesystem::path localTasksBackup = FindBackupByKind(pullTasks.backupPaths, "local");
+    if (localTasksBackup.empty()) return false;
+    const CloudWorkspaceResolveResult restoreTasks =
+        RestoreCloudWorkspaceBackup(dir, "meta/tasks.json", localTasksBackup);
+    if (!restoreTasks.ok || !restoreTasks.changed) return false;
+    std::string tasksAfterRestore;
+    if (!ReadFile(localTasksPath, tasksAfterRestore) || tasksAfterRestore != localTasksOriginal) return false;
+
+    if (!WriteFile(localPipelinePath, localPipelinePushed)) return false;
+    if (!SetFileUnixTimestamp(localPipelinePath, lastSyncAt + 180)) return false;
+    const CloudWorkspaceResolveResult pushPipeline =
+        ResolveCloudWorkspaceFileVersion(config, dir, "meta/pipeline.json", false);
+    if (!pushPipeline.ok || !pushPipeline.changed) return false;
+    std::string pipelineAfterPush;
+    if (!ReadFile(cloudPipelinePath, pipelineAfterPush) || pipelineAfterPush != localPipelinePushed) return false;
+    if (ListCloudWorkspaceBackups(dir, "meta/pipeline.json").size() < 2) return false;
+
+    const std::filesystem::path cloudPipelineBackup = FindBackupByKind(pushPipeline.backupPaths, "cloud");
+    if (cloudPipelineBackup.empty()) return false;
+    const CloudWorkspaceResolveResult restorePipeline =
+        RestoreCloudWorkspaceBackup(dir, "meta/pipeline.json", cloudPipelineBackup);
+    if (!restorePipeline.ok || !restorePipeline.changed) return false;
+    std::string pipelineAfterRestore;
+    if (!ReadFile(localPipelinePath, pipelineAfterRestore) || pipelineAfterRestore != cloudPipelineOriginal) return false;
+    return true;
+}
+
 int main() {
     std::filesystem::path tmp = std::filesystem::temp_directory_path() / "forgemirror_smoke";
     std::error_code ec;
@@ -181,8 +279,12 @@ int main() {
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudOverwrite = TestCloudAtomicOverwrite(tmp);
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
+    const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okRules && okTasks && okSyncHealth && okWhitelist && okVault && okCloudOverwrite) {
+    if (okProfile && okRules && okTasks && okSyncHealth && okWhitelist && okVault &&
+        okCloudOverwrite && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
@@ -193,6 +295,7 @@ int main() {
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
               << " vault=" << okVault
-              << " cloudOverwrite=" << okCloudOverwrite << "\n";
+              << " cloudOverwrite=" << okCloudOverwrite
+              << " cloudWorkspace=" << okCloudWorkspace << "\n";
     return 1;
 }
