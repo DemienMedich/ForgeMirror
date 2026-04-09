@@ -12,6 +12,13 @@
 #include <sstream>
 #include <unordered_set>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace {
 
 #ifndef APP_VERSION
@@ -52,8 +59,18 @@ bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& d
         out << data;
         if (!out.good()) return false;
     }
+#if defined(_WIN32)
+    if (MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        return true;
+    }
+    std::filesystem::remove(tmp, ec);
+    return false;
+#else
     std::filesystem::rename(tmp, path, ec);
-    return !ec;
+    if (!ec) return true;
+    std::filesystem::remove(tmp, ec);
+    return false;
+#endif
 }
 
 std::filesystem::path CanonicalSafe(const std::filesystem::path& p) {

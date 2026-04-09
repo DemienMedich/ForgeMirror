@@ -121,6 +121,47 @@ static bool TestStorageVaultRobustParsing(const std::filesystem::path& dir) {
     return true;
 }
 
+static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
+    CloudSyncConfig config;
+    config.enabled = true;
+    config.root = "cloud";
+    config.autoPull = true;
+    config.autoPush = false;
+    config.autoSyncEnabled = true;
+    config.autoSyncMinutes = 15;
+
+    if (!SaveCloudSyncConfig(dir, config)) return false;
+    config.autoPull = false;
+    config.autoPush = true;
+    config.autoSyncMinutes = 45;
+    if (!SaveCloudSyncConfig(dir, config)) return false;
+
+    const CloudSyncConfig loadedConfig = LoadCloudSyncConfig(dir);
+    if (loadedConfig.autoPull != false) return false;
+    if (loadedConfig.autoPush != true) return false;
+    if (loadedConfig.autoSyncMinutes != 45) return false;
+
+    CloudManifest manifest;
+    manifest.appVersion = "0.4.32";
+    manifest.dataUpdatedAt = 100;
+    manifest.releaseFile = "ForgeMirrorSetup_0.4.32.exe";
+    manifest.notes = "First";
+    if (!SaveCloudManifest(config, dir, manifest)) return false;
+
+    manifest.appVersion = "0.4.33";
+    manifest.dataUpdatedAt = 200;
+    manifest.releaseFile.clear();
+    manifest.notes.clear();
+    if (!SaveCloudManifest(config, dir, manifest)) return false;
+
+    const CloudManifest loadedManifest = LoadCloudManifest(config, dir);
+    if (loadedManifest.appVersion != "0.4.33") return false;
+    if (loadedManifest.dataUpdatedAt != 200) return false;
+    if (loadedManifest.releaseFile != "ForgeMirrorSetup_0.4.32.exe") return false;
+    if (loadedManifest.notes != "First") return false;
+    return true;
+}
+
 int main() {
     std::filesystem::path tmp = std::filesystem::temp_directory_path() / "forgemirror_smoke";
     std::error_code ec;
@@ -137,8 +178,11 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okWhitelist = TestWhitelist(tmp);
     const bool okVault = TestStorageVaultRobustParsing(tmp);
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
+    const bool okCloudOverwrite = TestCloudAtomicOverwrite(tmp);
 
-    if (okProfile && okRules && okTasks && okSyncHealth && okWhitelist && okVault) {
+    if (okProfile && okRules && okTasks && okSyncHealth && okWhitelist && okVault && okCloudOverwrite) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
@@ -148,6 +192,7 @@ int main() {
               << " tasks=" << okTasks
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
-              << " vault=" << okVault << "\n";
+              << " vault=" << okVault
+              << " cloudOverwrite=" << okCloudOverwrite << "\n";
     return 1;
 }
