@@ -187,9 +187,18 @@ static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
 }
 
 static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
+    auto fail = [](const char* message) {
+        std::cerr << "cloudWorkspace: " << message << "\n";
+        return false;
+    };
+    std::error_code ec;
+    std::filesystem::path cloudRoot = dir;
+    cloudRoot += "_cloud";
+    std::filesystem::remove_all(cloudRoot, ec);
+
     CloudSyncConfig config;
     config.enabled = true;
-    config.root = "cloud";
+    config.root = cloudRoot;
 
     const std::string localTasksOriginal = R"([{"id":"t1","title":"Local task"}])";
     const std::string cloudTasksVersion = R"([{"id":"t1","title":"Cloud task"}])";
@@ -199,20 +208,20 @@ static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
 
     const auto localTasksPath = dir / "meta" / "tasks.json";
     const auto localPipelinePath = dir / "meta" / "pipeline.json";
-    const auto cloudTasksPath = dir / "cloud" / "meta" / "tasks.json";
-    const auto cloudPipelinePath = dir / "cloud" / "meta" / "pipeline.json";
+    const auto cloudTasksPath = cloudRoot / "meta" / "tasks.json";
+    const auto cloudPipelinePath = cloudRoot / "meta" / "pipeline.json";
 
-    if (!WriteFile(localTasksPath, localTasksOriginal)) return false;
-    if (!WriteFile(cloudTasksPath, cloudTasksVersion)) return false;
-    if (!WriteFile(localPipelinePath, localPipelineOriginal)) return false;
-    if (!WriteFile(cloudPipelinePath, cloudPipelineOriginal)) return false;
+    if (!WriteFile(localTasksPath, localTasksOriginal)) return fail("write local tasks");
+    if (!WriteFile(cloudTasksPath, cloudTasksVersion)) return fail("write cloud tasks");
+    if (!WriteFile(localPipelinePath, localPipelineOriginal)) return fail("write local pipeline");
+    if (!WriteFile(cloudPipelinePath, cloudPipelineOriginal)) return fail("write cloud pipeline");
 
     const std::int64_t lastSyncAt = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count() - 300;
-    if (!SetFileUnixTimestamp(localTasksPath, lastSyncAt + 60)) return false;
-    if (!SetFileUnixTimestamp(cloudTasksPath, lastSyncAt + 120)) return false;
-    if (!SetFileUnixTimestamp(localPipelinePath, lastSyncAt - 120)) return false;
-    if (!SetFileUnixTimestamp(cloudPipelinePath, lastSyncAt + 120)) return false;
+    if (!SetFileUnixTimestamp(localTasksPath, lastSyncAt + 60)) return fail("timestamp local tasks");
+    if (!SetFileUnixTimestamp(cloudTasksPath, lastSyncAt + 120)) return fail("timestamp cloud tasks");
+    if (!SetFileUnixTimestamp(localPipelinePath, lastSyncAt - 120)) return fail("timestamp local pipeline");
+    if (!SetFileUnixTimestamp(cloudPipelinePath, lastSyncAt + 120)) return fail("timestamp cloud pipeline");
 
     const CloudWorkspaceDriftSummary drift = InspectCloudWorkspaceDrift(config, dir, lastSyncAt);
     bool tasksConflict = false;
@@ -224,39 +233,45 @@ static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
             pipelineCloudNewer = file.hasIssue && !file.conflict && !file.localChanged && file.cloudChanged;
         }
     }
-    if (drift.issueCount < 2 || drift.conflictCount < 1 || !tasksConflict || !pipelineCloudNewer) return false;
+    if (drift.issueCount < 2 || drift.conflictCount < 1 || !tasksConflict || !pipelineCloudNewer) {
+        return fail("unexpected drift summary");
+    }
 
     const CloudWorkspaceResolveResult pullTasks =
         ResolveCloudWorkspaceFileVersion(config, dir, "meta/tasks.json", true);
-    if (!pullTasks.ok || !pullTasks.changed) return false;
+    if (!pullTasks.ok || !pullTasks.changed) return fail("pull tasks resolve");
     std::string tasksAfterPull;
-    if (!ReadFile(localTasksPath, tasksAfterPull) || tasksAfterPull != cloudTasksVersion) return false;
-    if (ListCloudWorkspaceBackups(dir, "meta/tasks.json").size() < 2) return false;
+    if (!ReadFile(localTasksPath, tasksAfterPull) || tasksAfterPull != cloudTasksVersion) return fail("verify pulled tasks");
+    if (ListCloudWorkspaceBackups(dir, "meta/tasks.json").size() < 2) return fail("tasks backups");
 
     const std::filesystem::path localTasksBackup = FindBackupByKind(pullTasks.backupPaths, "local");
-    if (localTasksBackup.empty()) return false;
+    if (localTasksBackup.empty()) return fail("find local tasks backup");
     const CloudWorkspaceResolveResult restoreTasks =
         RestoreCloudWorkspaceBackup(dir, "meta/tasks.json", localTasksBackup);
-    if (!restoreTasks.ok || !restoreTasks.changed) return false;
+    if (!restoreTasks.ok || !restoreTasks.changed) return fail("restore tasks backup");
     std::string tasksAfterRestore;
-    if (!ReadFile(localTasksPath, tasksAfterRestore) || tasksAfterRestore != localTasksOriginal) return false;
+    if (!ReadFile(localTasksPath, tasksAfterRestore) || tasksAfterRestore != localTasksOriginal) return fail("verify restored tasks");
 
-    if (!WriteFile(localPipelinePath, localPipelinePushed)) return false;
-    if (!SetFileUnixTimestamp(localPipelinePath, lastSyncAt + 180)) return false;
+    if (!WriteFile(localPipelinePath, localPipelinePushed)) return fail("write local pipeline pushed");
+    if (!SetFileUnixTimestamp(localPipelinePath, lastSyncAt + 180)) return fail("timestamp local pipeline pushed");
     const CloudWorkspaceResolveResult pushPipeline =
         ResolveCloudWorkspaceFileVersion(config, dir, "meta/pipeline.json", false);
-    if (!pushPipeline.ok || !pushPipeline.changed) return false;
+    if (!pushPipeline.ok || !pushPipeline.changed) return fail("push pipeline resolve");
     std::string pipelineAfterPush;
-    if (!ReadFile(cloudPipelinePath, pipelineAfterPush) || pipelineAfterPush != localPipelinePushed) return false;
-    if (ListCloudWorkspaceBackups(dir, "meta/pipeline.json").size() < 2) return false;
+    if (!ReadFile(cloudPipelinePath, pipelineAfterPush) || pipelineAfterPush != localPipelinePushed) return fail("verify pushed pipeline");
+    if (ListCloudWorkspaceBackups(dir, "meta/pipeline.json").size() < 2) return fail("pipeline backups");
 
     const std::filesystem::path cloudPipelineBackup = FindBackupByKind(pushPipeline.backupPaths, "cloud");
-    if (cloudPipelineBackup.empty()) return false;
+    if (cloudPipelineBackup.empty()) return fail("find cloud pipeline backup");
     const CloudWorkspaceResolveResult restorePipeline =
         RestoreCloudWorkspaceBackup(dir, "meta/pipeline.json", cloudPipelineBackup);
-    if (!restorePipeline.ok || !restorePipeline.changed) return false;
+    if (!restorePipeline.ok || !restorePipeline.changed) return fail("restore pipeline backup");
     std::string pipelineAfterRestore;
-    if (!ReadFile(localPipelinePath, pipelineAfterRestore) || pipelineAfterRestore != cloudPipelineOriginal) return false;
+    if (!ReadFile(localPipelinePath, pipelineAfterRestore) || pipelineAfterRestore != cloudPipelineOriginal) {
+        return fail("verify restored pipeline");
+    }
+
+    std::filesystem::remove_all(cloudRoot, ec);
     return true;
 }
 

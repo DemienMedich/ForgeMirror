@@ -412,16 +412,52 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputText("##task_plan_title", state.taskPlanTitle.data(), state.taskPlanTitle.size());
                 ImGui::TextDisabled(u8"Проект");
-                ImGui::SetNextItemWidth(-1.0f);
-                ImGui::Combo("##task_plan_project", &state.taskPlanProjectIndex,
-                             projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
-                if (state.isAdmin) {
-                    const char* projectToggleLabel = state.taskPlanCreateProjectInline
-                        ? u8"Скрыть создание проекта"
-                        : u8"Создать проект для задачи";
-                    if (ImGui::SmallButton(projectToggleLabel)) {
-                        state.taskPlanCreateProjectInline = !state.taskPlanCreateProjectInline;
+                const float projectControlsAvail = ImGui::GetContentRegionAvail().x;
+                const bool stackProjectControls = projectControlsAvail < 420.0f;
+                const auto toggleTaskProjectInline = [&]() {
+                    state.taskPlanCreateProjectInline = !state.taskPlanCreateProjectInline;
+                    if (!state.taskPlanCreateProjectInline) {
+                        state.taskPlanProjectName.fill('\0');
+                        state.taskPlanProjectDesc.fill('\0');
                     }
+                };
+                if (stackProjectControls) {
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::Combo("##task_plan_project", &state.taskPlanProjectIndex,
+                                 projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
+                    if (state.isAdmin) {
+                        const char* projectToggleLabel = state.taskPlanCreateProjectInline
+                            ? u8"Скрыть проект"
+                            : u8"Новый проект";
+                        if (ImGui::Button(projectToggleLabel, ImVec2(-1.0f, 0.0f))) {
+                            toggleTaskProjectInline();
+                        }
+                    }
+                } else if (ImGui::BeginTable("task_plan_project_row", state.isAdmin ? 2 : 1,
+                                             ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("task_plan_project_combo", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    if (state.isAdmin) {
+                        ImGui::TableSetupColumn("task_plan_project_action", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                    }
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::Combo("##task_plan_project", &state.taskPlanProjectIndex,
+                                 projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
+                    if (state.isAdmin) {
+                        ImGui::TableSetColumnIndex(1);
+                        const char* projectToggleLabel = state.taskPlanCreateProjectInline
+                            ? u8"Скрыть проект"
+                            : u8"Новый проект";
+                        if (ImGui::Button(projectToggleLabel, ImVec2(-1.0f, 0.0f))) {
+                            toggleTaskProjectInline();
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+                if (state.isAdmin && state.projects.empty() && !state.taskPlanCreateProjectInline) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                       u8"Проектов пока нет. Создайте первый прямо из этой формы.");
                 }
                 ImGui::TextDisabled(u8"Этап пайплайна");
                 ImGui::SetNextItemWidth(-1.0f);
@@ -454,12 +490,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 ImGui::Separator();
                 ImGui::TextDisabled(u8"Новый проект из задачи");
+                ImGui::TextDisabled(u8"После сохранения он сразу привяжется к текущей задаче.");
                 ImGui::SetNextItemWidth(-1.0f);
-                ImGui::InputText("##task_plan_project_name", state.taskPlanProjectName.data(), state.taskPlanProjectName.size());
+                ImGui::InputTextWithHint("##task_plan_project_name", u8"Например, Редизайн профиля",
+                                         state.taskPlanProjectName.data(), state.taskPlanProjectName.size());
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextMultiline("##task_plan_project_desc", state.taskPlanProjectDesc.data(),
                                           state.taskPlanProjectDesc.size(), ImVec2(-1.0f, 64.0f));
-                if (ImGui::Button(u8"Сохранить и выбрать проект", ImVec2(-1.0f, 0.0f))) {
+                const float projectInlineAvail = ImGui::GetContentRegionAvail().x;
+                const bool stackProjectInlineActions = projectInlineAvail < 360.0f;
+                auto saveInlineProject = [&]() {
                     AppProjectSaveResult saveResult = AppSaveProjectEntry(
                         state.storageDir,
                         state.projects,
@@ -475,6 +515,29 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     } else {
                         SetStatus(state, saveResult.errorMessage, 1.0f, 0.45f, 0.45f);
                     }
+                };
+                if (stackProjectInlineActions) {
+                    if (ImGui::Button(u8"Сохранить и выбрать проект", ImVec2(-1.0f, 0.0f))) {
+                        saveInlineProject();
+                    }
+                    if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                        state.taskPlanCreateProjectInline = false;
+                        state.taskPlanProjectName.fill('\0');
+                        state.taskPlanProjectDesc.fill('\0');
+                    }
+                } else if (ImGui::BeginTable("task_plan_project_inline_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    if (ImGui::Button(u8"Сохранить и выбрать проект", ImVec2(-1.0f, 0.0f))) {
+                        saveInlineProject();
+                    }
+                    ImGui::TableSetColumnIndex(1);
+                    if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                        state.taskPlanCreateProjectInline = false;
+                        state.taskPlanProjectName.fill('\0');
+                        state.taskPlanProjectDesc.fill('\0');
+                    }
+                    ImGui::EndTable();
                 }
             }
 
