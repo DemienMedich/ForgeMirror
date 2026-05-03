@@ -194,6 +194,7 @@ struct GuiRuntimeState {
     int tasksFilterDays = 0;
     int tasksSortMode = 0; // 0=date, 1=deadline, 2=priority
     int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days,5=no-project,6=xp-pending,7=active
+    int tasksViewMode = 0; // 0=work, 1=admin
     std::int64_t tasksReminderLastAt = 0;
     std::unordered_set<std::string> tasksReminderShown24h;
     std::unordered_set<std::string> tasksReminderShown2h;

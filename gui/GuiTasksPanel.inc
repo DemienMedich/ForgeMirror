@@ -367,7 +367,49 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         state.filters.tasks.fill('\0');
     };
 
-    if (state.isAdmin && state.showTaskCreateForm) {
+    if (!state.isAdmin) {
+        state.tasksViewMode = 0;
+    }
+    state.tasksViewMode = std::clamp(state.tasksViewMode, 0, state.isAdmin ? 1 : 0);
+    bool tasksAdminMode = state.isAdmin && state.tasksViewMode == 1;
+    auto SetTasksViewMode = [&](int mode) {
+        state.tasksViewMode = state.isAdmin ? std::clamp(mode, 0, 1) : 0;
+        if (state.tasksViewMode == 0) {
+            state.showTaskCreateForm = false;
+            state.taskSelectionIds.clear();
+        }
+        tasksAdminMode = state.isAdmin && state.tasksViewMode == 1;
+    };
+    if (!tasksAdminMode) {
+        state.showTaskCreateForm = false;
+    }
+
+    if (BeginCard("tasks_mode_card")) {
+        DrawCardHeader(u8"Режим задач");
+        if (!state.isAdmin) {
+            ImGui::TextDisabled(u8"Оперативно: текущие задачи, дедлайны, фильтры и детали без админских правок.");
+        } else {
+            const bool stackModes = ImGui::GetContentRegionAvail().x < 540.0f;
+            auto DrawModeButton = [&](const char* label, int mode) {
+                const bool selected = state.tasksViewMode == mode;
+                if (selected) ImGui::BeginDisabled();
+                if (ImGui::Button(label, ImVec2(stackModes ? -1.0f : 190.0f, 0.0f))) {
+                    SetTasksViewMode(mode);
+                }
+                if (selected) ImGui::EndDisabled();
+            };
+            DrawModeButton(u8"Оперативно", 0);
+            if (!stackModes) ImGui::SameLine();
+            DrawModeButton(u8"Администрирование", 1);
+            ImGui::TextDisabled(tasksAdminMode
+                ? u8"Админ-режим: создание задач, проекты, аудит, массовые действия и inline-правки."
+                : u8"Рабочий режим: таблица, дедлайны, фильтры и детали без лишних админских блоков.");
+        }
+    }
+    EndCard();
+    ImGui::Spacing();
+
+    if (tasksAdminMode && state.showTaskCreateForm) {
         if (BeginCard("tasks_create_card")) {
             DrawCardHeader(u8"Создать задачу");
             EnsureTaskPlanAssigneesSize(state);
@@ -864,6 +906,18 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         u8"Активные"
     };
     state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
+    auto ToggleTaskCreateFlow = [&]() {
+        if (!state.isAdmin) return;
+        if (!tasksAdminMode) {
+            SetTasksViewMode(1);
+            state.showTaskCreateForm = true;
+            return;
+        }
+        state.showTaskCreateForm = !state.showTaskCreateForm;
+    };
+    auto TaskCreateButtonLabel = [&]() -> const char* {
+        return (tasksAdminMode && state.showTaskCreateForm) ? u8"Скрыть форму" : u8"Поставить задачу";
+    };
     if (BeginCard("tasks_toolbar_card")) {
         DrawCardHeader(u8"Быстрый доступ");
         const bool compactToolbar = ImGui::GetContentRegionAvail().x < 760.0f;
@@ -880,9 +934,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
             if (state.isAdmin) {
-                const char* createLabel = state.showTaskCreateForm ? u8"Скрыть форму" : u8"Новая задача";
-                if (ImGui::Button(createLabel, ImVec2(-1.0f, 0.0f))) {
-                    state.showTaskCreateForm = !state.showTaskCreateForm;
+                if (ImGui::Button(TaskCreateButtonLabel(), ImVec2(-1.0f, 0.0f))) {
+                    ToggleTaskCreateFlow();
                 }
             }
             if (ImGui::Button(u8"Сбросить фильтры", ImVec2(-1.0f, 0.0f))) {
@@ -913,9 +966,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextUnformatted(quickFilterLabels[state.tasksQuickFilter]);
             if (state.isAdmin) {
                 ImGui::TableSetColumnIndex(2);
-                const char* createLabel = state.showTaskCreateForm ? u8"Скрыть форму" : u8"Новая задача";
-                if (ImGui::Button(createLabel, ImVec2(-1.0f, 0.0f))) {
-                    state.showTaskCreateForm = !state.showTaskCreateForm;
+                if (ImGui::Button(TaskCreateButtonLabel(), ImVec2(-1.0f, 0.0f))) {
+                    ToggleTaskCreateFlow();
                 }
                 ImGui::TableSetColumnIndex(3);
             } else {
@@ -930,6 +982,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     EndCard();
     ImGui::Spacing();
 
+    if (tasksAdminMode) {
     std::string projectsHeader = u8"Проекты в задачах (" + std::to_string(static_cast<int>(state.projects.size())) + ")";
     if (ImGui::CollapsingHeader(projectsHeader.c_str())) {
         if (BeginCard("tasks_projects_bridge")) {
@@ -1070,6 +1123,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         EndCard();
         ImGui::Spacing();
+    }
     }
 
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -1555,6 +1609,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::Spacing();
     }
 
+    if (tasksAdminMode) {
     std::string auditHeader = u8"Последние изменения (" +
         std::to_string(static_cast<int>(state.taskAudit.size())) + ")";
     if (ImGui::CollapsingHeader(auditHeader.c_str())) {
@@ -1604,6 +1659,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         EndCard();
         ImGui::Spacing();
+    }
     }
 
     auto ApplyBulkStatus = [&]() -> bool {
@@ -1768,7 +1824,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return true;
     };
 
-    if (state.isAdmin && !state.taskSelectionIds.empty()) {
+    if (tasksAdminMode && !state.taskSelectionIds.empty()) {
         std::string bulkHeader = u8"Массовые действия (" +
             std::to_string(static_cast<int>(state.taskSelectionIds.size())) + ")";
         if (ImGui::CollapsingHeader(bulkHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -2146,7 +2202,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     };
 
     int visibleCount = 0;
-    const bool allowBulkSelection = state.isAdmin;
+    const bool allowBulkSelection = tasksAdminMode;
     const int tableColumns = allowBulkSelection ? 9 : 8;
     if (allowBulkSelection && !state.taskSelectionIds.empty()) {
         ImGui::TextDisabled(u8"Выбрано задач: %d", static_cast<int>(state.taskSelectionIds.size()));
@@ -2181,7 +2237,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
             }
-            TaskEntry* editableTask = state.isAdmin ? FindTaskMutable(task->id) : nullptr;
+            TaskEntry* editableTask = tasksAdminMode ? FindTaskMutable(task->id) : nullptr;
             int col = 0;
             ImGui::PushID(task->id.c_str());
 
@@ -2206,7 +2262,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
 
             ImGui::TableSetColumnIndex(col++);
-            if (state.isAdmin && editableTask) {
+            if (tasksAdminMode && editableTask) {
                 const std::string deadlineText = task->deadlineAt > 0 ? FormatTimestamp(task->deadlineAt, "%Y-%m-%d %H:%M") : std::string();
                 std::string buttonLabel = deadlineText.empty() ? std::string(u8"Установить") : deadlineText;
                 if (ImGui::Button(buttonLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
@@ -2253,7 +2309,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TableSetColumnIndex(col++);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             const std::string projectName = ResolveTaskProjectName(state, *task);
-            if (state.isAdmin && editableTask) {
+            if (tasksAdminMode && editableTask) {
                 int projectIndex = 0;
                 if (!editableTask->projectId.empty()) {
                     for (int i = 0; i < static_cast<int>(state.projects.size()); ++i) {
@@ -2280,7 +2336,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, pipelineAttentionBg);
             }
             const std::string pipelineName = ResolveTaskPipelineName(state, *task);
-            if (state.isAdmin && editableTask) {
+            if (tasksAdminMode && editableTask) {
                 int pipelineIndex = 0;
                 if (!editableTask->pipelineStepId.empty()) {
                     const int currentPipelineIndex = FindPipelineStepIndexById(state, editableTask->pipelineStepId);
@@ -2344,7 +2400,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (!participants.empty() && participants != participantSummary && ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", participants.c_str());
             }
-            if (state.isAdmin && editableTask && task->participants.empty()) {
+            if (tasksAdminMode && editableTask && task->participants.empty()) {
                 ImGui::SameLine();
                 if (ImGui::SmallButton(u8"Изм.")) {
                     state.taskInlineAssigneeEditId = task->id;
@@ -2400,7 +2456,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::TableSetColumnIndex(col++);
             const int normalizedPriority = NormalizeTaskPriority(task->priority);
-            if (state.isAdmin) {
+            if (tasksAdminMode) {
                 int draftPriority = normalizedPriority;
                 const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
                 ImGui::SetNextItemWidth(-1.0f);
@@ -2421,7 +2477,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             ImGui::TableSetColumnIndex(col++);
             const int normalizedStatus = NormalizeTaskStatus(task->status);
-            if (state.isAdmin) {
+            if (tasksAdminMode) {
                 int draftStatus = normalizedStatus;
                 const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
                 ImGui::SetNextItemWidth(-1.0f);
@@ -2515,10 +2571,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     };
     if (expanded) {
         TaskEntry* editableTask = nullptr;
-        for (auto& task : state.tasks) {
-            if (task.id == expanded->id) {
-                editableTask = &task;
-                break;
+        if (tasksAdminMode) {
+            for (auto& task : state.tasks) {
+                if (task.id == expanded->id) {
+                    editableTask = &task;
+                    break;
+                }
             }
         }
         if (BeginCard("tasks_detail_card")) {
@@ -2709,7 +2767,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
 
-            if (state.isAdmin && editableTask && !editableTask->id.empty()) {
+            if (tasksAdminMode && editableTask && !editableTask->id.empty()) {
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::TextDisabled(u8"Админские изменения применяются сразу.");
