@@ -253,17 +253,16 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Задачи получили более прямой сценарий `постановка -> создание проекта -> привязка`, без ощущения, что создание проекта спрятано в побочную функцию формы.
+  - Профиль получил компактную карточку `Текущие задачи` в основной сводке: статусы, ближайшие задачи, дедлайны, проект/этап, штраф дедлайна и иконки перехода в задачи.
 - Next:
-  - Продолжить icon-pass: заменить редкие detail-actions и вторичные кнопки создания/редактирования задач на иконки с tooltip, не трогая первичные CTA.
+  - Продолжить компоновку профиля: уплотнить верхнюю карточку идентификации/ранга и аккуратно встроить духов/кошелёк в одну строку состояния.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfilePanel.inc`
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiTasksPanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.35.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.55.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)
