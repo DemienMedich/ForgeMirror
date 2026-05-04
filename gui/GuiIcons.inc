@@ -21,7 +21,8 @@ enum class UiIcon {
     Play,
     Stop,
     Next,
-    Plus
+    Plus,
+    Copy
 };
 
 static ImVec2 IconPoint(ImVec2 center, float x, float y, float size) {
@@ -280,6 +281,16 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
                               IconPoint(center, 0.55f, 0.0f, s), color, stroke);
             drawList->AddLine(IconPoint(center, 0.0f, -0.55f, s),
                               IconPoint(center, 0.0f, 0.55f, s), color, stroke);
+            return;
+        }
+        case UiIcon::Copy: {
+            ImVec2 backA = IconPoint(center, -0.46f, -0.58f, s);
+            ImVec2 backB = IconPoint(center, 0.32f, 0.20f, s);
+            ImVec2 frontA = IconPoint(center, -0.22f, -0.30f, s);
+            ImVec2 frontB = IconPoint(center, 0.56f, 0.58f, s);
+            drawList->AddRect(backA, backB, color, s * 0.10f, 0, stroke);
+            drawList->AddRectFilled(frontA, frontB, ImGui::GetColorU32(ImVec4(0, 0, 0, 0)), s * 0.10f);
+            drawList->AddRect(frontA, frontB, color, s * 0.10f, 0, stroke);
             return;
         }
         case UiIcon::LockClosed:

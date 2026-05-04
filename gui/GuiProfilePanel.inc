@@ -576,6 +576,16 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::BeginChild("profile_header_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_AutoResizeY,
             ImGuiWindowFlags_NoScrollbar);
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
+        auto drawCopyableValue = [&](const char* id, const std::string& value, const char* tooltip) {
+            ImGui::TextUnformatted(value.c_str());
+            const float iconSize = ImGui::GetFrameHeight();
+            if (ImGui::GetContentRegionAvail().x > iconSize + ImGui::GetStyle().ItemSpacing.x) {
+                ImGui::SameLine();
+                if (IconButtonGui(id, UiIcon::Copy, tooltip, accent, iconSize)) {
+                    ImGui::SetClipboardText(value.c_str());
+                }
+            }
+        };
         if (ImGui::BeginTable("profile_info", 2, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
@@ -583,43 +593,23 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Имя");
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(profile.name().c_str());
-            if (ImGui::GetContentRegionAvail().x > 120.0f) {
-                ImGui::SameLine();
-            }
-            if (ImGui::SmallButton(u8"Копировать##profile_name")) {
-                ImGui::SetClipboardText(profile.name().c_str());
-            }
+            drawCopyableValue("copy_name", profile.name(), u8"Копировать имя");
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"ID");
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(state.active->id.c_str());
-            if (ImGui::GetContentRegionAvail().x > 120.0f) {
-                ImGui::SameLine();
-            }
-            if (ImGui::SmallButton(u8"Копировать##profile_id")) {
-                ImGui::SetClipboardText(state.active->id.c_str());
-            }
+            drawCopyableValue("copy_id", state.active->id, u8"Копировать ID");
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Логин");
             ImGui::TableSetColumnIndex(1);
             std::string login = profile.login().empty() ? state.active->id : profile.login();
-            ImGui::TextUnformatted(login.c_str());
-            if (ImGui::GetContentRegionAvail().x > 120.0f) {
-                ImGui::SameLine();
-            }
-            if (ImGui::SmallButton(u8"Копировать##profile_login")) {
-                ImGui::SetClipboardText(login.c_str());
-            }
+            drawCopyableValue("copy_login", login, u8"Копировать логин");
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Доступ");
             ImGui::TableSetColumnIndex(1);
             ImGui::TextColored(accessColor, "%s", accessText.c_str());
-            const float actionsWidth = ImGui::GetContentRegionAvail().x;
-            const bool stackActions = actionsWidth < 320.0f;
             auto openUnlock = [&]() {
                 state.profileAuthTargetId = state.active->id;
                 state.profileAuthTargetName = profile.name();
@@ -640,20 +630,24 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 state.profileResetPassword = GenerateRandomPassword();
                 state.profileResetPasswordRequest = true;
             };
+            const float accessIconSize = ImGui::GetFrameHeight();
             if (hasPassword && !unlocked) {
-                if (!stackActions) ImGui::SameLine();
-                if (ImGui::SmallButton(u8"Ввести пароль")) {
+                ImGui::SameLine();
+                if (IconButtonGui("profile_unlock", UiIcon::LockOpen, u8"Ввести пароль",
+                                  accent, accessIconSize)) {
                     openUnlock();
                 }
             }
-            const char* changeLabel = hasPassword ? u8"Сменить пароль" : u8"Задать пароль";
-            if (!stackActions) ImGui::SameLine();
-            if (ImGui::SmallButton(changeLabel)) {
+            ImGui::SameLine();
+            if (IconButtonGui("profile_change_password", UiIcon::Settings,
+                              hasPassword ? u8"Сменить пароль" : u8"Задать пароль",
+                              accent, accessIconSize)) {
                 openChange();
             }
             if (state.isAdmin) {
-                if (!stackActions) ImGui::SameLine();
-                if (ImGui::SmallButton(u8"Сбросить пароль")) {
+                ImGui::SameLine();
+                if (IconButtonGui("profile_reset_password", UiIcon::Refresh, u8"Сбросить пароль",
+                                  accent, accessIconSize)) {
                     openReset();
                 }
             }
@@ -663,11 +657,12 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableSetColumnIndex(1);
             ImGui::TextColored(profileStatusColor, "%s", blocked ? u8"Заблокирован" : u8"Активен");
             if (state.isAdmin) {
-                const float statusWidth = ImGui::GetContentRegionAvail().x;
-                const bool stackStatusActions = statusWidth < 220.0f;
-                if (!stackStatusActions) ImGui::SameLine();
-                const char* actionLabel = blocked ? u8"Разблокировать" : u8"Блокировать";
-                if (ImGui::SmallButton(actionLabel)) {
+                ImGui::SameLine();
+                const UiIcon statusIcon = blocked ? UiIcon::LockOpen : UiIcon::LockClosed;
+                const char* statusTip = blocked ? u8"Разблокировать профиль" : u8"Блокировать профиль";
+                if (IconButtonGui("profile_toggle_block", statusIcon, statusTip,
+                                  blocked ? accent : LogLevelColor(AppLogLevel::Warning),
+                                  ImGui::GetFrameHeight())) {
                     state.confirmAction = blocked ? ConfirmAction::Unblock : ConfirmAction::Block;
                     state.confirmPopupRequest = true;
                 }
