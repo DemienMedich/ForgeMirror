@@ -34,10 +34,13 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: codex/tasks-module-ux. Версия: 0.4.53.
-  - Последнее изменение: добавлен smoke guard на ImGui stack-паттерны панели задач.
+  - Ветка: codex/tasks-module-ux. Версия: 0.4.54.
+  - Последнее изменение: уплотнены project bridge и bulk-actions в админском режиме задач.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
+  - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
+  - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
+  - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.
   - Tasks UX: wizard создания задачи получил короткие stepper-labels (`Основное/Люди/Навыки/Проверка`) и compact `SmallButton` шаги.
   - Tasks UX: inline-создание проекта в wizard стало короче: `+ Проект`, компактный текст, меньше высота описания и короткая кнопка сохранения.

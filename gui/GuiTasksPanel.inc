@@ -1188,45 +1188,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             const ProjectPortfolioStats bridgePortfolio = BuildProjectPortfolioStats(bridgeProjectStats);
 
+            ImGui::TextDisabled(u8"Активно: %d пр. / %d зад.",
+                                bridgePortfolio.activeProjects,
+                                bridgePortfolio.totalActiveTasks);
+            if (bridgePortfolio.xpPendingProjects > 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                   u8"XP: %d пр. / %d зад.",
+                                   bridgePortfolio.xpPendingProjects,
+                                   bridgePortfolio.totalXpPendingTasks);
+            }
+            if (bridgePortfolio.overdueProjects > 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                   u8"Проср.: %d пр.", bridgePortfolio.overdueProjects);
+            }
             if (state.tasksFilterProject > 0) {
-                ImGui::TextDisabled(u8"Активный проектный фокус");
-                if (ImGui::Button(u8"Снять проектный фильтр", ImVec2(-1.0f, 0.0f))) {
+                ImGui::SameLine();
+                if (TaskIconButton("bridge_clear_focus", UiIcon::Refresh, u8"Снять проектный фильтр")) {
                     state.tasksFilterProject = 0;
                 }
-                ImGui::Dummy(ImVec2(0.0f, 4.0f));
             }
-
-            if (ImGui::BeginTable("tasks_projects_bridge_summary", 3, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("bridge_summary_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableSetupColumn("bridge_summary_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableSetupColumn("bridge_summary_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableNextRow();
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextDisabled(u8"Активный поток");
-                ImGui::Text(u8"%d проектов / %d задач", bridgePortfolio.activeProjects, bridgePortfolio.totalActiveTasks);
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextDisabled(u8"XP handoff");
-                if (bridgePortfolio.xpPendingProjects > 0) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
-                                       u8"%d проектов / %d задач",
-                                       bridgePortfolio.xpPendingProjects,
-                                       bridgePortfolio.totalXpPendingTasks);
-                } else {
-                    ImGui::TextDisabled(u8"Нет ожидания");
-                }
-
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TextDisabled(u8"Просрочка");
-                if (bridgePortfolio.overdueProjects > 0) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d проектов", bridgePortfolio.overdueProjects);
-                } else {
-                    ImGui::TextDisabled(u8"Нет риска");
-                }
-                ImGui::EndTable();
-            }
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
             if (state.projects.empty()) {
                 ImGui::TextDisabled(u8"Проектов пока нет.");
@@ -1262,9 +1245,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     if (stats.xpPending > 0) {
                         ImGui::SameLine();
                         ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", stats.xpPending);
-                    }
-                    if (stats.xpPending > 0) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Handoff ждёт: %d", stats.xpPending);
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(u8"Handoff ждёт: %d", stats.xpPending);
+                        }
                     }
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%d", stats.total);
@@ -1283,14 +1266,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::EndTable();
             }
 
-            if (state.isAdmin) {
-                ImGui::Dummy(ImVec2(0.0f, 8.0f));
-                ImGui::Separator();
-                if (ImGui::Button(u8"Новый проект", ImVec2(-1.0f, 0.0f))) {
+            if (state.isAdmin && ImGui::CollapsingHeader(u8"Создание и редактирование проекта")) {
+                if (TaskIconButton("bridge_new_project", UiIcon::Plus, u8"Новый проект")) {
                     state.projectEditIndex = -1;
                     state.newProjectName.fill('\0');
                     state.newProjectDesc.fill('\0');
                 }
+                ImGui::SameLine();
                 if (state.projectEditIndex >= 0 && state.projectEditIndex < static_cast<int>(state.projects.size())) {
                     ImGui::TextDisabled(u8"Редактирование проекта: %s", state.projects[static_cast<size_t>(state.projectEditIndex)].name.c_str());
                 } else {
@@ -1302,7 +1284,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TextDisabled(u8"Описание");
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextMultiline("##tasks_bridge_project_desc", state.newProjectDesc.data(),
-                                          state.newProjectDesc.size(), ImVec2(-1.0f, 70.0f));
+                                          state.newProjectDesc.size(), ImVec2(-1.0f, 52.0f));
                 if (ImGui::Button(u8"Сохранить проект", ImVec2(-1.0f, 0.0f))) {
                     AppProjectSaveResult saveResult = AppSaveProjectEntry(
                         state.storageDir,
@@ -2126,7 +2108,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (ImGui::CollapsingHeader(bulkHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             if (BeginCard("tasks_bulk_actions")) {
             const int selectedCount = static_cast<int>(state.taskSelectionIds.size());
-            ImGui::TextDisabled(u8"Выбрано: %d", selectedCount);
+            ImGui::TextDisabled(u8"%d выбрано", selectedCount);
             ImGui::SameLine();
             if (TaskIconButton("bulk_select_visible", UiIcon::Search, u8"Выбрать все видимые задачи")) {
                 for (const TaskEntry* task : filtered) {
@@ -2154,7 +2136,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.taskBulkPriority = std::clamp(state.taskBulkPriority, kTaskPriorityLow, kTaskPriorityCritical);
             const float bulkIconColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
 
-            if (ImGui::BeginTable("tasks_bulk_compact_row1", 8, ImGuiTableFlags_SizingStretchProp)) {
+            if (ImGui::BeginTable("tasks_bulk_compact_row1", 8, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
                 ImGui::TableSetupColumn("bulk_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                 ImGui::TableSetupColumn("bulk_status_btn", ImGuiTableColumnFlags_WidthFixed, bulkIconColumn);
                 ImGui::TableSetupColumn("bulk_priority", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -2205,7 +2187,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::EndTable();
             }
 
-            if (ImGui::BeginTable("tasks_bulk_compact_row2", 4, ImGuiTableFlags_SizingStretchProp)) {
+            if (ImGui::BeginTable("tasks_bulk_compact_row2", 4, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
                 ImGui::TableSetupColumn("bulk_deadline", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                 ImGui::TableSetupColumn("bulk_deadline_set", ImGuiTableColumnFlags_WidthFixed, bulkIconColumn);
                 ImGui::TableSetupColumn("bulk_deadline_clear", ImGuiTableColumnFlags_WidthFixed, bulkIconColumn);
