@@ -20,7 +20,8 @@ enum class UiIcon {
     SpiritEvil,
     Play,
     Stop,
-    Next
+    Next,
+    Plus
 };
 
 static ImVec2 IconPoint(ImVec2 center, float x, float y, float size) {
@@ -272,6 +273,13 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             drawList->AddTriangleFilled(a2, b2, c2, color);
             drawList->AddTriangle(a1, b1, c1, color, stroke * 0.8f);
             drawList->AddTriangle(a2, b2, c2, color, stroke * 0.8f);
+            return;
+        }
+        case UiIcon::Plus: {
+            drawList->AddLine(IconPoint(center, -0.55f, 0.0f, s),
+                              IconPoint(center, 0.55f, 0.0f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, -0.55f, s),
+                              IconPoint(center, 0.0f, 0.55f, s), color, stroke);
             return;
         }
         case UiIcon::LockClosed:
