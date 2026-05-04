@@ -35,6 +35,29 @@ static bool ReadFile(const std::filesystem::path& path, std::string& outData) {
     return true;
 }
 
+static std::filesystem::path FindRepoRootFromCwd() {
+    std::error_code ec;
+    std::filesystem::path current = std::filesystem::current_path(ec);
+    for (int i = 0; !ec && i < 8 && !current.empty(); ++i) {
+        if (std::filesystem::exists(current / "gui" / "GuiTasksPanel.inc", ec)) {
+            return current;
+        }
+        current = current.parent_path();
+    }
+    return {};
+}
+
+static size_t CountSubstring(const std::string& haystack, const std::string& needle) {
+    if (needle.empty()) return 0;
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = haystack.find(needle, pos)) != std::string::npos) {
+        ++count;
+        pos += needle.size();
+    }
+    return count;
+}
+
 static bool SetFileUnixTimestamp(const std::filesystem::path& path, std::int64_t unixSeconds) {
     using namespace std::chrono;
     std::error_code ec;
@@ -113,6 +136,21 @@ static bool TestTaskTextMutation(const std::filesystem::path& dir) {
     return auditLog.find("|title|Old title|New title") != std::string::npos &&
            auditLog.find("|description|Old description|New description") != std::string::npos &&
            audit.size() == 2;
+}
+
+static bool TestGuiTasksImGuiStackPatterns() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string source;
+    if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", source)) return false;
+
+    if (source.find("&& BeginCard(") != std::string::npos) {
+        return false;
+    }
+
+    const size_t beginCards = CountSubstring(source, "BeginCard(");
+    const size_t endCards = CountSubstring(source, "EndCard();");
+    return beginCards == endCards;
 }
 
 static bool TestSyncHealthDetectsBrokenFiles(const std::filesystem::path& dir) {
@@ -437,6 +475,7 @@ int main() {
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
+    const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okSyncHealth = TestSyncHealthDetectsBrokenFiles(tmp);
@@ -454,7 +493,7 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -466,6 +505,7 @@ int main() {
               << " rules=" << okRules
               << " tasks=" << okTasks
               << " taskText=" << okTaskText
+              << " guiStack=" << okGuiStack
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
               << " vault=" << okVault
