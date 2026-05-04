@@ -1,5 +1,6 @@
 build/
 build-gui/
+build-test/
 dist/
 .idea/
 .gigaide/

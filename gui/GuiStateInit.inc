@@ -43,7 +43,7 @@ void InitGuiState(GuiState& state, AppContext& app,
     state.tasksFilterPriority = 0;
     state.tasksSortMode = 0;
     state.tasksQuickFilter = 0;
-    state.projectsSortMode = std::clamp(state.projectsSortMode, 0, 2);
+    state.projectsSortMode = std::clamp(state.projectsSortMode, 0, 3);
     state.tasksReminderLastAt = 0;
     state.tasksReminderShown24h.clear();
     state.tasksReminderShown2h.clear();
@@ -65,8 +65,9 @@ void InitGuiState(GuiState& state, AppContext& app,
     glfwGetWindowPos(window, &state.windowedX, &state.windowedY);
     glfwGetWindowSize(window, &state.windowedW, &state.windowedH);
     state.windowFullscreenLast = state.ui.windowFullscreen;
-    glfwSetWindowAttrib(window, GLFW_DECORATED, state.ui.windowDecorated ? GLFW_TRUE : GLFW_FALSE);
-    state.windowDecoratedLast = state.ui.windowDecorated;
+    const bool effectiveDecorated = state.ui.windowDecorated && !state.ui.windowFullscreen;
+    glfwSetWindowAttrib(window, GLFW_DECORATED, effectiveDecorated ? GLFW_TRUE : GLFW_FALSE);
+    state.windowDecoratedLast = effectiveDecorated;
     if (state.ui.windowFullscreen) {
         state.windowFullscreenLast = false;
         ApplyWindowMode(window, state);

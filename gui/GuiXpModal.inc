@@ -58,6 +58,18 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
         if (state.taskShares.size() != state.profiles.size()) {
             PrepareTaskShares(state);
         }
+        TaskEntry* sourceTask = nullptr;
+        if (!state.xpSourceTaskId.empty()) {
+            auto it = std::find_if(state.tasks.begin(), state.tasks.end(),
+                                   [&](const TaskEntry& task) { return task.id == state.xpSourceTaskId; });
+            if (it != state.tasks.end()) {
+                sourceTask = &(*it);
+            }
+        }
+        const bool fromTask = (sourceTask != nullptr);
+        const int taskPenaltyPercent = fromTask
+            ? std::clamp(sourceTask->deadlinePenaltyPercent, 0, 100)
+            : std::clamp(state.xpTaskPenaltyPercent, 0, 100);
             if (catalogSkills.empty()) {
                 ImGui::TextDisabled(u8"Навыков пока нет.");
         } else if (!state.active) {
@@ -123,17 +135,31 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
 
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
             DrawCardHeader(u8"Описание задачи");
-            ImGui::TextDisabled(u8"Все поля обязательны для сохранения.");
-            ImGui::TextDisabled(u8"Проект");
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputText(u8"##task_project", state.taskProject.data(), state.taskProject.size());
-            ImGui::TextDisabled(u8"Задача");
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputText(u8"##task_title", state.taskTitle.data(), state.taskTitle.size());
-            ImGui::TextDisabled(u8"Краткое описание");
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputTextMultiline(u8"##task_desc", state.taskDescription.data(),
-                                      state.taskDescription.size(), ImVec2(-1.0f, 80.0f));
+            if (fromTask) {
+                ImGui::TextDisabled(u8"XP будет записан в существующую задачу.");
+                ImGui::TextDisabled(u8"Проект");
+                ImGui::TextUnformatted(state.taskProject.data());
+                ImGui::TextDisabled(u8"Задача");
+                ImGui::TextUnformatted(state.taskTitle.data());
+                ImGui::TextDisabled(u8"Краткое описание");
+                ImGui::TextWrapped("%s", state.taskDescription.data());
+                if (taskPenaltyPercent > 0) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                       u8"Штраф дедлайна: -%d%% к итоговому XP-пулу.", taskPenaltyPercent);
+                }
+            } else {
+                ImGui::TextDisabled(u8"Все поля обязательны для сохранения.");
+                ImGui::TextDisabled(u8"Проект");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputText(u8"##task_project", state.taskProject.data(), state.taskProject.size());
+                ImGui::TextDisabled(u8"Задача");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputText(u8"##task_title", state.taskTitle.data(), state.taskTitle.size());
+                ImGui::TextDisabled(u8"Краткое описание");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextMultiline(u8"##task_desc", state.taskDescription.data(),
+                                          state.taskDescription.size(), ImVec2(-1.0f, 80.0f));
+            }
 
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
             DrawCardHeader(u8"Участники и вклад");
@@ -317,7 +343,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 double mult = state.active->profile.skill_bonus_multiplier(skillId, nowSeconds);
                 xpBonus[i] = std::max(0.0, (mult - 1.0) * 100.0);
                 const int previewXp = (baseXp * state.xpEntries[i].percent) / 100;
-                xpPreview[i] = static_cast<int>(std::round(previewXp * mult));
+                xpPreview[i] = ApplyProfileSpiritXpModifier(
+                    state.active->profile.spirit(),
+                    static_cast<int>(std::round(previewXp * mult)));
                 if (restrictSkills && i < static_cast<int>(skillAllowed.size()) && !skillAllowed[i]) {
                     continue;
                 }
@@ -404,6 +432,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     } else {
                         ImGui::Text("%d", previewXp);
                     }
+                    if (state.active->profile.spirit() != ProfileSpirit::None && ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(state.active->profile.spirit()));
+                    }
                 }
                 ImGui::EndTable();
             }
@@ -430,9 +461,35 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Назначено: %d%%", percentSum);
             }
             const float focusBonus = rules.focusBaseBonus + rules.focusAdditionalBonus * (static_cast<float>(maxSharePercent) / 100.0f);
-            const int previewPool = static_cast<int>(std::round(baseXp * scoreMultiplier * focusBonus));
+            const int previewPoolRaw = static_cast<int>(std::round(baseXp * scoreMultiplier * focusBonus));
+            const int previewPool = static_cast<int>(std::round(
+                static_cast<double>(previewPoolRaw) * static_cast<double>(100 - taskPenaltyPercent) / 100.0));
             ImGui::Text(u8"Фокус-бонус: %.2f (макс. доля %d%%)", focusBonus, maxSharePercent);
-            ImGui::TextDisabled(u8"Прогноз XP по навыкам до штрафов: %d", previewPool);
+            if (taskPenaltyPercent > 0) {
+                ImGui::TextDisabled(u8"Прогноз XP по навыкам: %d -> %d после дедлайна (-%d%%)",
+                                    previewPoolRaw, previewPool, taskPenaltyPercent);
+            } else {
+                ImGui::TextDisabled(u8"Прогноз XP по навыкам до штрафов: %d", previewPool);
+            }
+            if (state.active->profile.spirit() != ProfileSpirit::None) {
+                ImVec4 spiritColor = state.active->profile.spirit() == ProfileSpirit::Evil
+                    ? LogLevelColor(AppLogLevel::Warning)
+                    : accent;
+                spiritColor.w = std::max(spiritColor.w, 0.90f);
+                if (auto spiritIcon = ResolveSpiritIconPath(state.active->profile.spirit(), state.storageDir)) {
+                    if (const auto* iconTex = GetIconTexture(*spiritIcon)) {
+                        const float iconSize = ImGui::GetTextLineHeightWithSpacing();
+                        ImGui::Image((ImTextureID)(intptr_t)iconTex->id, ImVec2(iconSize, iconSize));
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(state.active->profile.spirit()));
+                        ImGui::SameLine();
+                    }
+                }
+                ImGui::TextColored(spiritColor,
+                                   u8"%s: %s",
+                                   ProfileSpiritLabel(state.active->profile.spirit()),
+                                   ProfileSpiritEffectLabel(state.active->profile.spirit()));
+            }
+            ImGui::TextDisabled(u8"Дух применяется персонально к каждому участнику при сохранении XP.");
 
             const bool repeatPenaltyPreview = penaltiesEnabled && state.taskScore <= currentBest;
             const int repeatPercentPreview = static_cast<int>(std::round(rules.repeatRewardFactor * 100.0f));
@@ -454,8 +511,14 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             if (penaltiesEnabled && state.active->profile.penalty_active()) {
                 effectivePreview = static_cast<int>(std::round(effectivePreview * rules.recoveryRewardFactor));
             }
-            ImGui::TextDisabled(u8"%s: %d%s", globalHint.c_str(), effectivePreview,
-            previewPenalty ? u8" (после штрафов)" : "");
+            const int spiritEffectivePreview = ApplyProfileSpiritXpModifier(state.active->profile.spirit(), effectivePreview);
+            if (spiritEffectivePreview != effectivePreview) {
+                ImGui::TextDisabled(u8"%s: %d -> %d%s", globalHint.c_str(), effectivePreview, spiritEffectivePreview,
+                                    previewPenalty ? u8" (после штрафов и духа)" : u8" (после духа)");
+            } else {
+                ImGui::TextDisabled(u8"%s: %d%s", globalHint.c_str(), effectivePreview,
+                previewPenalty ? u8" (после штрафов)" : "");
+            }
 
             if (ImGui::Button(u8"Применить", ImVec2(stackControls ? -1.0f : 0.0f, 0.0f))) {
                 const int readyCategory = NormalizeCategoryIndex(state.taskCategoryIndex);
@@ -473,6 +536,15 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     ratingCheck += std::max(0, entry.rating);
                 }
                 const bool hasContribution = ratingCheck > 0;
+                const std::vector<std::string> selectedSkillIds = [&]() {
+                    std::vector<std::string> ids;
+                    ids.reserve(state.xpEntries.size());
+                    for (size_t i = 0; i < state.xpEntries.size() && i < catalogSkills.size(); ++i) {
+                        if (state.xpEntries[i].rating <= 0) continue;
+                        ids.push_back(catalogSkills[i]);
+                    }
+                    return ids;
+                }();
                 if (project.empty() || title.empty() || description.empty()) {
                     SetStatus(state, u8"Заполните проект, задачу и описание.", 1.0f, 0.45f, 0.45f);
                 } else if (memberCount <= 0) {
@@ -492,9 +564,12 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         maxShare = static_cast<float>(it->percent) / 100.0f;
                     }
                     const float focusBonus = rules.focusBaseBonus + rules.focusAdditionalBonus * maxShare;
-                    int basePool = static_cast<int>(std::round(
+                    int basePoolRaw = static_cast<int>(std::round(
                     rules.categoryBaseXp[readyCategory] *
                     std::pow(std::max(0.1f, static_cast<float>(readyScore) / 10.0f), 1.35f) * focusBonus));
+                    if (basePoolRaw < 0) basePoolRaw = 0;
+                    int basePool = static_cast<int>(std::round(
+                        static_cast<double>(basePoolRaw) * static_cast<double>(100 - taskPenaltyPercent) / 100.0));
                     if (basePool < 0) basePool = 0;
                     const char* categoryLabel = ClassificationLabel(readyCategory);
 
@@ -532,10 +607,12 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     task.status = kTaskStatusDone;
                     task.priority = kTaskPriorityMedium;
                     task.category = readyCategory;
+                    task.deadlinePenaltyPercent = taskPenaltyPercent;
                     task.score = readyScore;
                     task.baseXp = rules.categoryBaseXp[readyCategory];
                     task.basePool = basePool;
                     task.createdAt = nowSeconds;
+                    task.skillIds = selectedSkillIds;
 
                     std::vector<TaskParticipant> participants;
                     std::vector<std::string> assignees;
@@ -550,6 +627,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         auto profileOpt = storage.load_profile();
                         if (!profileOpt) continue;
                         Profile& profile = *profileOpt;
+                        const std::string rollbackSnapshot = SerializeProfileTaskRollbackSnapshot(profile);
 
                         const int storedBest = profile.category_best_score(static_cast<size_t>(readyCategory));
                         const bool penaltiesEnabled = profile.penalties_enabled();
@@ -586,7 +664,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             profile.add_skill(skillId, 1, weight);
                             double mult = profile.skill_bonus_multiplier(skillId, nowSeconds);
                             double bonusPercent = std::max(0.0, (mult - 1.0) * 100.0);
-                            int finalSkillXp = static_cast<int>(std::round(shareXp * mult));
+                            const int skillXpBeforeSpirit = static_cast<int>(std::round(shareXp * mult));
+                            int finalSkillXp = ApplyProfileSpiritXpModifier(profile.spirit(), skillXpBeforeSpirit);
                             skillXpTotal += finalSkillXp;
                             bool leveled = profile.grant_xp(skillId, finalSkillXp);
                             if (!firstSkill) skillsStream << " | ";
@@ -594,6 +673,10 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             if (bonusPercent > 0.01) {
                                 skillsStream << ", +" << std::fixed << std::setprecision(1) << bonusPercent << "%";
                                 skillsStream << std::defaultfloat;
+                            }
+                            const int spiritPercent = ProfileSpiritXpModifierPercent(profile.spirit());
+                            if (spiritPercent != 0) {
+                                skillsStream << u8", дух " << (spiritPercent > 0 ? "+" : "") << spiritPercent << "%";
                             }
                             skillsStream << ")";
                             if (leveled) skillsStream << u8" уровень вверх";
@@ -621,6 +704,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             effectiveXp = static_cast<int>(std::round(effectiveXp * rules.recoveryRewardFactor));
                             profile.consume_penalty_task();
                         }
+                        const int spiritPercent = ProfileSpiritXpModifierPercent(profile.spirit());
+                        const int beforeSpiritXp = effectiveXp;
+                        effectiveXp = ApplyProfileSpiritXpModifier(profile.spirit(), effectiveXp);
                         profile.set_last_task_timestamp(nowSeconds);
                         profile.increment_tasks_completed();
                         if (effectiveXp > 0) {
@@ -669,10 +755,21 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         summaryStream.imbue(std::locale::classic());
                         summaryStream << u8"Задача [" << categoryLabel << u8"] " << project << " / " << title
                                       << u8" => +" << effectiveXp << " XP";
+                        if (taskPenaltyPercent > 0) {
+                            summaryStream << u8" (дедлайн -" << taskPenaltyPercent << "%)";
+                        }
                         const int repeatPercent = static_cast<int>(std::round(rules.repeatRewardFactor * 100.0f));
                         const int recoveryPercent = static_cast<int>(std::round(rules.recoveryRewardFactor * 100.0f));
                         if (repeatPenalty) summaryStream << u8" (повтор " << repeatPercent << "%)";
                         if (recoveryPenalty) summaryStream << u8" (прогрев " << recoveryPercent << "%)";
+                        if (spiritPercent != 0) {
+                            summaryStream << u8" (" << ProfileSpiritLabel(profile.spirit()) << " "
+                                          << (spiritPercent > 0 ? "+" : "") << spiritPercent << "%";
+                            if (beforeSpiritXp != effectiveXp) {
+                                summaryStream << ": " << beforeSpiritXp << " -> " << effectiveXp;
+                            }
+                            summaryStream << ")";
+                        }
                         AppendLog(state, share.id, summaryStream.str());
 
                         AppProfileMutationResult mutation = AppSaveProfileSnapshot(storage, activeId, share.id, profile);
@@ -682,14 +779,41 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                                       1.0f, 0.45f, 0.45f);
                             continue;
                         }
-                        participants.push_back(TaskParticipant{share.id, share.percent, effectiveXp, skillXpTotal});
+                        TaskParticipant participant;
+                        participant.profileId = share.id;
+                        participant.percent = share.percent;
+                        participant.globalXp = effectiveXp;
+                        participant.skillXp = skillXpTotal;
+                        participant.rollbackSnapshot = rollbackSnapshot;
+                        participants.push_back(std::move(participant));
                     }
 
                     if (!participants.empty()) {
-                        task.participants = std::move(participants);
-                        task.assignees = std::move(assignees);
-                        state.tasks.push_back(std::move(task));
-                        const bool saveOk = SaveTasks(state.storageDir, state.tasks);
+                        bool saveOk = false;
+                        if (fromTask) {
+                            AppMutationResult mutation = AppFinalizeTaskXp(
+                                state.storageDir,
+                                state.tasks,
+                                sourceTask->id,
+                                readyCategory,
+                                readyScore,
+                                rules.categoryBaseXp[readyCategory],
+                                basePool,
+                                assignees,
+                                selectedSkillIds,
+                                participants,
+                                state.isAdmin ? "admin" : (state.active ? state.active->id : "system"),
+                                &state.taskAudit);
+                            saveOk = mutation.ok;
+                            if (!mutation.ok) {
+                                SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+                            }
+                        } else {
+                            task.participants = std::move(participants);
+                            task.assignees = std::move(assignees);
+                            state.tasks.push_back(std::move(task));
+                            saveOk = SaveTasks(state.storageDir, state.tasks);
+                        }
                         if (!activeId.empty()) {
                             storage.set_active_profile(activeId);
                             RefreshActiveProfile(state, storage, catalog);
@@ -700,14 +824,22 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         state.taskProject.fill('\0');
                         state.taskTitle.fill('\0');
                         state.taskDescription.fill('\0');
+                        state.xpSourceTaskId.clear();
+                        state.xpTaskPenaltyPercent = 0;
                         if (saveOk) {
-                            SetStatus(state, u8"Задача сохранена и опыт начислен.", 0.45f, 0.9f, 0.45f);
+                            SetStatus(state,
+                                      fromTask ? u8"XP записан в существующую задачу." : u8"Задача сохранена и опыт начислен.",
+                                      0.45f, 0.9f, 0.45f);
+                            ImGui::CloseCurrentPopup();
+                            xpPopupOpen = false;
                         } else {
-                            SetStatus(state, u8"Опыт начислен, но не удалось записать файл задач.", 1.0f, 0.75f, 0.35f,
+                            SetStatus(state,
+                                      fromTask
+                                          ? u8"Опыт начислен, но не удалось обновить задачу."
+                                          : u8"Опыт начислен, но не удалось записать файл задач.",
+                                      1.0f, 0.75f, 0.35f,
                                       1.0f, AppLogLevel::Warning, u8"Задачи");
                         }
-                        ImGui::CloseCurrentPopup();
-                        xpPopupOpen = false;
                     } else {
                         SetStatus(state, u8"Не удалось начислить опыт выбранным профилям.", 1.0f, 0.45f, 0.45f);
                     }

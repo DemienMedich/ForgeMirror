@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 enum class CloudRole {
     Viewer,
@@ -48,11 +49,56 @@ struct CloudManifest {
     std::string notes;
 };
 
+struct CloudWorkspaceFileDrift {
+    std::string relativePath;
+    bool localExists = false;
+    bool cloudExists = false;
+    bool localChanged = false;
+    bool cloudChanged = false;
+    bool hasIssue = false;
+    bool conflict = false;
+    std::string message;
+};
+
+struct CloudWorkspaceDriftSummary {
+    int issueCount = 0;
+    int conflictCount = 0;
+    std::vector<CloudWorkspaceFileDrift> files;
+    std::vector<std::string> issues;
+};
+
+struct CloudWorkspaceResolveResult {
+    bool ok = false;
+    bool changed = false;
+    std::string message;
+    std::vector<std::filesystem::path> backupPaths;
+};
+
+struct CloudWorkspaceBackupEntry {
+    std::string relativePath;
+    std::string sourceKind;
+    std::int64_t createdAt = 0;
+    std::filesystem::path path;
+};
+
 CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir);
 bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config);
 CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
 bool SaveCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir, const CloudManifest& manifest);
 bool IsUpdateAvailable(const CloudManifest& manifest, const std::string& currentVersion);
+std::filesystem::path ResolveCloudRootPath(const CloudSyncConfig& config, const std::filesystem::path& storageDir);
+CloudWorkspaceDriftSummary InspectCloudWorkspaceDrift(const CloudSyncConfig& config,
+                                                      const std::filesystem::path& storageDir,
+                                                      std::int64_t lastSuccessfulSyncAt);
+CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConfig& config,
+                                                             const std::filesystem::path& storageDir,
+                                                             const std::string& relativePath,
+                                                             bool preferCloud);
+std::vector<CloudWorkspaceBackupEntry> ListCloudWorkspaceBackups(const std::filesystem::path& storageDir,
+                                                                 const std::string& relativePath = std::string());
+CloudWorkspaceResolveResult RestoreCloudWorkspaceBackup(const std::filesystem::path& storageDir,
+                                                        const std::string& relativePath,
+                                                        const std::filesystem::path& backupPath);
 CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::filesystem::path& storageDir,
                                      const CloudManifest& manifest, std::filesystem::path& outPath);
 CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role);
@@ -64,7 +110,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
     std::error_code ec;
     if (!std::filesystem::exists(storageDir, ec)) return false;
     const std::unordered_set<std::string> allowedDirs = {
-        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes",
+        "", "archive", "achievements", "achievements/icons", "spirits", "meta", "meta/patch-notes",
         "meta/ui-presets", "meta/reports", "meta/updates", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
@@ -92,6 +138,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
             if (dirStr == "archive") return entry.path().extension() == ".ini";
             if (dirStr == "achievements") return entry.path().extension() == ".json";
             if (dirStr == "achievements/icons") return entry.path().extension() == ".png";
+            if (dirStr == "spirits") return entry.path().extension() == ".png";
             if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
             if (dirStr == "meta/patch-notes") return entry.path().extension() == ".md";
             if (dirStr == "meta/ui-presets") return entry.path().extension() == ".ini";

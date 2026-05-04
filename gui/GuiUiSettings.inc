@@ -178,6 +178,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
         } else if (section == "projects") {
             if (key == "filter") settings.projectsFilter = value;
             else if (key == "overdueOnly") settings.projectsOverdueOnly = ParseBool(value, settings.projectsOverdueOnly);
+            else if (key == "xpPendingOnly") settings.projectsXpPendingOnly = ParseBool(value, settings.projectsXpPendingOnly);
             else if (key == "sortMode") settings.projectsSortMode = ParseInt(value, settings.projectsSortMode);
         } else if (section == "admin_stats") {
             if (key == "filter") settings.adminStatsFilter = value;
@@ -233,7 +234,7 @@ UiSettings LoadUiSettingsFromPath(const std::filesystem::path& path, const ImGui
     settings.backgroundTileScale = ClampFinite(settings.backgroundTileScale, 0.25f, 4.0f, 1.0f);
     settings.profileTab = std::clamp(settings.profileTab, 0, 5);
     settings.profileViewMode = std::clamp(settings.profileViewMode, 0, 2);
-    settings.projectsSortMode = std::clamp(settings.projectsSortMode, 0, 2);
+    settings.projectsSortMode = std::clamp(settings.projectsSortMode, 0, 3);
     settings.adminStatsRankFilter = std::max(0, settings.adminStatsRankFilter);
     settings.adminStatsRefreshSeconds = std::clamp(settings.adminStatsRefreshSeconds, 5, 120);
     settings.inactivityThresholdDays = std::clamp(settings.inactivityThresholdDays, 1, 365);
@@ -317,6 +318,7 @@ void SaveUiSettingsToPath(const std::filesystem::path& path, const UiSettings& s
     out << "[projects]\n";
     out << "filter=" << SanitizeLogLine(settings.projectsFilter) << "\n";
     out << "overdueOnly=" << (settings.projectsOverdueOnly ? 1 : 0) << "\n";
+    out << "xpPendingOnly=" << (settings.projectsXpPendingOnly ? 1 : 0) << "\n";
     out << "sortMode=" << settings.projectsSortMode << "\n\n";
 
     out << "[admin_stats]\n";
@@ -602,6 +604,7 @@ void ApplyUiFiltersToState(GuiState& state) {
     state.adminStatsRefreshSeconds = state.ui.adminStatsRefreshSeconds;
     std::snprintf(state.filters.projects.data(), state.filters.projects.size(), "%s", state.ui.projectsFilter.c_str());
     state.projectsFilterOverdueOnly = state.ui.projectsOverdueOnly;
+    state.projectsFilterXpPendingOnly = state.ui.projectsXpPendingOnly;
     state.projectsSortMode = state.ui.projectsSortMode;
     state.inactivityThresholdDays = state.ui.inactivityThresholdDays;
 }
@@ -621,6 +624,7 @@ void SyncFiltersToUi(GuiState& state) {
     state.ui.adminStatsRefreshSeconds = state.adminStatsRefreshSeconds;
     state.ui.projectsFilter = state.filters.projects.data();
     state.ui.projectsOverdueOnly = state.projectsFilterOverdueOnly;
+    state.ui.projectsXpPendingOnly = state.projectsFilterXpPendingOnly;
     state.ui.projectsSortMode = state.projectsSortMode;
     state.ui.inactivityThresholdDays = state.inactivityThresholdDays;
 }

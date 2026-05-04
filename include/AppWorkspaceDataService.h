@@ -20,11 +20,31 @@ struct WorkspaceDataSnapshot {
     StorageVaultData vault;
 };
 
+struct WorkspaceSyncFileHealth {
+    std::string relativePath;
+    bool exists = false;
+    bool valid = false;
+    bool empty = false;
+    size_t rawEntries = 0;
+    size_t loadedEntries = 0;
+    std::string message;
+};
+
+struct WorkspaceSyncHealth {
+    int issueCount = 0;
+    std::vector<WorkspaceSyncFileHealth> files;
+    std::vector<std::string> issues;
+};
+
 std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir);
+std::vector<TaskEntry> LoadTasksDataFromFile(const std::filesystem::path& filePath);
 std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries = 200);
 std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageDir);
 std::vector<ShortcutEntry> LoadShortcutsData(const std::filesystem::path& storageDir);
 std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir);
+std::vector<PipelineStep> LoadPipelineDataFromFile(const std::filesystem::path& filePath);
 std::vector<ProfessionEntry> LoadProfessionsData(const std::filesystem::path& storageDir);
+WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& storageDir,
+                                               const ModuleToggles& modules);
 WorkspaceDataSnapshot LoadWorkspaceDataSnapshot(const std::filesystem::path& storageDir,
                                                 const ModuleToggles& modules);

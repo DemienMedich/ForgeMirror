@@ -30,6 +30,7 @@ ImGuiStyle& style, ImGuiIO& io, std::string& layoutPath) {
         DrawConfirmModal(state, app.storage, app.catalog);
         DrawProfilePasswordModals(state, app.storage);
         DrawStorageConflictModal(state);
+        DrawCloudWorkspaceActionModal(state, app);
         FinalizeFrame(state, window);
     }
 }

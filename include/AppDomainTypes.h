@@ -9,23 +9,28 @@ struct TaskParticipant {
     int percent = 0;
     int globalXp = 0;
     int skillXp = 0;
+    std::string rollbackSnapshot;
 };
 
 struct TaskEntry {
     std::string id;
     std::string projectId;
     std::string project;
+    std::string pipelineStepId;
+    std::string pipelineStep;
     std::string title;
     std::string description;
     std::int64_t deadlineAt = 0;
     int status = 0;
     int priority = 1;
     int category = 0;
+    int deadlinePenaltyPercent = 0;
     int score = 0;
     int baseXp = 0;
     int basePool = 0;
     std::int64_t createdAt = 0;
     std::vector<std::string> assignees;
+    std::vector<std::string> skillIds;
     std::vector<TaskParticipant> participants;
 };
 

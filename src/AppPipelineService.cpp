@@ -149,20 +149,21 @@ AppPipelineMutationResult AppAddPipelineStep(const std::filesystem::path& storag
 AppPipelineMutationResult AppUpdatePipelineStep(const std::filesystem::path& storageDir,
                                                 std::vector<PipelineStep>& steps,
                                                 int index,
-                                                const std::string& title,
-                                                const std::string& description) {
+                                                const PipelineStep& updatedStep) {
     AppPipelineMutationResult result;
-    if (title.empty()) {
-        result.errorMessage = u8"Название этапа не может быть пустым.";
-        return result;
-    }
     if (!IsValidIndex(steps, index)) {
         result.errorMessage = u8"Этап не найден.";
         return result;
     }
+    const std::string title = updatedStep.title;
+    if (title.empty()) {
+        result.errorMessage = u8"Название этапа не может быть пустым.";
+        return result;
+    }
     std::vector<PipelineStep> backup = steps;
-    steps[index].title = title;
-    steps[index].description = description;
+    PipelineStep next = updatedStep;
+    next.id = backup[index].id;
+    steps[index] = std::move(next);
     if (!AppSavePipelineData(storageDir, steps)) {
         steps = std::move(backup);
         result.errorMessage = u8"Не удалось сохранить пайплайн.";

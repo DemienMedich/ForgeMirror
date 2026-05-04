@@ -35,6 +35,8 @@ static void ApplyWorkspaceSnapshot(GuiState& state, WorkspaceDataSnapshot snapsh
 
 static void LoadWorkspaceCollections(GuiState& state, const AppContext& app) {
     ApplyWorkspaceSnapshot(state, LoadWorkspaceDataSnapshot(app.storageDir, state.modules));
+    state.syncHealth = InspectWorkspaceSyncHealth(app.storageDir, state.modules);
+    state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, app.storageDir, state.lastCloudSyncOkAt);
 }
 
 static void ReloadSyncedWorkspaceData(GuiState& state, AppContext& app, bool reloadProfiles = true) {
@@ -43,6 +45,8 @@ static void ReloadSyncedWorkspaceData(GuiState& state, AppContext& app, bool rel
         RefreshProfiles(state, app, preferredId);
     }
     ApplyWorkspaceSnapshot(state, LoadWorkspaceDataSnapshot(app.storageDir, state.modules));
+    state.syncHealth = InspectWorkspaceSyncHealth(app.storageDir, state.modules);
+    state.cloudWorkspaceDrift = InspectCloudWorkspaceDrift(state.cloudConfig, app.storageDir, state.lastCloudSyncOkAt);
     EnsureBannerSelection(state);
     state.bannerLastRotateAt = NowSeconds();
     FindStrayStorageFiles(app.storageDir, 5, state.straySamples, state.strayFileCount);

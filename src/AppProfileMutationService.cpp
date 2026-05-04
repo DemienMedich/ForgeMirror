@@ -1,6 +1,7 @@
 #include "AppProfileMutationService.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <utility>
@@ -103,6 +104,11 @@ Achievement BuildAchievement(const std::string& title,
         ? nowSec + static_cast<std::int64_t>(durationDays) * 24 * 3600
         : 0;
     return achievement;
+}
+
+std::int64_t MutationNowSeconds() {
+    const auto now = std::chrono::system_clock::now();
+    return std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 }
 
 } // namespace
@@ -311,6 +317,87 @@ AppProfileMutationResult AppAdjustProfileWallet(IJobStorage& storage,
 
     profile.set_wallet_balance(nextBalance);
     return PersistProfile(storage, restoreProfileId, profileId, profile);
+}
+
+AppProfileMutationResult AppRemoveEvilSpiritForCoins(IJobStorage& storage,
+                                                     const std::string& restoreProfileId,
+                                                     const std::string& profileId,
+                                                     const std::filesystem::path& storageDir,
+                                                     StorageVaultData& vault,
+                                                     double cost) {
+    if (profileId.empty() || profileId != restoreProfileId) {
+        AppProfileMutationResult result;
+        result.userError = true;
+        result.errorMessage = u8"Снять Злого духа можно только в своём профиле.";
+        return result;
+    }
+
+    AppProfileMutationResult loaded = LoadProfileForMutation(storage, restoreProfileId, profileId);
+    if (!loaded.ok || !loaded.profile) {
+        return loaded;
+    }
+    if (cost <= 0.0) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false;
+        loaded.userError = true;
+        loaded.profile.reset();
+        loaded.errorMessage = u8"Некорректная стоимость снятия духа.";
+        return loaded;
+    }
+
+    Profile originalProfile = *loaded.profile;
+    if (originalProfile.spirit() != ProfileSpirit::Evil) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false;
+        loaded.userError = true;
+        loaded.profile.reset();
+        loaded.errorMessage = u8"На профиле нет Злого духа.";
+        return loaded;
+    }
+    if (originalProfile.wallet_balance() + 0.000001 < cost) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false;
+        loaded.userError = true;
+        loaded.profile.reset();
+        loaded.errorMessage = u8"Недостаточно Кукоинов для снятия Злого духа.";
+        return loaded;
+    }
+
+    Profile updatedProfile = originalProfile;
+    updatedProfile.set_spirit(ProfileSpirit::None);
+    updatedProfile.set_wallet_balance(std::max(0.0, originalProfile.wallet_balance() - cost));
+
+    AppProfileMutationResult savedProfile =
+        PersistProfile(storage, restoreProfileId, profileId, updatedProfile);
+    if (!savedProfile.ok || !savedProfile.profile) {
+        return savedProfile;
+    }
+
+    StorageVaultData updatedVault = vault;
+    updatedVault.balance += cost;
+    StorageLogEntry logEntry;
+    logEntry.timestamp = MutationNowSeconds();
+    logEntry.amount = cost;
+    logEntry.action = "spirit_cleanup";
+    logEntry.note = profileId + " " + originalProfile.name() + " removed evil spirit";
+    updatedVault.log.push_back(std::move(logEntry));
+
+    if (!SaveStorageVault(storageDir, updatedVault)) {
+        AppProfileMutationResult rollback =
+            PersistProfile(storage, restoreProfileId, profileId, originalProfile);
+        AppProfileMutationResult result;
+        result.userError = false;
+        result.errorMessage = rollback.ok
+            ? u8"Не удалось пополнить хранилище. Изменения профиля отменены."
+            : u8"Не удалось пополнить хранилище; откат профиля тоже не выполнен.";
+        return result;
+    }
+
+    vault = LoadStorageVault(storageDir);
+    savedProfile.changed = true;
+    savedProfile.affectedProfiles = 1;
+    savedProfile.profile = updatedProfile;
+    return savedProfile;
 }
 
 AppProfileMutationResult AppGrantAchievement(IJobStorage& storage,

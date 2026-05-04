@@ -22,6 +22,7 @@
 #    define NOMINMAX
 #  endif
 #  include <windows.h>
+#  include <dwmapi.h>
 #  include <shellapi.h>
 #  include <commdlg.h>
 #  include <mmsystem.h>

@@ -11,5 +11,18 @@ void FinalizeFrame(GuiState& state, GLFWwindow* window) {
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 
+    // Windows capture of fullscreen OpenGL windows can lag by one frame.
+    // In fullscreen, force GPU completion before present so the compositor sees the current frame.
+#if defined(_WIN32)
+    if (state.ui.windowFullscreen) {
+        glFinish();
+    }
+#endif
     glfwSwapBuffers(window);
+
+#if defined(_WIN32)
+    if (state.ui.windowFullscreen) {
+        DwmFlush();
+    }
+#endif
 }

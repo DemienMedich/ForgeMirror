@@ -45,7 +45,7 @@ static void SyncUiTheme(GuiState& state, ImGuiStyle& style) {
 static void ApplyUiWindowState(GuiState& state, GLFWwindow* window, ImGuiStyle& style, ImGuiIO& io) {
     ApplyUiSettings(state.ui, style, io);
     ApplyWindowMode(window, state);
-    ApplyWindowDecorations(window, state.ui.windowDecorated, state.windowDecoratedLast);
+    ApplyWindowDecorations(window, state.ui.windowDecorated && !state.ui.windowFullscreen, state.windowDecoratedLast);
     HandleBorderlessDrag(window, state.ui);
 }
 

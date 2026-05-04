@@ -1,5 +1,8 @@
 int CountSelectedProfileShares(const std::vector<TaskProfileShare>& shares);
 void BalanceProfileShares(std::vector<TaskProfileShare>& shares, int fixedIndex);
+void NormalizeProfileShares(std::vector<TaskProfileShare>& shares);
+void PrepareXpEntries(GuiState& state, const SkillCatalog& catalog);
+void RecalculateXpPercentages(std::vector<XpEntry>& entries);
 
 static constexpr int kTaskStatusNew = 0;
 static constexpr int kTaskStatusInProgress = 1;
@@ -334,7 +337,8 @@ static std::string SerializeParticipants(const std::vector<TaskParticipant>& par
     for (const auto& p : participants) {
         if (!first) out << ';';
         first = false;
-        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp;
+        out << p.profileId << "|" << p.percent << "|" << p.globalXp << "|" << p.skillXp
+            << "|" << EncodePassword(p.rollbackSnapshot);
     }
     return out.str();
 }
@@ -362,7 +366,14 @@ static std::vector<TaskParticipant> ParseParticipants(const std::string& text) {
         if (sep == std::string::npos) continue;
         p.globalXp = tasks_parse_int(token.substr(pos, sep - pos), 0);
         pos = sep + 1;
-        p.skillXp = tasks_parse_int(token.substr(pos), 0);
+        sep = token.find('|', pos);
+        if (sep == std::string::npos) {
+            p.skillXp = tasks_parse_int(token.substr(pos), 0);
+        } else {
+            p.skillXp = tasks_parse_int(token.substr(pos, sep - pos), 0);
+            pos = sep + 1;
+            p.rollbackSnapshot = DecodePassword(token.substr(pos));
+        }
         out.push_back(std::move(p));
     }
     return out;
@@ -397,6 +408,14 @@ static std::vector<std::string> ParseAssignees(const std::string& text) {
     return out;
 }
 
+static std::vector<std::string> ParseSkillIds(const std::string& text) {
+    return ParseAssignees(text);
+}
+
+static std::string SerializeSkillIds(const std::vector<std::string>& skillIds) {
+    return SerializeAssignees(skillIds);
+}
+
 static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir) {
     std::vector<TaskEntry> out;
     const auto path = TasksStoragePath(storageDir);
@@ -413,6 +432,8 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
         if (auto v = find_value("id")) entry.id = *v;
         if (auto v = find_value("projectId")) entry.projectId = *v;
         if (auto v = find_value("project")) entry.project = *v;
+        if (auto v = find_value("pipelineStepId")) entry.pipelineStepId = *v;
+        if (auto v = find_value("pipelineStep")) entry.pipelineStep = *v;
         if (auto v = find_value("title")) entry.title = *v;
         if (auto v = find_value("description")) entry.description = *v;
         if (auto v = find_value("deadlineAt")) entry.deadlineAt = tasks_parse_int64(*v, 0);
@@ -427,11 +448,15 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
             entry.priority = kTaskPriorityMedium;
         }
         if (auto v = find_value("category")) entry.category = tasks_parse_int(*v, 0);
+        if (auto v = find_value("deadlinePenaltyPercent")) {
+            entry.deadlinePenaltyPercent = std::clamp(tasks_parse_int(*v, 0), 0, 100);
+        }
         if (auto v = find_value("score")) entry.score = tasks_parse_int(*v, 0);
         if (auto v = find_value("baseXp")) entry.baseXp = tasks_parse_int(*v, 0);
         if (auto v = find_value("basePool")) entry.basePool = tasks_parse_int(*v, 0);
         if (auto v = find_value("createdAt")) entry.createdAt = tasks_parse_int64(*v, 0);
         if (auto v = find_value("assignees")) entry.assignees = ParseAssignees(*v);
+        if (auto v = find_value("skillIds")) entry.skillIds = ParseSkillIds(*v);
         if (auto v = find_value("participants")) entry.participants = ParseParticipants(*v);
         if (entry.id.empty()) continue;
         if (entry.assignees.empty()) {
@@ -460,17 +485,21 @@ static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector
         out << "  {\"id\":\"" << tasks_json_escape(entry.id)
             << "\",\"projectId\":\"" << tasks_json_escape(entry.projectId)
             << "\",\"project\":\"" << tasks_json_escape(entry.project)
+            << "\",\"pipelineStepId\":\"" << tasks_json_escape(entry.pipelineStepId)
+            << "\",\"pipelineStep\":\"" << tasks_json_escape(entry.pipelineStep)
             << "\",\"title\":\"" << tasks_json_escape(entry.title)
             << "\",\"description\":\"" << tasks_json_escape(entry.description)
             << "\",\"deadlineAt\":" << entry.deadlineAt
             << ",\"status\":" << NormalizeTaskStatus(entry.status)
             << ",\"priority\":" << NormalizeTaskPriority(entry.priority)
             << ",\"category\":" << entry.category
+            << ",\"deadlinePenaltyPercent\":" << std::clamp(entry.deadlinePenaltyPercent, 0, 100)
             << ",\"score\":" << entry.score
             << ",\"baseXp\":" << entry.baseXp
             << ",\"basePool\":" << entry.basePool
             << ",\"createdAt\":" << entry.createdAt
             << ",\"assignees\":\"" << tasks_json_escape(SerializeAssignees(entry.assignees)) << "\""
+            << ",\"skillIds\":\"" << tasks_json_escape(SerializeSkillIds(entry.skillIds)) << "\""
             << ",\"participants\":\"" << tasks_json_escape(SerializeParticipants(entry.participants)) << "\"}";
         if (i + 1 < tasks.size()) out << ",";
         out << "\n";
@@ -504,6 +533,237 @@ static std::string TaskDisplayTitle(const TaskEntry& task) {
     }
     if (!task.title.empty()) return task.title;
     return task.project;
+}
+
+static std::string TaskPipelineStepLabel(const PipelineStep& step, int index) {
+    const std::string code = step.stageCode.empty() ? std::to_string(index + 1) : step.stageCode;
+    if (step.title.empty()) return code;
+    return code + "  " + step.title;
+}
+
+static std::string TaskPipelineStepCode(const PipelineStep& step, int index) {
+    if (!step.stageCode.empty()) return step.stageCode;
+    return std::to_string(index + 1);
+}
+
+static int ResolveTaskPipelineIndex(const GuiState& state, const TaskEntry& task) {
+    if (!task.pipelineStepId.empty()) {
+        for (int i = 0; i < static_cast<int>(state.pipelineSteps.size()); ++i) {
+            if (state.pipelineSteps[static_cast<size_t>(i)].id == task.pipelineStepId) {
+                return i;
+            }
+        }
+    }
+    if (!task.pipelineStep.empty()) {
+        for (int i = 0; i < static_cast<int>(state.pipelineSteps.size()); ++i) {
+            const auto& step = state.pipelineSteps[static_cast<size_t>(i)];
+            if (TaskPipelineStepLabel(step, i) == task.pipelineStep || step.title == task.pipelineStep) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+static std::string ResolveTaskPipelineName(const GuiState& state, const TaskEntry& task) {
+    const int index = ResolveTaskPipelineIndex(state, task);
+    if (index >= 0 && index < static_cast<int>(state.pipelineSteps.size())) {
+        return TaskPipelineStepLabel(state.pipelineSteps[static_cast<size_t>(index)], index);
+    }
+    return task.pipelineStep;
+}
+
+enum class TaskPipelineProgressState {
+    None,
+    Missing,
+    Unknown,
+    Active,
+    Branching,
+    Final
+};
+
+struct TaskPipelineProgressInfo {
+    std::string primary;
+    std::string secondary;
+    TaskPipelineProgressState state = TaskPipelineProgressState::None;
+};
+
+static TaskPipelineProgressInfo DescribeTaskPipelineProgress(const GuiState& state, const TaskEntry& task) {
+    TaskPipelineProgressInfo info;
+    const int totalSteps = static_cast<int>(state.pipelineSteps.size());
+    if (totalSteps <= 0) {
+        return info;
+    }
+
+    const int index = ResolveTaskPipelineIndex(state, task);
+    if (index < 0 || index >= totalSteps) {
+        info.primary = "0/" + std::to_string(totalSteps);
+        if (!task.pipelineStepId.empty() || !task.pipelineStep.empty()) {
+            info.secondary = u8"этап вне схемы";
+            info.state = TaskPipelineProgressState::Unknown;
+        } else {
+            info.secondary = u8"старт не задан";
+            info.state = TaskPipelineProgressState::Missing;
+        }
+        return info;
+    }
+
+    info.primary = std::to_string(index + 1) + "/" + std::to_string(totalSteps);
+    const PipelineStep& step = state.pipelineSteps[static_cast<size_t>(index)];
+    if (step.nextIds.empty()) {
+        info.secondary = u8"финальный handoff";
+        info.state = TaskPipelineProgressState::Final;
+        return info;
+    }
+    if (step.nextIds.size() > 1) {
+        info.secondary = u8"ветвление: " + std::to_string(step.nextIds.size());
+        info.state = TaskPipelineProgressState::Branching;
+        return info;
+    }
+
+    for (int i = 0; i < totalSteps; ++i) {
+        if (state.pipelineSteps[static_cast<size_t>(i)].id == step.nextIds.front()) {
+            info.secondary = u8"дальше: " + TaskPipelineStepCode(state.pipelineSteps[static_cast<size_t>(i)], i);
+            info.state = TaskPipelineProgressState::Active;
+            return info;
+        }
+    }
+
+    info.secondary = u8"следующий этап не найден";
+    info.state = TaskPipelineProgressState::Unknown;
+    return info;
+}
+
+static void DrawTaskPipelineProgressHint(const GuiState& state, const TaskEntry& task) {
+    const TaskPipelineProgressInfo info = DescribeTaskPipelineProgress(state, task);
+    if (info.primary.empty() && info.secondary.empty()) {
+        return;
+    }
+
+    ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    color.w = 1.0f;
+    if (info.state == TaskPipelineProgressState::Missing) {
+        color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+    } else if (info.state == TaskPipelineProgressState::Unknown) {
+        color = LogLevelColor(AppLogLevel::Error);
+    } else if (info.state == TaskPipelineProgressState::Final) {
+        color = LogLevelColor(AppLogLevel::Info);
+    }
+
+    if (!info.primary.empty()) {
+        ImGui::TextColored(color, "%s", info.primary.c_str());
+    }
+    if (!info.secondary.empty()) {
+        if (!info.primary.empty()) {
+            const float secondaryWidth = ImGui::CalcTextSize(info.secondary.c_str()).x;
+            if (ImGui::GetContentRegionAvail().x >= secondaryWidth + ImGui::GetStyle().ItemSpacing.x) {
+                ImGui::SameLine();
+            }
+        }
+        ImGui::TextDisabled("%s", info.secondary.c_str());
+    }
+}
+
+static bool TryGetTaskPipelineAttentionCellBg(const GuiState& state,
+                                              const TaskEntry& task,
+                                              ImU32& bgColor) {
+    const TaskPipelineProgressInfo info = DescribeTaskPipelineProgress(state, task);
+    ImVec4 tint;
+    if (info.state == TaskPipelineProgressState::Missing) {
+        tint = LogLevelColor(AppLogLevel::Warning);
+        tint.w = std::clamp(tint.w * 0.10f, 0.05f, 0.12f);
+    } else if (info.state == TaskPipelineProgressState::Unknown) {
+        tint = LogLevelColor(AppLogLevel::Error);
+        tint.w = std::clamp(tint.w * 0.14f, 0.06f, 0.18f);
+    } else {
+        return false;
+    }
+    bgColor = ImGui::GetColorU32(tint);
+    return true;
+}
+
+static int ResolveTaskProfileFilterIndex(const GuiState& state, const std::string& profileId) {
+    if (profileId.empty()) return 0;
+    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+        if (state.profiles[static_cast<size_t>(i)].id == profileId) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+static bool TaskNeedsXpAward(const TaskEntry& task);
+
+struct ProfileTaskOverview {
+    int active = 0;
+    int created = 0;
+    int inProgress = 0;
+    int overdue = 0;
+    int xpPending = 0;
+    const TaskEntry* primaryTask = nullptr;
+};
+
+static bool ShouldRankProfileTaskEarlier(const TaskEntry& a,
+                                         const TaskEntry& b,
+                                         std::int64_t nowSec) {
+    const bool aOverdue = a.deadlineAt > 0 && a.deadlineAt < nowSec;
+    const bool bOverdue = b.deadlineAt > 0 && b.deadlineAt < nowSec;
+    if (aOverdue != bOverdue) return aOverdue > bOverdue;
+    const bool aHasDeadline = a.deadlineAt > 0;
+    const bool bHasDeadline = b.deadlineAt > 0;
+    if (aHasDeadline != bHasDeadline) return aHasDeadline > bHasDeadline;
+    if (aHasDeadline && bHasDeadline && a.deadlineAt != b.deadlineAt) {
+        return a.deadlineAt < b.deadlineAt;
+    }
+    return a.createdAt > b.createdAt;
+}
+
+static ProfileTaskOverview BuildProfileTaskOverview(const GuiState& state, const std::string& profileId) {
+    ProfileTaskOverview overview{};
+    if (profileId.empty()) return overview;
+    const std::int64_t nowSec = NowSeconds();
+    for (const auto& task : state.tasks) {
+        if (!TaskHasAssignee(task, profileId)) continue;
+        if (TaskNeedsXpAward(task)) {
+            overview.xpPending += 1;
+        }
+        const int status = NormalizeTaskStatus(task.status);
+        if (status == kTaskStatusDone) continue;
+        overview.active += 1;
+        if (status == kTaskStatusInProgress) {
+            overview.inProgress += 1;
+        } else {
+            overview.created += 1;
+        }
+        if (task.deadlineAt > 0 && task.deadlineAt < nowSec) {
+            overview.overdue += 1;
+        }
+        if (!overview.primaryTask || ShouldRankProfileTaskEarlier(task, *overview.primaryTask, nowSec)) {
+            overview.primaryTask = &task;
+        }
+    }
+    return overview;
+}
+
+static void FocusTasksForProfile(GuiState& state,
+                                 const std::string& profileId,
+                                 int quickFilter = 0,
+                                 const std::string& expandedTaskId = std::string()) {
+    if (!state.modules.tasks) return;
+    state.showTasks = true;
+    state.showProjects = false;
+    state.workspaceTabRequest = static_cast<int>(UiWindowId::Tasks);
+    state.filters.tasks.fill('\0');
+    state.tasksQuickFilter = quickFilter;
+    state.tasksFilterProfile = ResolveTaskProfileFilterIndex(state, profileId);
+    state.tasksFilterProject = 0;
+    state.tasksFilterPipeline = 0;
+    state.tasksFilterCategory = 0;
+    state.tasksFilterStatus = 0;
+    state.tasksFilterPriority = 0;
+    state.tasksFilterDays = 0;
+    state.taskSelectionIds.clear();
+    state.tasksExpandedId = expandedTaskId;
 }
 
 static std::string BuildParticipantLabel(const TaskEntry& task,
@@ -551,7 +811,7 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
     // UTF-8 BOM for spreadsheet tools
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-    out << "Date,Deadline,Project,Task,Description,Status,Priority,Category,Score,Participants,BaseXP,BasePool\n";
+    out << "Date,Deadline,Project,PipelineStep,Task,Description,Status,Priority,Category,Score,Participants,BaseXP,BasePool\n";
     for (const TaskEntry* task : tasks) {
         if (!task) continue;
         ++exportedCount;
@@ -562,6 +822,7 @@ static bool ExportTasksCsv(const GuiState& state, const std::vector<const TaskEn
         out << CsvEscape(stampText) << ","
             << CsvEscape(deadlineText) << ","
             << CsvEscape(task->project) << ","
+            << CsvEscape(task->pipelineStep) << ","
             << CsvEscape(task->title) << ","
             << CsvEscape(task->description) << ","
             << CsvEscape(TaskStatusLabel(task->status)) << ","
@@ -604,6 +865,7 @@ static bool ExportTasksTxt(const GuiState& state, const std::vector<const TaskEn
         out << "- " << stampText << " | "
             << SanitizeLogLine(deadlineText) << " | "
             << SanitizeLogLine(task->project) << " | "
+            << SanitizeLogLine(task->pipelineStep) << " | "
             << SanitizeLogLine(task->title) << " | "
             << SanitizeLogLine(TaskStatusLabel(task->status)) << " | "
             << SanitizeLogLine(TaskPriorityLabel(task->priority)) << " | "
@@ -666,5 +928,133 @@ static void PrepareTaskShares(GuiState& state) {
     }
     if (CountSelectedProfileShares(state.taskShares) > 0) {
         BalanceProfileShares(state.taskShares, 0);
+    }
+}
+
+static void EnsureTaskSkillFlagsSize(std::vector<char>& flags, size_t requiredSize) {
+    if (flags.size() == requiredSize) return;
+    std::vector<char> next(requiredSize, 0);
+    for (size_t i = 0; i < std::min(requiredSize, flags.size()); ++i) {
+        next[i] = flags[i] ? 1 : 0;
+    }
+    flags = std::move(next);
+}
+
+static void ApplyTaskSkillIdsToFlags(const SkillCatalog& catalog,
+                                     const std::vector<std::string>& skillIds,
+                                     std::vector<char>& flags) {
+    const auto& catalogSkills = catalog.skills();
+    EnsureTaskSkillFlagsSize(flags, catalogSkills.size());
+    std::fill(flags.begin(), flags.end(), 0);
+    if (skillIds.empty()) return;
+    for (size_t i = 0; i < catalogSkills.size(); ++i) {
+        if (std::find(skillIds.begin(), skillIds.end(), catalogSkills[i]) != skillIds.end()) {
+            flags[i] = 1;
+        }
+    }
+}
+
+static std::vector<std::string> CollectSelectedTaskSkillIds(const SkillCatalog& catalog,
+                                                            const std::vector<char>& flags) {
+    std::vector<std::string> selected;
+    const auto& catalogSkills = catalog.skills();
+    const size_t count = std::min(flags.size(), catalogSkills.size());
+    selected.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        if (!flags[i]) continue;
+        selected.push_back(catalogSkills[i]);
+    }
+    return selected;
+}
+
+static std::string BuildTaskSkillSummary(const std::vector<std::string>& skillIds,
+                                         const SkillCatalog& catalog,
+                                         int maxVisible = 3) {
+    if (skillIds.empty()) return std::string(u8"Не выбраны");
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    int shown = 0;
+    for (const auto& skillId : skillIds) {
+        if (skillId.empty()) continue;
+        if (shown > 0) out << ", ";
+        out << catalog.display_name(skillId);
+        ++shown;
+        if (shown >= maxVisible) break;
+    }
+    const int remaining = static_cast<int>(skillIds.size()) - shown;
+    if (remaining > 0) {
+        out << " +" << remaining;
+    }
+    const std::string summary = out.str();
+    return summary.empty() ? std::string(u8"Не выбраны") : summary;
+}
+
+static bool TaskHasRecordedXp(const TaskEntry& task) {
+    for (const auto& participant : task.participants) {
+        if (participant.globalXp > 0 || participant.skillXp > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool TaskNeedsXpAward(const TaskEntry& task) {
+    return NormalizeTaskStatus(task.status) == kTaskStatusDone && !TaskHasRecordedXp(task);
+}
+
+static void DrawTaskXpPendingBadge(const TaskEntry& task) {
+    if (!TaskNeedsXpAward(task)) return;
+    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан");
+}
+
+static void PrepareXpEntriesFromTask(GuiState& state,
+                                     const TaskEntry& task,
+                                     const SkillCatalog& catalog) {
+    PrepareXpEntries(state, catalog);
+    state.xpSourceTaskId = task.id;
+    std::snprintf(state.taskProject.data(), state.taskProject.size(), "%s", task.project.c_str());
+    std::snprintf(state.taskTitle.data(), state.taskTitle.size(), "%s", task.title.c_str());
+    std::snprintf(state.taskDescription.data(), state.taskDescription.size(), "%s", task.description.c_str());
+    state.taskCategoryIndex = std::clamp(task.category, 0, static_cast<int>(Profile::kCategoryCount - 1));
+    state.taskScore = std::clamp(task.score > 0 ? task.score : Profile::kMaxCategoryScore,
+                                 1, Profile::kMaxCategoryScore);
+    state.xpTaskPenaltyPercent = std::clamp(task.deadlinePenaltyPercent, 0, 100);
+
+    PrepareTaskShares(state);
+    for (auto& share : state.taskShares) {
+        share.selected = false;
+        share.percent = 0;
+    }
+    if (!task.participants.empty()) {
+        for (auto& share : state.taskShares) {
+            auto it = std::find_if(task.participants.begin(), task.participants.end(),
+                                   [&](const TaskParticipant& participant) { return participant.profileId == share.id; });
+            if (it == task.participants.end()) continue;
+            share.selected = true;
+            share.percent = std::clamp(it->percent, 0, 100);
+        }
+    } else {
+        for (auto& share : state.taskShares) {
+            if (std::find(task.assignees.begin(), task.assignees.end(), share.id) == task.assignees.end()) continue;
+            share.selected = true;
+        }
+        NormalizeProfileShares(state.taskShares);
+    }
+    if (CountSelectedProfileShares(state.taskShares) > 0) {
+        BalanceProfileShares(state.taskShares, 0);
+    }
+
+    if (!task.skillIds.empty()) {
+        const auto& catalogSkills = catalog.skills();
+        for (auto& entry : state.xpEntries) {
+            entry.rating = 0;
+            entry.percent = 0;
+        }
+        for (size_t i = 0; i < catalogSkills.size() && i < state.xpEntries.size(); ++i) {
+            if (std::find(task.skillIds.begin(), task.skillIds.end(), catalogSkills[i]) != task.skillIds.end()) {
+                state.xpEntries[i].rating = 1;
+            }
+        }
+        RecalculateXpPercentages(state.xpEntries);
     }
 }

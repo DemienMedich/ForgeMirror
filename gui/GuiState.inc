@@ -21,6 +21,7 @@ struct GuiDataState {
     std::vector<PipelineStep> pipelineSteps;
     std::vector<ProfessionEntry> professions;
     std::vector<std::string> bannerTexts;
+    WorkspaceSyncHealth syncHealth;
     std::unordered_map<std::string, std::string> profileProfessionCache;
     std::unordered_map<std::string, std::string> profileLoginCache;
     std::unordered_map<std::string, bool> profileBlockedCache;
@@ -39,6 +40,7 @@ struct GuiRuntimeState {
     std::int64_t lastCloudSyncAt = 0;
     std::int64_t lastCloudSyncOkAt = 0;
     bool lastCloudSyncOk = false;
+    CloudWorkspaceDriftSummary cloudWorkspaceDrift;
     std::int64_t lastStorageScanAt = 0;
     std::int64_t lastStorageDataAt = 0;
     UiSettings ui;
@@ -134,6 +136,7 @@ struct GuiRuntimeState {
     int pendingDeleteProjectIndex = -1;
     std::string pendingDeleteProjectId;
     bool projectsFilterOverdueOnly = false;
+    bool projectsFilterXpPendingOnly = false;
     int projectsSortMode = 0;
     float newSkillWeight = 1.0f;
     std::vector<char> newSkillProfessionFlags;
@@ -157,28 +160,42 @@ struct GuiRuntimeState {
     int selectedAchievementIndex = -1;
     std::vector<XpEntry> xpEntries;
     std::string xpProfessionId;
+    std::string xpSourceTaskId;
+    int xpTaskPenaltyPercent = 0;
     std::string catalogProfessionId;
     std::array<char, 128> taskProject{};
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
+    bool showTaskCreateForm = false;
+    int taskPlanStep = 0; // 0=main, 1=assignees, 2=skills, 3=review
     std::array<char, 128> taskPlanTitle{};
     std::array<char, 256> taskPlanDescription{};
     std::array<char, 20> taskPlanDeadline{};
     int taskPlanProjectIndex = 0;
+    int taskPlanPipelineIndex = 0;
     int taskPlanStatus = 0;
     int taskPlanPriority = 1;
+    int taskPlanCategory = 0;
+    int taskPlanPenaltyPercent = 0;
+    bool taskPlanCreateProjectInline = false;
+    std::array<char, 128> taskPlanProjectName{};
+    std::array<char, 256> taskPlanProjectDesc{};
     std::vector<char> taskPlanAssignees;
+    std::vector<char> taskPlanSkillFlags;
+    std::array<char, 64> taskPlanSkillFilter{};
     std::vector<TaskProfileShare> taskShares;
     bool taskDeletePopupRequest = false;
     std::string pendingTaskDeleteId;
     int tasksFilterProfile = 0;
     int tasksFilterProject = 0;
+    int tasksFilterPipeline = 0;
     int tasksFilterCategory = 0;
     int tasksFilterStatus = 0;
     int tasksFilterPriority = 0;
     int tasksFilterDays = 0;
     int tasksSortMode = 0; // 0=date, 1=deadline, 2=priority
-    int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days,5=no-project
+    int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days,5=no-project,6=xp-pending,7=active,8=action-needed
+    int tasksViewMode = 0; // 0=work, 1=admin
     std::int64_t tasksReminderLastAt = 0;
     std::unordered_set<std::string> tasksReminderShown24h;
     std::unordered_set<std::string> tasksReminderShown2h;
@@ -186,13 +203,20 @@ struct GuiRuntimeState {
     int taskBulkStatus = 0;
     int taskBulkPriority = 1;
     int taskBulkProjectIndex = 0;
+    int taskBulkPipelineIndex = 0;
     std::array<char, 20> taskBulkDeadline{};
     std::vector<char> taskBulkAssignees;
     bool taskBulkDeletePopupRequest = false;
     std::array<char, 20> taskInlineDeadlineBuffer{};
     std::string taskInlineDeadlineEditId;
+    std::array<char, 128> taskInlineTitleBuffer{};
+    std::array<char, 512> taskInlineDescriptionBuffer{};
+    std::string taskInlineTextEditId;
     std::vector<char> taskInlineAssigneeFlags;
     std::string taskInlineAssigneeEditId;
+    std::vector<char> taskInlineSkillFlags;
+    std::string taskInlineSkillEditId;
+    std::array<char, 64> taskInlineSkillFilter{};
     std::string tasksExpandedId;
     std::array<char, 128> shortcutLabel{};
     std::array<char, 260> shortcutPath{};
@@ -200,8 +224,21 @@ struct GuiRuntimeState {
     bool cloudPickerRequest = false;
     std::filesystem::path cloudPickerPath;
     std::filesystem::path cloudPickerSelectedPath;
+    bool pipelineEditMode = false;
+    std::array<char, 64> pipelineStageCode{};
+    std::array<char, 128> pipelineBranch{};
     std::array<char, 128> pipelineTitle{};
     std::array<char, 4096> pipelineDescription{};
+    std::array<char, 256> pipelineInput{};
+    std::array<char, 256> pipelineOutput{};
+    std::array<char, 160> pipelineOwner{};
+    std::array<char, 4096> pipelineDoneCriteria{};
+    std::array<char, 4096> pipelineEngineCheck{};
+    std::array<char, 4096> pipelineRisk{};
+    std::array<char, 512> pipelineNextStageLabel{};
+    std::array<char, 4096> pipelineLegacyNotes{};
+    std::array<char, 1024> pipelineNextIds{};
+    std::array<char, 2048> pipelineHints{};
     int pipelineEditIndex = -1;
     int pomodoroPhase = 0;
     int pomodoroNextPhase = 0;
@@ -258,6 +295,13 @@ struct GuiRuntimeState {
     std::int64_t updateNoticeCheckedAt = 0;
     bool storageConflictPopupRequest = false;
     std::filesystem::path storageConflictPath;
+    bool cloudWorkspaceActionPopupRequest = false;
+    int cloudWorkspaceActionMode = 0;
+    std::string cloudWorkspaceActionRelativePath;
+    std::string cloudWorkspaceActionContext;
+    std::string cloudWorkspaceActionSourceKind;
+    std::filesystem::path cloudWorkspaceActionBackupPath;
+    std::int64_t cloudWorkspaceActionSourceCreatedAt = 0;
     bool requestExit = false;
 };
 
