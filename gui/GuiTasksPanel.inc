@@ -1382,11 +1382,24 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             break;
         }
     }
+    auto ExportFilteredTasks = [&](bool txt) {
+        std::filesystem::path outPath;
+        int exported = 0;
+        std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
+        const bool ok = txt
+            ? ExportTasksTxt(state, filtered, nameById, outPath, exported)
+            : ExportTasksCsv(state, filtered, nameById, outPath, exported);
+        if (!ok) {
+            SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
+            return;
+        }
+        std::string msg = u8"Экспортировано задач: " + std::to_string(exported) + u8" (";
+        msg += outPath.string();
+        msg += ")";
+        SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
+    };
 
     if (stackFilters) {
-        ImGui::TextDisabled(u8"Поиск");
-        ImGui::InputTextWithHint(u8"##tasks_filter", u8"Поиск по проекту, задаче или описанию",
-                                 state.filters.tasks.data(), state.filters.tasks.size());
         ImGui::TextDisabled(u8"Профили");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_profile", &state.tasksFilterProfile,
@@ -1434,35 +1447,15 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterDays = dayOptions[dayIndex];
         }
         ImGui::TextDisabled(u8"Экспорт");
-        if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
-            std::filesystem::path outPath;
-            int exported = 0;
-            std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
-            if (!ExportTasksCsv(state, filtered, nameById, outPath, exported)) {
-                SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
-            } else {
-                std::string msg = u8"Экспортировано задач: " + std::to_string(exported) + u8" (";
-                msg += outPath.string();
-                msg += ")";
-                SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
-            }
+        if (TaskIconButton("tasks_export_csv_stack", UiIcon::Launch, u8"Экспортировать видимые задачи в CSV")) {
+            ExportFilteredTasks(false);
         }
-        if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
-            std::filesystem::path outPath;
-            int exported = 0;
-            std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
-            if (!ExportTasksTxt(state, filtered, nameById, outPath, exported)) {
-                SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
-            } else {
-                std::string msg = u8"Экспортировано задач: " + std::to_string(exported) + u8" (";
-                msg += outPath.string();
-                msg += ")";
-                SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
-            }
+        ImGui::SameLine();
+        if (TaskIconButton("tasks_export_txt_stack", UiIcon::Info, u8"Экспортировать видимые задачи в TXT")) {
+            ExportFilteredTasks(true);
         }
-    } else if (ImGui::BeginTable("tasks_filters", 7, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("tasks_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("filter_profile", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("filter_project", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("filter_pipeline", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1472,19 +1465,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-        ImGui::TextDisabled(u8"Поиск");
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint(u8"##tasks_filter", u8"Поиск по проекту, задаче или описанию",
-                                 state.filters.tasks.data(), state.filters.tasks.size());
-        ImGui::TableSetColumnIndex(2);
         ImGui::TextDisabled(u8"Профили");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_profile", &state.tasksFilterProfile,
                          profileLabelPtrs.data(), static_cast<int>(profileLabelPtrs.size()))) {
             state.tasksFilterProfile = std::clamp(state.tasksFilterProfile, 0, static_cast<int>(profileLabelPtrs.size()) - 1);
         }
-        ImGui::TableSetColumnIndex(3);
+        ImGui::TableSetColumnIndex(2);
         ImGui::TextDisabled(u8"Проекты");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_project", &state.tasksFilterProject,
@@ -1492,7 +1479,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterProject = std::clamp(state.tasksFilterProject, 0,
                 static_cast<int>(projectFilterLabelPtrs.size()) - 1);
         }
-        ImGui::TableSetColumnIndex(4);
+        ImGui::TableSetColumnIndex(3);
         ImGui::TextDisabled(u8"Этап");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_pipeline", &state.tasksFilterPipeline,
@@ -1500,7 +1487,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
                 static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
         }
-        ImGui::TableSetColumnIndex(5);
+        ImGui::TableSetColumnIndex(4);
         ImGui::TextDisabled(u8"Статус");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_status", &state.tasksFilterStatus,
@@ -1508,7 +1495,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0,
                 static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
         }
-        ImGui::TableSetColumnIndex(6);
+        ImGui::TableSetColumnIndex(5);
         ImGui::TextDisabled(u8"Приоритет");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_priority", &state.tasksFilterPriority,
@@ -1542,31 +1529,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             ImGui::TableSetColumnIndex(3);
             ImGui::TextDisabled(u8"Экспорт");
-            if (ImGui::Button(u8"CSV", ImVec2(-1.0f, 0.0f))) {
-                std::filesystem::path outPath;
-                int exported = 0;
-                std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
-                if (!ExportTasksCsv(state, filtered, nameById, outPath, exported)) {
-                    SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
-                } else {
-                    std::string msg = u8"Экспортировано задач: " + std::to_string(exported) + u8" (";
-                    msg += outPath.string();
-                    msg += ")";
-                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
-                }
+            if (TaskIconButton("tasks_export_csv", UiIcon::Launch, u8"Экспортировать видимые задачи в CSV")) {
+                ExportFilteredTasks(false);
             }
-            if (ImGui::Button(u8"TXT", ImVec2(-1.0f, 0.0f))) {
-                std::filesystem::path outPath;
-                int exported = 0;
-                std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
-                if (!ExportTasksTxt(state, filtered, nameById, outPath, exported)) {
-                    SetStatus(state, u8"Нет задач для экспорта.", 1.0f, 0.75f, 0.35f);
-                } else {
-                    std::string msg = u8"Экспортировано задач: " + std::to_string(exported) + u8" (";
-                    msg += outPath.string();
-                    msg += ")";
-                    SetStatus(state, msg, 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Задачи");
-                }
+            ImGui::SameLine();
+            if (TaskIconButton("tasks_export_txt", UiIcon::Info, u8"Экспортировать видимые задачи в TXT")) {
+                ExportFilteredTasks(true);
             }
             ImGui::EndTable();
         }
