@@ -1,8 +1,10 @@
 #include "Profile.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <numeric>
+#include <string>
 
 #include "GameplayConfig.h"
 
@@ -15,6 +17,64 @@ int ClampScore(int value) {
 }
 
 } // namespace
+
+ProfileSpirit ProfileSpiritFromString(const std::string& value) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (unsigned char ch : value) {
+        normalized.push_back(static_cast<char>(std::tolower(ch)));
+    }
+    if (normalized == "good" || normalized == "kind" || normalized == "light") {
+        return ProfileSpirit::Good;
+    }
+    if (normalized == "evil" || normalized == "dark" || normalized == "bad") {
+        return ProfileSpirit::Evil;
+    }
+    return ProfileSpirit::None;
+}
+
+const char* ProfileSpiritId(ProfileSpirit spirit) {
+    switch (spirit) {
+        case ProfileSpirit::Good: return "good";
+        case ProfileSpirit::Evil: return "evil";
+        case ProfileSpirit::None:
+        default: return "none";
+    }
+}
+
+const char* ProfileSpiritLabel(ProfileSpirit spirit) {
+    switch (spirit) {
+        case ProfileSpirit::Good: return u8"Добрый дух";
+        case ProfileSpirit::Evil: return u8"Злой дух";
+        case ProfileSpirit::None:
+        default: return u8"Без духа";
+    }
+}
+
+const char* ProfileSpiritEffectLabel(ProfileSpirit spirit) {
+    switch (spirit) {
+        case ProfileSpirit::Good: return u8"+1% к получаемому XP";
+        case ProfileSpirit::Evil: return u8"-1% к получаемому XP";
+        case ProfileSpirit::None:
+        default: return u8"XP без модификатора";
+    }
+}
+
+int ProfileSpiritXpModifierPercent(ProfileSpirit spirit) {
+    switch (spirit) {
+        case ProfileSpirit::Good: return 1;
+        case ProfileSpirit::Evil: return -1;
+        case ProfileSpirit::None:
+        default: return 0;
+    }
+}
+
+int ApplyProfileSpiritXpModifier(ProfileSpirit spirit, int xp) {
+    if (xp <= 0) return 0;
+    const int percent = ProfileSpiritXpModifierPercent(spirit);
+    if (percent == 0) return xp;
+    return std::max(0, static_cast<int>(std::round(static_cast<double>(xp) * (100.0 + percent) / 100.0)));
+}
 
 Profile::Profile(std::string n) : name_(std::move(n)) {}
 

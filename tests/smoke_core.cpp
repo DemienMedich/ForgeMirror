@@ -1,16 +1,20 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 #include <chrono>
 
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
+#include "IJobStorage.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
 #include "GameplayConfig.h"
 #include "CloudSync.h"
+
+IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
 
 static bool WriteFile(const std::filesystem::path& path, const std::string& data) {
     std::error_code ec;
@@ -99,6 +103,36 @@ static bool TestProfileRank() {
     p.set_overall_level(40);
     const std::string rank = DescribeOverallRank(p);
     return rank.find("Джуниор") != std::string::npos;
+}
+
+static bool TestProfileSpirit(const std::filesystem::path& dir) {
+    Profile profile("Spirit");
+    if (profile.spirit() != ProfileSpirit::None) return false;
+    if (ProfileSpiritFromString("good") != ProfileSpirit::Good) return false;
+    if (ProfileSpiritFromString("evil") != ProfileSpirit::Evil) return false;
+    if (ApplyProfileSpiritXpModifier(ProfileSpirit::Good, 1000) != 1010) return false;
+    if (ApplyProfileSpiritXpModifier(ProfileSpirit::Evil, 1000) != 990) return false;
+    if (ApplyProfileSpiritXpModifier(ProfileSpirit::None, 1000) != 1000) return false;
+
+    profile.set_spirit(ProfileSpirit::Good);
+    std::unique_ptr<IJobStorage> storage(CreateFileStorage(dir));
+    auto info = storage->create_profile(profile);
+    if (!info) return false;
+    if (!storage->set_active_profile(info->id)) return false;
+    auto loaded = storage->load_profile();
+    if (!loaded || loaded->spirit() != ProfileSpirit::Good) return false;
+
+    loaded->set_spirit(ProfileSpirit::Evil);
+    if (!storage->save_profile(*loaded)) return false;
+    auto reloaded = storage->load_profile();
+    if (!reloaded || reloaded->spirit() != ProfileSpirit::Evil) return false;
+
+    Profile legacy("Legacy");
+    auto legacyInfo = storage->create_profile(legacy);
+    if (!legacyInfo) return false;
+    if (!storage->set_active_profile(legacyInfo->id)) return false;
+    auto legacyLoaded = storage->load_profile();
+    return legacyLoaded && legacyLoaded->spirit() == ProfileSpirit::None;
 }
 
 static bool TestWhitelist(const std::filesystem::path& dir) {
@@ -282,6 +316,7 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
 
     const bool okProfile = TestProfileRank();
+    const bool okSpirit = TestProfileSpirit(tmp / "spirit");
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     std::filesystem::remove_all(tmp, ec);
@@ -298,13 +333,14 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okRules && okTasks && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okRules && okTasks && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
     std::cerr << "smoke_core failed: "
               << "profile=" << okProfile
+              << " spirit=" << okSpirit
               << " rules=" << okRules
               << " tasks=" << okTasks
               << " syncHealth=" << okSyncHealth

@@ -16,6 +16,8 @@ enum class UiIcon {
     List,
     Launch,
     Info,
+    SpiritGood,
+    SpiritEvil,
     Play,
     Stop,
     Next
@@ -217,6 +219,31 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             ImVec2 stemA = IconPoint(center, 0.0f, -0.08f, s);
             ImVec2 stemB = IconPoint(center, 0.0f, 0.38f, s);
             drawList->AddLine(stemA, stemB, color, stroke);
+            return;
+        }
+        case UiIcon::SpiritGood: {
+            drawList->AddCircle(IconPoint(center, 0.0f, -0.72f, s), s * 0.32f, color, 20, stroke);
+            drawList->AddCircle(center, s * 0.48f, color, 20, stroke);
+            drawList->AddCircleFilled(IconPoint(center, -0.18f, -0.10f, s), s * 0.07f, color, 10);
+            drawList->AddCircleFilled(IconPoint(center, 0.18f, -0.10f, s), s * 0.07f, color, 10);
+            drawList->PathClear();
+            drawList->PathArcTo(IconPoint(center, 0.0f, 0.05f, s), s * 0.28f, 0.20f * kPi, 0.80f * kPi, 12);
+            drawList->PathStroke(color, false, stroke);
+            return;
+        }
+        case UiIcon::SpiritEvil: {
+            ImVec2 leftHornA = IconPoint(center, -0.34f, -0.42f, s);
+            ImVec2 leftHornB = IconPoint(center, -0.54f, -0.84f, s);
+            ImVec2 leftHornC = IconPoint(center, -0.12f, -0.52f, s);
+            ImVec2 rightHornA = IconPoint(center, 0.34f, -0.42f, s);
+            ImVec2 rightHornB = IconPoint(center, 0.54f, -0.84f, s);
+            ImVec2 rightHornC = IconPoint(center, 0.12f, -0.52f, s);
+            drawList->AddTriangle(leftHornA, leftHornB, leftHornC, color, stroke);
+            drawList->AddTriangle(rightHornA, rightHornB, rightHornC, color, stroke);
+            drawList->AddCircle(center, s * 0.50f, color, 20, stroke);
+            drawList->AddLine(IconPoint(center, -0.30f, -0.14f, s), IconPoint(center, -0.06f, -0.02f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.30f, -0.14f, s), IconPoint(center, 0.06f, -0.02f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.20f, 0.30f, s), IconPoint(center, 0.20f, 0.30f, s), color, stroke);
             return;
         }
         case UiIcon::Play: {

@@ -200,6 +200,31 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
+        auto SpiritIconFor = [](ProfileSpirit spirit) {
+            return spirit == ProfileSpirit::Evil ? UiIcon::SpiritEvil : UiIcon::SpiritGood;
+        };
+        auto SpiritColorFor = [&](ProfileSpirit spirit) {
+            ImVec4 color = accent;
+            if (spirit == ProfileSpirit::Evil) {
+                color = LogLevelColor(AppLogLevel::Warning);
+            } else if (spirit == ProfileSpirit::None) {
+                color = style.Colors[ImGuiCol_TextDisabled];
+            }
+            color.w = std::max(color.w, 0.90f);
+            return color;
+        };
+        auto DrawSpiritBadge = [&](const char* id, ProfileSpirit spirit) {
+            if (spirit == ProfileSpirit::None) {
+                ImGui::TextDisabled(u8"Без духа");
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(spirit));
+                return;
+            }
+            const ImVec4 color = SpiritColorFor(spirit);
+            IconButtonGui(id, SpiritIconFor(spirit), ProfileSpiritEffectLabel(spirit), color,
+                          ImGui::GetFrameHeight(), true, true);
+            ImGui::SameLine();
+            ImGui::TextColored(color, "%s", ProfileSpiritLabel(spirit));
+        };
 
         const std::string rankText = DescribeOverallRank(profile);
         const char* rankLabel = RankLabelForLevel(overallLevel);
@@ -227,7 +252,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             categoriesLine = catStream.str();
         }
         if (BeginCard("profile_header_card")) {
-        if (ImGui::BeginTable("profile_header_summary", 4, ImGuiTableFlags_SizingStretchSame)) {
+        if (ImGui::BeginTable("profile_header_summary", 5, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Уровень");
@@ -241,6 +266,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Профессия");
             ImGui::TextColored(accent, "%s", professionName.c_str());
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Дух");
+            DrawSpiritBadge("profile_spirit_header", profile.spirit());
             ImGui::EndTable();
         }
         ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
@@ -411,6 +439,39 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     state.confirmPopupRequest = true;
                 }
             }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Дух");
+            ImGui::TableSetColumnIndex(1);
+            const char* spiritLabels[] = {u8"Без духа", u8"Добрый дух (+1% XP)", u8"Злой дух (-1% XP)"};
+            int draftSpirit = static_cast<int>(profile.spirit());
+            if (state.isAdmin) {
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::Combo("##profile_spirit", &draftSpirit, spiritLabels, IM_ARRAYSIZE(spiritLabels))) {
+                    draftSpirit = std::clamp(draftSpirit, 0, 2);
+                    const ProfileSpirit oldSpirit = profile.spirit();
+                    const ProfileSpirit nextSpirit = static_cast<ProfileSpirit>(draftSpirit);
+                    if (oldSpirit != nextSpirit) {
+                        Profile updatedProfile = profile;
+                        updatedProfile.set_spirit(nextSpirit);
+                        AppProfileMutationResult mutation = AppSaveProfileSnapshot(
+                            storage, state.active->id, state.active->id, updatedProfile);
+                        if (mutation.ok && mutation.profile) {
+                            state.active->profile = *mutation.profile;
+                            AppendProfileAudit(state.storageDir, state.active->id, "spirit",
+                                               std::string(ProfileSpiritId(oldSpirit)) + "->" + ProfileSpiritId(nextSpirit));
+                            SetStatus(state, u8"Дух профиля обновлён.", 0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state,
+                                      mutation.errorMessage.empty() ? u8"Не удалось сохранить дух профиля." : mutation.errorMessage,
+                                      1.0f, 0.45f, 0.45f);
+                        }
+                    }
+                }
+            } else {
+                DrawSpiritBadge("profile_spirit_info", profile.spirit());
+            }
+            ImGui::TextDisabled("%s", ProfileSpiritEffectLabel(profile.spirit()));
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Опыт");
