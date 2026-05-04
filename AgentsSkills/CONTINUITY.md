@@ -34,14 +34,17 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: codex/tasks-module-ux. Версия: 0.4.43.
-  - Последнее изменение: добавлена система добрых/злых духов профиля с XP-модификатором и UI назначения.
+  - Ветка: codex/tasks-module-ux. Версия: 0.4.44.
+  - Последнее изменение: подключены PNG-иконки доброго/злого духа из `data/spirits`, включая seed-копирование и cloud-sync whitelist.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Spirits system: `Profile` получил поле `spirit` (`none/good/evil`), INI-сохранение/загрузку, label/effect helpers и общий `ApplyProfileSpiritXpModifier`.
   - Spirits system: в профиле отображается badge духа; админ может назначить `Без духа / Добрый дух / Злой дух`, изменение пишется в `profile-audit.log`.
   - Spirits XP: добрый дух даёт `+1%`, злой дух `-1%` ко всему начисляемому XP участника; модификатор применяется к глобальному XP после штрафов и к XP навыков после бонусов.
+  - Spirits assets: профиль и XP-preview используют PNG-иконки из `data/spirits`, с fallback на встроенные glyph-иконки.
+  - Spirits sync: `spirits/*.png` включены в startup seed-copy, cloud push/pull и whitelist cleanup.
   - QA: `smoke_core` проверяет модификаторы духа и roundtrip сохранения/загрузки профиля.
+  - QA: `smoke_core` проверяет сохранение `spirits/*.png` whitelist-ом и перенос иконок через cloud push/pull.
   - Tasks icon pass: project bridge actions `Фокус/Ред.` и массовые действия (`статус`, `приоритет`, `проект`, `этап`, `дедлайн`, `исполнители`, выбор/снятие/удаление) переведены на icon-buttons с tooltip.
   - Tasks icon pass: toolbar действий задач, inline-редактирование исполнителей в строке и закрытие detail-pane переведены на icon-buttons с подсказками.
   - Tasks UX: добавлен quick-filter `Требуют действий` для pending XP, просроченных дедлайнов, отсутствующего/битого pipeline-этапа и открытого final handoff.

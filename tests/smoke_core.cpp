@@ -138,11 +138,15 @@ static bool TestProfileSpirit(const std::filesystem::path& dir) {
 static bool TestWhitelist(const std::filesystem::path& dir) {
     WriteFile(dir / "bad.txt", "x");
     WriteFile(dir / "meta" / "bad.json", "{}");
+    WriteFile(dir / "spirits" / "good.png", "x");
+    WriteFile(dir / "spirits" / "bad.txt", "x");
     WriteFile(dir / "meta" / "task-audit.log", "1700000000|admin|t1|create||Task\n");
     int removed = 0;
     RemoveStrayFiles(dir, removed);
     return removed >= 2 &&
            !std::filesystem::exists(dir / "bad.txt") &&
+           std::filesystem::exists(dir / "spirits" / "good.png") &&
+           !std::filesystem::exists(dir / "spirits" / "bad.txt") &&
            std::filesystem::exists(dir / "meta" / "task-audit.log");
 }
 
@@ -218,6 +222,30 @@ static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
     if (loadedManifest.releaseFile != "ForgeMirrorSetup_0.4.32.exe") return false;
     if (loadedManifest.notes != "First") return false;
     return true;
+}
+
+static bool TestCloudSpiritIcons(const std::filesystem::path& dir) {
+    std::error_code ec;
+    std::filesystem::path cloudRoot = dir;
+    cloudRoot += "_spirit_cloud";
+    std::filesystem::remove_all(cloudRoot, ec);
+
+    CloudSyncConfig config;
+    config.enabled = true;
+    config.root = cloudRoot;
+
+    if (!WriteFile(dir / "spirits" / "good.png", "local-good")) return false;
+    CloudSyncResult push = PushCloudSnapshot(config, dir, CloudRole::Admin);
+    if (!push.ok) return false;
+    if (!std::filesystem::exists(cloudRoot / "spirits" / "good.png", ec)) return false;
+
+    std::filesystem::remove(dir / "spirits" / "good.png", ec);
+    if (!WriteFile(cloudRoot / "spirits" / "evil.png", "cloud-evil")) return false;
+    CloudSyncResult pull = PullCloudSnapshot(config, dir, CloudRole::Admin);
+    if (!pull.ok) return false;
+    const bool ok = std::filesystem::exists(dir / "spirits" / "evil.png", ec);
+    std::filesystem::remove_all(cloudRoot, ec);
+    return ok;
 }
 
 static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
@@ -331,10 +359,13 @@ int main() {
     const bool okCloudOverwrite = TestCloudAtomicOverwrite(tmp);
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
+    const bool okCloudSpirits = TestCloudSpiritIcons(tmp);
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
     if (okProfile && okSpirit && okRules && okTasks && okSyncHealth && okWhitelist && okVault &&
-        okCloudOverwrite && okCloudWorkspace) {
+        okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
@@ -347,6 +378,7 @@ int main() {
               << " whitelist=" << okWhitelist
               << " vault=" << okVault
               << " cloudOverwrite=" << okCloudOverwrite
+              << " cloudSpirits=" << okCloudSpirits
               << " cloudWorkspace=" << okCloudWorkspace << "\n";
     return 1;
 }

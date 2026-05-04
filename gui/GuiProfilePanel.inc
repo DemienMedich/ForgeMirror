@@ -220,8 +220,21 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 return;
             }
             const ImVec4 color = SpiritColorFor(spirit);
-            IconButtonGui(id, SpiritIconFor(spirit), ProfileSpiritEffectLabel(spirit), color,
-                          ImGui::GetFrameHeight(), true, true);
+            bool drewTexture = false;
+            if (auto iconPath = ResolveSpiritIconPath(spirit, state.storageDir)) {
+                if (const auto* iconTex = GetIconTexture(*iconPath)) {
+                    const float iconSize = ImGui::GetFrameHeight();
+                    ImGui::PushID(id);
+                    ImGui::Image((ImTextureID)(intptr_t)iconTex->id, ImVec2(iconSize, iconSize));
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(spirit));
+                    ImGui::PopID();
+                    drewTexture = true;
+                }
+            }
+            if (!drewTexture) {
+                IconButtonGui(id, SpiritIconFor(spirit), ProfileSpiritEffectLabel(spirit), color,
+                              ImGui::GetFrameHeight(), true, true);
+            }
             ImGui::SameLine();
             ImGui::TextColored(color, "%s", ProfileSpiritLabel(spirit));
         };

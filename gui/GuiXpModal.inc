@@ -476,6 +476,14 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     ? LogLevelColor(AppLogLevel::Warning)
                     : accent;
                 spiritColor.w = std::max(spiritColor.w, 0.90f);
+                if (auto spiritIcon = ResolveSpiritIconPath(state.active->profile.spirit(), state.storageDir)) {
+                    if (const auto* iconTex = GetIconTexture(*spiritIcon)) {
+                        const float iconSize = ImGui::GetTextLineHeightWithSpacing();
+                        ImGui::Image((ImTextureID)(intptr_t)iconTex->id, ImVec2(iconSize, iconSize));
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(state.active->profile.spirit()));
+                        ImGui::SameLine();
+                    }
+                }
                 ImGui::TextColored(spiritColor,
                                    u8"%s: %s",
                                    ProfileSpiritLabel(state.active->profile.spirit()),
