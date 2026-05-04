@@ -2966,6 +2966,67 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *expanded);
+            const int detailStatus = NormalizeTaskStatus(expanded->status);
+            const bool detailHasRecordedXp = TaskHasRecordedXp(*expanded);
+            const bool detailNeedsXpAward = TaskNeedsXpAward(*expanded);
+            const std::vector<int> detailQuickPipelineTargets = (tasksAdminMode && editableTask)
+                ? CollectTaskPipelineQuickTargets(*editableTask)
+                : CollectTaskPipelineQuickTargets(*expanded);
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::TextDisabled(u8"Следующее действие");
+            if (tasksAdminMode && editableTask && !editableTask->id.empty()) {
+                if (detailNeedsXpAward) {
+                    ImGui::TextWrapped(u8"Задача уже закрыта. Остался handoff XP: распределить вклад, навыки и применить штрафы.");
+                    if (ImGui::Button(u8"Выдать XP по задаче", ImVec2(-1.0f, 0.0f))) {
+                        StartTaskXpFlow(editableTask->id, true);
+                    }
+                } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing &&
+                           !detailQuickPipelineTargets.empty()) {
+                    ImGui::TextWrapped(u8"Задача вне пайплайна. Сначала назначьте стартовый этап, чтобы статус можно было отслеживать.");
+                    DrawTaskPipelineQuickActionButtons("task_detail_next_missing_pipeline",
+                                                       editableTask->id,
+                                                       detailQuickPipelineTargets);
+                } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Unknown) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                       u8"Текущий этап отсутствует в схеме. Ниже нужен ручной выбор корректного этапа.");
+                } else if (detailStatus == kTaskStatusNew) {
+                    ImGui::TextWrapped(u8"Задача поставлена, но ещё не в работе.");
+                    if (ImGui::Button(u8"Перевести в работу", ImVec2(-1.0f, 0.0f))) {
+                        UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
+                    }
+                } else if (detailStatus == kTaskStatusInProgress) {
+                    if (!detailQuickPipelineTargets.empty()) {
+                        ImGui::TextWrapped(u8"Следующий безопасный шаг — продвинуть задачу по pipeline.");
+                        DrawTaskPipelineQuickActionButtons("task_detail_next_pipeline",
+                                                           editableTask->id,
+                                                           detailQuickPipelineTargets);
+                    } else {
+                        ImGui::TextWrapped(u8"Дальше pipeline-переходов нет. Если работа завершена, закройте задачу через XP handoff.");
+                        if (ImGui::Button(u8"Закрыть и выдать XP", ImVec2(-1.0f, 0.0f))) {
+                            StartTaskXpFlow(editableTask->id, true);
+                        }
+                    }
+                } else if (detailStatus == kTaskStatusDone && detailHasRecordedXp) {
+                    ImGui::TextWrapped(u8"Задача закрыта, XP уже записан. Reopen доступен только в статус 'В работе'.");
+                    if (ImGui::Button(u8"Вернуть в работу", ImVec2(-1.0f, 0.0f))) {
+                        UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
+                    }
+                } else {
+                    ImGui::TextDisabled(u8"Нет доступного shortcut для текущего состояния.");
+                }
+            } else {
+                if (detailNeedsXpAward) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Ожидает выдачи XP администратором.");
+                } else if (detailStatus == kTaskStatusNew) {
+                    ImGui::TextDisabled(u8"Ожидает старта администратором.");
+                } else if (detailStatus == kTaskStatusInProgress) {
+                    ImGui::TextDisabled(u8"В работе. Следите за дедлайном и этапом pipeline.");
+                } else {
+                    ImGui::TextDisabled(detailHasRecordedXp ? u8"Закрыта, XP записан." : u8"Закрыта, XP ещё не записан.");
+                }
+            }
+
             if (ImGui::CollapsingHeader(u8"Контекст задачи", ImGuiTreeNodeFlags_DefaultOpen)) {
                 if (!expanded->description.empty()) {
                     ImGui::TextDisabled(u8"Описание");
