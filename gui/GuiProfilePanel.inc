@@ -449,6 +449,44 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         const bool walletUnlocked = walletHasPassword && IsProfileAccessUnlocked(state, state.active->id);
         std::string walletCurrency = !state.vault.currencyName.empty() ? state.vault.currencyName : state.vault.currencyCode;
         if (walletCurrency.empty()) walletCurrency = u8"Кукоин";
+        std::ostringstream walletStream;
+        walletStream.imbue(std::locale::classic());
+        walletStream << std::fixed << std::setprecision(0) << profile.wallet_balance();
+        const std::string walletText = (state.isAdmin || walletUnlocked)
+            ? (walletStream.str() + " " + walletCurrency)
+            : std::string(u8"скрыт");
+        const bool hasPassword = walletHasPassword;
+        const bool unlocked = hasPassword && IsProfileAccessUnlocked(state, state.active->id);
+        const bool sessionUnlock = hasPassword && state.unlockedProfiles.count(state.active->id) > 0;
+        std::string accessText;
+        if (!hasPassword) {
+            accessText = u8"Пароль не задан";
+        } else if (!unlocked) {
+            accessText = u8"Закрыт";
+        } else {
+            auto it = state.trustedProfiles.find(state.active->id);
+            if (it != state.trustedProfiles.end() && it->second > nowSec) {
+                accessText = u8"Открыт до " + FormatTimestamp(it->second, "%Y-%m-%d");
+            } else if (sessionUnlock) {
+                accessText = u8"Открыт (сессия)";
+            } else {
+                accessText = u8"Открыт";
+            }
+        }
+        ImVec4 accessColor = unlocked ? accent : style.Colors[ImGuiCol_TextDisabled];
+        if (!hasPassword) {
+            accessColor = LogLevelColor(AppLogLevel::Warning);
+            accessColor.w = std::max(accessColor.w, 0.9f);
+        }
+        const bool blocked = profile.is_blocked();
+        ImVec4 profileStatusColor = blocked ? LogLevelColor(AppLogLevel::Warning) : style.Colors[ImGuiCol_TextDisabled];
+        if (blocked) profileStatusColor.w = std::max(profileStatusColor.w, 0.9f);
+        const int spiritPercent = ProfileSpiritXpModifierPercent(profile.spirit());
+        std::string spiritSummary = ProfileSpiritLabel(profile.spirit());
+        if (spiritPercent != 0) {
+            spiritSummary += spiritPercent > 0 ? " +" : " ";
+            spiritSummary += std::to_string(spiritPercent) + "% XP";
+        }
         if (BeginCard("profile_header_card")) {
         if (ImGui::BeginTable("profile_header_summary", 5, ImGuiTableFlags_SizingStretchSame)) {
             ImGui::TableNextRow();
@@ -467,6 +505,29 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Дух");
             DrawSpiritBadge("profile_spirit_header", profile.spirit());
+            ImGui::EndTable();
+        }
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        if (ImGui::BeginTable("profile_status_strip", 4, ImGuiTableFlags_SizingStretchSame)) {
+            auto drawStripCell = [](const char* label, const std::string& value, const ImVec4& color) {
+                ImGui::TextDisabled("%s", label);
+                ImGui::TextColored(color, "%s", value.c_str());
+            };
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            drawStripCell(u8"Доступ", accessText, accessColor);
+            ImGui::TableSetColumnIndex(1);
+            drawStripCell(u8"Статус", blocked ? std::string(u8"Заблокирован") : std::string(u8"Активен"), profileStatusColor);
+            ImGui::TableSetColumnIndex(2);
+            drawStripCell(u8"Дух", spiritSummary, SpiritColorFor(profile.spirit()));
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(profile.spirit()));
+            }
+            ImGui::TableSetColumnIndex(3);
+            drawStripCell(u8"Кошелёк", walletText, (state.isAdmin || walletUnlocked) ? accent : style.Colors[ImGuiCol_TextDisabled]);
+            if (!(state.isAdmin || walletUnlocked) && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Нужен пароль профиля.");
+            }
             ImGui::EndTable();
         }
         ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
@@ -556,29 +617,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Доступ");
             ImGui::TableSetColumnIndex(1);
-            const bool hasPassword = !profile.password_encoded().empty();
-            const bool unlocked = hasPassword && IsProfileAccessUnlocked(state, state.active->id);
-            const bool sessionUnlock = hasPassword && state.unlockedProfiles.count(state.active->id) > 0;
-            std::string accessText;
-            if (!hasPassword) {
-                accessText = u8"Пароль не задан";
-            } else if (!unlocked) {
-                accessText = u8"Закрыт";
-            } else {
-                auto it = state.trustedProfiles.find(state.active->id);
-                if (it != state.trustedProfiles.end() && it->second > NowSeconds()) {
-                    accessText = u8"Открыт до " + FormatTimestamp(it->second, "%Y-%m-%d");
-                } else if (sessionUnlock) {
-                    accessText = u8"Открыт (сессия)";
-                } else {
-                    accessText = u8"Открыт";
-                }
-            }
-            ImVec4 accessColor = unlocked ? accent : ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
-            if (!hasPassword) {
-                accessColor = LogLevelColor(AppLogLevel::Warning);
-                accessColor.w = std::max(accessColor.w, 0.9f);
-            }
             ImGui::TextColored(accessColor, "%s", accessText.c_str());
             const float actionsWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionsWidth < 320.0f;
@@ -623,10 +661,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Статус");
             ImGui::TableSetColumnIndex(1);
-            const bool blocked = profile.is_blocked();
-            ImVec4 statusColor = blocked ? LogLevelColor(AppLogLevel::Warning) : ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
-            if (blocked) statusColor.w = std::max(statusColor.w, 0.9f);
-            ImGui::TextColored(statusColor, "%s", blocked ? u8"Заблокирован" : u8"Активен");
+            ImGui::TextColored(profileStatusColor, "%s", blocked ? u8"Заблокирован" : u8"Активен");
             if (state.isAdmin) {
                 const float statusWidth = ImGui::GetContentRegionAvail().x;
                 const bool stackStatusActions = statusWidth < 220.0f;
@@ -1040,14 +1075,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
-    if (state.isAdmin || walletUnlocked) {
-        std::ostringstream walletStream;
-        walletStream.imbue(std::locale::classic());
-        walletStream << std::fixed << std::setprecision(0) << profile.wallet_balance();
-        ImGui::TextDisabled(u8"Кошелек: %s %s", walletStream.str().c_str(), walletCurrency.c_str());
-    } else {
-        ImGui::TextDisabled(u8"Кошелек: скрыт (нужен пароль)");
-    }
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (state.modules.achievements) {
             if (!profile.achievements().empty()) {
