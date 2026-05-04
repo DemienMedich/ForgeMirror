@@ -167,6 +167,7 @@ struct GuiRuntimeState {
     std::array<char, 128> taskTitle{};
     std::array<char, 256> taskDescription{};
     bool showTaskCreateForm = false;
+    int taskPlanStep = 0; // 0=main, 1=assignees, 2=skills, 3=review
     std::array<char, 128> taskPlanTitle{};
     std::array<char, 256> taskPlanDescription{};
     std::array<char, 20> taskPlanDeadline{};
@@ -193,7 +194,7 @@ struct GuiRuntimeState {
     int tasksFilterPriority = 0;
     int tasksFilterDays = 0;
     int tasksSortMode = 0; // 0=date, 1=deadline, 2=priority
-    int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days,5=no-project,6=xp-pending,7=active
+    int tasksQuickFilter = 0; // 0=none,1=mine,2=today,3=overdue,4=next7days,5=no-project,6=xp-pending,7=active,8=action-needed
     int tasksViewMode = 0; // 0=work, 1=admin
     std::int64_t tasksReminderLastAt = 0;
     std::unordered_set<std::string> tasksReminderShown24h;
@@ -208,6 +209,9 @@ struct GuiRuntimeState {
     bool taskBulkDeletePopupRequest = false;
     std::array<char, 20> taskInlineDeadlineBuffer{};
     std::string taskInlineDeadlineEditId;
+    std::array<char, 128> taskInlineTitleBuffer{};
+    std::array<char, 512> taskInlineDescriptionBuffer{};
+    std::string taskInlineTextEditId;
     std::vector<char> taskInlineAssigneeFlags;
     std::string taskInlineAssigneeEditId;
     std::vector<char> taskInlineSkillFlags;

@@ -534,6 +534,7 @@ public:
         std::string storedWalletEncoded;
         bool hasStoredWalletEncoded = false;
         std::string storedProfession;
+        std::string storedSpirit;
         std::string storedLogin;
         std::string storedPassword;
 
@@ -556,6 +557,7 @@ public:
             } else if (section == "profile") {
                 if (key == "name") name = val;
                 else if (key == "profession") storedProfession = val;
+                else if (key == "spirit") storedSpirit = val;
                 else if (key == "overall") {
                     storedOverall = parse_int(val, -1);
                 } else if (key == "totalXp" || key == "totalXP") {
@@ -648,6 +650,7 @@ public:
 
         Profile profile(name);
         profile.set_profession_id(storedProfession);
+        profile.set_spirit(ProfileSpiritFromString(storedSpirit));
         if (storedLogin.empty()) storedLogin = activeId_;
         profile.set_login(storedLogin);
         profile.set_password_encoded(storedPassword);
@@ -720,6 +723,7 @@ public:
         ss << "id=" << activeId_ << "\n";
         ss << "name=" << profile.name() << "\n";
         if (!profile.profession_id().empty()) ss << "profession=" << profile.profession_id() << "\n";
+        if (profile.spirit() != ProfileSpirit::None) ss << "spirit=" << ProfileSpiritId(profile.spirit()) << "\n";
         ss << "overall=" << profile.overall_level() << "\n";
         ss << "progress=" << profile.level_progress() << "\n";
         ss << "totalXp=" << profile.total_xp() << "\n";

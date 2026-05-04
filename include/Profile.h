@@ -21,6 +21,19 @@ struct Achievement {
     }
 };
 
+enum class ProfileSpirit {
+    None = 0,
+    Good = 1,
+    Evil = 2
+};
+
+ProfileSpirit ProfileSpiritFromString(const std::string& value);
+const char* ProfileSpiritId(ProfileSpirit spirit);
+const char* ProfileSpiritLabel(ProfileSpirit spirit);
+const char* ProfileSpiritEffectLabel(ProfileSpirit spirit);
+int ProfileSpiritXpModifierPercent(ProfileSpirit spirit);
+int ApplyProfileSpiritXpModifier(ProfileSpirit spirit, int xp);
+
 class Profile {
 public:
     inline static constexpr int kCategoryCount = 5;
@@ -79,6 +92,9 @@ public:
     void set_blocked(bool value) { blocked_ = value; }
     const std::string& profession_id() const { return professionId_; }
     void set_profession_id(std::string id) { professionId_ = std::move(id); }
+    ProfileSpirit spirit() const { return spirit_; }
+    void set_spirit(ProfileSpirit spirit) { spirit_ = spirit; }
+    int spirit_xp_modifier_percent() const { return ProfileSpiritXpModifierPercent(spirit_); }
     bool penalty_active() const { return recoveryTasksRemaining_ > 0; }
     bool penalties_enabled() const;
     int recovery_tasks_remaining() const { return recoveryTasksRemaining_; }
@@ -111,6 +127,7 @@ private:
     int tasksCompleted_ = 0;
     std::vector<Achievement> achievements_;
     std::string professionId_;
+    ProfileSpirit spirit_ = ProfileSpirit::None;
     bool blocked_ = false;
     double walletBalance_ = 0.0;
 };

@@ -50,6 +50,21 @@ std::optional<std::filesystem::path> ResolveIconPath(const std::string& icon, co
     return std::nullopt;
 }
 
+const char* SpiritIconFilename(ProfileSpirit spirit) {
+    switch (spirit) {
+        case ProfileSpirit::Good: return "good_spirit_icon_100x100_alpha.png";
+        case ProfileSpirit::Evil: return "evil_spirit_icon_100x100_alpha.png";
+        case ProfileSpirit::None:
+        default: return "";
+    }
+}
+
+std::optional<std::filesystem::path> ResolveSpiritIconPath(ProfileSpirit spirit, const std::filesystem::path& storageDir) {
+    const char* filename = SpiritIconFilename(spirit);
+    if (!filename || filename[0] == '\0') return std::nullopt;
+    return ResolveIconPath((std::filesystem::path("spirits") / filename).generic_string(), storageDir);
+}
+
 struct IconChoice {
     std::string label;
     std::string relativePath;

@@ -142,7 +142,7 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
-                if (state.showView3d &&
+                if (state.modules.view3d && state.showView3d &&
                     ImGui::BeginTabItem(u8"3D просмотр", &state.showView3d, tabFlagsFor(UiWindowId::View3D))) {
                     if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3D)) {
                         state.workspaceTabRequest = -1;
@@ -230,7 +230,7 @@ void DrawWorkspacePanel(GuiState& state, IJobStorage& storage, SkillCatalog& cat
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
-                if (state.isAdmin && state.showView3dSettings &&
+                if (state.modules.view3d && state.isAdmin && state.showView3dSettings &&
                     ImGui::BeginTabItem(u8"3D настройки", &state.showView3dSettings, tabFlagsFor(UiWindowId::View3DSettings))) {
                     if (state.workspaceTabRequest == static_cast<int>(UiWindowId::View3DSettings)) {
                         state.workspaceTabRequest = -1;

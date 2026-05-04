@@ -110,7 +110,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
     std::error_code ec;
     if (!std::filesystem::exists(storageDir, ec)) return false;
     const std::unordered_set<std::string> allowedDirs = {
-        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes",
+        "", "archive", "achievements", "achievements/icons", "spirits", "meta", "meta/patch-notes",
         "meta/ui-presets", "meta/reports", "meta/updates", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
@@ -138,6 +138,7 @@ inline bool RemoveStrayFiles(const std::filesystem::path& storageDir, int& remov
             if (dirStr == "archive") return entry.path().extension() == ".ini";
             if (dirStr == "achievements") return entry.path().extension() == ".json";
             if (dirStr == "achievements/icons") return entry.path().extension() == ".png";
+            if (dirStr == "spirits") return entry.path().extension() == ".png";
             if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
             if (dirStr == "meta/patch-notes") return entry.path().extension() == ".md";
             if (dirStr == "meta/ui-presets") return entry.path().extension() == ".ini";

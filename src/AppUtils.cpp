@@ -327,6 +327,23 @@ void CopySeedAchievementIcons(const std::filesystem::path& seedRoot, const std::
     }
 }
 
+void CopySeedSpiritIcons(const std::filesystem::path& seedRoot, const std::filesystem::path& storageRoot) {
+    if (seedRoot.empty() || storageRoot.empty()) return;
+    std::error_code ec;
+    auto srcIcons = seedRoot / "spirits";
+    if (!std::filesystem::exists(srcIcons, ec)) return;
+    auto dstIcons = storageRoot / "spirits";
+    for (const auto& entry : std::filesystem::directory_iterator(srcIcons, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".png") continue;
+        auto dstFile = dstIcons / entry.path().filename();
+        if (std::filesystem::exists(dstFile, ec)) continue;
+        std::filesystem::create_directories(dstIcons, ec);
+        if (ec) continue;
+        std::filesystem::copy_file(entry.path(), dstFile, std::filesystem::copy_options::overwrite_existing, ec);
+    }
+}
+
 } // namespace
 
 std::filesystem::path ProjectSeedDataDir() {
@@ -353,6 +370,7 @@ std::filesystem::path ResolveStorageDirectory() {
     auto finalize = [&](std::filesystem::path chosen) {
         MaybeMergeSeedProfiles(legacyDir, chosen);
         CopySeedAchievementIcons(legacyDir, chosen);
+        CopySeedSpiritIcons(legacyDir, chosen);
         return chosen;
     };
 
@@ -1194,7 +1212,7 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     const std::string relStr = rel.generic_string();
     if (relStr.empty()) return true;
     const std::unordered_set<std::string> allowedDirs = {
-        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes",
+        "", "archive", "achievements", "achievements/icons", "spirits", "meta", "meta/patch-notes",
         "meta/ui-presets", "meta/reports", "meta/updates", "logs", "cloud"
     };
     if (isDir) {
@@ -1215,6 +1233,7 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     if (parent == "archive") return ext == ".ini";
     if (parent == "achievements") return ext == ".json";
     if (parent == "achievements/icons") return ext == ".png";
+    if (parent == "spirits") return ext == ".png";
     if (parent == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
     if (parent == "meta/patch-notes") return ext == ".md";
     if (parent == "meta/ui-presets") return ext == ".ini";

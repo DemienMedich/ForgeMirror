@@ -874,6 +874,59 @@ AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
     return result;
 }
 
+AppMutationResult AppUpdateTaskText(const std::filesystem::path& storageDir,
+                                    std::vector<TaskEntry>& tasks,
+                                    const std::string& taskId,
+                                    const std::string& title,
+                                    const std::string& description,
+                                    const std::string& actor,
+                                    std::vector<TaskAuditEntry>* auditCache) {
+    AppMutationResult result;
+    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+
+    const std::string nextTitle = TrimCopy(title);
+    const std::string nextDescription = TrimCopy(description);
+    if (nextTitle.empty()) {
+        result.errorMessage = u8"Название задачи не может быть пустым.";
+        return result;
+    }
+    if (nextDescription.empty()) {
+        result.errorMessage = u8"Описание задачи не может быть пустым.";
+        return result;
+    }
+
+    const std::string prevTitle = task->title;
+    const std::string prevDescription = task->description;
+    if (prevTitle == nextTitle && prevDescription == nextDescription) {
+        result.ok = true;
+        return result;
+    }
+
+    task->title = nextTitle;
+    task->description = nextDescription;
+    if (!AppSaveTasks(storageDir, tasks)) {
+        task->title = prevTitle;
+        task->description = prevDescription;
+        result.errorMessage = u8"Не удалось сохранить текст задачи.";
+        return result;
+    }
+    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "title",
+                                  prevTitle, task->title, auditCache) ||
+        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "description",
+                                  prevDescription, task->description, auditCache)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
+}
+
 AppMutationResult AppUpdateTaskCategory(const std::filesystem::path& storageDir,
                                         std::vector<TaskEntry>& tasks,
                                         const std::string& taskId,

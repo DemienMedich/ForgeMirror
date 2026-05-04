@@ -1,16 +1,23 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 #include <chrono>
+#include <cmath>
 
+#include "AppProfileMutationService.h"
+#include "AppTaskProjectService.h"
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
+#include "IJobStorage.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
 #include "GameplayConfig.h"
 #include "CloudSync.h"
+
+IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
 
 static bool WriteFile(const std::filesystem::path& path, const std::string& data) {
     std::error_code ec;
@@ -26,6 +33,29 @@ static bool ReadFile(const std::filesystem::path& path, std::string& outData) {
     if (!in) return false;
     outData.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     return true;
+}
+
+static std::filesystem::path FindRepoRootFromCwd() {
+    std::error_code ec;
+    std::filesystem::path current = std::filesystem::current_path(ec);
+    for (int i = 0; !ec && i < 8 && !current.empty(); ++i) {
+        if (std::filesystem::exists(current / "gui" / "GuiTasksPanel.inc", ec)) {
+            return current;
+        }
+        current = current.parent_path();
+    }
+    return {};
+}
+
+static size_t CountSubstring(const std::string& haystack, const std::string& needle) {
+    if (needle.empty()) return 0;
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = haystack.find(needle, pos)) != std::string::npos) {
+        ++count;
+        pos += needle.size();
+    }
+    return count;
 }
 
 static bool SetFileUnixTimestamp(const std::filesystem::path& path, std::int64_t unixSeconds) {
@@ -77,6 +107,52 @@ static bool TestTasksPipelineRoundtrip(const std::filesystem::path& dir) {
            std::filesystem::exists(dir / "meta" / "task-audit.log");
 }
 
+static bool TestTaskTextMutation(const std::filesystem::path& dir) {
+    std::vector<TaskEntry> tasks;
+    TaskEntry task;
+    task.id = "task_text";
+    task.title = "Old title";
+    task.description = "Old description";
+    task.createdAt = 1700000000;
+    tasks.push_back(task);
+
+    std::vector<TaskAuditEntry> audit;
+    AppMutationResult result = AppUpdateTaskText(
+        dir, tasks, task.id, "New title", "New description", "admin", &audit);
+    if (!result.ok || !result.changed || tasks[0].title != "New title" ||
+        tasks[0].description != "New description") {
+        return false;
+    }
+
+    std::string saved;
+    if (!ReadFile(dir / "meta" / "tasks.json", saved)) return false;
+    if (saved.find("\"title\":\"New title\"") == std::string::npos ||
+        saved.find("\"description\":\"New description\"") == std::string::npos) {
+        return false;
+    }
+
+    std::string auditLog;
+    if (!ReadFile(dir / "meta" / "task-audit.log", auditLog)) return false;
+    return auditLog.find("|title|Old title|New title") != std::string::npos &&
+           auditLog.find("|description|Old description|New description") != std::string::npos &&
+           audit.size() == 2;
+}
+
+static bool TestGuiTasksImGuiStackPatterns() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string source;
+    if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", source)) return false;
+
+    if (source.find("&& BeginCard(") != std::string::npos) {
+        return false;
+    }
+
+    const size_t beginCards = CountSubstring(source, "BeginCard(");
+    const size_t endCards = CountSubstring(source, "EndCard();");
+    return beginCards == endCards;
+}
+
 static bool TestSyncHealthDetectsBrokenFiles(const std::filesystem::path& dir) {
     if (!WriteFile(dir / "meta" / "tasks.json", "{broken")) return false;
     if (!WriteFile(dir / "meta" / "pipeline.json", "{\"steps\":[{\"id\":\"p1\"}]}")) return false;
@@ -101,14 +177,102 @@ static bool TestProfileRank() {
     return rank.find("Джуниор") != std::string::npos;
 }
 
+static bool TestProfileSpirit(const std::filesystem::path& dir) {
+    Profile profile("Spirit");
+    if (profile.spirit() != ProfileSpirit::None) return false;
+    if (ProfileSpiritFromString("good") != ProfileSpirit::Good) return false;
+    if (ProfileSpiritFromString("evil") != ProfileSpirit::Evil) return false;
+    if (ApplyProfileSpiritXpModifier(ProfileSpirit::Good, 1000) != 1010) return false;
+    if (ApplyProfileSpiritXpModifier(ProfileSpirit::Evil, 1000) != 990) return false;
+    if (ApplyProfileSpiritXpModifier(ProfileSpirit::None, 1000) != 1000) return false;
+
+    profile.set_spirit(ProfileSpirit::Good);
+    std::unique_ptr<IJobStorage> storage(CreateFileStorage(dir));
+    auto info = storage->create_profile(profile);
+    if (!info) return false;
+    if (!storage->set_active_profile(info->id)) return false;
+    auto loaded = storage->load_profile();
+    if (!loaded || loaded->spirit() != ProfileSpirit::Good) return false;
+
+    loaded->set_spirit(ProfileSpirit::Evil);
+    if (!storage->save_profile(*loaded)) return false;
+    auto reloaded = storage->load_profile();
+    if (!reloaded || reloaded->spirit() != ProfileSpirit::Evil) return false;
+
+    Profile legacy("Legacy");
+    auto legacyInfo = storage->create_profile(legacy);
+    if (!legacyInfo) return false;
+    if (!storage->set_active_profile(legacyInfo->id)) return false;
+    auto legacyLoaded = storage->load_profile();
+    return legacyLoaded && legacyLoaded->spirit() == ProfileSpirit::None;
+}
+
+static bool TestEvilSpiritRemovalForCoins(const std::filesystem::path& dir) {
+    std::unique_ptr<IJobStorage> storage(CreateFileStorage(dir));
+
+    Profile buyer("Buyer");
+    buyer.set_wallet_balance(250.0);
+    buyer.set_spirit(ProfileSpirit::Evil);
+    auto buyerInfo = storage->create_profile(buyer);
+    if (!buyerInfo) return false;
+    if (!storage->set_active_profile(buyerInfo->id)) return false;
+    if (!storage->save_profile(buyer)) return false;
+
+    StorageVaultData vault = LoadStorageVault(dir);
+    vault.balance = 10.0;
+    if (!SaveStorageVault(dir, vault)) return false;
+    vault = LoadStorageVault(dir);
+
+    AppProfileMutationResult result = AppRemoveEvilSpiritForCoins(
+        *storage, buyerInfo->id, buyerInfo->id, dir, vault, 200.0);
+    if (!result.ok || !result.changed || !result.profile) return false;
+    if (result.profile->spirit() != ProfileSpirit::None) return false;
+    if (std::abs(result.profile->wallet_balance() - 50.0) > 0.000001) return false;
+    if (std::abs(vault.balance - 210.0) > 0.000001) return false;
+    if (vault.log.empty() || vault.log.back().action != "spirit_cleanup") return false;
+
+    if (!storage->set_active_profile(buyerInfo->id)) return false;
+    auto savedBuyer = storage->load_profile();
+    if (!savedBuyer || savedBuyer->spirit() != ProfileSpirit::None ||
+        std::abs(savedBuyer->wallet_balance() - 50.0) > 0.000001) {
+        return false;
+    }
+    const StorageVaultData savedVault = LoadStorageVault(dir);
+    if (std::abs(savedVault.balance - 210.0) > 0.000001) return false;
+
+    Profile poor("Poor");
+    poor.set_wallet_balance(100.0);
+    poor.set_spirit(ProfileSpirit::Evil);
+    auto poorInfo = storage->create_profile(poor);
+    if (!poorInfo) return false;
+    if (!storage->set_active_profile(poorInfo->id)) return false;
+    if (!storage->save_profile(poor)) return false;
+
+    AppProfileMutationResult foreignResult = AppRemoveEvilSpiritForCoins(
+        *storage, buyerInfo->id, poorInfo->id, dir, vault, 200.0);
+    if (foreignResult.ok || !foreignResult.userError) return false;
+
+    AppProfileMutationResult poorResult = AppRemoveEvilSpiritForCoins(
+        *storage, poorInfo->id, poorInfo->id, dir, vault, 200.0);
+    if (poorResult.ok || !poorResult.userError) return false;
+    if (!storage->set_active_profile(poorInfo->id)) return false;
+    auto savedPoor = storage->load_profile();
+    return savedPoor && savedPoor->spirit() == ProfileSpirit::Evil &&
+           std::abs(savedPoor->wallet_balance() - 100.0) <= 0.000001;
+}
+
 static bool TestWhitelist(const std::filesystem::path& dir) {
     WriteFile(dir / "bad.txt", "x");
     WriteFile(dir / "meta" / "bad.json", "{}");
+    WriteFile(dir / "spirits" / "good.png", "x");
+    WriteFile(dir / "spirits" / "bad.txt", "x");
     WriteFile(dir / "meta" / "task-audit.log", "1700000000|admin|t1|create||Task\n");
     int removed = 0;
     RemoveStrayFiles(dir, removed);
     return removed >= 2 &&
            !std::filesystem::exists(dir / "bad.txt") &&
+           std::filesystem::exists(dir / "spirits" / "good.png") &&
+           !std::filesystem::exists(dir / "spirits" / "bad.txt") &&
            std::filesystem::exists(dir / "meta" / "task-audit.log");
 }
 
@@ -184,6 +348,30 @@ static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
     if (loadedManifest.releaseFile != "ForgeMirrorSetup_0.4.32.exe") return false;
     if (loadedManifest.notes != "First") return false;
     return true;
+}
+
+static bool TestCloudSpiritIcons(const std::filesystem::path& dir) {
+    std::error_code ec;
+    std::filesystem::path cloudRoot = dir;
+    cloudRoot += "_spirit_cloud";
+    std::filesystem::remove_all(cloudRoot, ec);
+
+    CloudSyncConfig config;
+    config.enabled = true;
+    config.root = cloudRoot;
+
+    if (!WriteFile(dir / "spirits" / "good.png", "local-good")) return false;
+    CloudSyncResult push = PushCloudSnapshot(config, dir, CloudRole::Admin);
+    if (!push.ok) return false;
+    if (!std::filesystem::exists(cloudRoot / "spirits" / "good.png", ec)) return false;
+
+    std::filesystem::remove(dir / "spirits" / "good.png", ec);
+    if (!WriteFile(cloudRoot / "spirits" / "evil.png", "cloud-evil")) return false;
+    CloudSyncResult pull = PullCloudSnapshot(config, dir, CloudRole::Admin);
+    if (!pull.ok) return false;
+    const bool ok = std::filesystem::exists(dir / "spirits" / "evil.png", ec);
+    std::filesystem::remove_all(cloudRoot, ec);
+    return ok;
 }
 
 static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
@@ -282,8 +470,12 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
 
     const bool okProfile = TestProfileRank();
+    const bool okSpirit = TestProfileSpirit(tmp / "spirit");
+    const bool okSpiritRemoval = TestEvilSpiritRemovalForCoins(tmp / "spirit_removal");
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
+    const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
+    const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okSyncHealth = TestSyncHealthDetectsBrokenFiles(tmp);
@@ -296,21 +488,29 @@ int main() {
     const bool okCloudOverwrite = TestCloudAtomicOverwrite(tmp);
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
+    const bool okCloudSpirits = TestCloudSpiritIcons(tmp);
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okRules && okTasks && okSyncHealth && okWhitelist && okVault &&
-        okCloudOverwrite && okCloudWorkspace) {
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okSyncHealth && okWhitelist && okVault &&
+        okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
     std::cerr << "smoke_core failed: "
               << "profile=" << okProfile
+              << " spirit=" << okSpirit
+              << " spiritRemoval=" << okSpiritRemoval
               << " rules=" << okRules
               << " tasks=" << okTasks
+              << " taskText=" << okTaskText
+              << " guiStack=" << okGuiStack
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
               << " vault=" << okVault
               << " cloudOverwrite=" << okCloudOverwrite
+              << " cloudSpirits=" << okCloudSpirits
               << " cloudWorkspace=" << okCloudWorkspace << "\n";
     return 1;
 }

@@ -987,7 +987,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
     std::error_code ec;
     if (!std::filesystem::exists(root, ec)) return false;
     const std::unordered_set<std::string> allowedDirs = {
-        "", "archive", "achievements", "achievements/icons", "meta", "logs", "cloud", "cloud/releases"
+        "", "archive", "achievements", "achievements/icons", "spirits", "meta", "logs", "cloud", "cloud/releases"
     };
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini", "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "seed.merged"
@@ -1013,6 +1013,7 @@ bool RemoveStrayFilesInternal(const std::filesystem::path& root, int& removed) {
             if (dirStr == "archive") return entry.path().extension() == ".ini";
             if (dirStr == "achievements") return entry.path().extension() == ".json";
             if (dirStr == "achievements/icons") return entry.path().extension() == ".png";
+            if (dirStr == "spirits") return entry.path().extension() == ".png";
             if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
             if (dirStr == "logs") return true;
             if (dirStr == "cloud") return true;
@@ -1046,7 +1047,7 @@ bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem:
     std::error_code ec;
     if (!std::filesystem::exists(root, ec)) return false;
     std::unordered_set<std::string> allowedDirs = {
-        "", "archive", "achievements", "achievements/icons", "meta", "meta/patch-notes"
+        "", "archive", "achievements", "achievements/icons", "spirits", "meta", "meta/patch-notes"
     };
     std::string releasesRel;
     if (config.releasesDir.empty()) {
@@ -1099,6 +1100,7 @@ bool RemoveStrayCloudFiles(const CloudSyncConfig& config, const std::filesystem:
             if (dirStr == "archive") return ext == ".ini";
             if (dirStr == "achievements") return ext == ".json";
             if (dirStr == "achievements/icons") return ext == ".png";
+            if (dirStr == "spirits") return ext == ".png";
             if (dirStr == "meta") return allowedMetaFiles.find(name) != allowedMetaFiles.end();
             if (dirStr == "meta/patch-notes") return ext == ".md";
             if (!releasesRel.empty() && dirStr == releasesRel) return true;
@@ -1528,6 +1530,7 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyProfiles(cloudRoot / "archive", storageDir / "archive", role, config, result.stats, skipIds, true, &ioError);
     CopyAchievements(cloudRoot / "achievements", storageDir / "achievements", skipIds, result.stats, true, &ioError);
     CopyAchievementIcons(cloudRoot / "achievements" / "icons", storageDir / "achievements" / "icons", result.stats, true, &ioError);
+    CopyFlatDirFiles(cloudRoot / "spirits", storageDir / "spirits", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "skills.txt", storageDir / "skills.txt", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "pipeline.json", storageDir / "meta" / "pipeline.json", result.stats, true, &ioError);
     CopyFileIfExists(cloudRoot / "meta" / "tasks.json", storageDir / "meta" / "tasks.json", result.stats, true, &ioError);
@@ -1623,6 +1626,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     CopyProfiles(storageDir / "archive", cloudRoot / "archive", role, config, result.stats, skipIds, false, &ioError);
     CopyAchievements(storageDir / "achievements", cloudRoot / "achievements", skipIds, result.stats, false, &ioError);
     CopyAchievementIcons(storageDir / "achievements" / "icons", cloudRoot / "achievements" / "icons", result.stats, false, &ioError);
+    CopyFlatDirFiles(storageDir / "spirits", cloudRoot / "spirits", result.stats, false, &ioError);
     CopyFileIfExistsPush(storageDir / "skills.txt", cloudRoot / "skills.txt", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", result.stats, &ioError);
     CopyFileIfExistsPush(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", result.stats, &ioError);
@@ -1638,6 +1642,7 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     const bool removedAny = RemoveOrphanedProfiles(storageDir, cloudRoot, removed)
         || RemoveOrphanedProfiles(storageDir / "archive", cloudRoot / "archive", removed)
         || RemoveOrphanedAchievements(storageDir, storageDir / "archive", cloudRoot / "achievements", removed)
+        || RemoveOrphanedFlatFiles(storageDir / "spirits", cloudRoot / "spirits", removed)
         || RemoveFileIfMissing(storageDir / "skills.txt", cloudRoot / "skills.txt", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "pipeline.json", cloudRoot / "meta" / "pipeline.json", removed)
         || RemoveFileIfMissing(storageDir / "meta" / "tasks.json", cloudRoot / "meta" / "tasks.json", removed)

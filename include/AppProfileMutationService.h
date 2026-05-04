@@ -1,11 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 
 #include "AppContext.h"
 #include "Profile.h"
+
+struct StorageVaultData;
 
 struct AppProfileActionResult {
     bool ok = false;
@@ -72,6 +75,13 @@ AppProfileMutationResult AppAdjustProfileWallet(IJobStorage& storage,
                                                 const std::string& restoreProfileId,
                                                 const std::string& profileId,
                                                 double delta);
+
+AppProfileMutationResult AppRemoveEvilSpiritForCoins(IJobStorage& storage,
+                                                     const std::string& restoreProfileId,
+                                                     const std::string& profileId,
+                                                     const std::filesystem::path& storageDir,
+                                                     StorageVaultData& vault,
+                                                     double cost);
 
 AppProfileMutationResult AppGrantAchievement(IJobStorage& storage,
                                              const std::string& restoreProfileId,
