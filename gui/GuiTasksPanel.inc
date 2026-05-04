@@ -2500,6 +2500,23 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         return out.str();
     };
+    auto TaskPriorityCode = [](int priority) -> const char* {
+        switch (NormalizeTaskPriority(priority)) {
+            case kTaskPriorityLow: return "P1";
+            case kTaskPriorityMedium: return "P2";
+            case kTaskPriorityHigh: return "P3";
+            case kTaskPriorityCritical: return "P4";
+            default: return "P?";
+        }
+    };
+    auto TaskStatusShortLabel = [](int status) -> const char* {
+        switch (NormalizeTaskStatus(status)) {
+            case kTaskStatusNew: return u8"Нов.";
+            case kTaskStatusInProgress: return u8"Раб.";
+            case kTaskStatusDone: return u8"Гот.";
+            default: return "?";
+        }
+    };
 
     int visibleCount = 0;
     const bool allowBulkSelection = tasksAdminMode;
@@ -2517,14 +2534,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (allowBulkSelection) {
             ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 34.0f);
         }
-        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-        ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-        ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn(u8"Приоритет", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 156.0f);
+        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 118.0f);
+        ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+        ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+        ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn(u8"Приор.", ImGuiTableColumnFlags_WidthFixed, 82.0f);
+        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 106.0f);
         ImGui::TableHeadersRow();
         const std::int64_t nowSec = NowSeconds();
         for (const TaskEntry* task : filtered) {
@@ -2558,17 +2575,22 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *task);
 
             ImGui::TableSetColumnIndex(col++);
-            const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
+            const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m %H:%M");
             ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
 
             ImGui::TableSetColumnIndex(col++);
             if (tasksAdminMode && editableTask) {
                 const std::string deadlineText = task->deadlineAt > 0 ? FormatTimestamp(task->deadlineAt, "%Y-%m-%d %H:%M") : std::string();
-                std::string buttonLabel = deadlineText.empty() ? std::string(u8"Установить") : deadlineText;
+                std::string buttonLabel = task->deadlineAt > 0
+                    ? FormatTimestamp(task->deadlineAt, "%d.%m %H:%M")
+                    : std::string(u8"+");
                 if (ImGui::Button(buttonLabel.c_str(), ImVec2(-1.0f, 0.0f))) {
                     std::snprintf(state.taskInlineDeadlineBuffer.data(), state.taskInlineDeadlineBuffer.size(), "%s", deadlineText.c_str());
                     state.taskInlineDeadlineEditId = task->id;
                     ImGui::OpenPopup("deadline_popup");
+                }
+                if (!deadlineText.empty() && ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", deadlineText.c_str());
                 }
                 if (ImGui::BeginPopup("deadline_popup")) {
                     ImGui::TextDisabled(u8"Дедлайн (YYYY-MM-DD HH:MM)");
@@ -2596,11 +2618,15 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::EndPopup();
                 }
             } else if (task->deadlineAt > 0) {
-                const std::string deadline = FormatTimestamp(task->deadlineAt, "%d.%m.%Y %H:%M");
+                const std::string deadline = FormatTimestamp(task->deadlineAt, "%d.%m %H:%M");
                 if (overdue) {
                     ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadline.c_str());
                 } else {
                     ImGui::TextUnformatted(deadline.c_str());
+                }
+                if (ImGui::IsItemHovered()) {
+                    const std::string fullDeadline = FormatTimestamp(task->deadlineAt, "%Y-%m-%d %H:%M");
+                    ImGui::SetTooltip("%s", fullDeadline.c_str());
                 }
             } else {
                 ImGui::TextDisabled("-");
@@ -2683,7 +2709,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextDisabled("%s", ClassificationLabel(task->category));
             if (xpPending) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP handoff");
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Ожидает выдачи XP");
+                }
             }
             if (!task->description.empty() && taskTitleHovered) {
                 ImGui::BeginTooltip();
@@ -2758,20 +2787,26 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int normalizedPriority = NormalizeTaskPriority(task->priority);
             if (tasksAdminMode) {
                 int draftPriority = normalizedPriority;
-                const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
+                const char* priorityLabels[] = {"P1", "P2", "P3", "P4"};
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_priority_row", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
                     UpdateTaskPriority(task->id, draftPriority);
                 }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", TaskPriorityLabel(draftPriority));
+                }
             } else {
                 if (normalizedPriority >= kTaskPriorityCritical) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityLabel(normalizedPriority));
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityCode(normalizedPriority));
                 } else if (normalizedPriority >= kTaskPriorityHigh) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityLabel(normalizedPriority));
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityCode(normalizedPriority));
                 } else if (normalizedPriority <= kTaskPriorityLow) {
-                    ImGui::TextDisabled("%s", TaskPriorityLabel(normalizedPriority));
+                    ImGui::TextDisabled("%s", TaskPriorityCode(normalizedPriority));
                 } else {
-                    ImGui::TextUnformatted(TaskPriorityLabel(normalizedPriority));
+                    ImGui::TextUnformatted(TaskPriorityCode(normalizedPriority));
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", TaskPriorityLabel(normalizedPriority));
                 }
             }
 
@@ -2779,25 +2814,40 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int normalizedStatus = NormalizeTaskStatus(task->status);
             if (tasksAdminMode) {
                 int draftStatus = normalizedStatus;
-                const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
+                const char* statusLabels[] = {u8"Нов.", u8"Раб.", u8"Гот."};
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_status_row", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
                     UpdateTaskStatus(task->id, draftStatus);
                 }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", TaskStatusLabel(draftStatus));
+                }
                 if (overdue) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Дедлайн сорван");
+                    ImGui::SameLine();
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "!");
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(u8"Дедлайн сорван");
+                    }
                 }
             } else if (normalizedStatus == kTaskStatusDone) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusLabel(normalizedStatus));
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusShortLabel(normalizedStatus));
             } else if (overdue) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusLabel(normalizedStatus));
-                ImGui::TextDisabled(u8"Дедлайн сорван");
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusShortLabel(normalizedStatus));
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "!");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Дедлайн сорван");
+                }
             } else {
-                ImGui::TextUnformatted(TaskStatusLabel(normalizedStatus));
+                ImGui::TextUnformatted(TaskStatusShortLabel(normalizedStatus));
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", TaskStatusLabel(normalizedStatus));
             }
             const std::string actionNeededSummary = BuildTaskActionNeededSummary(*task, nowSec);
             if (!actionNeededSummary.empty()) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Действие");
+                ImGui::SameLine();
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"•");
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", actionNeededSummary.c_str());
                 }
