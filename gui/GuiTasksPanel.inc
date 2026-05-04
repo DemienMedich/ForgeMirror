@@ -1376,15 +1376,64 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
 
+    const std::int64_t workNowSec = NowSeconds();
+    const std::int64_t workDayStart = StartOfLocalDay(workNowSec);
+    const std::int64_t workDayEnd = workDayStart + 86400;
     int filteredActiveTasks = 0;
+    int filteredOverdueTasks = 0;
+    int filteredTodayTasks = 0;
+    int filteredXpPendingTasks = 0;
+    int filteredCriticalTasks = 0;
     int filteredPipelineMissing = 0;
     int filteredPipelineUnknown = 0;
     int filteredPipelineBranching = 0;
     int filteredPipelineFinalOpen = 0;
+    const TaskEntry* workFocusTask = nullptr;
+    auto ShouldPromoteWorkFocus = [&](const TaskEntry* candidate, const TaskEntry* current) {
+        if (!candidate) return false;
+        if (!current) return true;
+        const bool candidateOverdue = candidate->deadlineAt > 0 && candidate->deadlineAt < workNowSec &&
+                                      NormalizeTaskStatus(candidate->status) != kTaskStatusDone;
+        const bool currentOverdue = current->deadlineAt > 0 && current->deadlineAt < workNowSec &&
+                                    NormalizeTaskStatus(current->status) != kTaskStatusDone;
+        if (candidateOverdue != currentOverdue) return candidateOverdue;
+        const int candidatePriority = NormalizeTaskPriority(candidate->priority);
+        const int currentPriority = NormalizeTaskPriority(current->priority);
+        if (candidatePriority != currentPriority) return candidatePriority > currentPriority;
+        const std::int64_t candidateDeadline = candidate->deadlineAt > 0
+            ? candidate->deadlineAt
+            : std::numeric_limits<std::int64_t>::max();
+        const std::int64_t currentDeadline = current->deadlineAt > 0
+            ? current->deadlineAt
+            : std::numeric_limits<std::int64_t>::max();
+        if (candidateDeadline != currentDeadline) return candidateDeadline < currentDeadline;
+        const int candidateStatus = NormalizeTaskStatus(candidate->status);
+        const int currentStatus = NormalizeTaskStatus(current->status);
+        if (candidateStatus != currentStatus) return candidateStatus > currentStatus;
+        return candidate->createdAt > current->createdAt;
+    };
     for (const TaskEntry* task : filtered) {
         if (!task) continue;
-        if (NormalizeTaskStatus(task->status) == kTaskStatusDone) continue;
+        const int taskStatus = NormalizeTaskStatus(task->status);
+        const bool taskDone = taskStatus == kTaskStatusDone;
+        const bool taskOverdue = task->deadlineAt > 0 && task->deadlineAt < workNowSec && !taskDone;
+        if (TaskNeedsXpAward(*task)) {
+            filteredXpPendingTasks += 1;
+        }
+        if (taskDone) continue;
         ++filteredActiveTasks;
+        if (taskOverdue) {
+            filteredOverdueTasks += 1;
+        }
+        if (task->deadlineAt >= workDayStart && task->deadlineAt < workDayEnd) {
+            filteredTodayTasks += 1;
+        }
+        if (NormalizeTaskPriority(task->priority) >= kTaskPriorityCritical) {
+            filteredCriticalTasks += 1;
+        }
+        if (ShouldPromoteWorkFocus(task, workFocusTask)) {
+            workFocusTask = task;
+        }
         const TaskPipelineProgressInfo progress = DescribeTaskPipelineProgress(state, *task);
         if (progress.state == TaskPipelineProgressState::Missing) {
             filteredPipelineMissing += 1;
@@ -1396,18 +1445,97 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             filteredPipelineFinalOpen += 1;
         }
     }
+    const int filteredPipelineSignalCount = filteredPipelineMissing + filteredPipelineUnknown +
+        filteredPipelineBranching + filteredPipelineFinalOpen;
 
-    if (BeginCard("tasks_pipeline_risks_card")) {
+    if (!tasksAdminMode) {
+        if (BeginCard("tasks_work_queue_card")) {
+            DrawCardHeader(u8"Очередь задач");
+            const int queueColumns = ImGui::GetContentRegionAvail().x < 840.0f ? 2 : 6;
+            if (ImGui::BeginTable("tasks_work_queue_metrics", queueColumns, ImGuiTableFlags_SizingStretchSame)) {
+                int metricIndex = 0;
+                auto DrawQueueMetric = [&](const char* title,
+                                           int value,
+                                           const char* hint,
+                                           int quickFilter,
+                                           const ImVec4& color) {
+                    if ((metricIndex % queueColumns) == 0) {
+                        ImGui::TableNextRow();
+                    }
+                    ImGui::TableSetColumnIndex(metricIndex % queueColumns);
+                    ImVec4 bg = color;
+                    bg.w = value > 0
+                        ? std::clamp(bg.w * 0.12f, 0.06f, 0.16f)
+                        : std::clamp(bg.w * 0.04f, 0.03f, 0.06f);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, ImGui::GetColorU32(bg));
+                    ImGui::TextDisabled("%s", title);
+                    if (value > 0) {
+                        ImGui::TextColored(color, "%d", value);
+                    } else {
+                        ImGui::TextDisabled("0");
+                    }
+                    ImGui::TextDisabled("%s", hint);
+                    if (quickFilter != -1 && ImGui::SmallButton((std::string(u8"Открыть##queue_") + title).c_str())) {
+                        if (quickFilter >= 0) {
+                            state.tasksQuickFilter = quickFilter;
+                        } else if (quickFilter == -2) {
+                            state.tasksQuickFilter = 0;
+                            state.tasksFilterPriority = kTaskPriorityCritical + 1;
+                        }
+                    }
+                    ++metricIndex;
+                };
+                DrawQueueMetric(u8"Активные", filteredActiveTasks, u8"в очереди", 7, LogLevelColor(AppLogLevel::Info));
+                DrawQueueMetric(u8"Просрочка", filteredOverdueTasks, u8"срок сорван", 3, LogLevelColor(AppLogLevel::Warning));
+                DrawQueueMetric(u8"Сегодня", filteredTodayTasks, u8"дедлайн", 2, LogLevelColor(AppLogLevel::Info));
+                DrawQueueMetric(u8"Ждут XP", filteredXpPendingTasks, u8"handoff", 6, LogLevelColor(AppLogLevel::Warning));
+                DrawQueueMetric(u8"Критичные", filteredCriticalTasks, u8"приоритет", -2, LogLevelColor(AppLogLevel::Error));
+                DrawQueueMetric(u8"Pipeline", filteredPipelineSignalCount, u8"сигналы", -1,
+                                filteredPipelineSignalCount > 0 ? LogLevelColor(AppLogLevel::Warning) : LogLevelColor(AppLogLevel::Info));
+                ImGui::EndTable();
+            }
+            if (workFocusTask) {
+                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::TextDisabled(u8"Фокус");
+                ImGui::SameLine();
+                const std::string focusTitle = TaskDisplayTitle(*workFocusTask).empty()
+                    ? workFocusTask->id
+                    : TaskDisplayTitle(*workFocusTask);
+                ImGui::TextUnformatted(focusTitle.c_str());
+                if (workFocusTask->deadlineAt > 0) {
+                    ImGui::SameLine();
+                    const std::string deadlineText = FormatTimestamp(workFocusTask->deadlineAt, "%d.%m %H:%M");
+                    const bool overdue = workFocusTask->deadlineAt < workNowSec;
+                    if (overdue) {
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadlineText.c_str());
+                    } else {
+                        ImGui::TextDisabled("%s", deadlineText.c_str());
+                    }
+                }
+                if (ImGui::Button(u8"Открыть фокус", ImVec2(-1.0f, 0.0f))) {
+                    state.tasksExpandedId = workFocusTask->id;
+                }
+            } else {
+                ImGui::TextDisabled(u8"По текущему фильтру нет активных задач.");
+            }
+        }
+        EndCard();
+        ImGui::Spacing();
+    }
+
+    const bool drawPipelineRiskDetails = tasksAdminMode ||
+        (filteredPipelineSignalCount > 0 &&
+         ImGui::CollapsingHeader((u8"Pipeline-сигналы (" +
+             std::to_string(filteredPipelineSignalCount) + ")").c_str()));
+    if (drawPipelineRiskDetails && BeginCard("tasks_pipeline_risks_card")) {
         DrawCardHeader(u8"Пайплайн-риски");
         if (state.pipelineSteps.empty()) {
             ImGui::TextDisabled(u8"Пайплайн не настроен.");
         } else if (filteredActiveTasks == 0) {
             ImGui::TextDisabled(u8"По текущему фильтру нет активных задач.");
         } else {
-            const int totalSignals = filteredPipelineMissing + filteredPipelineUnknown +
-                filteredPipelineBranching + filteredPipelineFinalOpen;
             ImGui::TextDisabled(u8"Активных задач по фильтру: %d | сигналов: %d",
-                                filteredActiveTasks, totalSignals);
+                                filteredActiveTasks, filteredPipelineSignalCount);
             const int riskColumns = ImGui::GetContentRegionAvail().x < 760.0f ? 2 : 4;
             if (ImGui::BeginTable("tasks_pipeline_risks_table", riskColumns, ImGuiTableFlags_SizingStretchSame)) {
                 int metricIndex = 0;
@@ -1444,13 +1572,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                LogLevelColor(AppLogLevel::Info), u8"handoff не закрыт");
                 ImGui::EndTable();
             }
-            if (totalSignals == 0) {
+            if (filteredPipelineSignalCount == 0) {
                 ImGui::TextDisabled(u8"Критичных pipeline-сигналов по текущему фильтру нет.");
             }
         }
+        EndCard();
+        ImGui::Spacing();
     }
-    EndCard();
-    ImGui::Spacing();
 
     for (auto it = state.taskSelectionIds.begin(); it != state.taskSelectionIds.end();) {
         const bool exists = std::any_of(state.tasks.begin(), state.tasks.end(),
