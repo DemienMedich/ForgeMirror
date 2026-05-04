@@ -2463,10 +2463,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     const float taskLayoutGap = style.ItemSpacing.x;
     const float detailPanelWidth = std::clamp(taskLayoutWidth * 0.30f, 320.0f, 400.0f);
     const bool useTaskSplitView = (taskLayoutWidth - detailPanelWidth - taskLayoutGap) >= 1040.0f;
+    float taskSplitPaneHeight = 0.0f;
     if (useTaskSplitView) {
         const float listPanelWidth = std::max(0.0f, taskLayoutWidth - detailPanelWidth - taskLayoutGap);
-        ImGui::BeginChild("tasks_master_column", ImVec2(listPanelWidth, 0.0f), ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar);
+        taskSplitPaneHeight = std::max(420.0f, ImGui::GetContentRegionAvail().y);
+        ImGui::BeginChild("tasks_master_column", ImVec2(listPanelWidth, taskSplitPaneHeight), ImGuiChildFlags_Border,
+                          ImGuiWindowFlags_HorizontalScrollbar);
     }
 
     auto CollectTaskTableAssigneeNames = [&](const TaskEntry& task) -> std::vector<std::string> {
@@ -2829,8 +2831,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (useTaskSplitView) {
         ImGui::EndChild();
         ImGui::SameLine();
-        ImGui::BeginChild("tasks_detail_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar);
+        ImGui::BeginChild("tasks_detail_column", ImVec2(0.0f, taskSplitPaneHeight), ImGuiChildFlags_Border);
     }
 
     const TaskEntry* expanded = nullptr;
