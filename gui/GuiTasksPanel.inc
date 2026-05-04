@@ -267,6 +267,19 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         return false;
     };
 
+    auto UpdateTaskText = [&](const std::string& taskId, const std::string& title, const std::string& description) -> bool {
+        AppMutationResult mutation = AppUpdateTaskText(
+            state.storageDir, state.tasks, taskId, title, description, ResolveTaskActor(), &state.taskAudit);
+        if (mutation.ok) {
+            if (mutation.changed) {
+                SetStatus(state, u8"Текст задачи обновлён.", 0.45f, 0.9f, 0.45f);
+            }
+            return true;
+        }
+        SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
+        return false;
+    };
+
     auto UpdateTaskCategory = [&](const std::string& taskId, int newCategory) -> bool {
         AppMutationResult mutation = AppUpdateTaskCategory(
             state.storageDir, state.tasks, taskId, newCategory, ResolveTaskActor(), &state.taskAudit);
@@ -3146,6 +3159,55 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
                 const TaskPipelineProgressInfo editablePipelineProgress = DescribeTaskPipelineProgress(state, *editableTask);
                 const int currentEditableStatus = NormalizeTaskStatus(editableTask->status);
+
+                if (ImGui::CollapsingHeader(u8"Название и описание",
+                                            state.taskInlineTextEditId == editableTask->id ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
+                    if (state.taskInlineTextEditId != editableTask->id) {
+                        ImGui::TextDisabled(u8"Название");
+                        ImGui::TextWrapped("%s", editableTask->title.empty() ? u8"Без названия" : editableTask->title.c_str());
+                        ImGui::Spacing();
+                        ImGui::TextDisabled(u8"Описание");
+                        ImGui::TextWrapped("%s", editableTask->description.empty() ? u8"Без описания" : editableTask->description.c_str());
+                        ImGui::Spacing();
+                        if (ImGui::Button(u8"Редактировать текст", ImVec2(-1.0f, 0.0f))) {
+                            std::snprintf(state.taskInlineTitleBuffer.data(), state.taskInlineTitleBuffer.size(),
+                                          "%s", editableTask->title.c_str());
+                            std::snprintf(state.taskInlineDescriptionBuffer.data(), state.taskInlineDescriptionBuffer.size(),
+                                          "%s", editableTask->description.c_str());
+                            state.taskInlineTextEditId = editableTask->id;
+                        }
+                    } else {
+                        ImGui::TextDisabled(u8"Название");
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::InputTextWithHint("##task_detail_title_edit", u8"Что нужно сделать",
+                                                 state.taskInlineTitleBuffer.data(), state.taskInlineTitleBuffer.size());
+                        ImGui::TextDisabled(u8"Описание");
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::InputTextMultiline("##task_detail_description_edit",
+                                                  state.taskInlineDescriptionBuffer.data(),
+                                                  state.taskInlineDescriptionBuffer.size(),
+                                                  ImVec2(-1.0f, 110.0f));
+                        if (ImGui::BeginTable("task_detail_text_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            if (ImGui::Button(u8"Сохранить текст", ImVec2(-1.0f, 0.0f))) {
+                                if (UpdateTaskText(editableTask->id,
+                                                   state.taskInlineTitleBuffer.data(),
+                                                   state.taskInlineDescriptionBuffer.data())) {
+                                    state.taskInlineTextEditId.clear();
+                                }
+                            }
+                            ImGui::TableSetColumnIndex(1);
+                            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                                state.taskInlineTextEditId.clear();
+                                state.taskInlineTitleBuffer.fill('\0');
+                                state.taskInlineDescriptionBuffer.fill('\0');
+                            }
+                            ImGui::EndTable();
+                        }
+                    }
+                }
+
                 if (ImGui::CollapsingHeader(u8"Параметры задачи", ImGuiTreeNodeFlags_DefaultOpen)) {
                     const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
                     const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};

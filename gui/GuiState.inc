@@ -209,6 +209,9 @@ struct GuiRuntimeState {
     bool taskBulkDeletePopupRequest = false;
     std::array<char, 20> taskInlineDeadlineBuffer{};
     std::string taskInlineDeadlineEditId;
+    std::array<char, 128> taskInlineTitleBuffer{};
+    std::array<char, 512> taskInlineDescriptionBuffer{};
+    std::string taskInlineTextEditId;
     std::vector<char> taskInlineAssigneeFlags;
     std::string taskInlineAssigneeEditId;
     std::vector<char> taskInlineSkillFlags;

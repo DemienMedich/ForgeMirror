@@ -107,6 +107,14 @@ AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
                                         const std::string& actor,
                                         std::vector<TaskAuditEntry>* auditCache = nullptr);
 
+AppMutationResult AppUpdateTaskText(const std::filesystem::path& storageDir,
+                                    std::vector<TaskEntry>& tasks,
+                                    const std::string& taskId,
+                                    const std::string& title,
+                                    const std::string& description,
+                                    const std::string& actor,
+                                    std::vector<TaskAuditEntry>* auditCache = nullptr);
+
 AppMutationResult AppUpdateTaskCategory(const std::filesystem::path& storageDir,
                                         std::vector<TaskEntry>& tasks,
                                         const std::string& taskId,

@@ -5,7 +5,10 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <cmath>
 
+#include "AppProfileMutationService.h"
+#include "AppTaskProjectService.h"
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
 #include "IJobStorage.h"
@@ -81,6 +84,37 @@ static bool TestTasksPipelineRoundtrip(const std::filesystem::path& dir) {
            std::filesystem::exists(dir / "meta" / "task-audit.log");
 }
 
+static bool TestTaskTextMutation(const std::filesystem::path& dir) {
+    std::vector<TaskEntry> tasks;
+    TaskEntry task;
+    task.id = "task_text";
+    task.title = "Old title";
+    task.description = "Old description";
+    task.createdAt = 1700000000;
+    tasks.push_back(task);
+
+    std::vector<TaskAuditEntry> audit;
+    AppMutationResult result = AppUpdateTaskText(
+        dir, tasks, task.id, "New title", "New description", "admin", &audit);
+    if (!result.ok || !result.changed || tasks[0].title != "New title" ||
+        tasks[0].description != "New description") {
+        return false;
+    }
+
+    std::string saved;
+    if (!ReadFile(dir / "meta" / "tasks.json", saved)) return false;
+    if (saved.find("\"title\":\"New title\"") == std::string::npos ||
+        saved.find("\"description\":\"New description\"") == std::string::npos) {
+        return false;
+    }
+
+    std::string auditLog;
+    if (!ReadFile(dir / "meta" / "task-audit.log", auditLog)) return false;
+    return auditLog.find("|title|Old title|New title") != std::string::npos &&
+           auditLog.find("|description|Old description|New description") != std::string::npos &&
+           audit.size() == 2;
+}
+
 static bool TestSyncHealthDetectsBrokenFiles(const std::filesystem::path& dir) {
     if (!WriteFile(dir / "meta" / "tasks.json", "{broken")) return false;
     if (!WriteFile(dir / "meta" / "pipeline.json", "{\"steps\":[{\"id\":\"p1\"}]}")) return false;
@@ -133,6 +167,60 @@ static bool TestProfileSpirit(const std::filesystem::path& dir) {
     if (!storage->set_active_profile(legacyInfo->id)) return false;
     auto legacyLoaded = storage->load_profile();
     return legacyLoaded && legacyLoaded->spirit() == ProfileSpirit::None;
+}
+
+static bool TestEvilSpiritRemovalForCoins(const std::filesystem::path& dir) {
+    std::unique_ptr<IJobStorage> storage(CreateFileStorage(dir));
+
+    Profile buyer("Buyer");
+    buyer.set_wallet_balance(250.0);
+    buyer.set_spirit(ProfileSpirit::Evil);
+    auto buyerInfo = storage->create_profile(buyer);
+    if (!buyerInfo) return false;
+    if (!storage->set_active_profile(buyerInfo->id)) return false;
+    if (!storage->save_profile(buyer)) return false;
+
+    StorageVaultData vault = LoadStorageVault(dir);
+    vault.balance = 10.0;
+    if (!SaveStorageVault(dir, vault)) return false;
+    vault = LoadStorageVault(dir);
+
+    AppProfileMutationResult result = AppRemoveEvilSpiritForCoins(
+        *storage, buyerInfo->id, buyerInfo->id, dir, vault, 200.0);
+    if (!result.ok || !result.changed || !result.profile) return false;
+    if (result.profile->spirit() != ProfileSpirit::None) return false;
+    if (std::abs(result.profile->wallet_balance() - 50.0) > 0.000001) return false;
+    if (std::abs(vault.balance - 210.0) > 0.000001) return false;
+    if (vault.log.empty() || vault.log.back().action != "spirit_cleanup") return false;
+
+    if (!storage->set_active_profile(buyerInfo->id)) return false;
+    auto savedBuyer = storage->load_profile();
+    if (!savedBuyer || savedBuyer->spirit() != ProfileSpirit::None ||
+        std::abs(savedBuyer->wallet_balance() - 50.0) > 0.000001) {
+        return false;
+    }
+    const StorageVaultData savedVault = LoadStorageVault(dir);
+    if (std::abs(savedVault.balance - 210.0) > 0.000001) return false;
+
+    Profile poor("Poor");
+    poor.set_wallet_balance(100.0);
+    poor.set_spirit(ProfileSpirit::Evil);
+    auto poorInfo = storage->create_profile(poor);
+    if (!poorInfo) return false;
+    if (!storage->set_active_profile(poorInfo->id)) return false;
+    if (!storage->save_profile(poor)) return false;
+
+    AppProfileMutationResult foreignResult = AppRemoveEvilSpiritForCoins(
+        *storage, buyerInfo->id, poorInfo->id, dir, vault, 200.0);
+    if (foreignResult.ok || !foreignResult.userError) return false;
+
+    AppProfileMutationResult poorResult = AppRemoveEvilSpiritForCoins(
+        *storage, poorInfo->id, poorInfo->id, dir, vault, 200.0);
+    if (poorResult.ok || !poorResult.userError) return false;
+    if (!storage->set_active_profile(poorInfo->id)) return false;
+    auto savedPoor = storage->load_profile();
+    return savedPoor && savedPoor->spirit() == ProfileSpirit::Evil &&
+           std::abs(savedPoor->wallet_balance() - 100.0) <= 0.000001;
 }
 
 static bool TestWhitelist(const std::filesystem::path& dir) {
@@ -345,8 +433,10 @@ int main() {
 
     const bool okProfile = TestProfileRank();
     const bool okSpirit = TestProfileSpirit(tmp / "spirit");
+    const bool okSpiritRemoval = TestEvilSpiritRemovalForCoins(tmp / "spirit_removal");
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
+    const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okSyncHealth = TestSyncHealthDetectsBrokenFiles(tmp);
@@ -364,7 +454,7 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okSpirit && okRules && okTasks && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -372,8 +462,10 @@ int main() {
     std::cerr << "smoke_core failed: "
               << "profile=" << okProfile
               << " spirit=" << okSpirit
+              << " spiritRemoval=" << okSpiritRemoval
               << " rules=" << okRules
               << " tasks=" << okTasks
+              << " taskText=" << okTaskText
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
               << " vault=" << okVault
