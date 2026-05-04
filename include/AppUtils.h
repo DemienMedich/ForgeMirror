@@ -16,7 +16,7 @@ struct ModuleToggles {
     bool shortcuts = true;
     bool pomodoro = true;
     bool cloud = true;
-    bool view3d = true;
+    bool view3d = false;
     bool professions = true;
 };
 

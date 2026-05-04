@@ -935,7 +935,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             if (ImGui::MenuItem(u8"Ярлыки")) {
                 OpenWorkspaceTab(state, state.showShortcuts, UiWindowId::Shortcuts);
             }
-            if (ImGui::MenuItem(u8"3D просмотр")) {
+            if (state.modules.view3d && ImGui::MenuItem(u8"3D просмотр")) {
                 OpenWorkspaceTab(state, state.showView3d, UiWindowId::View3D);
             }
             if (ImGui::MenuItem(u8"Настройки")) {
@@ -955,7 +955,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 if (ImGui::MenuItem(u8"Правила", "F4")) {
                     OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
                 }
-                if (ImGui::MenuItem(u8"3D настройки")) {
+                if (state.modules.view3d && ImGui::MenuItem(u8"3D настройки")) {
                     OpenWorkspaceTab(state, state.showView3dSettings, UiWindowId::View3DSettings);
                 }
                 if (ImGui::MenuItem(u8"Баннер")) {

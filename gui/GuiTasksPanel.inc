@@ -426,31 +426,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         state.showTaskCreateForm = false;
     }
 
-    if (BeginCard("tasks_mode_card")) {
-        DrawCardHeader(u8"Режим задач");
-        if (!state.isAdmin) {
-            ImGui::TextDisabled(u8"Оперативно: текущие задачи, дедлайны, фильтры и детали без админских правок.");
-        } else {
-            const bool stackModes = ImGui::GetContentRegionAvail().x < 540.0f;
-            auto DrawModeButton = [&](const char* label, int mode) {
-                const bool selected = state.tasksViewMode == mode;
-                if (selected) ImGui::BeginDisabled();
-                if (ImGui::Button(label, ImVec2(stackModes ? -1.0f : 190.0f, 0.0f))) {
-                    SetTasksViewMode(mode);
-                }
-                if (selected) ImGui::EndDisabled();
-            };
-            DrawModeButton(u8"Оперативно", 0);
-            if (!stackModes) ImGui::SameLine();
-            DrawModeButton(u8"Администрирование", 1);
-            ImGui::TextDisabled(tasksAdminMode
-                ? u8"Админ-режим: создание задач, проекты, аудит, массовые действия и inline-правки."
-                : u8"Рабочий режим: таблица, дедлайны, фильтры и детали без лишних админских блоков.");
-        }
-    }
-    EndCard();
-    ImGui::Spacing();
-
     if (tasksAdminMode && state.showTaskCreateForm) {
         if (BeginCard("tasks_create_card")) {
             DrawCardHeader(u8"Создать задачу");
@@ -1094,11 +1069,35 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         accent.w = 1.0f;
         return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
     };
+    auto DrawTasksModeSwitch = [&](bool fullWidth) {
+        if (!state.isAdmin) {
+            ImGui::TextDisabled(u8"Оперативно");
+            return;
+        }
+        const float modeWidth = fullWidth
+            ? std::max(88.0f, (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f)
+            : 86.0f;
+        auto drawMode = [&](const char* label, int mode) {
+            const bool selected = state.tasksViewMode == mode;
+            if (selected) ImGui::BeginDisabled();
+            if (ImGui::Button(label, ImVec2(modeWidth, 0.0f))) {
+                SetTasksViewMode(mode);
+            }
+            if (selected) ImGui::EndDisabled();
+        };
+        drawMode(u8"Опер.", 0);
+        ImGui::SameLine();
+        drawMode(u8"Админ", 1);
+    };
     if (BeginCard("tasks_toolbar_card")) {
-        DrawCardHeader(u8"Быстрый доступ");
+        DrawCardHeader(u8"Рабочая панель");
         const bool compactToolbar = ImGui::GetContentRegionAvail().x < 760.0f;
         int requestedQuickFilter = state.tasksQuickFilter;
         if (compactToolbar) {
+            if (state.isAdmin) {
+                ImGui::TextDisabled(u8"Режим");
+                DrawTasksModeSwitch(true);
+            }
             ImGui::TextDisabled(u8"Быстрый фильтр");
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::Combo("##tasks_quick_filter", &requestedQuickFilter,
@@ -1109,6 +1108,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     state.tasksQuickFilter = requestedQuickFilter;
                 }
             }
+            ImGui::TextDisabled(u8"Поиск");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##tasks_toolbar_search_compact",
+                                     u8"Проект, задача или описание",
+                                     state.filters.tasks.data(), state.filters.tasks.size());
             if (state.isAdmin) {
                 const UiIcon createIcon = (tasksAdminMode && state.showTaskCreateForm) ? UiIcon::Stop : UiIcon::Plus;
                 if (TaskIconButton("tasks_toolbar_create_compact", createIcon, TaskCreateButtonLabel(),
@@ -1120,17 +1124,26 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (TaskIconButton("tasks_toolbar_reset_compact", UiIcon::Refresh, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
-        } else if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 4 : 3,
+        } else if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 5 : 3,
                                      ImGuiTableFlags_SizingStretchProp)) {
             const float toolbarIconColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
-            ImGui::TableSetupColumn("tasks_toolbar_filter", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-            ImGui::TableSetupColumn("tasks_toolbar_hint", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            if (state.isAdmin) {
+                ImGui::TableSetupColumn("tasks_toolbar_mode", ImGuiTableColumnFlags_WidthFixed, 190.0f);
+            }
+            ImGui::TableSetupColumn("tasks_toolbar_filter", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+            ImGui::TableSetupColumn("tasks_toolbar_search", ImGuiTableColumnFlags_WidthStretch, 1.45f);
             if (state.isAdmin) {
                 ImGui::TableSetupColumn("tasks_toolbar_create", ImGuiTableColumnFlags_WidthFixed, toolbarIconColumn);
             }
             ImGui::TableSetupColumn("tasks_toolbar_reset", ImGuiTableColumnFlags_WidthFixed, toolbarIconColumn);
             ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
+            int toolbarColumn = 0;
+            if (state.isAdmin) {
+                ImGui::TableSetColumnIndex(toolbarColumn++);
+                ImGui::TextDisabled(u8"Режим");
+                DrawTasksModeSwitch(false);
+            }
+            ImGui::TableSetColumnIndex(toolbarColumn++);
             ImGui::TextDisabled(u8"Быстрый фильтр");
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::Combo("##tasks_quick_filter", &requestedQuickFilter,
@@ -1141,20 +1154,21 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     state.tasksQuickFilter = requestedQuickFilter;
                 }
             }
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextDisabled(u8"Сейчас");
-            ImGui::TextUnformatted(quickFilterLabels[state.tasksQuickFilter]);
+            ImGui::TableSetColumnIndex(toolbarColumn++);
+            ImGui::TextDisabled(u8"Поиск");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##tasks_toolbar_search",
+                                     u8"Проект, задача или описание",
+                                     state.filters.tasks.data(), state.filters.tasks.size());
             if (state.isAdmin) {
-                ImGui::TableSetColumnIndex(2);
+                ImGui::TableSetColumnIndex(toolbarColumn++);
                 const UiIcon createIcon = (tasksAdminMode && state.showTaskCreateForm) ? UiIcon::Stop : UiIcon::Plus;
                 if (TaskIconButton("tasks_toolbar_create", createIcon, TaskCreateButtonLabel(),
                                    true, tasksAdminMode && state.showTaskCreateForm)) {
                     ToggleTaskCreateFlow();
                 }
-                ImGui::TableSetColumnIndex(3);
-            } else {
-                ImGui::TableSetColumnIndex(2);
             }
+            ImGui::TableSetColumnIndex(toolbarColumn++);
             if (TaskIconButton("tasks_toolbar_reset", UiIcon::Refresh, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
