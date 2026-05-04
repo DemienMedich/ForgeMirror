@@ -2937,21 +2937,23 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         if (BeginCard("tasks_detail_card")) {
             DrawCardHeader(u8"Детали задачи");
+            std::string title = expanded->title;
+            if (title.empty()) title = u8"Без названия";
             const float detailHeadlineWidth = ImGui::GetContentRegionAvail().x;
             if (detailHeadlineWidth < 300.0f) {
-                ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
+                ImGui::TextWrapped("%s", title.c_str());
                 ImGui::SameLine();
                 if (TaskIconButton("task_detail_close_compact", UiIcon::Exit, u8"Скрыть детали задачи")) {
                     state.tasksExpandedId.clear();
                 }
             } else if (ImGui::BeginTable("task_detail_headline", 2, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("task_detail_note", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("task_detail_title", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed,
                                         ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::PushTextWrapPos(0.0f);
-                ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
+                ImGui::TextUnformatted(title.c_str());
                 ImGui::PopTextWrapPos();
                 ImGui::TableSetColumnIndex(1);
                 if (TaskIconButton("task_detail_close", UiIcon::Exit, u8"Скрыть детали задачи")) {
@@ -2959,9 +2961,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::EndTable();
             }
-            std::string title = expanded->title;
-            if (title.empty()) title = u8"Без названия";
-            ImGui::TextUnformatted(title.c_str());
             const std::string projectName = ResolveTaskProjectName(state, *expanded);
             const std::string pipelineName = ResolveTaskPipelineName(state, *expanded);
             const TaskPipelineProgressInfo expandedPipelineProgress = DescribeTaskPipelineProgress(state, *expanded);
@@ -3082,13 +3081,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextDisabled(u8"Следующее действие");
             if (tasksAdminMode && editableTask && !editableTask->id.empty()) {
                 if (detailNeedsXpAward) {
-                    ImGui::TextWrapped(u8"Задача уже закрыта. Остался handoff XP: распределить вклад, навыки и применить штрафы.");
+                    ImGui::TextDisabled(u8"Закрыта без XP.");
                     if (ImGui::Button(u8"Выдать XP по задаче", ImVec2(-1.0f, 0.0f))) {
                         StartTaskXpFlow(editableTask->id, true);
                     }
                 } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing &&
                            !detailQuickPipelineTargets.empty()) {
-                    ImGui::TextWrapped(u8"Задача вне пайплайна. Сначала назначьте стартовый этап, чтобы статус можно было отслеживать.");
+                    ImGui::TextDisabled(u8"Назначьте стартовый этап.");
                     DrawTaskPipelineQuickActionButtons("task_detail_next_missing_pipeline",
                                                        editableTask->id,
                                                        detailQuickPipelineTargets);
@@ -3096,24 +3095,24 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
                                        u8"Текущий этап отсутствует в схеме. Ниже нужен ручной выбор корректного этапа.");
                 } else if (detailStatus == kTaskStatusNew) {
-                    ImGui::TextWrapped(u8"Задача поставлена, но ещё не в работе.");
+                    ImGui::TextDisabled(u8"Ожидает старта.");
                     if (ImGui::Button(u8"Перевести в работу", ImVec2(-1.0f, 0.0f))) {
                         UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
                     }
                 } else if (detailStatus == kTaskStatusInProgress) {
                     if (!detailQuickPipelineTargets.empty()) {
-                        ImGui::TextWrapped(u8"Следующий безопасный шаг — продвинуть задачу по pipeline.");
+                        ImGui::TextDisabled(u8"Следующий pipeline-шаг.");
                         DrawTaskPipelineQuickActionButtons("task_detail_next_pipeline",
                                                            editableTask->id,
                                                            detailQuickPipelineTargets);
                     } else {
-                        ImGui::TextWrapped(u8"Дальше pipeline-переходов нет. Если работа завершена, закройте задачу через XP handoff.");
+                        ImGui::TextDisabled(u8"Переходов дальше нет.");
                         if (ImGui::Button(u8"Закрыть и выдать XP", ImVec2(-1.0f, 0.0f))) {
                             StartTaskXpFlow(editableTask->id, true);
                         }
                     }
                 } else if (detailStatus == kTaskStatusDone && detailHasRecordedXp) {
-                    ImGui::TextWrapped(u8"Задача закрыта, XP уже записан. Reopen доступен только в статус 'В работе'.");
+                    ImGui::TextDisabled(u8"Закрыта, XP записан.");
                     if (ImGui::Button(u8"Вернуть в работу", ImVec2(-1.0f, 0.0f))) {
                         UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
                     }
@@ -3132,7 +3131,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
 
-            if (ImGui::CollapsingHeader(u8"Контекст задачи", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader(u8"Контекст задачи")) {
                 if (!expanded->description.empty()) {
                     ImGui::TextDisabled(u8"Описание");
                     ImGui::TextWrapped("%s", expanded->description.c_str());
@@ -3242,7 +3241,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 }
 
-                if (ImGui::CollapsingHeader(u8"Параметры задачи", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader(u8"Параметры задачи")) {
                     const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
                     const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
                     if (ImGui::BeginTable("task_detail_admin_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
@@ -3337,7 +3336,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 }
 
-                if (ImGui::CollapsingHeader(u8"Пайплайн и handoff", ImGuiTreeNodeFlags_DefaultOpen)) {
+                const bool openPipelineAdmin =
+                    editablePipelineProgress.state == TaskPipelineProgressState::Missing ||
+                    editablePipelineProgress.state == TaskPipelineProgressState::Unknown ||
+                    editablePipelineProgress.state == TaskPipelineProgressState::Final ||
+                    TaskNeedsXpAward(*editableTask);
+                if (ImGui::CollapsingHeader(u8"Пайплайн и handoff",
+                                            openPipelineAdmin ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
                     if (editablePipelineProgress.state == TaskPipelineProgressState::Final) {
                         ImGui::TextDisabled(u8"Статус финального handoff");
                         if (currentEditableStatus == kTaskStatusNew) {
