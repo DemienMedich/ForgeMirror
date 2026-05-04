@@ -354,6 +354,35 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         localTm.tm_isdst = -1;
         return static_cast<std::int64_t>(std::mktime(&localTm));
     };
+    auto BuildTaskActionNeededSummary = [&state](const TaskEntry& task, std::int64_t nowSec) -> std::string {
+        std::vector<std::string> reasons;
+        const int status = NormalizeTaskStatus(task.status);
+        if (TaskNeedsXpAward(task)) {
+            reasons.push_back(u8"выдать XP");
+        }
+        if (task.deadlineAt > 0 && task.deadlineAt < nowSec && status != kTaskStatusDone) {
+            reasons.push_back(u8"просрочен дедлайн");
+        }
+        const TaskPipelineProgressInfo progress = DescribeTaskPipelineProgress(state, task);
+        if (progress.state == TaskPipelineProgressState::Missing) {
+            reasons.push_back(u8"назначить этап");
+        } else if (progress.state == TaskPipelineProgressState::Unknown) {
+            reasons.push_back(u8"исправить этап");
+        } else if (progress.state == TaskPipelineProgressState::Final && status != kTaskStatusDone) {
+            reasons.push_back(u8"закрыть handoff");
+        }
+        if (reasons.empty()) return {};
+        std::ostringstream out;
+        out.imbue(std::locale::classic());
+        for (size_t i = 0; i < reasons.size(); ++i) {
+            if (i > 0) out << "; ";
+            out << reasons[i];
+        }
+        return out.str();
+    };
+    auto TaskNeedsAdminAction = [&](const TaskEntry& task, std::int64_t nowSec) -> bool {
+        return !BuildTaskActionNeededSummary(task, nowSec).empty();
+    };
 
     auto ResetTaskFilters = [&state]() {
         state.tasksQuickFilter = 0;
@@ -855,7 +884,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Задач пока нет.");
     }
 
-    auto ComputeFilteredTasks = [&state, &StartOfLocalDay]() {
+    auto ComputeFilteredTasks = [&]() {
         std::vector<const TaskEntry*> ordered;
         ordered.reserve(state.tasks.size());
         for (const auto& task : state.tasks) {
@@ -939,6 +968,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (!TaskNeedsXpAward(*task)) continue;
             } else if (state.tasksQuickFilter == 7) {
                 if (NormalizeTaskStatus(task->status) == kTaskStatusDone) continue;
+            } else if (state.tasksQuickFilter == 8) {
+                if (!TaskNeedsAdminAction(*task, nowSec)) continue;
             }
 
             filtered.push_back(task);
@@ -1024,7 +1055,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         u8"7 дней",
         u8"Без проекта",
         u8"Ждут XP",
-        u8"Активные"
+        u8"Активные",
+        u8"Требуют действий"
     };
     state.tasksQuickFilter = std::clamp(state.tasksQuickFilter, 0, static_cast<int>(IM_ARRAYSIZE(quickFilterLabels)) - 1);
     auto ToggleTaskCreateFlow = [&]() {
@@ -2747,6 +2779,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TextDisabled(u8"Дедлайн сорван");
             } else {
                 ImGui::TextUnformatted(TaskStatusLabel(normalizedStatus));
+            }
+            const std::string actionNeededSummary = BuildTaskActionNeededSummary(*task, nowSec);
+            if (!actionNeededSummary.empty()) {
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Действие");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", actionNeededSummary.c_str());
+                }
             }
 
             ImGui::PopID();
