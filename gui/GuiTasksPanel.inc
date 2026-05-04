@@ -444,7 +444,42 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.taskPlanPriority = NormalizeTaskPriority(state.taskPlanPriority);
             state.taskPlanCategory = std::clamp(state.taskPlanCategory, 0, static_cast<int>(Profile::kCategoryCount - 1));
             state.taskPlanPenaltyPercent = std::clamp(state.taskPlanPenaltyPercent, 0, 100);
+            constexpr int kTaskPlanStepMain = 0;
+            constexpr int kTaskPlanStepAssignees = 1;
+            constexpr int kTaskPlanStepSkills = 2;
+            constexpr int kTaskPlanStepReview = 3;
+            state.taskPlanStep = std::clamp(state.taskPlanStep, kTaskPlanStepMain, kTaskPlanStepReview);
+            auto CountTaskPlanAssignees = [&]() {
+                int count = 0;
+                for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                    if (i < static_cast<int>(state.taskPlanAssignees.size()) &&
+                        state.taskPlanAssignees[i] && !state.profiles[static_cast<size_t>(i)].archived) {
+                        count += 1;
+                    }
+                }
+                return count;
+            };
+            const int plannedAssigneeCount = CountTaskPlanAssignees();
+            const std::vector<std::string> plannedSkillIds = CollectSelectedTaskSkillIds(catalog, state.taskPlanSkillFlags);
 
+            const char* taskPlanStepLabels[] = {u8"1. Основное", u8"2. Исполнители", u8"3. Навыки", u8"4. Проверка"};
+            if (ImGui::BeginTable("task_plan_steps", 4, ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                for (int i = 0; i < 4; ++i) {
+                    ImGui::TableSetColumnIndex(i);
+                    const bool selected = state.taskPlanStep == i;
+                    if (selected) ImGui::BeginDisabled();
+                    if (ImGui::Button(taskPlanStepLabels[i], ImVec2(-1.0f, 0.0f))) {
+                        state.taskPlanStep = i;
+                    }
+                    if (selected) ImGui::EndDisabled();
+                }
+                ImGui::EndTable();
+            }
+            ImGui::TextDisabled(u8"Шаг %d из 4: %s", state.taskPlanStep + 1, taskPlanStepLabels[state.taskPlanStep]);
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+            if (state.taskPlanStep == kTaskPlanStepMain) {
             if (ImGui::BeginTable("tasks_create_form", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("create_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                 ImGui::TableSetupColumn("create_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -587,8 +622,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextMultiline("##task_plan_desc", state.taskPlanDescription.data(),
                                       state.taskPlanDescription.size(), ImVec2(-1.0f, 70.0f));
+            }
 
+            if (state.taskPlanStep == kTaskPlanStepAssignees) {
             ImGui::TextDisabled(u8"Назначить профилям");
+            ImGui::TextDisabled(u8"Выбрано исполнителей: %d", plannedAssigneeCount);
             if (ImGui::BeginTable("task_plan_assignees", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn(u8"№", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.2f);
@@ -619,10 +657,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::EndTable();
             }
+            }
 
+            if (state.taskPlanStep == kTaskPlanStepSkills) {
             ImGui::TextDisabled(u8"Навыки задачи");
-            const std::string plannedSkillSummary = BuildTaskSkillSummary(
-                CollectSelectedTaskSkillIds(catalog, state.taskPlanSkillFlags), catalog, 4);
+            const std::string plannedSkillSummary = BuildTaskSkillSummary(plannedSkillIds, catalog, 4);
             ImGui::TextWrapped("%s", plannedSkillSummary.c_str());
             ImGui::InputTextWithHint("##task_plan_skill_filter", u8"Фильтр навыков",
                                      state.taskPlanSkillFilter.data(), state.taskPlanSkillFilter.size());
@@ -640,8 +679,84 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
             ImGui::EndChild();
+            }
 
-            if (ImGui::Button(u8"Создать задачу", ImVec2(-1.0f, 0.0f))) {
+            if (state.taskPlanStep == kTaskPlanStepReview) {
+                const std::string titlePreview = TrimStringGui(state.taskPlanTitle.data());
+                const std::string deadlinePreview = TrimStringGui(state.taskPlanDeadline.data());
+                std::string projectPreview = u8"Без проекта";
+                if (state.taskPlanProjectIndex > 0) {
+                    const int projectIdx = state.taskPlanProjectIndex - 1;
+                    if (projectIdx >= 0 && projectIdx < static_cast<int>(state.projects.size())) {
+                        projectPreview = state.projects[static_cast<size_t>(projectIdx)].name;
+                    }
+                }
+                std::string pipelinePreview = u8"Без этапа";
+                if (state.taskPlanPipelineIndex > 0) {
+                    const int pipelineIdx = state.taskPlanPipelineIndex - 1;
+                    if (pipelineIdx >= 0 && pipelineIdx < static_cast<int>(state.pipelineSteps.size())) {
+                        pipelinePreview = PipelineDisplayLabel(state.pipelineSteps[static_cast<size_t>(pipelineIdx)], pipelineIdx);
+                    }
+                }
+                DrawCardHeader(u8"Проверка перед созданием");
+                if (ImGui::BeginTable("task_plan_review", 4, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("review_label_l", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                    ImGui::TableSetupColumn("review_value_l", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    ImGui::TableSetupColumn("review_label_r", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                    ImGui::TableSetupColumn("review_value_r", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    auto DrawReviewRow = [&](const char* leftLabel, const std::string& leftValue,
+                                             const char* rightLabel, const std::string& rightValue) {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextDisabled("%s", leftLabel);
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::TextWrapped("%s", leftValue.empty() ? u8"Не задано" : leftValue.c_str());
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::TextDisabled("%s", rightLabel);
+                        ImGui::TableSetColumnIndex(3);
+                        ImGui::TextWrapped("%s", rightValue.empty() ? u8"Не задано" : rightValue.c_str());
+                    };
+                    DrawReviewRow(u8"Название", titlePreview, u8"Дедлайн", deadlinePreview);
+                    DrawReviewRow(u8"Проект", projectPreview, u8"Этап", pipelinePreview);
+                    DrawReviewRow(u8"Категория", ClassificationLabel(state.taskPlanCategory),
+                                  u8"Приоритет", TaskPriorityLabel(state.taskPlanPriority));
+                    DrawReviewRow(u8"Исполнители", std::to_string(plannedAssigneeCount),
+                                  u8"Навыки", BuildTaskSkillSummary(plannedSkillIds, catalog, 3));
+                    ImGui::EndTable();
+                }
+                if (state.taskPlanPenaltyPercent > 0) {
+                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                                       u8"Штраф за дедлайн: -%d%% к итоговому XP.", state.taskPlanPenaltyPercent);
+                }
+                ImGui::TextDisabled(u8"Если задача создаётся сразу со статусом 'Выполнена', после создания откроется распределение XP.");
+            }
+
+            bool createTaskRequested = false;
+            if (ImGui::BeginTable("task_plan_navigation", 3, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("task_plan_back", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("task_plan_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("task_plan_next", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                if (state.taskPlanStep <= kTaskPlanStepMain) ImGui::BeginDisabled();
+                if (ImGui::Button(u8"Назад", ImVec2(-1.0f, 0.0f))) {
+                    state.taskPlanStep = std::max(kTaskPlanStepMain, state.taskPlanStep - 1);
+                }
+                if (state.taskPlanStep <= kTaskPlanStepMain) ImGui::EndDisabled();
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextDisabled(u8"%s", taskPlanStepLabels[state.taskPlanStep]);
+                ImGui::TableSetColumnIndex(2);
+                if (state.taskPlanStep < kTaskPlanStepReview) {
+                    if (ImGui::Button(u8"Далее", ImVec2(-1.0f, 0.0f))) {
+                        state.taskPlanStep = std::min(kTaskPlanStepReview, state.taskPlanStep + 1);
+                    }
+                } else {
+                    createTaskRequested = ImGui::Button(u8"Создать задачу", ImVec2(-1.0f, 0.0f));
+                }
+                ImGui::EndTable();
+            }
+
+            if (createTaskRequested) {
                 const std::string title = TrimStringGui(state.taskPlanTitle.data());
                 const std::string description = TrimStringGui(state.taskPlanDescription.data());
                 const std::string deadlineInput = TrimStringGui(state.taskPlanDeadline.data());
@@ -654,12 +769,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 }
                 if (title.empty()) {
+                    state.taskPlanStep = kTaskPlanStepMain;
                     SetStatus(state, u8"Название задачи обязательно.", 1.0f, 0.45f, 0.45f);
                 } else if (description.empty()) {
+                    state.taskPlanStep = kTaskPlanStepMain;
                     SetStatus(state, u8"Краткое описание обязательно.", 1.0f, 0.45f, 0.45f);
                 } else if (!ParseTaskDeadlineInput(deadlineInput, deadlineTs)) {
+                    state.taskPlanStep = kTaskPlanStepMain;
                     SetStatus(state, u8"Укажите дедлайн в формате YYYY-MM-DD HH:MM.", 1.0f, 0.45f, 0.45f);
                 } else if (assignees.empty()) {
+                    state.taskPlanStep = kTaskPlanStepAssignees;
                     SetStatus(state, u8"Выберите хотя бы один профиль.", 1.0f, 0.45f, 0.45f);
                 } else {
                     TaskEntry task;
@@ -708,6 +827,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         state.taskPlanCreateProjectInline = false;
                         state.taskPlanProjectName.fill('\0');
                         state.taskPlanProjectDesc.fill('\0');
+                        state.taskPlanStep = kTaskPlanStepMain;
                         state.taskPlanSkillFilter.fill('\0');
                         std::fill(state.taskPlanSkillFlags.begin(), state.taskPlanSkillFlags.end(), 0);
                         for (auto& flag : state.taskPlanAssignees) flag = 0;
@@ -721,7 +841,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
 
-            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+            ImGui::Separator();
+            if (ImGui::Button(u8"Добавить опыт без задачи", ImVec2(-1.0f, 0.0f))) {
                 PrepareXpEntries(state, catalog);
                 state.xpPopupRequest = true;
             }
@@ -911,9 +1032,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (!tasksAdminMode) {
             SetTasksViewMode(1);
             state.showTaskCreateForm = true;
+            state.taskPlanStep = 0;
             return;
         }
         state.showTaskCreateForm = !state.showTaskCreateForm;
+        if (state.showTaskCreateForm) {
+            state.taskPlanStep = 0;
+        }
     };
     auto TaskCreateButtonLabel = [&]() -> const char* {
         return (tasksAdminMode && state.showTaskCreateForm) ? u8"Скрыть форму" : u8"Поставить задачу";
