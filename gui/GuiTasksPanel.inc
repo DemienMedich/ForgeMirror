@@ -1075,6 +1075,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     auto TaskCreateButtonLabel = [&]() -> const char* {
         return (tasksAdminMode && state.showTaskCreateForm) ? u8"Скрыть форму" : u8"Поставить задачу";
     };
+    auto TaskIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                             bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
     if (BeginCard("tasks_toolbar_card")) {
         DrawCardHeader(u8"Быстрый доступ");
         const bool compactToolbar = ImGui::GetContentRegionAvail().x < 760.0f;
@@ -1091,21 +1097,25 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
             if (state.isAdmin) {
-                if (ImGui::Button(TaskCreateButtonLabel(), ImVec2(-1.0f, 0.0f))) {
+                const UiIcon createIcon = (tasksAdminMode && state.showTaskCreateForm) ? UiIcon::Stop : UiIcon::Launch;
+                if (TaskIconButton("tasks_toolbar_create_compact", createIcon, TaskCreateButtonLabel(),
+                                   true, tasksAdminMode && state.showTaskCreateForm)) {
                     ToggleTaskCreateFlow();
                 }
+                ImGui::SameLine();
             }
-            if (ImGui::Button(u8"Сбросить фильтры", ImVec2(-1.0f, 0.0f))) {
+            if (TaskIconButton("tasks_toolbar_reset_compact", UiIcon::Refresh, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
         } else if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 4 : 3,
                                      ImGuiTableFlags_SizingStretchProp)) {
+            const float toolbarIconColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
             ImGui::TableSetupColumn("tasks_toolbar_filter", ImGuiTableColumnFlags_WidthStretch, 1.1f);
             ImGui::TableSetupColumn("tasks_toolbar_hint", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             if (state.isAdmin) {
-                ImGui::TableSetupColumn("tasks_toolbar_create", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                ImGui::TableSetupColumn("tasks_toolbar_create", ImGuiTableColumnFlags_WidthFixed, toolbarIconColumn);
             }
-            ImGui::TableSetupColumn("tasks_toolbar_reset", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn("tasks_toolbar_reset", ImGuiTableColumnFlags_WidthFixed, toolbarIconColumn);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled(u8"Быстрый фильтр");
@@ -1123,14 +1133,16 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextUnformatted(quickFilterLabels[state.tasksQuickFilter]);
             if (state.isAdmin) {
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::Button(TaskCreateButtonLabel(), ImVec2(-1.0f, 0.0f))) {
+                const UiIcon createIcon = (tasksAdminMode && state.showTaskCreateForm) ? UiIcon::Stop : UiIcon::Launch;
+                if (TaskIconButton("tasks_toolbar_create", createIcon, TaskCreateButtonLabel(),
+                                   true, tasksAdminMode && state.showTaskCreateForm)) {
                     ToggleTaskCreateFlow();
                 }
                 ImGui::TableSetColumnIndex(3);
             } else {
                 ImGui::TableSetColumnIndex(2);
             }
-            if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+            if (TaskIconButton("tasks_toolbar_reset", UiIcon::Refresh, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
             ImGui::EndTable();
@@ -2687,7 +2699,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             if (tasksAdminMode && editableTask && task->participants.empty()) {
                 ImGui::SameLine();
-                if (ImGui::SmallButton(u8"Изм.")) {
+                if (TaskIconButton("task_row_assignee_edit", UiIcon::Users, u8"Редактировать исполнителей")) {
                     state.taskInlineAssigneeEditId = task->id;
                     if (state.taskInlineAssigneeFlags.size() != state.profiles.size()) {
                         state.taskInlineAssigneeFlags.assign(state.profiles.size(), 0);
@@ -2876,19 +2888,21 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const float detailHeadlineWidth = ImGui::GetContentRegionAvail().x;
             if (detailHeadlineWidth < 300.0f) {
                 ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
-                if (ImGui::SmallButton(u8"Скрыть")) {
+                ImGui::SameLine();
+                if (TaskIconButton("task_detail_close_compact", UiIcon::Exit, u8"Скрыть детали задачи")) {
                     state.tasksExpandedId.clear();
                 }
             } else if (ImGui::BeginTable("task_detail_headline", 2, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("task_detail_note", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed,
+                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 ImGui::PushTextWrapPos(0.0f);
                 ImGui::TextDisabled(u8"Выбор в таблице обновляет эту панель.");
                 ImGui::PopTextWrapPos();
                 ImGui::TableSetColumnIndex(1);
-                if (ImGui::Button(u8"Скрыть", ImVec2(-1.0f, 0.0f))) {
+                if (TaskIconButton("task_detail_close", UiIcon::Exit, u8"Скрыть детали задачи")) {
                     state.tasksExpandedId.clear();
                 }
                 ImGui::EndTable();
