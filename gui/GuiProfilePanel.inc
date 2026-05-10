@@ -900,19 +900,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             balanceDetail = u8"Все категории уже на 10/10.";
             balanceAccent = BlendColor(style.Colors[ImGuiCol_TextDisabled], accent, 0.25f);
         }
-        if (ImGui::BeginTable("profile_kpi", 2, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            DrawKpiCardIcon("kpi_level", UiIcon::Chart, u8"Уровень", std::to_string(overallLevel), accent);
-            ImGui::TableSetColumnIndex(1);
-            DrawKpiCardIcon("kpi_rank", UiIcon::User, u8"Ранг", rankText, accent);
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-        DrawKpiCardIcon("kpi_total", UiIcon::Chart, u8"Всего XP", std::to_string(totalXp), accent);
-        ImGui::TableSetColumnIndex(1);
-        DrawKpiCardIcon("kpi_bonus", UiIcon::Bell, u8"Активный бонус", bonusLabel, accent);
-        ImGui::EndTable();
-    }
+        ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d | Бонус: %s",
+                             skillCount, activeAchCount, achCount, bonusLabel.c_str());
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
     const float signalAvail = ImGui::GetContentRegionAvail().x;
     const int signalColumns = signalAvail >= 1120.0f ? 4 : (signalAvail >= 620.0f ? 2 : 1);
@@ -984,8 +973,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     }
     ImGui::SameLine();
     ImGui::TextDisabled(u8"XP · задачи · аналитика");
-    ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
-    skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
         const bool showAchievementPreview = state.ui.profileViewMode != 2;
@@ -1024,7 +1011,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     }
                     ImGui::SameLine();
                     const float iconSize = 32.0f;
-                    const float spacing = ImGui::GetStyle().ItemSpacing.x;
                     for (int i = 0; i < showCount; ++i) {
                         const Achievement& a = *recent[i];
                         const bool active = a.is_active(nowSec);
