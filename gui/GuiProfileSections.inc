@@ -11,7 +11,6 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         : 0;
     if (BeginCard("profile_state_card")) {
         DrawCardHeader(u8"Сводка состояния");
-        ImGui::TextDisabled(u8"Где вы сейчас и что проседает.");
         const auto& catScores = profile.category_best_scores();
         int minScore = Profile::kMaxCategoryScore;
         int maxScore = 0;
@@ -77,35 +76,40 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        if (ImGui::BeginTable("profile_state_summary", 2, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("state_label", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn("state_value", ImGuiTableColumnFlags_WidthStretch);
-
+        if (ImGui::BeginTable("profile_state_summary", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("state_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("state_balance", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("state_focus", ImGuiTableColumnFlags_WidthStretch, 1.15f);
             ImGui::TableNextRow();
+
             ImGui::TableSetColumnIndex(0);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextDisabled(u8"Состояние");
-            ImGui::TableSetColumnIndex(1);
             ImGui::TextColored(stateColor, "%s", stateText.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Последняя активность и текущая динамика профиля.");
+            }
 
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextDisabled(u8"Перекос");
-            ImGui::TableSetColumnIndex(1);
             if (hasImbalance) {
                 ImVec4 warnBg = LogLevelColor(AppLogLevel::Warning);
                 warnBg.w = std::clamp(warnBg.w * 0.16f, 0.06f, 0.16f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, ImGui::GetColorU32(warnBg));
             }
             ImGui::TextColored(imbalanceColor, "%s", imbalanceText.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Самая слабая категория относительно остальных.");
+            }
 
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetColumnIndex(2);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
             ImGui::TextDisabled(u8"Фокус");
-            ImGui::TableSetColumnIndex(1);
             ImGui::TextColored(accent, "%s", focusText.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Ближайшее полезное действие для профиля.");
+            }
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
@@ -114,7 +118,6 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 
     if (BeginCard("profile_balance_card")) {
         DrawCardHeader(u8"Зоны перекоса");
-        ImGui::TextDisabled(u8"Три самые слабые категории по оценке.");
         const auto& catScores = profile.category_best_scores();
         struct CatRow { int idx; int score; };
         std::vector<CatRow> rows;
@@ -168,9 +171,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 ImGui::EndTable();
             }
             ImGui::PopStyleVar();
-            if (showCount < static_cast<int>(rows.size())) {
-                ImGui::TextDisabled(u8"Остальные категории >= %d/10.", rows[showCount - 1].score);
-            }
+            ImGui::TextDisabled(u8"Слабые зоны: %d из %d", showCount, static_cast<int>(rows.size()));
         }
     }
     EndCard();
@@ -234,9 +235,8 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     if (ImGui::CollapsingHeader(u8"Диагностика состояния")) {
         const std::int64_t lastTask = profile.last_task_timestamp();
         const bool hasLastTask = lastTask > 0;
-        std::string lastTaskLabel = hasLastTask
-        ? FormatTimestamp(lastTask, "%Y-%m-%d %H:%M")
-        : std::string(u8"нет данных");
+        std::string lastTaskLabel = hasLastTask ? FormatTimestamp(lastTask, "%d.%m %H:%M") : std::string(u8"нет данных");
+        std::string lastTaskFull = hasLastTask ? FormatTimestamp(lastTask, "%Y-%m-%d %H:%M") : std::string();
         std::string elapsedLabel = hasLastTask
         ? FormatDurationShort(std::max<std::int64_t>(0, nowSec - lastTask))
         : std::string(u8"-");
@@ -270,8 +270,8 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         };
         if (ImGui::BeginTable("profile_status", 4, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-            ImGui::TableSetupColumn(u8"Параметр", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+            ImGui::TableSetupColumn(u8"Параметр", ImGuiTableColumnFlags_WidthFixed, 104.0f);
+            ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 112.0f);
             ImGui::TableSetupColumn(u8"Детали", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
             int rowRank = 0;
@@ -284,6 +284,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TableSetColumnIndex(2);
             if (hasLastTask) {
                 ImGui::TextColored(accentSoft, "%s", lastTaskLabel.c_str());
+                if (ImGui::IsItemHovered() && !lastTaskFull.empty()) {
+                    ImGui::SetTooltip("%s", lastTaskFull.c_str());
+                }
             } else {
                 ImGui::TextDisabled("%s", lastTaskLabel.c_str());
             }
@@ -319,12 +322,21 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImGui::TextDisabled(u8"Категории");
             ImGui::TableSetColumnIndex(2);
             if (categoriesBelow > 0) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"ниже 10/10");
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text(u8"шт: %d", categoriesBelow);
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d ниже", categoriesBelow);
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 36.0f);
                     ImGui::TextWrapped("%s", categoryAttention.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndTooltip();
+                }
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextDisabled(u8"наведите для списка");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 36.0f);
+                    ImGui::TextWrapped("%s", categoryAttention.c_str());
+                    ImGui::PopTextWrapPos();
                     ImGui::EndTooltip();
                 }
             } else {
