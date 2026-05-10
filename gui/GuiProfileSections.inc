@@ -1057,30 +1057,28 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
 
             ImGui::TableSetColumnIndex(1);
             ImGui::TextDisabled(u8"Проср.");
+            std::string overdueCountLabel = std::to_string(taskOverview.overdue);
             if (taskOverview.overdue > 0) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%d", taskOverview.overdue);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(u8"Просроченные активные задачи.");
-                }
+                DrawStatusPillGui("profile_tasks_overdue_count", overdueCountLabel.c_str(),
+                                  LogLevelColor(AppLogLevel::Warning),
+                                  u8"Просроченные активные задачи.", true);
             } else {
-                ImGui::TextDisabled("0");
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(u8"Просрочек нет.");
-                }
+                DrawStatusPillGui("profile_tasks_overdue_count", overdueCountLabel.c_str(),
+                                  style.Colors[ImGuiCol_TextDisabled],
+                                  u8"Просрочек нет.", false);
             }
 
             ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"XP");
+            std::string xpCountLabel = std::to_string(taskOverview.xpPending);
             if (taskOverview.xpPending > 0) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%d", taskOverview.xpPending);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(u8"Закрытые задачи, ожидающие начисления XP.");
-                }
+                DrawStatusPillGui("profile_tasks_xp_count", xpCountLabel.c_str(),
+                                  LogLevelColor(AppLogLevel::Warning),
+                                  u8"Закрытые задачи, ожидающие начисления XP.", true);
             } else {
-                ImGui::TextDisabled("0");
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(u8"Нет задач с незавершенным XP handoff.");
-                }
+                DrawStatusPillGui("profile_tasks_xp_count", xpCountLabel.c_str(),
+                                  style.Colors[ImGuiCol_TextDisabled],
+                                  u8"Нет задач с незавершенным XP handoff.", false);
             }
 
             ImGui::TableSetColumnIndex(3);
@@ -1179,16 +1177,15 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                     }
 
                     ImGui::TableSetColumnIndex(0);
+                    ImVec4 statusAccent = style.Colors[ImGuiCol_CheckMark];
                     if (status == kTaskStatusInProgress) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", taskStatusShort(status));
+                        statusAccent = LogLevelColor(AppLogLevel::Info);
                     } else if (overdue) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", taskStatusShort(status));
-                    } else {
-                        ImGui::TextUnformatted(taskStatusShort(status));
+                        statusAccent = LogLevelColor(AppLogLevel::Warning);
                     }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("%s", TaskStatusLabel(status));
-                    }
+                    DrawStatusPillGui("profile_active_task_status", taskStatusShort(status),
+                                      statusAccent, TaskStatusLabel(status),
+                                      status == kTaskStatusInProgress || overdue);
 
                     ImGui::TableSetColumnIndex(1);
                     if (task->deadlineAt > 0) {
@@ -1301,10 +1298,10 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         ImGui::TextDisabled(u8"Последние 5");
         if (pendingXpTasks > 0) {
             ImGui::SameLine();
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", pendingXpTasks);
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(u8"Задачи, закрытые без начисления XP.");
-            }
+            std::string pendingXpLabel = "XP:" + std::to_string(pendingXpTasks);
+            DrawStatusPillGui("profile_done_tasks_pending_xp", pendingXpLabel.c_str(),
+                              LogLevelColor(AppLogLevel::Warning),
+                              u8"Задачи, закрытые без начисления XP.", true);
             if (state.modules.tasks) {
                 ImGui::SameLine();
                 if (IconButtonGui("profile_done_tasks_xp", UiIcon::Chart,
@@ -1354,7 +1351,9 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 if (participant) {
                     ImGui::Text("%d%%", participant->percent);
                 } else {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Ожидает");
+                    DrawStatusPillGui("profile_done_task_waiting", u8"Ожид.",
+                                      LogLevelColor(AppLogLevel::Warning),
+                                      u8"Ожидает распределения вклада и начисления XP.", true);
                 }
                 ImGui::TableSetColumnIndex(4);
                 if (awaitingXp) {

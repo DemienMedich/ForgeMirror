@@ -135,11 +135,17 @@ static void DrawProfileTaskBriefCard(GuiState& state,
         ImGui::TextDisabled(u8"%d активных", overview.active);
         if (overview.overdue > 0) {
             ImGui::SameLine();
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d просроч.", overview.overdue);
+            std::string overdueLabel = std::to_string(overview.overdue) + u8" просроч.";
+            DrawStatusPillGui("profile_task_brief_overdue", overdueLabel.c_str(),
+                              LogLevelColor(AppLogLevel::Warning),
+                              u8"Просроченные активные задачи", true);
         }
         if (overview.xpPending > 0) {
             ImGui::SameLine();
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d ждут XP", overview.xpPending);
+            std::string xpLabel = std::to_string(overview.xpPending) + u8" ждут XP";
+            DrawStatusPillGui("profile_task_brief_xp", xpLabel.c_str(),
+                              LogLevelColor(AppLogLevel::Warning),
+                              u8"Закрытые задачи, ожидающие XP", true);
         }
         ImGui::EndGroup();
 
@@ -181,23 +187,28 @@ static void DrawProfileTaskBriefCard(GuiState& state,
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (ImGui::BeginTable("profile_task_brief_stats", 4, ImGuiTableFlags_SizingStretchSame)) {
-            auto drawStat = [](const char* label, int value, const ImVec4& color) {
+            auto drawStat = [](const char* label, int value, const ImVec4& color, const char* tooltip, bool filled) {
                 ImGui::TextDisabled("%s", label);
-                ImGui::TextColored(color, "%d", value);
+                const std::string valueLabel = std::to_string(value);
+                DrawStatusPillGui("##profile_task_brief_stat", valueLabel.c_str(), color, tooltip, filled);
             };
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            drawStat(u8"Новые", overview.created, style.Colors[ImGuiCol_Text]);
+            drawStat(u8"Новые", overview.created, style.Colors[ImGuiCol_TextDisabled],
+                     u8"Новые задачи профиля", false);
             ImGui::TableSetColumnIndex(1);
-            drawStat(u8"В работе", overview.inProgress, LogLevelColor(AppLogLevel::Info));
+            drawStat(u8"В работе", overview.inProgress, LogLevelColor(AppLogLevel::Info),
+                     u8"Задачи профиля в работе", overview.inProgress > 0);
             ImGui::TableSetColumnIndex(2);
             drawStat(u8"Просрочка", overview.overdue, overview.overdue > 0
                 ? LogLevelColor(AppLogLevel::Warning)
-                : style.Colors[ImGuiCol_TextDisabled]);
+                : style.Colors[ImGuiCol_TextDisabled],
+                u8"Просроченные активные задачи", overview.overdue > 0);
             ImGui::TableSetColumnIndex(3);
             drawStat(u8"XP handoff", overview.xpPending, overview.xpPending > 0
                 ? LogLevelColor(AppLogLevel::Warning)
-                : style.Colors[ImGuiCol_TextDisabled]);
+                : style.Colors[ImGuiCol_TextDisabled],
+                u8"Задачи, ожидающие выдачи XP", overview.xpPending > 0);
             ImGui::EndTable();
         }
 
