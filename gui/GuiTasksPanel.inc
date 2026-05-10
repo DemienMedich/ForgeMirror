@@ -1639,13 +1639,17 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::TextDisabled("0");
                     }
                     ImGui::TextDisabled("%s", hint);
-                    if (quickFilter != -1 && ImGui::SmallButton((std::string(u8"Открыть##queue_") + title).c_str())) {
-                        if (quickFilter >= 0) {
-                            state.tasksQuickFilter = quickFilter;
-                        } else if (quickFilter == -2) {
-                            state.tasksQuickFilter = 0;
-                            state.tasksFilterPriority = kTaskPriorityCritical + 1;
+                    if (quickFilter != -1) {
+                        ImGui::PushID(title);
+                        if (TaskIconButton("queue_open", UiIcon::Search, u8"Открыть задачи по этому сигналу")) {
+                            if (quickFilter >= 0) {
+                                state.tasksQuickFilter = quickFilter;
+                            } else if (quickFilter == -2) {
+                                state.tasksQuickFilter = 0;
+                                state.tasksFilterPriority = kTaskPriorityCritical + 1;
+                            }
                         }
+                        ImGui::PopID();
                     }
                     ++metricIndex;
                 };
@@ -1676,7 +1680,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::TextDisabled("%s", deadlineText.c_str());
                     }
                 }
-                if (ImGui::Button(u8"Открыть фокус", ImVec2(-1.0f, 0.0f))) {
+                ImGui::SameLine();
+                if (TaskIconButton("tasks_focus_open", UiIcon::Search, u8"Открыть фокусную задачу")) {
                     state.tasksExpandedId = workFocusTask->id;
                 }
             } else {
