@@ -428,7 +428,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
     if (tasksAdminMode && state.showTaskCreateForm) {
         if (BeginCard("tasks_create_card")) {
-            DrawCardHeader(u8"Создать задачу");
+            DrawCardHeader(u8"Постановка");
+            ImVec4 taskPlanAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            taskPlanAccent.w = 1.0f;
+            const float taskPlanIconSize = ImGui::GetFrameHeight();
             EnsureTaskPlanAssigneesSize(state);
             EnsureTaskSkillFlagsSize(state.taskPlanSkillFlags, catalog.skills().size());
             std::vector<std::string> projectLabels;
@@ -480,21 +483,25 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const std::vector<std::string> plannedSkillIds = CollectSelectedTaskSkillIds(catalog, state.taskPlanSkillFlags);
 
             const char* taskPlanStepLabels[] = {u8"Основное", u8"Люди", u8"Навыки", u8"Проверка"};
+            const char* taskPlanStepShortLabels[] = {u8"Осн.", u8"Люди", u8"Нав.", u8"Пров."};
             if (ImGui::BeginTable("task_plan_steps", 4, ImGuiTableFlags_SizingStretchSame)) {
                 ImGui::TableNextRow();
                 for (int i = 0; i < 4; ++i) {
                     ImGui::TableSetColumnIndex(i);
                     const bool selected = state.taskPlanStep == i;
                     if (selected) ImGui::BeginDisabled();
-                    std::string stepLabel = std::to_string(i + 1) + ". " + taskPlanStepLabels[i];
+                    std::string stepLabel = std::to_string(i + 1) + ". " + taskPlanStepShortLabels[i];
                     if (ImGui::SmallButton(stepLabel.c_str())) {
                         state.taskPlanStep = i;
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", taskPlanStepLabels[i]);
                     }
                     if (selected) ImGui::EndDisabled();
                 }
                 ImGui::EndTable();
             }
-            ImGui::TextDisabled(u8"Шаг %d/4: %s", state.taskPlanStep + 1, taskPlanStepLabels[state.taskPlanStep]);
+            ImGui::TextDisabled(u8"%d/4 %s", state.taskPlanStep + 1, taskPlanStepLabels[state.taskPlanStep]);
 
             if (state.taskPlanStep == kTaskPlanStepMain) {
             if (ImGui::BeginTable("tasks_create_form", 2, ImGuiTableFlags_SizingStretchProp)) {
@@ -520,10 +527,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::Combo("##task_plan_project", &state.taskPlanProjectIndex,
                                  projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
                     if (state.isAdmin) {
-                        const char* projectToggleLabel = state.taskPlanCreateProjectInline
-                            ? u8"Скрыть"
-                            : u8"+ Проект";
-                        if (ImGui::Button(projectToggleLabel, ImVec2(-1.0f, 0.0f))) {
+                        const UiIcon projectToggleIcon = state.taskPlanCreateProjectInline ? UiIcon::Close : UiIcon::Plus;
+                        const char* projectToggleTip = state.taskPlanCreateProjectInline
+                            ? u8"Скрыть создание проекта"
+                            : u8"Создать проект прямо из задачи";
+                        if (IconButtonGui("task_plan_project_toggle_stack", projectToggleIcon, projectToggleTip,
+                                          taskPlanAccent, taskPlanIconSize)) {
                             toggleTaskProjectInline();
                         }
                     }
@@ -531,7 +540,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                              ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("task_plan_project_combo", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     if (state.isAdmin) {
-                        ImGui::TableSetupColumn("task_plan_project_action", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                        ImGui::TableSetupColumn("task_plan_project_action", ImGuiTableColumnFlags_WidthFixed,
+                                                taskPlanIconSize + ImGui::GetStyle().CellPadding.x * 2.0f);
                     }
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -540,10 +550,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                  projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
                     if (state.isAdmin) {
                         ImGui::TableSetColumnIndex(1);
-                        const char* projectToggleLabel = state.taskPlanCreateProjectInline
-                            ? u8"Скрыть"
-                            : u8"+ Проект";
-                        if (ImGui::Button(projectToggleLabel, ImVec2(-1.0f, 0.0f))) {
+                        const UiIcon projectToggleIcon = state.taskPlanCreateProjectInline ? UiIcon::Close : UiIcon::Plus;
+                        const char* projectToggleTip = state.taskPlanCreateProjectInline
+                            ? u8"Скрыть создание проекта"
+                            : u8"Создать проект прямо из задачи";
+                        if (IconButtonGui("task_plan_project_toggle", projectToggleIcon, projectToggleTip,
+                                          taskPlanAccent, taskPlanIconSize)) {
                             toggleTaskProjectInline();
                         }
                     }
@@ -610,10 +622,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 };
                 if (stackProjectInlineActions) {
-                    if (ImGui::Button(u8"Сохранить проект", ImVec2(-1.0f, 0.0f))) {
+                    if (IconButtonGui("task_plan_project_save_stack", UiIcon::Chart,
+                                      u8"Сохранить проект и выбрать его", taskPlanAccent, taskPlanIconSize)) {
                         saveInlineProject();
                     }
-                    if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                    ImGui::SameLine();
+                    if (IconButtonGui("task_plan_project_cancel_stack", UiIcon::Close,
+                                      u8"Отменить создание проекта", LogLevelColor(AppLogLevel::Warning), taskPlanIconSize)) {
                         state.taskPlanCreateProjectInline = false;
                         state.taskPlanProjectName.fill('\0');
                         state.taskPlanProjectDesc.fill('\0');
@@ -621,11 +636,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 } else if (ImGui::BeginTable("task_plan_project_inline_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    if (ImGui::Button(u8"Сохранить проект", ImVec2(-1.0f, 0.0f))) {
+                    if (IconButtonGui("task_plan_project_save", UiIcon::Chart,
+                                      u8"Сохранить проект и выбрать его", taskPlanAccent, taskPlanIconSize)) {
                         saveInlineProject();
                     }
                     ImGui::TableSetColumnIndex(1);
-                    if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                    if (IconButtonGui("task_plan_project_cancel", UiIcon::Close,
+                                      u8"Отменить создание проекта", LogLevelColor(AppLogLevel::Warning), taskPlanIconSize)) {
                         state.taskPlanCreateProjectInline = false;
                         state.taskPlanProjectName.fill('\0');
                         state.taskPlanProjectDesc.fill('\0');
@@ -2102,7 +2119,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     };
 
     if (tasksAdminMode && !state.taskSelectionIds.empty()) {
-        std::string bulkHeader = u8"Массовые действия (" +
+        std::string bulkHeader = u8"Bulk (" +
             std::to_string(static_cast<int>(state.taskSelectionIds.size())) + ")";
         if (ImGui::CollapsingHeader(bulkHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             if (BeginCard("tasks_bulk_actions")) {
@@ -2119,7 +2136,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 state.taskSelectionIds.clear();
             }
             ImGui::SameLine();
-            if (TaskIconButton("bulk_delete_selection", UiIcon::Exit, u8"Удалить выбранные задачи")) {
+            if (TaskIconButton("bulk_delete_selection", UiIcon::Close, u8"Удалить выбранные задачи")) {
                 state.taskBulkDeletePopupRequest = true;
             }
 
@@ -2245,13 +2262,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                     ImGui::EndTable();
                 }
-                if (ImGui::Button(u8"Применить", ImVec2(120.0f, 0.0f))) {
+                if (TaskIconButton("bulk_assignees_apply", UiIcon::Users, u8"Применить исполнителей")) {
                     if (ApplyBulkAssignees()) {
                         ImGui::CloseCurrentPopup();
                     }
                 }
                 ImGui::SameLine();
-                if (ImGui::Button(u8"Отмена", ImVec2(120.0f, 0.0f))) {
+                if (TaskIconButton("bulk_assignees_cancel", UiIcon::Close, u8"Закрыть без изменений")) {
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();
