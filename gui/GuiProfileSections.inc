@@ -1209,11 +1209,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                     ImGui::TableSetColumnIndex(2);
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                     const std::string projectName = ResolveTaskProjectName(state, *task);
-                    if (projectName.empty()) {
-                        ImGui::TextDisabled(u8"Без проекта");
-                    } else {
-                        ImGui::TextUnformatted(projectName.c_str());
-                    }
+                    DrawClippedTextWithTooltip(projectName, u8"Без проекта", projectName.empty());
 
                     ImGui::TableSetColumnIndex(3);
                     ImU32 pipelineAttentionBg = 0;
@@ -1231,10 +1227,8 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                             ImGui::SameLine();
                             ImGui::TextDisabled("%s", stageTitle.c_str());
                         }
-                    } else if (pipelineName.empty()) {
-                        ImGui::TextDisabled(u8"Без этапа");
                     } else {
-                        ImGui::TextUnformatted(pipelineName.c_str());
+                        DrawClippedTextWithTooltip(pipelineName, u8"Без этапа", pipelineName.empty());
                     }
                     DrawTaskPipelineProgressHint(state, *task);
 
@@ -1333,13 +1327,9 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 const std::string projectName = ResolveTaskProjectName(state, *task);
-                if (projectName.empty()) {
-                    ImGui::TextDisabled(u8"Без проекта");
-                } else {
-                    ImGui::TextUnformatted(projectName.c_str());
-                }
+                DrawClippedTextWithTooltip(projectName, u8"Без проекта", projectName.empty());
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextUnformatted(task->title.c_str());
+                DrawClippedTextWithTooltip(task->title.empty() ? std::string(u8"Без названия") : task->title);
                 if (!task->description.empty() && ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
                     ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);

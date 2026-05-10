@@ -252,7 +252,7 @@ static void DrawProfileTaskBriefCard(GuiState& state,
 
                 ImGui::TableSetColumnIndex(1);
                 const std::string projectName = ResolveTaskProjectName(state, *task);
-                ImGui::TextDisabled("%s", projectName.empty() ? u8"Без проекта" : projectName.c_str());
+                DrawClippedTextWithTooltip(projectName, u8"Без проекта", true);
 
                 ImGui::TableSetColumnIndex(2);
                 ImU32 pipelineBg = 0;
@@ -260,7 +260,7 @@ static void DrawProfileTaskBriefCard(GuiState& state,
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, pipelineBg);
                 }
                 const std::string pipelineName = ResolveTaskPipelineName(state, *task);
-                ImGui::TextDisabled("%s", pipelineName.empty() ? u8"Без этапа" : pipelineName.c_str());
+                DrawClippedTextWithTooltip(pipelineName, u8"Без этапа", true);
 
                 ImGui::TableSetColumnIndex(3);
                 if (task->deadlineAt > 0) {

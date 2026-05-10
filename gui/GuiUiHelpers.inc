@@ -255,6 +255,21 @@ void DrawCardHeader(const char* label) {
     ImGui::PopStyleColor();
 }
 
+void DrawClippedTextWithTooltip(const std::string& text, const char* emptyText = "-",
+                                bool disabled = false) {
+    const char* shown = text.empty() ? emptyText : text.c_str();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const bool clipped = !text.empty() && ImGui::CalcTextSize(text.c_str()).x > avail;
+    if (text.empty() || disabled) {
+        ImGui::TextDisabled("%s", shown);
+    } else {
+        ImGui::TextUnformatted(shown);
+    }
+    if (clipped && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", text.c_str());
+    }
+}
+
 bool BeginCard(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), ImGuiChildFlags flags = ImGuiChildFlags_AutoResizeY) {
     ImVec4 bg = CardBackgroundColor();
     ImVec4 border = CardBorderColor();

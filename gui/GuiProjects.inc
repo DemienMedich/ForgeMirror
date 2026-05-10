@@ -478,10 +478,24 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("%d", shownProjects);
             ImGui::TableSetColumnIndex(1);
-            if (ImGui::Selectable(project.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
+            const std::string projectRowLabel = (project.name.empty() ? std::string(u8"Без названия") : project.name) +
+                "##project_row_" + project.id;
+            if (ImGui::Selectable(projectRowLabel.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
                 state.projectEditIndex = idx;
                 std::snprintf(state.newProjectName.data(), state.newProjectName.size(), "%s", project.name.c_str());
                 std::snprintf(state.newProjectDesc.data(), state.newProjectDesc.size(), "%s", project.description.c_str());
+            }
+            if (ImGui::IsItemHovered() && (!project.description.empty() ||
+                                           ImGui::CalcTextSize(project.name.c_str()).x > ImGui::GetContentRegionAvail().x)) {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(project.name.empty() ? u8"Без названия" : project.name.c_str());
+                if (!project.description.empty()) {
+                    ImGui::Separator();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 36.0f);
+                    ImGui::TextUnformatted(project.description.c_str());
+                    ImGui::PopTextWrapPos();
+                }
+                ImGui::EndTooltip();
             }
             ImGui::TableSetColumnIndex(2);
             ImGui::Text("%d", taskStats.total);

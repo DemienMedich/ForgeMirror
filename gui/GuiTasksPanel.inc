@@ -2702,10 +2702,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                  projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()))) {
                     UpdateTaskProject(task->id, projectIndex);
                 }
-            } else if (projectName.empty()) {
-                ImGui::TextDisabled(u8"Без проекта");
             } else {
-                ImGui::TextUnformatted(projectName.c_str());
+                DrawClippedTextWithTooltip(projectName, u8"Без проекта", projectName.empty());
             }
 
             ImGui::TableSetColumnIndex(col++);
@@ -2741,11 +2739,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::TextDisabled("%s", stageTitle.c_str());
                 }
                 DrawTaskPipelineProgressHint(state, *task);
-            } else if (pipelineName.empty()) {
-                ImGui::TextDisabled(u8"Без этапа");
-                DrawTaskPipelineProgressHint(state, *task);
             } else {
-                ImGui::TextUnformatted(pipelineName.c_str());
+                DrawClippedTextWithTooltip(pipelineName, u8"Без этапа", pipelineName.empty());
                 DrawTaskPipelineProgressHint(state, *task);
             }
 
@@ -2782,7 +2777,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TableSetColumnIndex(col++);
             const std::string participants = BuildParticipantLabel(*task, nameById);
             const std::string participantSummary = BuildTaskTableAssigneeSummary(*task, 2);
-            ImGui::TextUnformatted(participantSummary.c_str());
+            DrawClippedTextWithTooltip(participantSummary);
             if (!participants.empty() && participants != participantSummary && ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", participants.c_str());
             }
@@ -3050,7 +3045,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 DrawTaskDetailMetaRow(
                     u8"Проект",
                     [&]() {
-                        ImGui::TextUnformatted(projectName.empty() ? u8"Без проекта" : projectName.c_str());
+                        DrawClippedTextWithTooltip(projectName, u8"Без проекта", projectName.empty());
                     },
                     u8"Ст.",
                     [&]() {
@@ -3064,11 +3059,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 DrawTaskDetailMetaRow(
                     u8"Этап",
                     [&]() {
-                        if (pipelineName.empty()) {
-                            ImGui::TextDisabled(u8"Без этапа");
-                        } else {
-                            ImGui::TextUnformatted(pipelineName.c_str());
-                        }
+                        DrawClippedTextWithTooltip(pipelineName, u8"Без этапа", pipelineName.empty());
                         DrawTaskPipelineProgressHint(state, *expanded);
                     },
                     "P",
