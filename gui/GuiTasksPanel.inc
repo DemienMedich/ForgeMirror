@@ -2923,7 +2923,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
         }
         if (BeginCard("tasks_detail_card")) {
-            DrawCardHeader(u8"Детали задачи");
+            DrawCardHeader(u8"Детали");
             std::string title = expanded->title;
             if (title.empty()) title = u8"Без названия";
             const float detailHeadlineWidth = ImGui::GetContentRegionAvail().x;
@@ -2968,9 +2968,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 drawRight();
             };
             if (ImGui::BeginTable("task_detail_meta", 4, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("label_left", ImGuiTableColumnFlags_WidthFixed, 78.0f);
+                ImGui::TableSetupColumn("label_left", ImGuiTableColumnFlags_WidthFixed, 62.0f);
                 ImGui::TableSetupColumn("value_left", ImGuiTableColumnFlags_WidthStretch, 1.15f);
-                ImGui::TableSetupColumn("label_right", ImGuiTableColumnFlags_WidthFixed, 78.0f);
+                ImGui::TableSetupColumn("label_right", ImGuiTableColumnFlags_WidthFixed, 62.0f);
                 ImGui::TableSetupColumn("value_right", ImGuiTableColumnFlags_WidthStretch, 1.15f);
 
                 DrawTaskDetailMetaRow(
@@ -2978,9 +2978,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     [&]() {
                         ImGui::TextUnformatted(projectName.empty() ? u8"Без проекта" : projectName.c_str());
                     },
-                    u8"Статус",
+                    u8"Ст.",
                     [&]() {
-                        ImGui::TextUnformatted(TaskStatusLabel(expanded->status));
+                        ImGui::TextUnformatted(TaskStatusShortLabel(expanded->status));
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", TaskStatusLabel(expanded->status));
                         if (TaskNeedsXpAward(*expanded)) {
                             DrawTaskXpPendingBadge(*expanded);
                         }
@@ -2996,32 +2997,37 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         }
                         DrawTaskPipelineProgressHint(state, *expanded);
                     },
-                    u8"Приоритет",
+                    "P",
                     [&]() {
                         if (detailPriority >= kTaskPriorityCritical) {
-                            ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityLabel(detailPriority));
+                            ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityCode(detailPriority));
                         } else if (detailPriority >= kTaskPriorityHigh) {
-                            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityLabel(detailPriority));
+                            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityCode(detailPriority));
                         } else {
-                            ImGui::TextUnformatted(TaskPriorityLabel(detailPriority));
+                            ImGui::TextUnformatted(TaskPriorityCode(detailPriority));
                         }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", TaskPriorityLabel(detailPriority));
                     });
 
                 DrawTaskDetailMetaRow(
-                    u8"Дедлайн",
+                    u8"Дедл.",
                     [&]() {
                         if (expanded->deadlineAt > 0) {
-                            const std::string deadlineText = FormatTimestamp(expanded->deadlineAt, "%Y-%m-%d %H:%M");
+                            const std::string deadlineText = FormatTimestamp(expanded->deadlineAt, "%d.%m %H:%M");
                             if (detailOverdue) {
                                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadlineText.c_str());
                             } else {
                                 ImGui::TextUnformatted(deadlineText.c_str());
                             }
+                            if (ImGui::IsItemHovered()) {
+                                const std::string fullDeadline = FormatTimestamp(expanded->deadlineAt, "%Y-%m-%d %H:%M");
+                                ImGui::SetTooltip("%s", fullDeadline.c_str());
+                            }
                         } else {
-                            ImGui::TextDisabled(u8"Не задан");
+                            ImGui::TextDisabled("-");
                         }
                     },
-                    u8"Категория",
+                    u8"Кат.",
                     [&]() {
                         ImGui::TextUnformatted(ClassificationLabel(expanded->category));
                     });
@@ -3030,9 +3036,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     u8"Штраф XP",
                     [&]() {
                         if (expanded->deadlinePenaltyPercent > 0) {
-                            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"-%d%% за дедлайн", expanded->deadlinePenaltyPercent);
+                            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"-%d%%", expanded->deadlinePenaltyPercent);
+                            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Штраф за срыв дедлайна.");
                         } else {
-                            ImGui::TextDisabled(u8"Не назначен");
+                            ImGui::TextDisabled("-");
                         }
                     },
                     u8"Люди",
@@ -3133,9 +3140,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (detailAssigneeNames.empty()) {
                     ImGui::TextDisabled(u8"Нет назначенных профилей.");
                 } else {
-                    for (const auto& name : detailAssigneeNames) {
-                        ImGui::BulletText("%s", name.c_str());
-                    }
+                    ImGui::TextWrapped("%s", BuildTaskAssigneeSummary(*expanded, 4).c_str());
                 }
 
                 if (taskPipelineIndex >= 0 && taskPipelineIndex < static_cast<int>(state.pipelineSteps.size())) {
@@ -3189,7 +3194,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::TextDisabled(u8"Описание");
                         ImGui::TextWrapped("%s", editableTask->description.empty() ? u8"Без описания" : editableTask->description.c_str());
                         ImGui::Spacing();
-                        if (ImGui::Button(u8"Редактировать текст", ImVec2(-1.0f, 0.0f))) {
+                        if (TaskIconButton("task_detail_text_edit", UiIcon::Settings, u8"Редактировать название и описание")) {
                             std::snprintf(state.taskInlineTitleBuffer.data(), state.taskInlineTitleBuffer.size(),
                                           "%s", editableTask->title.c_str());
                             std::snprintf(state.taskInlineDescriptionBuffer.data(), state.taskInlineDescriptionBuffer.size(),
@@ -3210,7 +3215,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         if (ImGui::BeginTable("task_detail_text_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
                             ImGui::TableNextRow();
                             ImGui::TableSetColumnIndex(0);
-                            if (ImGui::Button(u8"Сохранить текст", ImVec2(-1.0f, 0.0f))) {
+                            if (TaskIconButton("task_detail_text_save", UiIcon::Chart, u8"Сохранить текст задачи")) {
                                 if (UpdateTaskText(editableTask->id,
                                                    state.taskInlineTitleBuffer.data(),
                                                    state.taskInlineDescriptionBuffer.data())) {
@@ -3218,7 +3223,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                 }
                             }
                             ImGui::TableSetColumnIndex(1);
-                            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                            if (TaskIconButton("task_detail_text_cancel", UiIcon::Close, u8"Отменить редактирование текста")) {
                                 state.taskInlineTextEditId.clear();
                                 state.taskInlineTitleBuffer.fill('\0');
                                 state.taskInlineDescriptionBuffer.fill('\0');
@@ -3280,7 +3285,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                             state.taskInlineSkillEditId == editableTask->id ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
                     ImGui::TextWrapped("%s", BuildTaskSkillSummary(editableTask->skillIds, catalog, 6).c_str());
                     if (state.taskInlineSkillEditId != editableTask->id) {
-                        if (ImGui::Button(u8"Редактировать навыки", ImVec2(-1.0f, 0.0f))) {
+                        if (TaskIconButton("task_detail_skill_edit", UiIcon::Settings, u8"Редактировать навыки задачи")) {
                             state.taskInlineSkillEditId = editableTask->id;
                             state.taskInlineSkillFilter.fill('\0');
                             ApplyTaskSkillIdsToFlags(catalog, editableTask->skillIds, state.taskInlineSkillFlags);
@@ -3306,7 +3311,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         if (ImGui::BeginTable("task_detail_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
                             ImGui::TableNextRow();
                             ImGui::TableSetColumnIndex(0);
-                            if (ImGui::Button(u8"Сохранить навыки", ImVec2(-1.0f, 0.0f))) {
+                            if (TaskIconButton("task_detail_skill_save", UiIcon::Chart, u8"Сохранить навыки задачи")) {
                                 const std::vector<std::string> skillIds =
                                     CollectSelectedTaskSkillIds(catalog, state.taskInlineSkillFlags);
                                 if (UpdateTaskSkills(editableTask->id, skillIds)) {
@@ -3314,7 +3319,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                 }
                             }
                             ImGui::TableSetColumnIndex(1);
-                            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                            if (TaskIconButton("task_detail_skill_cancel", UiIcon::Close, u8"Отменить редактирование навыков")) {
                                 state.taskInlineSkillEditId.clear();
                                 state.taskInlineSkillFilter.fill('\0');
                             }
