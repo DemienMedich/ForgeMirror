@@ -265,7 +265,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         }
     }
 
-    if (ImGui::CollapsingHeader(u8"Состояние")) {
+    if (ImGui::CollapsingHeader(u8"Диагностика состояния")) {
         const std::int64_t lastTask = profile.last_task_timestamp();
         const bool hasLastTask = lastTask > 0;
         std::string lastTaskLabel = hasLastTask
