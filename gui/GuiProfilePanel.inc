@@ -946,75 +946,44 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
     }
     ImGui::TextDisabled(u8"Быстрые действия");
-    const float actionsAvail = ImGui::GetContentRegionAvail().x;
-    const bool stackActions = actionsAvail < 640.0f;
-    if (stackActions) {
-        const bool xpEnabled = state.isAdmin;
-        if (!xpEnabled) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
+    ImGui::SameLine();
+    const float quickIconSize = ImGui::GetFrameHeight();
+    const bool xpEnabled = state.isAdmin;
+    if (IconButtonGui("profile_quick_xp", UiIcon::Plus, u8"Добавить опыт",
+                      accent, quickIconSize, xpEnabled)) {
+        if (xpEnabled) {
             PrepareXpEntries(state, catalog);
             state.xpPopupRequest = true;
         }
-        if (!xpEnabled) {
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip(u8"Доступно только администратору.");
-            }
-            ImGui::EndDisabled();
-        }
-        if (state.modules.tasks) {
-            const char* taskButtonLabel = taskOverview.primaryTask ? u8"Фокус-задача" : u8"К задачам";
-            if (ImGui::Button(taskButtonLabel, ImVec2(-1.0f, 0.0f))) {
-                if (taskOverview.primaryTask) {
-                    FocusTasksForProfile(state, state.active->id, 0, taskOverview.primaryTask->id);
-                } else {
-                    FocusTasksForProfile(state, state.active->id);
-                }
-            }
-        }
-        if (ImGui::Button(u8"Графики и категории", ImVec2(-1.0f, 0.0f))) {
-            state.ui.profileViewMode = 1;
-            state.ui.profileTab = 3;
-            state.profileSection = 3;
-            state.profileTabRequest = 3;
-            state.uiDirty = true;
-        }
-    } else if (ImGui::BeginTable("profile_quick_actions", state.modules.tasks ? 3 : 2, ImGuiTableFlags_SizingStretchSame)) {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        const bool xpEnabled = state.isAdmin;
-        if (!xpEnabled) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
-            PrepareXpEntries(state, catalog);
-            state.xpPopupRequest = true;
-        }
-        if (!xpEnabled) {
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip(u8"Доступно только администратору.");
-            }
-            ImGui::EndDisabled();
-        }
-        int actionColumn = 1;
-        if (state.modules.tasks) {
-            ImGui::TableSetColumnIndex(actionColumn++);
-            const char* taskButtonLabel = taskOverview.primaryTask ? u8"Фокус-задача" : u8"К задачам";
-            if (ImGui::Button(taskButtonLabel, ImVec2(-1.0f, 0.0f))) {
-                if (taskOverview.primaryTask) {
-                    FocusTasksForProfile(state, state.active->id, 0, taskOverview.primaryTask->id);
-                } else {
-                    FocusTasksForProfile(state, state.active->id);
-                }
-            }
-        }
-        ImGui::TableSetColumnIndex(actionColumn);
-        if (ImGui::Button(u8"Графики и категории", ImVec2(-1.0f, 0.0f))) {
-            state.ui.profileViewMode = 1;
-            state.ui.profileTab = 3;
-            state.profileSection = 3;
-            state.profileTabRequest = 3;
-            state.uiDirty = true;
-        }
-        ImGui::EndTable();
     }
+    if (!xpEnabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip(u8"Доступно только администратору.");
+    }
+    if (state.modules.tasks) {
+        ImGui::SameLine();
+        const bool hasFocusTask = taskOverview.primaryTask != nullptr;
+        if (IconButtonGui("profile_quick_tasks", hasFocusTask ? UiIcon::Launch : UiIcon::List,
+                          hasFocusTask ? u8"Открыть фокус-задачу" : u8"Открыть задачи профиля",
+                          hasFocusTask ? focusAccent : accent,
+                          quickIconSize)) {
+            if (hasFocusTask) {
+                FocusTasksForProfile(state, state.active->id, 0, taskOverview.primaryTask->id);
+            } else {
+                FocusTasksForProfile(state, state.active->id);
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (IconButtonGui("profile_quick_charts", UiIcon::Chart, u8"Открыть графики и категории",
+                      accent, quickIconSize)) {
+        state.ui.profileViewMode = 1;
+        state.ui.profileTab = 3;
+        state.profileSection = 3;
+        state.profileTabRequest = 3;
+        state.uiDirty = true;
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled(u8"XP · задачи · аналитика");
     ImGui::TextDisabled(u8"Навыков: %d | Ачивок активных: %d / %d",
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());

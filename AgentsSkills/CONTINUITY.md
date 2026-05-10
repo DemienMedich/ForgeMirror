@@ -253,17 +253,16 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Исправлен баг закрытия задачи `Шоурилл`: XP-модал больше не требует проект для уже существующей задачи, поэтому source-task с пустым `project` можно закрыть и начислить XP.
+  - Профиль получил компактную toolbar-строку быстрых действий в сводке: XP, задачи/фокус-задача и аналитика теперь иконки с tooltip вместо широких кнопок.
 - Next:
-  - Продолжить компоновку профиля: заменить широкие быстрые действия в сводке (`Добавить опыт`, `Фокус-задача`, `Графики и категории`) на компактную toolbar-строку с иконками и tooltip.
+  - Продолжить компоновку профиля: уплотнить последние ачивки/нижнюю сводку и решить, нужен ли отдельный блок ачивок в режиме `Обзор`.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiXpModal.inc`
-  - `Z:\\CPP\\ForgeMirror\\tests\\smoke_core.cpp`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfilePanel.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.59.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.60.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)
