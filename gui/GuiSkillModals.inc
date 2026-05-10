@@ -9,6 +9,12 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
     const float minWidth = 360.0f;
     const float maxWidth = std::max(minWidth, std::min(560.0f, display.x - 80.0f));
     const float maxHeight = std::max(240.0f, display.y - 80.0f);
+    auto SkillModalIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                                   bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
     ImGui::SetNextWindowSizeConstraints(ImVec2(minWidth, 0.0f), ImVec2(maxWidth, maxHeight));
     if (ImGui::BeginPopupModal(u8"Добавить навык", &addSkillOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawModalShadow();
@@ -76,10 +82,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         const float actionWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = actionWidth < 300.0f;
         if (stackActions) {
-            if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
+            if (SkillModalIconButton("add_skill_save_stack", UiIcon::Chart, u8"Сохранить навык")) {
                 saveSkill();
             }
-            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+            ImGui::SameLine();
+            if (SkillModalIconButton("add_skill_cancel_stack", UiIcon::Close, u8"Отменить добавление навыка")) {
                 ImGui::CloseCurrentPopup();
                 addSkillOpen = false;
             }
@@ -95,11 +102,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-            if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
+            if (SkillModalIconButton("add_skill_save", UiIcon::Chart, u8"Сохранить навык")) {
                 saveSkill();
             }
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+            if (SkillModalIconButton("add_skill_cancel", UiIcon::Close, u8"Отменить добавление навыка")) {
                 ImGui::CloseCurrentPopup();
                 addSkillOpen = false;
             }
@@ -146,10 +153,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 300.0f;
             if (stackActions) {
-                if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                if (SkillModalIconButton("delete_skill_apply_stack", UiIcon::Close, u8"Удалить выбранный навык")) {
                     deleteSkill();
                 }
-                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::SameLine();
+                if (SkillModalIconButton("delete_skill_cancel_stack", UiIcon::Refresh, u8"Отменить удаление")) {
                     ImGui::CloseCurrentPopup();
                     deleteSkillOpen = false;
                     state.pendingSkillDelete.clear();
@@ -166,11 +174,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                if (SkillModalIconButton("delete_skill_apply", UiIcon::Close, u8"Удалить выбранный навык")) {
                     deleteSkill();
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                if (SkillModalIconButton("delete_skill_cancel", UiIcon::Refresh, u8"Отменить удаление")) {
                     ImGui::CloseCurrentPopup();
                     deleteSkillOpen = false;
                     state.pendingSkillDelete.clear();
@@ -179,7 +187,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             }
         } else {
             ImGui::TextDisabled(u8"Навык не выбран.");
-            if (ImGui::Button(u8"Закрыть")) {
+            if (SkillModalIconButton("delete_skill_close", UiIcon::Close, u8"Закрыть окно")) {
                 ImGui::CloseCurrentPopup();
                 deleteSkillOpen = false;
             }
@@ -246,10 +254,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 300.0f;
             if (stackActions) {
-                if (ImGui::Button(u8"Слить", ImVec2(-1.0f, 0.0f))) {
+                if (SkillModalIconButton("merge_skill_apply_stack", UiIcon::Flow, u8"Слить навыки")) {
                     mergeSkills();
                 }
-                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                ImGui::SameLine();
+                if (SkillModalIconButton("merge_skill_cancel_stack", UiIcon::Close, u8"Отменить слияние")) {
                     state.pendingMergeFromId.clear();
                     state.pendingMergeToId.clear();
                     state.pendingMergeName.clear();
@@ -271,11 +280,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                if (ImGui::Button(u8"Слить", ImVec2(-1.0f, 0.0f))) {
+                if (SkillModalIconButton("merge_skill_apply", UiIcon::Flow, u8"Слить навыки")) {
                     mergeSkills();
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                if (SkillModalIconButton("merge_skill_cancel", UiIcon::Close, u8"Отменить слияние")) {
                     state.pendingMergeFromId.clear();
                     state.pendingMergeToId.clear();
                     state.pendingMergeName.clear();
@@ -289,7 +298,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             }
         } else {
             ImGui::TextDisabled(u8"Нет данных для слияния.");
-            if (ImGui::Button(u8"Закрыть")) {
+            if (SkillModalIconButton("merge_skill_close", UiIcon::Close, u8"Закрыть окно")) {
                 ImGui::CloseCurrentPopup();
                 mergeSkillOpen = false;
             }
@@ -327,10 +336,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         const float actionWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = actionWidth < 300.0f;
         if (stackActions) {
-            if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+            if (SkillModalIconButton("clear_skills_apply_stack", UiIcon::Close, u8"Очистить все навыки")) {
                 clearAll();
             }
-            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+            ImGui::SameLine();
+            if (SkillModalIconButton("clear_skills_cancel_stack", UiIcon::Refresh, u8"Отменить очистку")) {
                 ImGui::CloseCurrentPopup();
                 clearSkillsOpen = false;
             }
@@ -346,11 +356,11 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-            if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+            if (SkillModalIconButton("clear_skills_apply", UiIcon::Close, u8"Очистить все навыки")) {
                 clearAll();
             }
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+            if (SkillModalIconButton("clear_skills_cancel", UiIcon::Refresh, u8"Отменить очистку")) {
                 ImGui::CloseCurrentPopup();
                 clearSkillsOpen = false;
             }

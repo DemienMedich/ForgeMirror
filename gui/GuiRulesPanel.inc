@@ -3,6 +3,12 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     DrawCardHeader(u8"Правила");
     ImGui::TextDisabled(u8"Настройка формулы уровней и наград. Изменения влияют на весь прогресс.");
     GameplayConfig& draft = state.rulesDraft;
+    auto RulesIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                              bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
     auto rulesMatch = [](const GameplayConfig& a, const GameplayConfig& b) {
         auto closeEnough = [](float lhs, float rhs) { return std::fabs(lhs - rhs) < 0.0001f; };
         if (a.levelBaseXp != b.levelBaseXp) return false;
@@ -218,23 +224,11 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     const bool hasChanges = !rulesMatch(draft, state.rulesConfig);
     if (stackRules) {
         if (!hasChanges) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+        if (RulesIconButton("rules_reset_stack", UiIcon::Refresh, u8"Сбросить несохранённые изменения")) {
             draft = state.rulesConfig;
         }
-        if (hasChanges) {
-            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-            accent.w = 1.0f;
-            ImVec4 saveBg = accent;
-            saveBg.w = 0.18f;
-            ImVec4 saveHover = accent;
-            saveHover.w = 0.28f;
-            ImVec4 saveActive = accent;
-            saveActive.w = 0.38f;
-            ImGui::PushStyleColor(ImGuiCol_Button, saveBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saveHover);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, saveActive);
-        }
-        if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
+        ImGui::SameLine();
+        if (RulesIconButton("rules_save_stack", UiIcon::Chart, u8"Сохранить правила и применить к профилям")) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {
                 state.rulesConfig = result.config;
@@ -250,15 +244,14 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                           AppLogLevel::Error, u8"Правила");
             }
         }
-        if (hasChanges) {
-            ImGui::PopStyleColor(3);
-        }
         if (!hasChanges) ImGui::EndDisabled();
     } else if (ImGui::BeginTable("rules_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
         if (!hasChanges) ImGui::BeginDisabled();
         ImGui::TableSetupColumn("rules_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+        ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+        ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -266,25 +259,12 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+        if (RulesIconButton("rules_reset", UiIcon::Refresh, u8"Сбросить несохранённые изменения")) {
             draft = state.rulesConfig;
         }
         ImGui::TableSetColumnIndex(2);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-        if (hasChanges) {
-            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-            accent.w = 1.0f;
-            ImVec4 saveBg = accent;
-            saveBg.w = 0.18f;
-            ImVec4 saveHover = accent;
-            saveHover.w = 0.28f;
-            ImVec4 saveActive = accent;
-            saveActive.w = 0.38f;
-            ImGui::PushStyleColor(ImGuiCol_Button, saveBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saveHover);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, saveActive);
-        }
-        if (ImGui::Button(u8"Сохранить и применить", ImVec2(-1.0f, 0.0f))) {
+        if (RulesIconButton("rules_save", UiIcon::Chart, u8"Сохранить правила и применить к профилям")) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {
                 state.rulesConfig = result.config;
@@ -299,9 +279,6 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
                           AppLogLevel::Error, u8"Правила");
             }
-        }
-        if (hasChanges) {
-            ImGui::PopStyleColor(3);
         }
         if (!hasChanges) ImGui::EndDisabled();
         ImGui::EndTable();
