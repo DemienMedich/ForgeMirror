@@ -988,7 +988,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     skillCount, activeAchCount, achCount);
     ImGui::TextDisabled(u8"Выполнено задач: %d", profile.tasks_completed());
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (state.modules.achievements) {
+        const bool showAchievementPreview = state.ui.profileViewMode != 2;
+        if (state.modules.achievements && showAchievementPreview) {
             if (!profile.achievements().empty()) {
                 auto formatDate = [](std::int64_t ts) -> std::string {
                     if (ts <= 0) return std::string(u8"без срока");
@@ -1014,17 +1015,16 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     if (a->awardedAt != b->awardedAt) return a->awardedAt > b->awardedAt;
                     return a->title < b->title;
                 });
-                const int showCount = std::min<int>(5, static_cast<int>(recent.size()));
+                const int showCount = std::min<int>(3, static_cast<int>(recent.size()));
                 if (showCount > 0) {
-                    ImGui::Dummy(ImVec2(0.0f, 6.0f));
                     ImGui::TextDisabled(u8"Последние ачивки");
-                    const float iconSize = 56.0f;
-                    const float spacing = ImGui::GetStyle().ItemSpacing.x;
-                    const float totalWidth = showCount * iconSize + (showCount - 1) * spacing;
-                    const float avail = ImGui::GetContentRegionAvail().x;
-                    if (avail > totalWidth) {
-                        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - totalWidth) * 0.5f);
+                    if (static_cast<int>(recent.size()) > showCount) {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled(u8"+%d", static_cast<int>(recent.size()) - showCount);
                     }
+                    ImGui::SameLine();
+                    const float iconSize = 32.0f;
+                    const float spacing = ImGui::GetStyle().ItemSpacing.x;
                     for (int i = 0; i < showCount; ++i) {
                         const Achievement& a = *recent[i];
                         const bool active = a.is_active(nowSec);
@@ -1079,7 +1079,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     }
                 }
             }
-        } else {
+        } else if (!state.modules.achievements) {
             ImGui::TextDisabled(u8"Модуль ачивок отключён.");
         }
         }
