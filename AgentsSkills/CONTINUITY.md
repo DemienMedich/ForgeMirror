@@ -253,16 +253,17 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Навыки: каталог уплотнён, широкие действия заменены на иконки с подсказками, KPI стали ниже.
+  - Навыки: удаление использует отдельную `X`-иконку, detail-панель стала компактнее по весу/категории.
 - Next:
-  - Продолжить UX-прогоны по основным рабочим модулям: следующий кандидат — detail/editor навыка или общий task-manager после визуальной проверки.
+  - Продолжить UX-прогоны: следующий кандидат — editor ачивок внутри навыка или общий task-manager после визуальной проверки.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiSkillCatalogPanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiIcons.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.76.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.77.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)

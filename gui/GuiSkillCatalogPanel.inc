@@ -408,7 +408,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (!state.isAdmin) ImGui::EndDisabled();
             ImGui::SameLine();
             if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
-            if (IconButtonGui("catalog_delete_skill_stack", UiIcon::Stop,
+            if (IconButtonGui("catalog_delete_skill_stack", UiIcon::Close,
                               u8"Удалить выбранный навык", LogLevelColor(AppLogLevel::Warning), actionSize)) {
                 state.deleteSkillPopupRequest = true;
                 state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
@@ -455,7 +455,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (!state.isAdmin) ImGui::EndDisabled();
             ImGui::TableSetColumnIndex(2);
             if (!state.isAdmin || !canDeleteSkill) ImGui::BeginDisabled();
-            if (IconButtonGui("catalog_delete_skill", UiIcon::Stop,
+            if (IconButtonGui("catalog_delete_skill", UiIcon::Close,
                               u8"Удалить выбранный навык", LogLevelColor(AppLogLevel::Warning), actionSize)) {
                 state.deleteSkillPopupRequest = true;
                 state.pendingSkillDelete = catalogSkills[state.selectedCatalogIndex];
@@ -567,7 +567,6 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             const std::string desc = catalog.description(skillId);
             ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
             accent.w = 1.0f;
-            ImGui::TextColored(accent, "%s", displayName.c_str());
             std::string profName = u8"без ограничений";
             if (!state.professions.empty() && !state.editSkillProfessionFlags.empty()) {
                 std::string joined;
@@ -578,8 +577,13 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 }
                 if (!joined.empty()) profName = joined;
             }
+            ImGui::TextColored(accent, "%s", displayName.c_str());
+            ImGui::SameLine();
+            ImGui::TextDisabled(u8"%.2f / %s", catalog.weight(skillId), WeightCategoryLabel(WeightCategoryIndex(catalog.weight(skillId))));
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Вес влияет на долю XP при распределении.");
+            }
             ImGui::TextDisabled(u8"Профессии: %s", profName.c_str());
-            ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
             if (desc.empty()) {
                 ImGui::TextDisabled(u8"Описание отсутствует.");
