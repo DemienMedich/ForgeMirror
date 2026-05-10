@@ -1090,7 +1090,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             return true;
         };
         auto viewTabAllowed = [&](int index) {
-            if (focusMode) return index == 0;
+            if (focusMode) return index == 0 || index == 5;
             if (overviewMode) return index == 0 || index == 3;
             return true;
         };
@@ -1121,7 +1121,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 {u8"Обзор", 0, true},
                 {u8"Ачивки", 1, false},
                 {u8"Навыки", 2, false},
-                {u8"Диаграмма", 3, true},
+                {u8"Аналитика", 3, true},
                 {u8"Действия", 4, false},
                 {u8"Задачи", 5, false}
             };

@@ -699,7 +699,10 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
 }
 
 static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Profile& profile) {
-    if (ImGui::CollapsingHeader(u8"Диаграммы")) {
+    DrawCardHeader(u8"Аналитика профиля");
+    ImGui::TextDisabled(u8"Категории, лидирующие навыки и радар без вложенного раскрытия.");
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    {
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
@@ -829,9 +832,23 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                 static int radarCount = 8;
                 const int maxRadar = std::min<int>(16, static_cast<int>(skills.size()));
                 radarCount = std::clamp(radarCount, 3, maxRadar);
-                ImGui::SetNextItemWidth(std::min(260.0f, ImGui::GetContentRegionAvail().x));
-                ImGui::SliderInt(u8"Навыков на диаграмме", &radarCount, 3, maxRadar);
-                ImGui::TextDisabled(u8"Показано: %d из %d", radarCount, static_cast<int>(skills.size()));
+                const float radarControlWidth = ImGui::GetContentRegionAvail().x;
+                const bool compactRadarControls = radarControlWidth < 520.0f;
+                if (compactRadarControls) {
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::SliderInt(u8"Навыков", &radarCount, 3, maxRadar);
+                    ImGui::TextDisabled(u8"Показано: %d из %d", radarCount, static_cast<int>(skills.size()));
+                } else if (ImGui::BeginTable("radar_controls", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("radar_slider", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+                    ImGui::TableSetupColumn("radar_count", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::SliderInt(u8"Навыков", &radarCount, 3, maxRadar);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextDisabled(u8"Показано: %d из %d", radarCount, static_cast<int>(skills.size()));
+                    ImGui::EndTable();
+                }
                 ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
 
                 std::vector<Skill> top;
@@ -855,7 +872,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                     skill.name = catalog.display_name(skill.name);
                 }
 
-                ImVec2 radarSize(ImGui::GetContentRegionAvail().x, 320.0f);
+                ImVec2 radarSize(ImGui::GetContentRegionAvail().x, 280.0f);
                 if (radarSize.x < 200.0f) radarSize.x = 200.0f;
                 ImVec2 radarPos = ImGui::GetCursorScreenPos();
                 ImGui::InvisibleButton("##skill_radar_canvas", radarSize);
