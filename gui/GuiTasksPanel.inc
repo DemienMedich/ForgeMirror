@@ -2616,6 +2616,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
             const bool xpPending = TaskNeedsXpAward(*task);
             const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *task);
+            const std::string actionNeededSummary = BuildTaskActionNeededSummary(*task, nowSec);
 
             ImGui::TableSetColumnIndex(col++);
             const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m");
@@ -2761,6 +2762,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::SetTooltip(u8"Ожидает выдачи XP");
                 }
             }
+            if (!actionNeededSummary.empty()) {
+                ImGui::SameLine();
+                DrawStatusPillGui("task_action_needed_pill", "!", LogLevelColor(AppLogLevel::Warning),
+                                  actionNeededSummary.c_str(), true);
+            }
             if (!task->description.empty() && taskTitleHovered) {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
@@ -2890,11 +2896,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", TaskStatusLabel(draftStatus));
                 }
-                if (overdue) {
-                    ImGui::SameLine();
-                    DrawStatusPillGui("task_admin_overdue_pill", "!", LogLevelColor(AppLogLevel::Warning),
-                                      u8"Дедлайн сорван", true);
-                }
             } else {
                 ImVec4 statusAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                 if (normalizedStatus == kTaskStatusDone) {
@@ -2905,17 +2906,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 DrawStatusPillGui("task_status_pill", TaskStatusShortLabel(normalizedStatus),
                                   statusAccent, TaskStatusLabel(normalizedStatus),
                                   normalizedStatus == kTaskStatusDone || overdue);
-                if (overdue) {
-                    ImGui::SameLine();
-                    DrawStatusPillGui("task_overdue_pill", "!", LogLevelColor(AppLogLevel::Warning),
-                                      u8"Дедлайн сорван", true);
-                }
-            }
-            const std::string actionNeededSummary = BuildTaskActionNeededSummary(*task, nowSec);
-            if (!actionNeededSummary.empty()) {
-                ImGui::SameLine();
-                DrawStatusPillGui("task_action_needed_pill", "!", LogLevelColor(AppLogLevel::Warning),
-                                  actionNeededSummary.c_str(), true);
             }
 
             ImGui::PopID();
