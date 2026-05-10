@@ -153,6 +153,15 @@ static bool TestGuiTasksImGuiStackPatterns() {
     return beginCards == endCards;
 }
 
+static bool TestGuiXpModalAllowsProjectlessSourceTask() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string source;
+    if (!ReadFile(root / "gui" / "GuiXpModal.inc", source)) return false;
+    return source.find("(!fromTask && project.empty())") != std::string::npos &&
+           source.find("fromTask ? u8\"В задаче должны быть название и описание.\"") != std::string::npos;
+}
+
 static bool TestSyncHealthDetectsBrokenFiles(const std::filesystem::path& dir) {
     if (!WriteFile(dir / "meta" / "tasks.json", "{broken")) return false;
     if (!WriteFile(dir / "meta" / "pipeline.json", "{\"steps\":[{\"id\":\"p1\"}]}")) return false;
@@ -476,6 +485,7 @@ int main() {
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
+    const bool okXpProjectless = TestGuiXpModalAllowsProjectlessSourceTask();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okSyncHealth = TestSyncHealthDetectsBrokenFiles(tmp);
@@ -493,7 +503,7 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -506,6 +516,7 @@ int main() {
               << " tasks=" << okTasks
               << " taskText=" << okTaskText
               << " guiStack=" << okGuiStack
+              << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
               << " vault=" << okVault

@@ -545,8 +545,11 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     }
                     return ids;
                 }();
-                if (project.empty() || title.empty() || description.empty()) {
-                    SetStatus(state, u8"Заполните проект, задачу и описание.", 1.0f, 0.45f, 0.45f);
+                if ((!fromTask && project.empty()) || title.empty() || description.empty()) {
+                    SetStatus(state,
+                              fromTask ? u8"В задаче должны быть название и описание."
+                                       : u8"Заполните проект, задачу и описание.",
+                              1.0f, 0.45f, 0.45f);
                 } else if (memberCount <= 0) {
                     SetStatus(state, u8"Выберите хотя бы один профиль.", 1.0f, 0.45f, 0.45f);
                 } else if (memberSum != 100) {
