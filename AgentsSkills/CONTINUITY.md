@@ -34,13 +34,15 @@ UI аудит:
   - Нужно отдельно учитывать merge со старым `%APPDATA%\\ForgeMirror\\meta\\pipeline.json`, чтобы legacy-пайплайн автоматически обогащался новой схемой.
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
 - State:
-  - Ветка: develop. Версия: 0.4.83.
-  - Последнее изменение: уплотнены wizard постановки задачи и bulk-actions в админском режиме задач.
+  - Ветка: develop. Версия: 0.4.84.
+  - Последнее изменение: уплотнены detail-pane, popups и shortcut-действия задач.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
   - Tasks UX: wizard постановки задачи получил короткие stepper-labels с tooltip, compact project-toggle и icon-actions для inline-создания проекта.
   - Tasks UX: bulk-actions получили короткий header `Bulk`, X-иконку для удаления выбранных задач и compact-actions в popup массового назначения исполнителей.
+  - Tasks UX: detail-pane задач, inline-дедлайн, popup исполнителей и project bridge переведены на compact icon-buttons с tooltip вместо широких текстовых кнопок.
+  - Tasks UX: close/clear действия задач приведены к X-иконке; destructive delete оставлен за подтверждающими модальными окнами.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.
