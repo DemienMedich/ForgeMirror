@@ -181,51 +181,19 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     }
 
     if (ImGui::CollapsingHeader(u8"Топ навыков")) {
-        const char* topModes[] = {u8"По XP", u8"По уровню", u8"По весу"};
-        const float topWidth = ImGui::GetContentRegionAvail().x;
-        const bool stackTop = topWidth < 420.0f;
-        if (stackTop) {
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::Combo(u8"Рейтинг", &state.topSkillMode, topModes, IM_ARRAYSIZE(topModes));
-        } else if (ImGui::BeginTable("top_skill_filters", 2, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::Combo(u8"Рейтинг", &state.topSkillMode, topModes, IM_ARRAYSIZE(topModes));
-            ImGui::TableNextColumn();
-            ImGui::Dummy(ImVec2(0.0f, 0.0f));
-            ImGui::EndTable();
-        }
         auto skills = profile.list_skills();
         if (skills.empty()) {
             ImGui::TextDisabled(u8"Навыков нет.");
         } else {
             const int totalSkills = static_cast<int>(skills.size());
-            const int shownSkills = std::min(totalSkills, 5);
-            if (stackTop) {
-                ImGui::TextDisabled(u8"Показано: %d", shownSkills);
-            } else if (ImGui::BeginTable("top_skill_count", 2, ImGuiTableFlags_SizingStretchSame)) {
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Dummy(ImVec2(0.0f, 0.0f));
-                ImGui::TableNextColumn();
-                ImGui::TextDisabled(u8"Показано: %d", shownSkills);
-                ImGui::EndTable();
-            }
-            const int mode = std::clamp(state.topSkillMode, 0, 2);
             std::sort(skills.begin(), skills.end(), [&](const Skill& a, const Skill& b) {
-                if (mode == 1) {
-                    if (a.level != b.level) return a.level > b.level;
-                } else if (mode == 2) {
-                    if (a.weight != b.weight) return a.weight > b.weight;
-                } else {
-                    int totalA = TotalSkillXpGui(a);
-                    int totalB = TotalSkillXpGui(b);
-                    if (totalA != totalB) return totalA > totalB;
-                }
+                const int totalA = TotalSkillXpGui(a);
+                const int totalB = TotalSkillXpGui(b);
+                if (totalA != totalB) return totalA > totalB;
                 return a.level > b.level;
             });
-            if (skills.size() > 5) skills.resize(5);
+            const int shownSkills = std::min(totalSkills, 3);
+            if (skills.size() > static_cast<size_t>(shownSkills)) skills.resize(static_cast<size_t>(shownSkills));
             ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
             ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
@@ -233,12 +201,11 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
             topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
             const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
-            if (ImGui::BeginTable("top_skills", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+            if (ImGui::BeginTable("top_skills", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-                ImGui::TableSetupColumn(u8"Навык");
-                ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-                ImGui::TableSetupColumn(u8"Всего XP", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-                ImGui::TableSetupColumn(u8"Вес", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn(u8"Навык", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableSetupColumn(u8"Ур.", ImGuiTableColumnFlags_WidthFixed, 56.0f);
                 ImGui::TableHeadersRow();
                 int rowRank = 0;
                 for (const auto& skill : skills) {
@@ -252,16 +219,15 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                     ImGui::TextUnformatted(catalog.display_name(skill.name).c_str());
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%d", skill.level);
-                    ImGui::TableSetColumnIndex(3);
                     ImGui::Text("%d", TotalSkillXpGui(skill));
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("%.2f", skill.weight);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%d", skill.level);
                     ++rowRank;
                 }
                 ImGui::EndTable();
             }
             ImGui::PopStyleVar();
+            ImGui::TextDisabled(u8"Показано: %d из %d. Подробные рейтинги — в аналитике.", shownSkills, totalSkills);
         }
     }
 
@@ -371,17 +337,6 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         ImGui::PopStyleVar();
     }
 
-    if (ImGui::CollapsingHeader(u8"Категории")) {
-        const auto& catScores = profile.category_best_scores();
-        for (size_t i = 0; i < catScores.size(); ++i) {
-            const int score = catScores[i];
-            const float ratio = static_cast<float>(score) / static_cast<float>(Profile::kMaxCategoryScore);
-            std::string label = std::string(u8"Категория ") + Profile::kCategoryLabels[i];
-            ImGui::TextUnformatted(label.c_str());
-            std::string barText = std::to_string(score) + "/10";
-            ImGui::ProgressBar(ratio, ImVec2(-1.0f, 0.0f), barText.c_str());
-        }
-    }
     }
 
 static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
