@@ -1446,44 +1446,44 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextDisabled(u8"Профили");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_profile", &state.tasksFilterProfile,
                          profileLabelPtrs.data(), static_cast<int>(profileLabelPtrs.size()))) {
             state.tasksFilterProfile = std::clamp(state.tasksFilterProfile, 0, static_cast<int>(profileLabelPtrs.size()) - 1);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по профилю.");
         ImGui::TableSetColumnIndex(2);
-        ImGui::TextDisabled(u8"Проекты");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_project", &state.tasksFilterProject,
                          projectFilterLabelPtrs.data(), static_cast<int>(projectFilterLabelPtrs.size()))) {
             state.tasksFilterProject = std::clamp(state.tasksFilterProject, 0,
                 static_cast<int>(projectFilterLabelPtrs.size()) - 1);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по проекту.");
         ImGui::TableSetColumnIndex(3);
-        ImGui::TextDisabled(u8"Этап");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_pipeline", &state.tasksFilterPipeline,
                          pipelineFilterLabelPtrs.data(), static_cast<int>(pipelineFilterLabelPtrs.size()))) {
             state.tasksFilterPipeline = std::clamp(state.tasksFilterPipeline, 0,
                 static_cast<int>(pipelineFilterLabelPtrs.size()) - 1);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по этапу пайплайна.");
         ImGui::TableSetColumnIndex(4);
-        ImGui::TextDisabled(u8"Статус");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_status", &state.tasksFilterStatus,
                          statusLabelPtrs, IM_ARRAYSIZE(statusLabelPtrs))) {
             state.tasksFilterStatus = std::clamp(state.tasksFilterStatus, 0,
                 static_cast<int>(IM_ARRAYSIZE(statusLabelPtrs)) - 1);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по статусу.");
         ImGui::TableSetColumnIndex(5);
-        ImGui::TextDisabled(u8"Приоритет");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::Combo(u8"##tasks_priority", &state.tasksFilterPriority,
                          priorityLabelPtrs, IM_ARRAYSIZE(priorityLabelPtrs))) {
             state.tasksFilterPriority = std::clamp(state.tasksFilterPriority, 0,
                 static_cast<int>(IM_ARRAYSIZE(priorityLabelPtrs)) - 1);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по приоритету.");
         ImGui::EndTable();
         if (ImGui::BeginTable("tasks_filters_extra", 4, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
@@ -1495,21 +1495,20 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             DrawAnchorIcon(UiIcon::Chart);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-            ImGui::TextDisabled(u8"Период");
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::Combo(u8"##tasks_days", &dayIndex, dayLabels, IM_ARRAYSIZE(dayLabels))) {
                 state.tasksFilterDays = dayOptions[dayIndex];
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Период создания задач.");
             ImGui::TableSetColumnIndex(2);
-            ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::Combo(u8"##tasks_sort", &state.tasksSortMode,
                              sortLabelPtrs, IM_ARRAYSIZE(sortLabelPtrs))) {
                 state.tasksSortMode = std::clamp(state.tasksSortMode, 0,
                     static_cast<int>(IM_ARRAYSIZE(sortLabelPtrs)) - 1);
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Порядок сортировки таблицы.");
             ImGui::TableSetColumnIndex(3);
-            ImGui::TextDisabled(u8"Экспорт");
             if (TaskIconButton("tasks_export_csv", UiIcon::Launch, u8"Экспортировать видимые задачи в CSV")) {
                 ExportFilteredTasks(false);
             }
@@ -2363,19 +2362,21 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Text("%d", filteredCount);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                ImGui::TextDisabled(u8"Последняя");
+                ImGui::TextDisabled(u8"Посл.");
                 ImGui::Text("%s", lastStamp.empty() ? "-" : lastStamp.c_str());
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Последняя задача по текущему фильтру.");
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Фокус");
                 ImGui::Text("%s", focusText.c_str());
                 ImGui::TableSetColumnIndex(3);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                ImGui::TextDisabled(u8"Оценка ср.");
+                ImGui::TextDisabled(u8"Ср.");
                 ImGui::Text("%.1f", avgScore);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Средняя оценка задач.");
                 ImGui::TableSetColumnIndex(4);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                ImGui::TextDisabled(u8"Участники");
+                ImGui::TextDisabled(u8"Люди");
                 ImGui::Text("%d", static_cast<int>(uniqueProfiles.size()));
                 ImGui::EndTable();
             }
@@ -2388,27 +2389,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
-            ImGui::TextDisabled(u8"Средний пул XP: %.0f", avgPool);
+            ImGui::TextDisabled(u8"XP ср.: %.0f", avgPool);
             if (xpPendingCount > 0) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан: %d", xpPendingCount);
+                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"handoff:%d", xpPendingCount);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Задачи закрыты, но XP ещё не выдан.");
             }
             if (!topPipelineLabel.empty()) {
-                ImGui::Dummy(ImVec2(0.0f, 4.0f));
-                ImGui::TextDisabled(u8"Этап-фокус");
+                ImGui::SameLine();
+                ImGui::TextDisabled(u8"Этап:");
                 ImGui::SameLine();
                 ImGui::Text("%s (%d)", topPipelineLabel.c_str(), topPipelineCount);
                 if (unassignedPipelineCount > 0) {
                     ImGui::SameLine();
-                    ImGui::TextDisabled(u8"без этапа: %d", unassignedPipelineCount);
+                    ImGui::TextDisabled(u8"без:%d", unassignedPipelineCount);
                 }
             } else if (unassignedPipelineCount > 0) {
-                ImGui::Dummy(ImVec2(0.0f, 4.0f));
-                ImGui::TextDisabled(u8"Пайплайн не задан у %d задач.", unassignedPipelineCount);
+                ImGui::SameLine();
+                ImGui::TextDisabled(u8"без этапа:%d", unassignedPipelineCount);
             }
 
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            ImGui::TextDisabled(u8"Активность за 14 дней");
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::TextDisabled(u8"14 дней");
             constexpr int kDays = 14;
             std::array<float, kDays> dayCounts{};
             const std::int64_t nowSec = NowSeconds();
