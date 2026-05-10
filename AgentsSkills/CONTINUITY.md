@@ -253,16 +253,16 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Профильная `Сводка профиля` больше не дублирует уровень/ранг/общий XP из header; вместо KPI-плиток оставлена компактная строка счётчиков и сигнальные карточки.
+  - Вкладка профиля `Обзор` очищена от дублей: rank-progress и отдельный блок `Индикаторы` убраны, так как эти сигналы уже есть в header/сводке/подробном состоянии.
 - Next:
-  - Продолжить компоновку профиля: проверить вкладку `Обзор` после header/signal cleanup и решить, какие блоки оставить в overview/focus режимах.
+  - Продолжить компоновку профиля: пройтись по подробному блоку `Состояние` и решить, нужно ли его оставить раскрывающимся или перенести часть в `Аналитику`.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
-  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfilePanel.inc`
+  - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfileSections.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.62.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.63.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)

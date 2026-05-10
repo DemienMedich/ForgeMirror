@@ -9,17 +9,6 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
     const int levelsLeft = (span.hasNext && span.nextLevel > span.currentLevel)
         ? (span.nextLevel - overallLevel)
         : 0;
-    if (span.hasNext && span.nextLevel > span.currentLevel) {
-        std::string nextRankText = std::string(u8"След. ранг: ") + span.nextLabel;
-        std::string rankProgressText = u8"До следующего ранга: " + std::to_string(levelsLeft) + u8" ур.";
-        const float rankProgress = static_cast<float>(overallLevel - span.currentLevel) /
-        static_cast<float>(span.nextLevel - span.currentLevel);
-        ImGui::TextUnformatted(nextRankText.c_str());
-        ImGui::ProgressBar(std::clamp(rankProgress, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f), rankProgressText.c_str());
-    } else {
-        ImGui::TextUnformatted(u8"Ранг: максимум");
-    }
-
     if (BeginCard("profile_state_card")) {
         DrawCardHeader(u8"Сводка состояния");
         ImGui::TextDisabled(u8"Где вы сейчас и что проседает.");
@@ -273,88 +262,6 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 ImGui::EndTable();
             }
             ImGui::PopStyleVar();
-        }
-    }
-
-    {
-        constexpr std::int64_t kStaleThreshold = 30LL * 24 * 3600;
-        const bool isStale = profile.last_task_timestamp() > 0 &&
-        (nowSec - profile.last_task_timestamp()) > kStaleThreshold;
-        int categoriesBelow = 0;
-        const auto& catScores = profile.category_best_scores();
-        for (size_t i = 0; i < catScores.size(); ++i) {
-            if (catScores[i] < Profile::kMaxCategoryScore) {
-                categoriesBelow++;
-            }
-        }
-        const bool penaltiesEnabled = profile.penalties_enabled();
-        bool hasRecovery = penaltiesEnabled && profile.recovery_tasks_remaining() > 0;
-        if (ImGui::CollapsingHeader(u8"Индикаторы")) {
-            const int signals = (hasRecovery ? 1 : 0) + (categoriesBelow > 0 ? 1 : 0) + (isStale ? 1 : 0);
-            ImGui::TextDisabled(u8"Активных сигналов: %d", signals);
-            if (signals == 0) {
-                ImGui::TextColored(accentSoft, u8"Все в норме.");
-            } else {
-                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
-                ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
-                keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
-                const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-                auto rowTint = [](AppLogLevel level) {
-                    ImVec4 tint = LogLevelColor(level);
-                    tint.w = std::clamp(tint.w * 0.12f, 0.04f, 0.12f);
-                    return ImGui::GetColorU32(tint);
-                };
-                if (ImGui::BeginTable("profile_flags", 3, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-                ImGui::TableSetupColumn(u8"Сигнал");
-                ImGui::TableSetupColumn(u8"Статус");
-                ImGui::TableHeadersRow();
-                int rowRank = 0;
-                if (hasRecovery) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowTint(AppLogLevel::Error));
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextDisabled("%d", ++rowRank);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), u8"Прогрев");
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Text(u8"осталось: %d", profile.recovery_tasks_remaining());
-                }
-                if (categoriesBelow > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowTint(AppLogLevel::Warning));
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextDisabled("%d", ++rowRank);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Категории < 10/10");
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Text(u8"шт: %d", categoriesBelow);
-                }
-                if (isStale) {
-                    const std::int64_t lastTaskTs = profile.last_task_timestamp();
-                    const int staleDays = lastTaskTs > 0
-                    ? static_cast<int>((nowSec - lastTaskTs) / (24 * 3600))
-                    : 0;
-                    ImGui::TableNextRow();
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, rowTint(AppLogLevel::Warning));
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextDisabled("%d", ++rowRank);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Нет активности.");
-                    ImGui::TableSetColumnIndex(2);
-                    if (staleDays > 0) {
-                        ImGui::Text(u8"> %d дн.", staleDays);
-                    } else {
-                        ImGui::TextUnformatted(u8"> 30 дн.");
-                    }
-                }
-                ImGui::EndTable();
-                }
-                ImGui::PopStyleVar();
-            }
         }
     }
 
