@@ -2,7 +2,7 @@
 
 #ifndef AppVersion
   // Fallback to current app version (kept in CMakeLists.txt). Override via /DAppVersion=... when building.
-#define AppVersion "0.4.86"
+#define AppVersion "0.4.87"
 #endif
 
 #if AppVersion == "0.0.0"

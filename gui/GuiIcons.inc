@@ -20,6 +20,7 @@ enum class UiIcon {
     SpiritEvil,
     Play,
     Stop,
+    Previous,
     Next,
     Plus,
     Copy,
@@ -262,6 +263,19 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             ImVec2 b = IconPoint(center, 0.50f, 0.50f, s);
             drawList->AddRectFilled(a, b, color, s * 0.10f);
             drawList->AddRect(a, b, color, s * 0.10f, 0, stroke);
+            return;
+        }
+        case UiIcon::Previous: {
+            ImVec2 a1 = IconPoint(center, 0.55f, -0.50f, s);
+            ImVec2 b1 = IconPoint(center, -0.05f, 0.0f, s);
+            ImVec2 c1 = IconPoint(center, 0.55f, 0.50f, s);
+            ImVec2 a2 = IconPoint(center, -0.05f, -0.50f, s);
+            ImVec2 b2 = IconPoint(center, -0.65f, 0.0f, s);
+            ImVec2 c2 = IconPoint(center, -0.05f, 0.50f, s);
+            drawList->AddTriangleFilled(a1, b1, c1, color);
+            drawList->AddTriangleFilled(a2, b2, c2, color);
+            drawList->AddTriangle(a1, b1, c1, color, stroke * 0.8f);
+            drawList->AddTriangle(a2, b2, c2, color, stroke * 0.8f);
             return;
         }
         case UiIcon::Next: {

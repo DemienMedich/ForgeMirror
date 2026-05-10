@@ -86,6 +86,13 @@ static bool BeginPipelinePane(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f)) 
     return ImGui::BeginChild(id, size, ImGuiChildFlags_Border);
 }
 
+static bool PipelineIconButton(const char* id, UiIcon icon, const char* tooltip,
+                               bool enabled = true, bool selected = false) {
+    ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+    return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+}
+
 static void EndPipelinePane() {
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
@@ -362,9 +369,9 @@ void DrawPipelinePanel(GuiState& state) {
     const int stepCount = static_cast<int>(state.pipelineSteps.size());
     if (stepCount == 0) {
         DrawCardHeader(u8"Пайплайн");
-        ImGui::TextDisabled(u8"Пайплайн пуст.");
+        ImGui::TextDisabled(u8"Пайплайн пуст. Добавьте первый блок, чтобы начать production-flow.");
         if (state.isAdmin) {
-            if (ImGui::Button(u8"Добавить блок")) {
+            if (PipelineIconButton("pipeline_empty_add", UiIcon::Plus, u8"Добавить первый блок пайплайна")) {
                 AppPipelineMutationResult addResult = AppAddPipelineStep(state.storageDir, state.pipelineSteps, stepCount - 1);
                 if (addResult.ok) {
                     state.selectedPipelineIndex = addResult.selectedIndex;
@@ -390,13 +397,14 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::TextDisabled(u8"Фильтр");
         ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Название, код, ветка, контроль",
                                  state.filters.pipeline.data(), state.filters.pipeline.size());
-        if (ImGui::SmallButton(u8"Сброс фильтра")) {
+        if (PipelineIconButton("pipeline_filter_reset_stack", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
             state.filters.pipeline.fill('\0');
         }
     } else if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("pipeline_filter_label", ImGuiTableColumnFlags_WidthFixed, 74.0f);
         ImGui::TableSetupColumn("pipeline_filter_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("pipeline_filter_action", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImGui::TableSetupColumn("pipeline_filter_action", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::TextDisabled(u8"Фильтр");
@@ -405,7 +413,7 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Название, код, ветка, контроль",
                                  state.filters.pipeline.data(), state.filters.pipeline.size());
         ImGui::TableSetColumnIndex(2);
-        if (ImGui::Button(u8"Сбросить", ImVec2(-1.0f, 0.0f))) {
+        if (PipelineIconButton("pipeline_filter_reset", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
             state.filters.pipeline.fill('\0');
         }
         ImGui::EndTable();
@@ -654,59 +662,49 @@ void DrawPipelinePanel(GuiState& state) {
 
             if (state.isAdmin) {
                 ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
-                if (ImGui::BeginTable("pipeline_edit_actions", 6, ImGuiTableFlags_SizingStretchSame)) {
+                const float actionColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
+                if (ImGui::BeginTable("pipeline_edit_actions", 6, ImGuiTableFlags_SizingFixedFit)) {
+                    for (int col = 0; col < 6; ++col) {
+                        ImGui::TableSetupColumn(("pipeline_action_" + std::to_string(col)).c_str(),
+                                                ImGuiTableColumnFlags_WidthFixed, actionColumn);
+                    }
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     if (editingSelected) {
-                        const ImGuiStyle& style = ImGui::GetStyle();
-                        ImVec4 accentButton = style.Colors[ImGuiCol_CheckMark];
-                        accentButton.w = 0.86f;
-                        ImVec4 accentHover = BlendColor(accentButton, style.Colors[ImGuiCol_ButtonHovered], 0.35f);
-                        ImVec4 accentActive = BlendColor(accentButton, style.Colors[ImGuiCol_ButtonActive], 0.25f);
-                        ImGui::PushStyleColor(ImGuiCol_Button, accentButton);
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accentHover);
-                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, accentActive);
-                        if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
+                        if (PipelineIconButton("pipeline_save", UiIcon::Chart, u8"Сохранить блок пайплайна")) {
                             saveRequested = true;
                         }
-                        ImGui::PopStyleColor(3);
-                    } else if (ImGui::Button(u8"Редактировать", ImVec2(-1.0f, 0.0f))) {
+                    } else if (PipelineIconButton("pipeline_edit", UiIcon::Settings, u8"Редактировать блок пайплайна")) {
                         startEditRequested = true;
                     }
                     ImGui::TableNextColumn();
                     if (editingSelected) {
-                        if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
+                        if (PipelineIconButton("pipeline_cancel", UiIcon::Close, u8"Отменить редактирование")) {
                             cancelRequested = true;
                         }
                     } else {
-                        ImGui::BeginDisabled();
-                        ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f));
-                        ImGui::EndDisabled();
+                        PipelineIconButton("pipeline_cancel_disabled", UiIcon::Close, u8"Нет активного редактирования", false);
                     }
                     ImGui::TableNextColumn();
-                    if (ImGui::Button(u8"Добавить", ImVec2(-1.0f, 0.0f))) {
+                    if (PipelineIconButton("pipeline_add", UiIcon::Plus, u8"Добавить блок после текущего")) {
                         addRequested = true;
                     }
                     ImGui::TableNextColumn();
-                    if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
+                    if (PipelineIconButton("pipeline_delete", UiIcon::Close, u8"Удалить текущий блок")) {
                         deleteRequested = true;
                     }
                     ImGui::TableNextColumn();
                     const bool canMoveUp = state.selectedPipelineIndex > 0;
-                    if (!canMoveUp) ImGui::BeginDisabled();
-                    if (ImGui::Button(u8"Вверх", ImVec2(-1.0f, 0.0f))) {
+                    if (PipelineIconButton("pipeline_move_up", UiIcon::Previous, u8"Переместить блок выше", canMoveUp)) {
                         moveFrom = state.selectedPipelineIndex;
                         moveTo = state.selectedPipelineIndex - 1;
                     }
-                    if (!canMoveUp) ImGui::EndDisabled();
                     ImGui::TableNextColumn();
                     const bool canMoveDown = state.selectedPipelineIndex + 1 < stepCount;
-                    if (!canMoveDown) ImGui::BeginDisabled();
-                    if (ImGui::Button(u8"Вниз", ImVec2(-1.0f, 0.0f))) {
+                    if (PipelineIconButton("pipeline_move_down", UiIcon::Next, u8"Переместить блок ниже", canMoveDown)) {
                         moveFrom = state.selectedPipelineIndex;
                         moveTo = state.selectedPipelineIndex + 1;
                     }
-                    if (!canMoveDown) ImGui::EndDisabled();
                     ImGui::EndTable();
                 }
             }

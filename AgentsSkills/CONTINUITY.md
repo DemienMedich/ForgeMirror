@@ -36,8 +36,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state.
 - State:
-  - Ветка: develop. Версия: 0.4.86.
-  - Последнее изменение: начат общий UX pass с модуля проектов: compact icon-actions и useful empty-state.
+  - Ветка: develop. Версия: 0.4.87.
+  - Последнее изменение: продолжен общий UX pass, пункт 2 `Пайплайн`: compact icon-actions в фильтре и админ-панели.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
@@ -47,6 +47,7 @@ UI аудит:
   - Tasks UX: close/clear действия задач приведены к X-иконке; destructive delete оставлен за подтверждающими модальными окнами.
   - Tasks UX: рабочая очередь задач получила compact icon-buttons для переходов по метрикам, а фокусная задача открывается иконкой вместо широкой текстовой кнопки.
   - Projects UX: hub-actions, действия строк и редактор проекта переведены на compact icon-buttons с tooltip; empty-state получил next-step и reset-фильтров.
+  - Pipeline UX: empty-state, сброс фильтра и нижняя админ-панель действий переведены на compact icon-buttons с tooltip; добавлена Previous-иконка для move-up.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.
