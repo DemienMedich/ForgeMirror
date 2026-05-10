@@ -46,12 +46,32 @@ if ($IsccPath -ne "") {
     if ($cmd) {
         $isscc = $cmd.Source
     } else {
-        $fallbackX86 = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"
-        $fallbackX64 = Join-Path ${env:ProgramFiles} "Inno Setup 6\\ISCC.exe"
-        if (Test-Path $fallbackX86) {
-            $isscc = $fallbackX86
-        } elseif (Test-Path $fallbackX64) {
-            $isscc = $fallbackX64
+        $candidateDirs = New-Object System.Collections.Generic.List[string]
+        $registryRoots = @(
+            "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+            "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+            "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+            "HKCU:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*"
+        )
+        foreach ($root in $registryRoots) {
+            Get-ItemProperty $root -ErrorAction SilentlyContinue |
+                Where-Object { $_.DisplayName -like "*Inno Setup*" -and $_.InstallLocation } |
+                ForEach-Object { $candidateDirs.Add($_.InstallLocation) }
+        }
+        $staticDirs = @(
+            (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6"),
+            (Join-Path ${env:ProgramFiles} "Inno Setup 6"),
+            (Join-Path $env:LOCALAPPDATA "Programs\\Inno Setup 6")
+        )
+        foreach ($dir in $staticDirs) {
+            if ($dir) { $candidateDirs.Add($dir) }
+        }
+        foreach ($dir in ($candidateDirs | Select-Object -Unique)) {
+            $candidate = Join-Path $dir "ISCC.exe"
+            if (Test-Path $candidate) {
+                $isscc = $candidate
+                break
+            }
         }
     }
 }
