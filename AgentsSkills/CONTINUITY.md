@@ -253,7 +253,7 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Вкладка профиля `Текущие задачи`: быстрые переходы `Все/Активные/Просрочка/Ждут XP` заменены на compact icon-actions с tooltip и disabled-состояниями.
+  - Вкладки профиля `Навыки` и `Последние действия`: reset/export actions заменены на compact icon-actions с tooltip.
 - Next:
   - Продолжить компоновку профиля: пройтись по вкладкам `Аналитика` и `Фокус`, убрать дубли summary/графиков и привести оставшиеся action-кнопки к компактным иконкам с tooltip.
 - Open questions (UNCONFIRMED if needed):
@@ -262,7 +262,7 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfileSections.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.66.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.67.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)

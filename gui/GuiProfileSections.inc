@@ -530,6 +530,8 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
 
 static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
     if (ImGui::CollapsingHeader(u8"Навыки")) {
+    ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
     DrawCardHeader(u8"Фильтры");
     const float skillFilterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackSkillFilters = skillFilterWidth < 620.0f;
@@ -550,7 +552,8 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
         weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
-        if (ImGui::SmallButton(u8"Сброс##skill_filters")) {
+        if (IconButtonGui("profile_skill_filters_reset_stack", UiIcon::Refresh,
+                          u8"Сбросить фильтры навыков", accent, ImGui::GetFrameHeight())) {
             state.filters.profileSkill.fill('\0');
             state.profileSkillCategoryFilter = 0;
             state.profileSkillWeightRange[0] = 0.0f;
@@ -560,7 +563,8 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         ImGui::TableSetupColumn("profile_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("profile_sort", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn("profile_category", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("profile_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("profile_reset", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -576,7 +580,8 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
         weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
         ImGui::TableNextColumn();
-        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+        if (IconButtonGui("profile_skill_filters_reset", UiIcon::Refresh,
+                          u8"Сбросить фильтры навыков", accent, ImGui::GetFrameHeight())) {
             state.filters.profileSkill.fill('\0');
             state.profileSkillCategoryFilter = 0;
             state.profileSkillWeightRange[0] = 0.0f;
@@ -862,6 +867,8 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
 static void DrawProfileActivitySection(GuiState& state, const std::string& profileId) {
     if (ImGui::CollapsingHeader(u8"Последние действия")) {
     if (ImGui::BeginChild("profile_activity", ImVec2(0, 140), true)) {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
         DrawCardHeader(u8"Фильтры");
         const auto logIt = state.activityLogs.find(profileId);
         const bool hasLog = logIt != state.activityLogs.end() && !logIt->second.empty();
@@ -892,19 +899,24 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
         if (stackActivity) {
             ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
             state.filters.activity.data(), state.filters.activity.size());
-            if (ImGui::SmallButton(u8"Сброс##activity_filter")) {
+            if (IconButtonGui("profile_activity_reset_stack", UiIcon::Refresh,
+                              u8"Сбросить фильтр действий", accent, ImGui::GetFrameHeight())) {
                 state.filters.activity.fill('\0');
             }
-            ImGui::TextDisabled(u8"Показано: %d", activityShown);
-            if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+            ImGui::SameLine();
+            if (IconButtonGui("profile_activity_export_stack", UiIcon::Launch,
+                              u8"Экспортировать историю действий", accent, ImGui::GetFrameHeight())) {
                 exportActivity();
             }
+            ImGui::TextDisabled(u8"Показано: %d", activityShown);
         } else if (ImGui::BeginTable("activity_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("activity_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("activity_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-            ImGui::TableSetupColumn("activity_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("activity_reset", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
             ImGui::TableSetupColumn("activity_count", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-            ImGui::TableSetupColumn("activity_export", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("activity_export", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
             ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
             const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -917,13 +929,15 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
             state.filters.activity.data(), state.filters.activity.size());
             ImGui::TableNextColumn();
-            if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            if (IconButtonGui("profile_activity_reset", UiIcon::Refresh,
+                              u8"Сбросить фильтр действий", accent, ImGui::GetFrameHeight())) {
                 state.filters.activity.fill('\0');
             }
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Показано: %d", activityShown);
             ImGui::TableNextColumn();
-            if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+            if (IconButtonGui("profile_activity_export", UiIcon::Launch,
+                              u8"Экспортировать историю действий", accent, ImGui::GetFrameHeight())) {
                 exportActivity();
             }
             ImGui::EndTable();
