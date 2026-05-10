@@ -892,10 +892,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
 
 static void DrawProfileActivitySection(GuiState& state, const std::string& profileId) {
     if (ImGui::CollapsingHeader(u8"Последние действия")) {
-    if (ImGui::BeginChild("profile_activity", ImVec2(0, 140), true)) {
+    if (ImGui::BeginChild("profile_activity", ImVec2(0, 128), true)) {
         ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
-        DrawCardHeader(u8"Фильтры");
         const auto logIt = state.activityLogs.find(profileId);
         const bool hasLog = logIt != state.activityLogs.end() && !logIt->second.empty();
         int activityShown = 0;
@@ -968,14 +967,19 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             }
             ImGui::EndTable();
         }
-        DrawCardHeader(u8"История");
         if (hasLog) {
+            int rendered = 0;
+            constexpr int kMaxActivityRows = 6;
             for (auto it = logIt->second.rbegin(); it != logIt->second.rend(); ++it) {
                 if (!MatchesFilter(*it, state.filters.activity.data())) continue;
-                ImGui::BulletText("%s", it->c_str());
+                if (rendered >= kMaxActivityRows) break;
+                ImGui::TextWrapped("%s", it->c_str());
+                rendered += 1;
             }
             if (activityShown == 0) {
                 ImGui::TextDisabled(u8"Нет действий по фильтру.");
+            } else if (activityShown > rendered) {
+                ImGui::TextDisabled(u8"+%d в истории", activityShown - rendered);
             }
         } else {
             ImGui::TextDisabled(u8"Пока нет действий.");
@@ -993,6 +997,22 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
     const std::int64_t nowSec = NowSeconds();
+    const auto taskStatusShort = [](int status) -> const char* {
+        switch (NormalizeTaskStatus(status)) {
+        case kTaskStatusInProgress:
+            return u8"Раб.";
+        case kTaskStatusDone:
+            return u8"Гот.";
+        default:
+            return u8"Нов.";
+        }
+    };
+    const auto compactDeadline = [](std::int64_t timestamp) {
+        return FormatTimestamp(timestamp, "%d.%m %H:%M");
+    };
+    const auto fullDeadline = [](std::int64_t timestamp) {
+        return FormatTimestamp(timestamp, "%d.%m.%Y %H:%M");
+    };
 
     if (ImGui::CollapsingHeader(u8"Текущие задачи", ImGuiTreeNodeFlags_DefaultOpen)) {
         const ProfileTaskOverview taskOverview = BuildProfileTaskOverview(state, profileId);
@@ -1018,28 +1038,42 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Активные");
+            ImGui::TextDisabled(u8"Актив");
             ImGui::Text("%d", totalActiveCount);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Активные задачи профиля.");
+            }
             ImGui::TextDisabled(u8"Н:%d | В:%d", taskOverview.created, taskOverview.inProgress);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Новые: %d\nВ работе: %d", taskOverview.created, taskOverview.inProgress);
+            }
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextDisabled(u8"Просрочка");
+            ImGui::TextDisabled(u8"Проср.");
             if (taskOverview.overdue > 0) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%d", taskOverview.overdue);
-                ImGui::TextDisabled(u8"нужен разбор");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Просроченные активные задачи.");
+                }
             } else {
-                ImGui::TextDisabled(u8"Нет");
-                ImGui::TextDisabled(u8"дедлайны в норме");
+                ImGui::TextDisabled("0");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Просрочек нет.");
+                }
             }
 
             ImGui::TableSetColumnIndex(2);
-            ImGui::TextDisabled(u8"XP handoff");
+            ImGui::TextDisabled(u8"XP");
             if (taskOverview.xpPending > 0) {
                 ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%d", taskOverview.xpPending);
-                ImGui::TextDisabled(u8"закрыты без XP");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Закрытые задачи, ожидающие начисления XP.");
+                }
             } else {
-                ImGui::TextDisabled(u8"Нет");
-                ImGui::TextDisabled(u8"хвостов нет");
+                ImGui::TextDisabled("0");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(u8"Нет задач с незавершенным XP handoff.");
+                }
             }
 
             ImGui::TableSetColumnIndex(3);
@@ -1049,20 +1083,30 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                     ? std::string(u8"Без названия")
                     : taskOverview.primaryTask->title;
                 ImGui::TextUnformatted(focusTitle.c_str());
+                if (ImGui::IsItemHovered() && !taskOverview.primaryTask->description.empty()) {
+                    ImGui::BeginTooltip();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                    ImGui::TextUnformatted(taskOverview.primaryTask->description.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndTooltip();
+                }
                 if (taskOverview.primaryTask->deadlineAt > 0) {
-                    const std::string focusDeadline = FormatTimestamp(taskOverview.primaryTask->deadlineAt, "%d.%m %H:%M");
+                    const std::string focusDeadline = compactDeadline(taskOverview.primaryTask->deadlineAt);
+                    const std::string focusDeadlineFull = fullDeadline(taskOverview.primaryTask->deadlineAt);
                     const bool focusOverdue = taskOverview.primaryTask->deadlineAt < nowSec;
                     if (focusOverdue) {
                         ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", focusDeadline.c_str());
                     } else {
                         ImGui::TextDisabled("%s", focusDeadline.c_str());
                     }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(u8"Дедлайн: %s", focusDeadlineFull.c_str());
+                    }
                 } else {
                     ImGui::TextDisabled(u8"без дедлайна");
                 }
             } else {
                 ImGui::TextDisabled(u8"Нет активных задач");
-                ImGui::TextDisabled(u8"можно взять новую");
             }
             ImGui::EndTable();
         }
@@ -1111,11 +1155,11 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
             if (ImGui::BeginTable("profile_active_tasks_table", 5,
                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 88.0f);
-                ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 136.0f);
-                ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.95f);
-                ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.35f);
+                ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, 54.0f);
+                ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+                ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.95f);
+                ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.55f);
                 ImGui::TableHeadersRow();
                 for (const TaskEntry* task : activeItems) {
                     const int status = NormalizeTaskStatus(task->status);
@@ -1129,23 +1173,33 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
 
                     ImGui::TableSetColumnIndex(0);
                     if (status == kTaskStatusInProgress) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusLabel(status));
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", taskStatusShort(status));
                     } else if (overdue) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusLabel(status));
+                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", taskStatusShort(status));
                     } else {
-                        ImGui::TextUnformatted(TaskStatusLabel(status));
+                        ImGui::TextUnformatted(taskStatusShort(status));
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", TaskStatusLabel(status));
                     }
 
                     ImGui::TableSetColumnIndex(1);
                     if (task->deadlineAt > 0) {
-                        const std::string deadlineText = FormatTimestamp(task->deadlineAt, "%d.%m.%Y %H:%M");
+                        const std::string deadlineText = compactDeadline(task->deadlineAt);
+                        const std::string deadlineFull = fullDeadline(task->deadlineAt);
                         if (overdue) {
                             ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadlineText.c_str());
                         } else {
                             ImGui::TextUnformatted(deadlineText.c_str());
                         }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("%s", deadlineFull.c_str());
+                        }
                     } else {
-                        ImGui::TextDisabled(u8"Не задан");
+                        ImGui::TextDisabled("-");
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(u8"Дедлайн не задан.");
+                        }
                     }
 
                     ImGui::TableSetColumnIndex(2);
@@ -1237,10 +1291,13 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         if (items.size() > 5) {
             items.resize(5);
         }
-        ImGui::TextDisabled(u8"Последние 5 задач.");
+        ImGui::TextDisabled(u8"Последние 5");
         if (pendingXpTasks > 0) {
             ImGui::SameLine();
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан: %d", pendingXpTasks);
+            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", pendingXpTasks);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Задачи, закрытые без начисления XP.");
+            }
             if (state.modules.tasks) {
                 ImGui::SameLine();
                 if (IconButtonGui("profile_done_tasks_xp", UiIcon::Chart,
@@ -1251,11 +1308,11 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             }
         }
         if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-            ImGui::TableSetupColumn(u8"Вклад", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-            ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+            ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.35f);
+            ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+            ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 64.0f);
             ImGui::TableHeadersRow();
             for (const TaskEntry* task : items) {
                 const TaskParticipant* participant = FindTaskParticipant(*task, profileId);
@@ -1263,8 +1320,12 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 if (!participant && !awaitingXp) continue;
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m.%Y %H:%M");
+                const std::string stamp = compactDeadline(task->createdAt);
+                const std::string stampFull = fullDeadline(task->createdAt);
                 ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
+                if (ImGui::IsItemHovered() && !stampFull.empty()) {
+                    ImGui::SetTooltip("%s", stampFull.c_str());
+                }
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 const std::string projectName = ResolveTaskProjectName(state, *task);
