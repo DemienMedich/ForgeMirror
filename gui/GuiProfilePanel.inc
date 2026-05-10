@@ -530,6 +530,63 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             ImGui::EndTable();
         }
+        if (state.isAdmin || profile.spirit() == ProfileSpirit::Evil) {
+            ImGui::Dummy(ImVec2(0.0f, 3.0f));
+            ImGui::TextDisabled(u8"Дух");
+            ImGui::SameLine();
+            const char* spiritLabels[] = {u8"Без духа", u8"Добрый дух (+1% XP)", u8"Злой дух (-1% XP)"};
+            int draftSpirit = static_cast<int>(profile.spirit());
+            if (state.isAdmin) {
+                ImGui::SetNextItemWidth(std::min(260.0f, ImGui::GetContentRegionAvail().x));
+                if (ImGui::Combo("##profile_spirit_compact", &draftSpirit, spiritLabels, IM_ARRAYSIZE(spiritLabels))) {
+                    draftSpirit = std::clamp(draftSpirit, 0, 2);
+                    const ProfileSpirit oldSpirit = profile.spirit();
+                    const ProfileSpirit nextSpirit = static_cast<ProfileSpirit>(draftSpirit);
+                    if (oldSpirit != nextSpirit) {
+                        Profile updatedProfile = profile;
+                        updatedProfile.set_spirit(nextSpirit);
+                        AppProfileMutationResult mutation = AppSaveProfileSnapshot(
+                            storage, state.active->id, state.active->id, updatedProfile);
+                        if (mutation.ok && mutation.profile) {
+                            state.active->profile = *mutation.profile;
+                            AppendProfileAudit(state.storageDir, state.active->id, "spirit",
+                                               std::string(ProfileSpiritId(oldSpirit)) + "->" + ProfileSpiritId(nextSpirit));
+                            SetStatus(state, u8"Дух профиля обновлён.", 0.45f, 0.9f, 0.45f);
+                        } else {
+                            SetStatus(state,
+                                      mutation.errorMessage.empty() ? u8"Не удалось сохранить дух профиля." : mutation.errorMessage,
+                                      1.0f, 0.45f, 0.45f);
+                        }
+                    }
+                }
+            } else if (profile.spirit() == ProfileSpirit::Evil) {
+                constexpr double kEvilSpiritRemovalCost = 200.0;
+                const bool enoughCoins = profile.wallet_balance() + 0.000001 >= kEvilSpiritRemovalCost;
+                const bool canRemoveSpirit = walletUnlocked && enoughCoins;
+                const char* removeTooltip = !walletUnlocked
+                    ? u8"Нужно разблокировать свой профиль паролем."
+                    : (enoughCoins ? u8"Списать 200 Кукоинов и убрать дебафф -1% XP."
+                                   : u8"Нужно 200 Кукоинов для снятия Злого духа.");
+                if (IconButtonGui("profile_remove_evil_spirit", UiIcon::SpiritEvil, removeTooltip,
+                                  LogLevelColor(AppLogLevel::Warning), ImGui::GetFrameHeight(),
+                                  canRemoveSpirit)) {
+                    AppProfileMutationResult mutation = AppRemoveEvilSpiritForCoins(
+                        storage, state.active->id, state.active->id, state.storageDir, state.vault, kEvilSpiritRemovalCost);
+                    if (mutation.ok && mutation.profile) {
+                        state.active->profile = *mutation.profile;
+                        state.profileWalletCache[state.active->id] = mutation.profile->wallet_balance();
+                        AppendProfileAudit(state.storageDir, state.active->id, "spirit_purchase", "evil->none cost=200");
+                        SetStatus(state, u8"Злой дух снят. 200 Кукоинов отправлены в хранилище.", 0.45f, 0.9f, 0.45f);
+                    } else {
+                        SetStatus(state,
+                                  mutation.errorMessage.empty() ? u8"Не удалось снять Злого духа." : mutation.errorMessage,
+                                  1.0f, mutation.userError ? 0.75f : 0.45f, mutation.userError ? 0.35f : 0.45f);
+                    }
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled(u8"Снять за 200 %s", walletCurrency.c_str());
+            }
+        }
         ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
         ImGui::TextDisabled(u8"Режим");
         ImGui::SameLine();
@@ -667,115 +724,6 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     state.confirmPopupRequest = true;
                 }
             }
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Дух");
-            ImGui::TableSetColumnIndex(1);
-            const char* spiritLabels[] = {u8"Без духа", u8"Добрый дух (+1% XP)", u8"Злой дух (-1% XP)"};
-            int draftSpirit = static_cast<int>(profile.spirit());
-            if (state.isAdmin) {
-                ImGui::SetNextItemWidth(-1.0f);
-                if (ImGui::Combo("##profile_spirit", &draftSpirit, spiritLabels, IM_ARRAYSIZE(spiritLabels))) {
-                    draftSpirit = std::clamp(draftSpirit, 0, 2);
-                    const ProfileSpirit oldSpirit = profile.spirit();
-                    const ProfileSpirit nextSpirit = static_cast<ProfileSpirit>(draftSpirit);
-                    if (oldSpirit != nextSpirit) {
-                        Profile updatedProfile = profile;
-                        updatedProfile.set_spirit(nextSpirit);
-                        AppProfileMutationResult mutation = AppSaveProfileSnapshot(
-                            storage, state.active->id, state.active->id, updatedProfile);
-                        if (mutation.ok && mutation.profile) {
-                            state.active->profile = *mutation.profile;
-                            AppendProfileAudit(state.storageDir, state.active->id, "spirit",
-                                               std::string(ProfileSpiritId(oldSpirit)) + "->" + ProfileSpiritId(nextSpirit));
-                            SetStatus(state, u8"Дух профиля обновлён.", 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state,
-                                      mutation.errorMessage.empty() ? u8"Не удалось сохранить дух профиля." : mutation.errorMessage,
-                                      1.0f, 0.45f, 0.45f);
-                        }
-                    }
-                }
-            } else {
-                DrawSpiritBadge("profile_spirit_info", profile.spirit());
-                if (profile.spirit() == ProfileSpirit::Evil) {
-                    constexpr double kEvilSpiritRemovalCost = 200.0;
-                    const bool enoughCoins = profile.wallet_balance() + 0.000001 >= kEvilSpiritRemovalCost;
-                    const bool canRemoveSpirit = walletUnlocked && enoughCoins;
-                    if (ImGui::GetContentRegionAvail().x > 170.0f) {
-                        ImGui::SameLine();
-                    }
-                    if (!canRemoveSpirit) ImGui::BeginDisabled();
-                    if (ImGui::SmallButton(u8"Снять за 200")) {
-                        AppProfileMutationResult mutation = AppRemoveEvilSpiritForCoins(
-                            storage, state.active->id, state.active->id, state.storageDir, state.vault, kEvilSpiritRemovalCost);
-                        if (mutation.ok && mutation.profile) {
-                            state.active->profile = *mutation.profile;
-                            state.profileWalletCache[state.active->id] = mutation.profile->wallet_balance();
-                            AppendProfileAudit(state.storageDir, state.active->id, "spirit_purchase", "evil->none cost=200");
-                            SetStatus(state, u8"Злой дух снят. 200 Кукоинов отправлены в хранилище.", 0.45f, 0.9f, 0.45f);
-                        } else {
-                            SetStatus(state,
-                                      mutation.errorMessage.empty() ? u8"Не удалось снять Злого духа." : mutation.errorMessage,
-                                      1.0f, mutation.userError ? 0.75f : 0.45f, mutation.userError ? 0.35f : 0.45f);
-                        }
-                    }
-                    if (!canRemoveSpirit) {
-                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                            if (!walletUnlocked) {
-                                ImGui::SetTooltip(u8"Нужно разблокировать свой профиль паролем.");
-                            } else {
-                                ImGui::SetTooltip(u8"Нужно 200 %s. Сейчас: %.0f.", walletCurrency.c_str(), profile.wallet_balance());
-                            }
-                        }
-                        ImGui::EndDisabled();
-                    } else if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip(u8"Списать 200 %s и убрать дебафф -1%% XP.", walletCurrency.c_str());
-                    }
-                }
-            }
-            ImGui::TextDisabled("%s", ProfileSpiritEffectLabel(profile.spirit()));
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Опыт");
-            ImGui::TableSetColumnIndex(1);
-            const bool xpEnabled = state.isAdmin;
-            const bool emphasizeAddXp = xpEnabled && totalXp <= 0;
-            if (!xpEnabled) ImGui::BeginDisabled();
-            if (emphasizeAddXp) {
-                ImVec4 addBg = accent;
-                addBg.w = 0.18f;
-                ImVec4 addHover = addBg;
-                addHover.w = 0.28f;
-                ImVec4 addActive = addBg;
-                addActive.w = 0.38f;
-                ImGui::PushStyleColor(ImGuiCol_Button, addBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addHover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, addActive);
-            }
-            if (ImGui::Button(u8"Добавить опыт", ImVec2(-1.0f, 0.0f))) {
-                PrepareXpEntries(state, catalog);
-                state.xpPopupRequest = true;
-            }
-            if (emphasizeAddXp) {
-                ImGui::PopStyleColor(3);
-            }
-            if (!xpEnabled) {
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip(u8"Доступно только администратору.");
-                }
-                ImGui::EndDisabled();
-            }
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Ранг");
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(rankText.c_str());
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled(u8"Категории");
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextWrapped("%s", categoriesLine.c_str());
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
