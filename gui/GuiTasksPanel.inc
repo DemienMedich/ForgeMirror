@@ -1089,7 +1089,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         drawMode(u8"Админ", 1);
     };
     if (BeginCard("tasks_toolbar_card")) {
-        DrawCardHeader(u8"Рабочая панель");
+        DrawCardHeader(u8"Панель");
         const bool compactToolbar = ImGui::GetContentRegionAvail().x < 760.0f;
         int requestedQuickFilter = state.tasksQuickFilter;
         if (compactToolbar) {
@@ -1139,11 +1139,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             int toolbarColumn = 0;
             if (state.isAdmin) {
                 ImGui::TableSetColumnIndex(toolbarColumn++);
-                ImGui::TextDisabled(u8"Режим");
                 DrawTasksModeSwitch(false);
             }
             ImGui::TableSetColumnIndex(toolbarColumn++);
-            ImGui::TextDisabled(u8"Быстрый фильтр");
             ImGui::SetNextItemWidth(-1.0f);
             if (ImGui::Combo("##tasks_quick_filter", &requestedQuickFilter,
                              quickFilterLabels, IM_ARRAYSIZE(quickFilterLabels))) {
@@ -1153,8 +1151,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     state.tasksQuickFilter = requestedQuickFilter;
                 }
             }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(u8"Быстрый фильтр задач.");
+            }
             ImGui::TableSetColumnIndex(toolbarColumn++);
-            ImGui::TextDisabled(u8"Поиск");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##tasks_toolbar_search",
                                      u8"Проект, задача или описание",
@@ -2515,14 +2515,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (allowBulkSelection) {
             ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 34.0f);
         }
-        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 118.0f);
+        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 92.0f);
         ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.85f);
         ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.4f);
         ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn(u8"Приор.", ImGuiTableColumnFlags_WidthFixed, 82.0f);
-        ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 106.0f);
+        ImGui::TableSetupColumn("P", ImGuiTableColumnFlags_WidthFixed, 56.0f);
+        ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, tasksAdminMode ? 72.0f : 62.0f);
         ImGui::TableHeadersRow();
         const std::int64_t nowSec = NowSeconds();
         for (const TaskEntry* task : filtered) {
@@ -2556,8 +2556,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *task);
 
             ImGui::TableSetColumnIndex(col++);
-            const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m %H:%M");
+            const std::string stamp = FormatTimestamp(task->createdAt, "%d.%m");
             ImGui::TextDisabled("%s", stamp.empty() ? "-" : stamp.c_str());
+            if (ImGui::IsItemHovered()) {
+                const std::string fullStamp = FormatTimestamp(task->createdAt, "%Y-%m-%d %H:%M");
+                ImGui::SetTooltip("%s", fullStamp.c_str());
+            }
 
             ImGui::TableSetColumnIndex(col++);
             if (tasksAdminMode && editableTask) {
