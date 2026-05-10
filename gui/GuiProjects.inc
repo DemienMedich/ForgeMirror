@@ -234,6 +234,12 @@ void DrawProjectsPanel(GuiState& state) {
         return;
     }
     ImGui::TextDisabled(u8"Хранятся в meta/projects.json, синхронизируются через облако.");
+    auto ProjectIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                                bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
 
     std::vector<ProjectTaskStats> projectStats;
     projectStats.reserve(state.projects.size());
@@ -333,44 +339,52 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::EndTable();
     }
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
-    if (ImGui::BeginTable("projects_hub_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
+    if (ImGui::BeginTable("projects_hub_actions", 4, ImGuiTableFlags_SizingStretchSame)) {
         const bool canUseTasksHub = state.modules.tasks;
-        ImGui::TableSetupColumn("projects_open_all", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("projects_open_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("projects_open_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("projects_open_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("projects_open_all");
+        ImGui::TableSetupColumn("projects_open_active");
+        ImGui::TableSetupColumn("projects_open_xp");
+        ImGui::TableSetupColumn("projects_open_overdue");
         ImGui::TableNextRow();
 
         ImGui::TableSetColumnIndex(0);
         if (!canUseTasksHub) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Все задачи", ImVec2(-1.0f, 0.0f))) {
+        if (ProjectIconButton("projects_open_all", UiIcon::List, u8"Открыть все задачи проектов")) {
             OpenTasksFromProjectHub(state, 0, 0);
         }
         if (!canUseTasksHub) ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled(u8"Все");
         ImGui::TextDisabled(u8"%d проектов", portfolio.totalProjects);
 
         ImGui::TableSetColumnIndex(1);
         if (!canUseTasksHub || portfolio.totalActiveTasks <= 0) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Активные", ImVec2(-1.0f, 0.0f))) {
+        if (ProjectIconButton("projects_open_active", UiIcon::Play, u8"Открыть активные задачи проектов")) {
             OpenTasksFromProjectHub(state, 0, 7);
         }
         if (!canUseTasksHub || portfolio.totalActiveTasks <= 0) ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled(u8"Актив");
         ImGui::TextDisabled(u8"%d задач", portfolio.totalActiveTasks);
 
         ImGui::TableSetColumnIndex(2);
         if (!canUseTasksHub || portfolio.totalXpPendingTasks <= 0) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Ждут XP", ImVec2(-1.0f, 0.0f))) {
+        if (ProjectIconButton("projects_open_xp", UiIcon::Chart, u8"Открыть задачи, ожидающие XP")) {
             OpenTasksFromProjectHub(state, 0, 6);
         }
         if (!canUseTasksHub || portfolio.totalXpPendingTasks <= 0) ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled("XP");
         ImGui::TextDisabled(u8"%d задач", portfolio.totalXpPendingTasks);
 
         ImGui::TableSetColumnIndex(3);
         if (!canUseTasksHub || portfolio.totalOverdueTasks <= 0) ImGui::BeginDisabled();
-        if (ImGui::Button(u8"Просрочка", ImVec2(-1.0f, 0.0f))) {
+        if (ProjectIconButton("projects_open_overdue", UiIcon::Bell, u8"Открыть просроченные задачи проектов")) {
             OpenTasksFromProjectHub(state, 0, 3);
         }
         if (!canUseTasksHub || portfolio.totalOverdueTasks <= 0) ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled(u8"Срок");
         ImGui::TextDisabled(u8"%d задач", portfolio.totalOverdueTasks);
 
         ImGui::EndTable();
@@ -379,11 +393,14 @@ void DrawProjectsPanel(GuiState& state) {
 
     int shownProjects = 0;
     if (ImGui::BeginTable("projects_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+        const ImGuiStyle& projectStyle = ImGui::GetStyle();
+        const float projectActionWidth = ImGui::GetFrameHeight() * 4.0f + projectStyle.ItemSpacing.x * 3.0f +
+                                         projectStyle.CellPadding.x * 2.0f;
         ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn("tasks", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 240.0f);
+        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, projectActionWidth);
         ImGui::TableHeadersRow();
 
         const int sortMode = std::clamp(state.projectsSortMode, 0, 3);
@@ -479,28 +496,28 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::TableSetColumnIndex(4);
             const bool canOpenTasks = state.modules.tasks;
             if (!canOpenTasks) ImGui::BeginDisabled();
-            if (ImGui::SmallButton(u8"К задачам##open_tasks_project")) {
+            if (ProjectIconButton("open_tasks_project", UiIcon::List, u8"Открыть задачи проекта")) {
                 OpenTasksFromProjectHub(state, projectFilterIndex, 0);
             }
             if (canOpenTasks && taskStats.xpPending > 0) {
                 ImGui::SameLine();
-                if (ImGui::SmallButton(u8"XP##open_tasks_project_xp")) {
+                if (ProjectIconButton("open_tasks_project_xp", UiIcon::Chart, u8"Открыть задачи проекта, ожидающие XP")) {
                     OpenTasksFromProjectHub(state, projectFilterIndex, 6);
                 }
             } else if (canOpenTasks && taskStats.overdue > 0) {
                 ImGui::SameLine();
-                if (ImGui::SmallButton(u8"Срок##open_tasks_project_deadline")) {
+                if (ProjectIconButton("open_tasks_project_deadline", UiIcon::Bell, u8"Открыть просроченные задачи проекта")) {
                     OpenTasksFromProjectHub(state, projectFilterIndex, 3);
                 }
             } else if (canOpenTasks && activeTasks > 0) {
                 ImGui::SameLine();
-                if (ImGui::SmallButton(u8"Актив##open_tasks_project_active")) {
+                if (ProjectIconButton("open_tasks_project_active", UiIcon::Play, u8"Открыть активные задачи проекта")) {
                     OpenTasksFromProjectHub(state, projectFilterIndex, 7);
                 }
             }
             if (!canOpenTasks) ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::SmallButton(u8"Х##del_project")) {
+            if (ProjectIconButton("del_project", UiIcon::Close, u8"Удалить проект")) {
                 state.pendingDeleteProjectIndex = idx;
                 state.pendingDeleteProjectId = project.id;
                 state.projectDeletePopupRequest = true;
@@ -513,7 +530,19 @@ void DrawProjectsPanel(GuiState& state) {
     }
     ImGui::TextDisabled(u8"Показано проектов: %d из %d", shownProjects, static_cast<int>(state.projects.size()));
     if (shownProjects <= 0) {
-        ImGui::TextDisabled(u8"Нет проектов по фильтру.");
+        ImGui::TextDisabled(state.projects.empty()
+            ? u8"Проектов пока нет. Создайте первый проект ниже."
+            : u8"Нет проектов по фильтру.");
+        if (!state.projects.empty()) {
+            ImGui::SameLine();
+            if (ProjectIconButton("projects_empty_reset", UiIcon::Refresh, u8"Сбросить фильтры проектов")) {
+                state.filters.projects.fill('\0');
+                state.projectsFilterOverdueOnly = false;
+                state.projectsFilterXpPendingOnly = false;
+                SyncFiltersToUi(state);
+                state.uiDirty = true;
+            }
+        }
     }
 
     if (state.projectDeletePopupRequest) {
@@ -596,11 +625,12 @@ void DrawProjectsPanel(GuiState& state) {
 
     ImGui::Dummy(ImVec2(0.0f, 8.0f));
     DrawCardHeader(u8"Редактирование проекта");
-    if (ImGui::Button(u8"Новый проект", ImVec2(-1.0f, 0.0f))) {
+    if (ProjectIconButton("project_editor_new", UiIcon::Plus, u8"Новый проект")) {
         state.projectEditIndex = -1;
         state.newProjectName.fill('\0');
         state.newProjectDesc.fill('\0');
     }
+    ImGui::SameLine();
     if (state.projectEditIndex >= 0 && state.projectEditIndex < static_cast<int>(state.projects.size())) {
         ImGui::TextDisabled(u8"Редактирование: %s", state.projects[state.projectEditIndex].name.c_str());
     } else {
@@ -613,7 +643,7 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextMultiline("##project_desc", state.newProjectDesc.data(), state.newProjectDesc.size(), ImVec2(-1.0f, 90.0f));
 
-    if (ImGui::Button(u8"Сохранить проект", ImVec2(-1.0f, 0.0f))) {
+    if (ProjectIconButton("project_editor_save", UiIcon::Chart, u8"Сохранить проект")) {
         AppProjectSaveResult saveResult = AppSaveProjectEntry(
             state.storageDir,
             state.projects,

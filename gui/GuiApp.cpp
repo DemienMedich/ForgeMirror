@@ -112,10 +112,10 @@ static void SyncVaultBuffers(GuiState& state);
 #include "GuiUiSettings.inc"
 #include "GuiUiHelpers.inc"
 #include "GuiTasks.inc"
+#include "GuiIcons.inc"
 #include "GuiProjects.inc"
 #include "GuiProfessions.inc"
 #include "GuiPomodoro.inc"
-#include "GuiIcons.inc"
 #include "GuiShortcuts.inc"
 #include "GuiXpUtils.inc"
 
