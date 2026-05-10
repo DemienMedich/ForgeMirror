@@ -316,15 +316,22 @@ void DrawProjectsPanel(GuiState& state) {
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextDisabled(u8"Активный поток");
-        ImGui::Text(u8"%d проектов / %d задач", portfolio.activeProjects, portfolio.totalActiveTasks);
+        {
+            std::string activeLabel = std::to_string(portfolio.activeProjects) + u8" пр. / " +
+                std::to_string(portfolio.totalActiveTasks) + u8" зад.";
+            DrawStatusPillGui("projects_summary_active", activeLabel.c_str(),
+                              ImGui::GetStyle().Colors[ImGuiCol_CheckMark],
+                              u8"Активные проекты и задачи", portfolio.totalActiveTasks > 0);
+        }
 
         ImGui::TableSetColumnIndex(2);
         ImGui::TextDisabled(u8"XP handoff");
         if (portfolio.xpPendingProjects > 0) {
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
-                               u8"%d проектов / %d задач",
-                               portfolio.xpPendingProjects,
-                               portfolio.totalXpPendingTasks);
+            std::string xpLabel = std::to_string(portfolio.xpPendingProjects) + u8" пр. / " +
+                std::to_string(portfolio.totalXpPendingTasks) + u8" зад.";
+            DrawStatusPillGui("projects_summary_xp", xpLabel.c_str(),
+                              LogLevelColor(AppLogLevel::Warning),
+                              u8"Проекты с задачами, ожидающими XP", true);
         } else {
             ImGui::TextDisabled(u8"Нет ожидания");
         }
@@ -332,7 +339,10 @@ void DrawProjectsPanel(GuiState& state) {
         ImGui::TableSetColumnIndex(3);
         ImGui::TextDisabled(u8"Просрочка");
         if (portfolio.overdueProjects > 0) {
-            ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"%d проектов", portfolio.overdueProjects);
+            std::string overdueLabel = std::to_string(portfolio.overdueProjects) + u8" пр.";
+            DrawStatusPillGui("projects_summary_overdue", overdueLabel.c_str(),
+                              LogLevelColor(AppLogLevel::Warning),
+                              u8"Проекты с просроченными задачами", true);
         } else {
             ImGui::TextDisabled(u8"Нет риска");
         }
