@@ -623,21 +623,29 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.editSkillProfessionFlags.resize(state.professions.size(), 0);
                 if (state.professions.empty()) {
                     ImGui::TextDisabled(u8"Профессии не заданы.");
-                ImGui::TextDisabled(u8"Навык будет общим.");
+                    ImGui::TextDisabled(u8"Навык будет общим.");
                 } else {
-                    for (size_t i = 0; i < state.professions.size(); ++i) {
-                        bool checked = state.editSkillProfessionFlags[i] != 0;
-                        ImGui::PushID(static_cast<int>(i));
-                        if (ImGui::Checkbox("##edit_skill_prof_multi", &checked)) {
-                            state.editSkillProfessionFlags[i] = checked ? 1 : 0;
+                    const float profWidth = ImGui::GetContentRegionAvail().x;
+                    const int profColumns = profWidth > 520.0f ? 3 : (profWidth > 320.0f ? 2 : 1);
+                    if (ImGui::BeginTable("edit_skill_professions", profColumns, ImGuiTableFlags_SizingStretchSame)) {
+                        for (size_t i = 0; i < state.professions.size(); ++i) {
+                            bool checked = state.editSkillProfessionFlags[i] != 0;
+                            ImGui::TableNextColumn();
+                            ImGui::PushID(static_cast<int>(i));
+                            if (ImGui::Checkbox("##edit_skill_prof_multi", &checked)) {
+                                state.editSkillProfessionFlags[i] = checked ? 1 : 0;
+                            }
+                            ImGui::SameLine();
+                            ImGui::TextUnformatted(state.professions[i].name.c_str());
+                            ImGui::PopID();
                         }
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(state.professions[i].name.c_str());
-                        ImGui::PopID();
+                        ImGui::EndTable();
                     }
                 }
                 ImGui::InputTextMultiline(u8"Описание", state.editSkillDesc.data(), state.editSkillDesc.size(), ImVec2(-1.0f, 80.0f));
-                if (ImGui::Button(u8"Сохранить навык")) {
+                if (IconButtonGui("catalog_save_skill_details", UiIcon::Chart,
+                                  u8"Сохранить название, описание, вес и профессии навыка",
+                                  accent, ImGui::GetFrameHeight())) {
                     const std::string newName = TrimStringGui(state.editSkillName.data());
                     const std::string newDesc = TrimStringGui(state.editSkillDesc.data());
                     catInput = catalog.category(skillId);
@@ -677,17 +685,28 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::TextDisabled(u8"Модуль ачивок отключён.");
                 } else if (state.active) {
                     auto& ach = state.active->profile.achievements();
-                    ImGui::InputTextWithHint(u8"##skill_ach_filter", u8"Фильтр ачивок",
-                                             state.filters.skillAch.data(), state.filters.skillAch.size());
-                    ImGui::SameLine();
                     const char* statusLabels[] = {u8"Все", u8"Активные", u8"Истекшие"};
-                    ImGui::SetNextItemWidth(140.0f);
-                    ImGui::Combo(u8"Статус##skill_ach", &state.skillAchStatusFilter,
-                                 statusLabels, IM_ARRAYSIZE(statusLabels));
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton(u8"Сброс##skill_ach")) {
-                        state.filters.skillAch.fill('\0');
-                        state.skillAchStatusFilter = 0;
+                    if (ImGui::BeginTable("skill_ach_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+                        ImGui::TableSetupColumn("ach_filter", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableSetupColumn("ach_status", ImGuiTableColumnFlags_WidthFixed, 118.0f);
+                        ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthFixed,
+                                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::InputTextWithHint(u8"##skill_ach_filter", u8"Фильтр ачивок",
+                                                 state.filters.skillAch.data(), state.filters.skillAch.size());
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::Combo(u8"##skill_ach_status", &state.skillAchStatusFilter,
+                                     statusLabels, IM_ARRAYSIZE(statusLabels));
+                        ImGui::TableSetColumnIndex(2);
+                        if (IconButtonGui("skill_ach_reset", UiIcon::Refresh,
+                                          u8"Сбросить фильтр ачивок", accent, ImGui::GetFrameHeight())) {
+                            state.filters.skillAch.fill('\0');
+                            state.skillAchStatusFilter = 0;
+                        }
+                        ImGui::EndTable();
                     }
                     std::vector<int> filtered;
                     filtered.reserve(ach.size());
@@ -701,9 +720,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         if (!MatchesFilter(ach[idx].title, state.filters.skillAch.data())) continue;
                         filtered.push_back(static_cast<int>(idx));
                     }
-                    ImGui::TextDisabled(u8"Показано: %d из %d",
-                                        static_cast<int>(filtered.size()), totalForSkill);
-                    if (ImGui::BeginChild("ach_list", ImVec2(0, 140), true)) {
+                    ImGui::TextDisabled(u8"%d/%d", static_cast<int>(filtered.size()), totalForSkill);
+                    if (ImGui::BeginChild("ach_list", ImVec2(0, 116), true)) {
                         for (int fi = 0; fi < static_cast<int>(filtered.size()); ++fi) {
                             int idx = filtered[fi];
                             const auto& a = ach[idx];
@@ -735,10 +753,20 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
                     ImGui::InputText(u8"Название ачивки", state.achTitle.data(), state.achTitle.size());
-                    ImGui::InputText(u8"Иконка (путь)", state.achIcon.data(), state.achIcon.size());
-                    ImGui::SameLine();
-                    if (ImGui::Button(u8"Список иконок")) {
-                        ImGui::OpenPopup(u8"Выбор иконки");
+                    if (ImGui::BeginTable("skill_ach_icon_row", 2, ImGuiTableFlags_SizingStretchProp)) {
+                        ImGui::TableSetupColumn("ach_icon_path", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableSetupColumn("ach_icon_pick", ImGuiTableColumnFlags_WidthFixed,
+                                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::InputText(u8"Иконка##ach_icon_path", state.achIcon.data(), state.achIcon.size());
+                        ImGui::TableSetColumnIndex(1);
+                        if (IconButtonGui("skill_ach_icon_pick", UiIcon::List,
+                                          u8"Открыть список иконок", accent, ImGui::GetFrameHeight())) {
+                            ImGui::OpenPopup(u8"Выбор иконки");
+                        }
+                        ImGui::EndTable();
                     }
                     if (ImGui::BeginPopup(u8"Выбор иконки")) {
                         const auto icons = LoadAchievementIconChoices(state.storageDir);
@@ -788,10 +816,25 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         }
                         ImGui::EndPopup();
                     }
-                    ImGui::InputFloat(u8"Бонус к XP (%)", &state.achBonus, 0.5f, 2.0f, "%.1f");
-                    ImGui::InputInt(u8"Срок (дней, 0 = без срока)", &state.achDurationDays);
+                    if (ImGui::BeginTable("skill_ach_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
+                        ImGui::TableSetupColumn("ach_bonus", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableSetupColumn("ach_duration", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::InputFloat(u8"Бонус XP %", &state.achBonus, 0.5f, 2.0f, "%.1f");
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::SetNextItemWidth(-1.0f);
+                        ImGui::InputInt(u8"Дней", &state.achDurationDays);
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(u8"0 = без срока.");
+                        }
+                        ImGui::EndTable();
+                    }
                     if (state.achDurationDays < 0) state.achDurationDays = 0;
-                    if (ImGui::Button(u8"Выдать ачивку")) {
+                    const float achActionSize = ImGui::GetFrameHeight();
+                    if (IconButtonGui("skill_ach_grant", UiIcon::Plus,
+                                      u8"Выдать ачивку", accent, achActionSize)) {
                         ActionResult result = GrantAchievementAction(state.active->id, state.active->profile, storage,
                                                                     state.achTitle.data(), skillId,
                                                                     static_cast<double>(state.achBonus),
@@ -806,7 +849,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         }
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button(u8"Сохранить изменения")) {
+                    if (IconButtonGui("skill_ach_save", UiIcon::Chart,
+                                      u8"Сохранить изменения выбранной ачивки", accent, achActionSize)) {
                         ActionResult result = UpdateAchievementAction(state.active->id, state.active->profile, storage,
                                                                      state.selectedAchievementIndex,
                                                                      state.achTitle.data(),
@@ -821,7 +865,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         }
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button(u8"Удалить ачивку")) {
+                    if (IconButtonGui("skill_ach_delete", UiIcon::Close,
+                                      u8"Удалить выбранную ачивку", LogLevelColor(AppLogLevel::Warning), achActionSize)) {
                         ActionResult result = DeleteAchievementAction(state.active->id, state.active->profile, storage,
                                                                      state.selectedAchievementIndex);
                         AppLogLevel level = LogLevelForResult(result);
