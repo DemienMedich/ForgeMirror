@@ -341,6 +341,8 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
 
 static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalog, Profile& profile, std::int64_t nowSec) {
     if (ImGui::CollapsingHeader(u8"Ачивки")) {
+    ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
     if (profile.achievements().empty()) {
         ImGui::TextDisabled(u8"Ачивок нет.");
     } else {
@@ -375,7 +377,8 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             ImGui::InputTextWithHint(u8"##ach_filter", u8"Фильтр ачивок",
             state.filters.achievement.data(), state.filters.achievement.size());
             ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
-            if (ImGui::SmallButton(u8"Сброс##ach_filter")) {
+            if (IconButtonGui("profile_ach_reset_stack", UiIcon::Refresh,
+                              u8"Сбросить фильтр ачивок", accent, ImGui::GetFrameHeight())) {
                 state.filters.achievement.fill('\0');
                 state.showExpiredAchievements = true;
             }
@@ -383,7 +386,8 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             ImGui::TableSetupColumn("ach_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("ach_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableSetupColumn("ach_toggle", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
             ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
             keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
             const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -398,7 +402,8 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             ImGui::TableNextColumn();
             ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
             ImGui::TableNextColumn();
-            if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            if (IconButtonGui("profile_ach_reset", UiIcon::Refresh,
+                              u8"Сбросить фильтр ачивок", accent, ImGui::GetFrameHeight())) {
                 state.filters.achievement.fill('\0');
                 state.showExpiredAchievements = true;
             }
@@ -1217,7 +1222,9 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP не выдан: %d", pendingXpTasks);
             if (state.modules.tasks) {
                 ImGui::SameLine();
-                if (ImGui::SmallButton(u8"Ждут XP##profile_done_tasks_xp")) {
+                if (IconButtonGui("profile_done_tasks_xp", UiIcon::Chart,
+                                  u8"Открыть задачи, ожидающие XP", LogLevelColor(AppLogLevel::Warning),
+                                  ImGui::GetFrameHeight())) {
                     FocusTasksForProfile(state, profileId, 6);
                 }
             }

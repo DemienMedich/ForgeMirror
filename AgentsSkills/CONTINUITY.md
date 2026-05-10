@@ -253,16 +253,16 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Вкладки профиля `Навыки` и `Последние действия`: reset/export actions заменены на compact icon-actions с tooltip.
+  - Профиль: крупный icon-pass для выбора профиля, фильтра ачивок, pending XP shortcut, применения ранга и экспорта отчётов.
 - Next:
-  - Продолжить компоновку профиля: пройтись по вкладкам `Аналитика` и `Фокус`, убрать дубли summary/графиков и привести оставшиеся action-кнопки к компактным иконкам с tooltip.
+  - Продолжить компоновку профиля: пройтись по вкладкам `Аналитика` и `Фокус`, убрать дубли summary/графиков и проверить плотность таблиц/графиков.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):
   - `Z:\\CPP\\ForgeMirror\\gui\\GuiProfileSections.inc`
   - `Z:\\CPP\\ForgeMirror\\AgentsSkills\\CONTINUITY.md`
   - `Z:\\CPP\\ForgeMirror\\CMakeLists.txt`
-  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.67.md`
+  - `Z:\\CPP\\ForgeMirror\\data\\meta\\patch-notes\\0.4.68.md`
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)

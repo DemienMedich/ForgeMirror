@@ -286,6 +286,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
 
             const float avail = ImGui::GetContentRegionAvail().x;
             const bool stack = avail < 520.0f;
+            ImVec4 actionAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            actionAccent.w = 1.0f;
             if (stack) {
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::BeginCombo("##profile_select", currentLabel.c_str())) {
@@ -303,18 +305,23 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     }
                     ImGui::EndCombo();
                 }
-                if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_select_open_stack", UiIcon::Users,
+                                  u8"Открыть управление профилями", actionAccent, ImGui::GetFrameHeight())) {
                     state.showProfilesWindow = true;
                     state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
                 }
-                if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                ImGui::SameLine();
+                if (IconButtonGui("profile_select_refresh_stack", UiIcon::Refresh,
+                                  u8"Обновить список профилей", actionAccent, ImGui::GetFrameHeight())) {
                     RefreshProfiles(state, storage, catalog);
                 }
             } else if (ImGui::BeginTable("profile_select_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("select_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("select", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-                ImGui::TableSetupColumn("open", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-                ImGui::TableSetupColumn("refresh", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                ImGui::TableSetupColumn("open", ImGuiTableColumnFlags_WidthFixed,
+                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+                ImGui::TableSetupColumn("refresh", ImGuiTableColumnFlags_WidthFixed,
+                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
                 ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
                 keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -340,12 +347,14 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     ImGui::EndCombo();
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::Button(u8"Профили...", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_select_open", UiIcon::Users,
+                                  u8"Открыть управление профилями", actionAccent, ImGui::GetFrameHeight())) {
                     state.showProfilesWindow = true;
                     state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
                 }
                 ImGui::TableSetColumnIndex(3);
-                if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_select_refresh", UiIcon::Refresh,
+                                  u8"Обновить список профилей", actionAccent, ImGui::GetFrameHeight())) {
                     RefreshProfiles(state, storage, catalog);
                 }
                 ImGui::EndTable();
@@ -1177,13 +1186,15 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                                  static_cast<int>(labels.size()))) {
                     state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
                 }
-                if (ImGui::Button(u8"Применить ранг", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_apply_rank_stack", UiIcon::Chart,
+                                  u8"Применить выбранный ранг", accent, ImGui::GetFrameHeight())) {
                     applyRank();
                 }
             } else if (ImGui::BeginTable("profile_rank_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("rank_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("rank_combo", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-                ImGui::TableSetupColumn("rank_apply", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+                ImGui::TableSetupColumn("rank_apply", ImGuiTableColumnFlags_WidthFixed,
+                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
                 ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
                 keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -1198,7 +1209,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::Button(u8"Применить ранг", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_apply_rank", UiIcon::Chart,
+                                  u8"Применить выбранный ранг", accent, ImGui::GetFrameHeight())) {
                     applyRank();
                 }
                 ImGui::EndTable();
@@ -1228,16 +1240,21 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             const float reportWidth = ImGui::GetContentRegionAvail().x;
             const bool stackReport = reportWidth < 360.0f;
             if (stackReport) {
-                if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_report_txt_stack", UiIcon::Info,
+                                  u8"Экспортировать отчет в TXT", accent, ImGui::GetFrameHeight())) {
                     exportTxt();
                 }
-                if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+                ImGui::SameLine();
+                if (IconButtonGui("profile_report_csv_stack", UiIcon::Launch,
+                                  u8"Экспортировать отчет в CSV", accent, ImGui::GetFrameHeight())) {
                     exportCsv();
                 }
             } else if (ImGui::BeginTable("profile_report_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("report_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-                ImGui::TableSetupColumn("report_txt", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableSetupColumn("report_csv", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                ImGui::TableSetupColumn("report_txt", ImGuiTableColumnFlags_WidthFixed,
+                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+                ImGui::TableSetupColumn("report_csv", ImGuiTableColumnFlags_WidthFixed,
+                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
                 ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
                 keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
                 const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -1246,11 +1263,13 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                if (ImGui::Button(u8"Экспорт TXT", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_report_txt", UiIcon::Info,
+                                  u8"Экспортировать отчет в TXT", accent, ImGui::GetFrameHeight())) {
                     exportTxt();
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+                if (IconButtonGui("profile_report_csv", UiIcon::Launch,
+                                  u8"Экспортировать отчет в CSV", accent, ImGui::GetFrameHeight())) {
                     exportCsv();
                 }
                 ImGui::EndTable();
@@ -1260,7 +1279,8 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             if (ImGui::GetContentRegionAvail().x > 140.0f) {
                 ImGui::SameLine();
             }
-            if (ImGui::SmallButton(u8"Копировать путь")) {
+            if (IconButtonGui("profile_report_copy_path", UiIcon::Copy,
+                              u8"Копировать путь к папке отчетов", accent, ImGui::GetFrameHeight())) {
                 ImGui::SetClipboardText(reportDir.c_str());
             }
         }
