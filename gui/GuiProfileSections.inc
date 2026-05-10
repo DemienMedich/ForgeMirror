@@ -422,16 +422,13 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             }
             visibleAch += 1;
         }
-        ImGui::TextDisabled(u8"Показано: %d | активных: %d | истекших: %d",
-        visibleAch, activeCount, expiredCount);
-
         std::vector<std::pair<std::string, std::int64_t>> expiringSoon;
         constexpr std::int64_t kSoonWindow = 7LL * 24 * 3600;
         for (const auto& a : profile.achievements()) {
             if (a.expiresAt == 0) continue;
             if (!a.is_active(nowSec)) continue;
             const std::int64_t remaining = a.expiresAt - nowSec;
-            if (remaining <= 0 | remaining > kSoonWindow) continue;
+            if (remaining <= 0 || remaining > kSoonWindow) continue;
             std::string label = a.title;
             const std::string achSkillName = catalog.display_name(a.skill);
             if (!achSkillName.empty()) {
@@ -455,12 +452,14 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             ImGui::Dummy(ImVec2(0.0f, SectionSpacing()));
         }
 
-        constexpr int kIconsPerRow = 6;
-        const float iconCell = 110.0f;
+        const float iconCell = std::clamp(ImGui::GetFrameHeight() * 2.15f, 58.0f, 76.0f);
+        const int iconsPerRow = std::clamp(
+            static_cast<int>(ImGui::GetContentRegionAvail().x / (iconCell + ImGui::GetStyle().ItemSpacing.x)),
+            3, 8);
         int iconIndex = 0;
         if (visibleAch > 0) {
             ImGuiTableFlags gridFlags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_PadOuterX;
-            if (ImGui::BeginTable("ach_grid", kIconsPerRow, gridFlags)) {
+            if (ImGui::BeginTable("ach_grid", iconsPerRow, gridFlags)) {
                 for (const auto& a : profile.achievements()) {
                     bool active = a.is_active(nowSec);
                     if (!state.showExpiredAchievements && !active) {
@@ -473,10 +472,10 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
                     }
                     const std::string expires = formatDate(a.expiresAt);
                     const auto iconPath = ResolveIconPath(a.icon, state.storageDir);
-                    if (iconIndex % kIconsPerRow == 0) {
+                    if (iconIndex % iconsPerRow == 0) {
                         ImGui::TableNextRow();
                     }
-                    ImGui::TableSetColumnIndex(iconIndex % kIconsPerRow);
+                    ImGui::TableSetColumnIndex(iconIndex % iconsPerRow);
                     ImGui::PushID(iconIndex);
                     bool hovered = false;
                     if (iconPath) {
@@ -540,8 +539,6 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     DrawCardHeader(u8"Фильтры");
     const float skillFilterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackSkillFilters = skillFilterWidth < 620.0f;
-    ImGui::InputText(u8"Поиск навыка в профиле", state.filters.profileSkill.data(),
-    state.filters.profileSkill.size());
     const char* sortLabels[] = {u8"По имени", u8"По уровню", u8"По XP", u8"По весу"};
     const char* weightCategoryLabels[] = {
         u8"Все",
@@ -552,6 +549,8 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         u8"E (<0.70)"
     };
     if (stackSkillFilters) {
+        ImGui::InputTextWithHint(u8"##profile_skill_search", u8"Поиск навыка",
+        state.filters.profileSkill.data(), state.filters.profileSkill.size());
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"Сортировка", &state.profileSkillSort, sortLabels, IM_ARRAYSIZE(sortLabels));
         ImGui::SetNextItemWidth(-1.0f);
@@ -564,10 +563,11 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
             state.profileSkillWeightRange[0] = 0.0f;
             state.profileSkillWeightRange[1] = 2.0f;
         }
-    } else if (ImGui::BeginTable("profile_skill_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+    } else if (ImGui::BeginTable("profile_skill_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("profile_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("profile_sort", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-        ImGui::TableSetupColumn("profile_category", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("profile_search", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+        ImGui::TableSetupColumn("profile_sort", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("profile_category", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("profile_reset", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
@@ -578,6 +578,10 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableNextColumn();
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint(u8"##profile_skill_search", u8"Поиск навыка",
+        state.filters.profileSkill.data(), state.filters.profileSkill.size());
+        ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"Сортировка", &state.profileSkillSort, sortLabels, IM_ARRAYSIZE(sortLabels));
         ImGui::TableNextColumn();
@@ -640,7 +644,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
                 continue;
             }
             const float w = static_cast<float>(skill.weight);
-            if (w < state.profileSkillWeightRange[0] | w > state.profileSkillWeightRange[1]) {
+            if (w < state.profileSkillWeightRange[0] || w > state.profileSkillWeightRange[1]) {
                 continue;
             }
             if (state.profileSkillCategoryFilter > 0) {
