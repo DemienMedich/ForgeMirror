@@ -413,6 +413,58 @@ static bool IconButtonGui(const char* id, UiIcon icon, const char* tooltip, cons
     return pressed;
 }
 
+static bool DrawEmptyStateGui(const char* id, UiIcon icon, const char* title, const char* body,
+                              UiIcon actionIcon = UiIcon::Plus, const char* actionTooltip = nullptr,
+                              bool actionEnabled = true) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
+    ImVec4 bg = BlendColor(style.Colors[ImGuiCol_WindowBg], style.Colors[ImGuiCol_FrameBg], 0.55f);
+    ImVec4 border = BlendColor(style.Colors[ImGuiCol_Border], accent, 0.20f);
+    bg.w = std::max(bg.w, 0.72f);
+    border.w = std::max(border.w, 0.20f);
+
+    const float width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    const float frame = ImGui::GetFrameHeight();
+    const float pad = style.FramePadding.x * 2.0f + 8.0f;
+    const float iconRadius = std::max(15.0f, frame * 0.55f);
+    const float textWidth = std::max(80.0f, width - iconRadius * 2.0f - pad * 4.0f -
+                                           (actionTooltip ? frame + style.ItemSpacing.x : 0.0f));
+    const ImVec2 titleSize = ImGui::CalcTextSize(title ? title : "");
+    const ImVec2 bodySize = ImGui::CalcTextSize(body ? body : "", nullptr, false, textWidth);
+    const float height = std::max(frame * 2.4f, pad * 2.0f + titleSize.y + bodySize.y + 3.0f);
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const ImVec2 p1(p0.x + width, p0.y + height);
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(p0, p1, ImGui::GetColorU32(bg), CardRounding());
+    drawList->AddRect(p0, p1, ImGui::GetColorU32(border), CardRounding(), 0, 1.0f);
+    DrawIconBadge(drawList, icon, ImVec2(p0.x + pad + iconRadius, p0.y + height * 0.5f),
+                  iconRadius, accent, true);
+
+    const float textX = p0.x + pad + iconRadius * 2.0f + style.ItemSpacing.x;
+    const float textY = p0.y + std::max(pad * 0.65f, (height - titleSize.y - bodySize.y - 3.0f) * 0.5f);
+    ImGui::SetCursorScreenPos(ImVec2(textX, textY));
+    ImGui::TextUnformatted(title ? title : "");
+    if (body && body[0] != '\0') {
+        ImGui::SetCursorScreenPos(ImVec2(textX, textY + titleSize.y + 3.0f));
+        ImGui::PushTextWrapPos(textX + textWidth);
+        ImGui::TextDisabled("%s", body);
+        ImGui::PopTextWrapPos();
+    }
+
+    bool pressed = false;
+    if (actionTooltip && actionTooltip[0] != '\0') {
+        ImGui::SetCursorScreenPos(ImVec2(p1.x - pad - frame, p0.y + (height - frame) * 0.5f));
+        pressed = IconButtonGui("empty_action", actionIcon, actionTooltip, accent, frame,
+                                actionEnabled, false);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(p0.x, p1.y + style.ItemSpacing.y));
+    ImGui::PopID();
+    return pressed;
+}
+
 static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, const ImVec4& accent,
                              float height, bool enabled = true, bool selected = false) {
     if (height <= 0.0f) return false;

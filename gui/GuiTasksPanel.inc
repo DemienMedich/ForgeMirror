@@ -884,10 +884,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::Spacing();
     }
 
-    if (state.tasks.empty()) {
-        ImGui::TextDisabled(u8"Задач пока нет.");
-    }
-
     auto ComputeFilteredTasks = [&]() {
         std::vector<const TaskEntry*> ordered;
         ordered.reserve(state.tasks.size());
@@ -1229,7 +1225,15 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
             if (state.projects.empty()) {
-                ImGui::TextDisabled(u8"Проектов пока нет.");
+                if (DrawEmptyStateGui("tasks_projects_bridge_empty", UiIcon::Flow,
+                                      u8"Проектов пока нет",
+                                      u8"Создайте проект здесь же, чтобы сразу привязать к нему задачи.",
+                                      UiIcon::Plus, u8"Открыть форму создания проекта")) {
+                    state.projectEditIndex = -1;
+                    state.newProjectName.fill('\0');
+                    state.newProjectDesc.fill('\0');
+                    ImGui::SetNextItemOpen(true);
+                }
             } else if (ImGui::BeginTable("tasks_projects_bridge_table", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                 const ImGuiStyle& bridgeStyle = ImGui::GetStyle();
                 const float bridgeActionWidth = ImGui::GetFrameHeight() * 2.0f + bridgeStyle.ItemSpacing.x +
@@ -1539,6 +1543,17 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
 
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
+    if (state.tasks.empty()) {
+        if (DrawEmptyStateGui("tasks_empty_all", UiIcon::List,
+                              u8"Журнал задач пуст",
+                              state.isAdmin
+                                  ? u8"Начните с постановки первой задачи: проект, исполнители, навыки и дедлайн будут собраны в одном сценарии."
+                                  : u8"Когда администратор назначит задачу, она появится здесь с проектом, этапом и статусом.",
+                              UiIcon::Plus, state.isAdmin ? u8"Поставить первую задачу" : nullptr,
+                              state.isAdmin)) {
+            ToggleTaskCreateFlow();
+        }
+    }
 
     const std::int64_t workNowSec = NowSeconds();
     const std::int64_t workDayStart = StartOfLocalDay(workNowSec);
@@ -2552,9 +2567,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         for (const TaskEntry* task : filtered) {
             ++visibleCount;
             ImGui::TableNextRow();
+            const bool isExpanded = (state.tasksExpandedId == task->id);
             const bool overdue = task->deadlineAt > 0 && task->deadlineAt < nowSec &&
                                  NormalizeTaskStatus(task->status) != kTaskStatusDone;
-            if (overdue) {
+            if (isExpanded) {
+                ImVec4 rowHighlight = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                rowHighlight.w = std::clamp(rowHighlight.w * 0.18f, 0.10f, 0.26f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+            } else if (overdue) {
                 ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
@@ -2575,7 +2595,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
 
-            const bool isExpanded = (state.tasksExpandedId == task->id);
             const bool xpPending = TaskNeedsXpAward(*task);
             const int taskPipelineIndex = ResolveTaskPipelineIndex(state, *task);
 
@@ -2868,10 +2887,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     }
     const int totalTasks = static_cast<int>(state.tasks.size());
     ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
-    if (filteredCount == 0) {
-        ImGui::TextDisabled(u8"Нет задач по фильтру.");
-        ImGui::SameLine();
-        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+    if (!state.tasks.empty() && filteredCount == 0) {
+        ImGui::Spacing();
+        if (DrawEmptyStateGui("tasks_empty_filtered", UiIcon::Search,
+                              u8"По текущим фильтрам задач нет",
+                              u8"Сбросьте фильтры или переключите быстрый режим, чтобы вернуть полный журнал.",
+                              UiIcon::Refresh, u8"Сбросить фильтры задач")) {
             state.filters.tasks.fill('\0');
             state.tasksFilterProfile = 0;
             state.tasksFilterProject = 0;

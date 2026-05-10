@@ -450,7 +450,12 @@ void DrawProjectsPanel(GuiState& state) {
             }
             shownProjects += 1;
             ImGui::TableNextRow();
-            if (taskStats.overdue > 0) {
+            const bool selected = state.projectEditIndex == idx;
+            if (selected) {
+                ImVec4 rowHighlight = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                rowHighlight.w = std::clamp(rowHighlight.w * 0.18f, 0.10f, 0.26f);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+            } else if (taskStats.overdue > 0) {
                 ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
@@ -463,7 +468,6 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("%d", shownProjects);
             ImGui::TableSetColumnIndex(1);
-            const bool selected = state.projectEditIndex == idx;
             if (ImGui::Selectable(project.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
                 state.projectEditIndex = idx;
                 std::snprintf(state.newProjectName.data(), state.newProjectName.size(), "%s", project.name.c_str());
@@ -530,12 +534,20 @@ void DrawProjectsPanel(GuiState& state) {
     }
     ImGui::TextDisabled(u8"Показано проектов: %d из %d", shownProjects, static_cast<int>(state.projects.size()));
     if (shownProjects <= 0) {
-        ImGui::TextDisabled(state.projects.empty()
-            ? u8"Проектов пока нет. Создайте первый проект ниже."
-            : u8"Нет проектов по фильтру.");
-        if (!state.projects.empty()) {
-            ImGui::SameLine();
-            if (ProjectIconButton("projects_empty_reset", UiIcon::Refresh, u8"Сбросить фильтры проектов")) {
+        if (state.projects.empty()) {
+            if (DrawEmptyStateGui("projects_empty_all", UiIcon::Flow,
+                                  u8"Проектов пока нет",
+                                  u8"Создайте первый проект, чтобы группировать задачи, видеть handoff и просрочки по направлению.",
+                                  UiIcon::Plus, u8"Перейти к созданию проекта")) {
+                state.projectEditIndex = -1;
+                state.newProjectName.fill('\0');
+                state.newProjectDesc.fill('\0');
+            }
+        } else {
+            if (DrawEmptyStateGui("projects_empty_filter", UiIcon::Search,
+                                  u8"Нет проектов по фильтру",
+                                  u8"Текущие фильтры скрыли все проекты. Сброс вернет полный список.",
+                                  UiIcon::Refresh, u8"Сбросить фильтры проектов")) {
                 state.filters.projects.fill('\0');
                 state.projectsFilterOverdueOnly = false;
                 state.projectsFilterXpPendingOnly = false;

@@ -369,9 +369,11 @@ void DrawPipelinePanel(GuiState& state) {
     const int stepCount = static_cast<int>(state.pipelineSteps.size());
     if (stepCount == 0) {
         DrawCardHeader(u8"Пайплайн");
-        ImGui::TextDisabled(u8"Пайплайн пуст. Добавьте первый блок, чтобы начать production-flow.");
         if (state.isAdmin) {
-            if (PipelineIconButton("pipeline_empty_add", UiIcon::Plus, u8"Добавить первый блок пайплайна")) {
+            if (DrawEmptyStateGui("pipeline_empty_admin", UiIcon::Flow,
+                                  u8"Пайплайн пуст",
+                                  u8"Добавьте первый блок, чтобы собрать production-flow и связывать его с задачами.",
+                                  UiIcon::Plus, u8"Добавить первый блок пайплайна")) {
                 AppPipelineMutationResult addResult = AppAddPipelineStep(state.storageDir, state.pipelineSteps, stepCount - 1);
                 if (addResult.ok) {
                     state.selectedPipelineIndex = addResult.selectedIndex;
@@ -383,6 +385,10 @@ void DrawPipelinePanel(GuiState& state) {
                     SetStatus(state, addResult.errorMessage, 1.0f, 0.45f, 0.45f);
                 }
             }
+        } else {
+            DrawEmptyStateGui("pipeline_empty_readonly", UiIcon::Flow,
+                              u8"Пайплайн ещё не настроен",
+                              u8"После настройки администратором здесь появятся этапы production-flow и подсказки по переходам.");
         }
         return;
     }

@@ -36,8 +36,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state.
 - State:
-  - Ветка: develop. Версия: 0.4.89.
-  - Последнее изменение: продолжен общий UX pass, пункт 4 `Правила/модалки`: compact icon-actions в rules и skill modals.
+  - Ветка: develop. Версия: 0.4.90.
+  - Последнее изменение: продолжен общий UX pass, пункт 5 `empty-state и active-state`: action-oriented пустые состояния и явный tint выбранных строк.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
@@ -50,6 +50,8 @@ UI аудит:
   - Pipeline UX: empty-state, сброс фильтра и нижняя админ-панель действий переведены на compact icon-buttons с tooltip; добавлена Previous-иконка для move-up.
   - Logs/Stats UX: reset/export/clear/refresh действия в логах и статистике переведены на compact icon-buttons с tooltip.
   - Rules/Modals UX: действия сохранения/сброса правил и actions в модалках навыков переведены на compact icon-buttons с tooltip.
+  - Empty/Active UX: добавлен общий compact empty-state helper; задачи, проекты и пайплайн получили пустые состояния с иконкой, пояснением и контекстным действием.
+  - Empty/Active UX: выбранные строки задач и проектов получили явный active-state tint, чтобы текущее раскрытие/редактирование было видно в таблице.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.
