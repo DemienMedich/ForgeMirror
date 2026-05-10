@@ -45,13 +45,19 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     DrawWindowBackground(state.ui, UiWindowId::AdminStats, state.storageDir);
     DrawCardHeader(u8"Статистика");
     ImGui::TextDisabled(u8"Сводка по профилям. Клик по строке открывает профиль.");
+    auto StatsIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                              bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
     const std::int64_t nowSec = NowSeconds();
     bool refresh = false;
     const float headerWidth = ImGui::GetContentRegionAvail().x;
     const bool stackHeader = headerWidth < 620.0f;
     std::string updated = FormatTimestamp(state.adminStats.lastUpdated, "%Y-%m-%d %H:%M:%S");
     if (stackHeader) {
-        if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
+        if (StatsIconButton("admin_refresh_stack", UiIcon::Refresh, u8"Обновить статистику")) {
             refresh = true;
         }
         ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
@@ -60,7 +66,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
     } else if (ImGui::BeginTable("admin_refresh", 5, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("admin_refresh_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("admin_refresh_btn", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("admin_refresh_btn", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImGui::TableSetupColumn("admin_refresh_auto", ImGuiTableColumnFlags_WidthStretch, 0.8f);
         ImGui::TableSetupColumn("admin_refresh_secs", ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn("admin_refresh_stamp", ImGuiTableColumnFlags_WidthStretch, 2.0f);
@@ -71,7 +78,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::TableNextColumn();
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableNextColumn();
-        if (ImGui::Button(u8"Обновить", ImVec2(-1.0f, 0.0f))) {
+        if (StatsIconButton("admin_refresh", UiIcon::Refresh, u8"Обновить статистику")) {
             refresh = true;
         }
         ImGui::TableNextColumn();
@@ -119,31 +126,22 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
                      rankLabels.data(), static_cast<int>(rankLabels.size()));
-        if (ImGui::SmallButton(u8"Сброс##admin_stats_filter")) {
+        if (StatsIconButton("admin_stats_reset_stack", UiIcon::Refresh, u8"Сбросить фильтры статистики")) {
             resetFilters();
         }
-        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-        accent.w = 1.0f;
-        ImVec4 exportBg = accent;
-        exportBg.w = 0.18f;
-        ImVec4 exportHover = accent;
-        exportHover.w = 0.28f;
-        ImVec4 exportActive = accent;
-        exportActive.w = 0.38f;
-        ImGui::PushStyleColor(ImGuiCol_Button, exportBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, exportHover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, exportActive);
-        if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+        ImGui::SameLine();
+        if (StatsIconButton("admin_stats_export_stack", UiIcon::Launch, u8"Экспортировать статистику в CSV")) {
             exportStats();
         }
-        ImGui::PopStyleColor(3);
     } else if (ImGui::BeginTable("admin_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("admin_filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("admin_filter_search", ImGuiTableColumnFlags_WidthStretch, 2.0f);
         ImGui::TableSetupColumn("admin_filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("admin_filter_rank", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+        ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -164,25 +162,13 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
                      rankLabels.data(), static_cast<int>(rankLabels.size()));
         ImGui::TableNextColumn();
-        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+        if (StatsIconButton("admin_stats_reset", UiIcon::Refresh, u8"Сбросить фильтры статистики")) {
             resetFilters();
         }
         ImGui::TableNextColumn();
-        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-        accent.w = 1.0f;
-        ImVec4 exportBg = accent;
-        exportBg.w = 0.18f;
-        ImVec4 exportHover = accent;
-        exportHover.w = 0.28f;
-        ImVec4 exportActive = accent;
-        exportActive.w = 0.38f;
-        ImGui::PushStyleColor(ImGuiCol_Button, exportBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, exportHover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, exportActive);
-        if (ImGui::Button(u8"Экспорт CSV", ImVec2(-1.0f, 0.0f))) {
+        if (StatsIconButton("admin_stats_export", UiIcon::Launch, u8"Экспортировать статистику в CSV")) {
             exportStats();
         }
-        ImGui::PopStyleColor(3);
         ImGui::EndTable();
     }
     SyncFiltersToUi(state);

@@ -59,6 +59,12 @@ void DrawLogsPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::Logs, state.storageDir);
     DrawCardHeader(u8"Логи");
     ImGui::TextDisabled(u8"Фиксируют действия и ошибки. Используйте фильтры для поиска.");
+    auto LogIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                            bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
     int infoCount = 0;
     int warnCount = 0;
     int errorCount = 0;
@@ -255,7 +261,7 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::TextDisabled(u8"Поиск");
         ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
                                  state.filters.logs.data(), state.filters.logs.size());
-        if (ImGui::SmallButton(u8"Сброс##log_filter")) {
+        if (LogIconButton("log_filter_reset_stack", UiIcon::Refresh, u8"Сбросить поиск и источник")) {
             state.filters.logs.fill('\0');
             state.filters.logSource.fill('\0');
         }
@@ -277,30 +283,23 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::SmallButton(u8"Только ошибки")) {
             setLevelPreset(false, false, true);
         }
-        if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+        if (LogIconButton("log_export_stack", UiIcon::Launch, u8"Экспортировать отфильтрованные логи")) {
             exportLogs();
         }
-        ImVec4 dangerBg = LogLevelColor(AppLogLevel::Warning);
-        dangerBg.w = 0.18f;
-        ImVec4 dangerHover = LogLevelColor(AppLogLevel::Warning);
-        dangerHover.w = 0.28f;
-        ImVec4 dangerActive = LogLevelColor(AppLogLevel::Warning);
-        dangerActive.w = 0.38f;
-        ImGui::PushStyleColor(ImGuiCol_Button, dangerBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, dangerHover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, dangerActive);
-        if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+        ImGui::SameLine();
+        if (LogIconButton("log_clear_stack", UiIcon::Close, u8"Очистить текущий журнал логов")) {
             state.appLogs.clear();
             SetStatus(state, u8"Логи очищены.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Логи");
         }
-        ImGui::PopStyleColor(3);
     } else if (ImGui::BeginTable("log_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("log_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("log_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-        ImGui::TableSetupColumn("log_reset", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("log_reset", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImGui::TableSetupColumn("log_source", ImGuiTableColumnFlags_WidthStretch, 1.4f);
         ImGui::TableSetupColumn("log_export", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-        ImGui::TableSetupColumn("log_clear", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("log_clear", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
         ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -314,7 +313,7 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
                                  state.filters.logs.data(), state.filters.logs.size());
         ImGui::TableNextColumn();
-        if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+        if (LogIconButton("log_filter_reset", UiIcon::Refresh, u8"Сбросить поиск и источник")) {
             state.filters.logs.fill('\0');
             state.filters.logSource.fill('\0');
         }
@@ -339,23 +338,14 @@ void DrawLogsPanel(GuiState& state) {
             setLevelPreset(false, false, true);
         }
         ImGui::TableNextColumn();
-        if (ImGui::Button(u8"Экспорт", ImVec2(-1.0f, 0.0f))) {
+        if (LogIconButton("log_export", UiIcon::Launch, u8"Экспортировать отфильтрованные логи")) {
             exportLogs();
         }
         ImGui::TableNextColumn();
-        ImVec4 dangerBg = LogLevelColor(AppLogLevel::Warning);
-        dangerBg.w = 0.18f;
-        ImVec4 dangerHover = LogLevelColor(AppLogLevel::Warning);
-        dangerHover.w = 0.28f;
-        ImVec4 dangerActive = LogLevelColor(AppLogLevel::Warning);
-        dangerActive.w = 0.38f;
-        ImGui::PushStyleColor(ImGuiCol_Button, dangerBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, dangerHover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, dangerActive);
-        if (ImGui::Button(u8"Очистить", ImVec2(-1.0f, 0.0f))) {
+        if (LogIconButton("log_clear", UiIcon::Close, u8"Очистить текущий журнал логов")) {
             state.appLogs.clear();
+            SetStatus(state, u8"Логи очищены.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Логи");
         }
-        ImGui::PopStyleColor(3);
         ImGui::EndTable();
     }
 
