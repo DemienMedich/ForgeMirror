@@ -478,11 +478,15 @@ static void DrawStatusPillGui(const char* id, const char* label, const ImVec4& a
     const ImVec2 p1(p0.x + size.x, p0.y + size.y);
     ImGui::InvisibleButton("##status_pill", size);
 
-    ImVec4 bg = filled ? accent : BlendColor(style.Colors[ImGuiCol_FrameBg], accent, 0.22f);
-    ImVec4 border = BlendColor(style.Colors[ImGuiCol_Border], accent, 0.28f);
-    ImVec4 text = filled ? style.Colors[ImGuiCol_Text] : BlendColor(style.Colors[ImGuiCol_Text], accent, 0.34f);
-    bg.w = filled ? std::max(bg.w, 0.68f) : std::max(bg.w, 0.42f);
-    border.w = std::max(border.w, 0.22f);
+    ImVec4 bg = filled
+        ? BlendColor(style.Colors[ImGuiCol_FrameBg], accent, 0.58f)
+        : BlendColor(style.Colors[ImGuiCol_FrameBg], accent, 0.22f);
+    ImVec4 border = BlendColor(style.Colors[ImGuiCol_Border], accent, filled ? 0.45f : 0.28f);
+    ImVec4 text = filled
+        ? BlendColor(style.Colors[ImGuiCol_Text], accent, 0.28f)
+        : BlendColor(style.Colors[ImGuiCol_Text], accent, 0.34f);
+    bg.w = filled ? std::max(bg.w, 0.62f) : std::max(bg.w, 0.42f);
+    border.w = filled ? std::max(border.w, 0.34f) : std::max(border.w, 0.22f);
     text.w = 1.0f;
 
     const float rounding = height * 0.45f;

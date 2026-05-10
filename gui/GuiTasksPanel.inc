@@ -52,6 +52,32 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     DrawCardHeader(u8"Задачи");
     ImGui::TextDisabled(u8"Планирование и выполненные задачи в одном журнале.");
 
+    const ImGuiStyle& tasksStyle = ImGui::GetStyle();
+    auto TaskToneColor = [&](AppLogLevel level) -> ImVec4 {
+        ImVec4 tone = LogLevelColor(level);
+        const ImVec4 accent = tasksStyle.Colors[ImGuiCol_CheckMark];
+        const ImVec4 text = tasksStyle.Colors[ImGuiCol_Text];
+        if (level == AppLogLevel::Warning) {
+            tone = BlendColor(tone, accent, 0.32f);
+            tone = BlendColor(tone, text, 0.10f);
+        } else if (level == AppLogLevel::Info) {
+            tone = BlendColor(tone, accent, 0.45f);
+            tone = BlendColor(tone, text, 0.06f);
+        } else if (level == AppLogLevel::Error) {
+            tone = BlendColor(tone, text, 0.18f);
+        }
+        tone.w = 1.0f;
+        return tone;
+    };
+    auto TaskWarningColor = [&]() -> ImVec4 { return TaskToneColor(AppLogLevel::Warning); };
+    auto TaskInfoColor = [&]() -> ImVec4 { return TaskToneColor(AppLogLevel::Info); };
+    auto TaskErrorColor = [&]() -> ImVec4 { return TaskToneColor(AppLogLevel::Error); };
+    auto TaskRowTint = [&](AppLogLevel level, float alpha) -> ImVec4 {
+        ImVec4 tint = TaskToneColor(level);
+        tint.w = std::clamp(alpha, 0.04f, 0.18f);
+        return tint;
+    };
+
     auto ResolveTaskActor = [&state]() -> std::string {
         if (state.isAdmin) return "admin";
         if (state.active) {
@@ -562,7 +588,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::EndTable();
                 }
                 if (state.isAdmin && state.projects.empty() && !state.taskPlanCreateProjectInline) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                    ImGui::TextColored(TaskWarningColor(),
                                        u8"Проектов пока нет. Создайте первый прямо из этой формы.");
                 }
                 ImGui::TextDisabled(u8"Этап пайплайна");
@@ -628,7 +654,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                     ImGui::SameLine();
                     if (IconButtonGui("task_plan_project_cancel_stack", UiIcon::Close,
-                                      u8"Отменить создание проекта", LogLevelColor(AppLogLevel::Warning), taskPlanIconSize)) {
+                                      u8"Отменить создание проекта", TaskWarningColor(), taskPlanIconSize)) {
                         state.taskPlanCreateProjectInline = false;
                         state.taskPlanProjectName.fill('\0');
                         state.taskPlanProjectDesc.fill('\0');
@@ -642,7 +668,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                     ImGui::TableSetColumnIndex(1);
                     if (IconButtonGui("task_plan_project_cancel", UiIcon::Close,
-                                      u8"Отменить создание проекта", LogLevelColor(AppLogLevel::Warning), taskPlanIconSize)) {
+                                      u8"Отменить создание проекта", TaskWarningColor(), taskPlanIconSize)) {
                         state.taskPlanCreateProjectInline = false;
                         state.taskPlanProjectName.fill('\0');
                         state.taskPlanProjectDesc.fill('\0');
@@ -758,7 +784,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::EndTable();
                 }
                 if (state.taskPlanPenaltyPercent > 0) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                    ImGui::TextColored(TaskWarningColor(),
                                        u8"Штраф за дедлайн: -%d%% к итоговому XP.", state.taskPlanPenaltyPercent);
                 }
                 ImGui::TextDisabled(u8"Если задача создаётся сразу со статусом 'Выполнена', после создания откроется распределение XP.");
@@ -1211,14 +1237,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 std::string xpPortfolioLabel = u8"XP: " + std::to_string(bridgePortfolio.xpPendingProjects) +
                     u8" пр. / " + std::to_string(bridgePortfolio.totalXpPendingTasks) + u8" зад.";
                 DrawStatusPillGui("bridge_portfolio_xp", xpPortfolioLabel.c_str(),
-                                  LogLevelColor(AppLogLevel::Warning),
+                                  TaskWarningColor(),
                                   u8"Проекты с задачами, ожидающими выдачи XP", true);
             }
             if (bridgePortfolio.overdueProjects > 0) {
                 ImGui::SameLine();
                 std::string overduePortfolioLabel = u8"Проср.: " + std::to_string(bridgePortfolio.overdueProjects) + u8" пр.";
                 DrawStatusPillGui("bridge_portfolio_overdue", overduePortfolioLabel.c_str(),
-                                  LogLevelColor(AppLogLevel::Warning),
+                                  TaskWarningColor(),
                                   u8"Проекты с просроченными задачами", true);
             }
             if (state.tasksFilterProject > 0) {
@@ -1273,20 +1299,20 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     DrawStatusPillGui("bridge_project_work", workLabel.c_str(), activePill,
                                       u8"Задачи в работе", stats.inProgress > 0);
                     ImGui::SameLine();
-                    DrawStatusPillGui("bridge_project_done", doneLabel.c_str(), LogLevelColor(AppLogLevel::Info),
+                    DrawStatusPillGui("bridge_project_done", doneLabel.c_str(), TaskInfoColor(),
                                       u8"Готовые задачи", stats.done > 0);
                     if (stats.overdue > 0) {
                         ImGui::SameLine();
                         std::string overdueLabel = u8"П:" + std::to_string(stats.overdue);
                         DrawStatusPillGui("bridge_project_overdue", overdueLabel.c_str(),
-                                          LogLevelColor(AppLogLevel::Warning),
+                                          TaskWarningColor(),
                                           u8"Просроченные задачи", true);
                     }
                     if (stats.xpPending > 0) {
                         ImGui::SameLine();
                         std::string xpLabel = "XP:" + std::to_string(stats.xpPending);
                         DrawStatusPillGui("bridge_project_xp", xpLabel.c_str(),
-                                          LogLevelColor(AppLogLevel::Warning),
+                                          TaskWarningColor(),
                                           u8"Handoff ждёт выдачи XP", true);
                     }
                     ImGui::TableSetColumnIndex(2);
@@ -1687,13 +1713,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                     ++metricIndex;
                 };
-                DrawQueueMetric(u8"Активные", filteredActiveTasks, u8"в очереди", 7, LogLevelColor(AppLogLevel::Info));
-                DrawQueueMetric(u8"Просрочка", filteredOverdueTasks, u8"срок сорван", 3, LogLevelColor(AppLogLevel::Warning));
-                DrawQueueMetric(u8"Сегодня", filteredTodayTasks, u8"дедлайн", 2, LogLevelColor(AppLogLevel::Info));
-                DrawQueueMetric(u8"Ждут XP", filteredXpPendingTasks, u8"handoff", 6, LogLevelColor(AppLogLevel::Warning));
-                DrawQueueMetric(u8"Критичные", filteredCriticalTasks, u8"приоритет", -2, LogLevelColor(AppLogLevel::Error));
+                DrawQueueMetric(u8"Активные", filteredActiveTasks, u8"в очереди", 7, TaskInfoColor());
+                DrawQueueMetric(u8"Просрочка", filteredOverdueTasks, u8"срок сорван", 3, TaskWarningColor());
+                DrawQueueMetric(u8"Сегодня", filteredTodayTasks, u8"дедлайн", 2, TaskInfoColor());
+                DrawQueueMetric(u8"Ждут XP", filteredXpPendingTasks, u8"handoff", 6, TaskWarningColor());
+                DrawQueueMetric(u8"Критичные", filteredCriticalTasks, u8"приоритет", -2, TaskErrorColor());
                 DrawQueueMetric(u8"Pipeline", filteredPipelineSignalCount, u8"сигналы", -1,
-                                filteredPipelineSignalCount > 0 ? LogLevelColor(AppLogLevel::Warning) : LogLevelColor(AppLogLevel::Info));
+                                filteredPipelineSignalCount > 0 ? TaskWarningColor() : TaskInfoColor());
                 ImGui::EndTable();
             }
             if (workFocusTask) {
@@ -1709,7 +1735,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     const std::string deadlineText = FormatTimestamp(workFocusTask->deadlineAt, "%d.%m %H:%M");
                     const bool overdue = workFocusTask->deadlineAt < workNowSec;
                     if (overdue) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadlineText.c_str());
+                        ImGui::TextColored(TaskWarningColor(), "%s", deadlineText.c_str());
                     } else {
                         ImGui::TextDisabled("%s", deadlineText.c_str());
                     }
@@ -1767,13 +1793,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     };
 
                     drawRiskMetric(u8"Без этапа", filteredPipelineMissing,
-                                   LogLevelColor(AppLogLevel::Warning), u8"назначить старт");
+                                   TaskWarningColor(), u8"назначить старт");
                     drawRiskMetric(u8"Вне схемы", filteredPipelineUnknown,
-                                   LogLevelColor(AppLogLevel::Error), u8"переназначить шаг");
+                                   TaskErrorColor(), u8"переназначить шаг");
                     drawRiskMetric(u8"Ветвление", filteredPipelineBranching,
-                                   LogLevelColor(AppLogLevel::Info), u8"нужен выбор next");
+                                   TaskInfoColor(), u8"нужен выбор next");
                     drawRiskMetric(u8"Финал открыт", filteredPipelineFinalOpen,
-                                   LogLevelColor(AppLogLevel::Info), u8"handoff не закрыт");
+                                   TaskInfoColor(), u8"handoff не закрыт");
                     ImGui::EndTable();
                 }
                 if (filteredPipelineSignalCount == 0) {
@@ -1930,9 +1956,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
         };
 
-        DrawDeadlineList(u8"Просроченные", overdueDeadlines, LogLevelColor(AppLogLevel::Error), 3);
-        DrawDeadlineList(u8"Ближайшие 2 часа", upcoming2h, LogLevelColor(AppLogLevel::Warning), 4);
-        DrawDeadlineList(u8"Ближайшие 24 часа", upcoming24h, LogLevelColor(AppLogLevel::Info), 4);
+        DrawDeadlineList(u8"Просроченные", overdueDeadlines, TaskErrorColor(), 3);
+        DrawDeadlineList(u8"Ближайшие 2 часа", upcoming2h, TaskWarningColor(), 4);
+        DrawDeadlineList(u8"Ближайшие 24 часа", upcoming24h, TaskInfoColor(), 4);
 
         if (overdueDeadlines.empty() && upcoming2h.empty() && upcoming24h.empty()) {
             ImGui::TextDisabled(u8"Критичных дедлайнов нет.");
@@ -2442,7 +2468,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SameLine();
                 std::string attentionLabel = std::string(ClassificationLabel(minIdx)) + " (" + std::to_string(minCount) + ")";
                 DrawStatusPillGui("tasks_summary_attention", attentionLabel.c_str(),
-                                  LogLevelColor(AppLogLevel::Warning),
+                                  TaskWarningColor(),
                                   u8"Категория с заметным недобором задач", true);
             }
 
@@ -2452,7 +2478,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SameLine();
                 std::string handoffLabel = "handoff:" + std::to_string(xpPendingCount);
                 DrawStatusPillGui("tasks_summary_handoff", handoffLabel.c_str(),
-                                  LogLevelColor(AppLogLevel::Warning),
+                                  TaskWarningColor(),
                                   u8"Задачи закрыты, но XP ещё не выдан.", true);
             }
             if (!topPipelineLabel.empty()) {
@@ -2598,8 +2624,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.18f, 0.10f, 0.26f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
             } else if (overdue) {
-                ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
-                rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);
+                ImVec4 rowHighlight = TaskRowTint(AppLogLevel::Warning, 0.12f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
             }
             TaskEntry* editableTask = tasksAdminMode ? FindTaskMutable(task->id) : nullptr;
@@ -2672,7 +2697,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             } else if (task->deadlineAt > 0) {
                 const std::string deadline = FormatTimestamp(task->deadlineAt, "%d.%m %H:%M");
                 if (overdue) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadline.c_str());
+                    ImGui::TextColored(TaskWarningColor(), "%s", deadline.c_str());
                 } else {
                     ImGui::TextUnformatted(deadline.c_str());
                 }
@@ -2756,14 +2781,14 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextDisabled("%s", ClassificationLabel(task->category));
             if (xpPending) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP");
+                ImGui::TextColored(TaskWarningColor(), u8"XP");
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip(u8"Ожидает выдачи XP");
                 }
             }
             if (!actionNeededSummary.empty()) {
                 ImGui::SameLine();
-                DrawStatusPillGui("task_action_needed_pill", "!", LogLevelColor(AppLogLevel::Warning),
+                DrawStatusPillGui("task_action_needed_pill", "!", TaskWarningColor(),
                                   actionNeededSummary.c_str(), true);
             }
             if (!task->description.empty() && taskTitleHovered) {
@@ -2841,9 +2866,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 int draftPriority = normalizedPriority;
                 ImVec4 priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
                 if (normalizedPriority >= kTaskPriorityCritical) {
-                    priorityAccent = LogLevelColor(AppLogLevel::Error);
+                    priorityAccent = TaskErrorColor();
                 } else if (normalizedPriority >= kTaskPriorityHigh) {
-                    priorityAccent = LogLevelColor(AppLogLevel::Warning);
+                    priorityAccent = TaskWarningColor();
                 } else if (normalizedPriority == kTaskPriorityMedium) {
                     priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                 }
@@ -2862,9 +2887,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             } else {
                 ImVec4 priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
                 if (normalizedPriority >= kTaskPriorityCritical) {
-                    priorityAccent = LogLevelColor(AppLogLevel::Error);
+                    priorityAccent = TaskErrorColor();
                 } else if (normalizedPriority >= kTaskPriorityHigh) {
-                    priorityAccent = LogLevelColor(AppLogLevel::Warning);
+                    priorityAccent = TaskWarningColor();
                 } else if (normalizedPriority == kTaskPriorityMedium) {
                     priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                 }
@@ -2879,9 +2904,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 int draftStatus = normalizedStatus;
                 ImVec4 statusAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                 if (normalizedStatus == kTaskStatusDone) {
-                    statusAccent = LogLevelColor(AppLogLevel::Info);
+                    statusAccent = TaskInfoColor();
                 } else if (overdue) {
-                    statusAccent = LogLevelColor(AppLogLevel::Warning);
+                    statusAccent = TaskWarningColor();
                 }
                 ImVec4 statusFrame = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_FrameBg], statusAccent, 0.20f);
                 statusFrame.w = std::max(statusFrame.w, ImGui::GetStyle().Colors[ImGuiCol_FrameBg].w);
@@ -2898,9 +2923,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             } else {
                 ImVec4 statusAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                 if (normalizedStatus == kTaskStatusDone) {
-                    statusAccent = LogLevelColor(AppLogLevel::Info);
+                    statusAccent = TaskInfoColor();
                 } else if (overdue) {
-                    statusAccent = LogLevelColor(AppLogLevel::Warning);
+                    statusAccent = TaskWarningColor();
                 }
                 DrawStatusPillGui("task_status_pill", TaskStatusShortLabel(normalizedStatus),
                                   statusAccent, TaskStatusLabel(normalizedStatus),
@@ -3066,9 +3091,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     [&]() {
                         ImVec4 priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
                         if (detailPriority >= kTaskPriorityCritical) {
-                            priorityAccent = LogLevelColor(AppLogLevel::Error);
+                            priorityAccent = TaskErrorColor();
                         } else if (detailPriority >= kTaskPriorityHigh) {
-                            priorityAccent = LogLevelColor(AppLogLevel::Warning);
+                            priorityAccent = TaskWarningColor();
                         } else if (detailPriority == kTaskPriorityMedium) {
                             priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                         }
@@ -3083,7 +3108,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         if (expanded->deadlineAt > 0) {
                             const std::string deadlineText = FormatTimestamp(expanded->deadlineAt, "%d.%m %H:%M");
                             if (detailOverdue) {
-                                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", deadlineText.c_str());
+                                ImGui::TextColored(TaskWarningColor(), "%s", deadlineText.c_str());
                             } else {
                                 ImGui::TextUnformatted(deadlineText.c_str());
                             }
@@ -3106,7 +3131,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         if (expanded->deadlinePenaltyPercent > 0) {
                             std::string penaltyLabel = "-" + std::to_string(expanded->deadlinePenaltyPercent) + "%";
                             DrawStatusPillGui("task_detail_penalty", penaltyLabel.c_str(),
-                                              LogLevelColor(AppLogLevel::Warning),
+                                              TaskWarningColor(),
                                               u8"Штраф за срыв дедлайна.", true);
                         } else {
                             ImGui::TextDisabled("-");
@@ -3122,20 +3147,20 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing) {
                 ImGui::Spacing();
                 DrawStatusPillGui("task_detail_pipeline_missing", u8"Вне пайплайна",
-                                  LogLevelColor(AppLogLevel::Warning),
+                                  TaskWarningColor(),
                                   u8"Задача пока вне пайплайна.", true);
                 ImGui::TextWrapped(u8"Назначьте стартовый этап, чтобы отслеживать движение задачи по pipeline.");
             } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Unknown) {
                 ImGui::Spacing();
                 DrawStatusPillGui("task_detail_pipeline_unknown", u8"Этап не найден",
-                                  LogLevelColor(AppLogLevel::Error),
+                                  TaskErrorColor(),
                                   u8"Этап задачи не найден в текущей схеме.", true);
                 ImGui::TextWrapped(u8"Лучше переназначить шаг вручную, иначе быстрые переходы pipeline будут непредсказуемы.");
             }
             if (NormalizeTaskStatus(expanded->status) == kTaskStatusDone && !TaskHasRecordedXp(*expanded)) {
                 ImGui::Spacing();
                 DrawStatusPillGui("task_detail_xp_pending", u8"XP не выдан",
-                                  LogLevelColor(AppLogLevel::Warning),
+                                  TaskWarningColor(),
                                   u8"Задача закрыта, но XP ещё не выдан.", true);
             }
 
@@ -3162,7 +3187,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                                        editableTask->id,
                                                        detailQuickPipelineTargets);
                 } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Unknown) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                    ImGui::TextColored(TaskWarningColor(),
                                        u8"Текущий этап отсутствует в схеме. Ниже нужен ручной выбор корректного этапа.");
                 } else if (detailStatus == kTaskStatusNew) {
                     ImGui::TextDisabled(u8"Ожидает старта.");
@@ -3191,7 +3216,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             } else {
                 if (detailNeedsXpAward) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Ожидает выдачи XP администратором.");
+                    ImGui::TextColored(TaskWarningColor(), u8"Ожидает выдачи XP администратором.");
                 } else if (detailStatus == kTaskStatusNew) {
                     ImGui::TextDisabled(u8"Ожидает старта администратором.");
                 } else if (detailStatus == kTaskStatusInProgress) {
@@ -3493,7 +3518,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         }
                     }
                     if (hasXp) {
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
+                        ImGui::TextColored(TaskWarningColor(),
                                            u8"Удаление откатит уже записанный XP по участникам задачи.");
                     } else {
                         ImGui::TextDisabled(u8"Удаление уберёт задачу из журнала без XP-отката.");
