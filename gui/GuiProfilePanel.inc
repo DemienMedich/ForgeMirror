@@ -497,43 +497,42 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             spiritSummary += std::to_string(spiritPercent) + "% XP";
         }
         if (BeginCard("profile_header_card")) {
-        if (ImGui::BeginTable("profile_header_summary", 5, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled(u8"Уровень");
-            ImGui::TextColored(accent, "%d", overallLevel);
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled(u8"Ранг");
-            ImGui::TextColored(accent, "%s", rankLabel ? rankLabel : u8"-");
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled(u8"Прогресс");
-            ImGui::TextColored(accent, "%s", progressLabel.c_str());
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled(u8"Профессия");
-            ImGui::TextColored(accent, "%s", professionName.c_str());
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled(u8"Дух");
-            DrawSpiritBadge("profile_spirit_header", profile.spirit());
-            ImGui::EndTable();
-        }
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (ImGui::BeginTable("profile_status_strip", 4, ImGuiTableFlags_SizingStretchSame)) {
-            auto drawStripCell = [](const char* label, const std::string& value, const ImVec4& color) {
+        if (ImGui::BeginTable("profile_header_compact", 4, ImGuiTableFlags_SizingStretchSame)) {
+            auto drawHeaderCell = [](const char* label,
+                                     const std::string& value,
+                                     const ImVec4& valueColor,
+                                     const char* subLabel,
+                                     const std::string& subValue,
+                                     const ImVec4& subColor) {
                 ImGui::TextDisabled("%s", label);
-                ImGui::TextColored(color, "%s", value.c_str());
+                ImGui::TextColored(valueColor, "%s", value.c_str());
+                if (subLabel && !subValue.empty()) {
+                    ImGui::TextDisabled("%s", subLabel);
+                    ImGui::SameLine();
+                    ImGui::TextColored(subColor, "%s", subValue.c_str());
+                }
             };
+            const std::string levelRankText = std::to_string(overallLevel) + " · " + (rankLabel ? rankLabel : u8"-");
+            const std::string statusText = blocked ? std::string(u8"Заблокирован") : std::string(u8"Активен");
+            const ImVec4 walletColor = (state.isAdmin || walletUnlocked)
+                ? accent
+                : style.Colors[ImGuiCol_TextDisabled];
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            drawStripCell(u8"Доступ", accessText, accessColor);
+            drawHeaderCell(u8"Уровень / ранг", levelRankText, accent,
+                           u8"Доступ:", accessText, accessColor);
             ImGui::TableSetColumnIndex(1);
-            drawStripCell(u8"Статус", blocked ? std::string(u8"Заблокирован") : std::string(u8"Активен"), profileStatusColor);
+            drawHeaderCell(u8"Прогресс", progressLabel, accent,
+                           u8"Статус:", statusText, profileStatusColor);
             ImGui::TableSetColumnIndex(2);
-            drawStripCell(u8"Дух", spiritSummary, SpiritColorFor(profile.spirit()));
+            drawHeaderCell(u8"Профессия", professionName, accent,
+                           u8"Дух:", spiritSummary, SpiritColorFor(profile.spirit()));
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", ProfileSpiritEffectLabel(profile.spirit()));
             }
             ImGui::TableSetColumnIndex(3);
-            drawStripCell(u8"Кошелёк", walletText, (state.isAdmin || walletUnlocked) ? accent : style.Colors[ImGuiCol_TextDisabled]);
+            drawHeaderCell(u8"Кошелёк", walletText, walletColor,
+                           nullptr, std::string(), style.Colors[ImGuiCol_TextDisabled]);
             if (!(state.isAdmin || walletUnlocked) && ImGui::IsItemHovered()) {
                 ImGui::SetTooltip(u8"Нужен пароль профиля.");
             }
