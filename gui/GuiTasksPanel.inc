@@ -1201,20 +1201,25 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             const ProjectPortfolioStats bridgePortfolio = BuildProjectPortfolioStats(bridgeProjectStats);
 
-            ImGui::TextDisabled(u8"Активно: %d пр. / %d зад.",
-                                bridgePortfolio.activeProjects,
-                                bridgePortfolio.totalActiveTasks);
+            std::string activePortfolioLabel = u8"Активно: " + std::to_string(bridgePortfolio.activeProjects) +
+                u8" пр. / " + std::to_string(bridgePortfolio.totalActiveTasks) + u8" зад.";
+            DrawStatusPillGui("bridge_portfolio_active", activePortfolioLabel.c_str(),
+                              ImGui::GetStyle().Colors[ImGuiCol_CheckMark],
+                              u8"Активные проекты и задачи", bridgePortfolio.totalActiveTasks > 0);
             if (bridgePortfolio.xpPendingProjects > 0) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
-                                   u8"XP: %d пр. / %d зад.",
-                                   bridgePortfolio.xpPendingProjects,
-                                   bridgePortfolio.totalXpPendingTasks);
+                std::string xpPortfolioLabel = u8"XP: " + std::to_string(bridgePortfolio.xpPendingProjects) +
+                    u8" пр. / " + std::to_string(bridgePortfolio.totalXpPendingTasks) + u8" зад.";
+                DrawStatusPillGui("bridge_portfolio_xp", xpPortfolioLabel.c_str(),
+                                  LogLevelColor(AppLogLevel::Warning),
+                                  u8"Проекты с задачами, ожидающими выдачи XP", true);
             }
             if (bridgePortfolio.overdueProjects > 0) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning),
-                                   u8"Проср.: %d пр.", bridgePortfolio.overdueProjects);
+                std::string overduePortfolioLabel = u8"Проср.: " + std::to_string(bridgePortfolio.overdueProjects) + u8" пр.";
+                DrawStatusPillGui("bridge_portfolio_overdue", overduePortfolioLabel.c_str(),
+                                  LogLevelColor(AppLogLevel::Warning),
+                                  u8"Проекты с просроченными задачами", true);
             }
             if (state.tasksFilterProject > 0) {
                 ImGui::SameLine();
@@ -1258,17 +1263,31 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::SetTooltip("%s", project.description.c_str());
                     }
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::TextDisabled(u8"Н:%d  В:%d  Г:%d", stats.created, stats.inProgress, stats.done);
+                    ImVec4 neutralPill = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+                    ImVec4 activePill = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                    std::string newLabel = u8"Н:" + std::to_string(stats.created);
+                    std::string workLabel = u8"В:" + std::to_string(stats.inProgress);
+                    std::string doneLabel = u8"Г:" + std::to_string(stats.done);
+                    DrawStatusPillGui("bridge_project_new", newLabel.c_str(), neutralPill, u8"Новые задачи");
+                    ImGui::SameLine();
+                    DrawStatusPillGui("bridge_project_work", workLabel.c_str(), activePill,
+                                      u8"Задачи в работе", stats.inProgress > 0);
+                    ImGui::SameLine();
+                    DrawStatusPillGui("bridge_project_done", doneLabel.c_str(), LogLevelColor(AppLogLevel::Info),
+                                      u8"Готовые задачи", stats.done > 0);
                     if (stats.overdue > 0) {
                         ImGui::SameLine();
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", stats.overdue);
+                        std::string overdueLabel = u8"П:" + std::to_string(stats.overdue);
+                        DrawStatusPillGui("bridge_project_overdue", overdueLabel.c_str(),
+                                          LogLevelColor(AppLogLevel::Warning),
+                                          u8"Просроченные задачи", true);
                     }
                     if (stats.xpPending > 0) {
                         ImGui::SameLine();
-                        ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", stats.xpPending);
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip(u8"Handoff ждёт: %d", stats.xpPending);
-                        }
+                        std::string xpLabel = "XP:" + std::to_string(stats.xpPending);
+                        DrawStatusPillGui("bridge_project_xp", xpLabel.c_str(),
+                                          LogLevelColor(AppLogLevel::Warning),
+                                          u8"Handoff ждёт выдачи XP", true);
                     }
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%d", stats.total);
@@ -2815,11 +2834,23 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int normalizedPriority = NormalizeTaskPriority(task->priority);
             if (tasksAdminMode) {
                 int draftPriority = normalizedPriority;
+                ImVec4 priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+                if (normalizedPriority >= kTaskPriorityCritical) {
+                    priorityAccent = LogLevelColor(AppLogLevel::Error);
+                } else if (normalizedPriority >= kTaskPriorityHigh) {
+                    priorityAccent = LogLevelColor(AppLogLevel::Warning);
+                } else if (normalizedPriority == kTaskPriorityMedium) {
+                    priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                }
+                ImVec4 priorityFrame = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_FrameBg], priorityAccent, 0.20f);
+                priorityFrame.w = std::max(priorityFrame.w, ImGui::GetStyle().Colors[ImGuiCol_FrameBg].w);
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, priorityFrame);
                 const char* priorityLabels[] = {"P1", "P2", "P3", "P4"};
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_priority_row", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
                     UpdateTaskPriority(task->id, draftPriority);
                 }
+                ImGui::PopStyleColor();
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", TaskPriorityLabel(draftPriority));
                 }
@@ -2841,20 +2872,28 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int normalizedStatus = NormalizeTaskStatus(task->status);
             if (tasksAdminMode) {
                 int draftStatus = normalizedStatus;
+                ImVec4 statusAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                if (normalizedStatus == kTaskStatusDone) {
+                    statusAccent = LogLevelColor(AppLogLevel::Info);
+                } else if (overdue) {
+                    statusAccent = LogLevelColor(AppLogLevel::Warning);
+                }
+                ImVec4 statusFrame = BlendColor(ImGui::GetStyle().Colors[ImGuiCol_FrameBg], statusAccent, 0.20f);
+                statusFrame.w = std::max(statusFrame.w, ImGui::GetStyle().Colors[ImGuiCol_FrameBg].w);
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, statusFrame);
                 const char* statusLabels[] = {u8"Нов.", u8"Раб.", u8"Гот."};
                 ImGui::SetNextItemWidth(-1.0f);
                 if (ImGui::Combo("##task_status_row", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
                     UpdateTaskStatus(task->id, draftStatus);
                 }
+                ImGui::PopStyleColor();
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", TaskStatusLabel(draftStatus));
                 }
                 if (overdue) {
                     ImGui::SameLine();
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "!");
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip(u8"Дедлайн сорван");
-                    }
+                    DrawStatusPillGui("task_admin_overdue_pill", "!", LogLevelColor(AppLogLevel::Warning),
+                                      u8"Дедлайн сорван", true);
                 }
             } else {
                 ImVec4 statusAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
@@ -2875,10 +2914,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const std::string actionNeededSummary = BuildTaskActionNeededSummary(*task, nowSec);
             if (!actionNeededSummary.empty()) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"•");
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("%s", actionNeededSummary.c_str());
-                }
+                DrawStatusPillGui("task_action_needed_pill", "!", LogLevelColor(AppLogLevel::Warning),
+                                  actionNeededSummary.c_str(), true);
             }
 
             ImGui::PopID();
