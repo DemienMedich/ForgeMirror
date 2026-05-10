@@ -465,6 +465,38 @@ static bool DrawEmptyStateGui(const char* id, UiIcon icon, const char* title, co
     return pressed;
 }
 
+static void DrawStatusPillGui(const char* id, const char* label, const ImVec4& accent,
+                              const char* tooltip = nullptr, bool filled = false) {
+    ImGui::PushID(id);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const char* safeLabel = label ? label : "";
+    const ImVec2 textSize = ImGui::CalcTextSize(safeLabel);
+    const float padX = std::max(6.0f, style.FramePadding.x * 1.35f);
+    const float height = std::max(ImGui::GetTextLineHeight() + 4.0f, ImGui::GetFrameHeight() * 0.78f);
+    const ImVec2 size(textSize.x + padX * 2.0f, height);
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const ImVec2 p1(p0.x + size.x, p0.y + size.y);
+    ImGui::InvisibleButton("##status_pill", size);
+
+    ImVec4 bg = filled ? accent : BlendColor(style.Colors[ImGuiCol_FrameBg], accent, 0.22f);
+    ImVec4 border = BlendColor(style.Colors[ImGuiCol_Border], accent, 0.28f);
+    ImVec4 text = filled ? style.Colors[ImGuiCol_Text] : BlendColor(style.Colors[ImGuiCol_Text], accent, 0.34f);
+    bg.w = filled ? std::max(bg.w, 0.68f) : std::max(bg.w, 0.42f);
+    border.w = std::max(border.w, 0.22f);
+    text.w = 1.0f;
+
+    const float rounding = height * 0.45f;
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(p0, p1, ImGui::GetColorU32(bg), rounding);
+    drawList->AddRect(p0, p1, ImGui::GetColorU32(border), rounding, 0, 1.0f);
+    drawList->AddText(ImVec2(p0.x + padX, p0.y + (height - textSize.y) * 0.5f),
+                      ImGui::GetColorU32(text), safeLabel);
+    if (tooltip && tooltip[0] != '\0' && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", tooltip);
+    }
+    ImGui::PopID();
+}
+
 static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, const ImVec4& accent,
                              float height, bool enabled = true, bool selected = false) {
     if (height <= 0.0f) return false;

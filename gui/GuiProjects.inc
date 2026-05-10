@@ -397,9 +397,9 @@ void DrawProjectsPanel(GuiState& state) {
         const float projectActionWidth = ImGui::GetFrameHeight() * 4.0f + projectStyle.ItemSpacing.x * 3.0f +
                                          projectStyle.CellPadding.x * 2.0f;
         ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+        ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("tasks", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 1.25f);
         ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, projectActionWidth);
         ImGui::TableHeadersRow();
 
@@ -477,22 +477,28 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::Text("%d", taskStats.total);
 
             ImGui::TableSetColumnIndex(3);
-            ImGui::TextDisabled(u8"Н:%d  В:%d  Г:%d", taskStats.created, taskStats.inProgress, taskStats.done);
-            if (ImGui::IsItemHovered()) {
-                ImGui::BeginTooltip();
-                ImGui::TextUnformatted(u8"Н = новые, В = в работе, Г = готово, П = просроченные, XP = ждут выдачи опыта");
-                ImGui::EndTooltip();
-            }
+            ImVec4 neutralPill = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+            ImVec4 activePill = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            DrawStatusPillGui("project_new_pill", (std::string("Н:") + std::to_string(taskStats.created)).c_str(),
+                              neutralPill, u8"Новые задачи");
+            ImGui::SameLine();
+            DrawStatusPillGui("project_work_pill", (std::string("В:") + std::to_string(taskStats.inProgress)).c_str(),
+                              activePill, u8"Задачи в работе", taskStats.inProgress > 0);
+            ImGui::SameLine();
+            DrawStatusPillGui("project_done_pill", (std::string("Г:") + std::to_string(taskStats.done)).c_str(),
+                              LogLevelColor(AppLogLevel::Info), u8"Готовые задачи", taskStats.done > 0);
             if (taskStats.overdue > 0) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"П:%d", taskStats.overdue);
+                DrawStatusPillGui("project_overdue_pill", (std::string(u8"П:") + std::to_string(taskStats.overdue)).c_str(),
+                                  LogLevelColor(AppLogLevel::Warning), u8"Просроченные задачи", true);
             }
             if (taskStats.xpPending > 0) {
                 ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"XP:%d", taskStats.xpPending);
+                DrawStatusPillGui("project_xp_pill", (std::string("XP:") + std::to_string(taskStats.xpPending)).c_str(),
+                                  LogLevelColor(AppLogLevel::Warning), u8"Задачи ждут выдачи опыта", true);
             }
             if (taskStats.xpPending > 0) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), u8"Handoff ждёт: %d", taskStats.xpPending);
+                ImGui::TextDisabled(u8"Handoff ждёт");
             } else if (taskStats.done > 0) {
                 ImGui::TextDisabled(u8"Handoff закрыт");
             }

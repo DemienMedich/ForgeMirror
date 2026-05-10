@@ -2824,18 +2824,17 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::SetTooltip("%s", TaskPriorityLabel(draftPriority));
                 }
             } else {
+                ImVec4 priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
                 if (normalizedPriority >= kTaskPriorityCritical) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", TaskPriorityCode(normalizedPriority));
+                    priorityAccent = LogLevelColor(AppLogLevel::Error);
                 } else if (normalizedPriority >= kTaskPriorityHigh) {
-                    ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskPriorityCode(normalizedPriority));
-                } else if (normalizedPriority <= kTaskPriorityLow) {
-                    ImGui::TextDisabled("%s", TaskPriorityCode(normalizedPriority));
-                } else {
-                    ImGui::TextUnformatted(TaskPriorityCode(normalizedPriority));
+                    priorityAccent = LogLevelColor(AppLogLevel::Warning);
+                } else if (normalizedPriority == kTaskPriorityMedium) {
+                    priorityAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
                 }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("%s", TaskPriorityLabel(normalizedPriority));
-                }
+                DrawStatusPillGui("task_priority_pill", TaskPriorityCode(normalizedPriority),
+                                  priorityAccent, TaskPriorityLabel(normalizedPriority),
+                                  normalizedPriority >= kTaskPriorityHigh);
             }
 
             ImGui::TableSetColumnIndex(col++);
@@ -2857,20 +2856,21 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::SetTooltip(u8"Дедлайн сорван");
                     }
                 }
-            } else if (normalizedStatus == kTaskStatusDone) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Info), "%s", TaskStatusShortLabel(normalizedStatus));
-            } else if (overdue) {
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "%s", TaskStatusShortLabel(normalizedStatus));
-                ImGui::SameLine();
-                ImGui::TextColored(LogLevelColor(AppLogLevel::Warning), "!");
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(u8"Дедлайн сорван");
-                }
             } else {
-                ImGui::TextUnformatted(TaskStatusShortLabel(normalizedStatus));
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", TaskStatusLabel(normalizedStatus));
+                ImVec4 statusAccent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+                if (normalizedStatus == kTaskStatusDone) {
+                    statusAccent = LogLevelColor(AppLogLevel::Info);
+                } else if (overdue) {
+                    statusAccent = LogLevelColor(AppLogLevel::Warning);
+                }
+                DrawStatusPillGui("task_status_pill", TaskStatusShortLabel(normalizedStatus),
+                                  statusAccent, TaskStatusLabel(normalizedStatus),
+                                  normalizedStatus == kTaskStatusDone || overdue);
+                if (overdue) {
+                    ImGui::SameLine();
+                    DrawStatusPillGui("task_overdue_pill", "!", LogLevelColor(AppLogLevel::Warning),
+                                      u8"Дедлайн сорван", true);
+                }
             }
             const std::string actionNeededSummary = BuildTaskActionNeededSummary(*task, nowSec);
             if (!actionNeededSummary.empty()) {
