@@ -947,6 +947,8 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
 
 static void DrawProfileTasksSection(GuiState& state, const std::string& profileId) {
     const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
+    accent.w = 1.0f;
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
@@ -1025,40 +1027,38 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             ImGui::EndTable();
         }
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
-        if (state.modules.tasks && ImGui::BeginTable("profile_active_tasks_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("profile_tasks_open_all", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("profile_tasks_open_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("profile_tasks_open_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("profile_tasks_open_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableNextRow();
-
-            ImGui::TableSetColumnIndex(0);
-            if (ImGui::Button(u8"Все##profile_tasks_all", ImVec2(-1.0f, 0.0f))) {
+        if (state.modules.tasks) {
+            const float actionSize = ImGui::GetFrameHeight();
+            ImGui::TextDisabled(u8"Открыть в задачах");
+            ImGui::SameLine();
+            if (IconButtonGui("profile_tasks_all", UiIcon::List,
+                              u8"Все задачи профиля", accent, actionSize)) {
                 FocusTasksForProfile(state, profileId);
             }
-
-            ImGui::TableSetColumnIndex(1);
-            if (taskOverview.active <= 0) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Активные##profile_tasks_active", ImVec2(-1.0f, 0.0f))) {
+            ImGui::SameLine();
+            if (IconButtonGui("profile_tasks_active", UiIcon::Play,
+                              u8"Активные задачи профиля", accent, actionSize,
+                              taskOverview.active > 0)) {
                 FocusTasksForProfile(state, profileId, 7);
             }
-            if (taskOverview.active <= 0) ImGui::EndDisabled();
-
-            ImGui::TableSetColumnIndex(2);
-            if (taskOverview.overdue <= 0) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Просрочка##profile_tasks_overdue", ImVec2(-1.0f, 0.0f))) {
+            ImGui::SameLine();
+            const ImVec4 overdueAccent = taskOverview.overdue > 0
+                ? LogLevelColor(AppLogLevel::Warning)
+                : accent;
+            if (IconButtonGui("profile_tasks_overdue", UiIcon::Bell,
+                              u8"Просроченные задачи профиля", overdueAccent, actionSize,
+                              taskOverview.overdue > 0)) {
                 FocusTasksForProfile(state, profileId, 3);
             }
-            if (taskOverview.overdue <= 0) ImGui::EndDisabled();
-
-            ImGui::TableSetColumnIndex(3);
-            if (taskOverview.xpPending <= 0) ImGui::BeginDisabled();
-            if (ImGui::Button(u8"Ждут XP##profile_tasks_xp", ImVec2(-1.0f, 0.0f))) {
+            ImGui::SameLine();
+            const ImVec4 xpAccent = taskOverview.xpPending > 0
+                ? LogLevelColor(AppLogLevel::Warning)
+                : accent;
+            if (IconButtonGui("profile_tasks_xp", UiIcon::Chart,
+                              u8"Задачи профиля, ожидающие XP", xpAccent, actionSize,
+                              taskOverview.xpPending > 0)) {
                 FocusTasksForProfile(state, profileId, 6);
             }
-            if (taskOverview.xpPending <= 0) ImGui::EndDisabled();
-
-            ImGui::EndTable();
         }
 
         if (activeItems.empty()) {
