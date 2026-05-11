@@ -246,7 +246,7 @@ static PipelineStageRowAction DrawPipelineStageRow(const GuiState& state,
     const PipelineStep& step = state.pipelineSteps[index];
     const ImGuiStyle& style = ImGui::GetStyle();
     const float width = std::max(140.0f, ImGui::GetContentRegionAvail().x);
-    const float height = 66.0f;
+    const float height = 58.0f;
     const ImVec2 pos = ImGui::GetCursorScreenPos();
     const ImVec2 size(width, height);
 
@@ -276,10 +276,10 @@ static PipelineStageRowAction DrawPipelineStageRow(const GuiState& state,
     drawList->AddRect(pos, p1, ImGui::GetColorU32(border), CardRounding(), 0, selected ? 2.0f : 1.0f);
 
     const float padX = 12.0f;
-    const float padY = 10.0f;
-    const float chipWidth = 52.0f;
+    const float padY = 8.0f;
+    const float chipWidth = 48.0f;
     const ImVec2 chipMin(pos.x + padX, pos.y + padY);
-    const ImVec2 chipMax(chipMin.x + chipWidth, chipMin.y + 24.0f);
+    const ImVec2 chipMax(chipMin.x + chipWidth, chipMin.y + 22.0f);
     ImVec4 chipBg = selected ? accent : BlendColor(accent, style.Colors[ImGuiCol_FrameBg], 0.55f);
     chipBg.w = selected ? 0.92f : 0.54f;
     drawList->AddRectFilled(chipMin, chipMax, ImGui::GetColorU32(chipBg), 8.0f);
@@ -292,13 +292,13 @@ static PipelineStageRowAction DrawPipelineStageRow(const GuiState& state,
     const ImVec4 metaColor = BlendColor(style.Colors[ImGuiCol_TextDisabled], accent, selected ? 0.24f : 0.10f);
 
     drawList->PushClipRect(pos, p1, true);
-    drawList->AddText(ImVec2(chipMin.x + 10.0f, chipMin.y + 5.0f), ImGui::GetColorU32(style.Colors[ImGuiCol_Text]), code.c_str());
+    drawList->AddText(ImVec2(chipMin.x + 9.0f, chipMin.y + 4.0f), ImGui::GetColorU32(style.Colors[ImGuiCol_Text]), code.c_str());
     drawList->AddText(ImVec2(textX, pos.y + padY - 1.0f), ImGui::GetColorU32(titleColor), step.title.c_str());
     drawList->AddText(ImVec2(textX, pos.y + padY + 24.0f), ImGui::GetColorU32(metaColor), subtitle.c_str());
 
     if (adminMode) {
         const float buttonWidth = 54.0f;
-        const float buttonHeight = 26.0f;
+        const float buttonHeight = 24.0f;
         const ImVec2 editMin(p1.x - padX - buttonWidth, pos.y + padY);
         const ImVec2 editMax(editMin.x + buttonWidth, editMin.y + buttonHeight);
         const bool editHovered = ImGui::IsMouseHoveringRect(editMin, editMax);
@@ -406,8 +406,11 @@ void DrawPipelinePanel(GuiState& state) {
         if (PipelineIconButton("pipeline_filter_reset_stack", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
             state.filters.pipeline.fill('\0');
         }
-    } else if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("pipeline_filter_label", ImGuiTableColumnFlags_WidthFixed, 74.0f);
+    } else {
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
+    if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("pipeline_filter_label", ImGuiTableColumnFlags_WidthFixed, 64.0f);
         ImGui::TableSetupColumn("pipeline_filter_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("pipeline_filter_action", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
@@ -423,6 +426,8 @@ void DrawPipelinePanel(GuiState& state) {
             state.filters.pipeline.fill('\0');
         }
         ImGui::EndTable();
+    }
+        ImGui::PopStyleVar(2);
     }
 
     std::vector<int> visibleIndices;
@@ -463,6 +468,7 @@ void DrawPipelinePanel(GuiState& state) {
         if (!selectedVisible) state.selectedPipelineIndex = visibleIndices.front();
     }
 
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
     if (ImGui::BeginTable("pipeline_split", 2, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("pipeline_map", ImGuiTableColumnFlags_WidthStretch, 0.44f);
         ImGui::TableSetupColumn("pipeline_detail", ImGuiTableColumnFlags_WidthStretch, 0.56f);
@@ -527,6 +533,8 @@ void DrawPipelinePanel(GuiState& state) {
                 ImGui::TextDisabled(u8"ID: %s", step.id.c_str());
                 ImGui::TextDisabled(u8"Все поля редактируются на месте. Следующие блоки задаются ID через ';' или новую строку.");
 
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
                 if (ImGui::BeginTable("pipeline_editor_grid", 2, ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("pipeline_editor_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     ImGui::TableSetupColumn("pipeline_editor_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -556,6 +564,7 @@ void DrawPipelinePanel(GuiState& state) {
                     ImGui::InputText("##pipeline_owner", state.pipelineOwner.data(), state.pipelineOwner.size());
                     ImGui::EndTable();
                 }
+                ImGui::PopStyleVar(2);
 
                 ImGui::TextDisabled(u8"Описание");
                 ImGui::SetNextItemWidth(-1.0f);
@@ -586,8 +595,9 @@ void DrawPipelinePanel(GuiState& state) {
                 ImGui::InputTextMultiline("##pipeline_next_ids", state.pipelineNextIds.data(),
                                           state.pipelineNextIds.size(), ImVec2(-1.0f, 70.0f));
             } else {
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
                 if (ImGui::BeginTable("pipeline_meta_table", 2, ImGuiTableFlags_SizingStretchProp)) {
-                    ImGui::TableSetupColumn("pipeline_meta_label", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                    ImGui::TableSetupColumn("pipeline_meta_label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
                     ImGui::TableSetupColumn("pipeline_meta_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     DrawPipelineFieldRow(u8"Вход", step.input);
                     DrawPipelineFieldRow(u8"Выход", step.output);
@@ -596,6 +606,7 @@ void DrawPipelinePanel(GuiState& state) {
                     DrawPipelineFieldRow(u8"Следующий этап", step.nextStageLabel);
                     ImGui::EndTable();
                 }
+                ImGui::PopStyleVar();
 
                 ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
                 DrawCardHeader(u8"Что делаем");
@@ -710,9 +721,10 @@ void DrawPipelinePanel(GuiState& state) {
                     if (PipelineIconButton("pipeline_move_down", UiIcon::Next, u8"Переместить блок ниже", canMoveDown)) {
                         moveFrom = state.selectedPipelineIndex;
                         moveTo = state.selectedPipelineIndex + 1;
-                    }
-                    ImGui::EndTable();
-                }
+        }
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleVar();
             }
 
             if (startEditRequested) {

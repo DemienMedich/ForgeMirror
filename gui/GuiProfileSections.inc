@@ -1157,11 +1157,12 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             if (shownCount < totalActiveCount) {
                 activeItems.resize(static_cast<size_t>(shownCount));
             }
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
             if (ImGui::BeginTable("profile_active_tasks_table", 5,
                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, 54.0f);
-                ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+                ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 86.0f);
                 ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.85f);
                 ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.95f);
                 ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.55f);
@@ -1223,9 +1224,8 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                         const std::string stageCode = TaskPipelineStepCode(step, pipelineIndex);
                         const std::string stageTitle = step.title.empty() ? pipelineName : step.title;
                         ImGui::Text("%s", stageCode.c_str());
-                        if (!stageTitle.empty() && stageTitle != stageCode) {
-                            ImGui::SameLine();
-                            ImGui::TextDisabled("%s", stageTitle.c_str());
+                        if (ImGui::IsItemHovered() && !stageTitle.empty()) {
+                            ImGui::SetTooltip("%s", stageTitle.c_str());
                         }
                     } else {
                         DrawClippedTextWithTooltip(pipelineName, u8"Без этапа", pipelineName.empty());
@@ -1260,7 +1260,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 }
                 ImGui::EndTable();
             }
-            ImGui::PopStyleVar();
+            ImGui::PopStyleVar(2);
             ImGui::TextDisabled(u8"Показано: %d из %d", static_cast<int>(activeItems.size()), totalActiveCount);
         }
     }
@@ -1305,12 +1305,14 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 }
             }
         }
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
         if (ImGui::BeginTable("profile_tasks", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+            ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 86.0f);
             ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
             ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.35f);
-            ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-            ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 64.0f);
+            ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 44.0f);
+            ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 58.0f);
             ImGui::TableHeadersRow();
             for (const TaskEntry* task : items) {
                 const TaskParticipant* participant = FindTaskParticipant(*task, profileId);
@@ -1360,6 +1362,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             }
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar(2);
         ImGui::TextDisabled(u8"Показано: %d", static_cast<int>(items.size()));
     }
 }

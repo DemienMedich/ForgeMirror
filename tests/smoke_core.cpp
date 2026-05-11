@@ -153,6 +153,19 @@ static bool TestGuiTasksImGuiStackPatterns() {
     return beginCards == endCards;
 }
 
+static bool TestGuiEmptyStateRegistersLayoutSize() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string source;
+    if (!ReadFile(root / "gui" / "GuiIcons.inc", source)) return false;
+
+    const size_t fn = source.find("static bool DrawEmptyStateGui(");
+    if (fn == std::string::npos) return false;
+    const size_t dummy = source.find("ImGui::Dummy(ImVec2(width, height + style.ItemSpacing.y));", fn);
+    const size_t pop = source.find("ImGui::PopID();", fn);
+    return dummy != std::string::npos && pop != std::string::npos && dummy < pop;
+}
+
 static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -503,7 +516,9 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
+
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -516,6 +531,7 @@ int main() {
               << " tasks=" << okTasks
               << " taskText=" << okTaskText
               << " guiStack=" << okGuiStack
+              << " emptyStateLayout=" << okEmptyStateLayout
               << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist

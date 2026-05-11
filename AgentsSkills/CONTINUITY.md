@@ -36,8 +36,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state.
 - State:
-  - Ветка: develop. Версия: 0.5.02.
-  - Последнее изменение: общий UX pass, пункт 7 `плотность таблиц и читаемость строк`: `DrawEmptyStateGui` теперь регистрирует layout-размер через Dummy, исправляя ImGui assert на пустом списке после `Ждут XP`.
+  - Ветка: develop. Версия: 0.5.03.
+  - Последнее изменение: общий UX pass, пункт 7 `плотность таблиц и читаемость строк` закрыт полностью: профильные task-таблицы, проекты, пайплайн и smoke-защита empty-state layout.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
@@ -64,6 +64,7 @@ UI аудит:
   - Tasks Bulk/Filters Density UX: фильтры, bulk combo/action-строки и popup массового назначения исполнителей получили compact padding.
   - Tasks Queue Density/Fix: очередь задач теперь рисует metric-сигналы inline, без вертикального расширения ячеек; quick-filter `Ждут XP` больше не должен триггерить ImGui parent-boundary assert.
   - Empty State Fix: общий `DrawEmptyStateGui` после ручного позиционирования добавляет Dummy на размер карточки, чтобы ImGui корректно учитывал границы parent/child.
+  - UX Plan 7 Done: профильные task-таблицы, проекты и пайплайн уплотнены; smoke_core проверяет layout-контракт `DrawEmptyStateGui`.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.
@@ -278,9 +279,9 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Задачи: detail-pane уплотняется по `ui-ux-pro-max`: короткие labels, tooltip и иконки действий.
+  - Общий UX pass: пункт 7 `плотность таблиц и читаемость строк` завершён.
 - Next:
-  - Продолжить UX-прогоны task-manager: следующий кандидат — bulk-панель и create-flow.
+  - Перейти к пункту 8: единые empty/active/focus states по всем модулям.
 - Open questions (UNCONFIRMED if needed):
   - UNCONFIRMED: есть ли в `%APPDATA%\\ForgeMirror\\meta\\pipeline.json` пользовательские правки сверх старого стандартного 8-шагового пайплайна.
 - Working set (files/ids/commands):

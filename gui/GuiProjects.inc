@@ -303,6 +303,8 @@ void DrawProjectsPanel(GuiState& state) {
     }
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
     if (ImGui::BeginTable("projects_status_slice", 4, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("projects_total", ImGuiTableColumnFlags_WidthStretch, 0.85f);
         ImGui::TableSetupColumn("projects_active", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -348,7 +350,10 @@ void DrawProjectsPanel(GuiState& state) {
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(2);
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
     if (ImGui::BeginTable("projects_hub_actions", 4, ImGuiTableFlags_SizingStretchSame)) {
         const bool canUseTasksHub = state.modules.tasks;
         ImGui::TableSetupColumn("projects_open_all");
@@ -399,16 +404,19 @@ void DrawProjectsPanel(GuiState& state) {
 
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(2);
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
     int shownProjects = 0;
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
     if (ImGui::BeginTable("projects_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         const ImGuiStyle& projectStyle = ImGui::GetStyle();
         const float projectActionWidth = ImGui::GetFrameHeight() * 4.0f + projectStyle.ItemSpacing.x * 3.0f +
                                          projectStyle.CellPadding.x * 2.0f;
-        ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+        ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("tasks", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("tasks", ImGuiTableColumnFlags_WidthFixed, 58.0f);
         ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch, 1.25f);
         ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, projectActionWidth);
         ImGui::TableHeadersRow();
@@ -562,6 +570,7 @@ void DrawProjectsPanel(GuiState& state) {
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(2);
     ImGui::TextDisabled(u8"Показано проектов: %d из %d", shownProjects, static_cast<int>(state.projects.size()));
     if (shownProjects <= 0) {
         if (state.projects.empty()) {
