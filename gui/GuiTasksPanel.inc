@@ -1507,8 +1507,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (TaskIconButton("tasks_export_txt_stack", UiIcon::Info, u8"Экспортировать видимые задачи в TXT")) {
             ExportFilteredTasks(true);
         }
-    } else if (ImGui::BeginTable("tasks_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+    } else {
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
+        if (ImGui::BeginTable("tasks_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
         ImGui::TableSetupColumn("filter_profile", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("filter_project", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("filter_pipeline", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1557,8 +1560,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по приоритету.");
         ImGui::EndTable();
+        }
         if (ImGui::BeginTable("tasks_filters_extra", 4, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
             ImGui::TableSetupColumn("filter_period", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("filter_actions", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1590,6 +1594,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar(2);
     }
     }
 
@@ -2227,6 +2232,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
             state.taskBulkStatus = std::clamp(state.taskBulkStatus, kTaskStatusNew, kTaskStatusDone);
             state.taskBulkPriority = std::clamp(state.taskBulkPriority, kTaskPriorityLow, kTaskPriorityCritical);
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
             const float bulkIconColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
 
             if (ImGui::BeginTable("tasks_bulk_compact_row1", 8, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
@@ -2308,9 +2315,11 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::EndTable();
             }
+            ImGui::PopStyleVar(2);
 
             if (ImGui::BeginPopup("tasks_bulk_assignees_popup")) {
                 ImGui::TextDisabled(u8"Массовое назначение исполнителей");
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
                 if (ImGui::BeginTable("bulk_assignees_table", 2, ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("bulk_assignee_col1", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     ImGui::TableSetupColumn("bulk_assignee_col2", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -2339,6 +2348,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                     ImGui::EndTable();
                 }
+                ImGui::PopStyleVar();
                 if (TaskIconButton("bulk_assignees_apply", UiIcon::Users, u8"Применить исполнителей")) {
                     if (ApplyBulkAssignees()) {
                         ImGui::CloseCurrentPopup();
