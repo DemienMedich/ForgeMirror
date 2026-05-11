@@ -1151,7 +1151,13 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         }
 
         if (activeItems.empty()) {
-            ImGui::TextDisabled(u8"Нет активных задач.");
+            if (DrawEmptyStateGui("profile_active_tasks_empty", UiIcon::List,
+                                  u8"Нет активных задач",
+                                  u8"У профиля нет открытой нагрузки. Откройте задачи, чтобы назначить новую.",
+                                  UiIcon::Plus, state.isAdmin ? u8"Открыть постановку задачи" : nullptr,
+                                  state.isAdmin)) {
+                FocusTasksForProfile(state, profileId, 0);
+            }
         } else {
             const int shownCount = std::min(6, totalActiveCount);
             if (shownCount < totalActiveCount) {
@@ -1283,7 +1289,13 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             }
         }
         if (items.empty()) {
-            ImGui::TextDisabled(u8"Нет задач.");
+            if (DrawEmptyStateGui("profile_done_tasks_empty", UiIcon::Chart,
+                                  u8"История задач пуста",
+                                  u8"Когда задачи будут закрыты или будут ждать XP, они появятся здесь.",
+                                  UiIcon::Search, state.modules.tasks ? u8"Открыть журнал задач" : nullptr,
+                                  state.modules.tasks)) {
+                FocusTasksForProfile(state, profileId, 0);
+            }
             return;
         }
         std::sort(items.begin(), items.end(), [](const TaskEntry* a, const TaskEntry* b) {

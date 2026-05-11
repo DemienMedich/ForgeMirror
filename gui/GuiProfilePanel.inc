@@ -214,7 +214,13 @@ static void DrawProfileTaskBriefCard(GuiState& state,
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (activeItems.empty()) {
-            ImGui::TextDisabled(u8"Активных задач нет. Можно назначать новую задачу без перегруза.");
+            if (DrawEmptyStateGui("profile_task_brief_empty", UiIcon::List,
+                                  u8"Активных задач нет",
+                                  u8"Профиль свободен: можно назначать новую задачу без перегруза.",
+                                  UiIcon::Plus, state.isAdmin ? u8"Перейти к постановке задачи" : nullptr,
+                                  state.isAdmin)) {
+                FocusTasksForProfile(state, profileId, 0);
+            }
         } else if (ImGui::BeginTable("profile_task_brief_rows", 4,
                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.35f);
