@@ -122,7 +122,9 @@ void DrawVaultAdminPanel(GuiState& state) {
     const float listHeight = std::max(160.0f, ImGui::GetTextLineHeightWithSpacing() * 6.0f);
     if (ImGui::BeginChild("vault_log", ImVec2(0.0f, listHeight), true)) {
         if (state.vault.log.empty()) {
-            ImGui::TextDisabled(u8"Операций пока нет.");
+            DrawEmptyStateGui("vault_log_empty", UiIcon::List,
+                              u8"Операций пока нет",
+                              u8"Пополнения, списания и покупки духов будут появляться в журнале хранилища.");
         } else if (ImGui::BeginTable("vault_log_table", 4,
                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Время", ImGuiTableColumnFlags_WidthFixed, 140.0f);

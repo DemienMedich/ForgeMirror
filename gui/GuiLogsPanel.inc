@@ -379,8 +379,10 @@ void DrawLogsPanel(GuiState& state) {
     const bool hasTextFilter = state.filters.logs[0] != '\0';
     const bool hasSourceFilter = state.filters.logSource[0] != '\0';
     if (filteredCount == 0 && (hasTextFilter || hasSourceFilter)) {
-        ImGui::TextDisabled(u8"По фильтрам ничего не найдено.");
-        if (ImGui::SmallButton(u8"Сбросить фильтры")) {
+        if (DrawEmptyStateGui("logs_filter_empty_top", UiIcon::Search,
+                              u8"По фильтрам ничего не найдено",
+                              u8"Сбросьте поиск или источник, чтобы вернуть полный журнал.",
+                              UiIcon::Refresh, u8"Сбросить фильтры логов")) {
             state.filters.logs.fill('\0');
             state.filters.logSource.fill('\0');
         }
@@ -527,9 +529,20 @@ void DrawLogsPanel(GuiState& state) {
     }
     if (filteredCount == 0) {
         if (totalCount == 0) {
-            ImGui::TextDisabled(u8"Пока нет записей. Они появятся после действий в приложении.");
+            DrawEmptyStateGui("logs_empty_all", UiIcon::List,
+                              u8"Журнал пока пуст",
+                              u8"Записи появятся после действий, ошибок и системных событий приложения.");
         } else {
-            ImGui::TextDisabled(u8"Нет записей по фильтру.");
+            if (DrawEmptyStateGui("logs_empty_filtered", UiIcon::Search,
+                                  u8"Нет записей по фильтру",
+                                  u8"Измените поисковый запрос, источник или уровни логов.",
+                                  UiIcon::Refresh, u8"Сбросить фильтры логов")) {
+                state.filters.logs.fill('\0');
+                state.filters.logSource.fill('\0');
+                state.logShowInfo = true;
+                state.logShowWarning = true;
+                state.logShowError = true;
+            }
         }
     }
 
@@ -597,7 +610,9 @@ void DrawLogsPanel(GuiState& state) {
         };
 
         if (state.taskAudit.empty()) {
-            ImGui::TextDisabled(u8"Записей пока нет.");
+            DrawEmptyStateGui("task_audit_empty_all", UiIcon::List,
+                              u8"Аудит задач пуст",
+                              u8"Изменения задач появятся здесь после создания, правок и закрытия задач.");
         } else if (ImGui::BeginTable("log_task_audit_table", 5,
                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp,
                                      ImVec2(0.0f, 180.0f))) {
@@ -636,7 +651,9 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::EndTable();
             ImGui::TextDisabled(u8"Показано: %d из %d", shown, static_cast<int>(state.taskAudit.size()));
             if (shown == 0) {
-                ImGui::TextDisabled(u8"По фильтрам ничего не найдено.");
+                DrawEmptyStateGui("task_audit_empty_filtered", UiIcon::Search,
+                                  u8"По фильтрам аудита ничего не найдено",
+                                  u8"Очистите фильтры актора, задачи или поля, чтобы вернуть записи.");
             }
         }
     }

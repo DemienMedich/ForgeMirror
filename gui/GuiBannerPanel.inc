@@ -130,7 +130,9 @@ void DrawBannerAdminPanel(GuiState& state) {
     const float listHeight = std::max(180.0f, ImGui::GetTextLineHeightWithSpacing() * 8.0f);
     if (ImGui::BeginChild("banner_list", ImVec2(0.0f, listHeight), true)) {
         if (state.bannerTexts.empty()) {
-            ImGui::TextDisabled(u8"Фраз пока нет.");
+            DrawEmptyStateGui("banner_texts_empty", UiIcon::Bell,
+                              u8"Фраз пока нет",
+                              u8"Добавьте первую фразу, чтобы баннер начал ротировать сообщения в верхней панели.");
         } else if (ImGui::BeginTable("banner_rows", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn(u8"Текст", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn(u8"Правка", ImGuiTableColumnFlags_WidthFixed, 150.0f);

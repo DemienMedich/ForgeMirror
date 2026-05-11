@@ -189,10 +189,13 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
                         static_cast<int>(stats.profiles.size()));
     if (filtered.empty()) {
         if (stats.profiles.empty()) {
-            ImGui::TextDisabled(u8"Нет профилей для статистики.");
-            ImGui::TextDisabled(u8"Создайте профиль или импортируйте данные.");
+            DrawEmptyStateGui("admin_stats_empty_all", UiIcon::User,
+                              u8"Нет профилей для статистики",
+                              u8"Создайте профиль или импортируйте данные, чтобы увидеть сводку.");
         } else {
-            ImGui::TextDisabled(u8"Нет данных по фильтрам.");
+            DrawEmptyStateGui("admin_stats_empty_filtered", UiIcon::Search,
+                              u8"Нет данных по фильтрам",
+                              u8"Сбросьте поиск, ранг или режим архива, чтобы вернуть список.");
         }
         if (hasFilters && ImGui::SmallButton(u8"Сбросить фильтры")) {
             resetFilters();
