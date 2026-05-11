@@ -502,6 +502,27 @@ static void DrawStatusPillGui(const char* id, const char* label, const ImVec4& a
     ImGui::PopID();
 }
 
+static ImVec4 ActiveRowTintGui(float strength = 0.18f) {
+    ImVec4 tint = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+    tint.w = std::clamp(tint.w * strength, 0.10f, 0.26f);
+    return tint;
+}
+
+static ImVec4 FocusRowTintGui(float strength = 0.12f) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 tint = BlendColor(style.Colors[ImGuiCol_FrameBg], style.Colors[ImGuiCol_CheckMark], 0.28f);
+    tint.w = std::clamp(tint.w * strength, 0.06f, 0.18f);
+    return tint;
+}
+
+static void ApplyTableRowStateTintGui(bool active, bool focus = false) {
+    if (active) {
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ActiveRowTintGui()));
+    } else if (focus) {
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(FocusRowTintGui()));
+    }
+}
+
 static bool NavIconButtonGui(const char* id, UiIcon icon, const char* label, const ImVec4& accent,
                              float height, bool enabled = true, bool selected = false) {
     if (height <= 0.0f) return false;

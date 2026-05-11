@@ -223,8 +223,11 @@ static void DrawProfileTaskBriefCard(GuiState& state,
             ImGui::TableSetupColumn(u8"Дедлайн", ImGuiTableColumnFlags_WidthFixed, 122.0f);
             for (const TaskEntry* task : activeItems) {
                 const bool overdue = task->deadlineAt > 0 && task->deadlineAt < nowSec;
+                const bool isFocusTask = overview.primaryTask && overview.primaryTask->id == task->id;
                 ImGui::TableNextRow();
-                if (overdue) {
+                if (isFocusTask) {
+                    ApplyTableRowStateTintGui(false, true);
+                } else if (overdue) {
                     ImVec4 warnBg = LogLevelColor(AppLogLevel::Warning);
                     warnBg.w = std::clamp(warnBg.w * 0.14f, 0.05f, 0.16f);
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(warnBg));

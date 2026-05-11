@@ -181,6 +181,27 @@ static bool TestGuiEmptyStateRegistersLayoutSize() {
     return dummy != std::string::npos && pop != std::string::npos && dummy < pop;
 }
 
+static bool TestGuiRowStateHelpersUsedAcrossModules() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string icons;
+    std::string tasks;
+    std::string projects;
+    std::string profilePanel;
+    std::string profileSections;
+    if (!ReadFile(root / "gui" / "GuiIcons.inc", icons)) return false;
+    if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
+    if (!ReadFile(root / "gui" / "GuiProjects.inc", projects)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfilePanel.inc", profilePanel)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfileSections.inc", profileSections)) return false;
+
+    return icons.find("static void ApplyTableRowStateTintGui(") != std::string::npos &&
+           CountSubstring(tasks, "ApplyTableRowStateTintGui(") >= 2 &&
+           projects.find("ApplyTableRowStateTintGui(") != std::string::npos &&
+           profilePanel.find("ApplyTableRowStateTintGui(") != std::string::npos &&
+           CountSubstring(profileSections, "ApplyTableRowStateTintGui(") >= 2;
+}
+
 static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -514,6 +535,7 @@ int main() {
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
+    const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
     const bool okXpProjectless = TestGuiXpModalAllowsProjectlessSourceTask();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
@@ -534,7 +556,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -548,6 +570,7 @@ int main() {
               << " taskText=" << okTaskText
               << " guiStack=" << okGuiStack
               << " pipelineGuiStack=" << okPipelineGuiStack
+              << " guiRowStates=" << okGuiRowStates
               << " emptyStateLayout=" << okEmptyStateLayout
               << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth

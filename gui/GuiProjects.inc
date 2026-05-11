@@ -469,10 +469,11 @@ void DrawProjectsPanel(GuiState& state) {
             shownProjects += 1;
             ImGui::TableNextRow();
             const bool selected = state.projectEditIndex == idx;
+            const bool focusedByTasks = state.tasksFilterProject == projectFilterIndex;
             if (selected) {
-                ImVec4 rowHighlight = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-                rowHighlight.w = std::clamp(rowHighlight.w * 0.18f, 0.10f, 0.26f);
-                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+                ApplyTableRowStateTintGui(true);
+            } else if (focusedByTasks) {
+                ApplyTableRowStateTintGui(false, true);
             } else if (taskStats.overdue > 0) {
                 ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
                 rowHighlight.w = std::clamp(rowHighlight.w * 0.16f, 0.08f, 0.22f);

@@ -1278,6 +1278,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     const auto& project = state.projects[static_cast<size_t>(i)];
                     const ProjectTaskStats stats = bridgeProjectStats[static_cast<size_t>(i)];
                     ImGui::TableNextRow();
+                    ApplyTableRowStateTintGui(state.projectEditIndex == i, state.tasksFilterProject == 2 + i);
                     ImGui::PushID(project.id.c_str());
                     ImGui::TableSetColumnIndex(0);
                     if (ImGui::Selectable(project.name.c_str(), state.projectEditIndex == i, ImGuiSelectableFlags_SpanAvailWidth)) {
@@ -2651,12 +2652,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ++visibleCount;
             ImGui::TableNextRow();
             const bool isExpanded = (state.tasksExpandedId == task->id);
+            const bool isFocusTask = workFocusTask && workFocusTask->id == task->id;
             const bool overdue = task->deadlineAt > 0 && task->deadlineAt < nowSec &&
                                  NormalizeTaskStatus(task->status) != kTaskStatusDone;
             if (isExpanded) {
-                ImVec4 rowHighlight = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
-                rowHighlight.w = std::clamp(rowHighlight.w * 0.18f, 0.10f, 0.26f);
-                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
+                ApplyTableRowStateTintGui(true);
+            } else if (isFocusTask) {
+                ApplyTableRowStateTintGui(false, true);
             } else if (overdue) {
                 ImVec4 rowHighlight = TaskRowTint(AppLogLevel::Warning, 0.12f);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));

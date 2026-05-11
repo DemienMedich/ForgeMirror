@@ -1170,8 +1170,11 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 for (const TaskEntry* task : activeItems) {
                     const int status = NormalizeTaskStatus(task->status);
                     const bool overdue = task->deadlineAt > 0 && task->deadlineAt < nowSec;
+                    const bool isFocusTask = taskOverview.primaryTask && taskOverview.primaryTask->id == task->id;
                     ImGui::TableNextRow();
-                    if (overdue) {
+                    if (isFocusTask) {
+                        ApplyTableRowStateTintGui(false, true);
+                    } else if (overdue) {
                         ImVec4 rowHighlight = LogLevelColor(AppLogLevel::Warning);
                         rowHighlight.w = std::clamp(rowHighlight.w * 0.14f, 0.05f, 0.16f);
                         ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(rowHighlight));
@@ -1319,6 +1322,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 const bool awaitingXp = TaskNeedsXpAward(*task);
                 if (!participant && !awaitingXp) continue;
                 ImGui::TableNextRow();
+                ApplyTableRowStateTintGui(false, awaitingXp);
                 ImGui::TableSetColumnIndex(0);
                 const std::string stamp = compactDeadline(task->createdAt);
                 const std::string stampFull = fullDeadline(task->createdAt);
