@@ -311,7 +311,9 @@ static void DrawShortcutsSidebar(GuiState& state) {
         const float iconSize = std::max(52.0f, ImGui::GetFrameHeight() * 1.45f);
         const float dotSize = std::max(10.0f, iconSize * 0.28f);
         if (state.shortcuts.empty()) {
-            ImGui::TextDisabled(u8"Нет ярлыков.");
+            DrawEmptyStateGui("shortcuts_sidebar_empty", UiIcon::Launch,
+                              u8"Нет ярлыков",
+                              u8"Добавьте приложения или папки в настройках ярлыков.");
         } else {
             for (size_t i = 0; i < state.shortcuts.size(); ++i) {
                 const auto& entry = state.shortcuts[i];

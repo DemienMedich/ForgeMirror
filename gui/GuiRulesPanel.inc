@@ -284,7 +284,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::EndTable();
     }
     if (!hasChanges) {
-        ImGui::TextDisabled(u8"Нет несохранённых изменений.");
+        DrawEmptyStateGui("rules_clean_state", UiIcon::Info,
+                          u8"Изменений нет",
+                          u8"Правила уже сохранены и применены к текущей конфигурации.");
     }
 }
 

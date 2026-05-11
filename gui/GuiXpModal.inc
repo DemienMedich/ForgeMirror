@@ -71,9 +71,13 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             ? std::clamp(sourceTask->deadlinePenaltyPercent, 0, 100)
             : std::clamp(state.xpTaskPenaltyPercent, 0, 100);
             if (catalogSkills.empty()) {
-                ImGui::TextDisabled(u8"Навыков пока нет.");
+                DrawEmptyStateGui("xp_modal_skills_empty", UiIcon::Chart,
+                                  u8"Навыков пока нет",
+                                  u8"Добавьте навыки в каталог, чтобы распределять опыт.");
         } else if (!state.active) {
-            ImGui::TextDisabled(u8"Нет активного профиля.");
+            DrawEmptyStateGui("xp_modal_profile_empty", UiIcon::Users,
+                              u8"Нет активного профиля",
+                              u8"Выберите профиль перед начислением опыта.");
         } else {
             state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
             state.taskScore = ClampToRange(state.taskScore, 1, Profile::kMaxCategoryScore);
@@ -439,7 +443,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::EndTable();
             }
             if (visibleXpCount == 0) {
-                ImGui::TextDisabled(u8"Нет навыков по фильтру.");
+                DrawEmptyStateGui("xp_modal_skills_filter_empty", UiIcon::Search,
+                                  u8"Нет навыков по фильтру",
+                                  u8"Сбросьте поиск или фильтр профессии, чтобы вернуть список навыков.");
             }
 
             int percentSum = 0;
