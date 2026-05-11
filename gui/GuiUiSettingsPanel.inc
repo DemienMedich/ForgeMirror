@@ -188,7 +188,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                           return a.filename().u8string() < b.filename().u8string();
                       });
             if (entries.empty()) {
-                ImGui::TextDisabled(u8"Нет подпапок.");
+                DrawEmptyStateGui("ui_cloud_picker_empty", UiIcon::Flow,
+                                  u8"Нет подпапок",
+                                  u8"Выберите текущую папку или перейдите на уровень выше.");
             } else {
                 for (const auto& entry : entries) {
                     const std::string name = PathToUtf8(entry.filename());
@@ -257,7 +259,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         if (hasPendingChanges) {
             ImGui::TextColored(accentSoft, u8"Есть несохранённые изменения.");
         } else {
-            ImGui::TextDisabled(u8"Нет несохранённых изменений.");
+            DrawEmptyStateGui("ui_sync_clean_state", UiIcon::Info,
+                              u8"Изменений нет",
+                              u8"Синхронизация уже соответствует текущим настройкам.");
         }
         return;
     }
@@ -490,7 +494,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     }
     const auto presets = LoadUiPresetNames(state.storageDir);
     if (presets.empty()) {
-        ImGui::TextDisabled(u8"Нет сохранённых пресетов.");
+        DrawEmptyStateGui("ui_presets_empty", UiIcon::Settings,
+                          u8"Нет сохранённых пресетов",
+                          u8"Сохраните текущую тему как пресет, чтобы быстро возвращаться к ней.");
         state.uiPresetIndex = 0;
     } else {
         state.uiPresetIndex = std::clamp(state.uiPresetIndex, 0, static_cast<int>(presets.size()) - 1);
@@ -696,10 +702,16 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         visibleBackgrounds, static_cast<int>(backgrounds.size()));
     if (backgrounds.empty()) {
-        ImGui::TextDisabled(u8"Фоны не найдены. Положите изображения в data/backgrounds.");
+        DrawEmptyStateGui("ui_backgrounds_empty", UiIcon::Bell,
+                          u8"Фоны не найдены",
+                          u8"Положите изображения в data/backgrounds, чтобы назначать их окнам.");
     } else if (visibleBackgrounds == 0) {
-        ImGui::TextDisabled(u8"Нет фонов по фильтру.");
-        if (ImGui::SmallButton(u8"Сбросить фильтр")) {
+        if (DrawEmptyStateGui("ui_backgrounds_filter_empty", UiIcon::Search,
+                              u8"Нет фонов по фильтру",
+                              u8"Очистите поиск, чтобы вернуть список доступных фонов.",
+                              UiIcon::Refresh,
+                              u8"Сбросить фильтр",
+                              true)) {
             state.filters.background.fill('\0');
         }
     }
@@ -714,7 +726,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 state.uiDirty = true;
             }
             if (visibleBackgrounds == 0) {
-                ImGui::TextDisabled(u8"Нет фонов по фильтру.");
+                DrawEmptyStateGui("ui_background_combo_filter_empty", UiIcon::Search,
+                                  u8"Нет фонов по фильтру",
+                                  u8"Очистите фильтр в блоке фонов, чтобы выбрать изображение.");
             }
             for (const auto& bg : backgrounds) {
                 if (!MatchesFilter(bg.label, state.filters.background.data())) continue;
@@ -788,6 +802,8 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     if (hasPendingChanges) {
         ImGui::TextColored(accentSoft, u8"Есть несохранённые изменения.");
     } else {
-        ImGui::TextDisabled(u8"Нет несохранённых изменений.");
+        DrawEmptyStateGui("ui_appearance_clean_state", UiIcon::Info,
+                          u8"Изменений нет",
+                          u8"Тема, фон и цветовые настройки уже сохранены.");
     }
 }
