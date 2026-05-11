@@ -1982,44 +1982,50 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         constexpr int kTaskAuditPreview = 8;
         if (state.taskAudit.empty()) {
             ImGui::TextDisabled(u8"Изменений пока нет.");
-        } else if (ImGui::BeginTable("tasks_audit_table", 5,
-                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("audit_time", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn("audit_actor", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-            ImGui::TableSetupColumn("audit_task", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-            ImGui::TableSetupColumn("audit_field", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-            ImGui::TableSetupColumn("audit_change", ImGuiTableColumnFlags_WidthStretch, 1.4f);
-            ImGui::TableHeadersRow();
-            int shown = 0;
-            for (auto it = state.taskAudit.rbegin(); it != state.taskAudit.rend() && shown < kTaskAuditPreview; ++it, ++shown) {
-                const TaskAuditEntry& row = *it;
-                std::string taskLabel = row.taskId;
-                auto taskIt = std::find_if(state.tasks.begin(), state.tasks.end(),
-                    [&](const TaskEntry& task) { return task.id == row.taskId; });
-                if (taskIt != state.tasks.end()) {
-                    const std::string title = TaskDisplayTitle(*taskIt);
-                    if (!title.empty()) taskLabel = title;
-                }
-                const std::string timeLabel = row.timestamp > 0
-                    ? FormatTimestamp(row.timestamp, "%d.%m %H:%M")
-                    : std::string(u8"—");
-                std::string changeLabel = row.oldValue;
-                changeLabel += " -> ";
-                changeLabel += row.newValue;
+        } else {
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
+            if (ImGui::BeginTable("tasks_audit_table", 5,
+                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("audit_time", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+                ImGui::TableSetupColumn("audit_actor", ImGuiTableColumnFlags_WidthFixed, 106.0f);
+                ImGui::TableSetupColumn("audit_task", ImGuiTableColumnFlags_WidthStretch, 1.35f);
+                ImGui::TableSetupColumn("audit_field", ImGuiTableColumnFlags_WidthFixed, 74.0f);
+                ImGui::TableSetupColumn("audit_change", ImGuiTableColumnFlags_WidthStretch, 1.55f);
+                ImGui::TableHeadersRow();
+                int shown = 0;
+                for (auto it = state.taskAudit.rbegin(); it != state.taskAudit.rend() && shown < kTaskAuditPreview; ++it, ++shown) {
+                    const TaskAuditEntry& row = *it;
+                    std::string taskLabel = row.taskId;
+                    auto taskIt = std::find_if(state.tasks.begin(), state.tasks.end(),
+                        [&](const TaskEntry& task) { return task.id == row.taskId; });
+                    if (taskIt != state.tasks.end()) {
+                        const std::string title = TaskDisplayTitle(*taskIt);
+                        if (!title.empty()) taskLabel = title;
+                    }
+                    const std::string timeLabel = row.timestamp > 0
+                        ? FormatTimestamp(row.timestamp, "%d.%m %H:%M")
+                        : std::string(u8"—");
+                    const std::string actorLabel = row.actor.empty() ? std::string(u8"system") : row.actor;
+                    std::string changeLabel = row.oldValue;
+                    changeLabel += " -> ";
+                    changeLabel += row.newValue;
 
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(timeLabel.c_str());
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextUnformatted(row.actor.empty() ? u8"system" : row.actor.c_str());
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TextUnformatted(taskLabel.c_str());
-                ImGui::TableSetColumnIndex(3);
-                ImGui::TextUnformatted(row.field.c_str());
-                ImGui::TableSetColumnIndex(4);
-                ImGui::TextUnformatted(changeLabel.c_str());
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(timeLabel.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    DrawClippedTextWithTooltip(actorLabel);
+                    ImGui::TableSetColumnIndex(2);
+                    DrawClippedTextWithTooltip(taskLabel);
+                    ImGui::TableSetColumnIndex(3);
+                    DrawClippedTextWithTooltip(row.field);
+                    ImGui::TableSetColumnIndex(4);
+                    DrawClippedTextWithTooltip(changeLabel);
+                }
+                ImGui::EndTable();
             }
-            ImGui::EndTable();
+            ImGui::PopStyleVar(2);
         }
         }
         EndCard();
@@ -2437,6 +2443,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const float avgPool = filteredCount > 0
                 ? static_cast<float>(poolSum) / static_cast<float>(filteredCount)
                 : 0.0f;
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
             if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp)) {
                 ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.7f);
                 ImGui::TableSetupColumn("sum_last", ImGuiTableColumnFlags_WidthStretch, 1.1f);
@@ -2456,7 +2464,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Фокус");
-                ImGui::Text("%s", focusText.c_str());
+                DrawClippedTextWithTooltip(focusText);
                 ImGui::TableSetColumnIndex(3);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
                 ImGui::TextDisabled(u8"Ср.");
@@ -2468,6 +2476,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Text("%d", static_cast<int>(uniqueProfiles.size()));
                 ImGui::EndTable();
             }
+            ImGui::PopStyleVar(2);
             if (hasAttention) {
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
                 ImGui::TextDisabled(u8"Зона внимания");
