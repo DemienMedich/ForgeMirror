@@ -1376,6 +1376,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+    const ImVec2 tasksCompactCellPadding(
+        std::max(4.0f, style.CellPadding.x * 0.58f),
+        std::max(2.0f, style.CellPadding.y * 0.50f));
+    const ImVec2 tasksCompactFramePadding(
+        std::max(4.0f, style.FramePadding.x * 0.66f),
+        std::max(2.0f, style.FramePadding.y * 0.56f));
 
     if (ImGui::CollapsingHeader(u8"Фильтры и экспорт")) {
         DrawCardHeader(u8"Фильтр");
@@ -2598,19 +2604,21 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::Spacing();
     }
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
     if (ImGui::BeginTable("tasks_table", tableColumns, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
         if (allowBulkSelection) {
-            ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 34.0f);
+            ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 30.0f);
         }
-        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 86.0f);
         ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.85f);
         ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.4f);
         ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("P", ImGuiTableColumnFlags_WidthFixed, 56.0f);
-        ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, tasksAdminMode ? 72.0f : 62.0f);
+        ImGui::TableSetupColumn("P", ImGuiTableColumnFlags_WidthFixed, 48.0f);
+        ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, tasksAdminMode ? 66.0f : 58.0f);
         ImGui::TableHeadersRow();
         const std::int64_t nowSec = NowSeconds();
         for (const TaskEntry* task : filtered) {
@@ -2756,12 +2764,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 const std::string stageCode = TaskPipelineStepCode(step, taskPipelineIndex);
                 const std::string stageTitle = step.title.empty() ? pipelineName : step.title;
                 ImGui::Text("%s", stageCode.c_str());
-                if (!stageTitle.empty() && stageTitle != stageCode && stageTitle != pipelineName) {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("%s", stageTitle.c_str());
-                } else if (!stageTitle.empty() && stageTitle != stageCode) {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("%s", stageTitle.c_str());
+                if (ImGui::IsItemHovered()) {
+                    const std::string tooltip = stageTitle.empty() ? pipelineName : stageTitle;
+                    if (!tooltip.empty()) ImGui::SetTooltip("%s", tooltip.c_str());
                 }
                 DrawTaskPipelineProgressHint(state, *task);
             } else {
@@ -2936,6 +2941,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(2);
     const int totalTasks = static_cast<int>(state.tasks.size());
     ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
     if (!state.tasks.empty() && filteredCount == 0) {
