@@ -36,8 +36,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state.
 - State:
-  - Ветка: develop. Версия: 0.5.01.
-  - Последнее изменение: общий UX pass, пункт 7 `плотность таблиц и читаемость строк`: очередь задач переведена на compact inline metrics, исправлен ImGui assert на quick-filter `Ждут XP`.
+  - Ветка: develop. Версия: 0.5.02.
+  - Последнее изменение: общий UX pass, пункт 7 `плотность таблиц и читаемость строк`: `DrawEmptyStateGui` теперь регистрирует layout-размер через Dummy, исправляя ImGui assert на пустом списке после `Ждут XP`.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
@@ -63,6 +63,7 @@ UI аудит:
   - Tasks Audit Density UX: таблица последних изменений задач уплотнена, а actor/task/field/change обрезаются с tooltip; summary-таблица тоже использует compact padding.
   - Tasks Bulk/Filters Density UX: фильтры, bulk combo/action-строки и popup массового назначения исполнителей получили compact padding.
   - Tasks Queue Density/Fix: очередь задач теперь рисует metric-сигналы inline, без вертикального расширения ячеек; quick-filter `Ждут XP` больше не должен триггерить ImGui parent-boundary assert.
+  - Empty State Fix: общий `DrawEmptyStateGui` после ручного позиционирования добавляет Dummy на размер карточки, чтобы ImGui корректно учитывал границы parent/child.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

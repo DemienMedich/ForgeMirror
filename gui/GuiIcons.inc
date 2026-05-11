@@ -460,7 +460,8 @@ static bool DrawEmptyStateGui(const char* id, UiIcon icon, const char* title, co
         pressed = IconButtonGui("empty_action", actionIcon, actionTooltip, accent, frame,
                                 actionEnabled, false);
     }
-    ImGui::SetCursorScreenPos(ImVec2(p0.x, p1.y + style.ItemSpacing.y));
+    ImGui::SetCursorScreenPos(p0);
+    ImGui::Dummy(ImVec2(width, height + style.ItemSpacing.y));
     ImGui::PopID();
     return pressed;
 }
