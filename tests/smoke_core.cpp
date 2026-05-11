@@ -270,6 +270,20 @@ static bool TestSharedEmptyStatesUsedInProfileSections() {
            CountSubstring(profileSections, "DrawEmptyStateGui(") >= 10;
 }
 
+static bool TestSharedEmptyStatesUsedInSkillCatalog() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string catalogPanel;
+    if (!ReadFile(root / "gui" / "GuiSkillCatalogPanel.inc", catalogPanel)) return false;
+
+    return catalogPanel.find("catalog_summary_empty") != std::string::npos &&
+           catalogPanel.find("catalog_skill_list_empty") != std::string::npos &&
+           catalogPanel.find("skill_achievements_empty") != std::string::npos &&
+           catalogPanel.find("skill_icon_picker_filter_empty") != std::string::npos &&
+           catalogPanel.find("catalog_detail_empty") != std::string::npos &&
+           CountSubstring(catalogPanel, "DrawEmptyStateGui(") >= 7;
+}
+
 static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -608,6 +622,7 @@ int main() {
     const bool okServiceEmptyStates = TestSharedEmptyStatesUsedInServicePanels();
     const bool okProfileAdminEmptyStates = TestSharedEmptyStatesUsedInProfileAdminPanels();
     const bool okProfileSectionEmptyStates = TestSharedEmptyStatesUsedInProfileSections();
+    const bool okSkillCatalogEmptyStates = TestSharedEmptyStatesUsedInSkillCatalog();
     const bool okXpProjectless = TestGuiXpModalAllowsProjectlessSourceTask();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
@@ -628,7 +643,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileSectionEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -647,6 +662,7 @@ int main() {
               << " serviceEmptyStates=" << okServiceEmptyStates
               << " profileAdminEmptyStates=" << okProfileAdminEmptyStates
               << " profileSectionEmptyStates=" << okProfileSectionEmptyStates
+              << " skillCatalogEmptyStates=" << okSkillCatalogEmptyStates
               << " emptyStateLayout=" << okEmptyStateLayout
               << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth

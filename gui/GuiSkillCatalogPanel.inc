@@ -341,7 +341,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::EndTable();
             }
             if (matchingCount == 0) {
-                ImGui::TextDisabled(u8"Нет навыков по фильтру.");
+                DrawEmptyStateGui("catalog_summary_empty", UiIcon::Search,
+                                  u8"Нет навыков по фильтру",
+                                  u8"Сбросьте поиск или категорию, чтобы вернуть сводку каталога.");
             } else {
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
                 ImGui::TextDisabled(u8"Вес A-E");
@@ -553,7 +555,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         }
         ImGui::TextDisabled(u8"%d/%d", visibleCount, static_cast<int>(catalogSkills.size()));
         if (visibleCount == 0) {
-            ImGui::TextDisabled(u8"Нет навыков по фильтру.");
+            DrawEmptyStateGui("catalog_skill_list_empty", UiIcon::Search,
+                              u8"Нет навыков по фильтру",
+                              u8"Сбросьте поиск или категорию, чтобы вернуть список навыков.");
         }
         ImGui::EndChild();
 
@@ -747,9 +751,13 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                     ImGui::EndChild();
                     if (totalForSkill == 0) {
-                        ImGui::TextDisabled(u8"Для навыка нет ачивок.");
+                        DrawEmptyStateGui("skill_achievements_empty", UiIcon::Bell,
+                                          u8"Для навыка нет ачивок",
+                                          u8"Выдайте первую ачивку, чтобы она появилась в списке навыка.");
                     } else if (filtered.empty()) {
-                        ImGui::TextDisabled(u8"Нет ачивок по фильтру.");
+                        DrawEmptyStateGui("skill_achievements_filter_empty", UiIcon::Search,
+                                          u8"Нет ачивок по фильтру",
+                                          u8"Сбросьте поиск или статус, чтобы вернуть ачивки навыка.");
                     }
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
                     ImGui::InputText(u8"Название ачивки", state.achTitle.data(), state.achTitle.size());
@@ -771,7 +779,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     if (ImGui::BeginPopup(u8"Выбор иконки")) {
                         const auto icons = LoadAchievementIconChoices(state.storageDir);
                         if (icons.empty()) {
-                            ImGui::TextDisabled(u8"Иконки не найдены.");
+                            DrawEmptyStateGui("skill_icon_picker_empty", UiIcon::Bell,
+                                              u8"Иконки не найдены",
+                                              u8"Добавьте изображения в папку ачивок, чтобы выбирать их для наград.");
                         } else {
                             ImGui::InputTextWithHint(u8"##icon_filter", u8"Фильтр иконок",
                                                      state.filters.iconPicker.data(), state.filters.iconPicker.size());
@@ -811,7 +821,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                             }
                             ImGui::EndChild();
                             if (visibleIcons == 0) {
-                                ImGui::TextDisabled(u8"Нет иконок по фильтру.");
+                                DrawEmptyStateGui("skill_icon_picker_filter_empty", UiIcon::Search,
+                                                  u8"Нет иконок по фильтру",
+                                                  u8"Очистите поиск, чтобы вернуть список иконок.");
                             }
                         }
                         ImGui::EndPopup();
@@ -878,21 +890,25 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         }
                     }
                 } else {
-                    ImGui::TextDisabled(u8"Ачивки отображаются при выборе профиля.");
+                    DrawEmptyStateGui("skill_achievements_profile_empty", UiIcon::Users,
+                                      u8"Профиль не выбран",
+                                      u8"Ачивки навыка отображаются после выбора активного профиля.");
                 }
             }
         } else {
-            ImGui::TextDisabled(u8"Выберите навык, чтобы увидеть детали.");
-            if (state.isAdmin) {
-                if (ImGui::Button(u8"Добавить навык", ImVec2(-1.0f, 0.0f))) {
-                    state.addSkillPopupRequest = true;
-                    std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
-                    std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
-                    state.newSkillWeight = 1.0f;
-                    state.newSkillProfessionFlags.assign(state.professions.size(), 0);
-                }
-            } else {
-                ImGui::TextDisabled(u8"Добавление навыков доступно администратору.");
+            if (DrawEmptyStateGui("catalog_detail_empty", UiIcon::Search,
+                                  u8"Навык не выбран",
+                                  state.isAdmin
+                                      ? u8"Выберите навык слева или создайте новый, чтобы открыть детали."
+                                      : u8"Выберите навык слева, чтобы увидеть детали.",
+                                  UiIcon::Plus,
+                                  state.isAdmin ? u8"Добавить навык" : nullptr,
+                                  state.isAdmin)) {
+                state.addSkillPopupRequest = true;
+                std::fill(state.newSkillName.begin(), state.newSkillName.end(), 0);
+                std::fill(state.newSkillDesc.begin(), state.newSkillDesc.end(), 0);
+                state.newSkillWeight = 1.0f;
+                state.newSkillProfessionFlags.assign(state.professions.size(), 0);
             }
         }
         ImGui::EndChild();
