@@ -1687,6 +1687,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (BeginCard("tasks_work_queue_card")) {
             DrawCardHeader(u8"Очередь задач");
             const int queueColumns = ImGui::GetContentRegionAvail().x < 840.0f ? 2 : 6;
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
             if (ImGui::BeginTable("tasks_work_queue_metrics", queueColumns, ImGuiTableFlags_SizingStretchSame)) {
                 int metricIndex = 0;
                 auto DrawQueueMetric = [&](const char* title,
@@ -1701,16 +1703,17 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImVec4 bg = color;
                     bg.w = value > 0
                         ? std::clamp(bg.w * 0.12f, 0.06f, 0.16f)
-                        : std::clamp(bg.w * 0.04f, 0.03f, 0.06f);
+                            : std::clamp(bg.w * 0.04f, 0.03f, 0.06f);
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, ImGui::GetColorU32(bg));
                     ImGui::TextDisabled("%s", title);
+                    ImGui::SameLine();
                     if (value > 0) {
                         ImGui::TextColored(color, "%d", value);
                     } else {
                         ImGui::TextDisabled("0");
                     }
-                    ImGui::TextDisabled("%s", hint);
                     if (quickFilter != -1) {
+                        ImGui::SameLine();
                         ImGui::PushID(title);
                         if (TaskIconButton("queue_open", UiIcon::Search, u8"Открыть задачи по этому сигналу")) {
                             if (quickFilter >= 0) {
@@ -1721,6 +1724,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             }
                         }
                         ImGui::PopID();
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", hint);
                     }
                     ++metricIndex;
                 };
@@ -1733,6 +1739,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                 filteredPipelineSignalCount > 0 ? TaskWarningColor() : TaskInfoColor());
                 ImGui::EndTable();
             }
+            ImGui::PopStyleVar(2);
             if (workFocusTask) {
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 ImGui::TextDisabled(u8"Фокус");
