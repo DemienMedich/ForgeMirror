@@ -36,8 +36,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state.
 - State:
-  - Ветка: develop. Версия: 0.5.08.
-  - Последнее изменение: UX plan point 8 `единые empty/active/focus states` продолжен: профиль, профессии и таблицы простоя/прогрева админ-статистики переведены на общий compact empty-state helper.
+  - Ветка: develop. Версия: 0.5.09.
+  - Последнее изменение: UX plan point 8 `единые empty/active/focus states` продолжен: профильные секции навыков, ачивок, аналитики и активности переведены на общий compact empty-state helper.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
@@ -70,6 +70,7 @@ UI аудит:
   - UX Plan 8 Progress: профильные task empty-state заменены на общий `DrawEmptyStateGui` с контекстным действием; smoke_core проверяет этот контракт.
   - UX Plan 8 Progress: логи, аудит задач, хранилище, баннер и админ-статистика используют общий `DrawEmptyStateGui`; smoke_core проверяет сервисные empty-state.
   - UX Plan 8 Progress: выбор профиля, профессии и empty-state таблиц простоя/прогрева используют общий `DrawEmptyStateGui`; smoke_core проверяет профиль/админ empty-state.
+  - UX Plan 8 Progress: empty-state профильных секций навыков/ачивок/аналитики/активности переведены на общий `DrawEmptyStateGui`; smoke_core проверяет этот контракт.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

@@ -130,7 +130,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             return a.idx < b.idx;
         });
         if (rows.empty()) {
-            ImGui::TextDisabled(u8"Нет данных по категориям.");
+            DrawEmptyStateGui("profile_balance_empty", UiIcon::Chart,
+                              u8"Нет данных по категориям",
+                              u8"Категории появятся после начисления опыта по навыкам.");
         } else {
             const int showCount = std::min<int>(3, static_cast<int>(rows.size()));
             ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
@@ -356,7 +358,9 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
     ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
     if (profile.achievements().empty()) {
-        ImGui::TextDisabled(u8"Ачивок нет.");
+        DrawEmptyStateGui("profile_achievements_empty", UiIcon::Bell,
+                          u8"Ачивок нет",
+                          u8"Активные достижения появятся здесь после выдачи ачивок профилю.");
     } else {
         auto formatDate = [](std::int64_t ts) -> std::string {
             if (ts <= 0) return std::string(u8"без срока");
@@ -536,7 +540,9 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             }
         }
         if (visibleAch == 0) {
-            ImGui::TextDisabled(u8"Нет ачивок по фильтру.");
+            DrawEmptyStateGui("profile_achievements_filter_empty", UiIcon::Search,
+                              u8"Нет ачивок по фильтру",
+                              u8"Сбросьте фильтр активности или поиск, чтобы вернуть список ачивок.");
         }
         ImGui::TextDisabled(u8"Показано: %d | активных: %d | истекших: %d",
         visibleAch, activeCount, expiredCount);
@@ -709,7 +715,9 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     ImGui::PopStyleVar();
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(skills.size()));
     if (visibleCount == 0) {
-        ImGui::TextDisabled(u8"Нет навыков по фильтру.");
+        DrawEmptyStateGui("profile_skills_filter_empty", UiIcon::Search,
+                          u8"Нет навыков по фильтру",
+                          u8"Сбросьте поиск, категорию или сортировку, чтобы вернуть список навыков.");
     }
     }
 }
@@ -733,7 +741,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
         if (BeginCard("profile_chart_categories")) {
             DrawCardHeader(u8"Категории");
             if (catScores.empty()) {
-                ImGui::TextDisabled(u8"Нет данных по категориям.");
+                DrawEmptyStateGui("profile_chart_categories_empty", UiIcon::Chart,
+                                  u8"Нет данных по категориям",
+                                  u8"Аналитика категорий появится после начисления опыта.");
             } else {
                 ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
                 ImVec4 warnRow = warnText;
@@ -774,7 +784,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
         if (BeginCard("profile_chart_top_skills")) {
             DrawCardHeader(u8"Топ навыков");
             if (skills.empty()) {
-                ImGui::TextDisabled(u8"У профиля нет навыков.");
+                DrawEmptyStateGui("profile_chart_top_skills_empty", UiIcon::Chart,
+                                  u8"У профиля нет навыков",
+                                  u8"Начислите опыт по навыкам, чтобы сформировать топ.");
             } else {
                 struct SkillStatRow {
                     Skill skill;
@@ -837,7 +849,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
         if (BeginCard("profile_chart_radar")) {
             DrawCardHeader(u8"Радар навыков");
             if (skills.size() < 3) {
-                ImGui::TextDisabled(u8"Недостаточно навыков для радар-диаграммы (минимум 3).");
+                DrawEmptyStateGui("profile_chart_radar_empty", UiIcon::Chart,
+                                  u8"Недостаточно навыков",
+                                  u8"Для радар-диаграммы нужно минимум 3 навыка с опытом.");
             } else {
                 static int radarCount = 8;
                 const int maxRadar = std::min<int>(16, static_cast<int>(skills.size()));
@@ -984,12 +998,16 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 rendered += 1;
             }
             if (activityShown == 0) {
-                ImGui::TextDisabled(u8"Нет действий по фильтру.");
+                DrawEmptyStateGui("profile_activity_filter_empty", UiIcon::Search,
+                                  u8"Нет действий по фильтру",
+                                  u8"Очистите поиск, чтобы вернуть историю действий профиля.");
             } else if (activityShown > rendered) {
                 ImGui::TextDisabled(u8"+%d в истории", activityShown - rendered);
             }
         } else {
-            ImGui::TextDisabled(u8"Пока нет действий.");
+            DrawEmptyStateGui("profile_activity_empty", UiIcon::List,
+                              u8"Пока нет действий",
+                              u8"История начнет заполняться после изменений профиля, задач и опыта.");
         }
     }
     ImGui::EndChild();

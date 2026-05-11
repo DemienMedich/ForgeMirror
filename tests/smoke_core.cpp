@@ -257,6 +257,19 @@ static bool TestSharedEmptyStatesUsedInProfileAdminPanels() {
            adminStats.find("admin_stats_recovery_empty") != std::string::npos;
 }
 
+static bool TestSharedEmptyStatesUsedInProfileSections() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string profileSections;
+    if (!ReadFile(root / "gui" / "GuiProfileSections.inc", profileSections)) return false;
+
+    return profileSections.find("profile_achievements_empty") != std::string::npos &&
+           profileSections.find("profile_skills_filter_empty") != std::string::npos &&
+           profileSections.find("profile_chart_radar_empty") != std::string::npos &&
+           profileSections.find("profile_activity_empty") != std::string::npos &&
+           CountSubstring(profileSections, "DrawEmptyStateGui(") >= 10;
+}
+
 static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -594,6 +607,7 @@ int main() {
     const bool okProfileTaskEmptyStates = TestProfileTaskEmptyStatesUseSharedHelper();
     const bool okServiceEmptyStates = TestSharedEmptyStatesUsedInServicePanels();
     const bool okProfileAdminEmptyStates = TestSharedEmptyStatesUsedInProfileAdminPanels();
+    const bool okProfileSectionEmptyStates = TestSharedEmptyStatesUsedInProfileSections();
     const bool okXpProjectless = TestGuiXpModalAllowsProjectlessSourceTask();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
@@ -614,7 +628,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileSectionEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -632,6 +646,7 @@ int main() {
               << " profileTaskEmptyStates=" << okProfileTaskEmptyStates
               << " serviceEmptyStates=" << okServiceEmptyStates
               << " profileAdminEmptyStates=" << okProfileAdminEmptyStates
+              << " profileSectionEmptyStates=" << okProfileSectionEmptyStates
               << " emptyStateLayout=" << okEmptyStateLayout
               << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth
