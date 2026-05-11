@@ -296,7 +296,13 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
         DrawCardHeader(u8"Выбор профиля");
         const bool hasProfiles = !state.profiles.empty();
         if (!hasProfiles) {
-            ImGui::TextDisabled(u8"Профили не найдены.");
+            if (DrawEmptyStateGui("profile_select_empty", UiIcon::Users,
+                                  u8"Профили не найдены",
+                                  u8"Откройте управление профилями, чтобы создать или импортировать профиль.",
+                                  UiIcon::Users, u8"Открыть управление профилями")) {
+                state.showProfilesWindow = true;
+                state.workspaceTabRequest = static_cast<int>(UiWindowId::MainMenu);
+            }
         } else {
             std::string currentLabel = u8"не выбран";
             if (state.selectedIndex >= 0 && state.selectedIndex < static_cast<int>(state.profiles.size())) {
@@ -393,9 +399,16 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             ImGui::TextColored(LogLevelColor(AppLogLevel::Error), "%s", state.profileLoadError.c_str());
             ImGui::TextDisabled(u8"Обновите список профилей или выберите другой.");
         } else if (state.profiles.empty()) {
-            ImGui::TextDisabled(u8"Профили не найдены.");
+            if (DrawEmptyStateGui("profile_body_empty_profiles", UiIcon::Users,
+                                  u8"Профили не найдены",
+                                  u8"Создайте профиль или обновите список, чтобы открыть карточку.",
+                                  UiIcon::Refresh, u8"Обновить список профилей")) {
+                RefreshProfiles(state, storage, catalog);
+            }
         } else {
-            ImGui::TextDisabled(u8"Выберите профиль, чтобы увидеть детали.");
+            DrawEmptyStateGui("profile_body_select_profile", UiIcon::Search,
+                              u8"Профиль не выбран",
+                              u8"Выберите профиль в верхнем блоке, чтобы увидеть прогресс, задачи и навыки.");
         }
     } else {
         Profile& profile = state.active->profile;

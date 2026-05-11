@@ -224,7 +224,9 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             RefreshProfileProfessionCache(state, storage);
         }
         if (state.profiles.empty()) {
-            ImGui::TextDisabled(u8"Профили не найдены.");
+            DrawEmptyStateGui("profession_members_empty", UiIcon::Users,
+                              u8"Профили не найдены",
+                              u8"Создайте или импортируйте профили, чтобы назначать им профессию.");
         } else if (ImGui::BeginTable("prof_members", 3, ImGuiTableFlags_RowBg |
                                               ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.4f);
@@ -281,7 +283,9 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
         DrawCardHeader(u8"Навыки профессии");
         const auto& catalogSkills = catalog.skills();
         if (catalogSkills.empty()) {
-            ImGui::TextDisabled(u8"Навыков пока нет.");
+            DrawEmptyStateGui("profession_skills_empty", UiIcon::Chart,
+                              u8"Навыков пока нет",
+                              u8"Добавьте навыки в каталог, чтобы связать их с этой профессией.");
         } else if (ImGui::BeginChild("prof_skill_list", ImVec2(0.0f, 220.0f), true)) {
             for (const auto& id : catalogSkills) {
                 std::string name = catalog.display_name(id);
@@ -311,6 +315,8 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             ImGui::EndChild();
         }
     } else {
-        ImGui::TextDisabled(u8"Выберите профессию, чтобы назначать профили и навыки.");
+        DrawEmptyStateGui("profession_select_empty", UiIcon::Flow,
+                          u8"Профессия не выбрана",
+                          u8"Выберите профессию слева или создайте новую, чтобы назначать профили и навыки.");
     }
 }

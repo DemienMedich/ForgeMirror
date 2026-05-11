@@ -512,21 +512,6 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::TableSetupColumn(u8"Прошло", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableSetupColumn(u8"Прогрев", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableHeadersRow();
-        if (byInactivity.empty()) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("-");
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextDisabled("-");
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextDisabled(u8"Нет профилей старше порога.");
-            ImGui::TableSetColumnIndex(3);
-            ImGui::TextDisabled("-");
-            ImGui::TableSetColumnIndex(4);
-            ImGui::TextDisabled("-");
-            ImGui::TableSetColumnIndex(5);
-            ImGui::TextDisabled("-");
-        }
         int rowRank = 0;
         for (const auto& item : byInactivity) {
             ImGui::TableNextRow();
@@ -572,6 +557,11 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         }
         ImGui::EndTable();
     }
+    if (byInactivity.empty()) {
+        DrawEmptyStateGui("admin_stats_inactive_empty", UiIcon::User,
+                          u8"Нет профилей старше порога",
+                          u8"По текущему фильтру нет профилей, которым требуется внимание по простою.");
+    }
 
     ImGui::Spacing();
     DrawCardHeader(u8"Профили на прогреве");
@@ -601,17 +591,6 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn(u8"Осталось", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableHeadersRow();
-        if (byRecovery.empty()) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextDisabled("-");
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextDisabled("-");
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextDisabled(u8"Нет активных профилей.");
-            ImGui::TableSetColumnIndex(3);
-            ImGui::TextDisabled("-");
-        }
         int rowRank = 0;
         for (const auto& item : byRecovery) {
             ImGui::TableNextRow();
@@ -636,6 +615,11 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             ++rowRank;
         }
         ImGui::EndTable();
+    }
+    if (byRecovery.empty()) {
+        DrawEmptyStateGui("admin_stats_recovery_empty", UiIcon::Bell,
+                          u8"Нет профилей на прогреве",
+                          u8"Сейчас нет активных профилей с временным штрафом после простоя.");
     }
     ImGui::PopStyleVar();
 }

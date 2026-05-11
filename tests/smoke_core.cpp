@@ -238,6 +238,25 @@ static bool TestSharedEmptyStatesUsedInServicePanels() {
            adminStats.find("admin_stats_empty_filtered") != std::string::npos;
 }
 
+static bool TestSharedEmptyStatesUsedInProfileAdminPanels() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string profilePanel;
+    std::string professions;
+    std::string adminStats;
+    if (!ReadFile(root / "gui" / "GuiProfilePanel.inc", profilePanel)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfessions.inc", professions)) return false;
+    if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
+
+    return profilePanel.find("profile_select_empty") != std::string::npos &&
+           profilePanel.find("profile_body_select_profile") != std::string::npos &&
+           professions.find("profession_members_empty") != std::string::npos &&
+           professions.find("profession_skills_empty") != std::string::npos &&
+           professions.find("profession_select_empty") != std::string::npos &&
+           adminStats.find("admin_stats_inactive_empty") != std::string::npos &&
+           adminStats.find("admin_stats_recovery_empty") != std::string::npos;
+}
+
 static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -574,6 +593,7 @@ int main() {
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
     const bool okProfileTaskEmptyStates = TestProfileTaskEmptyStatesUseSharedHelper();
     const bool okServiceEmptyStates = TestSharedEmptyStatesUsedInServicePanels();
+    const bool okProfileAdminEmptyStates = TestSharedEmptyStatesUsedInProfileAdminPanels();
     const bool okXpProjectless = TestGuiXpModalAllowsProjectlessSourceTask();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
@@ -594,7 +614,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -611,6 +631,7 @@ int main() {
               << " guiRowStates=" << okGuiRowStates
               << " profileTaskEmptyStates=" << okProfileTaskEmptyStates
               << " serviceEmptyStates=" << okServiceEmptyStates
+              << " profileAdminEmptyStates=" << okProfileAdminEmptyStates
               << " emptyStateLayout=" << okEmptyStateLayout
               << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth
