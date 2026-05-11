@@ -409,24 +409,24 @@ void DrawPipelinePanel(GuiState& state) {
     } else {
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
-    if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("pipeline_filter_label", ImGuiTableColumnFlags_WidthFixed, 64.0f);
-        ImGui::TableSetupColumn("pipeline_filter_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("pipeline_filter_action", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled(u8"Фильтр");
-        ImGui::TableSetColumnIndex(1);
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Название, код, ветка, контроль",
-                                 state.filters.pipeline.data(), state.filters.pipeline.size());
-        ImGui::TableSetColumnIndex(2);
-        if (PipelineIconButton("pipeline_filter_reset", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
-            state.filters.pipeline.fill('\0');
+        if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("pipeline_filter_label", ImGuiTableColumnFlags_WidthFixed, 64.0f);
+            ImGui::TableSetupColumn("pipeline_filter_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("pipeline_filter_action", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled(u8"Фильтр");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Название, код, ветка, контроль",
+                                     state.filters.pipeline.data(), state.filters.pipeline.size());
+            ImGui::TableSetColumnIndex(2);
+            if (PipelineIconButton("pipeline_filter_reset", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
+                state.filters.pipeline.fill('\0');
+            }
+            ImGui::EndTable();
         }
-        ImGui::EndTable();
-    }
         ImGui::PopStyleVar(2);
     }
 
@@ -721,10 +721,9 @@ void DrawPipelinePanel(GuiState& state) {
                     if (PipelineIconButton("pipeline_move_down", UiIcon::Next, u8"Переместить блок ниже", canMoveDown)) {
                         moveFrom = state.selectedPipelineIndex;
                         moveTo = state.selectedPipelineIndex + 1;
-        }
-        ImGui::EndTable();
-    }
-    ImGui::PopStyleVar();
+                    }
+                    ImGui::EndTable();
+                }
             }
 
             if (startEditRequested) {
@@ -811,4 +810,5 @@ void DrawPipelinePanel(GuiState& state) {
 
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
 }

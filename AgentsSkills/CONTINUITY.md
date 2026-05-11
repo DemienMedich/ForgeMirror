@@ -36,8 +36,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state.
 - State:
-  - Ветка: develop. Версия: 0.5.03.
-  - Последнее изменение: общий UX pass, пункт 7 `плотность таблиц и читаемость строк` закрыт полностью: профильные task-таблицы, проекты, пайплайн и smoke-защита empty-state layout.
+  - Ветка: develop. Версия: 0.5.04.
+  - Последнее изменение: регрессия пайплайна после пункта 7 исправлена: `Missing PopStyleVar()` закрыт переносом внешнего `pipeline_split` PopStyleVar после EndTable и стабилизацией filter-row.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
 - Done:
   - Tasks UX: project bridge получил однострочную сводку, compact clear-filter action и tooltip для XP handoff вместо второй строки.
@@ -65,6 +65,7 @@ UI аудит:
   - Tasks Queue Density/Fix: очередь задач теперь рисует metric-сигналы inline, без вертикального расширения ячеек; quick-filter `Ждут XP` больше не должен триггерить ImGui parent-boundary assert.
   - Empty State Fix: общий `DrawEmptyStateGui` после ручного позиционирования добавляет Dummy на размер карточки, чтобы ImGui корректно учитывал границы parent/child.
   - UX Plan 7 Done: профильные task-таблицы, проекты и пайплайн уплотнены; smoke_core проверяет layout-контракт `DrawEmptyStateGui`.
+  - Pipeline Stack Fix: устранен `Missing PopStyleVar()` во вкладке пайплайна; smoke_core проверяет stack/layout-контракт `GuiPipelinePanel.inc`.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.
