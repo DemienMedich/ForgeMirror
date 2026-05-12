@@ -8,11 +8,17 @@ void DrawAdminLoginModal(GuiState& state) {
     if (ImGui::BeginPopupModal(u8"Вход администратора", &adminPopupOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawModalShadow();
         DrawCardHeader(u8"Пароль администратора");
-        ImGui::InputText(u8"Пароль", state.adminPassword.data(), state.adminPassword.size(), ImGuiInputTextFlags_Password);
+        bool submitLogin = ImGui::InputText(u8"Пароль", state.adminPassword.data(), state.adminPassword.size(),
+                                            ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::Checkbox(u8"Не выходить", &state.adminStayLoggedIn);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(u8"Сохранить режим администратора после перезапуска на этом рабочем месте.");
+        }
         DrawKeyboardHintLine(true);
         auto handleLogin = [&]() {
             if (std::string(state.adminPassword.data()) == state.adminPasswordExpected) {
                 state.isAdmin = true;
+                SetAdminStayLoggedIn(state.storageDir, state.adminStayLoggedIn);
                 SetStatus(state, "Администратор: доступ открыт.", 0.45f, 0.9f, 0.45f, 1.0f,
                 AppLogLevel::Info, "Админ");
                 ImGui::CloseCurrentPopup();
@@ -22,6 +28,9 @@ void DrawAdminLoginModal(GuiState& state) {
                 AppLogLevel::Warning, "Админ");
             }
         };
+        if (submitLogin) {
+            handleLogin();
+        }
         const float actionWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = actionWidth < 280.0f;
         if (stackActions) {
@@ -81,12 +90,16 @@ void DrawAdminPasswordModal(GuiState& state) {
         }
 
         if (envOverride) ImGui::BeginDisabled();
-        ImGui::InputText(u8"Текущий пароль", state.adminPasswordCurrent.data(),
-                         state.adminPasswordCurrent.size(), ImGuiInputTextFlags_Password);
-        ImGui::InputText(u8"Новый пароль", state.adminPasswordNew.data(),
-                         state.adminPasswordNew.size(), ImGuiInputTextFlags_Password);
-        ImGui::InputText(u8"Повторите пароль", state.adminPasswordConfirm.data(),
-                         state.adminPasswordConfirm.size(), ImGuiInputTextFlags_Password);
+        bool submitSave = false;
+        submitSave |= ImGui::InputText(u8"Текущий пароль", state.adminPasswordCurrent.data(),
+                                       state.adminPasswordCurrent.size(),
+                                       ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
+        submitSave |= ImGui::InputText(u8"Новый пароль", state.adminPasswordNew.data(),
+                                       state.adminPasswordNew.size(),
+                                       ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
+        submitSave |= ImGui::InputText(u8"Повторите пароль", state.adminPasswordConfirm.data(),
+                                       state.adminPasswordConfirm.size(),
+                                       ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
         if (envOverride) ImGui::EndDisabled();
         DrawKeyboardHintLine(true);
 
@@ -124,6 +137,9 @@ void DrawAdminPasswordModal(GuiState& state) {
             ImGui::CloseCurrentPopup();
             popupOpen = false;
         };
+        if (!envOverride && submitSave) {
+            handleSave();
+        }
 
         const float actionWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = actionWidth < 320.0f;

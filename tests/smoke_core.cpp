@@ -316,6 +316,45 @@ static bool TestSharedEmptyStatesUsedInUtilityPanels() {
            CountSubstring(xpModal, "DrawEmptyStateGui(") >= 3;
 }
 
+static bool TestProfileTaskBriefStatsHaveUniqueIds() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string profilePanel;
+    if (!ReadFile(root / "gui" / "GuiProfilePanel.inc", profilePanel)) return false;
+
+    return profilePanel.find("profile_task_brief_stat_created") != std::string::npos &&
+           profilePanel.find("profile_task_brief_stat_progress") != std::string::npos &&
+           profilePanel.find("profile_task_brief_stat_overdue") != std::string::npos &&
+           profilePanel.find("profile_task_brief_stat_xp") != std::string::npos &&
+           profilePanel.find("##profile_task_brief_stat") == std::string::npos;
+}
+
+static bool TestPasswordModalsSubmitOnEnterAndAdminCanStayLoggedIn() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string adminModal;
+    std::string profileModals;
+    std::string mainMenu;
+    std::string guiState;
+    std::string stateInit;
+    std::string appUtils;
+    if (!ReadFile(root / "gui" / "GuiAdminModal.inc", adminModal)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfileModals.inc", profileModals)) return false;
+    if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
+    if (!ReadFile(root / "gui" / "GuiState.inc", guiState)) return false;
+    if (!ReadFile(root / "gui" / "GuiStateInit.inc", stateInit)) return false;
+    if (!ReadFile(root / "src" / "AppUtils.cpp", appUtils)) return false;
+
+    return CountSubstring(adminModal, "ImGuiInputTextFlags_EnterReturnsTrue") >= 4 &&
+           CountSubstring(profileModals, "ImGuiInputTextFlags_EnterReturnsTrue") >= 4 &&
+           adminModal.find(u8"Не выходить") != std::string::npos &&
+           adminModal.find("SetAdminStayLoggedIn(state.storageDir, state.adminStayLoggedIn)") != std::string::npos &&
+           mainMenu.find("SetAdminStayLoggedIn(state.storageDir, false)") != std::string::npos &&
+           guiState.find("bool adminStayLoggedIn") != std::string::npos &&
+           stateInit.find("state.isAdmin = state.adminStayLoggedIn") != std::string::npos &&
+           appUtils.find("stayLoggedIn=") != std::string::npos;
+}
+
 static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -657,6 +696,8 @@ int main() {
     const bool okSkillCatalogEmptyStates = TestSharedEmptyStatesUsedInSkillCatalog();
     const bool okUiSettingsEmptyStates = TestSharedEmptyStatesUsedInUiSettings();
     const bool okUtilityEmptyStates = TestSharedEmptyStatesUsedInUtilityPanels();
+    const bool okProfileTaskBriefIds = TestProfileTaskBriefStatsHaveUniqueIds();
+    const bool okPasswordEnter = TestPasswordModalsSubmitOnEnterAndAdminCanStayLoggedIn();
     const bool okXpProjectless = TestGuiXpModalAllowsProjectlessSourceTask();
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
@@ -677,7 +718,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -699,6 +740,8 @@ int main() {
               << " skillCatalogEmptyStates=" << okSkillCatalogEmptyStates
               << " uiSettingsEmptyStates=" << okUiSettingsEmptyStates
               << " utilityEmptyStates=" << okUtilityEmptyStates
+              << " profileTaskBriefIds=" << okProfileTaskBriefIds
+              << " passwordEnter=" << okPasswordEnter
               << " emptyStateLayout=" << okEmptyStateLayout
               << " xpProjectless=" << okXpProjectless
               << " syncHealth=" << okSyncHealth

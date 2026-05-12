@@ -187,25 +187,26 @@ static void DrawProfileTaskBriefCard(GuiState& state,
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (ImGui::BeginTable("profile_task_brief_stats", 4, ImGuiTableFlags_SizingStretchSame)) {
-            auto drawStat = [](const char* label, int value, const ImVec4& color, const char* tooltip, bool filled) {
+            auto drawStat = [](const char* id, const char* label, int value, const ImVec4& color,
+                               const char* tooltip, bool filled) {
                 ImGui::TextDisabled("%s", label);
                 const std::string valueLabel = std::to_string(value);
-                DrawStatusPillGui("##profile_task_brief_stat", valueLabel.c_str(), color, tooltip, filled);
+                DrawStatusPillGui(id, valueLabel.c_str(), color, tooltip, filled);
             };
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            drawStat(u8"Новые", overview.created, style.Colors[ImGuiCol_TextDisabled],
+            drawStat("profile_task_brief_stat_created", u8"Новые", overview.created, style.Colors[ImGuiCol_TextDisabled],
                      u8"Новые задачи профиля", false);
             ImGui::TableSetColumnIndex(1);
-            drawStat(u8"В работе", overview.inProgress, LogLevelColor(AppLogLevel::Info),
+            drawStat("profile_task_brief_stat_progress", u8"В работе", overview.inProgress, LogLevelColor(AppLogLevel::Info),
                      u8"Задачи профиля в работе", overview.inProgress > 0);
             ImGui::TableSetColumnIndex(2);
-            drawStat(u8"Просрочка", overview.overdue, overview.overdue > 0
+            drawStat("profile_task_brief_stat_overdue", u8"Просрочка", overview.overdue, overview.overdue > 0
                 ? LogLevelColor(AppLogLevel::Warning)
                 : style.Colors[ImGuiCol_TextDisabled],
                 u8"Просроченные активные задачи", overview.overdue > 0);
             ImGui::TableSetColumnIndex(3);
-            drawStat(u8"XP handoff", overview.xpPending, overview.xpPending > 0
+            drawStat("profile_task_brief_stat_xp", u8"XP handoff", overview.xpPending, overview.xpPending > 0
                 ? LogLevelColor(AppLogLevel::Warning)
                 : style.Colors[ImGuiCol_TextDisabled],
                 u8"Задачи, ожидающие выдачи XP", overview.xpPending > 0);

@@ -7,6 +7,8 @@ void InitGuiState(GuiState& state, AppContext& app,
     state.modules = LoadModuleToggles();
     state.storageDir = storageDir;
     state.adminPasswordExpected = LoadAdminPassword(storageDir);
+    state.adminStayLoggedIn = LoadAdminStayLoggedIn(storageDir);
+    state.isAdmin = state.adminStayLoggedIn;
     state.rulesConfig = gameplayConfig;
     state.rulesDraft = gameplayConfig;
     state.cloudConfig = LoadCloudSyncConfig(storageDir);

@@ -99,6 +99,7 @@ struct GuiRuntimeState {
     bool adminPopupRequest = false;
     bool adminChangePopupRequest = false;
     bool isAdmin = false;
+    bool adminStayLoggedIn = false;
     ConfirmAction confirmAction = ConfirmAction::None;
     std::array<char, 128> modalBuffer{};
     std::array<char, 256> bannerInput{};

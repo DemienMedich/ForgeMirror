@@ -64,6 +64,8 @@ void SyncProfileWithCatalog(Profile& profile, SkillCatalog& catalog);
 // Load admin password from environment or storage config.
 std::string LoadAdminPassword(const std::filesystem::path& storageDir);
 bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string& password);
+bool LoadAdminStayLoggedIn(const std::filesystem::path& storageDir);
+bool SetAdminStayLoggedIn(const std::filesystem::path& storageDir, bool enabled);
 std::string EncodePassword(const std::string& password);
 std::string DecodePassword(const std::string& value);
 std::string GenerateRandomPassword(size_t length = 10);

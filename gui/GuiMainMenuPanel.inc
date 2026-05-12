@@ -992,6 +992,8 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
             if (ImGui::MenuItem(state.isAdmin ? u8"Выйти из админа" : u8"Войти как админ")) {
                 if (state.isAdmin) {
                     state.isAdmin = false;
+                    state.adminStayLoggedIn = false;
+                    SetAdminStayLoggedIn(state.storageDir, false);
                     state.showProjects = false;
                     state.showRules = false;
                     state.showView3dSettings = false;

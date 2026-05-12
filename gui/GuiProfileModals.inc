@@ -197,7 +197,10 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
         } else {
             const auto& profile = state.active->profile;
             ImGui::TextDisabled(u8"Профиль: %s", profile.name().c_str());
-            ImGui::InputText(u8"Пароль", state.profilePasswordInput.data(), state.profilePasswordInput.size(), ImGuiInputTextFlags_Password);
+            bool submitUnlockRequested = ImGui::InputText(u8"Пароль", state.profilePasswordInput.data(),
+                                                          state.profilePasswordInput.size(),
+                                                          ImGuiInputTextFlags_Password |
+                                                              ImGuiInputTextFlags_EnterReturnsTrue);
             DrawKeyboardHintLine(true);
             ImGui::TextDisabled(u8"Доверенное устройство");
             const char* trustLabels[] = {u8"Только в этой сессии", u8"30 дней", u8"90 дней"};
@@ -231,6 +234,9 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     SetStatus(state, u8"Неверный пароль.", 1.0f, 0.45f, 0.45f);
                 }
             };
+            if (submitUnlockRequested) {
+                submitUnlock();
+            }
             if (stackActions) {
                 if (ImGui::Button(u8"Войти", ImVec2(-1.0f, 0.0f))) {
                     submitUnlock();
@@ -275,13 +281,23 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
         } else {
             auto profile = state.active->profile;
             const bool hasPassword = !profile.password_encoded().empty();
+            bool submitChangeRequested = false;
             if (hasPassword) {
-                ImGui::InputText(u8"Текущий пароль", state.profilePasswordInput.data(), state.profilePasswordInput.size(), ImGuiInputTextFlags_Password);
+                submitChangeRequested |= ImGui::InputText(u8"Текущий пароль", state.profilePasswordInput.data(),
+                                                          state.profilePasswordInput.size(),
+                                                          ImGuiInputTextFlags_Password |
+                                                              ImGuiInputTextFlags_EnterReturnsTrue);
             } else {
                 ImGui::TextDisabled(u8"Пароль не задан. Установите новый.");
             }
-            ImGui::InputText(u8"Новый пароль", state.profilePasswordNew.data(), state.profilePasswordNew.size(), ImGuiInputTextFlags_Password);
-            ImGui::InputText(u8"Повтор", state.profilePasswordConfirm.data(), state.profilePasswordConfirm.size(), ImGuiInputTextFlags_Password);
+            submitChangeRequested |= ImGui::InputText(u8"Новый пароль", state.profilePasswordNew.data(),
+                                                      state.profilePasswordNew.size(),
+                                                      ImGuiInputTextFlags_Password |
+                                                          ImGuiInputTextFlags_EnterReturnsTrue);
+            submitChangeRequested |= ImGui::InputText(u8"Повтор", state.profilePasswordConfirm.data(),
+                                                      state.profilePasswordConfirm.size(),
+                                                      ImGuiInputTextFlags_Password |
+                                                          ImGuiInputTextFlags_EnterReturnsTrue);
 
             DrawKeyboardHintLine(true);
             ImGui::TextDisabled(u8"Доверенное устройство");
@@ -334,6 +350,9 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                 ImGui::CloseCurrentPopup();
                 changeOpen = false;
             };
+            if (submitChangeRequested) {
+                applyChange();
+            }
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 260.0f;
             if (stackActions) {

@@ -480,7 +480,31 @@ static bool FromHex(const std::string& hex, std::string& out) {
 }
 
 
-bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
+bool LoadAdminStayLoggedInFlag(const std::filesystem::path& storageDir) {
+    auto path = AdminPasswordPath(storageDir);
+    std::ifstream in(path);
+    if (!in) return false;
+    std::string line;
+    bool firstLine = true;
+    while (std::getline(in, line)) {
+        if (firstLine) {
+            StripUtf8Bom(line);
+            firstLine = false;
+        }
+        std::string t = TrimCopy(line);
+        if (t.empty() || t[0] == '#' || t[0] == ';') continue;
+        if (t.rfind("stayLoggedIn=", 0) == 0) {
+            std::string value = TrimCopy(t.substr(13));
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            return value == "1" || value == "true" || value == "yes" || value == "on";
+        }
+    }
+    return false;
+}
+
+bool SaveAdminConfig(const std::filesystem::path& storageDir, const std::string& encodedPassword,
+                     bool stayLoggedIn) {
     auto path = AdminPasswordPath(storageDir);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return false;
@@ -488,9 +512,13 @@ bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::strin
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     out << "# ForgeMirror admin password\n";
-    const std::string encoded = EncodePassword(password);
-    out << "password=" << encoded << "\n";
+    out << "password=" << encodedPassword << "\n";
+    out << "stayLoggedIn=" << (stayLoggedIn ? 1 : 0) << "\n";
     return out.good();
+}
+
+bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
+    return SaveAdminConfig(storageDir, EncodePassword(password), LoadAdminStayLoggedInFlag(storageDir));
 }
 
 } // namespace
@@ -741,6 +769,16 @@ bool SetAdminPassword(const std::filesystem::path& storageDir, const std::string
     std::string trimmed = TrimCopy(password);
     if (trimmed.empty()) return false;
     return SaveAdminPassword(storageDir, trimmed);
+}
+
+bool LoadAdminStayLoggedIn(const std::filesystem::path& storageDir) {
+    return LoadAdminStayLoggedInFlag(storageDir);
+}
+
+bool SetAdminStayLoggedIn(const std::filesystem::path& storageDir, bool enabled) {
+    const std::string password = LoadAdminPassword(storageDir);
+    if (password.empty()) return false;
+    return SaveAdminConfig(storageDir, EncodePassword(password), enabled);
 }
 
 
