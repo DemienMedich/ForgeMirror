@@ -1278,7 +1278,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             const std::string reportDir = (state.storageDir / "meta" / "reports").u8string();
             if (stackReport) {
                 ImGui::TextDisabled(u8"Отчёт");
-                if (IconButtonGui("profile_report_txt_stack", UiIcon::Info,
+                if (IconButtonGui("profile_report_txt_stack", UiIcon::FileText,
                                   u8"Экспортировать отчет в TXT", accent, ImGui::GetFrameHeight())) {
                     exportTxt();
                 }
@@ -1309,7 +1309,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::TextDisabled(u8"Отчёт");
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                if (IconButtonGui("profile_report_txt", UiIcon::Info,
+                if (IconButtonGui("profile_report_txt", UiIcon::FileText,
                                   u8"Экспортировать отчет в TXT", accent, ImGui::GetFrameHeight())) {
                     exportTxt();
                 }

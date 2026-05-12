@@ -157,7 +157,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     deleteSkill();
                 }
                 ImGui::SameLine();
-                if (SkillModalIconButton("delete_skill_cancel_stack", UiIcon::Refresh, u8"Отменить удаление")) {
+                if (SkillModalIconButton("delete_skill_cancel_stack", UiIcon::Close, u8"Отменить удаление")) {
                     ImGui::CloseCurrentPopup();
                     deleteSkillOpen = false;
                     state.pendingSkillDelete.clear();
@@ -178,7 +178,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     deleteSkill();
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (SkillModalIconButton("delete_skill_cancel", UiIcon::Refresh, u8"Отменить удаление")) {
+                if (SkillModalIconButton("delete_skill_cancel", UiIcon::Close, u8"Отменить удаление")) {
                     ImGui::CloseCurrentPopup();
                     deleteSkillOpen = false;
                     state.pendingSkillDelete.clear();
@@ -344,7 +344,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 clearAll();
             }
             ImGui::SameLine();
-            if (SkillModalIconButton("clear_skills_cancel_stack", UiIcon::Refresh, u8"Отменить очистку")) {
+            if (SkillModalIconButton("clear_skills_cancel_stack", UiIcon::Close, u8"Отменить очистку")) {
                 ImGui::CloseCurrentPopup();
                 clearSkillsOpen = false;
             }
@@ -364,7 +364,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 clearAll();
             }
             ImGui::TableSetColumnIndex(2);
-            if (SkillModalIconButton("clear_skills_cancel", UiIcon::Refresh, u8"Отменить очистку")) {
+            if (SkillModalIconButton("clear_skills_cancel", UiIcon::Close, u8"Отменить очистку")) {
                 ImGui::CloseCurrentPopup();
                 clearSkillsOpen = false;
             }

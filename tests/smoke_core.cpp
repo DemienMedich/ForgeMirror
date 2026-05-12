@@ -360,12 +360,18 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
            icons.find("Apply,") != std::string::npos &&
            icons.find("Calendar,") != std::string::npos &&
            icons.find("Merge,") != std::string::npos &&
+           icons.find("Clear,") != std::string::npos &&
+           icons.find("Assign,") != std::string::npos &&
+           icons.find("FileText,") != std::string::npos &&
            tasks.find("\"task_detail_text_save\", UiIcon::Save") != std::string::npos &&
            tasks.find("\"task_detail_skill_save\", UiIcon::Save") != std::string::npos &&
            tasks.find("\"task_detail_award_xp\", UiIcon::Award") != std::string::npos &&
            tasks.find("\"tasks_export_csv\", UiIcon::Export") != std::string::npos &&
+           tasks.find("\"tasks_export_txt\", UiIcon::FileText") != std::string::npos &&
            tasks.find("\"tasks_empty_all\", UiIcon::Task") != std::string::npos &&
+           tasks.find("\"tasks_toolbar_reset\", UiIcon::Clear") != std::string::npos &&
            tasks.find("\"bulk_apply_deadline\", UiIcon::Calendar") != std::string::npos &&
+           tasks.find("\"bulk_open_assignees\", UiIcon::Assign") != std::string::npos &&
            pipeline.find("\"pipeline_save\", UiIcon::Save") != std::string::npos &&
            pipeline.find("\"pipeline_edit\", UiIcon::Edit") != std::string::npos &&
            rules.find("\"rules_save\", UiIcon::Save") != std::string::npos &&
@@ -377,7 +383,10 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
            projects.find("\"project_editor_save\", UiIcon::Save") != std::string::npos &&
            projects.find("\"projects_open_xp\", UiIcon::Award") != std::string::npos &&
            skillModals.find("\"add_skill_save\", UiIcon::Save") != std::string::npos &&
-           skillModals.find("\"merge_skill_apply\", UiIcon::Merge") != std::string::npos;
+           skillModals.find("\"merge_skill_apply\", UiIcon::Merge") != std::string::npos &&
+           skillModals.find("\"delete_skill_cancel\", UiIcon::Close") != std::string::npos &&
+           catalog.find("\"catalog_clear_skills\", UiIcon::Clear") != std::string::npos &&
+           catalog.find("\"skill_ach_icon_pick\", UiIcon::FileText") != std::string::npos;
 }
 
 static bool TestSharedEmptyStatesUsedInUiSettings() {

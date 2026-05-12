@@ -26,6 +26,9 @@ enum class UiIcon {
     Apply,
     Calendar,
     Merge,
+    Clear,
+    Assign,
+    FileText,
     Info,
     SpiritGood,
     SpiritEvil,
@@ -358,6 +361,46 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
                                         IconPoint(center, 0.36f, 0.18f, s), color);
             drawList->AddCircleFilled(left, s * 0.10f, color, 10);
             drawList->AddCircleFilled(IconPoint(center, -0.58f, 0.34f, s), s * 0.10f, color, 10);
+            return;
+        }
+        case UiIcon::Clear: {
+            ImVec2 a = IconPoint(center, -0.52f, 0.08f, s);
+            ImVec2 b = IconPoint(center, 0.16f, -0.60f, s);
+            ImVec2 c = IconPoint(center, 0.56f, -0.20f, s);
+            ImVec2 d = IconPoint(center, -0.12f, 0.48f, s);
+            drawList->AddQuad(a, b, c, d, color, stroke);
+            drawList->AddLine(IconPoint(center, -0.34f, 0.58f, s),
+                              IconPoint(center, 0.58f, 0.58f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.14f, -0.28f, s),
+                              IconPoint(center, 0.28f, 0.14f, s), color, stroke * 0.85f);
+            return;
+        }
+        case UiIcon::Assign: {
+            drawList->AddCircle(IconPoint(center, -0.18f, -0.18f, s), s * 0.30f, color, 18, stroke);
+            drawList->PathClear();
+            drawList->PathArcTo(IconPoint(center, -0.18f, 0.68f, s), s * 0.64f,
+                                kPi * 1.18f, kPi * 1.82f, 16);
+            drawList->PathStroke(color, false, stroke);
+            drawList->AddLine(IconPoint(center, 0.34f, 0.00f, s),
+                              IconPoint(center, 0.70f, 0.00f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.52f, -0.18f, s),
+                              IconPoint(center, 0.52f, 0.18f, s), color, stroke);
+            return;
+        }
+        case UiIcon::FileText: {
+            ImVec2 a = IconPoint(center, -0.46f, -0.58f, s);
+            ImVec2 b = IconPoint(center, 0.36f, 0.58f, s);
+            drawList->AddRect(a, b, color, s * 0.08f, 0, stroke);
+            drawList->AddLine(IconPoint(center, 0.12f, -0.58f, s),
+                              IconPoint(center, 0.36f, -0.32f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.36f, -0.32f, s),
+                              IconPoint(center, 0.36f, -0.18f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.22f, -0.12f, s),
+                              IconPoint(center, 0.16f, -0.12f, s), color, stroke * 0.8f);
+            drawList->AddLine(IconPoint(center, -0.22f, 0.16f, s),
+                              IconPoint(center, 0.16f, 0.16f, s), color, stroke * 0.8f);
+            drawList->AddLine(IconPoint(center, -0.22f, 0.42f, s),
+                              IconPoint(center, 0.02f, 0.42f, s), color, stroke * 0.8f);
             return;
         }
         case UiIcon::Info: {

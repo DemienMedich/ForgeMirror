@@ -393,7 +393,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             ImGui::InputTextWithHint(u8"##ach_filter", u8"Фильтр ачивок",
             state.filters.achievement.data(), state.filters.achievement.size());
             ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
-            if (IconButtonGui("profile_ach_reset_stack", UiIcon::Refresh,
+            if (IconButtonGui("profile_ach_reset_stack", UiIcon::Clear,
                               u8"Сбросить фильтр ачивок", accent, ImGui::GetFrameHeight())) {
                 state.filters.achievement.fill('\0');
                 state.showExpiredAchievements = true;
@@ -418,7 +418,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             ImGui::TableNextColumn();
             ImGui::Checkbox(u8"Показывать истекшие", &state.showExpiredAchievements);
             ImGui::TableNextColumn();
-            if (IconButtonGui("profile_ach_reset", UiIcon::Refresh,
+            if (IconButtonGui("profile_ach_reset", UiIcon::Clear,
                               u8"Сбросить фильтр ачивок", accent, ImGui::GetFrameHeight())) {
                 state.filters.achievement.fill('\0');
                 state.showExpiredAchievements = true;
@@ -574,7 +574,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
         weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
-        if (IconButtonGui("profile_skill_filters_reset_stack", UiIcon::Refresh,
+        if (IconButtonGui("profile_skill_filters_reset_stack", UiIcon::Clear,
                           u8"Сбросить фильтры навыков", accent, ImGui::GetFrameHeight())) {
             state.filters.profileSkill.fill('\0');
             state.profileSkillCategoryFilter = 0;
@@ -607,7 +607,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         ImGui::Combo(u8"Категория (вес)", &state.profileSkillCategoryFilter,
         weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
         ImGui::TableNextColumn();
-        if (IconButtonGui("profile_skill_filters_reset", UiIcon::Refresh,
+        if (IconButtonGui("profile_skill_filters_reset", UiIcon::Clear,
                           u8"Сбросить фильтры навыков", accent, ImGui::GetFrameHeight())) {
             state.filters.profileSkill.fill('\0');
             state.profileSkillCategoryFilter = 0;
@@ -945,7 +945,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
         if (stackActivity) {
             ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
             state.filters.activity.data(), state.filters.activity.size());
-            if (IconButtonGui("profile_activity_reset_stack", UiIcon::Refresh,
+            if (IconButtonGui("profile_activity_reset_stack", UiIcon::Clear,
                               u8"Сбросить фильтр действий", accent, ImGui::GetFrameHeight())) {
                 state.filters.activity.fill('\0');
             }
@@ -975,7 +975,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             ImGui::InputTextWithHint(u8"##activity_filter", u8"Фильтр действий",
             state.filters.activity.data(), state.filters.activity.size());
             ImGui::TableNextColumn();
-            if (IconButtonGui("profile_activity_reset", UiIcon::Refresh,
+            if (IconButtonGui("profile_activity_reset", UiIcon::Clear,
                               u8"Сбросить фильтр действий", accent, ImGui::GetFrameHeight())) {
                 state.filters.activity.fill('\0');
             }

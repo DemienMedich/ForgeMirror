@@ -422,7 +422,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
             ImGui::SameLine();
             if (!state.isAdmin) ImGui::BeginDisabled();
-            if (IconButtonGui("catalog_clear_skills_stack", UiIcon::Refresh,
+            if (IconButtonGui("catalog_clear_skills_stack", UiIcon::Clear,
                               u8"Очистить все навыки", LogLevelColor(AppLogLevel::Warning), actionSize)) {
                 state.clearSkillsPopupRequest = true;
             }
@@ -469,7 +469,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             if (!state.isAdmin || !canDeleteSkill) ImGui::EndDisabled();
             ImGui::TableSetColumnIndex(3);
             if (!state.isAdmin) ImGui::BeginDisabled();
-            if (IconButtonGui("catalog_clear_skills", UiIcon::Refresh,
+            if (IconButtonGui("catalog_clear_skills", UiIcon::Clear,
                               u8"Очистить все навыки", LogLevelColor(AppLogLevel::Warning), actionSize)) {
                 state.clearSkillsPopupRequest = true;
             }
@@ -709,7 +709,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         ImGui::Combo(u8"##skill_ach_status", &state.skillAchStatusFilter,
                                      statusLabels, IM_ARRAYSIZE(statusLabels));
                         ImGui::TableSetColumnIndex(2);
-                        if (IconButtonGui("skill_ach_reset", UiIcon::Refresh,
+                        if (IconButtonGui("skill_ach_reset", UiIcon::Clear,
                                           u8"Сбросить фильтр ачивок", accent, ImGui::GetFrameHeight())) {
                             state.filters.skillAch.fill('\0');
                             state.skillAchStatusFilter = 0;
@@ -774,7 +774,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         ImGui::SetNextItemWidth(-1.0f);
                         ImGui::InputText(u8"Иконка##ach_icon_path", state.achIcon.data(), state.achIcon.size());
                         ImGui::TableSetColumnIndex(1);
-                        if (IconButtonGui("skill_ach_icon_pick", UiIcon::List,
+                        if (IconButtonGui("skill_ach_icon_pick", UiIcon::FileText,
                                           u8"Открыть список иконок", accent, ImGui::GetFrameHeight())) {
                             ImGui::OpenPopup(u8"Выбор иконки");
                         }

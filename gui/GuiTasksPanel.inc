@@ -1159,7 +1159,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::SameLine();
             }
-            if (TaskIconButton("tasks_toolbar_reset_compact", UiIcon::Refresh, u8"Сбросить фильтры")) {
+            if (TaskIconButton("tasks_toolbar_reset_compact", UiIcon::Clear, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
         } else if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 5 : 3,
@@ -1207,7 +1207,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
             ImGui::TableSetColumnIndex(toolbarColumn++);
-            if (TaskIconButton("tasks_toolbar_reset", UiIcon::Refresh, u8"Сбросить фильтры")) {
+            if (TaskIconButton("tasks_toolbar_reset", UiIcon::Clear, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
             ImGui::EndTable();
@@ -1249,7 +1249,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             if (state.tasksFilterProject > 0) {
                 ImGui::SameLine();
-                if (TaskIconButton("bridge_clear_focus", UiIcon::Refresh, u8"Снять проектный фильтр")) {
+                if (TaskIconButton("bridge_clear_focus", UiIcon::Clear, u8"Снять проектный фильтр")) {
                     state.tasksFilterProject = 0;
                 }
             }
@@ -1505,7 +1505,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ExportFilteredTasks(false);
         }
         ImGui::SameLine();
-        if (TaskIconButton("tasks_export_txt_stack", UiIcon::Info, u8"Экспортировать видимые задачи в TXT")) {
+        if (TaskIconButton("tasks_export_txt_stack", UiIcon::FileText, u8"Экспортировать видимые задачи в TXT")) {
             ExportFilteredTasks(true);
         }
     } else {
@@ -1590,7 +1590,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ExportFilteredTasks(false);
             }
             ImGui::SameLine();
-            if (TaskIconButton("tasks_export_txt", UiIcon::Info, u8"Экспортировать видимые задачи в TXT")) {
+            if (TaskIconButton("tasks_export_txt", UiIcon::FileText, u8"Экспортировать видимые задачи в TXT")) {
                 ExportFilteredTasks(true);
             }
             ImGui::EndTable();
@@ -2222,7 +2222,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
             }
             ImGui::SameLine();
-            if (TaskIconButton("bulk_clear_selection", UiIcon::Refresh, u8"Снять выбор")) {
+            if (TaskIconButton("bulk_clear_selection", UiIcon::Clear, u8"Снять выбор")) {
                 state.taskSelectionIds.clear();
             }
             ImGui::SameLine();
@@ -2313,12 +2313,12 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
 
                 ImGui::TableSetColumnIndex(2);
-                if (TaskIconButton("bulk_clear_deadline", UiIcon::Refresh, u8"Очистить дедлайн")) {
+                if (TaskIconButton("bulk_clear_deadline", UiIcon::Clear, u8"Очистить дедлайн")) {
                     ApplyBulkDeadline(true);
                 }
 
                 ImGui::TableSetColumnIndex(3);
-                if (TaskIconButton("bulk_open_assignees", UiIcon::Users, u8"Назначить исполнителей")) {
+                if (TaskIconButton("bulk_open_assignees", UiIcon::Assign, u8"Назначить исполнителей")) {
                     ImGui::OpenPopup("tasks_bulk_assignees_popup");
                 }
                 ImGui::EndTable();
@@ -2357,7 +2357,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::EndTable();
                 }
                 ImGui::PopStyleVar();
-                if (TaskIconButton("bulk_assignees_apply", UiIcon::Users, u8"Применить исполнителей")) {
+                if (TaskIconButton("bulk_assignees_apply", UiIcon::Assign, u8"Применить исполнителей")) {
                     if (ApplyBulkAssignees()) {
                         ImGui::CloseCurrentPopup();
                     }
@@ -2721,7 +2721,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         }
                     }
                     ImGui::SameLine();
-                    if (TaskIconButton("deadline_popup_clear", UiIcon::Refresh, u8"Очистить дедлайн")) {
+                    if (TaskIconButton("deadline_popup_clear", UiIcon::Clear, u8"Очистить дедлайн")) {
                         if (UpdateTaskDeadline(task->id, "")) {
                             state.taskInlineDeadlineEditId.clear();
                             ImGui::CloseCurrentPopup();
@@ -2845,7 +2845,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             if (tasksAdminMode && editableTask && task->participants.empty()) {
                 ImGui::SameLine();
-                if (TaskIconButton("task_row_assignee_edit", UiIcon::Users, u8"Редактировать исполнителей")) {
+                if (TaskIconButton("task_row_assignee_edit", UiIcon::Assign, u8"Редактировать исполнителей")) {
                     state.taskInlineAssigneeEditId = task->id;
                     if (state.taskInlineAssigneeFlags.size() != state.profiles.size()) {
                         state.taskInlineAssigneeFlags.assign(state.profiles.size(), 0);
