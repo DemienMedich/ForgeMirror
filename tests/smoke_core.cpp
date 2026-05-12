@@ -270,6 +270,20 @@ static bool TestSharedEmptyStatesUsedInProfileAdminPanels() {
            adminStats.find("admin_stats_recovery_empty") != std::string::npos;
 }
 
+static bool TestProfileModalsMissingProfileUsesSharedEmptyState() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string profileModals;
+    if (!ReadFile(root / "gui" / "GuiProfileModals.inc", profileModals)) return false;
+
+    return profileModals.find("profile_confirm_missing_empty") != std::string::npos &&
+           profileModals.find("profile_unlock_missing_empty") != std::string::npos &&
+           profileModals.find("profile_change_password_missing_empty") != std::string::npos &&
+           profileModals.find("profile_reset_password_missing_empty") != std::string::npos &&
+           profileModals.find("TextDisabled(u8\"Профиль не выбран.") == std::string::npos &&
+           CountSubstring(profileModals, "DrawEmptyStateGui(") >= 4;
+}
+
 static bool TestSharedEmptyStatesUsedInProfileSections() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -706,6 +720,7 @@ int main() {
     const bool okTasksDetailEmptyStates = TestTasksDetailEmptyStatesUseSharedHelper();
     const bool okServiceEmptyStates = TestSharedEmptyStatesUsedInServicePanels();
     const bool okProfileAdminEmptyStates = TestSharedEmptyStatesUsedInProfileAdminPanels();
+    const bool okProfileModalsEmptyStates = TestProfileModalsMissingProfileUsesSharedEmptyState();
     const bool okProfileSectionEmptyStates = TestSharedEmptyStatesUsedInProfileSections();
     const bool okSkillCatalogEmptyStates = TestSharedEmptyStatesUsedInSkillCatalog();
     const bool okUiSettingsEmptyStates = TestSharedEmptyStatesUsedInUiSettings();
@@ -732,7 +747,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -751,6 +766,7 @@ int main() {
               << " tasksDetailEmptyStates=" << okTasksDetailEmptyStates
               << " serviceEmptyStates=" << okServiceEmptyStates
               << " profileAdminEmptyStates=" << okProfileAdminEmptyStates
+              << " profileModalsEmptyStates=" << okProfileModalsEmptyStates
               << " profileSectionEmptyStates=" << okProfileSectionEmptyStates
               << " skillCatalogEmptyStates=" << okSkillCatalogEmptyStates
               << " uiSettingsEmptyStates=" << okUiSettingsEmptyStates

@@ -158,8 +158,12 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::EndTable();
             }
         } else {
-            ImGui::TextDisabled(u8"Профиль не выбран.");
-            if (ImGui::Button(u8"Закрыть")) {
+            if (DrawEmptyStateGui("profile_confirm_missing_empty", UiIcon::Users,
+                                  u8"Профиль не выбран",
+                                  u8"Выберите активный профиль и повторите действие.",
+                                  UiIcon::Close,
+                                  u8"Закрыть",
+                                  true)) {
                 ImGui::CloseCurrentPopup();
                 confirmPopupOpen = false;
             }
@@ -189,8 +193,12 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
     if (ImGui::BeginPopupModal(u8"Доступ к профилю", &unlockOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawModalShadow();
         if (!state.active || state.active->id != state.profileAuthTargetId) {
-            ImGui::TextDisabled(u8"Профиль не выбран.");
-            if (ImGui::Button(u8"Закрыть")) {
+            if (DrawEmptyStateGui("profile_unlock_missing_empty", UiIcon::Users,
+                                  u8"Профиль не выбран",
+                                  u8"Выберите профиль, который нужно разблокировать.",
+                                  UiIcon::Close,
+                                  u8"Закрыть",
+                                  true)) {
                 ImGui::CloseCurrentPopup();
                 unlockOpen = false;
             }
@@ -273,8 +281,12 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
     if (ImGui::BeginPopupModal(u8"Сменить пароль", &changeOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawModalShadow();
         if (!state.active || state.active->id != state.profileAuthTargetId) {
-            ImGui::TextDisabled(u8"Профиль не выбран.");
-            if (ImGui::Button(u8"Закрыть")) {
+            if (DrawEmptyStateGui("profile_change_password_missing_empty", UiIcon::Users,
+                                  u8"Профиль не выбран",
+                                  u8"Выберите профиль, для которого нужно изменить пароль.",
+                                  UiIcon::Close,
+                                  u8"Закрыть",
+                                  true)) {
                 ImGui::CloseCurrentPopup();
                 changeOpen = false;
             }
@@ -392,8 +404,12 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
     if (ImGui::BeginPopupModal(u8"Сбросить пароль", &resetOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
         DrawModalShadow();
         if (!state.active || state.active->id != state.profileResetTargetId) {
-            ImGui::TextDisabled(u8"Профиль не выбран.");
-            if (ImGui::Button(u8"Закрыть")) {
+            if (DrawEmptyStateGui("profile_reset_password_missing_empty", UiIcon::Users,
+                                  u8"Профиль не выбран",
+                                  u8"Выберите профиль, для которого нужно сбросить пароль.",
+                                  UiIcon::Close,
+                                  u8"Закрыть",
+                                  true)) {
                 ImGui::CloseCurrentPopup();
                 resetOpen = false;
             }
