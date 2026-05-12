@@ -1366,7 +1366,7 @@ void DrawMainMenuBar(GLFWwindow* window, GuiState& state, IJobStorage& storage, 
                 syncTooltip += u8"\nРежим просмотра: только загрузка";
             }
         }
-        if (IconButtonGui("top_sync", UiIcon::Launch, syncTooltip.c_str(), accent, iconSize,
+        if (IconButtonGui("top_sync", UiIcon::Sync, syncTooltip.c_str(), accent, iconSize,
                           state.cloudConfig.enabled)) {
             RunCloudQuickSync(state, app, true);
         }

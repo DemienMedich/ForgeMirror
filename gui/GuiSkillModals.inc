@@ -82,7 +82,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
         const float actionWidth = ImGui::GetContentRegionAvail().x;
         const bool stackActions = actionWidth < 300.0f;
         if (stackActions) {
-            if (SkillModalIconButton("add_skill_save_stack", UiIcon::Chart, u8"Сохранить навык")) {
+            if (SkillModalIconButton("add_skill_save_stack", UiIcon::Save, u8"Сохранить навык")) {
                 saveSkill();
             }
             ImGui::SameLine();
@@ -102,7 +102,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             DrawAnchorIcon(UiIcon::List);
             ImGui::TableSetColumnIndex(1);
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-            if (SkillModalIconButton("add_skill_save", UiIcon::Chart, u8"Сохранить навык")) {
+            if (SkillModalIconButton("add_skill_save", UiIcon::Save, u8"Сохранить навык")) {
                 saveSkill();
             }
             ImGui::TableSetColumnIndex(2);
@@ -254,7 +254,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
             const float actionWidth = ImGui::GetContentRegionAvail().x;
             const bool stackActions = actionWidth < 300.0f;
             if (stackActions) {
-                if (SkillModalIconButton("merge_skill_apply_stack", UiIcon::Flow, u8"Слить навыки")) {
+                if (SkillModalIconButton("merge_skill_apply_stack", UiIcon::Merge, u8"Слить навыки")) {
                     mergeSkills();
                 }
                 ImGui::SameLine();
@@ -280,7 +280,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 DrawAnchorIcon(UiIcon::List);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-                if (SkillModalIconButton("merge_skill_apply", UiIcon::Flow, u8"Слить навыки")) {
+                if (SkillModalIconButton("merge_skill_apply", UiIcon::Merge, u8"Слить навыки")) {
                     mergeSkills();
                 }
                 ImGui::TableSetColumnIndex(2);
@@ -297,7 +297,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::EndTable();
             }
         } else {
-            if (DrawEmptyStateGui("merge_skill_empty", UiIcon::Flow,
+            if (DrawEmptyStateGui("merge_skill_empty", UiIcon::Merge,
                                   u8"Нет данных для слияния",
                                   u8"Выберите исходный и целевой навык перед открытием слияния.",
                                   UiIcon::Close,

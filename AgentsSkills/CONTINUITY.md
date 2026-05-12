@@ -37,8 +37,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
 - State:
-  - Ветка: develop. Версия: 0.5.19.
-  - Последнее изменение: UX plan point 9 `иконки` начат: добавлены semantic action icons Save/Edit/Award/Export и заменены критичные кнопки сохранения, редактирования, выдачи XP и экспорта.
+  - Ветка: develop. Версия: 0.5.20.
+  - Последнее изменение: UX plan point 9 `иконки` продолжен: добавлены section/action glyphs Task/Project/Shortcut/Sync/Apply/Calendar/Merge и заменены перегруженные List/Flow/Launch/Bell/Chart в навигации, профиле, проектах, задачах и skill-модалках.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий UX-пункт: пункт 9 `иконки`: инвентаризация текущих `UiIcon` и мест применения, action/icon map, замена непонятных иконок, tooltip-аудит, smoke/контракт на критичные действия.
 - Done:
@@ -85,6 +85,7 @@ UI аудит:
   - UX Plan 8 Progress: подсказка выбора блока пайплайна и пустой dropdown быстрого фона используют общий `DrawEmptyStateGui`; smoke_core проверяет этот контракт.
   - UX Plan 8 Done: оставшиеся guidance/empty-state контракты закрыты; residual `Нет риска/Нет ожидания/Нет shortcut` являются статусными подписями, не empty-state.
   - UX Plan 9 Progress: добавлены `UiIcon::Save/Edit/Award/Export`; критичные действия задач, пайплайна, правил, навыков, логов и статистики больше не используют generic `Chart/Settings/Launch` там, где нужен save/edit/award/export; smoke_core проверяет semantic action icons.
+  - UX Plan 9 Progress: добавлены `UiIcon::Task/Project/Shortcut/Sync/Apply/Calendar/Merge`; навигация, top sync, project/task profile actions, deadline actions и merge/save skill-модалки используют семантические иконки; smoke_core расширен на эти контракты.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

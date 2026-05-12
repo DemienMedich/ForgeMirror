@@ -57,7 +57,7 @@ void DrawNavigationPanel(GuiState& state) {
         state.workspaceTabRequest = static_cast<int>(UiWindowId::Profile);
     });
     if (state.modules.tasks) {
-        navButton("nav_tasks", UiIcon::List, u8"Задачи", state.showTasks, [&]() {
+        navButton("nav_tasks", UiIcon::Task, u8"Задачи", state.showTasks, [&]() {
             OpenWorkspaceTab(state, state.showTasks, UiWindowId::Tasks);
         });
     }
@@ -93,7 +93,7 @@ void DrawNavigationPanel(GuiState& state) {
         navButton("nav_logs", UiIcon::List, u8"Логи [F6]", state.showLogs, [&]() {
             OpenWorkspaceTab(state, state.showLogs, UiWindowId::Logs);
         });
-        navButton("nav_projects", UiIcon::Flow, u8"Проекты", state.showProjects, [&]() {
+        navButton("nav_projects", UiIcon::Project, u8"Проекты", state.showProjects, [&]() {
             OpenWorkspaceTab(state, state.showProjects, UiWindowId::Projects);
         });
         navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
@@ -226,7 +226,7 @@ void DrawNavigationPanel(GuiState& state) {
         }
     });
     if (state.modules.shortcuts) {
-        navButton("nav_shortcuts", UiIcon::Launch, u8"Ярлыки", state.showShortcuts, [&]() {
+        navButton("nav_shortcuts", UiIcon::Shortcut, u8"Ярлыки", state.showShortcuts, [&]() {
             OpenWorkspaceTab(state, state.showShortcuts, UiWindowId::Shortcuts);
         });
     }

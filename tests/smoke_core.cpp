@@ -335,24 +335,49 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
     std::string pipeline;
     std::string rules;
     std::string catalog;
+    std::string navigation;
+    std::string mainMenu;
+    std::string projects;
+    std::string skillModals;
     if (!ReadFile(root / "gui" / "GuiIcons.inc", icons)) return false;
     if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
     if (!ReadFile(root / "gui" / "GuiPipelinePanel.inc", pipeline)) return false;
     if (!ReadFile(root / "gui" / "GuiRulesPanel.inc", rules)) return false;
     if (!ReadFile(root / "gui" / "GuiSkillCatalogPanel.inc", catalog)) return false;
+    if (!ReadFile(root / "gui" / "GuiNavigationPanel.inc", navigation)) return false;
+    if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
+    if (!ReadFile(root / "gui" / "GuiProjects.inc", projects)) return false;
+    if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
 
     return icons.find("Save,") != std::string::npos &&
            icons.find("Edit,") != std::string::npos &&
            icons.find("Award,") != std::string::npos &&
            icons.find("Export,") != std::string::npos &&
+           icons.find("Task,") != std::string::npos &&
+           icons.find("Project,") != std::string::npos &&
+           icons.find("Shortcut,") != std::string::npos &&
+           icons.find("Sync,") != std::string::npos &&
+           icons.find("Apply,") != std::string::npos &&
+           icons.find("Calendar,") != std::string::npos &&
+           icons.find("Merge,") != std::string::npos &&
            tasks.find("\"task_detail_text_save\", UiIcon::Save") != std::string::npos &&
            tasks.find("\"task_detail_skill_save\", UiIcon::Save") != std::string::npos &&
            tasks.find("\"task_detail_award_xp\", UiIcon::Award") != std::string::npos &&
            tasks.find("\"tasks_export_csv\", UiIcon::Export") != std::string::npos &&
+           tasks.find("\"tasks_empty_all\", UiIcon::Task") != std::string::npos &&
+           tasks.find("\"bulk_apply_deadline\", UiIcon::Calendar") != std::string::npos &&
            pipeline.find("\"pipeline_save\", UiIcon::Save") != std::string::npos &&
            pipeline.find("\"pipeline_edit\", UiIcon::Edit") != std::string::npos &&
            rules.find("\"rules_save\", UiIcon::Save") != std::string::npos &&
-           catalog.find("\"catalog_save_skill_details\", UiIcon::Save") != std::string::npos;
+           catalog.find("\"catalog_save_skill_details\", UiIcon::Save") != std::string::npos &&
+           navigation.find("\"nav_tasks\", UiIcon::Task") != std::string::npos &&
+           navigation.find("\"nav_projects\", UiIcon::Project") != std::string::npos &&
+           navigation.find("\"nav_shortcuts\", UiIcon::Shortcut") != std::string::npos &&
+           mainMenu.find("\"top_sync\", UiIcon::Sync") != std::string::npos &&
+           projects.find("\"project_editor_save\", UiIcon::Save") != std::string::npos &&
+           projects.find("\"projects_open_xp\", UiIcon::Award") != std::string::npos &&
+           skillModals.find("\"add_skill_save\", UiIcon::Save") != std::string::npos &&
+           skillModals.find("\"merge_skill_apply\", UiIcon::Merge") != std::string::npos;
 }
 
 static bool TestSharedEmptyStatesUsedInUiSettings() {

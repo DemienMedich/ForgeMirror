@@ -950,7 +950,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 state.filters.activity.fill('\0');
             }
             ImGui::SameLine();
-            if (IconButtonGui("profile_activity_export_stack", UiIcon::Launch,
+            if (IconButtonGui("profile_activity_export_stack", UiIcon::Export,
                               u8"Экспортировать историю действий", accent, ImGui::GetFrameHeight())) {
                 exportActivity();
             }
@@ -982,7 +982,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
             ImGui::TableNextColumn();
             ImGui::TextDisabled(u8"Показано: %d", activityShown);
             ImGui::TableNextColumn();
-            if (IconButtonGui("profile_activity_export", UiIcon::Launch,
+            if (IconButtonGui("profile_activity_export", UiIcon::Export,
                               u8"Экспортировать историю действий", accent, ImGui::GetFrameHeight())) {
                 exportActivity();
             }
@@ -1138,7 +1138,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             const float actionSize = ImGui::GetFrameHeight();
             ImGui::TextDisabled(u8"Открыть в задачах");
             ImGui::SameLine();
-            if (IconButtonGui("profile_tasks_all", UiIcon::List,
+            if (IconButtonGui("profile_tasks_all", UiIcon::Task,
                               u8"Все задачи профиля", accent, actionSize)) {
                 FocusTasksForProfile(state, profileId);
             }
@@ -1152,7 +1152,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             const ImVec4 overdueAccent = taskOverview.overdue > 0
                 ? LogLevelColor(AppLogLevel::Warning)
                 : accent;
-            if (IconButtonGui("profile_tasks_overdue", UiIcon::Bell,
+            if (IconButtonGui("profile_tasks_overdue", UiIcon::Calendar,
                               u8"Просроченные задачи профиля", overdueAccent, actionSize,
                               taskOverview.overdue > 0)) {
                 FocusTasksForProfile(state, profileId, 3);
@@ -1161,7 +1161,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             const ImVec4 xpAccent = taskOverview.xpPending > 0
                 ? LogLevelColor(AppLogLevel::Warning)
                 : accent;
-            if (IconButtonGui("profile_tasks_xp", UiIcon::Chart,
+            if (IconButtonGui("profile_tasks_xp", UiIcon::Award,
                               u8"Задачи профиля, ожидающие XP", xpAccent, actionSize,
                               taskOverview.xpPending > 0)) {
                 FocusTasksForProfile(state, profileId, 6);
@@ -1169,7 +1169,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         }
 
         if (activeItems.empty()) {
-            if (DrawEmptyStateGui("profile_active_tasks_empty", UiIcon::List,
+            if (DrawEmptyStateGui("profile_active_tasks_empty", UiIcon::Task,
                                   u8"Нет активных задач",
                                   u8"У профиля нет открытой нагрузки. Откройте задачи, чтобы назначить новую.",
                                   UiIcon::Plus, state.isAdmin ? u8"Открыть постановку задачи" : nullptr,
@@ -1307,7 +1307,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             }
         }
         if (items.empty()) {
-            if (DrawEmptyStateGui("profile_done_tasks_empty", UiIcon::Chart,
+            if (DrawEmptyStateGui("profile_done_tasks_empty", UiIcon::Award,
                                   u8"История задач пуста",
                                   u8"Когда задачи будут закрыты или будут ждать XP, они появятся здесь.",
                                   UiIcon::Search, state.modules.tasks ? u8"Открыть журнал задач" : nullptr,
@@ -1331,7 +1331,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                               u8"Задачи, закрытые без начисления XP.", true);
             if (state.modules.tasks) {
                 ImGui::SameLine();
-                if (IconButtonGui("profile_done_tasks_xp", UiIcon::Chart,
+                if (IconButtonGui("profile_done_tasks_xp", UiIcon::Award,
                                   u8"Открыть задачи, ожидающие XP", LogLevelColor(AppLogLevel::Warning),
                                   ImGui::GetFrameHeight())) {
                     FocusTasksForProfile(state, profileId, 6);

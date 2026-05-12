@@ -19,6 +19,13 @@ enum class UiIcon {
     Edit,
     Award,
     Export,
+    Task,
+    Project,
+    Shortcut,
+    Sync,
+    Apply,
+    Calendar,
+    Merge,
     Info,
     SpiritGood,
     SpiritEvil,
@@ -268,6 +275,89 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             drawList->AddTriangleFilled(IconPoint(center, 0.0f, -0.64f, s),
                                         IconPoint(center, -0.28f, -0.30f, s),
                                         IconPoint(center, 0.28f, -0.30f, s), color);
+            return;
+        }
+        case UiIcon::Task: {
+            ImVec2 boxA = IconPoint(center, -0.58f, -0.58f, s);
+            ImVec2 boxB = IconPoint(center, 0.58f, 0.58f, s);
+            drawList->AddRect(boxA, boxB, color, s * 0.12f, 0, stroke);
+            for (int i = 0; i < 3; ++i) {
+                const float y = -0.30f + 0.30f * static_cast<float>(i);
+                drawList->AddCircleFilled(IconPoint(center, -0.30f, y, s), s * 0.07f, color, 10);
+                drawList->AddLine(IconPoint(center, -0.12f, y, s), IconPoint(center, 0.36f, y, s),
+                                  color, stroke * 0.85f);
+            }
+            return;
+        }
+        case UiIcon::Project: {
+            ImVec2 tabA = IconPoint(center, -0.58f, -0.38f, s);
+            ImVec2 tabB = IconPoint(center, -0.12f, -0.16f, s);
+            ImVec2 bodyA = IconPoint(center, -0.58f, -0.16f, s);
+            ImVec2 bodyB = IconPoint(center, 0.58f, 0.54f, s);
+            drawList->AddRect(tabA, tabB, color, s * 0.08f, 0, stroke);
+            drawList->AddRect(bodyA, bodyB, color, s * 0.12f, 0, stroke);
+            drawList->AddLine(IconPoint(center, -0.12f, -0.16f, s),
+                              IconPoint(center, 0.58f, -0.16f, s), color, stroke);
+            return;
+        }
+        case UiIcon::Shortcut: {
+            drawList->AddCircle(IconPoint(center, -0.34f, 0.18f, s), s * 0.28f, color, 18, stroke);
+            drawList->AddCircle(IconPoint(center, 0.34f, -0.18f, s), s * 0.28f, color, 18, stroke);
+            drawList->AddLine(IconPoint(center, -0.12f, 0.06f, s),
+                              IconPoint(center, 0.12f, -0.06f, s), color, stroke);
+            return;
+        }
+        case UiIcon::Sync: {
+            float r = s * 0.58f;
+            drawList->PathClear();
+            drawList->PathArcTo(center, r, -kPi * 0.85f, kPi * 0.18f, 18);
+            drawList->PathStroke(color, false, stroke);
+            drawList->PathClear();
+            drawList->PathArcTo(center, r, kPi * 0.15f, kPi * 1.18f, 18);
+            drawList->PathStroke(color, false, stroke);
+            drawList->AddTriangleFilled(IconPoint(center, 0.60f, -0.10f, s),
+                                        IconPoint(center, 0.30f, -0.24f, s),
+                                        IconPoint(center, 0.42f, 0.08f, s), color);
+            drawList->AddTriangleFilled(IconPoint(center, -0.60f, 0.10f, s),
+                                        IconPoint(center, -0.30f, 0.24f, s),
+                                        IconPoint(center, -0.42f, -0.08f, s), color);
+            return;
+        }
+        case UiIcon::Apply: {
+            drawList->AddLine(IconPoint(center, -0.56f, 0.02f, s),
+                              IconPoint(center, -0.16f, 0.42f, s), color, stroke * 1.15f);
+            drawList->AddLine(IconPoint(center, -0.16f, 0.42f, s),
+                              IconPoint(center, 0.58f, -0.44f, s), color, stroke * 1.15f);
+            return;
+        }
+        case UiIcon::Calendar: {
+            ImVec2 a = IconPoint(center, -0.58f, -0.48f, s);
+            ImVec2 b = IconPoint(center, 0.58f, 0.58f, s);
+            drawList->AddRect(a, b, color, s * 0.12f, 0, stroke);
+            drawList->AddLine(IconPoint(center, -0.58f, -0.18f, s),
+                              IconPoint(center, 0.58f, -0.18f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.28f, -0.62f, s),
+                              IconPoint(center, -0.28f, -0.34f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.28f, -0.62f, s),
+                              IconPoint(center, 0.28f, -0.34f, s), color, stroke);
+            drawList->AddCircleFilled(IconPoint(center, -0.22f, 0.08f, s), s * 0.06f, color, 8);
+            drawList->AddCircleFilled(IconPoint(center, 0.12f, 0.08f, s), s * 0.06f, color, 8);
+            drawList->AddCircleFilled(IconPoint(center, -0.22f, 0.36f, s), s * 0.06f, color, 8);
+            drawList->AddCircleFilled(IconPoint(center, 0.12f, 0.36f, s), s * 0.06f, color, 8);
+            return;
+        }
+        case UiIcon::Merge: {
+            ImVec2 left = IconPoint(center, -0.58f, -0.34f, s);
+            ImVec2 mid = IconPoint(center, 0.02f, 0.0f, s);
+            ImVec2 right = IconPoint(center, 0.58f, 0.0f, s);
+            drawList->AddLine(left, mid, color, stroke);
+            drawList->AddLine(IconPoint(center, -0.58f, 0.34f, s), mid, color, stroke);
+            drawList->AddLine(mid, right, color, stroke);
+            drawList->AddTriangleFilled(right,
+                                        IconPoint(center, 0.36f, -0.18f, s),
+                                        IconPoint(center, 0.36f, 0.18f, s), color);
+            drawList->AddCircleFilled(left, s * 0.10f, color, 10);
+            drawList->AddCircleFilled(IconPoint(center, -0.58f, 0.34f, s), s * 0.10f, color, 10);
             return;
         }
         case UiIcon::Info: {

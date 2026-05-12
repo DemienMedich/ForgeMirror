@@ -364,7 +364,7 @@ void DrawProjectsPanel(GuiState& state) {
 
         ImGui::TableSetColumnIndex(0);
         if (!canUseTasksHub) ImGui::BeginDisabled();
-        if (ProjectIconButton("projects_open_all", UiIcon::List, u8"Открыть все задачи проектов")) {
+        if (ProjectIconButton("projects_open_all", UiIcon::Task, u8"Открыть все задачи проектов")) {
             OpenTasksFromProjectHub(state, 0, 0);
         }
         if (!canUseTasksHub) ImGui::EndDisabled();
@@ -384,7 +384,7 @@ void DrawProjectsPanel(GuiState& state) {
 
         ImGui::TableSetColumnIndex(2);
         if (!canUseTasksHub || portfolio.totalXpPendingTasks <= 0) ImGui::BeginDisabled();
-        if (ProjectIconButton("projects_open_xp", UiIcon::Chart, u8"Открыть задачи, ожидающие XP")) {
+        if (ProjectIconButton("projects_open_xp", UiIcon::Award, u8"Открыть задачи, ожидающие XP")) {
             OpenTasksFromProjectHub(state, 0, 6);
         }
         if (!canUseTasksHub || portfolio.totalXpPendingTasks <= 0) ImGui::EndDisabled();
@@ -394,7 +394,7 @@ void DrawProjectsPanel(GuiState& state) {
 
         ImGui::TableSetColumnIndex(3);
         if (!canUseTasksHub || portfolio.totalOverdueTasks <= 0) ImGui::BeginDisabled();
-        if (ProjectIconButton("projects_open_overdue", UiIcon::Bell, u8"Открыть просроченные задачи проектов")) {
+        if (ProjectIconButton("projects_open_overdue", UiIcon::Calendar, u8"Открыть просроченные задачи проектов")) {
             OpenTasksFromProjectHub(state, 0, 3);
         }
         if (!canUseTasksHub || portfolio.totalOverdueTasks <= 0) ImGui::EndDisabled();
@@ -539,17 +539,17 @@ void DrawProjectsPanel(GuiState& state) {
             ImGui::TableSetColumnIndex(4);
             const bool canOpenTasks = state.modules.tasks;
             if (!canOpenTasks) ImGui::BeginDisabled();
-            if (ProjectIconButton("open_tasks_project", UiIcon::List, u8"Открыть задачи проекта")) {
+            if (ProjectIconButton("open_tasks_project", UiIcon::Task, u8"Открыть задачи проекта")) {
                 OpenTasksFromProjectHub(state, projectFilterIndex, 0);
             }
             if (canOpenTasks && taskStats.xpPending > 0) {
                 ImGui::SameLine();
-                if (ProjectIconButton("open_tasks_project_xp", UiIcon::Chart, u8"Открыть задачи проекта, ожидающие XP")) {
+                if (ProjectIconButton("open_tasks_project_xp", UiIcon::Award, u8"Открыть задачи проекта, ожидающие XP")) {
                     OpenTasksFromProjectHub(state, projectFilterIndex, 6);
                 }
             } else if (canOpenTasks && taskStats.overdue > 0) {
                 ImGui::SameLine();
-                if (ProjectIconButton("open_tasks_project_deadline", UiIcon::Bell, u8"Открыть просроченные задачи проекта")) {
+                if (ProjectIconButton("open_tasks_project_deadline", UiIcon::Calendar, u8"Открыть просроченные задачи проекта")) {
                     OpenTasksFromProjectHub(state, projectFilterIndex, 3);
                 }
             } else if (canOpenTasks && activeTasks > 0) {
@@ -575,7 +575,7 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::TextDisabled(u8"Показано проектов: %d из %d", shownProjects, static_cast<int>(state.projects.size()));
     if (shownProjects <= 0) {
         if (state.projects.empty()) {
-            if (DrawEmptyStateGui("projects_empty_all", UiIcon::Flow,
+            if (DrawEmptyStateGui("projects_empty_all", UiIcon::Project,
                                   u8"Проектов пока нет",
                                   u8"Создайте первый проект, чтобы группировать задачи, видеть handoff и просрочки по направлению.",
                                   UiIcon::Plus, u8"Перейти к созданию проекта")) {
@@ -695,7 +695,7 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextMultiline("##project_desc", state.newProjectDesc.data(), state.newProjectDesc.size(), ImVec2(-1.0f, 90.0f));
 
-    if (ProjectIconButton("project_editor_save", UiIcon::Chart, u8"Сохранить проект")) {
+    if (ProjectIconButton("project_editor_save", UiIcon::Save, u8"Сохранить проект")) {
         AppProjectSaveResult saveResult = AppSaveProjectEntry(
             state.storageDir,
             state.projects,

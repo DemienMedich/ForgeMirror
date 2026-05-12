@@ -157,30 +157,30 @@ static void DrawProfileTaskBriefCard(GuiState& state,
             ImGui::SameLine();
         }
         if (overview.primaryTask) {
-            if (IconButtonGui("open_focus", UiIcon::Launch, u8"Открыть фокус-задачу",
+            if (IconButtonGui("open_focus", UiIcon::Task, u8"Открыть фокус-задачу",
                               accent, actionSize)) {
                 FocusTasksForProfile(state, profileId, 0, overview.primaryTask->id);
             }
         } else {
             ImGui::BeginDisabled();
-            IconButtonGui("open_focus_disabled", UiIcon::Launch, u8"Нет фокус-задачи",
+            IconButtonGui("open_focus_disabled", UiIcon::Task, u8"Нет фокус-задачи",
                           accent, actionSize);
             ImGui::EndDisabled();
         }
         ImGui::SameLine();
-        if (IconButtonGui("open_active", UiIcon::List, u8"Открыть активные задачи профиля",
+        if (IconButtonGui("open_active", UiIcon::Task, u8"Открыть активные задачи профиля",
                           accent, actionSize)) {
             FocusTasksForProfile(state, profileId, overview.active > 0 ? 7 : 0);
         }
         ImGui::SameLine();
         if (overview.overdue > 0) {
-            if (IconButtonGui("open_overdue", UiIcon::Bell, u8"Открыть просроченные задачи",
+            if (IconButtonGui("open_overdue", UiIcon::Calendar, u8"Открыть просроченные задачи",
                               LogLevelColor(AppLogLevel::Warning), actionSize)) {
                 FocusTasksForProfile(state, profileId, 3);
             }
         } else {
             ImGui::BeginDisabled();
-            IconButtonGui("open_overdue_disabled", UiIcon::Bell, u8"Просроченных задач нет",
+            IconButtonGui("open_overdue_disabled", UiIcon::Calendar, u8"Просроченных задач нет",
                           accent, actionSize);
             ImGui::EndDisabled();
         }
@@ -215,7 +215,7 @@ static void DrawProfileTaskBriefCard(GuiState& state,
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
         if (activeItems.empty()) {
-            if (DrawEmptyStateGui("profile_task_brief_empty", UiIcon::List,
+            if (DrawEmptyStateGui("profile_task_brief_empty", UiIcon::Task,
                                   u8"Активных задач нет",
                                   u8"Профиль свободен: можно назначать новую задачу без перегруза.",
                                   UiIcon::Plus, state.isAdmin ? u8"Перейти к постановке задачи" : nullptr,
@@ -993,7 +993,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     if (state.modules.tasks) {
         ImGui::SameLine();
         const bool hasFocusTask = taskOverview.primaryTask != nullptr;
-        if (IconButtonGui("profile_quick_tasks", hasFocusTask ? UiIcon::Launch : UiIcon::List,
+        if (IconButtonGui("profile_quick_tasks", UiIcon::Task,
                           hasFocusTask ? u8"Открыть фокус-задачу" : u8"Открыть задачи профиля",
                           hasFocusTask ? focusAccent : accent,
                           quickIconSize)) {
@@ -1219,7 +1219,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                                  static_cast<int>(labels.size()))) {
                     state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
                 }
-                if (IconButtonGui("profile_apply_rank_stack", UiIcon::Chart,
+                if (IconButtonGui("profile_apply_rank_stack", UiIcon::Apply,
                                   u8"Применить выбранный ранг", accent, ImGui::GetFrameHeight())) {
                     applyRank();
                 }
@@ -1243,7 +1243,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     state.selectedRankIndex = std::clamp(state.selectedRankIndex, 0, static_cast<int>(opts.size()) - 1);
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (IconButtonGui("profile_apply_rank", UiIcon::Chart,
+                if (IconButtonGui("profile_apply_rank", UiIcon::Apply,
                                   u8"Применить выбранный ранг", accent, ImGui::GetFrameHeight())) {
                     applyRank();
                 }
@@ -1283,7 +1283,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     exportTxt();
                 }
                 ImGui::SameLine();
-                if (IconButtonGui("profile_report_csv_stack", UiIcon::Launch,
+                if (IconButtonGui("profile_report_csv_stack", UiIcon::Export,
                                   u8"Экспортировать отчет в CSV", accent, ImGui::GetFrameHeight())) {
                     exportCsv();
                 }
@@ -1314,7 +1314,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     exportTxt();
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (IconButtonGui("profile_report_csv", UiIcon::Launch,
+                if (IconButtonGui("profile_report_csv", UiIcon::Export,
                                   u8"Экспортировать отчет в CSV", accent, ImGui::GetFrameHeight())) {
                     exportCsv();
                 }

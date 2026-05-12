@@ -1256,7 +1256,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
             if (state.projects.empty()) {
-                if (DrawEmptyStateGui("tasks_projects_bridge_empty", UiIcon::Flow,
+                if (DrawEmptyStateGui("tasks_projects_bridge_empty", UiIcon::Project,
                                       u8"Проектов пока нет",
                                       u8"Создайте проект здесь же, чтобы сразу привязать к нему задачи.",
                                       UiIcon::Plus, u8"Открыть форму создания проекта")) {
@@ -1601,7 +1601,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
     std::vector<const TaskEntry*> filtered = ComputeFilteredTasks();
     if (state.tasks.empty()) {
-        if (DrawEmptyStateGui("tasks_empty_all", UiIcon::List,
+        if (DrawEmptyStateGui("tasks_empty_all", UiIcon::Task,
                               u8"Журнал задач пуст",
                               state.isAdmin
                                   ? u8"Начните с постановки первой задачи: проект, исполнители, навыки и дедлайн будут собраны в одном сценарии."
@@ -2269,7 +2269,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Combo("##task_bulk_priority", &state.taskBulkPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels));
 
                 ImGui::TableSetColumnIndex(3);
-                if (TaskIconButton("bulk_apply_priority", UiIcon::Bell, u8"Применить приоритет")) {
+                if (TaskIconButton("bulk_apply_priority", UiIcon::Apply, u8"Применить приоритет")) {
                     ApplyBulkPriority();
                 }
 
@@ -2279,7 +2279,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                              projectLabelPtrs.data(), static_cast<int>(projectLabelPtrs.size()));
 
                 ImGui::TableSetColumnIndex(5);
-                if (TaskIconButton("bulk_apply_project", UiIcon::Book, u8"Применить проект")) {
+                if (TaskIconButton("bulk_apply_project", UiIcon::Project, u8"Применить проект")) {
                     ApplyBulkProject();
                 }
 
@@ -2308,7 +2308,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                          state.taskBulkDeadline.data(), state.taskBulkDeadline.size());
 
                 ImGui::TableSetColumnIndex(1);
-                if (TaskIconButton("bulk_apply_deadline", UiIcon::Bell, u8"Установить дедлайн")) {
+                if (TaskIconButton("bulk_apply_deadline", UiIcon::Calendar, u8"Установить дедлайн")) {
                     ApplyBulkDeadline(false);
                 }
 
@@ -2547,7 +2547,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 maxCount = std::max(maxCount, static_cast<int>(dayCounts[idx]));
             }
             if (maxCount == 0) {
-                DrawEmptyStateGui("tasks_activity_empty_period", UiIcon::Chart,
+                DrawEmptyStateGui("tasks_activity_empty_period", UiIcon::Task,
                                   u8"Нет активности за период",
                                   u8"Новые задачи не создавались в последние дни.");
             } else {
@@ -2876,7 +2876,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             ImGui::EndDisabled();
                         }
                     }
-                    if (TaskIconButton("row_assignee_save", UiIcon::Users, u8"Сохранить исполнителей")) {
+                    if (TaskIconButton("row_assignee_save", UiIcon::Save, u8"Сохранить исполнителей")) {
                         std::vector<std::string> nextAssignees;
                         for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
                             if (i < static_cast<int>(state.taskInlineAssigneeFlags.size()) && state.taskInlineAssigneeFlags[i] && !state.profiles[i].archived) {
@@ -3577,7 +3577,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (!expanded) {
             if (BeginCard("tasks_detail_placeholder")) {
                 DrawCardHeader(u8"Детали задачи");
-                DrawEmptyStateGui("tasks_detail_empty_selection", UiIcon::List,
+                DrawEmptyStateGui("tasks_detail_empty_selection", UiIcon::Task,
                                   u8"Задача не выбрана",
                                   u8"Выберите задачу по названию в таблице, чтобы открыть описание, исполнителей, XP и админские действия.");
             }
