@@ -37,8 +37,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
 - State:
-  - Ветка: develop. Версия: 0.5.23.
-  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек` начат: добавлен общий compact table scope/helper и применён к control-таблицам логов, статистики и правил.
+  - Ветка: develop. Версия: 0.5.24.
+  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: общий compact table scope/helper применён к control-таблицам логов, статистики, правил и к плотным таблицам задач.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий UX-пункт: пункт 10 `визуальный ритм таблиц и карточек`: снизить шум control-таблиц, унифицировать padding/NoPadOuterX, затем пройти плотные таблицы задач/профиля/статистики.
 - Done:
@@ -90,6 +90,7 @@ UI аудит:
   - UX Plan 9 Progress: в `GuiIcons.inc` добавлен semantic icon map comment; логи/статистика/правила/профиль/задачи разделяют Refresh(reload), Clear(reset/clear), LockClosed(password reset) и Play(reopen); smoke_core проверяет эти различия.
   - UX Plan 9 Done: action/icon map закреплена smoke-контрактами; оставшиеся generic icons используются по прямому смыслу раздела или reload-действия.
   - UX Plan 10 Progress: добавлены `CompactTableScopeGui`, `CompactTableCellPadding`, `CompactTableFramePadding`, `ControlTableFlagsGui`; control-таблицы логов, админ-статистики и правил используют единый compact scope; smoke_core проверяет этот контракт.
+  - UX Plan 10 Progress: фильтры, bulk-действия, popup исполнителей, summary и основной список задач переведены с локальных `tasksCompact*` padding на общий `CompactTableScopeGui`; smoke_core проверяет этот контракт.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

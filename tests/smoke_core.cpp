@@ -210,17 +210,26 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string logs;
     std::string adminStats;
     std::string rules;
+    std::string tasks;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
     if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
     if (!ReadFile(root / "gui" / "GuiRulesPanel.inc", rules)) return false;
+    if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
            helpers.find("ControlTableFlagsGui(") != std::string::npos &&
            logs.find("CompactTableScopeGui compactTable") != std::string::npos &&
            logs.find("BeginTable(\"log_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
            adminStats.find("BeginTable(\"admin_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
-           rules.find("BeginTable(\"rules_actions\", 3, ControlTableFlagsGui()") != std::string::npos;
+           rules.find("BeginTable(\"rules_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("tasksCompactCellPadding") == std::string::npos &&
+           CountSubstring(tasks, "CompactTableScopeGui") >= 7 &&
+           tasks.find("BeginTable(\"tasks_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_filters_extra\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_bulk_compact_row1\", 8, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_summary_table\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_table\", tableColumns, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos;
 }
 
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {

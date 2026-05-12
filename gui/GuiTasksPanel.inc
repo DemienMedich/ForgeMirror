@@ -1377,13 +1377,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-    const ImVec2 tasksCompactCellPadding(
-        std::max(4.0f, style.CellPadding.x * 0.58f),
-        std::max(2.0f, style.CellPadding.y * 0.50f));
-    const ImVec2 tasksCompactFramePadding(
-        std::max(4.0f, style.FramePadding.x * 0.66f),
-        std::max(2.0f, style.FramePadding.y * 0.56f));
-
     if (ImGui::CollapsingHeader(u8"Фильтры и экспорт")) {
         DrawCardHeader(u8"Фильтр");
     const float filtersWidth = ImGui::GetContentRegionAvail().x;
@@ -1509,9 +1502,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ExportFilteredTasks(true);
         }
     } else {
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
-        if (ImGui::BeginTable("tasks_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("tasks_filters", 6, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
         ImGui::TableSetupColumn("filter_profile", ImGuiTableColumnFlags_WidthStretch, 0.9f);
         ImGui::TableSetupColumn("filter_project", ImGuiTableColumnFlags_WidthStretch, 0.9f);
@@ -1562,7 +1554,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Фильтр по приоритету.");
         ImGui::EndTable();
         }
-        if (ImGui::BeginTable("tasks_filters_extra", 4, ImGuiTableFlags_SizingStretchProp)) {
+        if (ImGui::BeginTable("tasks_filters_extra", 4, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
             ImGui::TableSetupColumn("filter_period", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("filter_sort", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1595,7 +1587,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             ImGui::EndTable();
         }
-        ImGui::PopStyleVar(2);
     }
     }
 
@@ -1688,8 +1679,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (BeginCard("tasks_work_queue_card")) {
             DrawCardHeader(u8"Очередь задач");
             const int queueColumns = ImGui::GetContentRegionAvail().x < 840.0f ? 2 : 6;
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
+            CompactTableScopeGui compactTable;
             if (ImGui::BeginTable("tasks_work_queue_metrics", queueColumns, ImGuiTableFlags_SizingStretchSame)) {
                 int metricIndex = 0;
                 auto DrawQueueMetric = [&](const char* title,
@@ -1740,7 +1730,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                 filteredPipelineSignalCount > 0 ? TaskWarningColor() : TaskInfoColor());
                 ImGui::EndTable();
             }
-            ImGui::PopStyleVar(2);
             if (workFocusTask) {
                 ImGui::Dummy(ImVec2(0.0f, 6.0f));
                 ImGui::TextDisabled(u8"Фокус");
@@ -1996,10 +1985,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (state.taskAudit.empty()) {
             ImGui::TextDisabled(u8"Изменений пока нет.");
         } else {
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
+            CompactTableScopeGui compactTable;
             if (ImGui::BeginTable("tasks_audit_table", 5,
-                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                                  ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
                 ImGui::TableSetupColumn("audit_time", ImGuiTableColumnFlags_WidthFixed, 92.0f);
                 ImGui::TableSetupColumn("audit_actor", ImGuiTableColumnFlags_WidthFixed, 106.0f);
                 ImGui::TableSetupColumn("audit_task", ImGuiTableColumnFlags_WidthStretch, 1.35f);
@@ -2038,7 +2026,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::EndTable();
             }
-            ImGui::PopStyleVar(2);
         }
         }
         EndCard();
@@ -2240,11 +2227,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
             state.taskBulkStatus = std::clamp(state.taskBulkStatus, kTaskStatusNew, kTaskStatusDone);
             state.taskBulkPriority = std::clamp(state.taskBulkPriority, kTaskPriorityLow, kTaskPriorityCritical);
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
+            CompactTableScopeGui compactTable;
             const float bulkIconColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
 
-            if (ImGui::BeginTable("tasks_bulk_compact_row1", 8, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
+            if (ImGui::BeginTable("tasks_bulk_compact_row1", 8, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("bulk_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                 ImGui::TableSetupColumn("bulk_status_btn", ImGuiTableColumnFlags_WidthFixed, bulkIconColumn);
                 ImGui::TableSetupColumn("bulk_priority", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -2295,7 +2281,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::EndTable();
             }
 
-            if (ImGui::BeginTable("tasks_bulk_compact_row2", 4, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
+            if (ImGui::BeginTable("tasks_bulk_compact_row2", 4, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("bulk_deadline", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                 ImGui::TableSetupColumn("bulk_deadline_set", ImGuiTableColumnFlags_WidthFixed, bulkIconColumn);
                 ImGui::TableSetupColumn("bulk_deadline_clear", ImGuiTableColumnFlags_WidthFixed, bulkIconColumn);
@@ -2323,40 +2309,40 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 }
                 ImGui::EndTable();
             }
-            ImGui::PopStyleVar(2);
 
             if (ImGui::BeginPopup("tasks_bulk_assignees_popup")) {
                 ImGui::TextDisabled(u8"Массовое назначение исполнителей");
-                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-                if (ImGui::BeginTable("bulk_assignees_table", 2, ImGuiTableFlags_SizingStretchProp)) {
-                    ImGui::TableSetupColumn("bulk_assignee_col1", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                    ImGui::TableSetupColumn("bulk_assignee_col2", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                    for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
-                        const auto& info = state.profiles[i];
-                        if (i % 2 == 0) {
-                            ImGui::TableNextRow();
-                        }
-                        ImGui::TableSetColumnIndex(i % 2);
-                        bool checked = (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] != 0);
-                        if (info.archived) ImGui::BeginDisabled();
-                        ImGui::PushID(info.id.c_str());
-                        if (ImGui::Checkbox("##bulk_assign", &checked)) {
-                            if (i < static_cast<int>(state.taskBulkAssignees.size())) {
-                                state.taskBulkAssignees[i] = checked ? 1 : 0;
+                {
+                    CompactTableScopeGui assigneesCompactTable;
+                    if (ImGui::BeginTable("bulk_assignees_table", 2, ControlTableFlagsGui())) {
+                        ImGui::TableSetupColumn("bulk_assignee_col1", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                        ImGui::TableSetupColumn("bulk_assignee_col2", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                        for (int i = 0; i < static_cast<int>(state.profiles.size()); ++i) {
+                            const auto& info = state.profiles[i];
+                            if (i % 2 == 0) {
+                                ImGui::TableNextRow();
+                            }
+                            ImGui::TableSetColumnIndex(i % 2);
+                            bool checked = (i < static_cast<int>(state.taskBulkAssignees.size()) && state.taskBulkAssignees[i] != 0);
+                            if (info.archived) ImGui::BeginDisabled();
+                            ImGui::PushID(info.id.c_str());
+                            if (ImGui::Checkbox("##bulk_assign", &checked)) {
+                                if (i < static_cast<int>(state.taskBulkAssignees.size())) {
+                                    state.taskBulkAssignees[i] = checked ? 1 : 0;
+                                }
+                            }
+                            ImGui::PopID();
+                            ImGui::SameLine();
+                            ImGui::TextUnformatted(info.name.c_str());
+                            if (info.archived) {
+                                ImGui::SameLine();
+                                ImGui::TextDisabled(u8"(архив)");
+                                ImGui::EndDisabled();
                             }
                         }
-                        ImGui::PopID();
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(info.name.c_str());
-                        if (info.archived) {
-                            ImGui::SameLine();
-                            ImGui::TextDisabled(u8"(архив)");
-                            ImGui::EndDisabled();
-                        }
+                        ImGui::EndTable();
                     }
-                    ImGui::EndTable();
                 }
-                ImGui::PopStyleVar();
                 if (TaskIconButton("bulk_assignees_apply", UiIcon::Assign, u8"Применить исполнителей")) {
                     if (ApplyBulkAssignees()) {
                         ImGui::CloseCurrentPopup();
@@ -2463,9 +2449,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const float avgPool = filteredCount > 0
                 ? static_cast<float>(poolSum) / static_cast<float>(filteredCount)
                 : 0.0f;
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
-            if (ImGui::BeginTable("tasks_summary_table", 5, ImGuiTableFlags_SizingStretchProp)) {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("tasks_summary_table", 5, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("sum_total", ImGuiTableColumnFlags_WidthStretch, 0.7f);
                 ImGui::TableSetupColumn("sum_last", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                 ImGui::TableSetupColumn("sum_focus", ImGuiTableColumnFlags_WidthStretch, 1.1f);
@@ -2496,7 +2481,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Text("%d", static_cast<int>(uniqueProfiles.size()));
                 ImGui::EndTable();
             }
-            ImGui::PopStyleVar(2);
             if (hasAttention) {
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
                 ImGui::TextDisabled(u8"Зона внимания");
@@ -2635,10 +2619,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::Spacing();
     }
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, tasksCompactCellPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tasksCompactFramePadding);
-    if (ImGui::BeginTable("tasks_table", tableColumns, ImGuiTableFlags_RowBg |
-                                              ImGuiTableFlags_SizingStretchProp)) {
+    CompactTableScopeGui compactTable;
+    if (ImGui::BeginTable("tasks_table", tableColumns, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
         if (allowBulkSelection) {
             ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 30.0f);
         }
@@ -2973,7 +2955,6 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::EndTable();
     }
-    ImGui::PopStyleVar(2);
     const int totalTasks = static_cast<int>(state.tasks.size());
     ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
     if (!state.tasks.empty() && filteredCount == 0) {
