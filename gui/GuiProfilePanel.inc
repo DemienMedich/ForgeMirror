@@ -745,7 +745,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             }
             if (state.isAdmin) {
                 ImGui::SameLine();
-                if (IconButtonGui("profile_reset_password", UiIcon::Refresh, u8"Сбросить пароль",
+                if (IconButtonGui("profile_reset_password", UiIcon::LockClosed, u8"Сбросить пароль",
                                   accent, accessIconSize)) {
                     openReset();
                 }

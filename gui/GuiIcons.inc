@@ -1,3 +1,7 @@
+// Semantic icon map:
+// Save/Edit/Award/Export/FileText describe actions, not modules.
+// Clear is for reset/clear filters or drafts; Refresh is only for reloading data.
+// Task/Project/Shortcut/Sync/Calendar/Assign/Merge keep compact buttons readable without relying on tooltip first.
 enum class UiIcon {
     User = 0,
     Users,

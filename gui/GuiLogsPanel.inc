@@ -261,7 +261,7 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::TextDisabled(u8"Поиск");
         ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
                                  state.filters.logs.data(), state.filters.logs.size());
-        if (LogIconButton("log_filter_reset_stack", UiIcon::Refresh, u8"Сбросить поиск и источник")) {
+        if (LogIconButton("log_filter_reset_stack", UiIcon::Clear, u8"Сбросить поиск и источник")) {
             state.filters.logs.fill('\0');
             state.filters.logSource.fill('\0');
         }
@@ -313,7 +313,7 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::InputTextWithHint(u8"##log_filter", u8"Поиск по тексту/источнику",
                                  state.filters.logs.data(), state.filters.logs.size());
         ImGui::TableNextColumn();
-        if (LogIconButton("log_filter_reset", UiIcon::Refresh, u8"Сбросить поиск и источник")) {
+        if (LogIconButton("log_filter_reset", UiIcon::Clear, u8"Сбросить поиск и источник")) {
             state.filters.logs.fill('\0');
             state.filters.logSource.fill('\0');
         }

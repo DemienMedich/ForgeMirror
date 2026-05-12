@@ -339,6 +339,9 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
     std::string mainMenu;
     std::string projects;
     std::string skillModals;
+    std::string profilePanel;
+    std::string logs;
+    std::string adminStats;
     if (!ReadFile(root / "gui" / "GuiIcons.inc", icons)) return false;
     if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
     if (!ReadFile(root / "gui" / "GuiPipelinePanel.inc", pipeline)) return false;
@@ -348,6 +351,9 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
     if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
     if (!ReadFile(root / "gui" / "GuiProjects.inc", projects)) return false;
     if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfilePanel.inc", profilePanel)) return false;
+    if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
+    if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
 
     return icons.find("Save,") != std::string::npos &&
            icons.find("Edit,") != std::string::npos &&
@@ -386,7 +392,14 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
            skillModals.find("\"merge_skill_apply\", UiIcon::Merge") != std::string::npos &&
            skillModals.find("\"delete_skill_cancel\", UiIcon::Close") != std::string::npos &&
            catalog.find("\"catalog_clear_skills\", UiIcon::Clear") != std::string::npos &&
-           catalog.find("\"skill_ach_icon_pick\", UiIcon::FileText") != std::string::npos;
+           catalog.find("\"skill_ach_icon_pick\", UiIcon::FileText") != std::string::npos &&
+           tasks.find("\"task_detail_reopen\", UiIcon::Play") != std::string::npos &&
+           tasks.find("\"task_detail_handoff_reopen\", UiIcon::Play") != std::string::npos &&
+           mainMenu.find("\"top_refresh\", UiIcon::Refresh") != std::string::npos &&
+           profilePanel.find("\"profile_reset_password\", UiIcon::LockClosed") != std::string::npos &&
+           logs.find("\"log_filter_reset\", UiIcon::Clear") != std::string::npos &&
+           adminStats.find("\"admin_stats_reset\", UiIcon::Clear") != std::string::npos &&
+           rules.find("\"rules_reset\", UiIcon::Clear") != std::string::npos;
 }
 
 static bool TestSharedEmptyStatesUsedInUiSettings() {

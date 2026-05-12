@@ -126,7 +126,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
                      rankLabels.data(), static_cast<int>(rankLabels.size()));
-        if (StatsIconButton("admin_stats_reset_stack", UiIcon::Refresh, u8"Сбросить фильтры статистики")) {
+        if (StatsIconButton("admin_stats_reset_stack", UiIcon::Clear, u8"Сбросить фильтры статистики")) {
             resetFilters();
         }
         ImGui::SameLine();
@@ -162,7 +162,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
                      rankLabels.data(), static_cast<int>(rankLabels.size()));
         ImGui::TableNextColumn();
-        if (StatsIconButton("admin_stats_reset", UiIcon::Refresh, u8"Сбросить фильтры статистики")) {
+        if (StatsIconButton("admin_stats_reset", UiIcon::Clear, u8"Сбросить фильтры статистики")) {
             resetFilters();
         }
         ImGui::TableNextColumn();

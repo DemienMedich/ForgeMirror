@@ -224,7 +224,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     const bool hasChanges = !rulesMatch(draft, state.rulesConfig);
     if (stackRules) {
         if (!hasChanges) ImGui::BeginDisabled();
-        if (RulesIconButton("rules_reset_stack", UiIcon::Refresh, u8"Сбросить несохранённые изменения")) {
+        if (RulesIconButton("rules_reset_stack", UiIcon::Clear, u8"Сбросить несохранённые изменения")) {
             draft = state.rulesConfig;
         }
         ImGui::SameLine();
@@ -259,7 +259,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetColumnIndex(0);
         DrawAnchorIcon(UiIcon::List);
         ImGui::TableSetColumnIndex(1);
-        if (RulesIconButton("rules_reset", UiIcon::Refresh, u8"Сбросить несохранённые изменения")) {
+        if (RulesIconButton("rules_reset", UiIcon::Clear, u8"Сбросить несохранённые изменения")) {
             draft = state.rulesConfig;
         }
         ImGui::TableSetColumnIndex(2);

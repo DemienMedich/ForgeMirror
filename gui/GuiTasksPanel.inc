@@ -3246,7 +3246,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 } else if (detailStatus == kTaskStatusDone && detailHasRecordedXp) {
                     ImGui::TextDisabled(u8"Закрыта, XP записан.");
-                    if (TaskIconButton("task_detail_reopen", UiIcon::Refresh, u8"Вернуть в работу")) {
+                    if (TaskIconButton("task_detail_reopen", UiIcon::Play, u8"Вернуть в работу")) {
                         UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
                     }
                 } else {
@@ -3489,7 +3489,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             }
                             ImGui::TextDisabled(u8"Используйте это после завершения финального handoff.");
                         } else {
-                            if (TaskIconButton("task_detail_handoff_reopen", UiIcon::Refresh, u8"Вернуть в работу")) {
+                            if (TaskIconButton("task_detail_handoff_reopen", UiIcon::Play, u8"Вернуть в работу")) {
                                 UpdateTaskStatus(editableTask->id, kTaskStatusInProgress);
                             }
                             ImGui::TextDisabled(u8"Новая из 'Выполнена' недоступна по правилам, поэтому shortcut возвращает в 'В работе'.");
