@@ -212,12 +212,14 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string rules;
     std::string tasks;
     std::string profileSections;
+    std::string projects;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
     if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
     if (!ReadFile(root / "gui" / "GuiRulesPanel.inc", rules)) return false;
     if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
     if (!ReadFile(root / "gui" / "GuiProfileSections.inc", profileSections)) return false;
+    if (!ReadFile(root / "gui" / "GuiProjects.inc", projects)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
            helpers.find("ControlTableFlagsGui(") != std::string::npos &&
@@ -235,7 +237,10 @@ static bool TestCompactControlTablesUseSharedScope() {
            profileSections.find("BeginTable(\"profile_active_tasks_table\", 5,") != std::string::npos &&
            profileSections.find("ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
            profileSections.find("BeginTable(\"profile_tasks\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
-           CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 2;
+           CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 2 &&
+           projects.find("BeginTable(\"projects_status_slice\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           projects.find("BeginTable(\"projects_table\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           CountSubstring(projects, "CompactTableScopeGui compactTable") >= 3;
 }
 
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {
