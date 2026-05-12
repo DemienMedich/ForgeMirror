@@ -642,7 +642,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
         if (backgrounds.empty()) {
-            ImGui::TextDisabled(u8"Фоны не найдены.");
+            DrawEmptyStateGui("ui_background_combo_empty", UiIcon::Bell,
+                              u8"Фоны не найдены",
+                              u8"Положите изображения в data/backgrounds, чтобы быстро назначать фон.");
         } else {
             for (const auto& bg : backgrounds) {
                 const bool selected = uniform && bg.relativePath == uniformBackground;

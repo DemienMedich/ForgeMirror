@@ -395,7 +395,9 @@ void DrawPipelinePanel(GuiState& state) {
 
     DrawCardHeader(u8"Пайплайн Forge Mirror");
     ImGui::TextDisabled(u8"Объединенный production-flow: текущий пайплайн Forge Mirror + схема из Excel.");
-    ImGui::TextDisabled(u8"Выберите блок, чтобы увидеть подсказки, контроль в движке и следующий путь.");
+    DrawEmptyStateGui("pipeline_select_hint", UiIcon::Flow,
+                      u8"Выберите блок",
+                      u8"После выбора этапа здесь будут подсказки, контроль в движке и следующий путь.");
 
     const float filterWidth = ImGui::GetContentRegionAvail().x;
     const bool stackFilter = filterWidth < 420.0f;

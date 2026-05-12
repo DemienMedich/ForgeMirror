@@ -165,7 +165,8 @@ static bool TestGuiPipelineImGuiStackPatterns() {
 
     const size_t actions = source.find("if (ImGui::BeginTable(\"pipeline_edit_actions\"");
     const size_t actionsEnd = source.find("                    ImGui::EndTable();\n                }", actions);
-    return actions != std::string::npos && actionsEnd != std::string::npos && actionsEnd > actions;
+    return actions != std::string::npos && actionsEnd != std::string::npos && actionsEnd > actions &&
+           source.find("pipeline_select_hint") != std::string::npos;
 }
 
 static bool TestGuiEmptyStateRegistersLayoutSize() {
@@ -335,9 +336,10 @@ static bool TestSharedEmptyStatesUsedInUiSettings() {
     return uiSettings.find("ui_cloud_picker_empty") != std::string::npos &&
            uiSettings.find("ui_presets_empty") != std::string::npos &&
            uiSettings.find("ui_backgrounds_empty") != std::string::npos &&
+           uiSettings.find("ui_background_combo_empty") != std::string::npos &&
            uiSettings.find("ui_backgrounds_filter_empty") != std::string::npos &&
            uiSettings.find("ui_appearance_clean_state") != std::string::npos &&
-           CountSubstring(uiSettings, "DrawEmptyStateGui(") >= 6;
+           CountSubstring(uiSettings, "DrawEmptyStateGui(") >= 7;
 }
 
 static bool TestSharedEmptyStatesUsedInUtilityPanels() {
