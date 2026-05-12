@@ -297,8 +297,12 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::EndTable();
             }
         } else {
-            ImGui::TextDisabled(u8"Нет данных для слияния.");
-            if (SkillModalIconButton("merge_skill_close", UiIcon::Close, u8"Закрыть окно")) {
+            if (DrawEmptyStateGui("merge_skill_empty", UiIcon::Flow,
+                                  u8"Нет данных для слияния",
+                                  u8"Выберите исходный и целевой навык перед открытием слияния.",
+                                  UiIcon::Close,
+                                  u8"Закрыть окно",
+                                  true)) {
                 ImGui::CloseCurrentPopup();
                 mergeSkillOpen = false;
             }

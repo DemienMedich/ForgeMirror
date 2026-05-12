@@ -209,7 +209,11 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         }
         ImGui::TextDisabled(u8"Всего: %d", static_cast<int>(catalogSkills.size()));
         if (catalogSkills.empty()) {
-            ImGui::TextDisabled(u8"Навыков пока нет. Добавьте первый навык.");
+            DrawEmptyStateGui("catalog_empty_all", UiIcon::Chart,
+                              u8"Навыков пока нет",
+                              state.isAdmin
+                                  ? u8"Добавьте первый навык, чтобы начать каталог и выдачу XP."
+                                  : u8"Каталог навыков пока не заполнен администратором.");
         }
         ImGui::Separator();
 

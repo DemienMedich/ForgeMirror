@@ -303,12 +303,27 @@ static bool TestSharedEmptyStatesUsedInSkillCatalog() {
     std::string catalogPanel;
     if (!ReadFile(root / "gui" / "GuiSkillCatalogPanel.inc", catalogPanel)) return false;
 
-    return catalogPanel.find("catalog_summary_empty") != std::string::npos &&
+    return catalogPanel.find("catalog_empty_all") != std::string::npos &&
+           catalogPanel.find("catalog_summary_empty") != std::string::npos &&
            catalogPanel.find("catalog_skill_list_empty") != std::string::npos &&
            catalogPanel.find("skill_achievements_empty") != std::string::npos &&
            catalogPanel.find("skill_icon_picker_filter_empty") != std::string::npos &&
            catalogPanel.find("catalog_detail_empty") != std::string::npos &&
-           CountSubstring(catalogPanel, "DrawEmptyStateGui(") >= 7;
+           CountSubstring(catalogPanel, "DrawEmptyStateGui(") >= 8;
+}
+
+static bool TestProfileSkillUtilityEmptyStatesUseSharedHelper() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string mainMenu;
+    std::string skillModals;
+    if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
+    if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
+
+    return mainMenu.find("profiles_filter_empty") != std::string::npos &&
+           skillModals.find("merge_skill_empty") != std::string::npos &&
+           mainMenu.find("TextDisabled(u8\"Нет профилей по фильтру.") == std::string::npos &&
+           skillModals.find("TextDisabled(u8\"Нет данных для слияния.") == std::string::npos;
 }
 
 static bool TestSharedEmptyStatesUsedInUiSettings() {
@@ -723,6 +738,7 @@ int main() {
     const bool okProfileModalsEmptyStates = TestProfileModalsMissingProfileUsesSharedEmptyState();
     const bool okProfileSectionEmptyStates = TestSharedEmptyStatesUsedInProfileSections();
     const bool okSkillCatalogEmptyStates = TestSharedEmptyStatesUsedInSkillCatalog();
+    const bool okProfileSkillUtilityEmptyStates = TestProfileSkillUtilityEmptyStatesUseSharedHelper();
     const bool okUiSettingsEmptyStates = TestSharedEmptyStatesUsedInUiSettings();
     const bool okUtilityEmptyStates = TestSharedEmptyStatesUsedInUtilityPanels();
     const bool okProfileTaskBriefIds = TestProfileTaskBriefStatsHaveUniqueIds();
@@ -747,7 +763,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -769,6 +785,7 @@ int main() {
               << " profileModalsEmptyStates=" << okProfileModalsEmptyStates
               << " profileSectionEmptyStates=" << okProfileSectionEmptyStates
               << " skillCatalogEmptyStates=" << okSkillCatalogEmptyStates
+              << " profileSkillUtilityEmptyStates=" << okProfileSkillUtilityEmptyStates
               << " uiSettingsEmptyStates=" << okUiSettingsEmptyStates
               << " utilityEmptyStates=" << okUtilityEmptyStates
               << " profileTaskBriefIds=" << okProfileTaskBriefIds
