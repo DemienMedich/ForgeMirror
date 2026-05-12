@@ -2447,7 +2447,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (ImGui::CollapsingHeader(summaryHeader.c_str())) {
         if (BeginCard("tasks_summary_card")) {
         if (filtered.empty()) {
-            ImGui::TextDisabled(u8"Нет задач по фильтру.");
+            DrawEmptyStateGui("tasks_summary_empty_filter", UiIcon::Search,
+                              u8"Нет задач по фильтру",
+                              u8"Сбросьте фильтры или переключите быстрый режим, чтобы вернуть сводку.");
         } else {
             std::ostringstream focusStream;
             focusStream.imbue(std::locale::classic());
@@ -2545,7 +2547,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 maxCount = std::max(maxCount, static_cast<int>(dayCounts[idx]));
             }
             if (maxCount == 0) {
-                ImGui::TextDisabled(u8"Нет активности за период.");
+                DrawEmptyStateGui("tasks_activity_empty_period", UiIcon::Chart,
+                                  u8"Нет активности за период",
+                                  u8"Новые задачи не создавались в последние дни.");
             } else {
                 ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
                 accent.w = 1.0f;
@@ -3273,7 +3277,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::Spacing();
                 ImGui::TextDisabled(u8"Исполнители");
                 if (detailAssigneeNames.empty()) {
-                    ImGui::TextDisabled(u8"Нет назначенных профилей.");
+                    DrawEmptyStateGui("tasks_detail_assignees_empty", UiIcon::Users,
+                                      u8"Нет назначенных профилей",
+                                      u8"Назначьте исполнителей, чтобы задача появилась в профилях участников.");
                 } else {
                     ImGui::TextWrapped("%s", BuildTaskAssigneeSummary(*expanded, 4).c_str());
                 }
@@ -3571,9 +3577,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (!expanded) {
             if (BeginCard("tasks_detail_placeholder")) {
                 DrawCardHeader(u8"Детали задачи");
-                ImGui::TextDisabled(u8"Выберите задачу по названию в таблице.");
-                ImGui::Dummy(ImVec2(0.0f, 4.0f));
-                ImGui::TextWrapped(u8"Справа будут показаны описание, исполнители, XP и админские действия выбранной задачи.");
+                DrawEmptyStateGui("tasks_detail_empty_selection", UiIcon::List,
+                                  u8"Задача не выбрана",
+                                  u8"Выберите задачу по названию в таблице, чтобы открыть описание, исполнителей, XP и админские действия.");
             }
             EndCard();
         }
