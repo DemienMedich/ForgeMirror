@@ -2619,22 +2619,23 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::Spacing();
     }
-    CompactTableScopeGui compactTable;
-    if (ImGui::BeginTable("tasks_table", tableColumns, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
-        if (allowBulkSelection) {
-            ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-        }
-        ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 86.0f);
-        ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.85f);
-        ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.4f);
-        ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("P", ImGuiTableColumnFlags_WidthFixed, 48.0f);
-        ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, tasksAdminMode ? 66.0f : 58.0f);
-        ImGui::TableHeadersRow();
-        const std::int64_t nowSec = NowSeconds();
-        for (const TaskEntry* task : filtered) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("tasks_table", tableColumns, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
+            if (allowBulkSelection) {
+                ImGui::TableSetupColumn("##sel", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            }
+            ImGui::TableSetupColumn(u8"Дата", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn(u8"Дедл.", ImGuiTableColumnFlags_WidthFixed, 86.0f);
+            ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+            ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+            ImGui::TableSetupColumn(u8"Исполнители", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("P", ImGuiTableColumnFlags_WidthFixed, 48.0f);
+            ImGui::TableSetupColumn(u8"Ст.", ImGuiTableColumnFlags_WidthFixed, tasksAdminMode ? 66.0f : 58.0f);
+            ImGui::TableHeadersRow();
+            const std::int64_t nowSec = NowSeconds();
+            for (const TaskEntry* task : filtered) {
             ++visibleCount;
             ImGui::TableNextRow();
             const bool isExpanded = (state.tasksExpandedId == task->id);
@@ -2952,8 +2953,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
 
             ImGui::PopID();
+            }
+            ImGui::EndTable();
         }
-        ImGui::EndTable();
     }
     const int totalTasks = static_cast<int>(state.tasks.size());
     ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
