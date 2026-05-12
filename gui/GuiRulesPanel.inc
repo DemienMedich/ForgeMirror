@@ -245,43 +245,46 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
         }
         if (!hasChanges) ImGui::EndDisabled();
-    } else if (ImGui::BeginTable("rules_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
-        if (!hasChanges) ImGui::BeginDisabled();
-        ImGui::TableSetupColumn("rules_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-        ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
-        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
-        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        DrawAnchorIcon(UiIcon::List);
-        ImGui::TableSetColumnIndex(1);
-        if (RulesIconButton("rules_reset", UiIcon::Clear, u8"Сбросить несохранённые изменения")) {
-            draft = state.rulesConfig;
-        }
-        ImGui::TableSetColumnIndex(2);
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-        if (RulesIconButton("rules_save", UiIcon::Save, u8"Сохранить правила и применить к профилям")) {
-            SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
-            if (result.ok) {
-                state.rulesConfig = result.config;
-                state.rulesDraft = result.config;
-                SetGameplayConfig(result.config);
-                ReapplyRulesToProfiles(state, storage, catalog);
-                std::string keepId = state.active ? state.active->id : std::string{};
-                RefreshProfiles(state, storage, catalog, keepId);
-                SetStatus(state, result.message, 0.45f, 0.9f, 0.45f, 1.0f,
-                          AppLogLevel::Info, u8"Правила");
-            } else {
-                SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
-                          AppLogLevel::Error, u8"Правила");
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("rules_actions", 3, ControlTableFlagsGui())) {
+            if (!hasChanges) ImGui::BeginDisabled();
+            ImGui::TableSetupColumn("rules_idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            ImGui::TableSetupColumn("rules_left", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+            ImGui::TableSetupColumn("rules_right", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableSetColumnIndex(1);
+            if (RulesIconButton("rules_reset", UiIcon::Clear, u8"Сбросить несохранённые изменения")) {
+                draft = state.rulesConfig;
             }
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            if (RulesIconButton("rules_save", UiIcon::Save, u8"Сохранить правила и применить к профилям")) {
+                SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
+                if (result.ok) {
+                    state.rulesConfig = result.config;
+                    state.rulesDraft = result.config;
+                    SetGameplayConfig(result.config);
+                    ReapplyRulesToProfiles(state, storage, catalog);
+                    std::string keepId = state.active ? state.active->id : std::string{};
+                    RefreshProfiles(state, storage, catalog, keepId);
+                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f, 1.0f,
+                              AppLogLevel::Info, u8"Правила");
+                } else {
+                    SetStatus(state, result.message, 1.0f, 0.45f, 0.45f, 1.0f,
+                              AppLogLevel::Error, u8"Правила");
+                }
+            }
+            if (!hasChanges) ImGui::EndDisabled();
+            ImGui::EndTable();
         }
-        if (!hasChanges) ImGui::EndDisabled();
-        ImGui::EndTable();
     }
     if (!hasChanges) {
         DrawEmptyStateGui("rules_clean_state", UiIcon::Info,

@@ -133,43 +133,46 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         if (StatsIconButton("admin_stats_export_stack", UiIcon::Export, u8"Экспортировать статистику в CSV")) {
             exportStats();
         }
-    } else if (ImGui::BeginTable("admin_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("admin_filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("admin_filter_search", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-        ImGui::TableSetupColumn("admin_filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn("admin_filter_rank", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-        ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
-        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
-        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-        DrawAnchorIcon(UiIcon::List);
-        ImGui::TableNextColumn();
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-        ImGui::TextDisabled(u8"Поиск");
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
-                                 state.filters.adminStats.data(), state.filters.adminStats.size());
-        ImGui::TableNextColumn();
-        ImGui::Checkbox(u8"Архив", &state.adminStatsIncludeArchived);
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled(u8"Ранг");
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
-                     rankLabels.data(), static_cast<int>(rankLabels.size()));
-        ImGui::TableNextColumn();
-        if (StatsIconButton("admin_stats_reset", UiIcon::Clear, u8"Сбросить фильтры статистики")) {
-            resetFilters();
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("admin_filters", 6, ControlTableFlagsGui())) {
+            ImGui::TableSetupColumn("admin_filter_idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            ImGui::TableSetupColumn("admin_filter_search", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+            ImGui::TableSetupColumn("admin_filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.9f);
+            ImGui::TableSetupColumn("admin_filter_rank", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("admin_filter_reset", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+            ImGui::TableSetupColumn("admin_filter_export", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableNextColumn();
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::TextDisabled(u8"Поиск");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint(u8"##admin_stats_filter", u8"Фильтр по ID/имени",
+                                     state.filters.adminStats.data(), state.filters.adminStats.size());
+            ImGui::TableNextColumn();
+            ImGui::Checkbox(u8"Архив", &state.adminStatsIncludeArchived);
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Ранг");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::Combo(u8"##admin_stats_rank", &state.adminStatsRankFilter,
+                         rankLabels.data(), static_cast<int>(rankLabels.size()));
+            ImGui::TableNextColumn();
+            if (StatsIconButton("admin_stats_reset", UiIcon::Clear, u8"Сбросить фильтры статистики")) {
+                resetFilters();
+            }
+            ImGui::TableNextColumn();
+            if (StatsIconButton("admin_stats_export", UiIcon::Export, u8"Экспортировать статистику в CSV")) {
+                exportStats();
+            }
+            ImGui::EndTable();
         }
-        ImGui::TableNextColumn();
-        if (StatsIconButton("admin_stats_export", UiIcon::Export, u8"Экспортировать статистику в CSV")) {
-            exportStats();
-        }
-        ImGui::EndTable();
     }
     SyncFiltersToUi(state);
 

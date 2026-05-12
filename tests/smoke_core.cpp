@@ -203,6 +203,26 @@ static bool TestGuiRowStateHelpersUsedAcrossModules() {
            CountSubstring(profileSections, "ApplyTableRowStateTintGui(") >= 2;
 }
 
+static bool TestCompactControlTablesUseSharedScope() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string helpers;
+    std::string logs;
+    std::string adminStats;
+    std::string rules;
+    if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
+    if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
+    if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
+    if (!ReadFile(root / "gui" / "GuiRulesPanel.inc", rules)) return false;
+
+    return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
+           helpers.find("ControlTableFlagsGui(") != std::string::npos &&
+           logs.find("CompactTableScopeGui compactTable") != std::string::npos &&
+           logs.find("BeginTable(\"log_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
+           adminStats.find("BeginTable(\"admin_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
+           rules.find("BeginTable(\"rules_actions\", 3, ControlTableFlagsGui()") != std::string::npos;
+}
+
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -808,6 +828,7 @@ int main() {
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
+    const bool okCompactControlTables = TestCompactControlTablesUseSharedScope();
     const bool okProfileTaskEmptyStates = TestProfileTaskEmptyStatesUseSharedHelper();
     const bool okTasksDetailEmptyStates = TestTasksDetailEmptyStatesUseSharedHelper();
     const bool okServiceEmptyStates = TestSharedEmptyStatesUsedInServicePanels();
@@ -841,7 +862,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -856,6 +877,7 @@ int main() {
               << " guiStack=" << okGuiStack
               << " pipelineGuiStack=" << okPipelineGuiStack
               << " guiRowStates=" << okGuiRowStates
+              << " compactControlTables=" << okCompactControlTables
               << " profileTaskEmptyStates=" << okProfileTaskEmptyStates
               << " tasksDetailEmptyStates=" << okTasksDetailEmptyStates
               << " serviceEmptyStates=" << okServiceEmptyStates

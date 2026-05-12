@@ -220,6 +220,29 @@ ImVec2 TableCellPadding() {
     return LayoutTokens().tableCellPadding;
 }
 
+ImVec2 CompactTableCellPadding() {
+    return ImVec2(6.0f, 3.0f);
+}
+
+ImVec2 CompactTableFramePadding() {
+    return ImVec2(6.0f, 3.0f);
+}
+
+ImGuiTableFlags ControlTableFlagsGui(ImGuiTableFlags extra = 0) {
+    return ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoPadOuterX | extra;
+}
+
+struct CompactTableScopeGui {
+    CompactTableScopeGui() {
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, CompactTableCellPadding());
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, CompactTableFramePadding());
+    }
+
+    ~CompactTableScopeGui() {
+        ImGui::PopStyleVar(2);
+    }
+};
+
 ImVec4 CardBackgroundColor() {
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 base = style.Colors[ImGuiCol_WindowBg];
