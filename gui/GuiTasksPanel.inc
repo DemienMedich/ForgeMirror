@@ -648,7 +648,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 };
                 if (stackProjectInlineActions) {
-                    if (IconButtonGui("task_plan_project_save_stack", UiIcon::Chart,
+                    if (IconButtonGui("task_plan_project_save_stack", UiIcon::Save,
                                       u8"Сохранить проект и выбрать его", taskPlanAccent, taskPlanIconSize)) {
                         saveInlineProject();
                     }
@@ -662,7 +662,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 } else if (ImGui::BeginTable("task_plan_project_inline_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    if (IconButtonGui("task_plan_project_save", UiIcon::Chart,
+                    if (IconButtonGui("task_plan_project_save", UiIcon::Save,
                                       u8"Сохранить проект и выбрать его", taskPlanAccent, taskPlanIconSize)) {
                         saveInlineProject();
                     }
@@ -1323,7 +1323,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         state.tasksFilterProject = 2 + i;
                     }
                     ImGui::SameLine();
-                    if (TaskIconButton("bridge_edit", UiIcon::Settings, u8"Редактировать проект")) {
+                    if (TaskIconButton("bridge_edit", UiIcon::Edit, u8"Редактировать проект")) {
                         state.projectEditIndex = i;
                         std::snprintf(state.newProjectName.data(), state.newProjectName.size(), "%s", project.name.c_str());
                         std::snprintf(state.newProjectDesc.data(), state.newProjectDesc.size(), "%s", project.description.c_str());
@@ -1352,7 +1352,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextMultiline("##tasks_bridge_project_desc", state.newProjectDesc.data(),
                                           state.newProjectDesc.size(), ImVec2(-1.0f, 52.0f));
-                if (TaskIconButton("bridge_save_project", UiIcon::Chart, u8"Сохранить проект")) {
+                if (TaskIconButton("bridge_save_project", UiIcon::Save, u8"Сохранить проект")) {
                     AppProjectSaveResult saveResult = AppSaveProjectEntry(
                         state.storageDir,
                         state.projects,
@@ -1501,7 +1501,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             state.tasksFilterDays = dayOptions[dayIndex];
         }
         ImGui::TextDisabled(u8"Экспорт");
-        if (TaskIconButton("tasks_export_csv_stack", UiIcon::Launch, u8"Экспортировать видимые задачи в CSV")) {
+        if (TaskIconButton("tasks_export_csv_stack", UiIcon::Export, u8"Экспортировать видимые задачи в CSV")) {
             ExportFilteredTasks(false);
         }
         ImGui::SameLine();
@@ -1586,7 +1586,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"Порядок сортировки таблицы.");
             ImGui::TableSetColumnIndex(3);
-            if (TaskIconButton("tasks_export_csv", UiIcon::Launch, u8"Экспортировать видимые задачи в CSV")) {
+            if (TaskIconButton("tasks_export_csv", UiIcon::Export, u8"Экспортировать видимые задачи в CSV")) {
                 ExportFilteredTasks(false);
             }
             ImGui::SameLine();
@@ -2714,7 +2714,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::SetNextItemWidth(180.0f);
                     ImGui::InputTextWithHint("##deadline_input", u8"2026-02-14 18:00",
                                              state.taskInlineDeadlineBuffer.data(), state.taskInlineDeadlineBuffer.size());
-                    if (TaskIconButton("deadline_popup_save", UiIcon::Chart, u8"Сохранить дедлайн")) {
+                    if (TaskIconButton("deadline_popup_save", UiIcon::Save, u8"Сохранить дедлайн")) {
                         if (UpdateTaskDeadline(task->id, state.taskInlineDeadlineBuffer.data())) {
                             state.taskInlineDeadlineEditId.clear();
                             ImGui::CloseCurrentPopup();
@@ -3215,7 +3215,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (tasksAdminMode && editableTask && !editableTask->id.empty()) {
                 if (detailNeedsXpAward) {
                     ImGui::TextDisabled(u8"Закрыта без XP.");
-                    if (TaskIconButton("task_detail_award_xp", UiIcon::Chart, u8"Выдать XP по задаче")) {
+                    if (TaskIconButton("task_detail_award_xp", UiIcon::Award, u8"Выдать XP по задаче")) {
                         StartTaskXpFlow(editableTask->id, true);
                     }
                 } else if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing &&
@@ -3240,7 +3240,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                                            detailQuickPipelineTargets);
                     } else {
                         ImGui::TextDisabled(u8"Переходов дальше нет.");
-                        if (TaskIconButton("task_detail_close_xp", UiIcon::Chart, u8"Закрыть и выдать XP")) {
+                        if (TaskIconButton("task_detail_close_xp", UiIcon::Award, u8"Закрыть и выдать XP")) {
                             StartTaskXpFlow(editableTask->id, true);
                         }
                     }
@@ -3335,7 +3335,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         ImGui::TextDisabled(u8"Описание");
                         ImGui::TextWrapped("%s", editableTask->description.empty() ? u8"Без описания" : editableTask->description.c_str());
                         ImGui::Spacing();
-                        if (TaskIconButton("task_detail_text_edit", UiIcon::Settings, u8"Редактировать название и описание")) {
+                        if (TaskIconButton("task_detail_text_edit", UiIcon::Edit, u8"Редактировать название и описание")) {
                             std::snprintf(state.taskInlineTitleBuffer.data(), state.taskInlineTitleBuffer.size(),
                                           "%s", editableTask->title.c_str());
                             std::snprintf(state.taskInlineDescriptionBuffer.data(), state.taskInlineDescriptionBuffer.size(),
@@ -3356,7 +3356,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         if (ImGui::BeginTable("task_detail_text_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
                             ImGui::TableNextRow();
                             ImGui::TableSetColumnIndex(0);
-                            if (TaskIconButton("task_detail_text_save", UiIcon::Chart, u8"Сохранить текст задачи")) {
+                            if (TaskIconButton("task_detail_text_save", UiIcon::Save, u8"Сохранить текст задачи")) {
                                 if (UpdateTaskText(editableTask->id,
                                                    state.taskInlineTitleBuffer.data(),
                                                    state.taskInlineDescriptionBuffer.data())) {
@@ -3426,7 +3426,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                             state.taskInlineSkillEditId == editableTask->id ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
                     ImGui::TextWrapped("%s", BuildTaskSkillSummary(editableTask->skillIds, catalog, 6).c_str());
                     if (state.taskInlineSkillEditId != editableTask->id) {
-                        if (TaskIconButton("task_detail_skill_edit", UiIcon::Settings, u8"Редактировать навыки задачи")) {
+                        if (TaskIconButton("task_detail_skill_edit", UiIcon::Edit, u8"Редактировать навыки задачи")) {
                             state.taskInlineSkillEditId = editableTask->id;
                             state.taskInlineSkillFilter.fill('\0');
                             ApplyTaskSkillIdsToFlags(catalog, editableTask->skillIds, state.taskInlineSkillFlags);
@@ -3452,7 +3452,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         if (ImGui::BeginTable("task_detail_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
                             ImGui::TableNextRow();
                             ImGui::TableSetColumnIndex(0);
-                            if (TaskIconButton("task_detail_skill_save", UiIcon::Chart, u8"Сохранить навыки задачи")) {
+                            if (TaskIconButton("task_detail_skill_save", UiIcon::Save, u8"Сохранить навыки задачи")) {
                                 const std::vector<std::string> skillIds =
                                     CollectSelectedTaskSkillIds(catalog, state.taskInlineSkillFlags);
                                 if (UpdateTaskSkills(editableTask->id, skillIds)) {
@@ -3484,7 +3484,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             }
                             ImGui::TextDisabled(u8"Shortcut не пропускает этапы: сначала 'В работе', затем 'Выполнена'.");
                         } else if (currentEditableStatus == kTaskStatusInProgress) {
-                            if (TaskIconButton("task_detail_handoff_close", UiIcon::Chart, u8"Закрыть после handoff и выдать XP")) {
+                            if (TaskIconButton("task_detail_handoff_close", UiIcon::Award, u8"Закрыть после handoff и выдать XP")) {
                                 StartTaskXpFlow(editableTask->id, true);
                             }
                             ImGui::TextDisabled(u8"Используйте это после завершения финального handoff.");
@@ -3543,7 +3543,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
 
                     if (NormalizeTaskStatus(editableTask->status) != kTaskStatusDone || !TaskHasRecordedXp(*editableTask)) {
                         ImGui::Spacing();
-                        if (TaskIconButton("task_detail_pipeline_close_xp", UiIcon::Chart, u8"Закрыть и выдать XP")) {
+                        if (TaskIconButton("task_detail_pipeline_close_xp", UiIcon::Award, u8"Закрыть и выдать XP")) {
                             StartTaskXpFlow(editableTask->id, true);
                         }
                     }

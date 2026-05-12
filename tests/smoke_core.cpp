@@ -327,6 +327,34 @@ static bool TestProfileSkillUtilityEmptyStatesUseSharedHelper() {
            skillModals.find("TextDisabled(u8\"Нет данных для слияния.") == std::string::npos;
 }
 
+static bool TestSemanticActionIconsUsedForCriticalActions() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string icons;
+    std::string tasks;
+    std::string pipeline;
+    std::string rules;
+    std::string catalog;
+    if (!ReadFile(root / "gui" / "GuiIcons.inc", icons)) return false;
+    if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
+    if (!ReadFile(root / "gui" / "GuiPipelinePanel.inc", pipeline)) return false;
+    if (!ReadFile(root / "gui" / "GuiRulesPanel.inc", rules)) return false;
+    if (!ReadFile(root / "gui" / "GuiSkillCatalogPanel.inc", catalog)) return false;
+
+    return icons.find("Save,") != std::string::npos &&
+           icons.find("Edit,") != std::string::npos &&
+           icons.find("Award,") != std::string::npos &&
+           icons.find("Export,") != std::string::npos &&
+           tasks.find("\"task_detail_text_save\", UiIcon::Save") != std::string::npos &&
+           tasks.find("\"task_detail_skill_save\", UiIcon::Save") != std::string::npos &&
+           tasks.find("\"task_detail_award_xp\", UiIcon::Award") != std::string::npos &&
+           tasks.find("\"tasks_export_csv\", UiIcon::Export") != std::string::npos &&
+           pipeline.find("\"pipeline_save\", UiIcon::Save") != std::string::npos &&
+           pipeline.find("\"pipeline_edit\", UiIcon::Edit") != std::string::npos &&
+           rules.find("\"rules_save\", UiIcon::Save") != std::string::npos &&
+           catalog.find("\"catalog_save_skill_details\", UiIcon::Save") != std::string::npos;
+}
+
 static bool TestSharedEmptyStatesUsedInUiSettings() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -741,6 +769,7 @@ int main() {
     const bool okProfileSectionEmptyStates = TestSharedEmptyStatesUsedInProfileSections();
     const bool okSkillCatalogEmptyStates = TestSharedEmptyStatesUsedInSkillCatalog();
     const bool okProfileSkillUtilityEmptyStates = TestProfileSkillUtilityEmptyStatesUseSharedHelper();
+    const bool okSemanticActionIcons = TestSemanticActionIconsUsedForCriticalActions();
     const bool okUiSettingsEmptyStates = TestSharedEmptyStatesUsedInUiSettings();
     const bool okUtilityEmptyStates = TestSharedEmptyStatesUsedInUtilityPanels();
     const bool okProfileTaskBriefIds = TestProfileTaskBriefStatsHaveUniqueIds();
@@ -765,7 +794,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -788,6 +817,7 @@ int main() {
               << " profileSectionEmptyStates=" << okProfileSectionEmptyStates
               << " skillCatalogEmptyStates=" << okSkillCatalogEmptyStates
               << " profileSkillUtilityEmptyStates=" << okProfileSkillUtilityEmptyStates
+              << " semanticActionIcons=" << okSemanticActionIcons
               << " uiSettingsEmptyStates=" << okUiSettingsEmptyStates
               << " utilityEmptyStates=" << okUtilityEmptyStates
               << " profileTaskBriefIds=" << okProfileTaskBriefIds

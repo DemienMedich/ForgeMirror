@@ -606,7 +606,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 12.0f));
                 ImGui::SliderFloat("##edit_weight", &state.editedSkillWeight, 0.5f, 1.6f, "%.2f");
                 ImGui::SameLine();
-                if (IconButtonGui("catalog_save_weight", UiIcon::Chart,
+                if (IconButtonGui("catalog_save_weight", UiIcon::Save,
                                   u8"Сохранить вес навыка", accent, ImGui::GetFrameHeight())) {
                     double newW = static_cast<double>(state.editedSkillWeight);
                     std::vector<std::string> profIds;
@@ -651,7 +651,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                 }
                 ImGui::InputTextMultiline(u8"Описание", state.editSkillDesc.data(), state.editSkillDesc.size(), ImVec2(-1.0f, 80.0f));
-                if (IconButtonGui("catalog_save_skill_details", UiIcon::Chart,
+                if (IconButtonGui("catalog_save_skill_details", UiIcon::Save,
                                   u8"Сохранить название, описание, вес и профессии навыка",
                                   accent, ImGui::GetFrameHeight())) {
                     const std::string newName = TrimStringGui(state.editSkillName.data());
@@ -865,7 +865,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         }
                     }
                     ImGui::SameLine();
-                    if (IconButtonGui("skill_ach_save", UiIcon::Chart,
+                    if (IconButtonGui("skill_ach_save", UiIcon::Save,
                                       u8"Сохранить изменения выбранной ачивки", accent, achActionSize)) {
                         ActionResult result = UpdateAchievementAction(state.active->id, state.active->profile, storage,
                                                                      state.selectedAchievementIndex,

@@ -690,10 +690,10 @@ void DrawPipelinePanel(GuiState& state) {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     if (editingSelected) {
-                        if (PipelineIconButton("pipeline_save", UiIcon::Chart, u8"Сохранить блок пайплайна")) {
+                        if (PipelineIconButton("pipeline_save", UiIcon::Save, u8"Сохранить блок пайплайна")) {
                             saveRequested = true;
                         }
-                    } else if (PipelineIconButton("pipeline_edit", UiIcon::Settings, u8"Редактировать блок пайплайна")) {
+                    } else if (PipelineIconButton("pipeline_edit", UiIcon::Edit, u8"Редактировать блок пайплайна")) {
                         startEditRequested = true;
                     }
                     ImGui::TableNextColumn();

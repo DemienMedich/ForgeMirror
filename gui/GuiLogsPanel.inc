@@ -283,7 +283,7 @@ void DrawLogsPanel(GuiState& state) {
         if (ImGui::SmallButton(u8"Только ошибки")) {
             setLevelPreset(false, false, true);
         }
-        if (LogIconButton("log_export_stack", UiIcon::Launch, u8"Экспортировать отфильтрованные логи")) {
+        if (LogIconButton("log_export_stack", UiIcon::Export, u8"Экспортировать отфильтрованные логи")) {
             exportLogs();
         }
         ImGui::SameLine();
@@ -338,7 +338,7 @@ void DrawLogsPanel(GuiState& state) {
             setLevelPreset(false, false, true);
         }
         ImGui::TableNextColumn();
-        if (LogIconButton("log_export", UiIcon::Launch, u8"Экспортировать отфильтрованные логи")) {
+        if (LogIconButton("log_export", UiIcon::Export, u8"Экспортировать отфильтрованные логи")) {
             exportLogs();
         }
         ImGui::TableNextColumn();

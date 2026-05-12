@@ -228,7 +228,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             draft = state.rulesConfig;
         }
         ImGui::SameLine();
-        if (RulesIconButton("rules_save_stack", UiIcon::Chart, u8"Сохранить правила и применить к профилям")) {
+        if (RulesIconButton("rules_save_stack", UiIcon::Save, u8"Сохранить правила и применить к профилям")) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {
                 state.rulesConfig = result.config;
@@ -264,7 +264,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         }
         ImGui::TableSetColumnIndex(2);
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-        if (RulesIconButton("rules_save", UiIcon::Chart, u8"Сохранить правила и применить к профилям")) {
+        if (RulesIconButton("rules_save", UiIcon::Save, u8"Сохранить правила и применить к профилям")) {
             SaveRulesResult result = SaveGameplayRulesAction(draft, state.storageDir);
             if (result.ok) {
                 state.rulesConfig = result.config;

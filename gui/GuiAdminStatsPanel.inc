@@ -130,7 +130,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             resetFilters();
         }
         ImGui::SameLine();
-        if (StatsIconButton("admin_stats_export_stack", UiIcon::Launch, u8"Экспортировать статистику в CSV")) {
+        if (StatsIconButton("admin_stats_export_stack", UiIcon::Export, u8"Экспортировать статистику в CSV")) {
             exportStats();
         }
     } else if (ImGui::BeginTable("admin_filters", 6, ImGuiTableFlags_SizingStretchProp)) {
@@ -166,7 +166,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             resetFilters();
         }
         ImGui::TableNextColumn();
-        if (StatsIconButton("admin_stats_export", UiIcon::Launch, u8"Экспортировать статистику в CSV")) {
+        if (StatsIconButton("admin_stats_export", UiIcon::Export, u8"Экспортировать статистику в CSV")) {
             exportStats();
         }
         ImGui::EndTable();
