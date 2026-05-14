@@ -215,6 +215,9 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string profileSections;
     std::string projects;
     std::string pipeline;
+    std::string banner;
+    std::string professions;
+    std::string vault;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
     if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
@@ -223,6 +226,9 @@ static bool TestCompactControlTablesUseSharedScope() {
     if (!ReadFile(root / "gui" / "GuiProfileSections.inc", profileSections)) return false;
     if (!ReadFile(root / "gui" / "GuiProjects.inc", projects)) return false;
     if (!ReadFile(root / "gui" / "GuiPipelinePanel.inc", pipeline)) return false;
+    if (!ReadFile(root / "gui" / "GuiBannerPanel.inc", banner)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfessions.inc", professions)) return false;
+    if (!ReadFile(root / "gui" / "GuiVaultPanel.inc", vault)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
            helpers.find("ControlTableFlagsGui(") != std::string::npos &&
@@ -251,7 +257,15 @@ static bool TestCompactControlTablesUseSharedScope() {
            pipeline.find("BeginTable(\"pipeline_filter_row\", 3, ControlTableFlagsGui()") != std::string::npos &&
            pipeline.find("BeginTable(\"pipeline_split\", 2, ControlTableFlagsGui()") != std::string::npos &&
            pipeline.find("BeginTable(\"pipeline_editor_grid\", 2, ControlTableFlagsGui()") != std::string::npos &&
-           pipeline.find("BeginTable(\"pipeline_meta_table\", 2, ControlTableFlagsGui()") != std::string::npos;
+           pipeline.find("BeginTable(\"pipeline_meta_table\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           logs.find("BeginTable(\"log_task_audit_filters\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           logs.find("BeginTable(\"log_task_audit_table\", 5,") != std::string::npos &&
+           logs.find("ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           banner.find("BeginTable(\"banner_rows\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           professions.find("BeginTable(\"prof_list\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           professions.find("BeginTable(\"prof_members\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           vault.find("BeginTable(\"vault_pomodoro_time\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           vault.find("BeginTable(\"vault_log_table\", 4, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos;
 }
 
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {

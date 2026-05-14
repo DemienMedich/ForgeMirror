@@ -73,7 +73,9 @@ void DrawVaultAdminPanel(GuiState& state) {
     int startMin = state.vaultPomodoroStartMinutes % 60;
     int endHour = state.vaultPomodoroEndMinutes / 60;
     int endMin = state.vaultPomodoroEndMinutes % 60;
-    if (ImGui::BeginTable("vault_pomodoro_time", 4, ImGuiTableFlags_SizingStretchProp)) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("vault_pomodoro_time", 4, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
         ImGui::TableSetupColumn("h", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn("m", ImGuiTableColumnFlags_WidthFixed, 80.0f);
@@ -97,6 +99,7 @@ void DrawVaultAdminPanel(GuiState& state) {
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt("##vault_end_m", &endMin, 0, 59);
         ImGui::EndTable();
+        }
     }
     state.vaultPomodoroStartMinutes = startHour * 60 + startMin;
     state.vaultPomodoroEndMinutes = endHour * 60 + endMin;
@@ -125,8 +128,9 @@ void DrawVaultAdminPanel(GuiState& state) {
             DrawEmptyStateGui("vault_log_empty", UiIcon::List,
                               u8"Операций пока нет",
                               u8"Пополнения, списания и покупки духов будут появляться в журнале хранилища.");
-        } else if (ImGui::BeginTable("vault_log_table", 4,
-                                     ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("vault_log_table", 4, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
             ImGui::TableSetupColumn(u8"Время", ImGuiTableColumnFlags_WidthFixed, 140.0f);
             ImGui::TableSetupColumn(u8"Действие", ImGuiTableColumnFlags_WidthStretch, 0.9f);
             ImGui::TableSetupColumn(u8"Сумма", ImGuiTableColumnFlags_WidthFixed, 90.0f);
@@ -144,6 +148,7 @@ void DrawVaultAdminPanel(GuiState& state) {
                 ImGui::TextUnformatted(entry.note.empty() ? "" : entry.note.c_str());
             }
             ImGui::EndTable();
+            }
         }
     }
     ImGui::EndChild();

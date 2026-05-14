@@ -92,6 +92,12 @@ static void DrawBannerStrip(GuiState& state) {
 void DrawBannerAdminPanel(GuiState& state) {
     DrawWindowBackground(state.ui, UiWindowId::BannerAdmin, state.storageDir);
     DrawCardHeader(u8"Баннер");
+    auto BannerIconButton = [](const char* id, UiIcon icon, const char* tooltip,
+                               bool enabled = true, bool selected = false) -> bool {
+        ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+        accent.w = 1.0f;
+        return IconButtonGui(id, icon, tooltip, accent, ImGui::GetFrameHeight(), enabled, selected);
+    };
     if (!state.isAdmin) {
         ImGui::TextDisabled(u8"Только для администратора.");
         return;
@@ -133,22 +139,24 @@ void DrawBannerAdminPanel(GuiState& state) {
             DrawEmptyStateGui("banner_texts_empty", UiIcon::Bell,
                               u8"Фраз пока нет",
                               u8"Добавьте первую фразу, чтобы баннер начал ротировать сообщения в верхней панели.");
-        } else if (ImGui::BeginTable("banner_rows", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("banner_rows", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
             ImGui::TableSetupColumn(u8"Текст", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn(u8"Правка", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-            ImGui::TableSetupColumn(u8"Удалить", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn(u8"Правка", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 14.0f);
+            ImGui::TableSetupColumn(u8"Удалить", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 14.0f);
             for (size_t i = 0; i < state.bannerTexts.size(); ++i) {
                 ImGui::TableNextRow();
                 ImGui::PushID(static_cast<int>(i));
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TextUnformatted(state.bannerTexts[i].c_str());
                 ImGui::TableSetColumnIndex(1);
-                if (ImGui::SmallButton(u8"Редактировать")) {
+                if (BannerIconButton("banner_edit", UiIcon::Edit, u8"Редактировать фразу баннера")) {
                     state.bannerEditIndex = static_cast<int>(i);
                     std::snprintf(state.bannerInput.data(), state.bannerInput.size(), "%s", state.bannerTexts[i].c_str());
                 }
                 ImGui::TableSetColumnIndex(2);
-                if (ImGui::SmallButton(u8"Удалить")) {
+                if (BannerIconButton("banner_delete", UiIcon::Close, u8"Удалить фразу баннера")) {
                     AppBannerMutationResult deleteResult = AppDeleteBannerText(
                         state.storageDir,
                         state.bannerTexts,
@@ -170,6 +178,7 @@ void DrawBannerAdminPanel(GuiState& state) {
                 ImGui::PopID();
             }
             ImGui::EndTable();
+            }
         }
     }
     ImGui::EndChild();

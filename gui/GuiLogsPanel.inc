@@ -555,11 +555,11 @@ void DrawLogsPanel(GuiState& state) {
         DrawCardHeader(u8"Аудит задач");
         ImGui::TextDisabled(u8"Изменения задач из meta/task-audit.log");
         ImGui::SameLine();
-        if (ImGui::SmallButton(u8"Экспорт аудита задач")) {
+        if (LogIconButton("task_audit_export", UiIcon::Export, u8"Экспортировать аудит задач")) {
             exportTaskAudit();
         }
         ImGui::SameLine();
-        if (ImGui::SmallButton(u8"Открыть файл аудита")) {
+        if (LogIconButton("task_audit_open", UiIcon::FileText, u8"Открыть файл аудита задач")) {
             const auto auditPath = TaskAuditStoragePath(state.storageDir);
             std::error_code ec;
             if (!std::filesystem::exists(auditPath, ec)) {
@@ -575,11 +575,13 @@ void DrawLogsPanel(GuiState& state) {
         static std::array<char, 96> taskAuditTaskFilter{};
         static std::array<char, 48> taskAuditFieldFilter{};
 
-        if (ImGui::BeginTable("log_task_audit_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+        {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("log_task_audit_filters", 4, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("audit_filter_actor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("audit_filter_task", ImGuiTableColumnFlags_WidthStretch, 1.2f);
             ImGui::TableSetupColumn("audit_filter_field", ImGuiTableColumnFlags_WidthStretch, 0.9f);
-            ImGui::TableSetupColumn("audit_filter_reset", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+            ImGui::TableSetupColumn("audit_filter_reset", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 14.0f);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::InputTextWithHint(u8"##task_audit_actor", u8"Актор", taskAuditActorFilter.data(), taskAuditActorFilter.size());
@@ -588,12 +590,13 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::TableSetColumnIndex(2);
             ImGui::InputTextWithHint(u8"##task_audit_field", u8"Поле", taskAuditFieldFilter.data(), taskAuditFieldFilter.size());
             ImGui::TableSetColumnIndex(3);
-            if (ImGui::Button(u8"Сброс", ImVec2(-1.0f, 0.0f))) {
+            if (LogIconButton("task_audit_reset", UiIcon::Clear, u8"Сбросить фильтры аудита задач")) {
                 taskAuditActorFilter.fill('\0');
                 taskAuditTaskFilter.fill('\0');
                 taskAuditFieldFilter.fill('\0');
             }
             ImGui::EndTable();
+            }
         }
 
         auto matchesTaskAudit = [&](const TaskAuditEntry& row) {
@@ -617,9 +620,11 @@ void DrawLogsPanel(GuiState& state) {
             DrawEmptyStateGui("task_audit_empty_all", UiIcon::List,
                               u8"Аудит задач пуст",
                               u8"Изменения задач появятся здесь после создания, правок и закрытия задач.");
-        } else if (ImGui::BeginTable("log_task_audit_table", 5,
-                                     ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp,
-                                     ImVec2(0.0f, 180.0f))) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("log_task_audit_table", 5,
+                                  ControlTableFlagsGui(ImGuiTableFlags_RowBg),
+                                  ImVec2(0.0f, 180.0f))) {
             ImGui::TableSetupColumn(u8"Время", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableSetupColumn(u8"Актор", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.2f);
@@ -658,6 +663,7 @@ void DrawLogsPanel(GuiState& state) {
                 DrawEmptyStateGui("task_audit_empty_filtered", UiIcon::Search,
                                   u8"По фильтрам аудита ничего не найдено",
                                   u8"Очистите фильтры актора, задачи или поля, чтобы вернуть записи.");
+            }
             }
         }
     }

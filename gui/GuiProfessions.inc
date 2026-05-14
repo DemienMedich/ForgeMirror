@@ -42,10 +42,12 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
     ImGui::TextDisabled(u8"Хранятся в meta/professions.txt, синхронизируются через облако.");
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
-    if (ImGui::BeginTable("prof_list", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("prof_list", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
         ImGui::TableSetupColumn("idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 14.0f);
         for (int i = 0; i < static_cast<int>(state.professions.size()); ++i) {
             const auto& p = state.professions[i];
             ImGui::TableNextRow();
@@ -60,7 +62,9 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 std::snprintf(state.newProfessionDesc.data(), state.newProfessionDesc.size(), "%s", p.description.c_str());
             }
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::SmallButton(u8"Х##del_prof")) {
+            ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
+            accent.w = 1.0f;
+            if (IconButtonGui("del_prof", UiIcon::Close, u8"Удалить профессию", accent, ImGui::GetFrameHeight())) {
                 state.pendingDeleteProfessionIndex = i;
                 state.pendingDeleteProfessionId = state.professions[i].id;
                 state.professionDeletePopupRequest = true;
@@ -70,6 +74,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             ImGui::PopID();
         }
         ImGui::EndTable();
+        }
     }
 
     if (state.professionDeletePopupRequest) {
@@ -154,7 +159,9 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             if (ImGui::Button(u8"Отмена", ImVec2(-1.0f, 0.0f))) {
                 doCancel();
             }
-        } else if (ImGui::BeginTable("prof_delete_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("prof_delete_actions", 2, ControlTableFlagsGui())) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             if (ImGui::Button(u8"Удалить", ImVec2(-1.0f, 0.0f))) {
@@ -165,6 +172,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 doCancel();
             }
             ImGui::EndTable();
+            }
         }
         ImGui::EndPopup();
     }
@@ -227,8 +235,9 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
             DrawEmptyStateGui("profession_members_empty", UiIcon::Users,
                               u8"Профили не найдены",
                               u8"Создайте или импортируйте профили, чтобы назначать им профессию.");
-        } else if (ImGui::BeginTable("prof_members", 3, ImGuiTableFlags_RowBg |
-                                              ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("prof_members", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
             ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.4f);
             ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 140.0f);
             ImGui::TableSetupColumn(u8"Назначить", ImGuiTableColumnFlags_WidthFixed, 90.0f);
@@ -277,6 +286,7 @@ void DrawProfessionsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& c
                 if (info.archived) ImGui::EndDisabled();
             }
             ImGui::EndTable();
+            }
         }
 
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
