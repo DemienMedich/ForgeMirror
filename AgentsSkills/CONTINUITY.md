@@ -37,8 +37,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
 - State:
-  - Ветка: develop. Версия: 0.5.28.
-  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: compact-таблицы пайплайна переведены на общий `CompactTableScopeGui` и `ControlTableFlagsGui`.
+  - Ветка: develop. Версия: 0.5.29.
+  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: таблицы админ-статистики переведены на локальный `CompactTableScopeGui`, широкий `CellPadding` scope удалён.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий UX-пункт: пункт 10 `визуальный ритм таблиц и карточек`: снизить шум control-таблиц, унифицировать padding/NoPadOuterX, затем пройти плотные таблицы задач/профиля/статистики.
 - Done:
@@ -95,6 +95,7 @@ UI аудит:
   - UX Plan 10 Progress: `profile_active_tasks_table` и `profile_tasks` используют общий `CompactTableScopeGui` + `ControlTableFlagsGui`; smoke_core проверяет compact-контракт профильных task-таблиц.
   - UX Plan 10 Progress: `projects_status_slice`, `projects_hub_actions` и `projects_table` используют общий `CompactTableScopeGui`; stretch/row таблицы проектов закреплены через `ControlTableFlagsGui`.
   - UX Plan 10 Progress: `pipeline_filter_row`, `pipeline_split`, `pipeline_editor_grid` и `pipeline_meta_table` используют общий compact table scope; smoke_core проверяет pipeline compact-контракт.
+  - UX Plan 10 Progress: `admin_refresh`, `admin_kpi`, топы, категории, ранги, простой и прогрев в статистике используют локальный `CompactTableScopeGui` + `ControlTableFlagsGui`; smoke_core проверяет compact-контракт статистики.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

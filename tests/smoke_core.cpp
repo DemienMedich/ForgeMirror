@@ -229,6 +229,10 @@ static bool TestCompactControlTablesUseSharedScope() {
            logs.find("CompactTableScopeGui compactTable") != std::string::npos &&
            logs.find("BeginTable(\"log_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
            adminStats.find("BeginTable(\"admin_filters\", 6, ControlTableFlagsGui()") != std::string::npos &&
+           adminStats.find("BeginTable(\"admin_refresh\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           adminStats.find("BeginTable(\"admin_kpi\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           adminStats.find("BeginTable(\"inactive_table\", 6, ControlTableFlagsGui(ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)") != std::string::npos &&
+           CountSubstring(adminStats, "CompactTableScopeGui compactTable") >= 7 &&
            rules.find("BeginTable(\"rules_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("tasksCompactCellPadding") == std::string::npos &&
            CountSubstring(tasks, "CompactTableScopeGui") >= 7 &&

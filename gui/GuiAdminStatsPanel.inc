@@ -64,32 +64,35 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
         ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
-    } else if (ImGui::BeginTable("admin_refresh", 5, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("admin_refresh_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
-        ImGui::TableSetupColumn("admin_refresh_btn", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-        ImGui::TableSetupColumn("admin_refresh_auto", ImGuiTableColumnFlags_WidthStretch, 0.8f);
-        ImGui::TableSetupColumn("admin_refresh_secs", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("admin_refresh_stamp", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-        ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
-        keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
-        const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-        DrawAnchorIcon(UiIcon::List);
-        ImGui::TableNextColumn();
-        if (StatsIconButton("admin_refresh", UiIcon::Refresh, u8"Обновить статистику")) {
-            refresh = true;
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("admin_refresh", 5, ControlTableFlagsGui())) {
+            ImGui::TableSetupColumn("admin_refresh_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+            ImGui::TableSetupColumn("admin_refresh_btn", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+            ImGui::TableSetupColumn("admin_refresh_auto", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("admin_refresh_secs", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("admin_refresh_stamp", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+            ImVec4 keyBg = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
+            const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            DrawAnchorIcon(UiIcon::List);
+            ImGui::TableNextColumn();
+            if (StatsIconButton("admin_refresh", UiIcon::Refresh, u8"Обновить статистику")) {
+                refresh = true;
+            }
+            ImGui::TableNextColumn();
+            ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
+            ImGui::TableNextColumn();
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
+            ImGui::EndTable();
         }
-        ImGui::TableNextColumn();
-        ImGui::Checkbox(u8"Авто", &state.adminStatsAutoRefresh);
-        ImGui::TableNextColumn();
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, keyBgU32);
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::SliderInt(u8"сек##admin_refresh", &state.adminStatsRefreshSeconds, 5, 120);
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled(u8"Обновлено: %s", updated.empty() ? u8"-" : updated.c_str());
-        ImGui::EndTable();
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Фильтры");
@@ -211,7 +214,6 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         return;
     }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 4.0f));
     const ImGuiStyle& tableStyle = ImGui::GetStyle();
     ImVec4 keyBg = tableStyle.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
@@ -221,7 +223,9 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
     const float topTableHeight = 180.0f;
     DrawCardHeader(u8"Сводка");
-    if (ImGui::BeginTable("admin_kpi", 3, ImGuiTableFlags_SizingStretchProp)) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("admin_kpi", 3, ControlTableFlagsGui())) {
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
@@ -257,14 +261,16 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         kpi("kpi_no_ach", UiIcon::List, u8"Без ачивок", std::to_string(stats.profilesNoAchievements),
             accentSoft);
         ImGui::EndTable();
+        }
     }
 
     ImGui::Spacing();
     auto drawTopTable = [&](const char* id, const char* title, const std::vector<AdminStatsProfile>& items) {
         DrawCardHeader(title);
-        ImGuiTableFlags flags = ImGuiTableFlags_RowBg |
-                                ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
-                                ImGuiTableFlags_SizingStretchProp;
+        ImGuiTableFlags flags = ControlTableFlagsGui(ImGuiTableFlags_RowBg |
+                                                     ImGuiTableFlags_Resizable |
+                                                     ImGuiTableFlags_ScrollY);
+        CompactTableScopeGui compactTable;
         if (ImGui::BeginTable(id, 5, flags, ImVec2(0.0f, topTableHeight))) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
@@ -326,9 +332,11 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     });
     if (byAchievements.size() > 6) byAchievements.resize(6);
     DrawCardHeader(u8"Топ по ачивкам");
-    if (ImGui::BeginTable("top_achievements", 5, ImGuiTableFlags_RowBg |
-                                             ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
-                                             ImGuiTableFlags_SizingStretchProp, ImVec2(0.0f, topTableHeight))) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("top_achievements", 5,
+                              ControlTableFlagsGui(ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY),
+                              ImVec2(0.0f, topTableHeight))) {
         ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
@@ -361,6 +369,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             ++rowRank;
         }
         ImGui::EndTable();
+        }
     }
 
     ImGui::Spacing();
@@ -393,8 +402,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
                       static_cast<int>(avgs.size()), 10.0f, accent, 56.0f);
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
-        if (ImGui::BeginTable("avg_categories", 3, ImGuiTableFlags_RowBg |
-                                                ImGuiTableFlags_SizingStretchProp)) {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("avg_categories", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
             ImGui::TableSetupColumn(u8"Категория", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableSetupColumn(u8"Среднее", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableSetupColumn(u8"График", ImGuiTableColumnFlags_WidthStretch);
@@ -454,8 +463,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         ImVec4 accent = style.Colors[ImGuiCol_CheckMark];
         accent.w = 1.0f;
         const int total = std::max(1, static_cast<int>(filtered.size()));
-        if (ImGui::BeginTable("rank_dist", 3, ImGuiTableFlags_RowBg |
-                                               ImGuiTableFlags_SizingStretchProp)) {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("rank_dist", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
             ImGui::TableSetupColumn(u8"Ранг", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn(u8"Профилей", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableSetupColumn(u8"Доля", ImGuiTableColumnFlags_WidthStretch);
@@ -505,9 +514,10 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     if (byInactivity.size() > 6) byInactivity.resize(6);
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         static_cast<int>(byInactivity.size()), inactiveTotal);
-    if (ImGui::BeginTable("inactive_table", 6, ImGuiTableFlags_RowBg |
-                                               ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY,
-                                               ImVec2(0.0f, topTableHeight))) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("inactive_table", 6, ControlTableFlagsGui(ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY),
+                              ImVec2(0.0f, topTableHeight))) {
         ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
@@ -558,7 +568,8 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             }
             ++rowRank;
         }
-        ImGui::EndTable();
+            ImGui::EndTable();
+        }
     }
     if (byInactivity.empty()) {
         DrawEmptyStateGui("admin_stats_inactive_empty", UiIcon::User,
@@ -586,9 +597,10 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
     if (byRecovery.size() > 6) byRecovery.resize(6);
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         static_cast<int>(byRecovery.size()), recoveryTotal);
-    if (ImGui::BeginTable("recovery_table", 4, ImGuiTableFlags_RowBg |
-                                            ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY,
-                                            ImVec2(0.0f, topTableHeight))) {
+    {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("recovery_table", 4, ControlTableFlagsGui(ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY),
+                              ImVec2(0.0f, topTableHeight))) {
         ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn(u8"ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn(u8"Имя", ImGuiTableColumnFlags_WidthStretch);
@@ -617,13 +629,13 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
             ImGui::Text("%d", item.recoveryTasksRemaining);
             ++rowRank;
         }
-        ImGui::EndTable();
+            ImGui::EndTable();
+        }
     }
     if (byRecovery.empty()) {
         DrawEmptyStateGui("admin_stats_recovery_empty", UiIcon::Bell,
                           u8"Нет профилей на прогреве",
                           u8"Сейчас нет активных профилей с временным штрафом после простоя.");
     }
-    ImGui::PopStyleVar();
 }
 
