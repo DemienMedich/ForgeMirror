@@ -409,9 +409,8 @@ void DrawPipelinePanel(GuiState& state) {
             state.filters.pipeline.fill('\0');
         }
     } else {
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
-        if (ImGui::BeginTable("pipeline_filter_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("pipeline_filter_row", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("pipeline_filter_label", ImGuiTableColumnFlags_WidthFixed, 64.0f);
             ImGui::TableSetupColumn("pipeline_filter_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("pipeline_filter_action", ImGuiTableColumnFlags_WidthFixed,
@@ -429,7 +428,6 @@ void DrawPipelinePanel(GuiState& state) {
             }
             ImGui::EndTable();
         }
-        ImGui::PopStyleVar(2);
     }
 
     std::vector<int> visibleIndices;
@@ -470,8 +468,8 @@ void DrawPipelinePanel(GuiState& state) {
         if (!selectedVisible) state.selectedPipelineIndex = visibleIndices.front();
     }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
-    if (ImGui::BeginTable("pipeline_split", 2, ImGuiTableFlags_SizingStretchProp)) {
+    CompactTableScopeGui splitCompactTable;
+    if (ImGui::BeginTable("pipeline_split", 2, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("pipeline_map", ImGuiTableColumnFlags_WidthStretch, 0.44f);
         ImGui::TableSetupColumn("pipeline_detail", ImGuiTableColumnFlags_WidthStretch, 0.56f);
         ImGui::TableNextRow();
@@ -535,9 +533,8 @@ void DrawPipelinePanel(GuiState& state) {
                 ImGui::TextDisabled(u8"ID: %s", step.id.c_str());
                 ImGui::TextDisabled(u8"Все поля редактируются на месте. Следующие блоки задаются ID через ';' или новую строку.");
 
-                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
-                if (ImGui::BeginTable("pipeline_editor_grid", 2, ImGuiTableFlags_SizingStretchProp)) {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("pipeline_editor_grid", 2, ControlTableFlagsGui())) {
                     ImGui::TableSetupColumn("pipeline_editor_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     ImGui::TableSetupColumn("pipeline_editor_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     ImGui::TableNextRow();
@@ -566,7 +563,6 @@ void DrawPipelinePanel(GuiState& state) {
                     ImGui::InputText("##pipeline_owner", state.pipelineOwner.data(), state.pipelineOwner.size());
                     ImGui::EndTable();
                 }
-                ImGui::PopStyleVar(2);
 
                 ImGui::TextDisabled(u8"Описание");
                 ImGui::SetNextItemWidth(-1.0f);
@@ -597,8 +593,8 @@ void DrawPipelinePanel(GuiState& state) {
                 ImGui::InputTextMultiline("##pipeline_next_ids", state.pipelineNextIds.data(),
                                           state.pipelineNextIds.size(), ImVec2(-1.0f, 70.0f));
             } else {
-                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
-                if (ImGui::BeginTable("pipeline_meta_table", 2, ImGuiTableFlags_SizingStretchProp)) {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("pipeline_meta_table", 2, ControlTableFlagsGui())) {
                     ImGui::TableSetupColumn("pipeline_meta_label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
                     ImGui::TableSetupColumn("pipeline_meta_value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     DrawPipelineFieldRow(u8"Вход", step.input);
@@ -608,7 +604,6 @@ void DrawPipelinePanel(GuiState& state) {
                     DrawPipelineFieldRow(u8"Следующий этап", step.nextStageLabel);
                     ImGui::EndTable();
                 }
-                ImGui::PopStyleVar();
 
                 ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
                 DrawCardHeader(u8"Что делаем");
@@ -812,5 +807,4 @@ void DrawPipelinePanel(GuiState& state) {
 
         ImGui::EndTable();
     }
-    ImGui::PopStyleVar();
 }

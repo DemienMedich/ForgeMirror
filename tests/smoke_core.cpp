@@ -159,13 +159,14 @@ static bool TestGuiPipelineImGuiStackPatterns() {
     std::string source;
     if (!ReadFile(root / "gui" / "GuiPipelinePanel.inc", source)) return false;
 
-    const size_t splitPush = source.find("ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));\n    if (ImGui::BeginTable(\"pipeline_split\"");
-    const size_t splitEnd = source.find("        ImGui::EndTable();\n    }\n    ImGui::PopStyleVar();", splitPush);
-    if (splitPush == std::string::npos || splitEnd == std::string::npos || splitEnd < splitPush) return false;
-
     const size_t actions = source.find("if (ImGui::BeginTable(\"pipeline_edit_actions\"");
     const size_t actionsEnd = source.find("                    ImGui::EndTable();\n                }", actions);
     return actions != std::string::npos && actionsEnd != std::string::npos && actionsEnd > actions &&
+           source.find("CompactTableScopeGui splitCompactTable") != std::string::npos &&
+           source.find("BeginTable(\"pipeline_split\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           source.find("BeginTable(\"pipeline_filter_row\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           source.find("BeginTable(\"pipeline_editor_grid\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           source.find("BeginTable(\"pipeline_meta_table\", 2, ControlTableFlagsGui()") != std::string::npos &&
            source.find("pipeline_select_hint") != std::string::npos;
 }
 
@@ -213,6 +214,7 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string tasks;
     std::string profileSections;
     std::string projects;
+    std::string pipeline;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
     if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
@@ -220,6 +222,7 @@ static bool TestCompactControlTablesUseSharedScope() {
     if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasks)) return false;
     if (!ReadFile(root / "gui" / "GuiProfileSections.inc", profileSections)) return false;
     if (!ReadFile(root / "gui" / "GuiProjects.inc", projects)) return false;
+    if (!ReadFile(root / "gui" / "GuiPipelinePanel.inc", pipeline)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
            helpers.find("ControlTableFlagsGui(") != std::string::npos &&
@@ -240,7 +243,11 @@ static bool TestCompactControlTablesUseSharedScope() {
            CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 2 &&
            projects.find("BeginTable(\"projects_status_slice\", 4, ControlTableFlagsGui()") != std::string::npos &&
            projects.find("BeginTable(\"projects_table\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
-           CountSubstring(projects, "CompactTableScopeGui compactTable") >= 3;
+           CountSubstring(projects, "CompactTableScopeGui compactTable") >= 3 &&
+           pipeline.find("BeginTable(\"pipeline_filter_row\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           pipeline.find("BeginTable(\"pipeline_split\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           pipeline.find("BeginTable(\"pipeline_editor_grid\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           pipeline.find("BeginTable(\"pipeline_meta_table\", 2, ControlTableFlagsGui()") != std::string::npos;
 }
 
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {
