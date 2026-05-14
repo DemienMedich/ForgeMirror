@@ -37,8 +37,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
 - State:
-  - Ветка: develop. Версия: 0.5.30.
-  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: баннер, профессии, хранилище и аудит задач в логах переведены на общий compact table scope; строковые действия баннера/аудита заменены на icon-buttons.
+  - Ветка: develop. Версия: 0.5.31.
+  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: верхние action/filter rows управления профилями, выбор профиля, краткая таблица задач профиля, назначение ранга и экспорт отчётов переведены на общий compact table scope.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий UX-пункт: пункт 10 `визуальный ритм таблиц и карточек`: снизить шум control-таблиц, унифицировать padding/NoPadOuterX, затем пройти плотные таблицы задач/профиля/статистики.
 - Done:
@@ -97,6 +97,7 @@ UI аудит:
   - UX Plan 10 Progress: `pipeline_filter_row`, `pipeline_split`, `pipeline_editor_grid` и `pipeline_meta_table` используют общий compact table scope; smoke_core проверяет pipeline compact-контракт.
   - UX Plan 10 Progress: `admin_refresh`, `admin_kpi`, топы, категории, ранги, простой и прогрев в статистике используют локальный `CompactTableScopeGui` + `ControlTableFlagsGui`; smoke_core проверяет compact-контракт статистики.
   - UX Plan 10 Progress: `banner_rows`, `prof_list`, `prof_members`, `vault_pomodoro_time`, `vault_log_table` и task-audit таблицы логов используют общий compact table scope; баннер/audit actions переведены на icon-buttons с tooltip.
+  - UX Plan 10 Progress: профильные action/filter rows (`profile_actions`, `profile_filters`, `profile_select_actions`, `profile_task_brief_rows`, `profile_rank_actions`, `profile_report_actions`) используют общий compact table scope.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

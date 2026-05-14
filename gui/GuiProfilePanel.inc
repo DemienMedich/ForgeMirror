@@ -222,8 +222,10 @@ static void DrawProfileTaskBriefCard(GuiState& state,
                                   state.isAdmin)) {
                 FocusTasksForProfile(state, profileId, 0);
             }
-        } else if (ImGui::BeginTable("profile_task_brief_rows", 4,
-                                     ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("profile_task_brief_rows", 4,
+                                  ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
             ImGui::TableSetupColumn(u8"Задача", ImGuiTableColumnFlags_WidthStretch, 1.35f);
             ImGui::TableSetupColumn(u8"Проект", ImGuiTableColumnFlags_WidthStretch, 0.95f);
             ImGui::TableSetupColumn(u8"Этап", ImGuiTableColumnFlags_WidthStretch, 0.95f);
@@ -282,6 +284,7 @@ static void DrawProfileTaskBriefCard(GuiState& state,
                 }
             }
             ImGui::EndTable();
+            }
         }
     }
     ImGui::EndChild();
@@ -342,7 +345,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                                   u8"Обновить список профилей", actionAccent, ImGui::GetFrameHeight())) {
                     RefreshProfiles(state, storage, catalog);
                 }
-            } else if (ImGui::BeginTable("profile_select_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("profile_select_actions", 4, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("select_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("select", ImGuiTableColumnFlags_WidthStretch, 1.1f);
                 ImGui::TableSetupColumn("open", ImGuiTableColumnFlags_WidthFixed,
@@ -385,6 +390,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     RefreshProfiles(state, storage, catalog);
                 }
                 ImGui::EndTable();
+                }
             }
         }
         }
@@ -1223,7 +1229,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                                   u8"Применить выбранный ранг", accent, ImGui::GetFrameHeight())) {
                     applyRank();
                 }
-            } else if (ImGui::BeginTable("profile_rank_actions", 4, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("profile_rank_actions", 4, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("rank_label", ImGuiTableColumnFlags_WidthFixed, 72.0f);
                 ImGui::TableSetupColumn("rank_combo", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                 ImGui::TableSetupColumn("rank_apply", ImGuiTableColumnFlags_WidthFixed,
@@ -1250,6 +1258,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::TableSetColumnIndex(3);
                 ImGui::TextDisabled(u8"Сохраняется сразу");
                 ImGui::EndTable();
+                }
             }
         }
         if (state.isAdmin && ImGui::CollapsingHeader(u8"Экспорт")) {
@@ -1292,7 +1301,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                                   u8"Копировать путь к папке отчетов", accent, ImGui::GetFrameHeight())) {
                     ImGui::SetClipboardText(reportDir.c_str());
                 }
-            } else if (ImGui::BeginTable("profile_report_actions", 5, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("profile_report_actions", 5, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("report_label", ImGuiTableColumnFlags_WidthFixed, 72.0f);
                 ImGui::TableSetupColumn("report_txt", ImGuiTableColumnFlags_WidthFixed,
                                         ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
@@ -1329,6 +1340,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::TableSetColumnIndex(4);
                 ImGui::TextDisabled(u8"TXT / CSV / папка");
                 ImGui::EndTable();
+                }
             }
         }
 

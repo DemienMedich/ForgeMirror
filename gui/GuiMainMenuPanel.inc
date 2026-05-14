@@ -1508,7 +1508,9 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             if (ImGui::Button(u8"Обновить список", ImVec2(-1.0f, 0.0f))) {
                 RefreshProfiles(state, storage, catalog);
             }
-        } else if (ImGui::BeginTable("profile_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("profile_actions", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.1f);
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1528,6 +1530,7 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                 RefreshProfiles(state, storage, catalog);
             }
             ImGui::EndTable();
+            }
         }
         const float filtersWidth = ImGui::GetContentRegionAvail().x;
         const bool stackFilters = filtersWidth < 640.0f;
@@ -1570,7 +1573,9 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::TextDisabled(u8"Сортировка");
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_sort", &state.profileSort, profileSortLabels, IM_ARRAYSIZE(profileSortLabels));
-        } else if (ImGui::BeginTable("profile_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("profile_filters", 5, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("filter_search", ImGuiTableColumnFlags_WidthStretch, 1.1f);
             ImGui::TableSetupColumn("filter_archive", ImGuiTableColumnFlags_WidthStretch, 0.85f);
@@ -1602,6 +1607,7 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##profile_sort", &state.profileSort, profileSortLabels, IM_ARRAYSIZE(profileSortLabels));
             ImGui::EndTable();
+            }
         }
         ImGui::Separator();
         if (!state.recentProfiles.empty()) {
