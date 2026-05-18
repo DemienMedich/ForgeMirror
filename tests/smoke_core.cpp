@@ -222,6 +222,7 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string mainMenu;
     std::string profileModals;
     std::string skillModals;
+    std::string xpModal;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
     if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
@@ -237,6 +238,7 @@ static bool TestCompactControlTablesUseSharedScope() {
     if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
     if (!ReadFile(root / "gui" / "GuiProfileModals.inc", profileModals)) return false;
     if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
+    if (!ReadFile(root / "gui" / "GuiXpModal.inc", xpModal)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
            helpers.find("ControlTableFlagsGui(") != std::string::npos &&
@@ -288,7 +290,12 @@ static bool TestCompactControlTablesUseSharedScope() {
            skillModals.find("BeginTable(\"add_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
            skillModals.find("BeginTable(\"delete_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
            skillModals.find("BeginTable(\"merge_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
-           skillModals.find("BeginTable(\"clear_skills_actions\", 3, ControlTableFlagsGui()") != std::string::npos;
+           skillModals.find("BeginTable(\"clear_skills_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           xpModal.find("BeginTable(\"xp_task_header\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           xpModal.find("BeginTable(\"task_member_controls\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           xpModal.find("BeginTable(\"task_members\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           xpModal.find("BeginTable(\"xp_controls\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           xpModal.find("BeginTable(\"xp_sheet\", 6, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos;
 }
 
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {

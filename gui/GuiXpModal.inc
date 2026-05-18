@@ -97,7 +97,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
                     state.taskCategoryIndex = NormalizeCategoryIndex(state.taskCategoryIndex);
                 }
-            } else if (ImGui::BeginTable("xp_task_header", 2, ImGuiTableFlags_SizingStretchSame)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("xp_task_header", 2, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("header_left", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("header_right", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableNextRow();
@@ -112,6 +114,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TextDisabled(u8"Базовый XP");
                 ImGui::Text("%d", rules.categoryBaseXp[state.taskCategoryIndex]);
                 ImGui::EndTable();
+                }
             }
             const int currentCategory = state.taskCategoryIndex;
             const int baseXp = rules.categoryBaseXp[currentCategory];
@@ -180,7 +183,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         share.percent = share.selected ? 100 : 0;
                     }
                 }
-            } else if (ImGui::BeginTable("task_member_controls", 3, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("task_member_controls", 3, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("member_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("member_even", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                 ImGui::TableSetupColumn("member_active", ImGuiTableColumnFlags_WidthStretch, 1.2f);
@@ -203,10 +208,12 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     }
                 }
                 ImGui::EndTable();
+                }
             }
 
-            if (ImGui::BeginTable("task_members", 3, ImGuiTableFlags_RowBg |
-                                                 ImGuiTableFlags_SizingStretchProp)) {
+            {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("task_members", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
                 ImGui::TableSetupColumn(u8"Профиль", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                 ImGui::TableSetupColumn(u8"Вклад (%)", ImGuiTableColumnFlags_WidthFixed, 120.0f);
                 ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 120.0f);
@@ -258,6 +265,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     }
                 }
                 ImGui::EndTable();
+                }
             }
 
             const int memberSum = SumSelectedProfileShares(state.taskShares);
@@ -289,7 +297,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::TextDisabled(u8"Сортировка");
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo(u8"##xp_sort", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
-            } else if (ImGui::BeginTable("xp_controls", 5, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("xp_controls", 5, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("xp_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("xp_btn", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                 ImGui::TableSetupColumn("xp_filter", ImGuiTableColumnFlags_WidthStretch, 1.6f);
@@ -321,6 +331,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::Combo(u8"##xp_sort", &state.xpSortMode, xpSortLabels, IM_ARRAYSIZE(xpSortLabels));
                 ImGui::EndTable();
+                }
             }
             const float ratingWidth = ImGui::CalcTextSize("5").x + ImGui::GetStyle().FramePadding.x * 6.0f;
             if (restrictSkills) {
@@ -386,8 +397,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
             const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
             const float ratingColumnWidth = ratingWidth + 24.0f;
             const float shareColumnWidth = percentWidth + 24.0f;
-            if (ImGui::BeginTable("xp_sheet", 6, ImGuiTableFlags_RowBg |
-                                                  ImGuiTableFlags_SizingStretchProp)) {
+            {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("xp_sheet", 6, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
                 ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Навык", ImGuiTableColumnFlags_WidthStretch, 1.4f);
                 ImGui::TableSetupColumn(u8"Оценка", ImGuiTableColumnFlags_WidthFixed, ratingColumnWidth);
@@ -441,6 +453,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     }
                 }
                 ImGui::EndTable();
+                }
             }
             if (visibleXpCount == 0) {
                 DrawEmptyStateGui("xp_modal_skills_filter_empty", UiIcon::Search,
