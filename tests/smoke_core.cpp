@@ -257,6 +257,14 @@ static bool TestCompactControlTablesUseSharedScope() {
            tasks.find("BeginTable(\"tasks_bulk_compact_row1\", 8, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"tasks_summary_table\", 5, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"tasks_table\", tableColumns, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           tasks.find("BeginTable(\"task_plan_steps\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_create_form\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"task_plan_assignees\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           tasks.find("BeginTable(\"task_plan_review\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"task_plan_navigation\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_projects_bridge_table\", 4, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_work_queue_metrics\", queueColumns, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_pipeline_risks_table\", riskColumns, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"task_detail_headline\", 2, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"task_detail_meta\", 4, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"task_detail_text_actions\", 2, ControlTableFlagsGui()") != std::string::npos &&
