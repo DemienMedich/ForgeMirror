@@ -220,6 +220,8 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string vault;
     std::string profilePanel;
     std::string mainMenu;
+    std::string profileModals;
+    std::string skillModals;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
     if (!ReadFile(root / "gui" / "GuiAdminStatsPanel.inc", adminStats)) return false;
@@ -233,6 +235,8 @@ static bool TestCompactControlTablesUseSharedScope() {
     if (!ReadFile(root / "gui" / "GuiVaultPanel.inc", vault)) return false;
     if (!ReadFile(root / "gui" / "GuiProfilePanel.inc", profilePanel)) return false;
     if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
+    if (!ReadFile(root / "gui" / "GuiProfileModals.inc", profileModals)) return false;
+    if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
            helpers.find("ControlTableFlagsGui(") != std::string::npos &&
@@ -275,7 +279,16 @@ static bool TestCompactControlTablesUseSharedScope() {
            profilePanel.find("BeginTable(\"profile_select_actions\", 4, ControlTableFlagsGui()") != std::string::npos &&
            profilePanel.find("BeginTable(\"profile_task_brief_rows\", 4,") != std::string::npos &&
            profilePanel.find("BeginTable(\"profile_rank_actions\", 4, ControlTableFlagsGui()") != std::string::npos &&
-           profilePanel.find("BeginTable(\"profile_report_actions\", 5, ControlTableFlagsGui()") != std::string::npos;
+           profilePanel.find("BeginTable(\"profile_report_actions\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           profileModals.find("BeginTable(\"create_profile_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileModals.find("BeginTable(\"confirm_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileModals.find("BeginTable(\"unlock_actions\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           profileModals.find("BeginTable(\"change_actions\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           profileModals.find("BeginTable(\"reset_actions\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           skillModals.find("BeginTable(\"add_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillModals.find("BeginTable(\"delete_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillModals.find("BeginTable(\"merge_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillModals.find("BeginTable(\"clear_skills_actions\", 3, ControlTableFlagsGui()") != std::string::npos;
 }
 
 static bool TestProfileTaskEmptyStatesUseSharedHelper() {

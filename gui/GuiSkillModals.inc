@@ -90,7 +90,9 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 addSkillOpen = false;
             }
-        } else if (ImGui::BeginTable("add_skill_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("add_skill_actions", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -111,6 +113,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 addSkillOpen = false;
             }
             ImGui::EndTable();
+            }
         }
         ImGui::EndPopup();
     }
@@ -162,7 +165,9 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     deleteSkillOpen = false;
                     state.pendingSkillDelete.clear();
                 }
-            } else if (ImGui::BeginTable("delete_skill_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("delete_skill_actions", 3, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                 ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -184,6 +189,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     state.pendingSkillDelete.clear();
                 }
                 ImGui::EndTable();
+                }
             }
         } else {
             ImGui::TextDisabled(u8"Навык не выбран.");
@@ -268,7 +274,9 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     ImGui::CloseCurrentPopup();
                     mergeSkillOpen = false;
                 }
-            } else if (ImGui::BeginTable("merge_skill_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("merge_skill_actions", 3, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                 ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -295,6 +303,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                     mergeSkillOpen = false;
                 }
                 ImGui::EndTable();
+                }
             }
         } else {
             if (DrawEmptyStateGui("merge_skill_empty", UiIcon::Merge,
@@ -348,7 +357,9 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 clearSkillsOpen = false;
             }
-        } else if (ImGui::BeginTable("clear_skills_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("clear_skills_actions", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -369,6 +380,7 @@ void DrawSkillCatalogModals(GuiState& state, IJobStorage& storage, SkillCatalog&
                 clearSkillsOpen = false;
             }
             ImGui::EndTable();
+            }
         }
         ImGui::EndPopup();
     }

@@ -36,7 +36,9 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
                 ImGui::CloseCurrentPopup();
                 createPopupOpen = false;
             }
-        } else if (ImGui::BeginTable("create_profile_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("create_profile_actions", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -57,6 +59,7 @@ void DrawCreateProfileModal(GuiState& state, IJobStorage& storage, SkillCatalog&
                 createPopupOpen = false;
             }
             ImGui::EndTable();
+            }
         }
         ImGui::EndPopup();
     }
@@ -135,7 +138,9 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     ImGui::CloseCurrentPopup();
                     confirmPopupOpen = false;
                 }
-            } else if (ImGui::BeginTable("confirm_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("confirm_actions", 3, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                 ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -156,6 +161,7 @@ void DrawConfirmModal(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                     confirmPopupOpen = false;
                 }
                 ImGui::EndTable();
+                }
             }
         } else {
             if (DrawEmptyStateGui("profile_confirm_missing_empty", UiIcon::Users,
@@ -253,7 +259,9 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     ImGui::CloseCurrentPopup();
                     unlockOpen = false;
                 }
-            } else if (ImGui::BeginTable("unlock_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("unlock_actions", 2, ControlTableFlagsGui())) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 if (ImGui::Button(u8"Войти", ImVec2(-1.0f, 0.0f))) {
@@ -265,6 +273,7 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     unlockOpen = false;
                 }
                 ImGui::EndTable();
+                }
             }
         }
         ImGui::EndPopup();
@@ -375,7 +384,9 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     ImGui::CloseCurrentPopup();
                     changeOpen = false;
                 }
-            } else if (ImGui::BeginTable("change_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("change_actions", 2, ControlTableFlagsGui())) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 if (ImGui::Button(u8"Сохранить", ImVec2(-1.0f, 0.0f))) {
@@ -387,6 +398,7 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     changeOpen = false;
                 }
                 ImGui::EndTable();
+                }
             }
         }
         ImGui::EndPopup();
@@ -460,7 +472,9 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     ImGui::CloseCurrentPopup();
                     resetOpen = false;
                 }
-            } else if (ImGui::BeginTable("reset_actions", 2, ImGuiTableFlags_SizingStretchProp)) {
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("reset_actions", 2, ControlTableFlagsGui())) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 if (!state.profileResetConfirm) ImGui::BeginDisabled();
@@ -474,6 +488,7 @@ void DrawProfilePasswordModals(GuiState& state, IJobStorage& storage) {
                     resetOpen = false;
                 }
                 ImGui::EndTable();
+                }
             }
         }
         ImGui::EndPopup();
