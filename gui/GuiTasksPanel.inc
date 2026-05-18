@@ -3048,20 +3048,23 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (TaskIconButton("task_detail_close_compact", UiIcon::Close, u8"Скрыть детали задачи")) {
                     state.tasksExpandedId.clear();
                 }
-            } else if (ImGui::BeginTable("task_detail_headline", 2, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("task_detail_title", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed,
-                                        ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::PushTextWrapPos(0.0f);
-                ImGui::TextUnformatted(title.c_str());
-                ImGui::PopTextWrapPos();
-                ImGui::TableSetColumnIndex(1);
-                if (TaskIconButton("task_detail_close", UiIcon::Close, u8"Скрыть детали задачи")) {
-                    state.tasksExpandedId.clear();
+            } else {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("task_detail_headline", 2, ControlTableFlagsGui())) {
+                    ImGui::TableSetupColumn("task_detail_title", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("task_detail_close", ImGuiTableColumnFlags_WidthFixed,
+                                            ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(title.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::TableSetColumnIndex(1);
+                    if (TaskIconButton("task_detail_close", UiIcon::Close, u8"Скрыть детали задачи")) {
+                        state.tasksExpandedId.clear();
+                    }
+                    ImGui::EndTable();
                 }
-                ImGui::EndTable();
             }
             const std::string projectName = ResolveTaskProjectName(state, *expanded);
             const std::string pipelineName = ResolveTaskPipelineName(state, *expanded);
@@ -3082,11 +3085,13 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ImGui::TableSetColumnIndex(3);
                 drawRight();
             };
-            if (ImGui::BeginTable("task_detail_meta", 4, ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("label_left", ImGuiTableColumnFlags_WidthFixed, 62.0f);
-                ImGui::TableSetupColumn("value_left", ImGuiTableColumnFlags_WidthStretch, 1.15f);
-                ImGui::TableSetupColumn("label_right", ImGuiTableColumnFlags_WidthFixed, 62.0f);
-                ImGui::TableSetupColumn("value_right", ImGuiTableColumnFlags_WidthStretch, 1.15f);
+            {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("task_detail_meta", 4, ControlTableFlagsGui())) {
+                    ImGui::TableSetupColumn("label_left", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+                    ImGui::TableSetupColumn("value_left", ImGuiTableColumnFlags_WidthStretch, 1.15f);
+                    ImGui::TableSetupColumn("label_right", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+                    ImGui::TableSetupColumn("value_right", ImGuiTableColumnFlags_WidthStretch, 1.15f);
 
                 DrawTaskDetailMetaRow(
                     u8"Проект",
@@ -3163,7 +3168,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                         const std::string assigneeSummary = BuildTaskAssigneeSummary(*expanded, 2);
                         ImGui::TextUnformatted(assigneeSummary.c_str());
                     });
-                ImGui::EndTable();
+                    ImGui::EndTable();
+                }
             }
             if (expandedPipelineProgress.state == TaskPipelineProgressState::Missing) {
                 ImGui::Spacing();
@@ -3336,23 +3342,26 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                                                   state.taskInlineDescriptionBuffer.data(),
                                                   state.taskInlineDescriptionBuffer.size(),
                                                   ImVec2(-1.0f, 110.0f));
-                        if (ImGui::BeginTable("task_detail_text_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
-                            ImGui::TableNextRow();
-                            ImGui::TableSetColumnIndex(0);
-                            if (TaskIconButton("task_detail_text_save", UiIcon::Save, u8"Сохранить текст задачи")) {
-                                if (UpdateTaskText(editableTask->id,
-                                                   state.taskInlineTitleBuffer.data(),
-                                                   state.taskInlineDescriptionBuffer.data())) {
-                                    state.taskInlineTextEditId.clear();
+                        {
+                            CompactTableScopeGui compactTable;
+                            if (ImGui::BeginTable("task_detail_text_actions", 2, ControlTableFlagsGui())) {
+                                ImGui::TableNextRow();
+                                ImGui::TableSetColumnIndex(0);
+                                if (TaskIconButton("task_detail_text_save", UiIcon::Save, u8"Сохранить текст задачи")) {
+                                    if (UpdateTaskText(editableTask->id,
+                                                       state.taskInlineTitleBuffer.data(),
+                                                       state.taskInlineDescriptionBuffer.data())) {
+                                        state.taskInlineTextEditId.clear();
+                                    }
                                 }
+                                ImGui::TableSetColumnIndex(1);
+                                if (TaskIconButton("task_detail_text_cancel", UiIcon::Close, u8"Отменить редактирование текста")) {
+                                    state.taskInlineTextEditId.clear();
+                                    state.taskInlineTitleBuffer.fill('\0');
+                                    state.taskInlineDescriptionBuffer.fill('\0');
+                                }
+                                ImGui::EndTable();
                             }
-                            ImGui::TableSetColumnIndex(1);
-                            if (TaskIconButton("task_detail_text_cancel", UiIcon::Close, u8"Отменить редактирование текста")) {
-                                state.taskInlineTextEditId.clear();
-                                state.taskInlineTitleBuffer.fill('\0');
-                                state.taskInlineDescriptionBuffer.fill('\0');
-                            }
-                            ImGui::EndTable();
                         }
                     }
                 }
@@ -3360,45 +3369,48 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 if (ImGui::CollapsingHeader(u8"Параметры задачи")) {
                     const char* statusLabels[] = {u8"Новая", u8"В работе", u8"Выполнена"};
                     const char* priorityLabels[] = {u8"Низкий", u8"Средний", u8"Высокий", u8"Критический"};
-                    if (ImGui::BeginTable("task_detail_admin_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
-                        ImGui::TableSetupColumn("task_detail_admin_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                        ImGui::TableSetupColumn("task_detail_admin_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                        ImGui::TableNextRow();
+                    {
+                        CompactTableScopeGui compactTable;
+                        if (ImGui::BeginTable("task_detail_admin_meta", 2, ControlTableFlagsGui())) {
+                            ImGui::TableSetupColumn("task_detail_admin_left", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                            ImGui::TableSetupColumn("task_detail_admin_right", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                            ImGui::TableNextRow();
 
-                        ImGui::TableSetColumnIndex(0);
-                        ImGui::TextDisabled(u8"Статус");
-                        int draftStatus = NormalizeTaskStatus(editableTask->status);
-                        ImGui::SetNextItemWidth(-1.0f);
-                        if (ImGui::Combo("##task_detail_status", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
-                            UpdateTaskStatus(editableTask->id, draftStatus);
-                        }
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextDisabled(u8"Статус");
+                            int draftStatus = NormalizeTaskStatus(editableTask->status);
+                            ImGui::SetNextItemWidth(-1.0f);
+                            if (ImGui::Combo("##task_detail_status", &draftStatus, statusLabels, IM_ARRAYSIZE(statusLabels))) {
+                                UpdateTaskStatus(editableTask->id, draftStatus);
+                            }
 
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::TextDisabled(u8"Приоритет");
-                        int draftPriority = NormalizeTaskPriority(editableTask->priority);
-                        ImGui::SetNextItemWidth(-1.0f);
-                        if (ImGui::Combo("##task_detail_priority", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
-                            UpdateTaskPriority(editableTask->id, draftPriority);
-                        }
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextDisabled(u8"Приоритет");
+                            int draftPriority = NormalizeTaskPriority(editableTask->priority);
+                            ImGui::SetNextItemWidth(-1.0f);
+                            if (ImGui::Combo("##task_detail_priority", &draftPriority, priorityLabels, IM_ARRAYSIZE(priorityLabels))) {
+                                UpdateTaskPriority(editableTask->id, draftPriority);
+                            }
 
-                        ImGui::TableNextRow();
-                        ImGui::TableSetColumnIndex(0);
-                        ImGui::TextDisabled(u8"Категория XP");
-                        int draftCategory = std::clamp(editableTask->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
-                        ImGui::SetNextItemWidth(-1.0f);
-                        if (ImGui::Combo("##task_detail_category", &draftCategory,
-                                         Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
-                            UpdateTaskCategory(editableTask->id, draftCategory);
-                        }
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextDisabled(u8"Категория XP");
+                            int draftCategory = std::clamp(editableTask->category, 0, static_cast<int>(Profile::kCategoryCount - 1));
+                            ImGui::SetNextItemWidth(-1.0f);
+                            if (ImGui::Combo("##task_detail_category", &draftCategory,
+                                             Profile::kCategoryLabels.data(), Profile::kCategoryCount)) {
+                                UpdateTaskCategory(editableTask->id, draftCategory);
+                            }
 
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::TextDisabled(u8"Штраф дедлайна");
-                        int draftPenalty = std::clamp(editableTask->deadlinePenaltyPercent, 0, 100);
-                        if (ImGui::SliderInt("##task_detail_penalty", &draftPenalty, 0, 100, "%d%%",
-                                             ImGuiSliderFlags_AlwaysClamp)) {
-                            UpdateTaskPenalty(editableTask->id, draftPenalty);
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextDisabled(u8"Штраф дедлайна");
+                            int draftPenalty = std::clamp(editableTask->deadlinePenaltyPercent, 0, 100);
+                            if (ImGui::SliderInt("##task_detail_penalty", &draftPenalty, 0, 100, "%d%%",
+                                                 ImGuiSliderFlags_AlwaysClamp)) {
+                                UpdateTaskPenalty(editableTask->id, draftPenalty);
+                            }
+                            ImGui::EndTable();
                         }
-                        ImGui::EndTable();
                     }
                     if (editableTask->deadlinePenaltyPercent > 0) {
                         ImGui::TextDisabled(u8"Штраф уменьшит итоговый XP-пул задачи на %d%%.", editableTask->deadlinePenaltyPercent);
@@ -3432,22 +3444,25 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                             }
                         }
                         ImGui::EndChild();
-                        if (ImGui::BeginTable("task_detail_skill_actions", 2, ImGuiTableFlags_SizingStretchSame)) {
-                            ImGui::TableNextRow();
-                            ImGui::TableSetColumnIndex(0);
-                            if (TaskIconButton("task_detail_skill_save", UiIcon::Save, u8"Сохранить навыки задачи")) {
-                                const std::vector<std::string> skillIds =
-                                    CollectSelectedTaskSkillIds(catalog, state.taskInlineSkillFlags);
-                                if (UpdateTaskSkills(editableTask->id, skillIds)) {
-                                    state.taskInlineSkillEditId.clear();
+                        {
+                            CompactTableScopeGui compactTable;
+                            if (ImGui::BeginTable("task_detail_skill_actions", 2, ControlTableFlagsGui())) {
+                                ImGui::TableNextRow();
+                                ImGui::TableSetColumnIndex(0);
+                                if (TaskIconButton("task_detail_skill_save", UiIcon::Save, u8"Сохранить навыки задачи")) {
+                                    const std::vector<std::string> skillIds =
+                                        CollectSelectedTaskSkillIds(catalog, state.taskInlineSkillFlags);
+                                    if (UpdateTaskSkills(editableTask->id, skillIds)) {
+                                        state.taskInlineSkillEditId.clear();
+                                    }
                                 }
+                                ImGui::TableSetColumnIndex(1);
+                                if (TaskIconButton("task_detail_skill_cancel", UiIcon::Close, u8"Отменить редактирование навыков")) {
+                                    state.taskInlineSkillEditId.clear();
+                                    state.taskInlineSkillFilter.fill('\0');
+                                }
+                                ImGui::EndTable();
                             }
-                            ImGui::TableSetColumnIndex(1);
-                            if (TaskIconButton("task_detail_skill_cancel", UiIcon::Close, u8"Отменить редактирование навыков")) {
-                                state.taskInlineSkillEditId.clear();
-                                state.taskInlineSkillFilter.fill('\0');
-                            }
-                            ImGui::EndTable();
                         }
                     }
                 }

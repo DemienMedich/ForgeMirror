@@ -257,6 +257,11 @@ static bool TestCompactControlTablesUseSharedScope() {
            tasks.find("BeginTable(\"tasks_bulk_compact_row1\", 8, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"tasks_summary_table\", 5, ControlTableFlagsGui()") != std::string::npos &&
            tasks.find("BeginTable(\"tasks_table\", tableColumns, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           tasks.find("BeginTable(\"task_detail_headline\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"task_detail_meta\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"task_detail_text_actions\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"task_detail_admin_meta\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"task_detail_skill_actions\", 2, ControlTableFlagsGui()") != std::string::npos &&
            profileSections.find("BeginTable(\"profile_active_tasks_table\", 5,") != std::string::npos &&
            profileSections.find("ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
            profileSections.find("BeginTable(\"profile_tasks\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
