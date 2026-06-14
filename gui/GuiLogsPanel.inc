@@ -110,7 +110,9 @@ void DrawLogsPanel(GuiState& state) {
             {"warn", UiIcon::Bell, u8"Предупр.", warnCount, warnColor},
             {"error", UiIcon::Exit, u8"Ошибки", errorCount, errorColor}
         }};
-        if (ImGui::BeginTable("log_kpi", columns, ImGuiTableFlags_SizingStretchSame)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("log_kpi", columns, ControlTableFlagsGui())) {
             size_t index = 0;
             const int rows = static_cast<int>((kpis.size() + columns - 1) / columns);
             for (int r = 0; r < rows; ++r) {
@@ -127,6 +129,7 @@ void DrawLogsPanel(GuiState& state) {
                 }
             }
             ImGui::EndTable();
+        }
         }
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -361,7 +364,9 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::Checkbox(u8"Ошибки", &state.logShowError);
         ImGui::Checkbox(u8"Автопрокрутка", &state.logAutoScroll);
         ImGui::Checkbox(u8"Компактно", &state.logCompactView);
-    } else if (ImGui::BeginTable("log_toggles", 3, ImGuiTableFlags_SizingStretchSame)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("log_toggles", 3, ControlTableFlagsGui())) {
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         ImGui::Checkbox(u8"Инфо", &state.logShowInfo);
@@ -377,6 +382,7 @@ void DrawLogsPanel(GuiState& state) {
         ImGui::TableNextColumn();
         ImGui::Dummy(ImVec2(0.0f, 0.0f));
         ImGui::EndTable();
+        }
     }
     int filteredCount = CountFilteredLogs(state);
     ImGui::TextDisabled(u8"Показано: %d из %d", filteredCount, static_cast<int>(state.appLogs.size()));
@@ -429,9 +435,8 @@ void DrawLogsPanel(GuiState& state) {
         row.w = std::clamp(row.w * 0.12f, 0.04f, 0.12f);
         return ImGui::GetColorU32(row);
     };
-    ImGuiTableFlags flags = ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
-                            ImGuiTableFlags_SizingStretchProp;
+    ImGuiTableFlags flags = ControlTableFlagsGui(
+        ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY);
     if (state.logCompactView) {
         if (ImGui::BeginTable("app_logs_compact", 3, flags, tableSize)) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 34.0f);

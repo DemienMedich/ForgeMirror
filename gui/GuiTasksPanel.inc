@@ -1186,8 +1186,10 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             if (TaskIconButton("tasks_toolbar_reset_compact", UiIcon::Clear, u8"Сбросить фильтры")) {
                 ResetTaskFilters();
             }
-        } else if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 5 : 3,
-                                     ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("tasks_toolbar_row", state.isAdmin ? 5 : 3,
+                                  ControlTableFlagsGui())) {
             const float toolbarIconColumn = ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f;
             if (state.isAdmin) {
                 ImGui::TableSetupColumn("tasks_toolbar_mode", ImGuiTableColumnFlags_WidthFixed, 190.0f);
@@ -1235,6 +1237,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 ResetTaskFilters();
             }
             ImGui::EndTable();
+        }
         }
     }
     EndCard();

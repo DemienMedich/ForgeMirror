@@ -414,8 +414,9 @@ static void DrawShortcutsPanel(GuiState& state) {
         ImGui::TextDisabled(u8"Ярлыков пока нет.");
         return;
     }
-    if (ImGui::BeginTable("shortcuts_list", 3, ImGuiTableFlags_RowBg |
-                                                  ImGuiTableFlags_SizingStretchProp)) {
+    {
+    CompactTableScopeGui compactTable;
+    if (ImGui::BeginTable("shortcuts_list", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
         ImGui::TableSetupColumn(u8"Название", ImGuiTableColumnFlags_WidthStretch, 1.1f);
         ImGui::TableSetupColumn(u8"Путь", ImGuiTableColumnFlags_WidthStretch, 1.9f);
         ImGui::TableSetupColumn(u8"Действия", ImGuiTableColumnFlags_WidthFixed, 190.0f);
@@ -483,5 +484,6 @@ static void DrawShortcutsPanel(GuiState& state) {
                 SetStatus(state, deleteResult.errorMessage, 1.0f, 0.75f, 0.35f);
             }
         }
+    }
     }
 }

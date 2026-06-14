@@ -41,7 +41,9 @@ void DrawAdminLoginModal(GuiState& state) {
                 ImGui::CloseCurrentPopup();
                 adminPopupOpen = false;
             }
-        } else if (ImGui::BeginTable("admin_login_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("admin_login_actions", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -62,6 +64,7 @@ void DrawAdminLoginModal(GuiState& state) {
                 adminPopupOpen = false;
             }
             ImGui::EndTable();
+            }
         }
         ImGui::EndPopup();
     }
@@ -151,7 +154,9 @@ void DrawAdminPasswordModal(GuiState& state) {
                 ImGui::CloseCurrentPopup();
                 popupOpen = false;
             }
-        } else if (ImGui::BeginTable("admin_password_actions", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("admin_password_actions", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("action_primary", ImGuiTableColumnFlags_WidthStretch, 1.2f);
             ImGui::TableSetupColumn("action_secondary", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -172,6 +177,7 @@ void DrawAdminPasswordModal(GuiState& state) {
                 popupOpen = false;
             }
             ImGui::EndTable();
+            }
         }
         ImGui::EndPopup();
     }

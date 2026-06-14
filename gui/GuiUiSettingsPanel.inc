@@ -38,7 +38,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     bool rootEdited = false;
     ImGui::TextDisabled(u8"Папка синхронизации");
     const float browseWidth = ImGui::CalcTextSize(u8"Обзор...").x + style.FramePadding.x * 2.0f;
-    if (ImGui::BeginTable("cloud_root_row", 2, ImGuiTableFlags_SizingStretchProp)) {
+    {
+    CompactTableScopeGui compactTable;
+    if (ImGui::BeginTable("cloud_root_row", 2, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("cloud_path", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn("cloud_browse", ImGuiTableColumnFlags_WidthFixed, browseWidth);
         ImGui::TableNextRow();
@@ -67,6 +69,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.cloudPickerRequest = true;
         }
         ImGui::EndTable();
+    }
     }
     std::string rawRoot = TrimStringGui(state.cloudRootBuffer.data());
     std::filesystem::path resolvedRoot = rawRoot.empty() ? state.cloudConfig.root : PathFromUtf8(rawRoot);
@@ -129,7 +132,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         if (!drives.empty()) {
             ImGui::TextDisabled(u8"Диски");
             const int cols = std::max(1, std::min<int>(6, static_cast<int>(drives.size())));
-            if (ImGui::BeginTable("cloud_picker_drives", cols, ImGuiTableFlags_SizingStretchSame)) {
+            {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("cloud_picker_drives", cols, ControlTableFlagsGui())) {
                 for (const auto& drive : drives) {
                     ImGui::TableNextColumn();
                     const std::string label = PathToUtf8(drive);
@@ -139,6 +144,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                     }
                 }
                 ImGui::EndTable();
+            }
             }
             ImGui::Spacing();
         }
@@ -286,7 +292,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.ui.customColors = false;
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("theme_row", 3, ImGuiTableFlags_SizingStretchProp)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("theme_row", 3, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("theme_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("theme_combo", ImGuiTableColumnFlags_WidthStretch, 1.6f);
         ImGui::TableSetupColumn("theme_reset", ImGuiTableColumnFlags_WidthFixed, 160.0f);
@@ -310,6 +318,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
         ImGui::EndTable();
+        }
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Готовые темы");
@@ -331,7 +340,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             ApplyThemePreset(2, state.ui, style);
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("theme_presets", 4, ImGuiTableFlags_SizingStretchSame)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("theme_presets", 4, ControlTableFlagsGui())) {
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Графит", ImVec2(-1.0f, 0.0f))) {
@@ -354,6 +365,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
         ImGui::EndTable();
+        }
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Пресеты интерфейса");
@@ -403,7 +415,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.ui.itemSpacing = ImVec2(6.0f, 4.0f);
             state.uiDirty = true;
         }
-    } else if (ImGui::BeginTable("ui_presets", 4, ImGuiTableFlags_SizingStretchSame)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("ui_presets", 4, ControlTableFlagsGui())) {
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         if (ImGui::Button(u8"Техно-стекло", ImVec2(-1.0f, 0.0f))) {
@@ -453,6 +467,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
         ImGui::EndTable();
+        }
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Пользовательские пресеты");
@@ -468,7 +483,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             std::snprintf(state.uiPresetName.data(), state.uiPresetName.size(), "%s", presetName.c_str());
             SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
         }
-    } else if (ImGui::BeginTable("ui_preset_save", 3, ImGuiTableFlags_SizingStretchProp)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("ui_preset_save", 3, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("preset_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("preset_name", ImGuiTableColumnFlags_WidthStretch, 1.4f);
         ImGui::TableSetupColumn("preset_save", ImGuiTableColumnFlags_WidthFixed, 160.0f);
@@ -491,6 +508,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             SetStatus(state, u8"Пресет сохранён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
         }
         ImGui::EndTable();
+        }
     }
     const auto presets = LoadUiPresetNames(state.storageDir);
     if (presets.empty()) {
@@ -524,7 +542,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 std::filesystem::remove(presetPath, ec);
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
-        } else if (ImGui::BeginTable("ui_preset_list", 4, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("ui_preset_list", 4, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("preset_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("preset_list", ImGuiTableColumnFlags_WidthStretch, 1.4f);
             ImGui::TableSetupColumn("preset_load", ImGuiTableColumnFlags_WidthFixed, 150.0f);
@@ -557,6 +577,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 SetStatus(state, u8"Пресет удалён.", 0.45f, 0.9f, 0.45f, 1.0f, AppLogLevel::Info, u8"Интерфейс");
             }
             ImGui::EndTable();
+            }
         }
     }
     ImGui::SliderFloat(u8"Масштаб шрифта", &state.ui.fontScale, 0.8f, 1.6f, "%.2f");
@@ -670,7 +691,9 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
         if (ImGui::SmallButton(u8"Сброс##bg_filter")) {
             state.filters.background.fill('\0');
         }
-    } else if (ImGui::BeginTable("bg_controls", 4, ImGuiTableFlags_SizingStretchProp)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("bg_controls", 4, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("bg_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("bg_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
         ImGui::TableSetupColumn("bg_reset", ImGuiTableColumnFlags_WidthFixed, 120.0f);
@@ -695,6 +718,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
         ImGui::EndTable();
+        }
     }
     int visibleBackgrounds = 0;
     for (const auto& bg : backgrounds) {

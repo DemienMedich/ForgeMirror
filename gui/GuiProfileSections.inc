@@ -658,15 +658,16 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     });
     int visibleCount = 0;
     int rowRank = 0;
-    ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, TableCellPadding());
     const ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
     keyBg.w = std::clamp(keyBg.w * 0.35f, 0.06f, 0.16f);
     const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
     const float importantRowHeight = ImGui::GetTextLineHeightWithSpacing() + 6.0f;
     const char* weightShort[] = {"", "A", "B", "C", "D", "E"};
-    if (ImGui::BeginTable("skill_table", 6, tableFlags)) {
+    {
+    CompactTableScopeGui compactTable;
+    if (ImGui::BeginTable("skill_table", 6,
+                          ControlTableFlagsGui(ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))) {
         ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn(u8"Навык");
         ImGui::TableSetupColumn(u8"Уровень", ImGuiTableColumnFlags_WidthFixed, 80.0f);
@@ -730,7 +731,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
         }
         ImGui::EndTable();
     }
-    ImGui::PopStyleVar();
+    }
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(skills.size()));
     if (visibleCount == 0) {
         DrawEmptyStateGui("profile_skills_filter_empty", UiIcon::Search,

@@ -223,6 +223,9 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string profileModals;
     std::string skillModals;
     std::string skillCatalog;
+    std::string adminModal;
+    std::string shortcuts;
+    std::string uiSettings;
     std::string xpModal;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
@@ -240,6 +243,9 @@ static bool TestCompactControlTablesUseSharedScope() {
     if (!ReadFile(root / "gui" / "GuiProfileModals.inc", profileModals)) return false;
     if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
     if (!ReadFile(root / "gui" / "GuiSkillCatalogPanel.inc", skillCatalog)) return false;
+    if (!ReadFile(root / "gui" / "GuiAdminModal.inc", adminModal)) return false;
+    if (!ReadFile(root / "gui" / "GuiShortcuts.inc", shortcuts)) return false;
+    if (!ReadFile(root / "gui" / "GuiUiSettingsPanel.inc", uiSettings)) return false;
     if (!ReadFile(root / "gui" / "GuiXpModal.inc", xpModal)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
@@ -334,6 +340,18 @@ static bool TestCompactControlTablesUseSharedScope() {
            skillCatalog.find("BeginTable(\"skill_ach_meta\", 2, ControlTableFlagsGui()") != std::string::npos &&
            skillCatalog.find("ImGuiTableFlags_SizingStretch") == std::string::npos &&
            CountSubstring(skillCatalog, "CompactTableScopeGui compactTable") >= 9 &&
+           adminModal.find("BeginTable(\"admin_login_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           adminModal.find("BeginTable(\"admin_password_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           CountSubstring(adminModal, "CompactTableScopeGui compactTable") >= 2 &&
+           logs.find("BeginTable(\"log_kpi\", columns, ControlTableFlagsGui()") != std::string::npos &&
+           logs.find("BeginTable(\"log_toggles\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           rules.find("BeginTable(\"level_rules\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           rules.find("BeginTable(\"category_rules\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           rules.find("BeginTable(\"bonus_rules\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           tasks.find("BeginTable(\"tasks_toolbar_row\", state.isAdmin ? 5 : 3,") != std::string::npos &&
+           shortcuts.find("BeginTable(\"shortcuts_list\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           CountSubstring(uiSettings, "CompactTableScopeGui compactTable") >= 8 &&
+           uiSettings.find("ImGuiTableFlags_SizingStretch") == std::string::npos &&
            xpModal.find("BeginTable(\"xp_task_header\", 2, ControlTableFlagsGui()") != std::string::npos &&
            xpModal.find("BeginTable(\"task_member_controls\", 3, ControlTableFlagsGui()") != std::string::npos &&
            xpModal.find("BeginTable(\"task_members\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&

@@ -354,7 +354,7 @@ void DrawProjectsPanel(GuiState& state) {
     ImGui::Dummy(ImVec2(0.0f, 6.0f));
     {
         CompactTableScopeGui compactTable;
-        if (ImGui::BeginTable("projects_hub_actions", 4, ImGuiTableFlags_SizingStretchSame)) {
+        if (ImGui::BeginTable("projects_hub_actions", 4, ControlTableFlagsGui())) {
         const bool canUseTasksHub = state.modules.tasks;
         ImGui::TableSetupColumn("projects_open_all");
         ImGui::TableSetupColumn("projects_open_active");

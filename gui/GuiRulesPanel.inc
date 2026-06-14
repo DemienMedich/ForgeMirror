@@ -36,7 +36,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Квадратичный прирост за уровень");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##level_quad", &draft.levelQuadraticXp);
-    } else if (ImGui::BeginTable("level_rules", 3, ImGuiTableFlags_SizingStretchSame)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("level_rules", 3, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("level_label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("level_value", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("level_hint", ImGuiTableColumnFlags_WidthFixed, 60.0f);
@@ -71,6 +73,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetColumnIndex(2);
         ImGui::TextDisabled(u8"квадр.");
         ImGui::EndTable();
+        }
     }
     ImGui::Spacing();
     DrawCardHeader(u8"Базовый XP категорий");
@@ -104,7 +107,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 draft.categoryBaseXp[idx] = value;
             }
         }
-    } else if (ImGui::BeginTable("category_rules", 3, ImGuiTableFlags_SizingStretchSame)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("category_rules", 3, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("cat_label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("cat_value", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("cat_hint", ImGuiTableColumnFlags_WidthFixed, 60.0f);
@@ -138,6 +143,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             ImGui::TextDisabled("C%s", Profile::kCategoryLabels[idx]);
         }
         ImGui::EndTable();
+        }
     }
     if (hasAttention) {
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -165,7 +171,9 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TextDisabled(u8"Задач прогрева");
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputInt(u8"##recovery_tasks", &draft.recoveryWarmupTasks);
-    } else if (ImGui::BeginTable("bonus_rules", 3, ImGuiTableFlags_SizingStretchSame)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("bonus_rules", 3, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("bonus_label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("bonus_value", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("bonus_hint", ImGuiTableColumnFlags_WidthFixed, 60.0f);
@@ -218,6 +226,7 @@ void DrawRulesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         ImGui::TableSetColumnIndex(2);
         ImGui::TextDisabled(u8"шт");
         ImGui::EndTable();
+        }
     }
     ImGui::TextDisabled(u8"Изменения применяются в CLI и GUI после сохранения.");
     ImGui::TextDisabled(u8"Рекомендуется пересчитать профили после изменения правил.");
