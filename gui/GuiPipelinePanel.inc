@@ -405,7 +405,7 @@ void DrawPipelinePanel(GuiState& state) {
         ImGui::TextDisabled(u8"Фильтр");
         ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Название, код, ветка, контроль",
                                  state.filters.pipeline.data(), state.filters.pipeline.size());
-        if (PipelineIconButton("pipeline_filter_reset_stack", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
+        if (PipelineIconButton("pipeline_filter_reset_stack", UiIcon::Clear, u8"Сбросить фильтр пайплайна")) {
             state.filters.pipeline.fill('\0');
         }
     } else {
@@ -423,7 +423,7 @@ void DrawPipelinePanel(GuiState& state) {
             ImGui::InputTextWithHint(u8"##pipeline_filter", u8"Название, код, ветка, контроль",
                                      state.filters.pipeline.data(), state.filters.pipeline.size());
             ImGui::TableSetColumnIndex(2);
-            if (PipelineIconButton("pipeline_filter_reset", UiIcon::Refresh, u8"Сбросить фильтр пайплайна")) {
+            if (PipelineIconButton("pipeline_filter_reset", UiIcon::Clear, u8"Сбросить фильтр пайплайна")) {
                 state.filters.pipeline.fill('\0');
             }
             ImGui::EndTable();

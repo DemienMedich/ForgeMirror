@@ -1,6 +1,7 @@
 // Semantic icon map:
 // Save/Edit/Award/Export/FileText describe actions, not modules.
 // Clear is for reset/clear filters or drafts; Refresh is only for reloading data.
+// Focus/SelectAll/Warning/Timer prevent navigation, selection, errors and timers from borrowing unrelated glyphs.
 // Task/Project/Shortcut/Sync/Calendar/Assign/Merge keep compact buttons readable without relying on tooltip first.
 enum class UiIcon {
     User = 0,
@@ -42,6 +43,10 @@ enum class UiIcon {
     Next,
     Plus,
     Copy,
+    Focus,
+    SelectAll,
+    Warning,
+    Timer,
     Close
 };
 
@@ -504,6 +509,50 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
             drawList->AddRect(backA, backB, color, s * 0.10f, 0, stroke);
             drawList->AddRectFilled(frontA, frontB, ImGui::GetColorU32(ImVec4(0, 0, 0, 0)), s * 0.10f);
             drawList->AddRect(frontA, frontB, color, s * 0.10f, 0, stroke);
+            return;
+        }
+        case UiIcon::Focus: {
+            drawList->AddCircle(center, s * 0.62f, color, 20, stroke);
+            drawList->AddCircle(center, s * 0.26f, color, 16, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, -0.82f, s),
+                              IconPoint(center, 0.0f, -0.48f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, 0.48f, s),
+                              IconPoint(center, 0.0f, 0.82f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.82f, 0.0f, s),
+                              IconPoint(center, -0.48f, 0.0f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.48f, 0.0f, s),
+                              IconPoint(center, 0.82f, 0.0f, s), color, stroke);
+            return;
+        }
+        case UiIcon::SelectAll: {
+            drawList->AddRect(IconPoint(center, -0.64f, -0.64f, s),
+                              IconPoint(center, 0.64f, 0.64f, s), color, s * 0.10f, 0, stroke);
+            drawList->AddLine(IconPoint(center, -0.38f, 0.02f, s),
+                              IconPoint(center, -0.10f, 0.32f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.10f, 0.32f, s),
+                              IconPoint(center, 0.42f, -0.30f, s), color, stroke);
+            return;
+        }
+        case UiIcon::Warning: {
+            ImVec2 top = IconPoint(center, 0.0f, -0.72f, s);
+            ImVec2 left = IconPoint(center, -0.72f, 0.62f, s);
+            ImVec2 right = IconPoint(center, 0.72f, 0.62f, s);
+            drawList->AddTriangle(top, left, right, color, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, -0.30f, s),
+                              IconPoint(center, 0.0f, 0.18f, s), color, stroke);
+            drawList->AddCircleFilled(IconPoint(center, 0.0f, 0.42f, s), s * 0.09f, color, 10);
+            return;
+        }
+        case UiIcon::Timer: {
+            drawList->AddCircle(IconPoint(center, 0.0f, 0.08f, s), s * 0.62f, color, 20, stroke);
+            drawList->AddLine(IconPoint(center, -0.22f, -0.72f, s),
+                              IconPoint(center, 0.22f, -0.72f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, -0.72f, s),
+                              IconPoint(center, 0.0f, -0.54f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, 0.08f, s),
+                              IconPoint(center, 0.0f, -0.30f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.0f, 0.08f, s),
+                              IconPoint(center, 0.30f, 0.28f, s), color, stroke);
             return;
         }
         case UiIcon::LockClosed:

@@ -75,7 +75,7 @@ void DrawNavigationPanel(GuiState& state) {
         });
     }
     if (state.modules.pomodoro) {
-        navButton("nav_pomodoro", UiIcon::Bell, u8"Помодоро", state.showPomodoro, [&]() {
+        navButton("nav_pomodoro", UiIcon::Timer, u8"Помодоро", state.showPomodoro, [&]() {
             OpenWorkspaceTab(state, state.showPomodoro, UiWindowId::Pomodoro);
         });
     }

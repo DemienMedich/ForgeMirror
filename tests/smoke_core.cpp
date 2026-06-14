@@ -525,6 +525,10 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
            icons.find("Clear,") != std::string::npos &&
            icons.find("Assign,") != std::string::npos &&
            icons.find("FileText,") != std::string::npos &&
+           icons.find("Focus,") != std::string::npos &&
+           icons.find("SelectAll,") != std::string::npos &&
+           icons.find("Warning,") != std::string::npos &&
+           icons.find("Timer,") != std::string::npos &&
            tasks.find("\"task_detail_text_save\", UiIcon::Save") != std::string::npos &&
            tasks.find("\"task_detail_skill_save\", UiIcon::Save") != std::string::npos &&
            tasks.find("\"task_detail_award_xp\", UiIcon::Award") != std::string::npos &&
@@ -534,13 +538,19 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
            tasks.find("\"tasks_toolbar_reset\", UiIcon::Clear") != std::string::npos &&
            tasks.find("\"bulk_apply_deadline\", UiIcon::Calendar") != std::string::npos &&
            tasks.find("\"bulk_open_assignees\", UiIcon::Assign") != std::string::npos &&
+           tasks.find("\"bridge_focus\", UiIcon::Focus") != std::string::npos &&
+           tasks.find("\"queue_open\", UiIcon::Focus") != std::string::npos &&
+           tasks.find("\"tasks_focus_open\", UiIcon::Focus") != std::string::npos &&
+           tasks.find("\"bulk_select_visible\", UiIcon::SelectAll") != std::string::npos &&
            pipeline.find("\"pipeline_save\", UiIcon::Save") != std::string::npos &&
            pipeline.find("\"pipeline_edit\", UiIcon::Edit") != std::string::npos &&
+           pipeline.find("\"pipeline_filter_reset\", UiIcon::Clear") != std::string::npos &&
            rules.find("\"rules_save\", UiIcon::Save") != std::string::npos &&
            catalog.find("\"catalog_save_skill_details\", UiIcon::Save") != std::string::npos &&
            navigation.find("\"nav_tasks\", UiIcon::Task") != std::string::npos &&
            navigation.find("\"nav_projects\", UiIcon::Project") != std::string::npos &&
            navigation.find("\"nav_shortcuts\", UiIcon::Shortcut") != std::string::npos &&
+           navigation.find("\"nav_pomodoro\", UiIcon::Timer") != std::string::npos &&
            mainMenu.find("\"top_sync\", UiIcon::Sync") != std::string::npos &&
            projects.find("\"project_editor_save\", UiIcon::Save") != std::string::npos &&
            projects.find("\"projects_open_xp\", UiIcon::Award") != std::string::npos &&
@@ -554,7 +564,10 @@ static bool TestSemanticActionIconsUsedForCriticalActions() {
            mainMenu.find("\"top_refresh\", UiIcon::Refresh") != std::string::npos &&
            profilePanel.find("\"profile_reset_password\", UiIcon::LockClosed") != std::string::npos &&
            logs.find("\"log_filter_reset\", UiIcon::Clear") != std::string::npos &&
+           logs.find("{\"error\", UiIcon::Warning") != std::string::npos &&
+           logs.find("\"task_audit_open\", UiIcon::Launch") != std::string::npos &&
            adminStats.find("\"admin_stats_reset\", UiIcon::Clear") != std::string::npos &&
+           adminStats.find("\"kpi_no_activity\", UiIcon::Calendar") != std::string::npos &&
            rules.find("\"rules_reset\", UiIcon::Clear") != std::string::npos;
 }
 

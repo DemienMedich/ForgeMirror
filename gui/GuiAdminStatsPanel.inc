@@ -256,7 +256,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         kpi("kpi_ach_active", UiIcon::Bell, u8"Ачивок активных", std::to_string(stats.achievementsActive), accent);
         kpi("kpi_recovery", UiIcon::Refresh, u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
             accentSoft);
-        kpi("kpi_no_activity", UiIcon::Search, u8"Без активности", std::to_string(stats.profilesNoActivity),
+        kpi("kpi_no_activity", UiIcon::Calendar, u8"Без активности", std::to_string(stats.profilesNoActivity),
             accentSoft);
         kpi("kpi_no_ach", UiIcon::List, u8"Без ачивок", std::to_string(stats.profilesNoAchievements),
             accentSoft);

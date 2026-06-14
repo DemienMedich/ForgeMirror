@@ -108,7 +108,7 @@ void DrawLogsPanel(GuiState& state) {
             {"total", UiIcon::List, u8"Всего", totalCount, accent},
             {"info", UiIcon::Chart, u8"Инфо", infoCount, infoColor},
             {"warn", UiIcon::Bell, u8"Предупр.", warnCount, warnColor},
-            {"error", UiIcon::Exit, u8"Ошибки", errorCount, errorColor}
+            {"error", UiIcon::Warning, u8"Ошибки", errorCount, errorColor}
         }};
         {
         CompactTableScopeGui compactTable;
@@ -564,7 +564,7 @@ void DrawLogsPanel(GuiState& state) {
             exportTaskAudit();
         }
         ImGui::SameLine();
-        if (LogIconButton("task_audit_open", UiIcon::FileText, u8"Открыть файл аудита задач")) {
+        if (LogIconButton("task_audit_open", UiIcon::Launch, u8"Открыть файл аудита задач")) {
             const auto auditPath = TaskAuditStoragePath(state.storageDir);
             std::error_code ec;
             if (!std::filesystem::exists(auditPath, ec)) {

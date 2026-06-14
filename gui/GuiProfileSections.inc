@@ -1344,7 +1344,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
             if (DrawEmptyStateGui("profile_done_tasks_empty", UiIcon::Award,
                                   u8"История задач пуста",
                                   u8"Когда задачи будут закрыты или будут ждать XP, они появятся здесь.",
-                                  UiIcon::Search, state.modules.tasks ? u8"Открыть журнал задач" : nullptr,
+                                  UiIcon::Task, state.modules.tasks ? u8"Открыть журнал задач" : nullptr,
                                   state.modules.tasks)) {
                 FocusTasksForProfile(state, profileId, 0);
             }

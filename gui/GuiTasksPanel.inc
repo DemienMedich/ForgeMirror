@@ -1348,7 +1348,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%d", stats.total);
                     ImGui::TableSetColumnIndex(3);
-                    if (TaskIconButton("bridge_focus", UiIcon::Search, u8"Показать задачи проекта")) {
+                    if (TaskIconButton("bridge_focus", UiIcon::Focus, u8"Показать задачи проекта")) {
                         state.tasksFilterProject = 2 + i;
                     }
                     ImGui::SameLine();
@@ -1736,7 +1736,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     if (quickFilter != -1) {
                         ImGui::SameLine();
                         ImGui::PushID(title);
-                        if (TaskIconButton("queue_open", UiIcon::Search, u8"Открыть задачи по этому сигналу")) {
+                        if (TaskIconButton("queue_open", UiIcon::Focus, u8"Открыть задачи по этому сигналу")) {
                             if (quickFilter >= 0) {
                                 state.tasksQuickFilter = quickFilter;
                             } else if (quickFilter == -2) {
@@ -1779,7 +1779,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                     }
                 }
                 ImGui::SameLine();
-                if (TaskIconButton("tasks_focus_open", UiIcon::Search, u8"Открыть фокусную задачу")) {
+                if (TaskIconButton("tasks_focus_open", UiIcon::Focus, u8"Открыть фокусную задачу")) {
                     state.tasksExpandedId = workFocusTask->id;
                 }
             } else {
@@ -2233,7 +2233,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             const int selectedCount = static_cast<int>(state.taskSelectionIds.size());
             ImGui::TextDisabled(u8"%d выбрано", selectedCount);
             ImGui::SameLine();
-            if (TaskIconButton("bulk_select_visible", UiIcon::Search, u8"Выбрать все видимые задачи")) {
+            if (TaskIconButton("bulk_select_visible", UiIcon::SelectAll, u8"Выбрать все видимые задачи")) {
                 for (const TaskEntry* task : filtered) {
                     if (task) state.taskSelectionIds.insert(task->id);
                 }
