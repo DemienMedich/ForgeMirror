@@ -277,7 +277,14 @@ static bool TestCompactControlTablesUseSharedScope() {
            profileSections.find("BeginTable(\"profile_balance_table\", 3, ControlTableFlagsGui()") != std::string::npos &&
            profileSections.find("BeginTable(\"profile_status\", 4, ControlTableFlagsGui()") != std::string::npos &&
            profileSections.find("BeginTable(\"profile_active_tasks_summary\", 4, ControlTableFlagsGui()") != std::string::npos &&
-           CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 6 &&
+           profileSections.find("BeginTable(\"top_skills\", 4, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
+           profileSections.find("BeginTable(\"ach_filters\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"profile_skill_filters\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"cat_bars\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"top_skill_bars\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"radar_controls\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"activity_filters\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 13 &&
            projects.find("BeginTable(\"projects_status_slice\", 4, ControlTableFlagsGui()") != std::string::npos &&
            projects.find("BeginTable(\"projects_table\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
            CountSubstring(projects, "CompactTableScopeGui compactTable") >= 3 &&

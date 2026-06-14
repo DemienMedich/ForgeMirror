@@ -210,7 +210,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImVec4 topRowBg = style.Colors[ImGuiCol_CheckMark];
             topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
             const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
-            if (ImGui::BeginTable("top_skills", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+            {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("top_skills", 4, ControlTableFlagsGui(ImGuiTableFlags_RowBg))) {
                 ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
                 ImGui::TableSetupColumn(u8"Навык", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn(u8"XP", ImGuiTableColumnFlags_WidthFixed, 100.0f);
@@ -234,6 +236,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     ++rowRank;
                 }
                 ImGui::EndTable();
+            }
             }
             ImGui::PopStyleVar();
             ImGui::TextDisabled(u8"Показано: %d из %d. Подробные рейтинги — в аналитике.", shownSkills, totalSkills);
@@ -407,7 +410,9 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
                 state.filters.achievement.fill('\0');
                 state.showExpiredAchievements = true;
             }
-        } else if (ImGui::BeginTable("ach_filters", 4, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("ach_filters", 4, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("ach_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("ach_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableSetupColumn("ach_toggle", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -433,6 +438,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
                 state.showExpiredAchievements = true;
             }
             ImGui::EndTable();
+        }
         }
         int visibleAch = 0;
         for (const auto& a : profile.achievements()) {
@@ -590,7 +596,9 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
             state.profileSkillWeightRange[0] = 0.0f;
             state.profileSkillWeightRange[1] = 2.0f;
         }
-    } else if (ImGui::BeginTable("profile_skill_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+    } else {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_skill_filters", 5, ControlTableFlagsGui())) {
         ImGui::TableSetupColumn("profile_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
         ImGui::TableSetupColumn("profile_search", ImGuiTableColumnFlags_WidthStretch, 1.6f);
         ImGui::TableSetupColumn("profile_sort", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -624,6 +632,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
             state.profileSkillWeightRange[1] = 2.0f;
         }
         ImGui::EndTable();
+        }
     }
     float range[2] = {state.profileSkillWeightRange[0], state.profileSkillWeightRange[1]};
     if (ImGui::SliderFloat2(u8"Диапазон веса", range, 0.0f, 2.0f, "%.2f")) {
@@ -757,7 +766,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                 ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
                 ImVec4 warnRow = warnText;
                 warnRow.w = std::clamp(warnRow.w * 0.14f, 0.05f, 0.14f);
-                if (ImGui::BeginTable("cat_bars", 3, ImGuiTableFlags_SizingStretchProp)) {
+                {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("cat_bars", 3, ControlTableFlagsGui())) {
                     ImGui::TableSetupColumn("cat_label", ImGuiTableColumnFlags_WidthFixed, 74.0f);
                     ImGui::TableSetupColumn("cat_value", ImGuiTableColumnFlags_WidthFixed, 48.0f);
                     ImGui::TableSetupColumn("cat_bar", ImGuiTableColumnFlags_WidthStretch);
@@ -785,6 +796,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                     ImGui::EndTable();
                 }
             }
+        }
         }
         EndCard();
         ImGui::Dummy(ImVec2(0.0f, CardSpacing()));
@@ -815,7 +827,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                 });
                 const int showCount = std::min<int>(6, static_cast<int>(rows.size()));
                 const int maxXp = std::max(1, rows.front().totalXp);
-                if (ImGui::BeginTable("top_skill_bars", 3, ImGuiTableFlags_SizingStretchProp)) {
+                {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("top_skill_bars", 3, ControlTableFlagsGui())) {
                     ImGui::TableSetupColumn("skill_name", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                     ImGui::TableSetupColumn("skill_xp", ImGuiTableColumnFlags_WidthFixed, 76.0f);
                     ImGui::TableSetupColumn("skill_bar", ImGuiTableColumnFlags_WidthStretch, 1.4f);
@@ -849,6 +863,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                     }
                     ImGui::EndTable();
                 }
+                }
                 ImGui::TextDisabled(u8"%d/%d", showCount, static_cast<int>(rows.size()));
             }
         }
@@ -870,7 +885,9 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                 if (compactRadarControls) {
                     ImGui::SetNextItemWidth(-1.0f);
                     ImGui::SliderInt(u8"Оси", &radarCount, 3, maxRadar);
-                } else if (ImGui::BeginTable("radar_controls", 3, ImGuiTableFlags_SizingStretchProp)) {
+                } else {
+                    CompactTableScopeGui compactTable;
+                    if (ImGui::BeginTable("radar_controls", 3, ControlTableFlagsGui())) {
                     ImGui::TableSetupColumn("radar_label", ImGuiTableColumnFlags_WidthFixed, 54.0f);
                     ImGui::TableSetupColumn("radar_slider", ImGuiTableColumnFlags_WidthStretch, 1.4f);
                     ImGui::TableSetupColumn("radar_count", ImGuiTableColumnFlags_WidthFixed, 72.0f);
@@ -883,6 +900,7 @@ static void DrawProfileChartSection(GuiState& state, SkillCatalog& catalog, Prof
                     ImGui::TableSetColumnIndex(2);
                     ImGui::TextDisabled(u8"%d/%d", radarCount, static_cast<int>(skills.size()));
                     ImGui::EndTable();
+                    }
                 }
 
                 std::vector<Skill> top;
@@ -964,7 +982,9 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 exportActivity();
             }
             ImGui::TextDisabled(u8"Показано: %d", activityShown);
-        } else if (ImGui::BeginTable("activity_filters", 5, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("activity_filters", 5, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("activity_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("activity_filter", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableSetupColumn("activity_reset", ImGuiTableColumnFlags_WidthFixed,
@@ -996,6 +1016,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 exportActivity();
             }
             ImGui::EndTable();
+            }
         }
         if (hasLog) {
             int rendered = 0;
