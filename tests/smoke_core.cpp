@@ -273,7 +273,11 @@ static bool TestCompactControlTablesUseSharedScope() {
            profileSections.find("BeginTable(\"profile_active_tasks_table\", 5,") != std::string::npos &&
            profileSections.find("ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
            profileSections.find("BeginTable(\"profile_tasks\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
-           CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 2 &&
+           profileSections.find("BeginTable(\"profile_state_summary\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"profile_balance_table\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"profile_status\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           profileSections.find("BeginTable(\"profile_active_tasks_summary\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           CountSubstring(profileSections, "CompactTableScopeGui compactTable") >= 6 &&
            projects.find("BeginTable(\"projects_status_slice\", 4, ControlTableFlagsGui()") != std::string::npos &&
            projects.find("BeginTable(\"projects_table\", 5, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
            CountSubstring(projects, "CompactTableScopeGui compactTable") >= 3 &&
@@ -293,6 +297,10 @@ static bool TestCompactControlTablesUseSharedScope() {
            mainMenu.find("BeginTable(\"profile_filters\", 5, ControlTableFlagsGui()") != std::string::npos &&
            profilePanel.find("BeginTable(\"profile_select_actions\", 4, ControlTableFlagsGui()") != std::string::npos &&
            profilePanel.find("BeginTable(\"profile_task_brief_rows\", 4,") != std::string::npos &&
+           profilePanel.find("BeginTable(\"profile_task_brief_stats\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           profilePanel.find("BeginTable(\"profile_header_compact\", 4, ControlTableFlagsGui()") != std::string::npos &&
+           profilePanel.find("BeginTable(\"profile_info\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           profilePanel.find("BeginTable(\"profile_signal_cards\", signalColumns, ControlTableFlagsGui()") != std::string::npos &&
            profilePanel.find("BeginTable(\"profile_rank_actions\", 4, ControlTableFlagsGui()") != std::string::npos &&
            profilePanel.find("BeginTable(\"profile_report_actions\", 5, ControlTableFlagsGui()") != std::string::npos &&
            profileModals.find("BeginTable(\"create_profile_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&

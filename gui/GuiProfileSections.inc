@@ -76,7 +76,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
         const ImU32 keyBgU32 = ImGui::GetColorU32(keyBg);
-        if (ImGui::BeginTable("profile_state_summary", 3, ImGuiTableFlags_SizingStretchProp)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_state_summary", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("state_status", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("state_balance", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("state_focus", ImGuiTableColumnFlags_WidthStretch, 1.15f);
@@ -112,6 +114,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             }
             ImGui::EndTable();
         }
+        }
         ImGui::PopStyleVar();
     }
     EndCard();
@@ -142,7 +145,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             ImVec4 warnText = LogLevelColor(AppLogLevel::Warning);
             ImVec4 warnRow = warnText;
             warnRow.w = std::clamp(warnRow.w * 0.16f, 0.06f, 0.16f);
-            if (ImGui::BeginTable("profile_balance_table", 3, ImGuiTableFlags_SizingStretchProp)) {
+            {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("profile_balance_table", 3, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn(u8"Категория", ImGuiTableColumnFlags_WidthFixed, 120.0f);
                 ImGui::TableSetupColumn(u8"Оценка", ImGuiTableColumnFlags_WidthFixed, 70.0f);
                 ImGui::TableSetupColumn(u8"Прогресс", ImGuiTableColumnFlags_WidthStretch);
@@ -171,6 +176,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
+            }
             }
             ImGui::PopStyleVar();
             ImGui::TextDisabled(u8"Слабые зоны: %d из %d", showCount, static_cast<int>(rows.size()));
@@ -270,7 +276,9 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
             tint.w = std::clamp(tint.w * 0.12f, 0.04f, 0.12f);
             return ImGui::GetColorU32(tint);
         };
-        if (ImGui::BeginTable("profile_status", 4, ImGuiTableFlags_SizingStretchProp)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_status", 4, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn(u8"Параметр", ImGuiTableColumnFlags_WidthFixed, 104.0f);
             ImGui::TableSetupColumn(u8"Статус", ImGuiTableColumnFlags_WidthFixed, 112.0f);
@@ -347,6 +355,7 @@ static void DrawProfileOverviewSection(GuiState& state, IJobStorage& storage, Sk
                 ImGui::TextDisabled(u8"-");
             }
             ImGui::EndTable();
+        }
         }
         ImGui::PopStyleVar();
     }
@@ -1055,7 +1064,9 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
         });
 
         const int totalActiveCount = static_cast<int>(activeItems.size());
-        if (ImGui::BeginTable("profile_active_tasks_summary", 4, ImGuiTableFlags_SizingStretchProp)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_active_tasks_summary", 4, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("profile_active_total", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("profile_active_overdue", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("profile_active_xp", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -1132,6 +1143,7 @@ static void DrawProfileTasksSection(GuiState& state, const std::string& profileI
                 ImGui::TextDisabled(u8"Нет активных задач");
             }
             ImGui::EndTable();
+        }
         }
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
         if (state.modules.tasks) {

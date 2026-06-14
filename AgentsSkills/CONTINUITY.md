@@ -37,8 +37,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
 - State:
-  - Ветка: develop. Версия: 0.5.35.
-  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: wizard постановки задач, inline-создание проекта, project bridge и queue/risk-метрики переведены на общий compact table scope.
+  - Ветка: develop. Версия: 0.5.36.
+  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: верхнеуровневые сводки и карточки профиля переведены на общий compact table scope.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий UX-пункт: пункт 10 `визуальный ритм таблиц и карточек`: снизить шум control-таблиц, унифицировать padding/NoPadOuterX, затем пройти плотные таблицы задач/профиля/статистики.
 - Done:
@@ -102,6 +102,7 @@ UI аудит:
   - UX Plan 10 Progress: XP-модалка (`xp_task_header`, `task_member_controls`, `task_members`, `xp_controls`, `xp_sheet`) использует общий compact table scope без изменения расчёта XP.
   - UX Plan 10 Progress: detail-pane задач (`task_detail_headline`, `task_detail_meta`, `task_detail_text_actions`, `task_detail_admin_meta`, `task_detail_skill_actions`) использует общий compact table scope без изменения логики редактирования.
   - UX Plan 10 Progress: wizard постановки задач (`task_plan_steps`, `tasks_create_form`, `task_plan_assignees`, `task_plan_review`, `task_plan_navigation`), project bridge и queue/risk-метрики задач используют общий compact table scope.
+  - UX Plan 10 Progress: верхнеуровневые таблицы профиля (`profile_task_brief_stats`, `profile_header_compact`, `profile_info`, `profile_signal_cards`, `profile_state_summary`, `profile_balance_table`, `profile_status`, `profile_active_tasks_summary`) используют общий compact table scope.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

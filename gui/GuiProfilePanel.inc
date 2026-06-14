@@ -186,7 +186,9 @@ static void DrawProfileTaskBriefCard(GuiState& state,
         }
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        if (ImGui::BeginTable("profile_task_brief_stats", 4, ImGuiTableFlags_SizingStretchSame)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_task_brief_stats", 4, ControlTableFlagsGui())) {
             auto drawStat = [](const char* id, const char* label, int value, const ImVec4& color,
                                const char* tooltip, bool filled) {
                 ImGui::TextDisabled("%s", label);
@@ -211,6 +213,7 @@ static void DrawProfileTaskBriefCard(GuiState& state,
                 : style.Colors[ImGuiCol_TextDisabled],
                 u8"Задачи, ожидающие выдачи XP", overview.xpPending > 0);
             ImGui::EndTable();
+        }
         }
 
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -537,7 +540,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             spiritSummary += std::to_string(spiritPercent) + "% XP";
         }
         if (BeginCard("profile_header_card")) {
-        if (ImGui::BeginTable("profile_header_compact", 4, ImGuiTableFlags_SizingStretchSame)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_header_compact", 4, ControlTableFlagsGui())) {
             auto drawHeaderCell = [](const char* label,
                                      const std::string& value,
                                      const ImVec4& valueColor,
@@ -577,6 +582,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 ImGui::SetTooltip(u8"Нужен пароль профиля.");
             }
             ImGui::EndTable();
+        }
         }
         if (state.isAdmin || profile.spirit() == ProfileSpirit::Evil) {
             ImGui::Dummy(ImVec2(0.0f, 3.0f));
@@ -691,7 +697,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
             }
         };
-        if (ImGui::BeginTable("profile_info", 2, ImGuiTableFlags_SizingStretchProp)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("profile_info", 2, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
             ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableNextRow();
@@ -773,6 +781,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
             }
             ImGui::EndTable();
+        }
         }
         ImGui::PopStyleVar();
         ImGui::EndChild();
@@ -966,7 +975,9 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     signalCards.push_back({"profile_signal_focus", UiIcon::Flow, u8"Рабочий фокус", focusValue, focusDetail, focusAccent});
     signalCards.push_back({"profile_signal_load", UiIcon::List, u8"Нагрузка", workloadValue, workloadDetail.str(), workloadAccent});
     signalCards.push_back({"profile_signal_balance", UiIcon::Bell, u8"Слабая зона", balanceValue, balanceDetail, balanceAccent});
-    if (ImGui::BeginTable("profile_signal_cards", signalColumns, ImGuiTableFlags_SizingStretchSame)) {
+    {
+    CompactTableScopeGui compactTable;
+    if (ImGui::BeginTable("profile_signal_cards", signalColumns, ControlTableFlagsGui())) {
         for (int i = 0; i < static_cast<int>(signalCards.size()); ++i) {
             if (i % signalColumns == 0) {
                 ImGui::TableNextRow();
@@ -976,6 +987,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
             DrawProfileSignalCard(card.id, card.icon, card.title, card.value, card.detail, card.accent);
         }
         ImGui::EndTable();
+    }
     }
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
     if (state.modules.tasks && state.active) {
