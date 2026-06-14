@@ -102,7 +102,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
 
     const float panelHeight = ImGui::GetContentRegionAvail().y;
     if (ImGui::BeginTable("catalog_split", 2,
-                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable)) {
+                          ControlTableFlagsGui(ImGuiTableFlags_Resizable))) {
         ImGui::TableSetupColumn("list", ImGuiTableColumnFlags_WidthStretch, 0.55f);
         ImGui::TableSetupColumn("editor", ImGuiTableColumnFlags_WidthStretch, 0.45f);
         ImGui::TableNextRow();
@@ -148,7 +148,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TextDisabled(u8"Поиск");
             ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
                                      state.filters.skill.data(), state.filters.skill.size());
-            if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
+            if (IconButtonGui("catalog_filter_reset_stack", UiIcon::Clear,
+                              u8"Сбросить фильтры каталога", catalogAccent, ImGui::GetFrameHeight())) {
                 state.filters.skill.fill('\0');
                 state.catalogWeightCategoryFilter = 0;
             }
@@ -163,7 +164,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::Combo(u8"##catalog_weight", &state.catalogWeightCategoryFilter,
                          weightCategoryLabels, IM_ARRAYSIZE(weightCategoryLabels));
-        } else if (ImGui::BeginTable("catalog_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("catalog_filters", 3, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("filter_idx", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn("filter_left", ImGuiTableColumnFlags_WidthStretch, 1.1f);
             ImGui::TableSetupColumn("filter_right", ImGuiTableColumnFlags_WidthStretch, 0.95f);
@@ -176,7 +179,8 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputTextWithHint(u8"##catalog_search", u8"Поиск навыка",
                                      state.filters.skill.data(), state.filters.skill.size());
-            if (ImGui::SmallButton(u8"Сброс##catalog_filter")) {
+            if (IconButtonGui("catalog_filter_reset", UiIcon::Clear,
+                              u8"Сбросить фильтры каталога", catalogAccent, ImGui::GetFrameHeight())) {
                 state.filters.skill.fill('\0');
                 state.catalogWeightCategoryFilter = 0;
             }
@@ -206,6 +210,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled(u8"");
             ImGui::EndTable();
+        }
         }
         ImGui::TextDisabled(u8"Всего: %d", static_cast<int>(catalogSkills.size()));
         if (catalogSkills.empty()) {
@@ -313,7 +318,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             } else {
                 rangeStream << "-";
             }
-            if (ImGui::BeginTable("catalog_kpi", columns, ImGuiTableFlags_SizingStretchSame)) {
+            {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("catalog_kpi", columns, ControlTableFlagsGui())) {
                 struct KpiItem {
                     const char* id;
                     UiIcon icon;
@@ -344,6 +351,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 }
                 ImGui::EndTable();
             }
+            }
             if (matchingCount == 0) {
                 DrawEmptyStateGui("catalog_summary_empty", UiIcon::Search,
                                   u8"Нет навыков по фильтру",
@@ -352,7 +360,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ImGui::Dummy(ImVec2(0.0f, 4.0f));
                 ImGui::TextDisabled(u8"Вес A-E");
                 const char* catLabels[] = {"", "A", "B", "C", "D", "E"};
-                if (ImGui::BeginTable("catalog_weights", 3, ImGuiTableFlags_SizingStretchProp)) {
+                {
+                CompactTableScopeGui compactTable;
+                if (ImGui::BeginTable("catalog_weights", 3, ControlTableFlagsGui())) {
                 ImGui::TableSetupColumn("cat", ImGuiTableColumnFlags_WidthFixed, 58.0f);
                 ImGui::TableSetupColumn("count", ImGuiTableColumnFlags_WidthFixed, 44.0f);
                 ImGui::TableSetupColumn("bar", ImGuiTableColumnFlags_WidthStretch);
@@ -381,6 +391,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
+                }
                 }
                 if (hasAttention && minCategory > 0) {
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -427,7 +438,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 state.clearSkillsPopupRequest = true;
             }
             if (!state.isAdmin) ImGui::EndDisabled();
-        } else if (ImGui::BeginTable("catalog_actions", 5, ImGuiTableFlags_SizingStretchProp)) {
+        } else {
+            CompactTableScopeGui compactTable;
+            if (ImGui::BeginTable("catalog_actions", 5, ControlTableFlagsGui())) {
             ImGui::TableSetupColumn("action_label", ImGuiTableColumnFlags_WidthFixed, 72.0f);
             ImGui::TableSetupColumn("action_add", ImGuiTableColumnFlags_WidthFixed,
                                     actionSize + ImGui::GetStyle().CellPadding.x * 2.0f);
@@ -477,12 +490,11 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
             ImGui::TableSetColumnIndex(4);
             ImGui::TextDisabled(u8"+ / удалить / очистить");
             ImGui::EndTable();
+            }
         }
 
         ImGui::Separator();
 
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg |
-            ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable;
         const ImGuiStyle& style = ImGui::GetStyle();
         ImVec4 keyBg = style.Colors[ImGuiCol_FrameBg];
         keyBg.w = std::clamp(keyBg.w * 0.35f, 0.05f, 0.14f);
@@ -491,7 +503,10 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
         topRowBg.w = std::clamp(topRowBg.w * 0.12f, 0.04f, 0.12f);
         const ImU32 topRowBgU32 = ImGui::GetColorU32(topRowBg);
         const char* catShort[] = {"", "A", "B", "C", "D", "E"};
-        if (ImGui::BeginTable("catalog_table", 4, tableFlags)) {
+        {
+        CompactTableScopeGui compactTable;
+        if (ImGui::BeginTable("catalog_table", 4,
+                              ControlTableFlagsGui(ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 36.0f);
             ImGui::TableSetupColumn(u8"Навык");
             ImGui::TableSetupColumn(u8"Кат.", ImGuiTableColumnFlags_WidthFixed, 52.0f);
@@ -556,6 +571,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 ++rowRank;
             }
             ImGui::EndTable();
+        }
         }
         ImGui::TextDisabled(u8"%d/%d", visibleCount, static_cast<int>(catalogSkills.size()));
         if (visibleCount == 0) {
@@ -635,7 +651,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 } else {
                     const float profWidth = ImGui::GetContentRegionAvail().x;
                     const int profColumns = profWidth > 520.0f ? 3 : (profWidth > 320.0f ? 2 : 1);
-                    if (ImGui::BeginTable("edit_skill_professions", profColumns, ImGuiTableFlags_SizingStretchSame)) {
+                    {
+                    CompactTableScopeGui compactTable;
+                    if (ImGui::BeginTable("edit_skill_professions", profColumns, ControlTableFlagsGui())) {
                         for (size_t i = 0; i < state.professions.size(); ++i) {
                             bool checked = state.editSkillProfessionFlags[i] != 0;
                             ImGui::TableNextColumn();
@@ -648,6 +666,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                             ImGui::PopID();
                         }
                         ImGui::EndTable();
+                    }
                     }
                 }
                 ImGui::InputTextMultiline(u8"Описание", state.editSkillDesc.data(), state.editSkillDesc.size(), ImVec2(-1.0f, 80.0f));
@@ -694,7 +713,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 } else if (state.active) {
                     auto& ach = state.active->profile.achievements();
                     const char* statusLabels[] = {u8"Все", u8"Активные", u8"Истекшие"};
-                    if (ImGui::BeginTable("skill_ach_filters", 3, ImGuiTableFlags_SizingStretchProp)) {
+                    {
+                    CompactTableScopeGui compactTable;
+                    if (ImGui::BeginTable("skill_ach_filters", 3, ControlTableFlagsGui())) {
                         ImGui::TableSetupColumn("ach_filter", ImGuiTableColumnFlags_WidthStretch);
                         ImGui::TableSetupColumn("ach_status", ImGuiTableColumnFlags_WidthFixed, 118.0f);
                         ImGui::TableSetupColumn("ach_reset", ImGuiTableColumnFlags_WidthFixed,
@@ -715,6 +736,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                             state.skillAchStatusFilter = 0;
                         }
                         ImGui::EndTable();
+                    }
                     }
                     std::vector<int> filtered;
                     filtered.reserve(ach.size());
@@ -765,7 +787,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
                     ImGui::InputText(u8"Название ачивки", state.achTitle.data(), state.achTitle.size());
-                    if (ImGui::BeginTable("skill_ach_icon_row", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    {
+                    CompactTableScopeGui compactTable;
+                    if (ImGui::BeginTable("skill_ach_icon_row", 2, ControlTableFlagsGui())) {
                         ImGui::TableSetupColumn("ach_icon_path", ImGuiTableColumnFlags_WidthStretch);
                         ImGui::TableSetupColumn("ach_icon_pick", ImGuiTableColumnFlags_WidthFixed,
                                                 ImGui::GetFrameHeight() + ImGui::GetStyle().CellPadding.x * 2.0f);
@@ -779,6 +803,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                             ImGui::OpenPopup(u8"Выбор иконки");
                         }
                         ImGui::EndTable();
+                    }
                     }
                     if (ImGui::BeginPopup(u8"Выбор иконки")) {
                         const auto icons = LoadAchievementIconChoices(state.storageDir);
@@ -832,7 +857,9 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         }
                         ImGui::EndPopup();
                     }
-                    if (ImGui::BeginTable("skill_ach_meta", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    {
+                    CompactTableScopeGui compactTable;
+                    if (ImGui::BeginTable("skill_ach_meta", 2, ControlTableFlagsGui())) {
                         ImGui::TableSetupColumn("ach_bonus", ImGuiTableColumnFlags_WidthStretch);
                         ImGui::TableSetupColumn("ach_duration", ImGuiTableColumnFlags_WidthStretch);
                         ImGui::TableNextRow();
@@ -846,6 +873,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                             ImGui::SetTooltip(u8"0 = без срока.");
                         }
                         ImGui::EndTable();
+                    }
                     }
                     if (state.achDurationDays < 0) state.achDurationDays = 0;
                     const float achActionSize = ImGui::GetFrameHeight();

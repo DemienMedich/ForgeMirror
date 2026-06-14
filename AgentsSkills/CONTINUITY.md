@@ -37,8 +37,8 @@ UI аудит:
   - Целевой UX задач: проект может быть создан из контекста задачи; категория берётся из модуля добавления опыта; навыки можно задать при создании задачи и редактировать по ходу выполнения или на шаге выдачи XP; штраф за дедлайн должен жить как процентный modifier к итоговому XP.
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
 - State:
-  - Ветка: develop. Версия: 0.5.37.
-  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: завершен compact-проход по таблицам профиля, включая фильтры и графики.
+  - Ветка: develop. Версия: 0.5.38.
+  - Последнее изменение: UX plan point 10 `визуальный ритм таблиц и карточек`: каталог и редакторы навыков переведены на общий compact table contract.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий UX-пункт: пункт 10 `визуальный ритм таблиц и карточек`: снизить шум control-таблиц, унифицировать padding/NoPadOuterX, затем пройти плотные таблицы задач/профиля/статистики.
 - Done:
@@ -104,6 +104,7 @@ UI аудит:
   - UX Plan 10 Progress: wizard постановки задач (`task_plan_steps`, `tasks_create_form`, `task_plan_assignees`, `task_plan_review`, `task_plan_navigation`), project bridge и queue/risk-метрики задач используют общий compact table scope.
   - UX Plan 10 Progress: верхнеуровневые таблицы профиля (`profile_task_brief_stats`, `profile_header_compact`, `profile_info`, `profile_signal_cards`, `profile_state_summary`, `profile_balance_table`, `profile_status`, `profile_active_tasks_summary`) используют общий compact table scope.
   - UX Plan 10 Progress: профильные top-skills, фильтры ачивок/навыков/активности, category/top-skill charts и radar controls используют общий compact table scope; в `GuiProfilePanel.inc` и `GuiProfileSections.inc` не осталось старых `SizingStretch*` таблиц.
+  - UX Plan 10 Progress: каталог навыков, его фильтры/KPI/веса/actions, список, профессии и редактор ачивок используют общий compact table scope; текстовый сброс каталога заменен на icon+tooltip.
   - Tasks UX: форма создания/редактирования проекта в project bridge спрятана под collapsible и стала ниже.
   - Tasks UX: bulk-actions получили более короткий selected header и tighter table padding без изменения массовых операций.
   - QA: `smoke_core` теперь проверяет `gui/GuiTasksPanel.inc` на отсутствие `&& BeginCard(...)` и баланс `BeginCard/EndCard`, чтобы ловить регрессии ImGui stack error.

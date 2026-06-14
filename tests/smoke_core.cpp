@@ -222,6 +222,7 @@ static bool TestCompactControlTablesUseSharedScope() {
     std::string mainMenu;
     std::string profileModals;
     std::string skillModals;
+    std::string skillCatalog;
     std::string xpModal;
     if (!ReadFile(root / "gui" / "GuiUiHelpers.inc", helpers)) return false;
     if (!ReadFile(root / "gui" / "GuiLogsPanel.inc", logs)) return false;
@@ -238,6 +239,7 @@ static bool TestCompactControlTablesUseSharedScope() {
     if (!ReadFile(root / "gui" / "GuiMainMenuPanel.inc", mainMenu)) return false;
     if (!ReadFile(root / "gui" / "GuiProfileModals.inc", profileModals)) return false;
     if (!ReadFile(root / "gui" / "GuiSkillModals.inc", skillModals)) return false;
+    if (!ReadFile(root / "gui" / "GuiSkillCatalogPanel.inc", skillCatalog)) return false;
     if (!ReadFile(root / "gui" / "GuiXpModal.inc", xpModal)) return false;
 
     return helpers.find("struct CompactTableScopeGui") != std::string::npos &&
@@ -319,6 +321,19 @@ static bool TestCompactControlTablesUseSharedScope() {
            skillModals.find("BeginTable(\"delete_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
            skillModals.find("BeginTable(\"merge_skill_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
            skillModals.find("BeginTable(\"clear_skills_actions\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"catalog_split\", 2,") != std::string::npos &&
+           skillCatalog.find("ControlTableFlagsGui(ImGuiTableFlags_Resizable)") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"catalog_filters\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"catalog_kpi\", columns, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"catalog_weights\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"catalog_actions\", 5, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"catalog_table\", 4,") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"edit_skill_professions\", profColumns, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"skill_ach_filters\", 3, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"skill_ach_icon_row\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("BeginTable(\"skill_ach_meta\", 2, ControlTableFlagsGui()") != std::string::npos &&
+           skillCatalog.find("ImGuiTableFlags_SizingStretch") == std::string::npos &&
+           CountSubstring(skillCatalog, "CompactTableScopeGui compactTable") >= 9 &&
            xpModal.find("BeginTable(\"xp_task_header\", 2, ControlTableFlagsGui()") != std::string::npos &&
            xpModal.find("BeginTable(\"task_member_controls\", 3, ControlTableFlagsGui()") != std::string::npos &&
            xpModal.find("BeginTable(\"task_members\", 3, ControlTableFlagsGui(ImGuiTableFlags_RowBg)") != std::string::npos &&
