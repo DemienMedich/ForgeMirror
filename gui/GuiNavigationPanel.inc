@@ -99,7 +99,7 @@ void DrawNavigationPanel(GuiState& state) {
         navButton("nav_rules", UiIcon::LockClosed, u8"Правила [F4]", state.showRules, [&]() {
             OpenWorkspaceTab(state, state.showRules, UiWindowId::Rules);
         });
-        navButton("nav_banner", UiIcon::Info, u8"Баннер", state.showBannerAdmin, [&]() {
+        navButton("nav_banner", UiIcon::Bell, u8"Баннер", state.showBannerAdmin, [&]() {
             OpenWorkspaceTab(state, state.showBannerAdmin, UiWindowId::BannerAdmin);
         });
         navButton("nav_vault", UiIcon::LockClosed, u8"Хранилище", state.showVaultAdmin, [&]() {

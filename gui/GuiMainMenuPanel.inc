@@ -1712,7 +1712,7 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                 if (DrawEmptyStateGui("profiles_filter_empty", UiIcon::Search,
                                       u8"Нет профилей по фильтру",
                                       u8"Сбросьте поиск, чтобы вернуть список профилей.",
-                                      UiIcon::Refresh,
+                                      UiIcon::Clear,
                                       u8"Сбросить фильтр",
                                       true)) {
                     state.filters.profile.fill('\0');

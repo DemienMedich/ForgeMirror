@@ -587,7 +587,7 @@ void DrawProjectsPanel(GuiState& state) {
             if (DrawEmptyStateGui("projects_empty_filter", UiIcon::Search,
                                   u8"Нет проектов по фильтру",
                                   u8"Текущие фильтры скрыли все проекты. Сброс вернет полный список.",
-                                  UiIcon::Refresh, u8"Сбросить фильтры проектов")) {
+                                  UiIcon::Clear, u8"Сбросить фильтры проектов")) {
                 state.filters.projects.fill('\0');
                 state.projectsFilterOverdueOnly = false;
                 state.projectsFilterXpPendingOnly = false;

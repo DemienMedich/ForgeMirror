@@ -107,7 +107,7 @@ void DrawLogsPanel(GuiState& state) {
         const std::array<LogKpi, 4> kpis = {{
             {"total", UiIcon::List, u8"Всего", totalCount, accent},
             {"info", UiIcon::Chart, u8"Инфо", infoCount, infoColor},
-            {"warn", UiIcon::Bell, u8"Предупр.", warnCount, warnColor},
+            {"warn", UiIcon::Warning, u8"Предупр.", warnCount, warnColor},
             {"error", UiIcon::Warning, u8"Ошибки", errorCount, errorColor}
         }};
         {
@@ -392,7 +392,7 @@ void DrawLogsPanel(GuiState& state) {
         if (DrawEmptyStateGui("logs_filter_empty_top", UiIcon::Search,
                               u8"По фильтрам ничего не найдено",
                               u8"Сбросьте поиск или источник, чтобы вернуть полный журнал.",
-                              UiIcon::Refresh, u8"Сбросить фильтры логов")) {
+                              UiIcon::Clear, u8"Сбросить фильтры логов")) {
             state.filters.logs.fill('\0');
             state.filters.logSource.fill('\0');
         }
@@ -545,7 +545,7 @@ void DrawLogsPanel(GuiState& state) {
             if (DrawEmptyStateGui("logs_empty_filtered", UiIcon::Search,
                                   u8"Нет записей по фильтру",
                                   u8"Измените поисковый запрос, источник или уровни логов.",
-                                  UiIcon::Refresh, u8"Сбросить фильтры логов")) {
+                                  UiIcon::Clear, u8"Сбросить фильтры логов")) {
                 state.filters.logs.fill('\0');
                 state.filters.logSource.fill('\0');
                 state.logShowInfo = true;

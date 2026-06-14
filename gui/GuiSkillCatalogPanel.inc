@@ -777,7 +777,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     }
                     ImGui::EndChild();
                     if (totalForSkill == 0) {
-                        DrawEmptyStateGui("skill_achievements_empty", UiIcon::Bell,
+                        DrawEmptyStateGui("skill_achievements_empty", UiIcon::Award,
                                           u8"Для навыка нет ачивок",
                                           u8"Выдайте первую ачивку, чтобы она появилась в списке навыка.");
                     } else if (filtered.empty()) {
@@ -798,7 +798,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                         ImGui::SetNextItemWidth(-1.0f);
                         ImGui::InputText(u8"Иконка##ach_icon_path", state.achIcon.data(), state.achIcon.size());
                         ImGui::TableSetColumnIndex(1);
-                        if (IconButtonGui("skill_ach_icon_pick", UiIcon::FileText,
+                        if (IconButtonGui("skill_ach_icon_pick", UiIcon::Image,
                                           u8"Открыть список иконок", accent, ImGui::GetFrameHeight())) {
                             ImGui::OpenPopup(u8"Выбор иконки");
                         }
@@ -808,7 +808,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                     if (ImGui::BeginPopup(u8"Выбор иконки")) {
                         const auto icons = LoadAchievementIconChoices(state.storageDir);
                         if (icons.empty()) {
-                            DrawEmptyStateGui("skill_icon_picker_empty", UiIcon::Bell,
+                            DrawEmptyStateGui("skill_icon_picker_empty", UiIcon::Image,
                                               u8"Иконки не найдены",
                                               u8"Добавьте изображения в папку ачивок, чтобы выбирать их для наград.");
                         } else {

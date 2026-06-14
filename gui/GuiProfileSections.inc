@@ -370,7 +370,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
     ImVec4 accent = ImGui::GetStyle().Colors[ImGuiCol_CheckMark];
     accent.w = 1.0f;
     if (profile.achievements().empty()) {
-        DrawEmptyStateGui("profile_achievements_empty", UiIcon::Bell,
+        DrawEmptyStateGui("profile_achievements_empty", UiIcon::Award,
                           u8"Ачивок нет",
                           u8"Активные достижения появятся здесь после выдачи ачивок профилю.");
     } else {

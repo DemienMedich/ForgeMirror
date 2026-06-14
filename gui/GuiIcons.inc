@@ -1,7 +1,7 @@
 // Semantic icon map:
 // Save/Edit/Award/Export/FileText describe actions, not modules.
 // Clear is for reset/clear filters or drafts; Refresh is only for reloading data.
-// Focus/SelectAll/Warning/Timer prevent navigation, selection, errors and timers from borrowing unrelated glyphs.
+// Focus/SelectAll/Warning/Timer/Image prevent navigation, selection, errors, timers and media from borrowing unrelated glyphs.
 // Task/Project/Shortcut/Sync/Calendar/Assign/Merge keep compact buttons readable without relying on tooltip first.
 enum class UiIcon {
     User = 0,
@@ -47,6 +47,7 @@ enum class UiIcon {
     SelectAll,
     Warning,
     Timer,
+    Image,
     Close
 };
 
@@ -553,6 +554,21 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
                               IconPoint(center, 0.0f, -0.30f, s), color, stroke);
             drawList->AddLine(IconPoint(center, 0.0f, 0.08f, s),
                               IconPoint(center, 0.30f, 0.28f, s), color, stroke);
+            return;
+        }
+        case UiIcon::Image: {
+            ImVec2 a = IconPoint(center, -0.62f, -0.50f, s);
+            ImVec2 b = IconPoint(center, 0.62f, 0.50f, s);
+            drawList->AddRect(a, b, color, s * 0.12f, 0, stroke);
+            drawList->AddCircle(IconPoint(center, 0.28f, -0.20f, s), s * 0.13f, color, 12, stroke);
+            drawList->AddLine(IconPoint(center, -0.48f, 0.32f, s),
+                              IconPoint(center, -0.12f, -0.06f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, -0.12f, -0.06f, s),
+                              IconPoint(center, 0.10f, 0.18f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.10f, 0.18f, s),
+                              IconPoint(center, 0.32f, -0.02f, s), color, stroke);
+            drawList->AddLine(IconPoint(center, 0.32f, -0.02f, s),
+                              IconPoint(center, 0.50f, 0.32f, s), color, stroke);
             return;
         }
         case UiIcon::LockClosed:

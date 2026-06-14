@@ -252,9 +252,9 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         avgXpStream.imbue(std::locale::classic());
         avgXpStream << std::fixed << std::setprecision(0) << stats.avgXp;
         kpi("kpi_avg_xp", UiIcon::Chart, u8"Средний XP", avgXpStream.str(), accentSoft);
-        kpi("kpi_ach_total", UiIcon::Bell, u8"Ачивок всего", std::to_string(stats.achievementsTotal), accentSoft);
-        kpi("kpi_ach_active", UiIcon::Bell, u8"Ачивок активных", std::to_string(stats.achievementsActive), accent);
-        kpi("kpi_recovery", UiIcon::Refresh, u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
+        kpi("kpi_ach_total", UiIcon::Award, u8"Ачивок всего", std::to_string(stats.achievementsTotal), accentSoft);
+        kpi("kpi_ach_active", UiIcon::Award, u8"Ачивок активных", std::to_string(stats.achievementsActive), accent);
+        kpi("kpi_recovery", UiIcon::Timer, u8"Профилей на прогреве", std::to_string(stats.profilesWithRecovery),
             accentSoft);
         kpi("kpi_no_activity", UiIcon::Calendar, u8"Без активности", std::to_string(stats.profilesNoActivity),
             accentSoft);
@@ -633,7 +633,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
         }
     }
     if (byRecovery.empty()) {
-        DrawEmptyStateGui("admin_stats_recovery_empty", UiIcon::Bell,
+        DrawEmptyStateGui("admin_stats_recovery_empty", UiIcon::Timer,
                           u8"Нет профилей на прогреве",
                           u8"Сейчас нет активных профилей с временным штрафом после простоя.");
     }

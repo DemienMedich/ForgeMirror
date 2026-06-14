@@ -2994,7 +2994,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
         if (DrawEmptyStateGui("tasks_empty_filtered", UiIcon::Search,
                               u8"По текущим фильтрам задач нет",
                               u8"Сбросьте фильтры или переключите быстрый режим, чтобы вернуть полный журнал.",
-                              UiIcon::Refresh, u8"Сбросить фильтры задач")) {
+                              UiIcon::Clear, u8"Сбросить фильтры задач")) {
             state.filters.tasks.fill('\0');
             state.tasksFilterProfile = 0;
             state.tasksFilterProject = 0;

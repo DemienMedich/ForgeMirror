@@ -663,7 +663,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
             state.uiDirty = true;
         }
         if (backgrounds.empty()) {
-            DrawEmptyStateGui("ui_background_combo_empty", UiIcon::Bell,
+        DrawEmptyStateGui("ui_background_combo_empty", UiIcon::Image,
                               u8"Фоны не найдены",
                               u8"Положите изображения в data/backgrounds, чтобы быстро назначать фон.");
         } else {
@@ -728,14 +728,14 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
     ImGui::TextDisabled(u8"Показано: %d из %d",
                         visibleBackgrounds, static_cast<int>(backgrounds.size()));
     if (backgrounds.empty()) {
-        DrawEmptyStateGui("ui_backgrounds_empty", UiIcon::Bell,
+        DrawEmptyStateGui("ui_backgrounds_empty", UiIcon::Image,
                           u8"Фоны не найдены",
                           u8"Положите изображения в data/backgrounds, чтобы назначать их окнам.");
     } else if (visibleBackgrounds == 0) {
         if (DrawEmptyStateGui("ui_backgrounds_filter_empty", UiIcon::Search,
                               u8"Нет фонов по фильтру",
                               u8"Очистите поиск, чтобы вернуть список доступных фонов.",
-                              UiIcon::Refresh,
+                              UiIcon::Clear,
                               u8"Сбросить фильтр",
                               true)) {
             state.filters.background.fill('\0');

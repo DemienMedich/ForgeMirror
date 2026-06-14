@@ -752,7 +752,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 }
             }
             ImGui::SameLine();
-            if (IconButtonGui("profile_change_password", UiIcon::Settings,
+            if (IconButtonGui("profile_change_password", UiIcon::LockClosed,
                               hasPassword ? u8"Сменить пароль" : u8"Задать пароль",
                               accent, accessIconSize)) {
                 openChange();
@@ -974,7 +974,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
     signalCards.push_back({"profile_signal_milestone", UiIcon::Chart, u8"Следующий рубеж", milestoneValue, milestoneDetail, milestoneAccent});
     signalCards.push_back({"profile_signal_focus", UiIcon::Flow, u8"Рабочий фокус", focusValue, focusDetail, focusAccent});
     signalCards.push_back({"profile_signal_load", UiIcon::List, u8"Нагрузка", workloadValue, workloadDetail.str(), workloadAccent});
-    signalCards.push_back({"profile_signal_balance", UiIcon::Bell, u8"Слабая зона", balanceValue, balanceDetail, balanceAccent});
+    signalCards.push_back({"profile_signal_balance", UiIcon::Warning, u8"Слабая зона", balanceValue, balanceDetail, balanceAccent});
     {
     CompactTableScopeGui compactTable;
     if (ImGui::BeginTable("profile_signal_cards", signalColumns, ControlTableFlagsGui())) {
