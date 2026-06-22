@@ -456,7 +456,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                 }
             }
             if (visibleXpCount == 0) {
-                DrawEmptyStateGui("xp_modal_skills_filter_empty", UiIcon::Search,
+                DrawEmptyStateGui("xp_modal_skills_filter_empty", UiIcon::Filter,
                                   u8"Нет навыков по фильтру",
                                   u8"Сбросьте поиск или фильтр профессии, чтобы вернуть список навыков.");
             }

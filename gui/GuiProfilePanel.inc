@@ -157,13 +157,13 @@ static void DrawProfileTaskBriefCard(GuiState& state,
             ImGui::SameLine();
         }
         if (overview.primaryTask) {
-            if (IconButtonGui("open_focus", UiIcon::Task, u8"Открыть фокус-задачу",
+            if (IconButtonGui("open_focus", UiIcon::Focus, u8"Открыть фокус-задачу",
                               accent, actionSize)) {
                 FocusTasksForProfile(state, profileId, 0, overview.primaryTask->id);
             }
         } else {
             ImGui::BeginDisabled();
-            IconButtonGui("open_focus_disabled", UiIcon::Task, u8"Нет фокус-задачи",
+            IconButtonGui("open_focus_disabled", UiIcon::Focus, u8"Нет фокус-задачи",
                           accent, actionSize);
             ImGui::EndDisabled();
         }
@@ -416,7 +416,7 @@ void DrawProfilePanel(GuiState& state, IJobStorage& storage, SkillCatalog& catal
                 RefreshProfiles(state, storage, catalog);
             }
         } else {
-            DrawEmptyStateGui("profile_body_select_profile", UiIcon::Search,
+            DrawEmptyStateGui("profile_body_select_profile", UiIcon::User,
                               u8"Профиль не выбран",
                               u8"Выберите профиль в верхнем блоке, чтобы увидеть прогресс, задачи и навыки.");
         }

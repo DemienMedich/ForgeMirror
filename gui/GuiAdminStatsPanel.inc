@@ -199,7 +199,7 @@ void DrawAdminStatsPanel(GuiState& state, IJobStorage& storage, SkillCatalog& ca
                               u8"Нет профилей для статистики",
                               u8"Создайте профиль или импортируйте данные, чтобы увидеть сводку.");
         } else {
-            DrawEmptyStateGui("admin_stats_empty_filtered", UiIcon::Search,
+            DrawEmptyStateGui("admin_stats_empty_filtered", UiIcon::Filter,
                               u8"Нет данных по фильтрам",
                               u8"Сбросьте поиск, ранг или режим архива, чтобы вернуть список.");
         }

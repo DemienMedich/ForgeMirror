@@ -555,7 +555,7 @@ static void DrawProfileAchievementsSection(GuiState& state, SkillCatalog& catalo
             }
         }
         if (visibleAch == 0) {
-            DrawEmptyStateGui("profile_achievements_filter_empty", UiIcon::Search,
+            DrawEmptyStateGui("profile_achievements_filter_empty", UiIcon::Filter,
                               u8"Нет ачивок по фильтру",
                               u8"Сбросьте фильтр активности или поиск, чтобы вернуть список ачивок.");
         }
@@ -734,7 +734,7 @@ static void DrawProfileSkillsSection(GuiState& state, SkillCatalog& catalog, Pro
     }
     ImGui::TextDisabled(u8"Показано: %d из %d", visibleCount, static_cast<int>(skills.size()));
     if (visibleCount == 0) {
-        DrawEmptyStateGui("profile_skills_filter_empty", UiIcon::Search,
+        DrawEmptyStateGui("profile_skills_filter_empty", UiIcon::Filter,
                           u8"Нет навыков по фильтру",
                           u8"Сбросьте поиск, категорию или сортировку, чтобы вернуть список навыков.");
     }
@@ -1029,7 +1029,7 @@ static void DrawProfileActivitySection(GuiState& state, const std::string& profi
                 rendered += 1;
             }
             if (activityShown == 0) {
-                DrawEmptyStateGui("profile_activity_filter_empty", UiIcon::Search,
+                DrawEmptyStateGui("profile_activity_filter_empty", UiIcon::Filter,
                                   u8"Нет действий по фильтру",
                                   u8"Очистите поиск, чтобы вернуть историю действий профиля.");
             } else if (activityShown > rendered) {

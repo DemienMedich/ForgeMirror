@@ -330,7 +330,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                 };
                 std::array<KpiItem, 4> kpis = {{
                     {"total", UiIcon::List, u8"Всего", std::to_string(totalCount), accent},
-                    {"shown", UiIcon::Search, u8"Показано", std::to_string(matchingCount), accent},
+                    {"shown", UiIcon::Filter, u8"Показано", std::to_string(matchingCount), accent},
                     {"avg", UiIcon::Chart, u8"Средний вес", avgStream.str(), accent},
                     {"range", UiIcon::Flow, u8"Диапазон", rangeStream.str(), accent}
                 }};
@@ -781,7 +781,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                                           u8"Для навыка нет ачивок",
                                           u8"Выдайте первую ачивку, чтобы она появилась в списке навыка.");
                     } else if (filtered.empty()) {
-                        DrawEmptyStateGui("skill_achievements_filter_empty", UiIcon::Search,
+                        DrawEmptyStateGui("skill_achievements_filter_empty", UiIcon::Filter,
                                           u8"Нет ачивок по фильтру",
                                           u8"Сбросьте поиск или статус, чтобы вернуть ачивки навыка.");
                     }
@@ -850,7 +850,7 @@ void DrawSkillCatalogPanel(GuiState& state, IJobStorage& storage, SkillCatalog& 
                             }
                             ImGui::EndChild();
                             if (visibleIcons == 0) {
-                                DrawEmptyStateGui("skill_icon_picker_filter_empty", UiIcon::Search,
+                                DrawEmptyStateGui("skill_icon_picker_filter_empty", UiIcon::Filter,
                                                   u8"Нет иконок по фильтру",
                                                   u8"Очистите поиск, чтобы вернуть список иконок.");
                             }

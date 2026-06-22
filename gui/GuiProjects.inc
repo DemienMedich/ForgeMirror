@@ -584,7 +584,7 @@ void DrawProjectsPanel(GuiState& state) {
                 state.newProjectDesc.fill('\0');
             }
         } else {
-            if (DrawEmptyStateGui("projects_empty_filter", UiIcon::Search,
+            if (DrawEmptyStateGui("projects_empty_filter", UiIcon::Filter,
                                   u8"Нет проектов по фильтру",
                                   u8"Текущие фильтры скрыли все проекты. Сброс вернет полный список.",
                                   UiIcon::Clear, u8"Сбросить фильтры проектов")) {

@@ -1709,7 +1709,7 @@ void DrawProfilesPanel(GuiState& state, IJobStorage& storage, SkillCatalog& cata
                     ImGui::TextDisabled(u8"Создание профилей доступно администратору.");
                 }
             } else if (visibleIndices.empty()) {
-                if (DrawEmptyStateGui("profiles_filter_empty", UiIcon::Search,
+                if (DrawEmptyStateGui("profiles_filter_empty", UiIcon::Filter,
                                       u8"Нет профилей по фильтру",
                                       u8"Сбросьте поиск, чтобы вернуть список профилей.",
                                       UiIcon::Clear,

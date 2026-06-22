@@ -389,7 +389,7 @@ void DrawLogsPanel(GuiState& state) {
     const bool hasTextFilter = state.filters.logs[0] != '\0';
     const bool hasSourceFilter = state.filters.logSource[0] != '\0';
     if (filteredCount == 0 && (hasTextFilter || hasSourceFilter)) {
-        if (DrawEmptyStateGui("logs_filter_empty_top", UiIcon::Search,
+        if (DrawEmptyStateGui("logs_filter_empty_top", UiIcon::Filter,
                               u8"По фильтрам ничего не найдено",
                               u8"Сбросьте поиск или источник, чтобы вернуть полный журнал.",
                               UiIcon::Clear, u8"Сбросить фильтры логов")) {
@@ -542,7 +542,7 @@ void DrawLogsPanel(GuiState& state) {
                               u8"Журнал пока пуст",
                               u8"Записи появятся после действий, ошибок и системных событий приложения.");
         } else {
-            if (DrawEmptyStateGui("logs_empty_filtered", UiIcon::Search,
+            if (DrawEmptyStateGui("logs_empty_filtered", UiIcon::Filter,
                                   u8"Нет записей по фильтру",
                                   u8"Измените поисковый запрос, источник или уровни логов.",
                                   UiIcon::Clear, u8"Сбросить фильтры логов")) {
@@ -665,7 +665,7 @@ void DrawLogsPanel(GuiState& state) {
             ImGui::EndTable();
             ImGui::TextDisabled(u8"Показано: %d из %d", shown, static_cast<int>(state.taskAudit.size()));
             if (shown == 0) {
-                DrawEmptyStateGui("task_audit_empty_filtered", UiIcon::Search,
+                DrawEmptyStateGui("task_audit_empty_filtered", UiIcon::Filter,
                                   u8"По фильтрам аудита ничего не найдено",
                                   u8"Очистите фильтры актора, задачи или поля, чтобы вернуть записи.");
             }

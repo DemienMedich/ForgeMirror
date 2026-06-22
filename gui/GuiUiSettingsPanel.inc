@@ -732,7 +732,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                           u8"Фоны не найдены",
                           u8"Положите изображения в data/backgrounds, чтобы назначать их окнам.");
     } else if (visibleBackgrounds == 0) {
-        if (DrawEmptyStateGui("ui_backgrounds_filter_empty", UiIcon::Search,
+        if (DrawEmptyStateGui("ui_backgrounds_filter_empty", UiIcon::Filter,
                               u8"Нет фонов по фильтру",
                               u8"Очистите поиск, чтобы вернуть список доступных фонов.",
                               UiIcon::Clear,
@@ -752,7 +752,7 @@ void DrawUiSettingsPanel(GuiState& state, ImGuiStyle& style) {
                 state.uiDirty = true;
             }
             if (visibleBackgrounds == 0) {
-                DrawEmptyStateGui("ui_background_combo_filter_empty", UiIcon::Search,
+                DrawEmptyStateGui("ui_background_combo_filter_empty", UiIcon::Filter,
                                   u8"Нет фонов по фильтру",
                                   u8"Очистите фильтр в блоке фонов, чтобы выбрать изображение.");
             }

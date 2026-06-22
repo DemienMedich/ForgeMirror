@@ -1,7 +1,7 @@
 // Semantic icon map:
 // Save/Edit/Award/Export/FileText describe actions, not modules.
 // Clear is for reset/clear filters or drafts; Refresh is only for reloading data.
-// Focus/SelectAll/Warning/Timer/Image prevent navigation, selection, errors, timers and media from borrowing unrelated glyphs.
+// Focus/SelectAll/Warning/Timer/Filter/Image prevent navigation, selection, errors, timers, filters and media from borrowing unrelated glyphs.
 // Task/Project/Shortcut/Sync/Calendar/Assign/Merge keep compact buttons readable without relying on tooltip first.
 enum class UiIcon {
     User = 0,
@@ -47,6 +47,7 @@ enum class UiIcon {
     SelectAll,
     Warning,
     Timer,
+    Filter,
     Image,
     Close
 };
@@ -554,6 +555,21 @@ static void DrawIconGlyph(ImDrawList* drawList, UiIcon icon, ImVec2 center, floa
                               IconPoint(center, 0.0f, -0.30f, s), color, stroke);
             drawList->AddLine(IconPoint(center, 0.0f, 0.08f, s),
                               IconPoint(center, 0.30f, 0.28f, s), color, stroke);
+            return;
+        }
+        case UiIcon::Filter: {
+            ImVec2 topLeft = IconPoint(center, -0.68f, -0.55f, s);
+            ImVec2 topRight = IconPoint(center, 0.68f, -0.55f, s);
+            ImVec2 neckRight = IconPoint(center, 0.22f, -0.02f, s);
+            ImVec2 stemRight = IconPoint(center, 0.12f, 0.58f, s);
+            ImVec2 stemLeft = IconPoint(center, -0.12f, 0.58f, s);
+            ImVec2 neckLeft = IconPoint(center, -0.22f, -0.02f, s);
+            drawList->AddLine(topLeft, topRight, color, stroke);
+            drawList->AddLine(topRight, neckRight, color, stroke);
+            drawList->AddLine(neckRight, stemRight, color, stroke);
+            drawList->AddLine(stemRight, stemLeft, color, stroke);
+            drawList->AddLine(stemLeft, neckLeft, color, stroke);
+            drawList->AddLine(neckLeft, topLeft, color, stroke);
             return;
         }
         case UiIcon::Image: {

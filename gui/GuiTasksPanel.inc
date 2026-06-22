@@ -2463,7 +2463,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     if (ImGui::CollapsingHeader(summaryHeader.c_str())) {
         if (BeginCard("tasks_summary_card")) {
         if (filtered.empty()) {
-            DrawEmptyStateGui("tasks_summary_empty_filter", UiIcon::Search,
+            DrawEmptyStateGui("tasks_summary_empty_filter", UiIcon::Filter,
                               u8"Нет задач по фильтру",
                               u8"Сбросьте фильтры или переключите быстрый режим, чтобы вернуть сводку.");
         } else {
@@ -2991,7 +2991,7 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
     ImGui::TextDisabled(u8"Показано: %d из %d (всего: %d)", visibleCount, filteredCount, totalTasks);
     if (!state.tasks.empty() && filteredCount == 0) {
         ImGui::Spacing();
-        if (DrawEmptyStateGui("tasks_empty_filtered", UiIcon::Search,
+        if (DrawEmptyStateGui("tasks_empty_filtered", UiIcon::Filter,
                               u8"По текущим фильтрам задач нет",
                               u8"Сбросьте фильтры или переключите быстрый режим, чтобы вернуть полный журнал.",
                               UiIcon::Clear, u8"Сбросить фильтры задач")) {
