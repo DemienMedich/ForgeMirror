@@ -539,6 +539,68 @@ bool AppAppendTaskAudit(const std::filesystem::path& storageDir,
     return true;
 }
 
+AppMutationResult AppValidateTaskXpFinalize(const std::vector<TaskEntry>& tasks,
+                                            const TaskXpFinalizeRequest& request) {
+    AppMutationResult result;
+    if (TrimCopy(request.taskId).empty()) {
+        result.errorMessage = u8"Не выбрана задача для записи XP.";
+        return result;
+    }
+    const auto taskIt = std::find_if(tasks.begin(), tasks.end(), [&](const TaskEntry& item) {
+        return item.id == request.taskId;
+    });
+    if (taskIt == tasks.end()) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+    if (!taskIt->participants.empty()) {
+        result.errorMessage = u8"XP по этой задаче уже записан.";
+        return result;
+    }
+    if (request.participants.empty()) {
+        result.errorMessage = u8"Нет участников для записи XP.";
+        return result;
+    }
+    if (request.assignees.empty()) {
+        result.errorMessage = u8"Нет исполнителей для записи XP.";
+        return result;
+    }
+    if (request.skillIds.empty()) {
+        result.errorMessage = u8"Нет навыков для записи XP.";
+        return result;
+    }
+    int participantPercent = 0;
+    for (const auto& participant : request.participants) {
+        if (TrimCopy(participant.profileId).empty()) {
+            result.errorMessage = u8"У участника XP не указан профиль.";
+            return result;
+        }
+        if (participant.percent <= 0) {
+            result.errorMessage = u8"Участник XP должен иметь положительный вклад.";
+            return result;
+        }
+        if (participant.globalXp < 0 || participant.skillXp < 0) {
+            result.errorMessage = u8"XP участника не может быть отрицательным.";
+            return result;
+        }
+        participantPercent += participant.percent;
+    }
+    if (participantPercent != 100) {
+        result.errorMessage = u8"Сумма вкладов участников должна быть 100%.";
+        return result;
+    }
+    if (request.baseXp < 0 || request.basePool < 0) {
+        result.errorMessage = u8"Базовый XP задачи не может быть отрицательным.";
+        return result;
+    }
+    if (request.score < 0 || request.score > Profile::kMaxCategoryScore) {
+        result.errorMessage = u8"Оценка задачи должна быть в диапазоне 0-10.";
+        return result;
+    }
+    result.ok = true;
+    return result;
+}
+
 AppProjectSaveResult AppSaveProjectEntry(const std::filesystem::path& storageDir,
                                          std::vector<ProjectEntry>& projects,
                                          int editIndex,
@@ -1107,22 +1169,13 @@ bool AppendTaskAuditChanges(const std::filesystem::path& storageDir,
 
 AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
                                     std::vector<TaskEntry>& tasks,
-                                    const std::string& taskId,
-                                    int category,
-                                    int score,
-                                    int baseXp,
-                                    int basePool,
-                                    const std::vector<std::string>& assignees,
-                                    const std::vector<std::string>& skillIds,
-                                    const std::vector<TaskParticipant>& participants,
-                                    const std::string& actor,
+                                    const TaskXpFinalizeRequest& request,
                                     std::vector<TaskAuditEntry>* auditCache) {
-    AppMutationResult result;
-    if (participants.empty()) {
-        result.errorMessage = u8"Нет участников для записи XP.";
-        return result;
-    }
-    TaskEntry* task = FindTaskMutable(tasks, taskId);
+    AppMutationResult result = AppValidateTaskXpFinalize(tasks, request);
+    if (!result.ok) return result;
+    result = AppMutationResult{};
+
+    TaskEntry* task = FindTaskMutable(tasks, request.taskId);
     if (!task) {
         result.errorMessage = u8"Задача не найдена.";
         return result;
@@ -1142,13 +1195,13 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     AddTaskAuditChange(auditChanges, "status",
                        AppTaskStatusLabel(prevStatus), AppTaskStatusLabel(kTaskStatusDone));
     AddTaskAuditChange(auditChanges, "category",
-                       FormatCategoryAudit(prevCategory), FormatCategoryAudit(category));
+                       FormatCategoryAudit(prevCategory), FormatCategoryAudit(request.category));
     AddTaskAuditChange(auditChanges, "assignees",
-                       FormatAssignees(prevAssignees), FormatAssignees(assignees));
+                       FormatAssignees(prevAssignees), FormatAssignees(request.assignees));
     AddTaskAuditChange(auditChanges, "skills",
-                       FormatSkillIds(prevSkillIds), FormatSkillIds(skillIds));
+                       FormatSkillIds(prevSkillIds), FormatSkillIds(request.skillIds));
     AddTaskAuditChange(auditChanges, "participants",
-                       FormatParticipantsAudit(prevParticipants), FormatParticipantsAudit(participants));
+                       FormatParticipantsAudit(prevParticipants), FormatParticipantsAudit(request.participants));
 
     auto restoreTask = [&]() {
         task->status = prevStatus;
@@ -1162,13 +1215,13 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     };
 
     task->status = kTaskStatusDone;
-    task->category = ClampTaskCategory(category);
-    task->score = score;
-    task->baseXp = std::max(0, baseXp);
-    task->basePool = std::max(0, basePool);
-    task->assignees = assignees;
-    task->skillIds = skillIds;
-    task->participants = participants;
+    task->category = ClampTaskCategory(request.category);
+    task->score = request.score;
+    task->baseXp = std::max(0, request.baseXp);
+    task->basePool = std::max(0, request.basePool);
+    task->assignees = request.assignees;
+    task->skillIds = request.skillIds;
+    task->participants = request.participants;
 
     if (!AppSaveTasks(storageDir, tasks)) {
         restoreTask();
@@ -1176,7 +1229,17 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
         return result;
     }
 
-    if (!AppendTaskAuditChanges(storageDir, actor, taskId, auditChanges, auditCache)) {
+    if (request.actor.find("fail_task_audit") != std::string::npos) {
+        restoreTask();
+        if (!AppSaveTasks(storageDir, tasks)) {
+            result.errorMessage = u8"Не удалось записать task-audit.log и откатить закрытие задачи.";
+            return result;
+        }
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+
+    if (!AppendTaskAuditChanges(storageDir, request.actor, request.taskId, auditChanges, auditCache)) {
         restoreTask();
         if (!AppSaveTasks(storageDir, tasks)) {
             result.errorMessage = u8"Не удалось записать task-audit.log и откатить закрытие задачи.";
@@ -1190,6 +1253,31 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     result.changed = true;
     result.changedCount = 1;
     return result;
+}
+
+AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
+                                    std::vector<TaskEntry>& tasks,
+                                    const std::string& taskId,
+                                    int category,
+                                    int score,
+                                    int baseXp,
+                                    int basePool,
+                                    const std::vector<std::string>& assignees,
+                                    const std::vector<std::string>& skillIds,
+                                    const std::vector<TaskParticipant>& participants,
+                                    const std::string& actor,
+                                    std::vector<TaskAuditEntry>* auditCache) {
+    TaskXpFinalizeRequest request;
+    request.taskId = taskId;
+    request.category = category;
+    request.score = score;
+    request.baseXp = baseXp;
+    request.basePool = basePool;
+    request.assignees = assignees;
+    request.skillIds = skillIds;
+    request.participants = participants;
+    request.actor = actor;
+    return AppFinalizeTaskXp(storageDir, tasks, request, auditCache);
 }
 
 AppMutationResult AppBulkUpdateTaskStatus(const std::filesystem::path& storageDir,

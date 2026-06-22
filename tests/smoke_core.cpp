@@ -139,6 +139,10 @@ static bool TestTaskTextMutation(const std::filesystem::path& dir) {
 }
 
 static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::path& dir) {
+    auto fail = [](const char* reason) {
+        std::cerr << "taskFinalizeRollback: " << reason << "\n";
+        return false;
+    };
     std::vector<TaskEntry> tasks;
     TaskEntry task;
     task.id = "task_finalize";
@@ -152,11 +156,7 @@ static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::pat
     task.skillIds = {"skill_old"};
     task.createdAt = 1700000000;
     tasks.push_back(task);
-    if (!AppSaveTasks(dir, tasks)) return false;
-
-    std::error_code ec;
-    std::filesystem::create_directories(dir / "meta" / "task-audit.log", ec);
-    if (ec) return false;
+    if (!AppSaveTasks(dir, tasks)) return fail("initial save");
 
     TaskParticipant participant;
     participant.profileId = "p_new";
@@ -164,25 +164,78 @@ static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::pat
     participant.globalXp = 20;
     participant.skillXp = 10;
     std::vector<TaskAuditEntry> audit;
-    AppMutationResult result = AppFinalizeTaskXp(
-        dir, tasks, task.id, 2, 4, 20, 20,
-        {"p_new"}, {"skill_new"}, {participant}, "admin", &audit);
+    TaskXpFinalizeRequest request;
+    request.taskId = task.id;
+    request.category = 2;
+    request.score = 4;
+    request.baseXp = 20;
+    request.basePool = 20;
+    request.assignees = {"p_new"};
+    request.skillIds = {"skill_new"};
+    request.participants = {participant};
+    request.actor = "__forgemirror_smoke_fail_task_audit__";
+    AppMutationResult result = AppFinalizeTaskXp(dir, tasks, request, &audit);
 
-    if (result.ok || tasks[0].status != 1 || tasks[0].category != 0 ||
-        tasks[0].score != 0 || tasks[0].baseXp != 0 || tasks[0].basePool != 0 ||
-        tasks[0].assignees != std::vector<std::string>{"p_old"} ||
-        tasks[0].skillIds != std::vector<std::string>{"skill_old"} ||
-        !tasks[0].participants.empty() || !audit.empty()) {
-        return false;
-    }
+    if (result.ok) return fail("result ok");
+    if (result.errorMessage.find("task-audit.log") == std::string::npos) return fail("wrong error");
+    if (tasks[0].status != 1) return fail("status not restored");
+    if (tasks[0].category != 0) return fail("category not restored");
+    if (tasks[0].score != 0) return fail("score not restored");
+    if (tasks[0].baseXp != 0) return fail("baseXp not restored");
+    if (tasks[0].basePool != 0) return fail("basePool not restored");
+    if (tasks[0].assignees != std::vector<std::string>{"p_old"}) return fail("assignees not restored");
+    if (tasks[0].skillIds != std::vector<std::string>{"skill_old"}) return fail("skills not restored");
+    if (!tasks[0].participants.empty()) return fail("participants not restored");
+    if (!audit.empty()) return fail("audit cache changed");
 
     std::string saved;
-    if (!ReadFile(dir / "meta" / "tasks.json", saved)) return false;
-    return saved.find("\"status\":1") != std::string::npos &&
-           saved.find("\"category\":0") != std::string::npos &&
-           saved.find("\"assignees\":\"p_old\"") != std::string::npos &&
-           saved.find("\"skillIds\":\"skill_old\"") != std::string::npos &&
-           saved.find("\"participants\":\"\"") != std::string::npos;
+    if (!ReadFile(dir / "meta" / "tasks.json", saved)) return fail("read saved");
+    if (saved.find("\"status\":1") == std::string::npos) return fail("saved status");
+    if (saved.find("\"category\":0") == std::string::npos) return fail("saved category");
+    if (saved.find("\"assignees\":\"p_old\"") == std::string::npos) return fail("saved assignees");
+    if (saved.find("\"skillIds\":\"skill_old\"") == std::string::npos) return fail("saved skills");
+    if (saved.find("p_new") != std::string::npos) return fail("saved new assignee");
+    if (saved.find("skill_new") != std::string::npos) return fail("saved new skill");
+    return true;
+}
+
+static bool TestTaskFinalizeXpValidatesWorkflowContract(const std::filesystem::path& dir) {
+    std::vector<TaskEntry> tasks;
+    TaskEntry task;
+    task.id = "task_contract";
+    task.title = "Contract XP";
+    task.status = 2;
+    task.category = 0;
+    task.createdAt = 1700000000;
+    tasks.push_back(task);
+
+    TaskParticipant participant;
+    participant.profileId = "p1";
+    participant.percent = 90;
+    participant.globalXp = 10;
+    participant.skillXp = 5;
+
+    TaskXpFinalizeRequest request;
+    request.taskId = task.id;
+    request.category = 1;
+    request.score = 5;
+    request.baseXp = 10;
+    request.basePool = 10;
+    request.assignees = {"p1"};
+    request.skillIds = {"skill"};
+    request.participants = {participant};
+    request.actor = "admin";
+
+    AppMutationResult invalidPercent = AppValidateTaskXpFinalize(tasks, request);
+    if (invalidPercent.ok) return false;
+
+    request.participants[0].percent = 100;
+    AppMutationResult valid = AppValidateTaskXpFinalize(tasks, request);
+    if (!valid.ok) return false;
+
+    tasks[0].participants = request.participants;
+    AppMutationResult duplicate = AppValidateTaskXpFinalize(tasks, request);
+    return !duplicate.ok;
 }
 
 static bool TestGuiTasksImGuiStackPatterns() {
@@ -1054,6 +1107,7 @@ int main() {
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
+    const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
@@ -1091,7 +1145,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okTaskFinalizeRollback && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1104,6 +1158,7 @@ int main() {
               << " tasks=" << okTasks
               << " taskText=" << okTaskText
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
+              << " taskFinalizeContract=" << okTaskFinalizeContract
               << " guiStack=" << okGuiStack
               << " pipelineGuiStack=" << okPipelineGuiStack
               << " guiRowStates=" << okGuiRowStates

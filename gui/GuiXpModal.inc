@@ -813,19 +813,18 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     if (!participants.empty()) {
                         bool saveOk = false;
                         if (fromTask) {
+                            TaskXpFinalizeRequest request;
+                            request.taskId = sourceTask->id;
+                            request.category = readyCategory;
+                            request.score = readyScore;
+                            request.baseXp = rules.categoryBaseXp[readyCategory];
+                            request.basePool = basePool;
+                            request.assignees = assignees;
+                            request.skillIds = selectedSkillIds;
+                            request.participants = participants;
+                            request.actor = state.isAdmin ? "admin" : (state.active ? state.active->id : "system");
                             AppMutationResult mutation = AppFinalizeTaskXp(
-                                state.storageDir,
-                                state.tasks,
-                                sourceTask->id,
-                                readyCategory,
-                                readyScore,
-                                rules.categoryBaseXp[readyCategory],
-                                basePool,
-                                assignees,
-                                selectedSkillIds,
-                                participants,
-                                state.isAdmin ? "admin" : (state.active ? state.active->id : "system"),
-                                &state.taskAudit);
+                                state.storageDir, state.tasks, request, &state.taskAudit);
                             saveOk = mutation.ok;
                             if (!mutation.ok) {
                                 SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);

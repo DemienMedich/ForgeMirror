@@ -30,6 +30,18 @@ struct AppProjectDeleteResult {
     std::string errorMessage;
 };
 
+struct TaskXpFinalizeRequest {
+    std::string taskId;
+    int category = 0;
+    int score = 0;
+    int baseXp = 0;
+    int basePool = 0;
+    std::vector<std::string> assignees;
+    std::vector<std::string> skillIds;
+    std::vector<TaskParticipant> participants;
+    std::string actor;
+};
+
 int AppNormalizeTaskStatus(int value);
 int AppNormalizeTaskPriority(int value);
 bool AppIsTaskStatusTransitionAllowed(int fromStatus, int toStatus);
@@ -50,6 +62,9 @@ bool AppAppendTaskAudit(const std::filesystem::path& storageDir,
                         const std::string& oldValue,
                         const std::string& newValue,
                         std::vector<TaskAuditEntry>* cache = nullptr);
+
+AppMutationResult AppValidateTaskXpFinalize(const std::vector<TaskEntry>& tasks,
+                                            const TaskXpFinalizeRequest& request);
 
 AppProjectSaveResult AppSaveProjectEntry(const std::filesystem::path& storageDir,
                                          std::vector<ProjectEntry>& projects,
@@ -142,6 +157,11 @@ AppMutationResult AppUpdateTaskAssignees(const std::filesystem::path& storageDir
                                          const std::vector<std::string>& assignees,
                                          const std::string& actor,
                                          std::vector<TaskAuditEntry>* auditCache = nullptr);
+
+AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
+                                    std::vector<TaskEntry>& tasks,
+                                    const TaskXpFinalizeRequest& request,
+                                    std::vector<TaskAuditEntry>* auditCache = nullptr);
 
 AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
                                     std::vector<TaskEntry>& tasks,
