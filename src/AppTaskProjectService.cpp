@@ -22,6 +22,8 @@ constexpr int kTaskPriorityMedium = 1;
 constexpr int kTaskPriorityHigh = 2;
 constexpr int kTaskPriorityCritical = 3;
 
+bool g_forceTaskAuditFailureForTests = false;
+
 std::int64_t NowSecondsLocal() {
     return static_cast<std::int64_t>(std::time(nullptr));
 }
@@ -1190,6 +1192,7 @@ bool AppendTaskAuditChanges(const std::filesystem::path& storageDir,
                             const std::string& taskId,
                             const std::vector<TaskAuditChange>& changes,
                             std::vector<TaskAuditEntry>* auditCache) {
+    if (g_forceTaskAuditFailureForTests) return false;
     for (const auto& change : changes) {
         if (!AppAppendTaskAudit(storageDir, actor, taskId, change.field,
                                 change.oldValue, change.newValue, auditCache)) {
@@ -1197,6 +1200,10 @@ bool AppendTaskAuditChanges(const std::filesystem::path& storageDir,
         }
     }
     return true;
+}
+
+void AppSetTaskAuditFailureHookForTests(bool enabled) {
+    g_forceTaskAuditFailureForTests = enabled;
 }
 
 AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
@@ -1258,16 +1265,6 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     if (!AppSaveTasks(storageDir, tasks)) {
         restoreTask();
         result.errorMessage = u8"Не удалось сохранить закрытие задачи с XP.";
-        return result;
-    }
-
-    if (request.actor.find("fail_task_audit") != std::string::npos) {
-        restoreTask();
-        if (!AppSaveTasks(storageDir, tasks)) {
-            result.errorMessage = u8"Не удалось записать task-audit.log и откатить закрытие задачи.";
-            return result;
-        }
-        result.errorMessage = u8"Не удалось записать task-audit.log";
         return result;
     }
 

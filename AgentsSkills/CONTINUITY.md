@@ -39,11 +39,12 @@ UI аудит:
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
   - Следующий крупный план: 1) стабильность ядра (`TaskWorkflowService`, транзакционность XP-finalize/audit/save, JSON recovery, ImGui assert-risk), 2) модульность (`GuiTasksPanel`/`GuiProfilePanel` на service/view/widgets, общий filter/action/table helper), 3) UX (`Задачи` table-first/detail-pane, профиль scan-friendly, empty/loading/error states).
 - State:
-  - Ветка: develop. Версия: 0.5.46.
-  - Последнее изменение: Stability plan point 1 `ядро задач и XP`: расчёт процентного штрафа и integer-распределения XP вынесен из XP-модалки в сервисный слой.
+  - Ветка: develop. Версия: 0.5.47.
+  - Последнее изменение: Stability plan point 1 `ядро задач и XP`: тестовый сбой task-audit вынесен из пользовательского `actor` в явный test hook.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий план-пункт: Stability 1 `ядро задач и XP`: транзакционность закрытия задачи, XP handoff, audit и save.
 - Done:
+  - Task XP Stability: удалён production-visible `fail_task_audit` из `actor`; smoke rollback теперь использует явный `AppSetTaskAuditFailureHookForTests`.
   - Task XP Stability: добавлены `AppApplyPercentPenalty` и `AppDistributeIntegerPool`; XP-модалка использует сервисный расчёт для pool участников и навыков, smoke_core проверяет округление/остаток/clamp.
   - Task XP Stability: XP-модалка получила rollback начисленных профилей по `rollbackSnapshot`, если `AppFinalizeTaskXp` или `SaveTasks` завершились ошибкой после начисления XP.
   - Task XP Stability: добавлен `TaskXpFinalizeRequest` и `AppValidateTaskXpFinalize`; XP-модалка использует request-контракт, а smoke_core проверяет запрет повторной записи XP и сумму вкладов 100%.

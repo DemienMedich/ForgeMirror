@@ -173,8 +173,10 @@ static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::pat
     request.assignees = {"p_new"};
     request.skillIds = {"skill_new"};
     request.participants = {participant};
-    request.actor = "__forgemirror_smoke_fail_task_audit__";
+    request.actor = "admin";
+    AppSetTaskAuditFailureHookForTests(true);
     AppMutationResult result = AppFinalizeTaskXp(dir, tasks, request, &audit);
+    AppSetTaskAuditFailureHookForTests(false);
 
     if (result.ok) return fail("result ok");
     if (result.errorMessage.find("task-audit.log") == std::string::npos) return fail("wrong error");

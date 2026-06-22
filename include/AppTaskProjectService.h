@@ -164,6 +164,7 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
                                     std::vector<TaskEntry>& tasks,
                                     const TaskXpFinalizeRequest& request,
                                     std::vector<TaskAuditEntry>* auditCache = nullptr);
+void AppSetTaskAuditFailureHookForTests(bool enabled);
 
 AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
                                     std::vector<TaskEntry>& tasks,
