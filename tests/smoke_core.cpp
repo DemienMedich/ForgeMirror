@@ -781,7 +781,11 @@ static bool TestGuiXpModalAllowsProjectlessSourceTask() {
     std::string source;
     if (!ReadFile(root / "gui" / "GuiXpModal.inc", source)) return false;
     return source.find("(!fromTask && project.empty())") != std::string::npos &&
-           source.find("fromTask ? u8\"В задаче должны быть название и описание.\"") != std::string::npos;
+           source.find("fromTask ? u8\"В задаче должны быть название и описание.\"") != std::string::npos &&
+           source.find("static bool RollbackXpParticipants(") != std::string::npos &&
+           source.find("participantsForRollback = participants") != std::string::npos &&
+           source.find("RollbackXpParticipants(state, storage, catalog, participantsForRollback, activeId)") != std::string::npos &&
+           source.find("начисление XP откатано") != std::string::npos;
 }
 
 static bool TestSyncHealthDetectsBrokenFiles(const std::filesystem::path& dir) {

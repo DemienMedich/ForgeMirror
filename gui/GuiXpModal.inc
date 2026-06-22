@@ -1,3 +1,49 @@
+static bool RollbackXpParticipants(GuiState& state,
+                                   IJobStorage& storage,
+                                   SkillCatalog& catalog,
+                                   const std::vector<TaskParticipant>& participants,
+                                   const std::string& previousActive) {
+    bool ok = true;
+    for (const auto& participant : participants) {
+        if (participant.profileId.empty()) continue;
+        if (!storage.set_active_profile(participant.profileId)) {
+            SetStatus(state, u8"Не удалось активировать профиль для отката XP.", 1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+        auto profileOpt = storage.load_profile();
+        if (!profileOpt) {
+            SetStatus(state, u8"Не удалось загрузить профиль для отката XP.", 1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+        Profile profile = *profileOpt;
+        if (!participant.rollbackSnapshot.empty()) {
+            if (!ApplyProfileTaskRollbackSnapshot(participant.rollbackSnapshot, profile)) {
+                SetStatus(state, u8"Не удалось восстановить snapshot профиля для отката XP.", 1.0f, 0.45f, 0.45f);
+                ok = false;
+                break;
+            }
+        } else {
+            profile.set_total_xp(std::max(0, profile.total_xp() - participant.globalXp));
+            profile.set_tasks_completed(std::max(0, profile.tasks_completed() - 1));
+        }
+        AppProfileMutationResult mutation =
+            AppSaveProfileSnapshot(storage, previousActive, participant.profileId, profile);
+        if (!mutation.ok) {
+            SetStatus(state,
+                      mutation.errorMessage.empty() ? u8"Не удалось сохранить профиль при откате XP." : mutation.errorMessage,
+                      1.0f, 0.45f, 0.45f);
+            ok = false;
+            break;
+        }
+    }
+    if (!previousActive.empty()) {
+        SelectProfileById(state, storage, catalog, previousActive);
+    }
+    return ok;
+}
+
 void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
     // XP sheet modal
     if (state.xpPopupRequest) {
@@ -811,6 +857,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     }
 
                     if (!participants.empty()) {
+                        const std::vector<TaskParticipant> participantsForRollback = participants;
                         bool saveOk = false;
                         if (fromTask) {
                             TaskXpFinalizeRequest request;
@@ -834,6 +881,9 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             task.assignees = std::move(assignees);
                             state.tasks.push_back(std::move(task));
                             saveOk = SaveTasks(state.storageDir, state.tasks);
+                            if (!saveOk && !state.tasks.empty()) {
+                                state.tasks.pop_back();
+                            }
                         }
                         if (!activeId.empty()) {
                             storage.set_active_profile(activeId);
@@ -854,12 +904,20 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             ImGui::CloseCurrentPopup();
                             xpPopupOpen = false;
                         } else {
+                            const bool rollbackOk =
+                                RollbackXpParticipants(state, storage, catalog, participantsForRollback, activeId);
                             SetStatus(state,
-                                      fromTask
-                                          ? u8"Опыт начислен, но не удалось обновить задачу."
-                                          : u8"Опыт начислен, но не удалось записать файл задач.",
-                                      1.0f, 0.75f, 0.35f,
-                                      1.0f, AppLogLevel::Warning, u8"Задачи");
+                                      rollbackOk
+                                          ? (fromTask
+                                                 ? u8"Не удалось обновить задачу; начисление XP откатано."
+                                                 : u8"Не удалось записать файл задач; начисление XP откатано.")
+                                          : u8"Не удалось завершить задачу и откатить весь начисленный XP.",
+                                      rollbackOk ? 1.0f : 1.0f,
+                                      rollbackOk ? 0.75f : 0.45f,
+                                      rollbackOk ? 0.35f : 0.45f,
+                                      1.0f,
+                                      rollbackOk ? AppLogLevel::Warning : AppLogLevel::Error,
+                                      u8"Задачи");
                         }
                     } else {
                         SetStatus(state, u8"Не удалось начислить опыт выбранным профилям.", 1.0f, 0.45f, 0.45f);
