@@ -138,6 +138,53 @@ static bool TestTaskTextMutation(const std::filesystem::path& dir) {
            audit.size() == 2;
 }
 
+static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::path& dir) {
+    std::vector<TaskEntry> tasks;
+    TaskEntry task;
+    task.id = "task_finalize";
+    task.title = "Finalize XP";
+    task.status = 1;
+    task.category = 0;
+    task.score = 0;
+    task.baseXp = 0;
+    task.basePool = 0;
+    task.assignees = {"p_old"};
+    task.skillIds = {"skill_old"};
+    task.createdAt = 1700000000;
+    tasks.push_back(task);
+    if (!AppSaveTasks(dir, tasks)) return false;
+
+    std::error_code ec;
+    std::filesystem::create_directories(dir / "meta" / "task-audit.log", ec);
+    if (ec) return false;
+
+    TaskParticipant participant;
+    participant.profileId = "p_new";
+    participant.percent = 100;
+    participant.globalXp = 20;
+    participant.skillXp = 10;
+    std::vector<TaskAuditEntry> audit;
+    AppMutationResult result = AppFinalizeTaskXp(
+        dir, tasks, task.id, 2, 4, 20, 20,
+        {"p_new"}, {"skill_new"}, {participant}, "admin", &audit);
+
+    if (result.ok || tasks[0].status != 1 || tasks[0].category != 0 ||
+        tasks[0].score != 0 || tasks[0].baseXp != 0 || tasks[0].basePool != 0 ||
+        tasks[0].assignees != std::vector<std::string>{"p_old"} ||
+        tasks[0].skillIds != std::vector<std::string>{"skill_old"} ||
+        !tasks[0].participants.empty() || !audit.empty()) {
+        return false;
+    }
+
+    std::string saved;
+    if (!ReadFile(dir / "meta" / "tasks.json", saved)) return false;
+    return saved.find("\"status\":1") != std::string::npos &&
+           saved.find("\"category\":0") != std::string::npos &&
+           saved.find("\"assignees\":\"p_old\"") != std::string::npos &&
+           saved.find("\"skillIds\":\"skill_old\"") != std::string::npos &&
+           saved.find("\"participants\":\"\"") != std::string::npos;
+}
+
 static bool TestGuiTasksImGuiStackPatterns() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -1006,6 +1053,7 @@ int main() {
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
+    const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
@@ -1043,7 +1091,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okTaskFinalizeRollback && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1055,6 +1103,7 @@ int main() {
               << " rules=" << okRules
               << " tasks=" << okTasks
               << " taskText=" << okTaskText
+              << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " guiStack=" << okGuiStack
               << " pipelineGuiStack=" << okPipelineGuiStack
               << " guiRowStates=" << okGuiRowStates

@@ -1077,6 +1077,34 @@ AppMutationResult AppUpdateTaskAssignees(const std::filesystem::path& storageDir
     return result;
 }
 
+struct TaskAuditChange {
+    std::string field;
+    std::string oldValue;
+    std::string newValue;
+};
+
+void AddTaskAuditChange(std::vector<TaskAuditChange>& changes,
+                        const std::string& field,
+                        const std::string& oldValue,
+                        const std::string& newValue) {
+    if (oldValue == newValue) return;
+    changes.push_back({field, oldValue, newValue});
+}
+
+bool AppendTaskAuditChanges(const std::filesystem::path& storageDir,
+                            const std::string& actor,
+                            const std::string& taskId,
+                            const std::vector<TaskAuditChange>& changes,
+                            std::vector<TaskAuditEntry>* auditCache) {
+    for (const auto& change : changes) {
+        if (!AppAppendTaskAudit(storageDir, actor, taskId, change.field,
+                                change.oldValue, change.newValue, auditCache)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
                                     std::vector<TaskEntry>& tasks,
                                     const std::string& taskId,
@@ -1109,6 +1137,30 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     const int prevBaseXp = task->baseXp;
     const int prevBasePool = task->basePool;
 
+    std::vector<TaskAuditChange> auditChanges;
+    auditChanges.reserve(5);
+    AddTaskAuditChange(auditChanges, "status",
+                       AppTaskStatusLabel(prevStatus), AppTaskStatusLabel(kTaskStatusDone));
+    AddTaskAuditChange(auditChanges, "category",
+                       FormatCategoryAudit(prevCategory), FormatCategoryAudit(category));
+    AddTaskAuditChange(auditChanges, "assignees",
+                       FormatAssignees(prevAssignees), FormatAssignees(assignees));
+    AddTaskAuditChange(auditChanges, "skills",
+                       FormatSkillIds(prevSkillIds), FormatSkillIds(skillIds));
+    AddTaskAuditChange(auditChanges, "participants",
+                       FormatParticipantsAudit(prevParticipants), FormatParticipantsAudit(participants));
+
+    auto restoreTask = [&]() {
+        task->status = prevStatus;
+        task->category = prevCategory;
+        task->score = prevScore;
+        task->baseXp = prevBaseXp;
+        task->basePool = prevBasePool;
+        task->assignees = prevAssignees;
+        task->skillIds = prevSkillIds;
+        task->participants = prevParticipants;
+    };
+
     task->status = kTaskStatusDone;
     task->category = ClampTaskCategory(category);
     task->score = score;
@@ -1119,33 +1171,17 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     task->participants = participants;
 
     if (!AppSaveTasks(storageDir, tasks)) {
-        task->status = prevStatus;
-        task->category = prevCategory;
-        task->score = prevScore;
-        task->baseXp = prevBaseXp;
-        task->basePool = prevBasePool;
-        task->assignees = prevAssignees;
-        task->skillIds = prevSkillIds;
-        task->participants = prevParticipants;
+        restoreTask();
         result.errorMessage = u8"Не удалось сохранить закрытие задачи с XP.";
         return result;
     }
 
-    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "status",
-                                  AppTaskStatusLabel(prevStatus), AppTaskStatusLabel(task->status),
-                                  auditCache) ||
-        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "category",
-                                  FormatCategoryAudit(prevCategory), FormatCategoryAudit(task->category),
-                                  auditCache) ||
-        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "assignees",
-                                  FormatAssignees(prevAssignees), FormatAssignees(task->assignees),
-                                  auditCache) ||
-        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "skills",
-                                  FormatSkillIds(prevSkillIds), FormatSkillIds(task->skillIds),
-                                  auditCache) ||
-        !AppendTaskAuditIfChanged(storageDir, actor, taskId, "participants",
-                                  FormatParticipantsAudit(prevParticipants), FormatParticipantsAudit(task->participants),
-                                  auditCache)) {
+    if (!AppendTaskAuditChanges(storageDir, actor, taskId, auditChanges, auditCache)) {
+        restoreTask();
+        if (!AppSaveTasks(storageDir, tasks)) {
+            result.errorMessage = u8"Не удалось записать task-audit.log и откатить закрытие задачи.";
+            return result;
+        }
         result.errorMessage = u8"Не удалось записать task-audit.log";
         return result;
     }
