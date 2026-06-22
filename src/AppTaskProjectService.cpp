@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
 #include <fstream>
@@ -379,6 +380,37 @@ const char* AppTaskPriorityLabel(int priority) {
         case kTaskPriorityCritical: return u8"Критический";
         default: return u8"Средний";
     }
+}
+
+std::vector<int> AppDistributeIntegerPool(int totalPool, const std::vector<int>& percents) {
+    std::vector<int> distribution(percents.size(), 0);
+    if (totalPool <= 0 || percents.empty()) return distribution;
+
+    int remainder = totalPool;
+    int fallbackIndex = -1;
+    for (int i = 0; i < static_cast<int>(percents.size()); ++i) {
+        const int percent = std::clamp(percents[static_cast<size_t>(i)], 0, 100);
+        if (percent <= 0) continue;
+        const int share = (totalPool * percent) / 100;
+        distribution[static_cast<size_t>(i)] = share;
+        remainder -= share;
+        if (fallbackIndex == -1 ||
+            percent > std::clamp(percents[static_cast<size_t>(fallbackIndex)], 0, 100)) {
+            fallbackIndex = i;
+        }
+    }
+    if (remainder > 0 && fallbackIndex >= 0) {
+        distribution[static_cast<size_t>(fallbackIndex)] += remainder;
+    }
+    return distribution;
+}
+
+int AppApplyPercentPenalty(int value, int penaltyPercent) {
+    if (value <= 0) return 0;
+    const int penalty = std::clamp(penaltyPercent, 0, 100);
+    const int result = static_cast<int>(std::round(
+        static_cast<double>(value) * static_cast<double>(100 - penalty) / 100.0));
+    return std::max(0, result);
 }
 
 bool AppParseTaskDeadlineInput(const std::string& input, std::int64_t& outTs) {

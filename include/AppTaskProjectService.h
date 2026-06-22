@@ -47,6 +47,8 @@ int AppNormalizeTaskPriority(int value);
 bool AppIsTaskStatusTransitionAllowed(int fromStatus, int toStatus);
 const char* AppTaskStatusLabel(int status);
 const char* AppTaskPriorityLabel(int priority);
+std::vector<int> AppDistributeIntegerPool(int totalPool, const std::vector<int>& percents);
+int AppApplyPercentPenalty(int value, int penaltyPercent);
 
 bool AppParseTaskDeadlineInput(const std::string& input, std::int64_t& outTs);
 std::string AppGenerateTaskId(std::int64_t nowSeconds, size_t index);

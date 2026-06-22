@@ -238,6 +238,22 @@ static bool TestTaskFinalizeXpValidatesWorkflowContract(const std::filesystem::p
     return !duplicate.ok;
 }
 
+static bool TestTaskXpDistributionHelpers() {
+    const std::vector<int> splitA = AppDistributeIntegerPool(101, {33, 33, 34});
+    if (splitA != std::vector<int>({33, 33, 35})) return false;
+
+    const std::vector<int> splitB = AppDistributeIntegerPool(99, {50, 50});
+    if (splitB != std::vector<int>({50, 49})) return false;
+
+    const std::vector<int> splitC = AppDistributeIntegerPool(20, {0, 100, -5});
+    if (splitC != std::vector<int>({0, 20, 0})) return false;
+
+    if (AppApplyPercentPenalty(101, 25) != 76) return false;
+    if (AppApplyPercentPenalty(100, 150) != 0) return false;
+    if (AppApplyPercentPenalty(-100, 10) != 0) return false;
+    return true;
+}
+
 static bool TestGuiTasksImGuiStackPatterns() {
     const std::filesystem::path root = FindRepoRootFromCwd();
     if (root.empty()) return false;
@@ -1112,6 +1128,7 @@ int main() {
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
+    const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
@@ -1149,7 +1166,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1163,6 +1180,7 @@ int main() {
               << " taskText=" << okTaskText
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
+              << " taskXpDistribution=" << okTaskXpDistribution
               << " guiStack=" << okGuiStack
               << " pipelineGuiStack=" << okPipelineGuiStack
               << " guiRowStates=" << okGuiRowStates

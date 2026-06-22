@@ -636,29 +636,16 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     rules.categoryBaseXp[readyCategory] *
                     std::pow(std::max(0.1f, static_cast<float>(readyScore) / 10.0f), 1.35f) * focusBonus));
                     if (basePoolRaw < 0) basePoolRaw = 0;
-                    int basePool = static_cast<int>(std::round(
-                        static_cast<double>(basePoolRaw) * static_cast<double>(100 - taskPenaltyPercent) / 100.0));
-                    if (basePool < 0) basePool = 0;
+                    int basePool = AppApplyPercentPenalty(basePoolRaw, taskPenaltyPercent);
                     const char* categoryLabel = ClassificationLabel(readyCategory);
 
-                    std::vector<int> participantPools(state.taskShares.size(), 0);
-                    int remainder = basePool;
-                    int fallbackIndex = -1;
+                    std::vector<int> participantPercents(state.taskShares.size(), 0);
                     for (int i = 0; i < static_cast<int>(state.taskShares.size()); ++i) {
                         auto& share = state.taskShares[i];
                         if (!share.selected || share.archived) continue;
-                        int percent = ClampToRange(share.percent, 0, 100);
-                        if (percent <= 0) continue;
-                        int sharePool = (basePool * percent) / 100;
-                        participantPools[i] = sharePool;
-                        remainder -= sharePool;
-                        if (fallbackIndex == -1 || percent > state.taskShares[fallbackIndex].percent) {
-                            fallbackIndex = i;
-                        }
+                        participantPercents[i] = ClampToRange(share.percent, 0, 100);
                     }
-                    if (remainder > 0 && fallbackIndex >= 0) {
-                        participantPools[fallbackIndex] += remainder;
-                    }
+                    std::vector<int> participantPools = AppDistributeIntegerPool(basePool, participantPercents);
 
                     TaskEntry task;
                     task.id = GenerateTaskId(nowSeconds, state.tasks.size() + 1);
@@ -702,22 +689,11 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         int participantPool = participantPools[i];
                         if (participantPool <= 0) continue;
 
-                        std::vector<int> xpDistribution(state.xpEntries.size(), 0);
-                        int remainderXp = participantPool;
-                        int fallbackSkill = -1;
+                        std::vector<int> skillPercents(state.xpEntries.size(), 0);
                         for (int s = 0; s < static_cast<int>(state.xpEntries.size()); ++s) {
-                            int percent = ClampToRange(state.xpEntries[s].percent, 0, 100);
-                            if (percent <= 0) continue;
-                            int shareXp = (participantPool * percent) / 100;
-                            xpDistribution[s] = shareXp;
-                            remainderXp -= shareXp;
-                            if (fallbackSkill == -1 || percent > state.xpEntries[fallbackSkill].percent) {
-                                fallbackSkill = s;
-                            }
+                            skillPercents[s] = ClampToRange(state.xpEntries[s].percent, 0, 100);
                         }
-                        if (remainderXp > 0 && fallbackSkill >= 0) {
-                            xpDistribution[fallbackSkill] += remainderXp;
-                        }
+                        std::vector<int> xpDistribution = AppDistributeIntegerPool(participantPool, skillPercents);
 
                         std::ostringstream skillsStream;
                         skillsStream.imbue(std::locale::classic());
