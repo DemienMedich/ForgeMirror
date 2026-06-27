@@ -18,6 +18,7 @@ add_executable(ForgeMirror
     src/FileStorage.cpp
     src/AppProfileService.cpp
     src/AppProfileMutationService.cpp
+    src/AppRecoveryStorage.cpp
     src/AppTaskProjectService.cpp
     src/AppProfessionService.cpp
     src/AppPipelineService.cpp
@@ -34,7 +35,7 @@ add_executable(ForgeMirror
 target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.5.47")
+set(APP_VERSION "0.5.48")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
@@ -70,6 +71,7 @@ if(BUILD_IMGUI_GUI)
         src/FileStorage.cpp
         src/AppProfileService.cpp
         src/AppProfileMutationService.cpp
+        src/AppRecoveryStorage.cpp
         src/AppTaskProjectService.cpp
     src/AppProfessionService.cpp
     src/AppPipelineService.cpp
@@ -110,6 +112,7 @@ if(BUILD_CORE_TESTS)
         src/FakeStorage.cpp
         src/AppProfileService.cpp
         src/AppProfileMutationService.cpp
+        src/AppRecoveryStorage.cpp
         src/AppTaskProjectService.cpp
     src/AppProfessionService.cpp
     src/AppPipelineService.cpp

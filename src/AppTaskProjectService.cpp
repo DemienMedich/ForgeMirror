@@ -1,4 +1,5 @@
 #include "AppTaskProjectService.h"
+#include "AppRecoveryStorage.h"
 #include "AppUtils.h"
 #include "Profile.h"
 
@@ -79,45 +80,6 @@ std::string JsonEscape(const std::string& value) {
         }
     }
     return out;
-}
-
-bool WriteAllUtf8Bom(const std::filesystem::path& path, const std::string& payloadWithoutBom) {
-    auto parent = path.parent_path();
-    if (!parent.empty()) {
-        std::error_code ec;
-        std::filesystem::create_directories(parent, ec);
-        if (ec) return false;
-    }
-
-    std::string data = payloadWithoutBom;
-    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
-    data.insert(0, reinterpret_cast<const char*>(bom), sizeof(bom));
-
-    auto tmp = path;
-    tmp += ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (!out) return false;
-        out << data;
-        if (!out.good()) return false;
-    }
-
-    std::error_code ec;
-    if (std::filesystem::exists(path, ec)) {
-        ec.clear();
-        std::filesystem::remove(path, ec);
-        if (ec) {
-            std::filesystem::remove(tmp);
-            return false;
-        }
-    }
-    ec.clear();
-    std::filesystem::rename(tmp, path, ec);
-    if (ec) {
-        std::filesystem::remove(tmp);
-        return false;
-    }
-    return true;
 }
 
 std::string SerializeAssignees(const std::vector<std::string>& assignees) {
@@ -510,7 +472,7 @@ bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<Tas
         out << "\n";
     }
     out << "]";
-    return WriteAllUtf8Bom(TasksStoragePath(storageDir), out.str());
+    return AppWriteUtf8BomWithRecovery(TasksStoragePath(storageDir), out.str());
 }
 
 bool AppSaveProjects(const std::filesystem::path& storageDir, const std::vector<ProjectEntry>& projects) {
@@ -529,7 +491,7 @@ bool AppSaveProjects(const std::filesystem::path& storageDir, const std::vector<
     }
     if (!first) out << "\n";
     out << "]";
-    return WriteAllUtf8Bom(ProjectsStoragePath(storageDir), out.str());
+    return AppWriteUtf8BomWithRecovery(ProjectsStoragePath(storageDir), out.str());
 }
 
 bool AppAppendTaskAudit(const std::filesystem::path& storageDir,

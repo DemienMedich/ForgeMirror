@@ -161,24 +161,6 @@ static std::string tasks_read_all(const std::filesystem::path& p) {
     return data;
 }
 
-static bool tasks_write_all(const std::filesystem::path& p, const std::string& data) {
-    auto parent = p.parent_path();
-    if (!parent.empty()) {
-        std::filesystem::create_directories(parent);
-    }
-    auto tmp = p;
-    tmp += ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (!out) return false;
-        out << data;
-        if (!out.good()) return false;
-    }
-    std::error_code ec;
-    std::filesystem::rename(tmp, p, ec);
-    return !ec;
-}
-
 static std::string tasks_json_escape(const std::string& value) {
     std::string out;
     out.reserve(value.size() + 8);
@@ -474,42 +456,6 @@ static std::vector<TaskEntry> LoadTasks(const std::filesystem::path& storageDir)
         out.push_back(std::move(entry));
     }
     return out;
-}
-
-static bool SaveTasks(const std::filesystem::path& storageDir, const std::vector<TaskEntry>& tasks) {
-    std::ostringstream out;
-    out.imbue(std::locale::classic());
-    out << "[\n";
-    for (size_t i = 0; i < tasks.size(); ++i) {
-        const auto& entry = tasks[i];
-        out << "  {\"id\":\"" << tasks_json_escape(entry.id)
-            << "\",\"projectId\":\"" << tasks_json_escape(entry.projectId)
-            << "\",\"project\":\"" << tasks_json_escape(entry.project)
-            << "\",\"pipelineStepId\":\"" << tasks_json_escape(entry.pipelineStepId)
-            << "\",\"pipelineStep\":\"" << tasks_json_escape(entry.pipelineStep)
-            << "\",\"title\":\"" << tasks_json_escape(entry.title)
-            << "\",\"description\":\"" << tasks_json_escape(entry.description)
-            << "\",\"deadlineAt\":" << entry.deadlineAt
-            << ",\"status\":" << NormalizeTaskStatus(entry.status)
-            << ",\"priority\":" << NormalizeTaskPriority(entry.priority)
-            << ",\"category\":" << entry.category
-            << ",\"deadlinePenaltyPercent\":" << std::clamp(entry.deadlinePenaltyPercent, 0, 100)
-            << ",\"score\":" << entry.score
-            << ",\"baseXp\":" << entry.baseXp
-            << ",\"basePool\":" << entry.basePool
-            << ",\"createdAt\":" << entry.createdAt
-            << ",\"assignees\":\"" << tasks_json_escape(SerializeAssignees(entry.assignees)) << "\""
-            << ",\"skillIds\":\"" << tasks_json_escape(SerializeSkillIds(entry.skillIds)) << "\""
-            << ",\"participants\":\"" << tasks_json_escape(SerializeParticipants(entry.participants)) << "\"}";
-        if (i + 1 < tasks.size()) out << ",";
-        out << "\n";
-    }
-    out << "]";
-    std::string data = out.str();
-    // Write BOM for editors (Notepad) to recognize UTF-8
-    const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
-    data.insert(0, reinterpret_cast<const char*>(bom), sizeof(bom));
-    return tasks_write_all(TasksStoragePath(storageDir), data);
 }
 
 static const TaskParticipant* FindTaskParticipant(const TaskEntry& task, const std::string& profileId) {

@@ -856,7 +856,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             task.participants = std::move(participants);
                             task.assignees = std::move(assignees);
                             state.tasks.push_back(std::move(task));
-                            saveOk = SaveTasks(state.storageDir, state.tasks);
+                            saveOk = AppSaveTasks(state.storageDir, state.tasks);
                             if (!saveOk && !state.tasks.empty()) {
                                 state.tasks.pop_back();
                             }

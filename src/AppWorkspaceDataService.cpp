@@ -1,4 +1,5 @@
 #include "AppWorkspaceDataService.h"
+#include "AppRecoveryStorage.h"
 #include "AppUtils.h"
 
 #include <algorithm>
@@ -130,41 +131,56 @@ bool ParseJsonObject(const std::string& text, size_t& pos,
     return false;
 }
 
-std::vector<std::unordered_map<std::string, std::string>> ParseJsonObjectArray(const std::string& text) {
-    std::vector<std::unordered_map<std::string, std::string>> objects;
+bool ParseJsonObjectArrayStrict(
+    const std::string& text,
+    std::vector<std::unordered_map<std::string, std::string>>& objects) {
+    objects.clear();
     size_t pos = 0;
     SkipWs(text, pos);
-    if (pos >= text.size() || text[pos] != '[') return objects;
+    if (pos >= text.size() || text[pos] != '[') return false;
     ++pos;
     while (pos < text.size()) {
         SkipWs(text, pos);
         if (pos < text.size() && text[pos] == ']') {
             ++pos;
-            break;
+            SkipWs(text, pos);
+            return pos == text.size();
         }
         std::unordered_map<std::string, std::string> obj;
-        if (!ParseJsonObject(text, pos, obj)) break;
+        if (!ParseJsonObject(text, pos, obj)) return false;
         objects.push_back(std::move(obj));
         SkipWs(text, pos);
         if (pos < text.size() && text[pos] == ',') {
             ++pos;
+            SkipWs(text, pos);
+            if (pos >= text.size() || text[pos] == ']') return false;
+            continue;
         }
+        if (pos >= text.size() || text[pos] != ']') return false;
     }
+    return false;
+}
+
+std::vector<std::unordered_map<std::string, std::string>> ParseJsonObjectArray(const std::string& text) {
+    std::vector<std::unordered_map<std::string, std::string>> objects;
+    if (!ParseJsonObjectArrayStrict(text, objects)) objects.clear();
     return objects;
 }
 
 std::vector<std::unordered_map<std::string, std::string>> ParsePipelineObjectsFromContent(const std::string& content) {
-    auto objects = ParseJsonObjectArray(content);
-    if (!objects.empty()) {
+    std::vector<std::unordered_map<std::string, std::string>> objects;
+    if (ParseJsonObjectArrayStrict(content, objects)) {
         return objects;
     }
+    const std::string trimmed = TrimCopy(content);
+    if (trimmed.size() < 2 || trimmed.front() != '{' || trimmed.back() != '}') return {};
     const size_t stepsPos = content.find("\"steps\"");
     const size_t lb = content.find('[', stepsPos);
     const size_t rb = content.rfind(']');
     if (stepsPos != std::string::npos && lb != std::string::npos && rb != std::string::npos && rb > lb) {
-        return ParseJsonObjectArray(content.substr(lb, rb - lb + 1));
+        if (ParseJsonObjectArrayStrict(content.substr(lb, rb - lb + 1), objects)) return objects;
     }
-    return objects;
+    return {};
 }
 
 int ParseInt(const std::string& value, int fallback = 0) {
@@ -988,7 +1004,22 @@ std::vector<TaskEntry> LoadTasksDataFromFile(const std::filesystem::path& filePa
 }
 
 std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
-    return LoadTasksDataFromFile(TasksStoragePath(storageDir));
+    const auto path = TasksStoragePath(storageDir);
+    auto is_valid = [](const std::filesystem::path& candidate) {
+        const std::string content = ReadAllText(candidate);
+        std::vector<std::unordered_map<std::string, std::string>> objects;
+        if (!ParseJsonObjectArrayStrict(content, objects)) return false;
+        return std::all_of(objects.begin(), objects.end(), [](const auto& obj) {
+            const auto id = obj.find("id");
+            return id != obj.end() && !id->second.empty();
+        });
+    };
+    if (is_valid(path)) return LoadTasksDataFromFile(path);
+
+    const auto backupPath = AppRecoveryBackupPath(path);
+    if (!is_valid(backupPath)) return {};
+    AppRestoreRecoveryBackup(path);
+    return LoadTasksDataFromFile(backupPath);
 }
 
 std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageDir) {
@@ -1246,7 +1277,20 @@ std::vector<PipelineStep> LoadPipelineDataFromFile(const std::filesystem::path& 
 }
 
 std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir) {
-    return LoadPipelineDataFromFile(PipelineStoragePath(storageDir));
+    const auto path = PipelineStoragePath(storageDir);
+    auto is_valid = [](const std::filesystem::path& candidate) {
+        const auto objects = ParsePipelineObjectsFromContent(ReadAllText(candidate));
+        return !objects.empty() && std::all_of(objects.begin(), objects.end(), [](const auto& obj) {
+            const auto title = obj.find("title");
+            return title != obj.end() && !title->second.empty();
+        });
+    };
+    if (is_valid(path)) return LoadPipelineDataFromFile(path);
+
+    const auto backupPath = AppRecoveryBackupPath(path);
+    if (!is_valid(backupPath)) return DefaultPipelineSteps();
+    AppRestoreRecoveryBackup(path);
+    return LoadPipelineDataFromFile(backupPath);
 }
 
 WorkspaceDataSnapshot LoadWorkspaceDataSnapshot(const std::filesystem::path& storageDir,

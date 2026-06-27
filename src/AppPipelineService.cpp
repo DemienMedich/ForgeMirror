@@ -1,4 +1,5 @@
 #include "AppPipelineService.h"
+#include "AppRecoveryStorage.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -13,27 +14,6 @@ namespace {
 
 std::filesystem::path PipelineStoragePath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "pipeline.json";
-}
-
-bool WriteAllUtf8BomAtomic(const std::filesystem::path& path, const std::string& payloadWithoutBom) {
-    auto parent = path.parent_path();
-    if (!parent.empty()) {
-        std::error_code ec;
-        std::filesystem::create_directories(parent, ec);
-    }
-    auto tmp = path;
-    tmp += ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (!out) return false;
-        static constexpr unsigned char bom[] = {0xEF, 0xBB, 0xBF};
-        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-        out.write(payloadWithoutBom.data(), static_cast<std::streamsize>(payloadWithoutBom.size()));
-        if (!out.good()) return false;
-    }
-    std::error_code ec;
-    std::filesystem::rename(tmp, path, ec);
-    return !ec;
 }
 
 std::string EscapeJson(const std::string& value) {
@@ -120,7 +100,7 @@ bool AppSavePipelineData(const std::filesystem::path& storageDir,
         out << "\n";
     }
     out << "]";
-    return WriteAllUtf8BomAtomic(PipelineStoragePath(storageDir), out.str());
+    return AppWriteUtf8BomWithRecovery(PipelineStoragePath(storageDir), out.str());
 }
 
 AppPipelineMutationResult AppAddPipelineStep(const std::filesystem::path& storageDir,

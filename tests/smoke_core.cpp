@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <fstream>
@@ -8,6 +9,8 @@
 #include <cmath>
 
 #include "AppProfileMutationService.h"
+#include "AppPipelineService.h"
+#include "AppRecoveryStorage.h"
 #include "AppTaskProjectService.h"
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
@@ -136,6 +139,49 @@ static bool TestTaskTextMutation(const std::filesystem::path& dir) {
     return auditLog.find("|title|Old title|New title") != std::string::npos &&
            auditLog.find("|description|Old description|New description") != std::string::npos &&
            audit.size() == 2;
+}
+
+static bool TestTasksPipelineRecovery(const std::filesystem::path& dir) {
+    auto fail = [](const char* reason) {
+        std::cerr << "workspaceRecovery: " << reason << "\n";
+        return false;
+    };
+
+    TaskEntry task;
+    task.id = "recovery_task";
+    task.title = "Recovery task";
+    task.createdAt = 1700000000;
+    if (!AppSaveTasks(dir, {task})) return fail("save tasks");
+
+    PipelineStep step;
+    step.id = "recovery_step";
+    step.title = "Recovery step";
+    if (!AppSavePipelineData(dir, {step})) return fail("save pipeline");
+
+    const auto tasksPath = dir / "meta" / "tasks.json";
+    const auto pipelinePath = dir / "meta" / "pipeline.json";
+    if (!std::filesystem::exists(AppRecoveryBackupPath(tasksPath))) return fail("tasks backup");
+    if (!std::filesystem::exists(AppRecoveryBackupPath(pipelinePath))) return fail("pipeline backup");
+    if (!WriteFile(tasksPath, "[{\"id\":\"partial\"}")) return fail("break tasks");
+    if (!WriteFile(pipelinePath, "{broken")) return fail("break pipeline");
+
+    const auto tasks = LoadTasksData(dir);
+    const auto pipeline = LoadPipelineData(dir);
+    if (tasks.size() != 1 || tasks[0].id != task.id) return fail("load tasks backup");
+    const auto pipelineMatch = std::find_if(pipeline.begin(), pipeline.end(), [&](const PipelineStep& item) {
+        return item.id == step.id && item.title == step.title;
+    });
+    if (pipelineMatch == pipeline.end()) return fail("load pipeline backup");
+
+    std::string restoredTasks;
+    std::string restoredPipeline;
+    if (!ReadFile(tasksPath, restoredTasks) || restoredTasks.find(task.id) == std::string::npos) {
+        return fail("restore tasks file");
+    }
+    if (!ReadFile(pipelinePath, restoredPipeline) || restoredPipeline.find(step.id) == std::string::npos) {
+        return fail("restore pipeline file");
+    }
+    return true;
 }
 
 static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::path& dir) {
@@ -1127,6 +1173,7 @@ int main() {
     const bool okSpiritRemoval = TestEvilSpiritRemovalForCoins(tmp / "spirit_removal");
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
+    const bool okWorkspaceRecovery = TestTasksPipelineRecovery(tmp / "workspace_recovery");
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
@@ -1168,7 +1215,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1179,6 +1226,7 @@ int main() {
               << " spiritRemoval=" << okSpiritRemoval
               << " rules=" << okRules
               << " tasks=" << okTasks
+              << " workspaceRecovery=" << okWorkspaceRecovery
               << " taskText=" << okTaskText
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
