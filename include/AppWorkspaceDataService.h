@@ -18,6 +18,7 @@ struct WorkspaceDataSnapshot {
     std::vector<std::string> bannerTexts;
     GameplayConfig rulesConfig;
     StorageVaultData vault;
+    std::vector<std::string> recoveryWarnings;
 };
 
 struct WorkspaceSyncFileHealth {

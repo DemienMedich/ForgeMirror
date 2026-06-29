@@ -158,29 +158,63 @@ static bool TestTasksPipelineRecovery(const std::filesystem::path& dir) {
     step.title = "Recovery step";
     if (!AppSavePipelineData(dir, {step})) return fail("save pipeline");
 
+    ProjectEntry project;
+    project.id = "recovery_project";
+    project.name = "Recovery project";
+    project.createdAt = 1700000000;
+    if (!AppSaveProjects(dir, {project})) return fail("save projects");
+
     const auto tasksPath = dir / "meta" / "tasks.json";
     const auto pipelinePath = dir / "meta" / "pipeline.json";
+    const auto projectsPath = dir / "meta" / "projects.json";
     if (!std::filesystem::exists(AppRecoveryBackupPath(tasksPath))) return fail("tasks backup");
     if (!std::filesystem::exists(AppRecoveryBackupPath(pipelinePath))) return fail("pipeline backup");
+    if (!std::filesystem::exists(AppRecoveryBackupPath(projectsPath))) return fail("projects backup");
     if (!WriteFile(tasksPath, "[{\"id\":\"partial\"}")) return fail("break tasks");
     if (!WriteFile(pipelinePath, "{broken")) return fail("break pipeline");
+    if (!WriteFile(projectsPath, "[{\"id\":\"broken\"}]")) return fail("break projects");
 
-    const auto tasks = LoadTasksData(dir);
-    const auto pipeline = LoadPipelineData(dir);
-    if (tasks.size() != 1 || tasks[0].id != task.id) return fail("load tasks backup");
-    const auto pipelineMatch = std::find_if(pipeline.begin(), pipeline.end(), [&](const PipelineStep& item) {
+    ModuleToggles modules;
+    const WorkspaceDataSnapshot snapshot = LoadWorkspaceDataSnapshot(dir, modules);
+    if (snapshot.tasks.size() != 1 || snapshot.tasks[0].id != task.id) return fail("load tasks backup");
+    const auto pipelineMatch = std::find_if(snapshot.pipelineSteps.begin(), snapshot.pipelineSteps.end(), [&](const PipelineStep& item) {
         return item.id == step.id && item.title == step.title;
     });
-    if (pipelineMatch == pipeline.end()) return fail("load pipeline backup");
+    if (pipelineMatch == snapshot.pipelineSteps.end()) return fail("load pipeline backup");
+    if (snapshot.projects.size() != 1 || snapshot.projects[0].id != project.id) {
+        return fail("load projects backup");
+    }
+    if (snapshot.recoveryWarnings.size() != 3) return fail("recovery warnings");
 
     std::string restoredTasks;
     std::string restoredPipeline;
+    std::string restoredProjects;
     if (!ReadFile(tasksPath, restoredTasks) || restoredTasks.find(task.id) == std::string::npos) {
         return fail("restore tasks file");
     }
     if (!ReadFile(pipelinePath, restoredPipeline) || restoredPipeline.find(step.id) == std::string::npos) {
         return fail("restore pipeline file");
     }
+    if (!ReadFile(projectsPath, restoredProjects) || restoredProjects.find(project.id) == std::string::npos) {
+        return fail("restore projects file");
+    }
+
+    bool tasksDamagedCopy = false;
+    bool pipelineDamagedCopy = false;
+    bool projectsDamagedCopy = false;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(dir / "meta" / "updates", ec)) {
+        const std::string name = entry.path().filename().string();
+        tasksDamagedCopy = tasksDamagedCopy || name.find("tasks.corrupt.") == 0;
+        pipelineDamagedCopy = pipelineDamagedCopy || name.find("pipeline.corrupt.") == 0;
+        projectsDamagedCopy = projectsDamagedCopy || name.find("projects.corrupt.") == 0;
+    }
+    if (ec || !tasksDamagedCopy || !pipelineDamagedCopy || !projectsDamagedCopy) {
+        return fail("damaged copies");
+    }
+
+    const WorkspaceDataSnapshot cleanReload = LoadWorkspaceDataSnapshot(dir, modules);
+    if (!cleanReload.recoveryWarnings.empty()) return fail("repeated recovery warning");
     return true;
 }
 

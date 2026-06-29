@@ -1003,7 +1003,8 @@ std::vector<TaskEntry> LoadTasksDataFromFile(const std::filesystem::path& filePa
     return out;
 }
 
-std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
+static std::vector<TaskEntry> LoadTasksDataWithRecovery(const std::filesystem::path& storageDir,
+                                                        std::vector<std::string>* recoveryWarnings) {
     const auto path = TasksStoragePath(storageDir);
     auto is_valid = [](const std::filesystem::path& candidate) {
         const std::string content = ReadAllText(candidate);
@@ -1018,13 +1019,27 @@ std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
 
     const auto backupPath = AppRecoveryBackupPath(path);
     if (!is_valid(backupPath)) return {};
-    AppRestoreRecoveryBackup(path);
+    std::filesystem::path damagedCopyPath;
+    const bool restored = AppRestoreRecoveryBackup(path, &damagedCopyPath);
+    if (recoveryWarnings) {
+        std::string warning = restored
+            ? std::string(u8"Задачи восстановлены из last-good копии.")
+            : std::string(u8"Задачи загружены из last-good копии, но основной файл не восстановлен.");
+        if (!damagedCopyPath.empty()) {
+            warning += std::string(u8" Повреждённый JSON сохранён: ") + damagedCopyPath.u8string();
+        }
+        recoveryWarnings->push_back(std::move(warning));
+    }
     return LoadTasksDataFromFile(backupPath);
 }
 
-std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageDir) {
+std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
+    return LoadTasksDataWithRecovery(storageDir, nullptr);
+}
+
+static std::vector<ProjectEntry> LoadProjectsDataFromFile(const std::filesystem::path& filePath) {
     std::vector<ProjectEntry> out;
-    const std::string content = ReadAllText(ProjectsStoragePath(storageDir));
+    const std::string content = ReadAllText(filePath);
     if (content.empty()) return out;
     const auto objects = ParseJsonObjectArray(content);
     out.reserve(objects.size());
@@ -1046,6 +1061,42 @@ std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageD
         return a.name < b.name;
     });
     return out;
+}
+
+static std::vector<ProjectEntry> LoadProjectsDataWithRecovery(
+    const std::filesystem::path& storageDir,
+    std::vector<std::string>* recoveryWarnings) {
+    const auto path = ProjectsStoragePath(storageDir);
+    auto is_valid = [](const std::filesystem::path& candidate) {
+        std::vector<std::unordered_map<std::string, std::string>> objects;
+        if (!ParseJsonObjectArrayStrict(ReadAllText(candidate), objects)) return false;
+        return std::all_of(objects.begin(), objects.end(), [](const auto& obj) {
+            const auto id = obj.find("id");
+            const auto name = obj.find("name");
+            return id != obj.end() && !id->second.empty() &&
+                   name != obj.end() && !name->second.empty();
+        });
+    };
+    if (is_valid(path)) return LoadProjectsDataFromFile(path);
+
+    const auto backupPath = AppRecoveryBackupPath(path);
+    if (!is_valid(backupPath)) return {};
+    std::filesystem::path damagedCopyPath;
+    const bool restored = AppRestoreRecoveryBackup(path, &damagedCopyPath);
+    if (recoveryWarnings) {
+        std::string warning = restored
+            ? std::string(u8"Проекты восстановлены из last-good копии.")
+            : std::string(u8"Проекты загружены из last-good копии, но основной файл не восстановлен.");
+        if (!damagedCopyPath.empty()) {
+            warning += std::string(u8" Повреждённый JSON сохранён: ") + damagedCopyPath.u8string();
+        }
+        recoveryWarnings->push_back(std::move(warning));
+    }
+    return LoadProjectsDataFromFile(backupPath);
+}
+
+std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageDir) {
+    return LoadProjectsDataWithRecovery(storageDir, nullptr);
 }
 
 std::vector<ShortcutEntry> LoadShortcutsData(const std::filesystem::path& storageDir) {
@@ -1276,7 +1327,9 @@ std::vector<PipelineStep> LoadPipelineDataFromFile(const std::filesystem::path& 
     return MergeLoadedPipelineWithDefaults(out);
 }
 
-std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir) {
+static std::vector<PipelineStep> LoadPipelineDataWithRecovery(
+    const std::filesystem::path& storageDir,
+    std::vector<std::string>* recoveryWarnings) {
     const auto path = PipelineStoragePath(storageDir);
     auto is_valid = [](const std::filesystem::path& candidate) {
         const auto objects = ParsePipelineObjectsFromContent(ReadAllText(candidate));
@@ -1289,18 +1342,36 @@ std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageD
 
     const auto backupPath = AppRecoveryBackupPath(path);
     if (!is_valid(backupPath)) return DefaultPipelineSteps();
-    AppRestoreRecoveryBackup(path);
+    std::filesystem::path damagedCopyPath;
+    const bool restored = AppRestoreRecoveryBackup(path, &damagedCopyPath);
+    if (recoveryWarnings) {
+        std::string warning = restored
+            ? std::string(u8"Пайплайн восстановлен из last-good копии.")
+            : std::string(u8"Пайплайн загружен из last-good копии, но основной файл не восстановлен.");
+        if (!damagedCopyPath.empty()) {
+            warning += std::string(u8" Повреждённый JSON сохранён: ") + damagedCopyPath.u8string();
+        }
+        recoveryWarnings->push_back(std::move(warning));
+    }
     return LoadPipelineDataFromFile(backupPath);
+}
+
+std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir) {
+    return LoadPipelineDataWithRecovery(storageDir, nullptr);
 }
 
 WorkspaceDataSnapshot LoadWorkspaceDataSnapshot(const std::filesystem::path& storageDir,
                                                 const ModuleToggles& modules) {
     WorkspaceDataSnapshot snapshot;
-    snapshot.tasks = modules.tasks ? LoadTasksData(storageDir) : std::vector<TaskEntry>();
+    snapshot.tasks = modules.tasks
+        ? LoadTasksDataWithRecovery(storageDir, &snapshot.recoveryWarnings)
+        : std::vector<TaskEntry>();
     snapshot.taskAudit = modules.tasks ? LoadTaskAuditData(storageDir) : std::vector<TaskAuditEntry>();
-    snapshot.projects = LoadProjectsData(storageDir);
+    snapshot.projects = LoadProjectsDataWithRecovery(storageDir, &snapshot.recoveryWarnings);
     snapshot.shortcuts = modules.shortcuts ? LoadShortcutsData(storageDir) : std::vector<ShortcutEntry>();
-    snapshot.pipelineSteps = modules.pipeline ? LoadPipelineData(storageDir) : std::vector<PipelineStep>();
+    snapshot.pipelineSteps = modules.pipeline
+        ? LoadPipelineDataWithRecovery(storageDir, &snapshot.recoveryWarnings)
+        : std::vector<PipelineStep>();
     snapshot.professions = modules.professions ? LoadProfessionsData(storageDir) : std::vector<ProfessionEntry>();
     snapshot.bannerTexts = LoadBannerTexts(storageDir);
     snapshot.rulesConfig = LoadGameplayConfig(storageDir);

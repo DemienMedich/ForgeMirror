@@ -1,5 +1,6 @@
 #include "AppRecoveryStorage.h"
 
+#include <chrono>
 #include <fstream>
 #include <iterator>
 
@@ -56,6 +57,19 @@ bool ReadBinary(const std::filesystem::path& path, std::string& data) {
     return in.good() || in.eof();
 }
 
+std::filesystem::path MakeDamagedCopyPath(const std::filesystem::path& path) {
+    const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const auto directory = path.parent_path() / "updates";
+    const std::string base = path.stem().string() + ".corrupt." + std::to_string(timestamp);
+    std::filesystem::path candidate = directory / (base + path.extension().string());
+    std::error_code ec;
+    for (int suffix = 2; std::filesystem::exists(candidate, ec) && !ec; ++suffix) {
+        candidate = directory / (base + "." + std::to_string(suffix) + path.extension().string());
+    }
+    return candidate;
+}
+
 } // namespace
 
 std::filesystem::path AppRecoveryBackupPath(const std::filesystem::path& path) {
@@ -74,8 +88,20 @@ bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
     return WriteBinaryAtomic(path, data);
 }
 
-bool AppRestoreRecoveryBackup(const std::filesystem::path& path) {
-    std::string data;
-    if (!ReadBinary(AppRecoveryBackupPath(path), data)) return false;
-    return WriteBinaryAtomic(path, data);
+bool AppRestoreRecoveryBackup(const std::filesystem::path& path,
+                              std::filesystem::path* damagedCopyPath) {
+    if (damagedCopyPath) damagedCopyPath->clear();
+
+    std::string recoveryData;
+    if (!ReadBinary(AppRecoveryBackupPath(path), recoveryData)) return false;
+
+    std::error_code ec;
+    if (std::filesystem::exists(path, ec) && !ec) {
+        std::string damagedData;
+        if (!ReadBinary(path, damagedData)) return false;
+        const auto copyPath = MakeDamagedCopyPath(path);
+        if (!WriteBinaryAtomic(copyPath, damagedData)) return false;
+        if (damagedCopyPath) *damagedCopyPath = copyPath;
+    }
+    return WriteBinaryAtomic(path, recoveryData);
 }

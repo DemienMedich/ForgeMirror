@@ -14,6 +14,7 @@ static void EnsureStorageVaultFile(GuiState& state, const AppContext& app) {
 }
 
 static void ApplyWorkspaceSnapshot(GuiState& state, WorkspaceDataSnapshot snapshot) {
+    const std::vector<std::string> recoveryWarnings = std::move(snapshot.recoveryWarnings);
     state.tasks = std::move(snapshot.tasks);
     state.taskAudit = std::move(snapshot.taskAudit);
     state.projects = std::move(snapshot.projects);
@@ -31,6 +32,15 @@ static void ApplyWorkspaceSnapshot(GuiState& state, WorkspaceDataSnapshot snapsh
     state.profileWalletCache.clear();
     state.profileProfessionDirty = true;
     state.adminStatsDirty = true;
+    if (!recoveryWarnings.empty()) {
+        std::string message;
+        for (const auto& warning : recoveryWarnings) {
+            if (!message.empty()) message += "\n";
+            message += warning;
+        }
+        SetStatus(state, message, 1.0f, 0.75f, 0.35f, 1.0f,
+                  AppLogLevel::Warning, u8"Восстановление данных");
+    }
 }
 
 static void LoadWorkspaceCollections(GuiState& state, const AppContext& app) {
