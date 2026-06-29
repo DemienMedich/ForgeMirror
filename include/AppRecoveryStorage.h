@@ -10,3 +10,5 @@ bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
 
 bool AppRestoreRecoveryBackup(const std::filesystem::path& path,
                               std::filesystem::path* damagedCopyPath = nullptr);
+
+void AppSetRecoveryPrimaryWriteFailureForTests(bool enabled);

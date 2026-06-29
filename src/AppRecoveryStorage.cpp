@@ -11,6 +11,8 @@
 
 namespace {
 
+bool g_forcePrimaryWriteFailureForTests = false;
+
 bool ReplaceFile(const std::filesystem::path& source, const std::filesystem::path& target) {
 #ifdef _WIN32
     return MoveFileExW(source.c_str(), target.c_str(),
@@ -83,9 +85,12 @@ bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
     std::string data(reinterpret_cast<const char*>(bom), sizeof(bom));
     data += payloadWithoutBom;
 
-    // Commit the recovery copy first. A failed primary replace leaves the old primary intact.
-    if (!WriteBinaryAtomic(AppRecoveryBackupPath(path), data)) return false;
-    return WriteBinaryAtomic(path, data);
+    if (g_forcePrimaryWriteFailureForTests) return false;
+    if (!WriteBinaryAtomic(path, data)) return false;
+
+    // The primary file is authoritative. A stale backup is safer than an uncommitted one.
+    WriteBinaryAtomic(AppRecoveryBackupPath(path), data);
+    return true;
 }
 
 bool AppRestoreRecoveryBackup(const std::filesystem::path& path,
@@ -104,4 +109,8 @@ bool AppRestoreRecoveryBackup(const std::filesystem::path& path,
         if (damagedCopyPath) *damagedCopyPath = copyPath;
     }
     return WriteBinaryAtomic(path, recoveryData);
+}
+
+void AppSetRecoveryPrimaryWriteFailureForTests(bool enabled) {
+    g_forcePrimaryWriteFailureForTests = enabled;
 }

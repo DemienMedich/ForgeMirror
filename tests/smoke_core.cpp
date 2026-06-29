@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <regex>
 #include <string>
 #include <vector>
 #include <chrono>
@@ -218,6 +219,66 @@ static bool TestTasksPipelineRecovery(const std::filesystem::path& dir) {
     return true;
 }
 
+static bool TestWorkspaceMutationsRollBackWhenSaveFails(const std::filesystem::path& dir) {
+    auto fail = [](const char* reason) {
+        AppSetRecoveryPrimaryWriteFailureForTests(false);
+        std::cerr << "workspaceSaveRollback: " << reason << "\n";
+        return false;
+    };
+
+    TaskEntry task;
+    task.id = "rollback_task";
+    task.title = "Old task";
+    task.description = "Old description";
+    std::vector<TaskEntry> tasks = {task};
+    if (!AppSaveTasks(dir, tasks)) return fail("initial tasks save");
+
+    ProjectEntry project;
+    project.id = "rollback_project";
+    project.name = "Old project";
+    std::vector<ProjectEntry> projects = {project};
+    if (!AppSaveProjects(dir, projects)) return fail("initial projects save");
+
+    PipelineStep step;
+    step.id = "rollback_step";
+    step.title = "Old pipeline";
+    std::vector<PipelineStep> pipeline = {step};
+    if (!AppSavePipelineData(dir, pipeline)) return fail("initial pipeline save");
+
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    const AppMutationResult taskResult = AppUpdateTaskText(
+        dir, tasks, task.id, "New task", "New description", "admin");
+    const AppProjectSaveResult projectResult = AppSaveProjectEntry(
+        dir, projects, 0, "New project", "New description");
+    PipelineStep updatedStep = step;
+    updatedStep.title = "New pipeline";
+    const AppPipelineMutationResult pipelineResult = AppUpdatePipelineStep(dir, pipeline, 0, updatedStep);
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+
+    if (taskResult.ok || tasks[0].title != task.title || tasks[0].description != task.description) {
+        return fail("task memory rollback");
+    }
+    if (projectResult.ok || projects[0].name != project.name) return fail("project memory rollback");
+    if (pipelineResult.ok || pipeline[0].title != step.title) return fail("pipeline memory rollback");
+
+    const auto loadedTasks = LoadTasksData(dir);
+    const auto loadedProjects = LoadProjectsData(dir);
+    const auto loadedPipeline = LoadPipelineData(dir);
+    if (loadedTasks.size() != 1 || loadedTasks[0].title != task.title) return fail("task disk rollback");
+    if (loadedProjects.size() != 1 || loadedProjects[0].name != project.name) return fail("project disk rollback");
+    const auto pipelineMatch = std::find_if(loadedPipeline.begin(), loadedPipeline.end(), [&](const PipelineStep& item) {
+        return item.id == step.id && item.title == step.title;
+    });
+    if (pipelineMatch == loadedPipeline.end()) return fail("pipeline disk rollback");
+
+    std::string tasksBackup;
+    if (!ReadFile(AppRecoveryBackupPath(dir / "meta" / "tasks.json"), tasksBackup) ||
+        tasksBackup.find("New task") != std::string::npos) {
+        return fail("uncommitted backup");
+    }
+    return true;
+}
+
 static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::path& dir) {
     auto fail = [](const char* reason) {
         std::cerr << "taskFinalizeRollback: " << reason << "\n";
@@ -349,6 +410,63 @@ static bool TestGuiTasksImGuiStackPatterns() {
     const size_t beginCards = CountSubstring(source, "BeginCard(");
     const size_t endCards = CountSubstring(source, "EndCard();");
     return beginCards == endCards;
+}
+
+static int CountImGuiPopCalls(const std::string& source, const char* call) {
+    const std::regex pattern(std::string("ImGui::") + call + R"(\s*\(\s*([0-9]*)\s*\))");
+    int count = 0;
+    for (std::sregex_iterator it(source.begin(), source.end(), pattern), end; it != end; ++it) {
+        const std::string amount = (*it)[1].str();
+        count += amount.empty() ? 1 : std::stoi(amount);
+    }
+    return count;
+}
+
+static bool TestGuiImGuiScopeTotals() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+
+    struct ScopePair {
+        const char* begin;
+        const char* end;
+        bool countedEnd;
+    };
+    const ScopePair pairs[] = {
+        {"ImGui::PushStyleColor(", "PopStyleColor", true},
+        {"ImGui::PushStyleVar(", "PopStyleVar", true},
+        {"ImGui::BeginDisabled(", "ImGui::EndDisabled(", false},
+        {"ImGui::BeginTable(", "ImGui::EndTable(", false},
+        {"ImGui::BeginCombo(", "ImGui::EndCombo(", false},
+        {"ImGui::BeginTabBar(", "ImGui::EndTabBar(", false},
+        {"ImGui::BeginTabItem(", "ImGui::EndTabItem(", false},
+        {"ImGui::BeginTooltip(", "ImGui::EndTooltip(", false},
+    };
+
+    std::string combinedSource;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "gui", ec)) {
+        if (ec) return false;
+        if (!entry.is_regular_file()) continue;
+        const auto extension = entry.path().extension().string();
+        if (extension != ".inc" && extension != ".cpp") continue;
+
+        std::string source;
+        if (!ReadFile(entry.path(), source)) return false;
+        combinedSource += source;
+        combinedSource.push_back('\n');
+    }
+    for (const ScopePair& pair : pairs) {
+        const int beginCount = static_cast<int>(CountSubstring(combinedSource, pair.begin));
+        const int endCount = pair.countedEnd
+            ? CountImGuiPopCalls(combinedSource, pair.end)
+            : static_cast<int>(CountSubstring(combinedSource, pair.end));
+        if (beginCount != endCount) {
+            std::cerr << "guiScopeTotals: " << pair.begin << "=" << beginCount
+                      << " end=" << endCount << "\n";
+            return false;
+        }
+    }
+    return !ec;
 }
 
 static bool TestGuiPipelineImGuiStackPatterns() {
@@ -1208,11 +1326,13 @@ int main() {
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okWorkspaceRecovery = TestTasksPipelineRecovery(tmp / "workspace_recovery");
+    const bool okWorkspaceSaveRollback = TestWorkspaceMutationsRollBackWhenSaveFails(tmp / "workspace_save_rollback");
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
+    const bool okGuiScopeTotals = TestGuiImGuiScopeTotals();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
     const bool okCompactControlTables = TestCompactControlTablesUseSharedScope();
@@ -1249,7 +1369,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1261,11 +1381,13 @@ int main() {
               << " rules=" << okRules
               << " tasks=" << okTasks
               << " workspaceRecovery=" << okWorkspaceRecovery
+              << " workspaceSaveRollback=" << okWorkspaceSaveRollback
               << " taskText=" << okTaskText
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
               << " taskXpDistribution=" << okTaskXpDistribution
               << " guiStack=" << okGuiStack
+              << " guiScopeTotals=" << okGuiScopeTotals
               << " pipelineGuiStack=" << okPipelineGuiStack
               << " guiRowStates=" << okGuiRowStates
               << " compactControlTables=" << okCompactControlTables
