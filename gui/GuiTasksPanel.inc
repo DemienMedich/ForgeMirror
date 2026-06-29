@@ -105,8 +105,8 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
             SetStatus(state, u8"Перед закрытием распределите XP по задаче.", 0.45f, 0.9f, 0.45f);
             return true;
         }
-        AppMutationResult mutation = AppUpdateTaskStatus(
-            state.storageDir, state.tasks, taskId, newStatus, ResolveTaskActor(), &state.taskAudit);
+        AppTaskWorkflowService workflow(state.storageDir, state.tasks, &state.taskAudit);
+        AppMutationResult mutation = workflow.UpdateStatus(taskId, newStatus, ResolveTaskActor());
         if (mutation.ok) {
             if (mutation.changed) {
                 SetStatus(state, u8"Статус задачи обновлен.", 0.45f, 0.9f, 0.45f);
@@ -2079,8 +2079,9 @@ void DrawTasksPanel(GuiState& state, IJobStorage& storage, SkillCatalog& catalog
                 return false;
             }
         }
-        AppMutationResult mutation = AppBulkUpdateTaskStatus(
-            state.storageDir, state.tasks, state.taskSelectionIds, state.taskBulkStatus, ResolveTaskActor(), &state.taskAudit);
+        AppTaskWorkflowService workflow(state.storageDir, state.tasks, &state.taskAudit);
+        AppMutationResult mutation = workflow.BulkUpdateStatus(
+            state.taskSelectionIds, state.taskBulkStatus, ResolveTaskActor());
         if (!mutation.ok) {
             SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);
             return false;

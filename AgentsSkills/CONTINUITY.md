@@ -39,11 +39,12 @@ UI аудит:
   - UX/UI план после аудита: привести action-систему к единому паттерну icon+tooltip; затем пройти модули `Проекты -> Пайплайн -> Логи/Статистика -> Правила/модалки`; отдельно унифицировать empty-state и active-state; следующим пунктом сделать ревизию семантики иконок.
   - Следующий крупный план: 1) стабильность ядра (`TaskWorkflowService`, транзакционность XP-finalize/audit/save, JSON recovery, ImGui assert-risk), 2) модульность (`GuiTasksPanel`/`GuiProfilePanel` на service/view/widgets, общий filter/action/table helper), 3) UX (`Задачи` table-first/detail-pane, профиль scan-friendly, empty/loading/error states).
 - State:
-  - Ветка: develop. Версия: 0.5.50.
-  - Последнее изменение: Stability plan point 1 `ядро задач и XP`: добавлены транзакционные save-failure тесты и общий smoke-аудит ImGui scopes.
+  - Ветка: develop. Версия: 0.5.51.
+  - Последнее изменение: Stability plan point 1 `TaskWorkflowService`: GUI переведён на единый stateful workflow-контракт для статусов и XP-finalize.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий план-пункт: Stability 1 `ядро задач и XP`: транзакционность закрытия задачи, XP handoff, audit и save.
 - Done:
+  - TaskWorkflowService Boundary: добавлен `AppTaskWorkflowService`, инкапсулирующий storage/tasks/audit; status, bulk-status, XP-finalize/validate и XP math переведены на него, smoke запрещает прямые legacy-вызовы из GUI.
   - Save/ImGui Stability: explicit test hook имитирует отказ основной JSON-записи; задачи, проекты и пайплайн откатывают память и диск, last-good не получает неподтверждённые данные; smoke_core проверяет общий баланс ключевых ImGui scopes по GUI-коду.
   - JSON Recovery Diagnostics: перед восстановлением `tasks.json`, `projects.json` и `pipeline.json` повреждённый файл сохраняется как `meta/updates/*.corrupt.<timestamp>.json`; GUI показывает warning и пишет событие в журнал, повторная загрузка не дублирует сообщение.
   - JSON Recovery Stability: сохранение `tasks.json`, `projects.json` и `pipeline.json` использует общий атомарный файловый слой; задачи и пайплайн восстанавливаются из `meta/updates/*.last-good.json` после повреждения, smoke_core проверяет оба сценария.

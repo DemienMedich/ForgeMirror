@@ -636,7 +636,7 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                     rules.categoryBaseXp[readyCategory] *
                     std::pow(std::max(0.1f, static_cast<float>(readyScore) / 10.0f), 1.35f) * focusBonus));
                     if (basePoolRaw < 0) basePoolRaw = 0;
-                    int basePool = AppApplyPercentPenalty(basePoolRaw, taskPenaltyPercent);
+                    int basePool = AppTaskWorkflowService::ApplyPercentPenalty(basePoolRaw, taskPenaltyPercent);
                     const char* categoryLabel = ClassificationLabel(readyCategory);
 
                     std::vector<int> participantPercents(state.taskShares.size(), 0);
@@ -645,7 +645,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         if (!share.selected || share.archived) continue;
                         participantPercents[i] = ClampToRange(share.percent, 0, 100);
                     }
-                    std::vector<int> participantPools = AppDistributeIntegerPool(basePool, participantPercents);
+                    std::vector<int> participantPools = AppTaskWorkflowService::DistributeIntegerPool(
+                        basePool, participantPercents);
 
                     TaskEntry task;
                     task.id = GenerateTaskId(nowSeconds, state.tasks.size() + 1);
@@ -693,7 +694,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                         for (int s = 0; s < static_cast<int>(state.xpEntries.size()); ++s) {
                             skillPercents[s] = ClampToRange(state.xpEntries[s].percent, 0, 100);
                         }
-                        std::vector<int> xpDistribution = AppDistributeIntegerPool(participantPool, skillPercents);
+                        std::vector<int> xpDistribution = AppTaskWorkflowService::DistributeIntegerPool(
+                            participantPool, skillPercents);
 
                         std::ostringstream skillsStream;
                         skillsStream.imbue(std::locale::classic());
@@ -846,8 +848,8 @@ void DrawXpModal(GuiState& state, IJobStorage& storage, SkillCatalog& catalog) {
                             request.skillIds = selectedSkillIds;
                             request.participants = participants;
                             request.actor = state.isAdmin ? "admin" : (state.active ? state.active->id : "system");
-                            AppMutationResult mutation = AppFinalizeTaskXp(
-                                state.storageDir, state.tasks, request, &state.taskAudit);
+                            AppTaskWorkflowService workflow(state.storageDir, state.tasks, &state.taskAudit);
+                            AppMutationResult mutation = workflow.FinalizeXp(request);
                             saveOk = mutation.ok;
                             if (!mutation.ok) {
                                 SetStatus(state, mutation.errorMessage, 1.0f, 0.45f, 0.45f);

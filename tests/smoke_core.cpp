@@ -13,6 +13,7 @@
 #include "AppPipelineService.h"
 #include "AppRecoveryStorage.h"
 #include "AppTaskProjectService.h"
+#include "AppTaskWorkflowService.h"
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
 #include "IJobStorage.h"
@@ -316,7 +317,8 @@ static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::pat
     request.participants = {participant};
     request.actor = "admin";
     AppSetTaskAuditFailureHookForTests(true);
-    AppMutationResult result = AppFinalizeTaskXp(dir, tasks, request, &audit);
+    AppTaskWorkflowService workflow(dir, tasks, &audit);
+    AppMutationResult result = workflow.FinalizeXp(request);
     AppSetTaskAuditFailureHookForTests(false);
 
     if (result.ok) return fail("result ok");
@@ -369,31 +371,32 @@ static bool TestTaskFinalizeXpValidatesWorkflowContract(const std::filesystem::p
     request.participants = {participant};
     request.actor = "admin";
 
-    AppMutationResult invalidPercent = AppValidateTaskXpFinalize(tasks, request);
+    AppTaskWorkflowService workflow(dir, tasks);
+    AppMutationResult invalidPercent = workflow.ValidateFinalizeXp(request);
     if (invalidPercent.ok) return false;
 
     request.participants[0].percent = 100;
-    AppMutationResult valid = AppValidateTaskXpFinalize(tasks, request);
+    AppMutationResult valid = workflow.ValidateFinalizeXp(request);
     if (!valid.ok) return false;
 
     tasks[0].participants = request.participants;
-    AppMutationResult duplicate = AppValidateTaskXpFinalize(tasks, request);
+    AppMutationResult duplicate = workflow.ValidateFinalizeXp(request);
     return !duplicate.ok;
 }
 
 static bool TestTaskXpDistributionHelpers() {
-    const std::vector<int> splitA = AppDistributeIntegerPool(101, {33, 33, 34});
+    const std::vector<int> splitA = AppTaskWorkflowService::DistributeIntegerPool(101, {33, 33, 34});
     if (splitA != std::vector<int>({33, 33, 35})) return false;
 
-    const std::vector<int> splitB = AppDistributeIntegerPool(99, {50, 50});
+    const std::vector<int> splitB = AppTaskWorkflowService::DistributeIntegerPool(99, {50, 50});
     if (splitB != std::vector<int>({50, 49})) return false;
 
-    const std::vector<int> splitC = AppDistributeIntegerPool(20, {0, 100, -5});
+    const std::vector<int> splitC = AppTaskWorkflowService::DistributeIntegerPool(20, {0, 100, -5});
     if (splitC != std::vector<int>({0, 20, 0})) return false;
 
-    if (AppApplyPercentPenalty(101, 25) != 76) return false;
-    if (AppApplyPercentPenalty(100, 150) != 0) return false;
-    if (AppApplyPercentPenalty(-100, 10) != 0) return false;
+    if (AppTaskWorkflowService::ApplyPercentPenalty(101, 25) != 76) return false;
+    if (AppTaskWorkflowService::ApplyPercentPenalty(100, 150) != 0) return false;
+    if (AppTaskWorkflowService::ApplyPercentPenalty(-100, 10) != 0) return false;
     return true;
 }
 
@@ -410,6 +413,29 @@ static bool TestGuiTasksImGuiStackPatterns() {
     const size_t beginCards = CountSubstring(source, "BeginCard(");
     const size_t endCards = CountSubstring(source, "EndCard();");
     return beginCards == endCards;
+}
+
+static bool TestTaskWorkflowServiceBoundary() {
+    const std::filesystem::path root = FindRepoRootFromCwd();
+    if (root.empty()) return false;
+    std::string tasksPanel;
+    std::string xpModal;
+    std::string workflowHeader;
+    std::string workflowSource;
+    if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasksPanel)) return false;
+    if (!ReadFile(root / "gui" / "GuiXpModal.inc", xpModal)) return false;
+    if (!ReadFile(root / "include" / "AppTaskWorkflowService.h", workflowHeader)) return false;
+    if (!ReadFile(root / "src" / "AppTaskWorkflowService.cpp", workflowSource)) return false;
+
+    const std::string guiSource = tasksPanel + xpModal;
+    return workflowHeader.find("class AppTaskWorkflowService") != std::string::npos &&
+           workflowSource.find("AppTaskWorkflowService::FinalizeXp") != std::string::npos &&
+           guiSource.find("AppTaskWorkflowService workflow") != std::string::npos &&
+           guiSource.find("AppUpdateTaskStatus(") == std::string::npos &&
+           guiSource.find("AppBulkUpdateTaskStatus(") == std::string::npos &&
+           guiSource.find("AppFinalizeTaskXp(") == std::string::npos &&
+           guiSource.find("AppApplyPercentPenalty(") == std::string::npos &&
+           guiSource.find("AppDistributeIntegerPool(") == std::string::npos;
 }
 
 static int CountImGuiPopCalls(const std::string& source, const char* call) {
@@ -1332,6 +1358,7 @@ int main() {
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
+    const bool okTaskWorkflowBoundary = TestTaskWorkflowServiceBoundary();
     const bool okGuiScopeTotals = TestGuiImGuiScopeTotals();
     const bool okPipelineGuiStack = TestGuiPipelineImGuiStackPatterns();
     const bool okGuiRowStates = TestGuiRowStateHelpersUsedAcrossModules();
@@ -1369,7 +1396,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1387,6 +1414,7 @@ int main() {
               << " taskFinalizeContract=" << okTaskFinalizeContract
               << " taskXpDistribution=" << okTaskXpDistribution
               << " guiStack=" << okGuiStack
+              << " taskWorkflowBoundary=" << okTaskWorkflowBoundary
               << " guiScopeTotals=" << okGuiScopeTotals
               << " pipelineGuiStack=" << okPipelineGuiStack
               << " guiRowStates=" << okGuiRowStates
