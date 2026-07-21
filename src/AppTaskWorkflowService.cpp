@@ -10,6 +10,13 @@ namespace {
 constexpr int kTaskStatusNew = 0;
 constexpr int kTaskStatusDone = 2;
 
+TaskEntry* FindTaskMutable(std::vector<TaskEntry>& tasks, const std::string& taskId) {
+    const auto it = std::find_if(tasks.begin(), tasks.end(), [&](const TaskEntry& item) {
+        return item.id == taskId;
+    });
+    return it == tasks.end() ? nullptr : &(*it);
+}
+
 std::string TrimCopy(const std::string& input) {
     size_t first = 0;
     while (first < input.size() && std::isspace(static_cast<unsigned char>(input[first]))) ++first;
@@ -33,14 +40,90 @@ AppTaskWorkflowService::AppTaskWorkflowService(
 AppMutationResult AppTaskWorkflowService::UpdateStatus(const std::string& taskId,
                                                        int newStatus,
                                                        const std::string& actor) {
-    return AppUpdateTaskStatus(storageDir_, tasks_, taskId, newStatus, actor, auditCache_);
+    AppMutationResult result;
+    TaskEntry* task = FindTaskMutable(tasks_, taskId);
+    if (!task) {
+        result.errorMessage = u8"Задача не найдена.";
+        return result;
+    }
+
+    const int previousStatus = NormalizeTaskStatus(task->status);
+    const int nextStatus = NormalizeTaskStatus(newStatus);
+    if (previousStatus == nextStatus) {
+        result.ok = true;
+        return result;
+    }
+    if (!IsStatusTransitionAllowed(previousStatus, nextStatus)) {
+        result.errorMessage = u8"Недопустимый переход статуса (Выполнена -> Новая).";
+        return result;
+    }
+
+    task->status = nextStatus;
+    if (!AppSaveTasks(storageDir_, tasks_)) {
+        task->status = previousStatus;
+        result.errorMessage = u8"Не удалось сохранить статус задачи.";
+        return result;
+    }
+    if (!AppAppendTaskAudit(storageDir_, actor, taskId, "status",
+                            AppTaskStatusLabel(previousStatus), AppTaskStatusLabel(nextStatus), auditCache_)) {
+        result.errorMessage = u8"Не удалось записать task-audit.log";
+        return result;
+    }
+
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = 1;
+    return result;
 }
 
 AppMutationResult AppTaskWorkflowService::BulkUpdateStatus(
     const std::unordered_set<std::string>& taskIds,
     int targetStatus,
     const std::string& actor) {
-    return AppBulkUpdateTaskStatus(storageDir_, tasks_, taskIds, targetStatus, actor, auditCache_);
+    AppMutationResult result;
+    struct PreviousState {
+        TaskEntry* task = nullptr;
+        int status = kTaskStatusNew;
+    };
+    std::vector<PreviousState> touched;
+    touched.reserve(taskIds.size());
+
+    const int nextStatus = NormalizeTaskStatus(targetStatus);
+    for (auto& task : tasks_) {
+        if (taskIds.find(task.id) == taskIds.end()) continue;
+        const int previousStatus = NormalizeTaskStatus(task.status);
+        if (previousStatus == nextStatus) continue;
+        if (!IsStatusTransitionAllowed(previousStatus, nextStatus)) {
+            result.skippedCount += 1;
+            continue;
+        }
+        touched.push_back({&task, previousStatus});
+        task.status = nextStatus;
+    }
+    if (touched.empty()) {
+        result.ok = true;
+        return result;
+    }
+    if (!AppSaveTasks(storageDir_, tasks_)) {
+        for (const auto& previous : touched) {
+            if (previous.task) previous.task->status = previous.status;
+        }
+        result.errorMessage = u8"Не удалось сохранить массовое изменение статуса.";
+        return result;
+    }
+    for (const auto& previous : touched) {
+        if (!previous.task) continue;
+        if (!AppAppendTaskAudit(storageDir_, actor, previous.task->id, "status",
+                                AppTaskStatusLabel(previous.status), AppTaskStatusLabel(nextStatus), auditCache_)) {
+            result.errorMessage = u8"Не удалось записать task-audit.log";
+            return result;
+        }
+    }
+
+    result.ok = true;
+    result.changed = true;
+    result.changedCount = static_cast<int>(touched.size());
+    return result;
 }
 
 AppMutationResult AppTaskWorkflowService::ValidateFinalizeXp(

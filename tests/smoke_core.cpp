@@ -402,6 +402,28 @@ static bool TestTaskXpDistributionHelpers() {
     return true;
 }
 
+static bool TestTaskWorkflowStatusRollsBackWhenSaveFails(const std::filesystem::path& dir) {
+    TaskEntry first;
+    first.id = "workflow_status_first";
+    first.title = "First";
+    first.status = 0;
+    TaskEntry second;
+    second.id = "workflow_status_second";
+    second.title = "Second";
+    second.status = 1;
+    std::vector<TaskEntry> tasks = {first, second};
+    if (!AppSaveTasks(dir, tasks)) return false;
+
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    AppTaskWorkflowService workflow(dir, tasks);
+    const AppMutationResult single = workflow.UpdateStatus(first.id, 1, "admin");
+    const AppMutationResult bulk = workflow.BulkUpdateStatus({first.id, second.id}, 2, "admin");
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+
+    return !single.ok && !bulk.ok &&
+           tasks[0].status == 0 && tasks[1].status == 1;
+}
+
 static bool TestTeamValueReportMetrics() {
     const std::int64_t now = 2000000000;
     ProjectEntry project;
@@ -494,16 +516,22 @@ static bool TestTaskWorkflowServiceBoundary() {
     std::string xpModal;
     std::string workflowHeader;
     std::string workflowSource;
+    std::string legacySource;
     if (!ReadFile(root / "gui" / "GuiTasksPanel.inc", tasksPanel)) return false;
     if (!ReadFile(root / "gui" / "GuiXpModal.inc", xpModal)) return false;
     if (!ReadFile(root / "include" / "AppTaskWorkflowService.h", workflowHeader)) return false;
     if (!ReadFile(root / "src" / "AppTaskWorkflowService.cpp", workflowSource)) return false;
+    if (!ReadFile(root / "src" / "AppTaskProjectService.cpp", legacySource)) return false;
 
     const std::string guiSource = tasksPanel + xpModal;
     return workflowHeader.find("class AppTaskWorkflowService") != std::string::npos &&
            workflowSource.find("AppTaskWorkflowService::FinalizeXp") != std::string::npos &&
+           workflowSource.find("AppTaskWorkflowService::UpdateStatus") != std::string::npos &&
+           workflowSource.find("AppTaskWorkflowService::BulkUpdateStatus") != std::string::npos &&
            workflowSource.find("Сумма вкладов участников должна быть 100%") != std::string::npos &&
            workflowSource.find("std::round") != std::string::npos &&
+           legacySource.find("return workflow.UpdateStatus(taskId, newStatus, actor);") != std::string::npos &&
+           legacySource.find("return workflow.BulkUpdateStatus(taskIds, targetStatus, actor);") != std::string::npos &&
            guiSource.find("AppTaskWorkflowService workflow") != std::string::npos &&
            guiSource.find("AppUpdateTaskStatus(") == std::string::npos &&
            guiSource.find("AppBulkUpdateTaskStatus(") == std::string::npos &&
@@ -1431,6 +1459,7 @@ int main() {
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
+    const bool okTaskWorkflowStatusRollback = TestTaskWorkflowStatusRollsBackWhenSaveFails(tmp / "task_workflow_status_rollback");
     const bool okTeamValueReport = TestTeamValueReportMetrics();
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okTaskWorkflowBoundary = TestTaskWorkflowServiceBoundary();
@@ -1471,7 +1500,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1488,6 +1517,7 @@ int main() {
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
               << " taskXpDistribution=" << okTaskXpDistribution
+              << " taskWorkflowStatusRollback=" << okTaskWorkflowStatusRollback
               << " teamValueReport=" << okTeamValueReport
               << " guiStack=" << okGuiStack
               << " taskWorkflowBoundary=" << okTaskWorkflowBoundary

@@ -41,11 +41,12 @@ UI аудит:
   - Следующий крупный план: 1) стабильность ядра (`TaskWorkflowService`, транзакционность XP-finalize/audit/save, JSON recovery, ImGui assert-risk), 2) модульность (`GuiTasksPanel`/`GuiProfilePanel` на service/view/widgets, общий filter/action/table helper), 3) UX (`Задачи` table-first/detail-pane, профиль scan-friendly, empty/loading/error states).
   - Новый план полезности для официального принятия: 1) доказательство пользы через управленческий отчёт, 2) стабильность ядра задач/XP/sync, 3) задачи как основной рабочий центр, 4) проекты и пайплайн как карта производства, 5) профиль как рабочее состояние сотрудника, 6) управленческая аналитика и экспорт, 7) UX без трения, 8) администрирование/аудит/доверие, 9) интеграции, 10) пилот 2.0.
 - State:
-  - Ветка: develop. Версия: 0.5.53.
-  - Последнее изменение: Product adoption plan point 2 `стабильность ядра задач/XP/sync`: чистые правила workflow (статусы, распределение XP, штраф и валидация XP-finalize) перенесены в `AppTaskWorkflowService`; legacy API делегирует сервису для обратной совместимости.
+  - Ветка: develop. Версия: 0.5.54.
+  - Последнее изменение: Product adoption plan point 2 `стабильность ядра задач/XP/sync`: `AppTaskWorkflowService` теперь сам меняет единичные и массовые статусы с rollback при отказе сохранения; legacy API стал совместимым фасадом.
   - Зафиксированный UX-план задач: table-first рабочий режим; создание задачи как компактный wizard; detail-pane как центр управления задачей; проектный контекст внутри задач; затем транзакционная устойчивость XP-finalize/audit/save.
   - Текущий план-пункт: Product adoption 2 `стабильность ядра задач/XP/sync`: устраняем legacy-дублирование и фиксируем надёжные транзакционные границы.
 - Done:
+  - Product adoption 2: status и bulk-status мутации перенесены в `AppTaskWorkflowService`; smoke_core проверяет rollback обоих сценариев при отказе основной JSON-записи.
   - Product adoption 2: `AppTaskWorkflowService` получил собственную реализацию статусов, XP-распределения, штрафа и XP-валидации; smoke_core подтверждает, что это не пустая legacy-переадресация.
   - Product adoption 1: добавлен `AppTeamValueReportService` для метрик полезности команды; smoke_core проверяет просрочку, pending XP, задачи без проекта/этапа, вклад исполнителя и CSV-блок отчёта.
   - TaskWorkflowService Boundary: добавлен `AppTaskWorkflowService`, инкапсулирующий storage/tasks/audit; status, bulk-status, XP-finalize/validate и XP math переведены на него, smoke запрещает прямые legacy-вызовы из GUI.

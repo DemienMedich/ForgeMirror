@@ -668,36 +668,8 @@ AppMutationResult AppUpdateTaskStatus(const std::filesystem::path& storageDir,
                                       int newStatus,
                                       const std::string& actor,
                                       std::vector<TaskAuditEntry>* auditCache) {
-    AppMutationResult result;
-    TaskEntry* task = FindTaskMutable(tasks, taskId);
-    if (!task) {
-        result.errorMessage = u8"Задача не найдена.";
-        return result;
-    }
-    const int prev = AppNormalizeTaskStatus(task->status);
-    const int next = AppNormalizeTaskStatus(newStatus);
-    if (prev == next) {
-        result.ok = true;
-        return result;
-    }
-    if (!AppIsTaskStatusTransitionAllowed(prev, next)) {
-        result.errorMessage = u8"Недопустимый переход статуса (Выполнена -> Новая).";
-        return result;
-    }
-    task->status = next;
-    if (!AppSaveTasks(storageDir, tasks)) {
-        task->status = prev;
-        result.errorMessage = u8"Не удалось сохранить статус задачи.";
-        return result;
-    }
-    if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "status", AppTaskStatusLabel(prev), AppTaskStatusLabel(next), auditCache)) {
-        result.errorMessage = u8"Не удалось записать task-audit.log";
-        return result;
-    }
-    result.ok = true;
-    result.changed = true;
-    result.changedCount = 1;
-    return result;
+    AppTaskWorkflowService workflow(storageDir, tasks, auditCache);
+    return workflow.UpdateStatus(taskId, newStatus, actor);
 }
 
 AppMutationResult AppUpdateTaskPriority(const std::filesystem::path& storageDir,
@@ -1195,46 +1167,8 @@ AppMutationResult AppBulkUpdateTaskStatus(const std::filesystem::path& storageDi
                                           int targetStatus,
                                           const std::string& actor,
                                           std::vector<TaskAuditEntry>* auditCache) {
-    AppMutationResult result;
-    struct PrevState { TaskEntry* task = nullptr; int status = 0; };
-    std::vector<PrevState> touched;
-    touched.reserve(taskIds.size());
-    const int nextStatus = AppNormalizeTaskStatus(targetStatus);
-    for (auto& task : tasks) {
-        if (taskIds.find(task.id) == taskIds.end()) continue;
-        const int prev = AppNormalizeTaskStatus(task.status);
-        if (prev == nextStatus) continue;
-        if (!AppIsTaskStatusTransitionAllowed(prev, nextStatus)) {
-            result.skippedCount += 1;
-            continue;
-        }
-        touched.push_back({&task, prev});
-        task.status = nextStatus;
-    }
-    if (touched.empty()) {
-        result.ok = true;
-        return result;
-    }
-    if (!AppSaveTasks(storageDir, tasks)) {
-        for (const auto& prev : touched) {
-            if (prev.task) prev.task->status = prev.status;
-        }
-        result.errorMessage = u8"Не удалось сохранить массовое изменение статуса.";
-        return result;
-    }
-    for (const auto& prev : touched) {
-        if (!prev.task) continue;
-        if (!AppendTaskAuditIfChanged(storageDir, actor, prev.task->id, "status",
-                                      AppTaskStatusLabel(prev.status), AppTaskStatusLabel(nextStatus),
-                                      auditCache)) {
-            result.errorMessage = u8"Не удалось записать task-audit.log";
-            return result;
-        }
-    }
-    result.ok = true;
-    result.changed = true;
-    result.changedCount = static_cast<int>(touched.size());
-    return result;
+    AppTaskWorkflowService workflow(storageDir, tasks, auditCache);
+    return workflow.BulkUpdateStatus(taskIds, targetStatus, actor);
 }
 
 AppMutationResult AppBulkUpdateTaskPriority(const std::filesystem::path& storageDir,
