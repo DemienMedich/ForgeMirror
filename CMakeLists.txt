@@ -21,6 +21,7 @@ add_executable(ForgeMirror
     src/AppRecoveryStorage.cpp
     src/AppTaskProjectService.cpp
     src/AppTaskWorkflowService.cpp
+    src/AppTeamValueReportService.cpp
     src/AppProfessionService.cpp
     src/AppPipelineService.cpp
     src/AppMetaService.cpp
@@ -36,7 +37,7 @@ add_executable(ForgeMirror
 target_include_directories(ForgeMirror PRIVATE include)
 
 # Версия приложения
-set(APP_VERSION "0.5.51")
+set(APP_VERSION "0.5.52")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
@@ -75,6 +76,7 @@ if(BUILD_IMGUI_GUI)
         src/AppRecoveryStorage.cpp
         src/AppTaskProjectService.cpp
         src/AppTaskWorkflowService.cpp
+        src/AppTeamValueReportService.cpp
     src/AppProfessionService.cpp
     src/AppPipelineService.cpp
     src/AppMetaService.cpp
@@ -117,6 +119,7 @@ if(BUILD_CORE_TESTS)
         src/AppRecoveryStorage.cpp
         src/AppTaskProjectService.cpp
         src/AppTaskWorkflowService.cpp
+        src/AppTeamValueReportService.cpp
     src/AppProfessionService.cpp
     src/AppPipelineService.cpp
     src/AppMetaService.cpp

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <memory>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <chrono>
@@ -14,6 +15,7 @@
 #include "AppRecoveryStorage.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskWorkflowService.h"
+#include "AppTeamValueReportService.h"
 #include "AppUtils.h"
 #include "AppWorkspaceDataService.h"
 #include "IJobStorage.h"
@@ -398,6 +400,76 @@ static bool TestTaskXpDistributionHelpers() {
     if (AppTaskWorkflowService::ApplyPercentPenalty(100, 150) != 0) return false;
     if (AppTaskWorkflowService::ApplyPercentPenalty(-100, 10) != 0) return false;
     return true;
+}
+
+static bool TestTeamValueReportMetrics() {
+    const std::int64_t now = 2000000000;
+    ProjectEntry project;
+    project.id = "p1";
+    project.name = "Project One";
+
+    TaskEntry overdue;
+    overdue.id = "t_overdue";
+    overdue.title = "Overdue";
+    overdue.projectId = "p1";
+    overdue.project = "Project One";
+    overdue.pipelineStepId = "s1";
+    overdue.status = 1;
+    overdue.deadlineAt = now - 60;
+    overdue.assignees = {"u1"};
+
+    TaskEntry xpPending;
+    xpPending.id = "t_xp";
+    xpPending.title = "XP Pending";
+    xpPending.projectId = "p1";
+    xpPending.project = "Project One";
+    xpPending.status = 2;
+    xpPending.assignees = {"u1", "u2"};
+
+    TaskEntry awarded;
+    awarded.id = "t_awarded";
+    awarded.title = "Awarded";
+    awarded.status = 2;
+    awarded.project = "Loose Project";
+    awarded.pipelineStep = "Final";
+    TaskParticipant participant;
+    participant.profileId = "u2";
+    participant.percent = 100;
+    participant.globalXp = 70;
+    participant.skillXp = 35;
+    awarded.participants = {participant};
+
+    TaskEntry unplanned;
+    unplanned.id = "t_unplanned";
+    unplanned.title = "Unplanned";
+    unplanned.status = 0;
+    unplanned.deadlineAt = now + 120;
+
+    const TeamValueReport report = BuildTeamValueReport({overdue, xpPending, awarded, unplanned}, {project}, now);
+    if (report.totalTasks != 4) return false;
+    if (report.activeTasks != 2 || report.doneTasks != 2) return false;
+    if (report.overdueTasks != 1 || report.deadlineNext24hTasks != 1) return false;
+    if (report.xpPendingTasks != 1 || report.tasksWithXp != 1) return false;
+    if (report.tasksWithoutProject != 1 || report.tasksWithoutPipeline != 2) return false;
+    if (report.unassignedTasks != 1) return false;
+    if (report.totalGlobalXp != 70 || report.totalSkillXp != 35) return false;
+    if (report.projectsWithOverdue != 1 || report.projectsWithXpPending != 1) return false;
+
+    auto assignee = std::find_if(report.assignees.begin(), report.assignees.end(), [](const auto& item) {
+        return item.profileId == "u2";
+    });
+    if (assignee == report.assignees.end() || assignee->totalTasks != 2 ||
+        assignee->totalGlobalXp != 70 || assignee->totalSkillXp != 35) {
+        return false;
+    }
+
+    std::ostringstream csv;
+    if (!WriteTeamValueReportCsv(csv, report)) return false;
+    const std::string text = csv.str();
+    return text.find("TeamValueReport") != std::string::npos &&
+           text.find("DeliveryScore") != std::string::npos &&
+           text.find("Project One") != std::string::npos &&
+           text.find("u2") != std::string::npos;
 }
 
 static bool TestGuiTasksImGuiStackPatterns() {
@@ -1357,6 +1429,7 @@ int main() {
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
+    const bool okTeamValueReport = TestTeamValueReportMetrics();
     const bool okGuiStack = TestGuiTasksImGuiStackPatterns();
     const bool okTaskWorkflowBoundary = TestTaskWorkflowServiceBoundary();
     const bool okGuiScopeTotals = TestGuiImGuiScopeTotals();
@@ -1396,7 +1469,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1413,6 +1486,7 @@ int main() {
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
               << " taskXpDistribution=" << okTaskXpDistribution
+              << " teamValueReport=" << okTeamValueReport
               << " guiStack=" << okGuiStack
               << " taskWorkflowBoundary=" << okTaskWorkflowBoundary
               << " guiScopeTotals=" << okGuiScopeTotals

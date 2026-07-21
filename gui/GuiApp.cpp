@@ -4,6 +4,7 @@
 #include "AppProfileMutationService.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskWorkflowService.h"
+#include "AppTeamValueReportService.h"
 #include "AppProfessionService.h"
 #include "AppPipelineService.h"
 #include "AppMetaService.h"

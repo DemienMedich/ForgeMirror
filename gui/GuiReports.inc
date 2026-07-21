@@ -262,5 +262,6 @@ bool ExportAdminStatsCsv(const GuiState& state, std::filesystem::path& outPath) 
             << item.achievementsTotal << ","
             << item.achievementsActive << "\n";
     }
-    return true;
+    const TeamValueReport valueReport = BuildTeamValueReport(state.tasks, state.projects, NowSeconds());
+    return WriteTeamValueReportCsv(out, valueReport);
 }
