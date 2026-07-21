@@ -502,6 +502,8 @@ static bool TestTaskWorkflowServiceBoundary() {
     const std::string guiSource = tasksPanel + xpModal;
     return workflowHeader.find("class AppTaskWorkflowService") != std::string::npos &&
            workflowSource.find("AppTaskWorkflowService::FinalizeXp") != std::string::npos &&
+           workflowSource.find("Сумма вкладов участников должна быть 100%") != std::string::npos &&
+           workflowSource.find("std::round") != std::string::npos &&
            guiSource.find("AppTaskWorkflowService workflow") != std::string::npos &&
            guiSource.find("AppUpdateTaskStatus(") == std::string::npos &&
            guiSource.find("AppBulkUpdateTaskStatus(") == std::string::npos &&

@@ -22,6 +22,8 @@ public:
     AppMutationResult ValidateFinalizeXp(const TaskXpFinalizeRequest& request) const;
     AppMutationResult FinalizeXp(const TaskXpFinalizeRequest& request);
 
+    static AppMutationResult ValidateFinalizeXp(const std::vector<TaskEntry>& tasks,
+                                                const TaskXpFinalizeRequest& request);
     static bool IsStatusTransitionAllowed(int fromStatus, int toStatus);
     static std::vector<int> DistributeIntegerPool(int totalPool, const std::vector<int>& percents);
     static int ApplyPercentPenalty(int value, int penaltyPercent);
