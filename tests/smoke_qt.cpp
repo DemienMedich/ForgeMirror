@@ -4,6 +4,7 @@
 #include "AppRecoveryStorage.h"
 #include "QtTaskCompletionDialog.h"
 #include "QtTheme.h"
+#include "QtProfileDialogs.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
 #include <iostream>
@@ -172,12 +173,130 @@ static bool TestTaskCompletion() {
     return true;
 }
 
+static bool TestProfileDialogs() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    Profile original("Original");
+    original.set_total_xp(777);
+    original.set_wallet_balance(42);
+    original.set_login("original-login");
+    original.set_password_encoded(EncodePassword("original-password"));
+    original.add_skill("test-skill");
+    auto created = workspace.storage->create_profile(original);
+    if (!created) return false;
+    const QString id = QString::fromStdString(created->id);
+    workspace.data.professions.push_back({"artist", "Artist", "3D"});
+    auto delegate = std::move(workspace.storage);
+    auto wrapper = std::make_unique<FailingProfileStorage>(*delegate);
+    auto* failures = wrapper.get();
+    workspace.storage = std::move(wrapper);
+    bool checks = true;
+    QTimer::singleShot(0, [&] {
+        auto* manager = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!manager) { checks = false; return; }
+        auto* table = manager->findChild<QTableWidget*>("profileRecords");
+        QTimer::singleShot(0, [] {
+            if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+                input->setTextValue(QString::fromUtf8("Новый профиль")); input->accept();
+            }
+        });
+        manager->findChild<QPushButton*>("createProfile")->click();
+        checks &= delegate->list_profiles().size() == 2;
+        auto* credentials = manager->findChild<QLineEdit*>("createdProfileCredentials");
+        checks &= !credentials->text().isEmpty() && credentials->echoMode() == QLineEdit::Password;
+        auto select = [&] {
+            for (int r = 0; r < table->rowCount(); ++r) if (table->item(r, 0)->data(Qt::UserRole).toString() == id) table->selectRow(r);
+        };
+        select();
+        QTimer::singleShot(0, [&] {
+            auto* editor = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!editor) { checks = false; return; }
+            editor->findChild<QComboBox*>("profileProfession")->setCurrentIndex(1);
+            editor->findChild<QComboBox*>("profileSpirit")->setCurrentIndex(1);
+            editor->findChild<QCheckBox*>("profileBlocked")->setChecked(true);
+            auto* save = editor->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+            failures->writes = 0;
+            failures->failAt = 1;
+            save->click();
+            delegate->set_active_profile(created->id);
+            checks &= !delegate->load_profile()->is_blocked() && !editor->findChild<QLabel*>("profileNotice")->text().isEmpty();
+            failures->failAt = 0;
+            save->click();
+        });
+        manager->findChild<QPushButton*>("editProfile")->click();
+        delegate->set_active_profile(created->id);
+        auto edited = delegate->load_profile();
+        checks &= edited && edited->profession_id() == "artist" && edited->spirit() == ProfileSpirit::Good && edited->is_blocked();
+        checks &= edited && edited->total_xp() == 777 && edited->wallet_balance() == 42 && edited->login() == original.login() &&
+            edited->password_encoded() == original.password_encoded() && edited->list_skills().size() == 1;
+        auto* archive = manager->findChild<QPushButton*>("archiveProfile");
+        QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::No)->click(); });
+        archive->click();
+        checks &= delegate->set_active_profile(created->id);
+        QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+        archive->click();
+        checks &= !delegate->set_active_profile(created->id);
+        manager->findChild<QCheckBox*>("showArchivedProfiles")->setChecked(true);
+        select();
+        checks &= !manager->findChild<QPushButton*>("editProfile")->isEnabled();
+        archive->click();
+        checks &= delegate->set_active_profile(created->id);
+        select();
+        QTimer::singleShot(0, [&] {
+            auto* password = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!password) { checks = false; return; }
+            password->findChild<QLineEdit*>("newPassword")->setText("reset-password");
+            password->findChild<QLineEdit*>("confirmPassword")->setText("different");
+            auto* save = password->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+            save->click();
+            checks &= !password->findChild<QLabel*>("profileNotice")->text().isEmpty();
+            password->findChild<QLineEdit*>("confirmPassword")->setText("reset-password");
+            save->click();
+        });
+        manager->findChild<QPushButton*>("resetProfilePassword")->click();
+        delegate->set_active_profile(created->id);
+        checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "reset-password";
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QDir().mkpath(artifacts);
+            manager->grab().save(artifacts + "/profile-manager.png");
+            manager->resize(640, 440);
+            QApplication::processEvents();
+            manager->grab().save(artifacts + "/profile-manager-small.png");
+        }
+        manager->reject();
+    });
+    ShowProfileManager(nullptr, workspace, id);
+    delegate->set_active_profile(created->id);
+    auto unblocked = *delegate->load_profile();
+    unblocked.set_blocked(false);
+    delegate->save_profile(unblocked);
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog) { checks = false; return; }
+        dialog->findChild<QLineEdit*>("currentPassword")->setText("wrong-password");
+        dialog->findChild<QLineEdit*>("newPassword")->setText("my-password");
+        dialog->findChild<QLineEdit*>("confirmPassword")->setText("my-password");
+        auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        save->click();
+        checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "reset-password";
+        dialog->findChild<QLineEdit*>("currentPassword")->setText("reset-password");
+        save->click();
+    });
+    checks &= ShowProfilePasswordDialog(nullptr, workspace, id, id, false);
+    delegate->set_active_profile(created->id);
+    checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "my-password";
+    if (!checks) std::cerr << "profile dialog lifecycle failed\n";
+    return checks;
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestProfileDialogs()) return 1;
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -186,7 +305,7 @@ int main(int argc, char** argv) {
     workspace.catalog.add_skill(u8"Моделирование", 1.0, u8"Создание геометрии");
     workspace.catalog.add_skill(u8"Текстурирование", 1.0, u8"Подготовка материалов");
     workspace.catalog.add_skill(u8"Анимация", 1.0, u8"Движение персонажа");
-    profile.add_skill(u8"Моделирование");
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Моделирование"));
     auto createdProfile = workspace.storage->create_profile(profile);
     if (!createdProfile) return fail("Profile creation failed");
     QFile profileFile(temp.path() + "/" + QString::fromStdString(createdProfile->id) + ".ini");
@@ -337,6 +456,21 @@ int main(int argc, char** argv) {
     const auto earned = workspace.storage->load_profile();
     if (!earned || earned->total_xp() != finished->participants[0].globalXp || earned->tasks_completed() != 1)
         return fail("XP form did not persist profile");
+    nav->setCurrentRow(0);
+    bool openedManager = false;
+    QTimer::singleShot(0, [&] {
+        auto* manager = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        openedManager = manager && manager->objectName() == "profileManager";
+        if (manager) manager->reject();
+    });
+    primary->click();
+    if (!openedManager) return fail("Admin profile manager navigation failed");
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty()) {
+        window.resize(800, 520);
+        QApplication::processEvents();
+        window.grab().save(artifacts + "/profile-small.png");
+    }
     std::cout << "smoke_qt: OK\n";
     return 0;
 }

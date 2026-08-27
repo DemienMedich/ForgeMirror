@@ -1,5 +1,6 @@
 #include "QtWindow.h"
 #include "QtTaskCompletionDialog.h"
+#include "QtProfileDialogs.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskWorkflowService.h"
 #include "AppTeamValueReportService.h"
@@ -43,6 +44,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     menuButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(menuButton);
     menu->addAction(QString::fromUtf8("Вход / выход администратора"), this, [this] { authenticate(); });
+    auto* passwordAction = menu->addAction(QString::fromUtf8("Сменить пароль выбранного профиля"), this, [this] {
+        const auto id = profiles_->currentData().toString();
+        if (id.isEmpty()) { message(u8"Сначала выберите профиль."); return; }
+        ShowProfilePasswordDialog(this, workspace_, id, id, false);
+    });
+    passwordAction->setObjectName("changeOwnProfilePassword");
     menu->addAction(QString::fromUtf8("Открыть папку данных Qt"), this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(q(workspace_.directory.u8string())));
     });
@@ -50,7 +57,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Это первый этап переноса, не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Редакторы профилей/навыков/пайплайна, Pomodoro, 3D и настройки ещё не перенесены."));
+            "Редакторы навыков/пайплайна, достижения, Pomodoro, 3D и настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -78,8 +85,30 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     toolbar->addWidget(primary_);
     content->addLayout(toolbar);
     summary_ = new QLabel;
+    summary_->setTextFormat(Qt::PlainText);
     summary_->setWordWrap(true);
     content->addWidget(summary_);
+    profileMetrics_ = new QWidget;
+    profileMetrics_->setObjectName("profileMetrics");
+    auto* metricsLayout = new QHBoxLayout(profileMetrics_);
+    metricsLayout->setContentsMargins(0, 0, 0, 0);
+    metricsLayout->setSpacing(8);
+    const QStringList metricNames = {QString::fromUtf8("Уровень"), QString::fromUtf8("Всего XP"),
+        QString::fromUtf8("Выполнено задач"), QString::fromUtf8("XP до уровня")};
+    for (int i = 0; i < 4; ++i) {
+        auto* metric = new QFrame;
+        metric->setProperty("metric", true);
+        metric->setFixedHeight(56);
+        auto* box = new QVBoxLayout(metric);
+        box->setContentsMargins(12, 8, 12, 8);
+        box->setSpacing(0);
+        box->addWidget(new QLabel(metricNames[i]));
+        profileValues_[i] = new QLabel(QString::fromUtf8("—"));
+        profileValues_[i]->setProperty("metricValue", true);
+        box->addWidget(profileValues_[i]);
+        metricsLayout->addWidget(metric, 1);
+    }
+    content->addWidget(profileMetrics_);
     auto* filters = new QHBoxLayout;
     search_ = new QLineEdit;
     search_->setObjectName("search");
@@ -243,8 +272,11 @@ void QtWindow::render() {
     title_->setText(navigation_->item(page)->text());
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8("Просмотр · Qt"));
     statusFilter_->setVisible(page == Tasks);
-    primary_->setVisible((page == Tasks || page == Projects) && admin_);
-    primary_->setText(page == Projects ? QString::fromUtf8("Создать проект") : QString::fromUtf8("Создать задачу"));
+    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects) && admin_);
+    primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
+        (page == Projects ? QString::fromUtf8("Создать проект") : QString::fromUtf8("Создать задачу")));
+    profileMetrics_->setVisible(page == ProfilePage);
+    for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
     summary_->clear();
 
@@ -255,13 +287,18 @@ void QtWindow::render() {
         // Viewing a profile must not invoke LoadActiveProfile: that legacy helper saves on read.
         if (!id.empty() && workspace_.storage->set_active_profile(id)) profile = workspace_.storage->load_profile();
         if (profile) {
-            summary_->setText(QString::fromUtf8("%1  ·  %2  ·  уровень %3  ·  %4 XP  ·  выполнено %5")
-                .arg(q(profile->name()), q(DescribeOverallRank(*profile))).arg(profile->overall_level())
-                .arg(profile->total_xp()).arg(profile->tasks_completed()));
+            QString profession = q(profile->profession_id());
+            for (const auto& item : data.professions) if (item.id == profile->profession_id()) profession = q(item.name);
+            summary_->setText(q(DescribeOverallRank(*profile)) + (profession.isEmpty() ? "" : " · " + profession) +
+                " · " + q(ProfileSpiritLabel(profile->spirit())) + (profile->is_blocked() ? QString::fromUtf8(" · Заблокирован") : ""));
+            profileValues_[0]->setText(QString::number(profile->overall_level()));
+            profileValues_[1]->setText(QString::number(profile->total_xp()));
+            profileValues_[2]->setText(QString::number(profile->tasks_completed()));
+            profileValues_[3]->setText(QString::number(profile->xp_to_next_level()));
             for (const auto& skill : profile->list_skills())
                 row(skill.name, {q(workspace_.catalog.display_name(skill.name)), QString::number(skill.level),
                     QString::number(skill.xp), QString::number(skill.weight)});
-        } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Создание профилей пока выполняется в стабильной версии."));
+        } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Администратор может создать его через «Управление профилями»."));
     } else if (page == Tasks) {
         headers({QString::fromUtf8("Задача"), QString::fromUtf8("Проект"), QString::fromUtf8("Статус"),
                  QString::fromUtf8("Приоритет"), QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
@@ -355,6 +392,11 @@ void QtWindow::details() {
 
 void QtWindow::createEntry() {
     if (!requireAdmin()) return;
+    if (navigation_->currentRow() == ProfilePage) {
+        ShowProfileManager(this, workspace_, profiles_->currentData().toString());
+        reload();
+        return;
+    }
     const bool projectMode = navigation_->currentRow() == Projects;
     if (!projectMode && navigation_->currentRow() != Tasks) return;
     QDialog dialog(this);

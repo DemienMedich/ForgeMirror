@@ -32,6 +32,8 @@ private:
     QLabel* summary_;
     QLabel* title_;
     QLabel* mode_;
+    QWidget* profileMetrics_;
+    QLabel* profileValues_[4];
     QTableWidget* table_;
     QTextBrowser* details_;
     QPushButton* primary_;
