@@ -1,3 +1,17 @@
+# Current work: Qt migration (2026-08-28)
+
+- Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
+- Constraints/Assumptions: Preserve develop; no cloud sync from the migration client; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
+- Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
+- State: First migration increment implemented; full migration remains in progress.
+- Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
+- Now: Final verification and commit/push of stage 1 to codex/qt-gui.
+- Next: XP handoff and profile authentication/editing, remaining CRUD, settings, cloud, Pomodoro, vault, 3D, complete parity and installer migration.
+- Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
+- Working set (files/ids/commands): qt/, tests/smoke_qt.cpp, build-qt.ps1, CMakeLists.txt; build-qt.ps1 -Package.
+
+---
+# Historical ledger (superseded by the current work above)
 UI аудит:
 - Разный размер кнопок: где-то full width, где-то SmallButton/иконка без единой иерархии.
 - Карточки/секции используют разные отступы (CardPadding/WindowPadding/ItemSpacing не синхронизированы).
@@ -353,6 +367,3 @@ UI аудит:
   - `Z:\\CPP\\ForgeMirror\\installer\\ForgeMirror.iss`
 - Remaining (taskmanager):
   - (пусто)
-
-
-

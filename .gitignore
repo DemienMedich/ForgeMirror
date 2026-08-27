@@ -1,6 +1,8 @@
 build/
 build-gui/
 build-test/
+build-qt/
+package-qt/
 dist/
 .idea/
 .gigaide/
