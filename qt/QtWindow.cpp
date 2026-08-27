@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtTaskCompletionDialog.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskWorkflowService.h"
 #include "AppTeamValueReportService.h"
@@ -49,7 +50,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Это первый этап переноса, не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Начисление XP, редакторы профилей/навыков/пайплайна, Pomodoro, 3D и настройки ещё не перенесены."));
+            "Редакторы профилей/навыков/пайплайна, Pomodoro, 3D и настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -108,7 +109,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     bottom->addWidget(detailsToggle);
     changeStatus_ = new QPushButton(QString::fromUtf8("Изменить статус"));
     changeStatus_->setObjectName("changeStatus");
-    changeStatus_->setToolTip(QString::fromUtf8("Переходы проверяются ядром. Начисление XP пока доступно только в ImGui."));
+    changeStatus_->setToolTip(QString::fromUtf8("Переходы проверяются ядром. Завершение открывает распределение XP."));
     bottom->addWidget(changeStatus_);
     bottom->addStretch();
     content->addLayout(bottom);
@@ -152,6 +153,10 @@ void QtWindow::message(const std::string& error) {
 }
 
 bool QtWindow::requireAdmin() {
+    if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+        message(u8"Осталась незавершённая XP-транзакция. Перезапустите Qt для восстановления.");
+        return false;
+    }
     if (!admin_) message(u8"Для изменения данных войдите как администратор через меню ⋯.");
     return admin_;
 }
@@ -175,7 +180,12 @@ void QtWindow::authenticate() {
 
 void QtWindow::reload() {
     const auto previous = profiles_->currentData().toString();
-    workspace_.reload();
+    try {
+        workspace_.reload();
+    } catch (const std::exception& error) {
+        message(error.what());
+        return;
+    }
     {
         QSignalBlocker blocker(profiles_);
         profiles_->clear();
@@ -316,10 +326,19 @@ void QtWindow::details() {
         for (const auto& task : workspace_.data.tasks) if (task.id == id) {
             QStringList assignees;
             for (const auto& value : task.assignees) assignees << q(value);
+            std::string xp;
+            for (const auto& participant : task.participants) {
+                const auto found = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
+                    [&](const auto& profile) { return profile.id == participant.profileId; });
+                xp += (found == workspace_.profiles.end() ? participant.profileId : found->name) + " (" +
+                    std::to_string(participant.percent) + "%): " + std::to_string(participant.globalXp) +
+                    u8" XP, навыки " + std::to_string(participant.skillXp) + " XP\n";
+            }
             details_->setHtml(field(QString::fromUtf8("Задача"), task.title) + field(QString::fromUtf8("Описание"), task.description)
                 + field(QString::fromUtf8("Исполнители"), u(assignees.join(", ")))
                 + field(QString::fromUtf8("Категория"), Profile::kCategoryLabels[std::clamp(task.category, 0, 4)])
-                + field(QString::fromUtf8("Штраф за срок"), std::to_string(task.deadlinePenaltyPercent) + "%"));
+                + field(QString::fromUtf8("Штраф за срок"), std::to_string(task.deadlinePenaltyPercent) + "%")
+                + (xp.empty() ? QString() : field(QString::fromUtf8("Начисленный XP"), xp)));
         }
     } else if (page == Pipeline) {
         for (const auto& step : workspace_.data.pipelineSteps) if (step.id == id)
@@ -439,19 +458,32 @@ void QtWindow::changeStatus() {
     const auto id = u(selectedId());
     auto found = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(), [&](const auto& task) { return task.id == id; });
     if (found == workspace_.data.tasks.end()) return;
-    // Do not close tasks until the transactional XP handoff UI has been migrated.
     QStringList labels;
     std::vector<int> states;
     for (int state : {0, 1}) if (state != found->status && AppTaskWorkflowService::IsStatusTransitionAllowed(found->status, state)) {
         states.push_back(state);
         labels << q(AppTaskStatusLabel(state));
     }
+    // Completed legacy tasks without XP can also finish their pending handoff.
+    if (found->participants.empty()) {
+        states.push_back(2);
+        labels << QString::fromUtf8("Выполнена — начислить XP");
+    } else if (found->status != 2) {
+        states.push_back(2);
+        labels << QString::fromUtf8("Выполнена — XP уже начислен");
+    }
     bool ok = false;
     const auto selected = QInputDialog::getItem(this, QString::fromUtf8("Статус задачи"),
-        QString::fromUtf8("Закрытие с начислением XP ещё не перенесено. Новый статус:"), labels, 0, false, &ok);
+        QString::fromUtf8("Новый статус:"), labels, 0, false, &ok);
     if (!ok || labels.indexOf(selected) < 0) return;
+    const int next = states[size_t(labels.indexOf(selected))];
+    if (next == 2 && found->participants.empty()) {
+        ShowTaskCompletionDialog(this, workspace_, q(id), profiles_->currentData().toString());
+        reload();
+        return;
+    }
     AppTaskWorkflowService workflow(workspace_.directory, workspace_.data.tasks, &workspace_.data.taskAudit);
-    const auto result = workflow.UpdateStatus(id, states[size_t(labels.indexOf(selected))], "admin/qt");
+    const auto result = workflow.UpdateStatus(id, next, "admin/qt");
     if (!result.ok) message(result.errorMessage);
     else reload();
 }

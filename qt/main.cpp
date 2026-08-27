@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtTheme.h"
 #include <QtWidgets>
 #include <QLockFile>
 #include <filesystem>
@@ -12,24 +13,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName("ForgeMirrorQt");
     QCoreApplication::setOrganizationName("Pharos");
-    QApplication::setStyle("Fusion");
-    QPalette palette;
-    palette.setColor(QPalette::Window, QColor("#202024"));
-    palette.setColor(QPalette::WindowText, QColor("#eeeeef"));
-    palette.setColor(QPalette::Base, QColor("#26262c"));
-    palette.setColor(QPalette::AlternateBase, QColor("#2c2c32"));
-    palette.setColor(QPalette::Text, QColor("#eeeeef"));
-    palette.setColor(QPalette::Button, QColor("#33333b"));
-    palette.setColor(QPalette::ButtonText, QColor("#eeeeef"));
-    palette.setColor(QPalette::Highlight, QColor("#7554ad"));
-    palette.setColor(QPalette::HighlightedText, Qt::white);
-    palette.setColor(QPalette::Disabled, QPalette::Text, QColor("#99999f"));
-    app.setPalette(palette);
-    app.setFont(QFont("Segoe UI", 10));
-    app.setStyleSheet("QPushButton, QToolButton, QComboBox, QLineEdit { min-height: 26px; }"
-        "QPushButton { padding: 0 8px; } QListWidget::item { padding: 8px; }"
-        "QPushButton#primary { background: #7554ad; color: white; border: 0; border-radius: 4px; }"
-        "QPushButton#primary:hover { background: #8764bf; } QLabel#title { font-weight: 600; }");
+    ApplyQtTheme(app);
     QCommandLineParser parser;
     parser.setApplicationDescription(QString::fromUtf8("ForgeMirror Qt — изолированный клиент переноса"));
     parser.addHelpOption();

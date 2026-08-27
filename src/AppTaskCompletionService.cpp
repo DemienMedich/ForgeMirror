@@ -1,0 +1,289 @@
+#include "AppTaskCompletionService.h"
+#include "AppTaskWorkflowService.h"
+#include "AppUtils.h"
+#include "GameplayConfig.h"
+#include "IJobStorage.h"
+#include "SkillCatalog.h"
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <limits>
+#include <numeric>
+#include <set>
+#include <stdexcept>
+
+namespace {
+struct RestoreSelection {
+    IJobStorage& storage;
+    std::string id;
+    ~RestoreSelection() { if (!id.empty()) storage.set_active_profile(id); }
+};
+int checkedXp(double value) {
+    if (!std::isfinite(value) || value < 0 || value > std::numeric_limits<int>::max() / 100)
+        throw std::runtime_error(u8"XP выходит за безопасный диапазон. Проверьте правила и бонусы.");
+    return int(std::round(value));
+}
+bool safeProfileId(const std::string& id) {
+    return !id.empty() && std::all_of(id.begin(), id.end(), [](unsigned char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' || c == '_';
+    });
+}
+std::filesystem::path journalPath(const std::filesystem::path& root) { return root / "meta" / "qt-xp-transaction"; }
+bool safeBackupName(const std::string& name) {
+    if (name == "meta/tasks.json" || name == "meta/task-audit.log" || name == "meta/updates/tasks.last-good.json") return true;
+    return name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4));
+}
+// Reject links in every path component, not just in the final file.
+void checkPath(const std::filesystem::path& root, const std::filesystem::path& relative) {
+    auto current = root;
+    for (const auto& part : relative) {
+        current /= part;
+        if (std::filesystem::is_symlink(std::filesystem::symlink_status(current)))
+            throw std::runtime_error(u8"Ссылки в файлах XP не поддерживаются.");
+    }
+}
+void finishJournal(const std::filesystem::path& root) {
+    auto destination = root / "meta" / "qt-xp-finished";
+    // A prior completed transaction can safely be cleaned up; pending is never deleted first.
+    std::filesystem::remove_all(destination);
+    std::filesystem::rename(journalPath(root), destination);
+    std::error_code ec;
+    std::filesystem::remove_all(destination, ec);
+}
+void prepareJournal(const std::filesystem::path& root, const TaskCompletionPreview& preview) {
+    const auto pending = journalPath(root);
+    if (std::filesystem::exists(pending)) throw std::runtime_error(u8"Сначала восстановите незавершённую XP-транзакцию перезапуском Qt.");
+    const auto staging = root / "meta" / "qt-xp-staging";
+    checkPath(root, "meta/qt-xp-staging");
+    checkPath(root, "meta/qt-xp-finished");
+    std::filesystem::remove_all(staging);
+    std::filesystem::create_directories(staging);
+    std::vector<std::string> files = {"meta/tasks.json", "meta/task-audit.log", "meta/updates/tasks.last-good.json"};
+    for (const auto& p : preview.finalize.participants) files.push_back(p.profileId + ".ini");
+    std::ofstream manifest(staging / "manifest", std::ios::binary);
+    if (!manifest) throw std::runtime_error(u8"Не удалось создать журнал восстановления XP.");
+    manifest << "FORGEMIRROR_QT_XP_1 " << files.size() << '\n';
+    for (const auto& name : files) {
+        checkPath(root, name);
+        const auto source = root / name;
+        const bool exists = std::filesystem::exists(source);
+        if (exists) {
+            if (!std::filesystem::is_regular_file(source)) throw std::runtime_error(u8"Ожидался обычный файл XP.");
+            std::filesystem::create_directories((staging / name).parent_path());
+            std::filesystem::copy_file(source, staging / name);
+        }
+        manifest << std::quoted(name) << ' ' << exists << '\n';
+    }
+    manifest.flush();
+    if (!manifest) throw std::runtime_error(u8"Не удалось сохранить журнал восстановления XP.");
+    manifest.close();
+    std::filesystem::rename(staging, pending);
+}
+}
+
+bool RecoverTaskCompletion(const std::filesystem::path& root) {
+    const auto pending = journalPath(root);
+    checkPath(root, "meta/qt-xp-transaction");
+    if (!std::filesystem::exists(pending)) return false;
+    checkPath(root, "meta/qt-xp-finished");
+    checkPath(pending, "manifest");
+    std::ifstream manifest(pending / "manifest", std::ios::binary);
+    if (!manifest) throw std::runtime_error(u8"Повреждён журнал XP: требуется ручное восстановление.");
+    std::vector<std::pair<std::string, bool>> entries;
+    std::string name;
+    bool exists = false;
+    std::set<std::string> seen;
+    std::string version;
+    size_t count = 0;
+    if (!(manifest >> version >> count) || version != "FORGEMIRROR_QT_XP_1" || count < 4 || count > 10003)
+        throw std::runtime_error(u8"Неизвестный формат журнала XP.");
+    for (size_t i = 0; i < count; ++i) {
+        if (!(manifest >> std::quoted(name) >> exists)) throw std::runtime_error(u8"Неполный журнал XP.");
+        if (!safeBackupName(name) || !seen.insert(name).second) throw std::runtime_error(u8"Некорректный путь в журнале XP.");
+        checkPath(root, name);
+        checkPath(pending, name);
+        if (exists && !std::filesystem::is_regular_file(pending / name)) throw std::runtime_error(u8"Резервный файл XP отсутствует.");
+        entries.emplace_back(name, exists);
+    }
+    manifest >> std::ws;
+    if (!manifest.eof() || !seen.count("meta/tasks.json") || !seen.count("meta/task-audit.log") ||
+        !seen.count("meta/updates/tasks.last-good.json") || entries.size() < 4)
+        throw std::runtime_error(u8"Неполный журнал XP: требуется ручное восстановление.");
+    manifest.close(); // Windows cannot rename the journal directory while this stream is open.
+    for (const auto& entry : entries) {
+        const auto target = root / entry.first;
+        if (entry.second) {
+            std::filesystem::create_directories(target.parent_path());
+            std::filesystem::copy_file(pending / entry.first, target, std::filesystem::copy_options::overwrite_existing);
+        } else if (std::filesystem::exists(target)) {
+            if (!std::filesystem::is_regular_file(target)) throw std::runtime_error(u8"Нельзя восстановить XP поверх каталога.");
+            std::filesystem::remove(target);
+        }
+    }
+    finishJournal(root);
+    return true;
+}
+
+TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<TaskEntry>& tasks,
+                                            const TaskCompletionInput& input) {
+    TaskCompletionPreview result;
+    RestoreSelection restore{app.storage, input.restoreProfileId};
+    try {
+        auto require = [](bool condition, const char* message) { if (!condition) throw std::runtime_error(message); };
+        const auto task = std::find_if(tasks.begin(), tasks.end(), [&](const auto& t) { return t.id == input.taskId; });
+        require(task != tasks.end(), u8"Задача не найдена.");
+        require(task->participants.empty(), u8"XP по этой задаче уже начислен.");
+        require(input.category >= 0 && input.category < Profile::kCategoryCount && input.score >= 1 && input.score <= 10,
+                u8"Проверьте категорию и оценку 1–10.");
+        require(input.now > 0, u8"Не задано время начисления.");
+        require(!input.shares.empty(), u8"Выберите участников и задайте вклад в сумме 100%.");
+        int total = 0;
+        std::set<std::string> ids;
+        const auto profiles = app.storage.list_profiles();
+        std::vector<int> shares;
+        for (const auto& share : input.shares) {
+            require(safeProfileId(share.profileId) && ids.insert(share.profileId).second, u8"Некорректный или повторяющийся участник.");
+            require(share.percent > 0 && share.percent <= 100, u8"Вклад выбранного участника должен быть от 1 до 100%.");
+            const auto info = std::find_if(profiles.begin(), profiles.end(), [&](const auto& p) { return p.id == share.profileId; });
+            require(info != profiles.end() && !info->archived, u8"Участник удалён или находится в архиве.");
+            total += share.percent;
+            require(total <= 100, u8"Сумма вкладов должна быть 100%.");
+            shares.push_back(share.percent);
+        }
+        require(total == 100, u8"Сумма вкладов должна быть 100%.");
+        ids.clear();
+        int ratingTotal = 0;
+        require(!input.skills.empty(), u8"Каталог навыков пуст. Добавьте навыки в стабильной версии и импортируйте копию данных.");
+        result.skillPercents.resize(input.skills.size());
+        for (const auto& skill : input.skills) {
+            require(ids.insert(skill.skillId).second && app.catalog.contains_id(skill.skillId), u8"Неизвестный или повторяющийся навык.");
+            require(skill.rating >= 0 && skill.rating <= 5, u8"Оценка навыка должна быть 0–5.");
+            ratingTotal += skill.rating;
+        }
+        require(ratingTotal > 0, u8"Поставьте оценку хотя бы одному навыку.");
+        // Same rating rounding and remainder order as GuiXpUtils.inc.
+        int remainder = 100;
+        std::vector<size_t> order;
+        for (size_t i = 0; i < input.skills.size(); ++i) if (input.skills[i].rating) {
+            result.skillPercents[i] = 100 * input.skills[i].rating / ratingTotal;
+            remainder -= result.skillPercents[i];
+            order.push_back(i);
+        }
+        std::stable_sort(order.begin(), order.end(), [&](auto a, auto b) { return input.skills[a].rating > input.skills[b].rating; });
+        for (int i = 0; i < remainder; ++i) ++result.skillPercents[order[size_t(i) % order.size()]];
+        const auto& rules = GetGameplayConfig();
+        const float focus = rules.focusBaseBonus + rules.focusAdditionalBonus * (*std::max_element(result.skillPercents.begin(), result.skillPercents.end()) / 100.0f);
+        result.rawPool = checkedXp(rules.categoryBaseXp[input.category] * std::pow(std::max(0.1f, input.score / 10.0f), 1.35f) * focus);
+        result.penaltyPercent = std::clamp(task->deadlinePenaltyPercent, 0, 100);
+        auto& request = result.finalize;
+        request.taskId = input.taskId;
+        request.category = input.category;
+        request.score = input.score;
+        request.baseXp = rules.categoryBaseXp[input.category];
+        request.basePool = AppTaskWorkflowService::ApplyPercentPenalty(result.rawPool, result.penaltyPercent);
+        request.actor = input.actor;
+        for (const auto& skill : input.skills) if (skill.rating > 0) request.skillIds.push_back(skill.skillId);
+        const auto pools = AppTaskWorkflowService::DistributeIntegerPool(request.basePool, shares);
+        for (size_t i = 0; i < input.shares.size(); ++i) {
+            const auto& share = input.shares[i];
+            require(app.storage.set_active_profile(share.profileId), u8"Не удалось открыть профиль участника.");
+            auto loaded = app.storage.load_profile();
+            require(bool(loaded), u8"Не удалось прочитать профиль участника.");
+            Profile profile = *loaded;
+            require(!profile.is_blocked(), u8"Заблокированному профилю нельзя начислить XP.");
+            TaskParticipant participant;
+            participant.profileId = share.profileId;
+            participant.percent = share.percent;
+            participant.rollbackSnapshot = SerializeProfileTaskRollbackSnapshot(profile);
+            const auto skillPools = AppTaskWorkflowService::DistributeIntegerPool(pools[i], result.skillPercents);
+            for (size_t s = 0; s < input.skills.size(); ++s) if (skillPools[s] > 0) {
+                const auto& id = input.skills[s].skillId;
+                profile.add_skill(id, 1, app.catalog.weight(id));
+                const int bonus = checkedXp(skillPools[s] * profile.skill_bonus_multiplier(id, input.now));
+                const int xp = ApplyProfileSpiritXpModifier(profile.spirit(), bonus);
+                participant.skillXp = checkedXp(double(participant.skillXp) + xp);
+                profile.grant_xp(id, xp);
+            }
+            const int best = profile.category_best_score(input.category);
+            const bool penalties = profile.penalties_enabled();
+            int effective = pools[i];
+            std::string modifiers;
+            if (penalties && input.score <= best) {
+                effective = checkedXp(effective * rules.repeatRewardFactor);
+                modifiers += u8"Повтор; ";
+            }
+            if (penalties && profile.last_task_timestamp() > 0 && input.now - profile.last_task_timestamp() > 30LL * 86400)
+                profile.start_penalty_recovery(rules.recoveryWarmupTasks);
+            if (!penalties && profile.penalty_active()) profile.start_penalty_recovery(0);
+            if (penalties && profile.penalty_active()) {
+                effective = checkedXp(effective * rules.recoveryRewardFactor);
+                profile.consume_penalty_task();
+                modifiers += u8"Прогрев; ";
+            }
+            participant.globalXp = ApplyProfileSpiritXpModifier(profile.spirit(), effective);
+            require(profile.total_xp() <= std::numeric_limits<int>::max() - participant.globalXp, u8"Суммарный XP профиля превышает допустимый диапазон.");
+            if (profile.spirit() != ProfileSpirit::None) modifiers += ProfileSpiritLabel(profile.spirit());
+            profile.set_last_task_timestamp(input.now);
+            profile.increment_tasks_completed();
+            if (participant.globalXp > 0) profile.grant_global_xp(participant.globalXp);
+            if (input.score > best) profile.update_category_best_score(input.category, input.score);
+            profile.reset_category_cooldown(input.category);
+            for (int c = 0; c < Profile::kCategoryCount; ++c) if (c != input.category) {
+                profile.tick_category_cooldown(c);
+                if (profile.category_cooldown(c) < 0) {
+                    profile.update_category_best_score(c, profile.category_best_score(c) - 1);
+                    profile.reset_category_cooldown(c);
+                }
+            }
+            const auto& cooldowns = profile.category_cooldowns();
+            profile.set_inactivity_tasks(std::max(0, *std::min_element(cooldowns.begin(), cooldowns.end())));
+            request.assignees.push_back(share.profileId);
+            request.participants.push_back(participant);
+            result.participantNames.push_back(profile.name());
+            result.modifiers.push_back(modifiers);
+            result.updatedProfiles.push_back(std::move(profile));
+        }
+        const auto validation = AppTaskWorkflowService::ValidateFinalizeXp(tasks, request);
+        require(validation.ok, validation.errorMessage.c_str());
+        result.ok = true;
+    } catch (const std::exception& e) { result.errorMessage = e.what(); }
+    return result;
+}
+
+AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& tasks,
+                                     std::vector<TaskAuditEntry>& audit, const TaskCompletionInput& input) {
+    AppMutationResult result;
+    RestoreSelection restore{app.storage, input.restoreProfileId};
+    auto preview = PreviewTaskCompletion(app, tasks, input);
+    if (!preview.ok) { result.errorMessage = preview.errorMessage; return result; }
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(app.storageDir, preview);
+        prepared = true;
+        for (size_t i = 0; i < preview.updatedProfiles.size(); ++i) {
+            if (!app.storage.set_active_profile(preview.finalize.participants[i].profileId) || !app.storage.save_profile(preview.updatedProfiles[i]))
+                throw std::runtime_error(u8"Не удалось сохранить профиль участника.");
+        }
+        AppTaskWorkflowService workflow(app.storageDir, tasks, &audit);
+        result = workflow.FinalizeXp(preview.finalize);
+        if (!result.ok) throw std::runtime_error(result.errorMessage);
+        finishJournal(app.storageDir);
+    } catch (const std::exception& e) {
+        result = {};
+        result.errorMessage = e.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try {
+                RecoverTaskCompletion(app.storageDir);
+                result.errorMessage += u8" Начисление полностью отменено.";
+            } catch (const std::exception&) {
+                result.errorMessage += u8" Откат не завершён. Закройте Qt; журнал meta/qt-xp-transaction сохранён для восстановления при запуске.";
+            }
+        }
+    }
+    return result;
+}

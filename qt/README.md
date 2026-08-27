@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 1**, not a feature-complete replacement for ImGui. The domain implementation and storage formats are reused without changes. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 2**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -26,10 +26,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 1 | Remaining |
+| Area | Qt stage 2 | Remaining |
 | --- | --- | --- |
 | Profiles | Profile selector, level/XP/rank, skills | Login, CRUD/archive, achievements, XP entry, wallet/spirits |
-| Tasks | List, search, status filter, details, admin creation with project/category/skills/assignees/deadline/penalty/stage; New/In progress transitions and reopening | Full editing, bulk operations, reminders, delete rollback, transactional XP completion |
+| Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions and transactional XP completion | Full editing, bulk operations, reminders, delete rollback |
 | Projects | Admin list and creation | Editing/deletion, embedded project focus |
 | Skills | Catalog viewing and search | CRUD and profession filters |
 | Pipeline | Stages and expanded details | Editing and task stage progression |
@@ -38,11 +38,21 @@ Admin mutations require the existing admin password from the copied settings (th
 | Audit | Admin task audit view | Other application logs |
 | Other | Separate workspace, refresh, F1/F2/F3/F5/F6 | F4 rules, cloud, shortcuts, Pomodoro/vault, 3D, settings, migration installer |
 
-Task completion is intentionally not exposed until the XP transaction flow is ported. Existing completed tasks are viewable. No placeholder mutation buttons pretend to perform missing functions.
+### Task completion and recovery
+
+As administrator, select a task, choose **Изменить статус → Выполнена — начислить XP**. The dialog supports category, score 1–10, participant contributions totaling 100%, and skill ratings 0–5. Ratings automatically produce skill percentages; the preview shows each participant's global and skill XP. The task's stored deadline penalty is applied unconditionally, matching ImGui. Repeat/recovery penalties, achievement skill bonuses, spirits, category best scores, cooldowns and task counters follow the existing XP calculation. Participants and skills remain editable in this dialog; task assignments provide initial selections.
+
+Completed legacy tasks without participants can receive their pending XP. Already awarded tasks cannot receive XP again, including after reopening. Reclosing such a task changes only its status. A 100% task penalty permits completion with zero XP and still records participants/counters; unlike the old ImGui loop, zero-pool participants are not silently skipped. Blocked/archived/missing profiles are rejected. Excessive XP values are rejected before unsafe integer arithmetic.
+
+Before writes, `meta/qt-xp-transaction` receives original profile bytes, tasks, task audit and the last-good task backup. Failed writes restore these files and in-memory task/audit data. If rollback cannot finish, the journal is retained and further Qt mutations are blocked. Pending transactions are recovered before loading the workspace on startup or refresh; malformed journals fail closed and require inspection. A committed journal is renamed before cleanup so a process interrupted during cleanup does not undo a successful completion. This is local recovery, not a guarantee against disk failure or concurrent external edits: do not open the Qt workspace in ImGui or edit its files during an operation.
+
+The full-profile journal is only for failed/interrupted transactions. Successful tasks retain the existing XP rollback snapshot for future task-deletion migration. The stable ImGui transaction code remains untouched.
 
 ## Verification
 
-`build-qt.ps1 -Package` builds the Qt client and executes `smoke_qt` plus the existing `smoke_core`. Qt tests use a temporary workspace and exercise loading, search, status filtering, HTML escaping, administrator login/logout, project/task form persistence, status persistence and keyboard navigation.
+`build-qt.ps1 -Package` builds the Qt client and executes `smoke_qt` plus the existing `smoke_core`. Qt tests use temporary workspaces and exercise loading, search, status filtering, HTML escaping, administrator login/logout, project/task forms, status persistence, keyboard navigation and byte-preserving profile viewing. XP tests cover form cancellation/validation/completion, exact modifiers and rounding, zero XP, blocked profiles, duplicate awards, failed second-profile/task/audit writes, byte-exact rollback, simulated restart recovery and rejection of unsafe recovery paths.
+
+For visual QA, run `smoke_qt.exe -platform windows` with Qt `bin` on PATH and `FORGEMIRROR_QT_TEST_ARTIFACTS` set to a disposable output directory. It captures the real XP dialog at normal and minimum sizes. The offscreen platform is appropriate for interaction tests but may render missing font glyphs on Windows.
 
 For a packaged startup check (no installed Qt on PATH):
 
