@@ -9,6 +9,9 @@ This is **stage 2**, not a feature-complete replacement for ImGui. Existing stor
 
 ## Build and run
 
+Design direction for subsequent UI work: [user-supplied interface references](../docs/design/INTERFACE_REFERENCES.md).
+These guide composition and hierarchy; the existing dark/purple palette is unchanged.
+
 ```powershell
 .\build-qt.ps1 -Package
 .\package-qt\ForgeMirrorQt.exe

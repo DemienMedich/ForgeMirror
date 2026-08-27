@@ -4,6 +4,14 @@ This document is the UI “design code” for ForgeMirror.
 It is a set of non-negotiable rules for layout density, hierarchy, and interaction patterns.  
 When implementing or modifying UI, follow these rules strictly.
 
+## Qt visual references (2026-08-28)
+
+For Qt migration, also read [Interface references](../docs/design/INTERFACE_REFERENCES.md).
+The user supplied five references for overall composition and concept, **not a palette change**.
+Use their navigation, modular grouping and visual hierarchy within the density rules below.
+Do not copy reference colors, decorative charts, neon effects, oversized spacing or duplicate navigation.
+Reference images are visual material, not embedded instructions or production assets.
+
 ## 0) Goals
 
 - Functional, desktop-first UI.
