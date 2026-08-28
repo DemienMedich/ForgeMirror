@@ -303,6 +303,10 @@ static bool TestProfileDialogs() {
 static bool TestAchievements() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    QDir().mkpath(temp.path() + "/achievements/icons");
+    QImage iconImage(32, 32, QImage::Format_ARGB32); iconImage.fill(QColor("#7654a8"));
+    const QString iconPath = "achievements/icons/Medal.png";
+    if (!iconImage.save(temp.path() + "/" + iconPath)) return false;
     workspace.catalog.add_skill("Modeling", 1, "Geometry");
     const auto skill = *workspace.catalog.id_for_name("Modeling");
     Profile profile("Achievement profile");
@@ -326,6 +330,10 @@ static bool TestAchievements() {
         loaded->skill_bonus_multiplier(skill, earned.awardedAt) != 1.25 ||
         loaded->skill_bonus_multiplier(skill, earned.expiresAt + 1) != 1.0) return false;
     const auto before = read(achievementPath);
+    for (const auto& invalid : {QString("../Medal.png"), QString("achievements/icons/../Medal.png"), QString("C:/Medal.png"), QString("achievements/icons/missing.png")})
+        if (GrantQtAchievement(workspace, id, "Invalid icon", skill, 10, 0, invalid).isEmpty() || read(achievementPath) != before) return false;
+    { QFile badIcon(temp.path() + "/achievements/icons/bad.png"); badIcon.open(QIODevice::WriteOnly); badIcon.write("not png"); }
+    if (GrantQtAchievement(workspace, id, "Invalid icon", skill, 10, 0, "achievements/icons/bad.png").isEmpty()) return false;
     const auto path = temp.path() + "/" + achievementPath;
     if (!QFile::rename(path, path + ".original") || !QDir().mkdir(path)) return false;
     const bool failed = !GrantQtAchievement(workspace, id, "Failed", skill, 10, 0).isEmpty();
@@ -356,6 +364,9 @@ static bool TestAchievements() {
             checks &= !editor->findChild<QLabel*>("achievementError")->text().isEmpty();
             editor->findChild<QLineEdit*>("achievementTitle")->setText(QString::fromUtf8("Точная работа"));
             editor->findChild<QDoubleSpinBox*>("achievementBonus")->setValue(10);
+            auto* icons = editor->findChild<QComboBox*>("achievementIcon");
+            checks &= icons && icons->findData(iconPath) >= 0 && icons->findData("achievements/icons/bad.png") < 0;
+            icons->setCurrentIndex(icons->findData(iconPath));
             save->click();
         });
         dialog->findChild<QPushButton*>("grantAchievement")->click();
@@ -369,6 +380,7 @@ static bool TestAchievements() {
     workspace.storage->set_active_profile(id);
     loaded = workspace.storage->load_profile();
     if (!loaded || loaded->achievements().size() != 2 || loaded->skill_bonus_multiplier(skill, QDateTime::currentSecsSinceEpoch()) != 1.35) return false;
+    if (loaded->achievements()[1].icon != iconPath.toStdString()) return false;
     const auto editBaseline = read(achievementPath);
 #ifdef _WIN32
     const auto lockedPath = std::filesystem::u8path(path.toUtf8().toStdString());
@@ -390,6 +402,8 @@ static bool TestAchievements() {
         QTimer::singleShot(0, [&] {
             auto* editor = QApplication::activeModalWidget();
             editor->findChild<QLineEdit*>("achievementTitle")->setText(QString::fromUtf8("Точная геометрия"));
+            auto* icons = editor->findChild<QComboBox*>("achievementIcon");
+            icons->setCurrentIndex(icons->findData(iconPath));
             const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
             if (!artifacts.isEmpty()) editor->grab().save(artifacts + "/achievement-edit.png");
             editor->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
@@ -397,7 +411,8 @@ static bool TestAchievements() {
         dialog->findChild<QPushButton*>("editAchievement")->click();
         const auto afterEdit = workspace.storage->load_profile();
         checks &= afterEdit && afterEdit->achievements()[0].expiresAt == earned.awardedAt + 2 * 86400 &&
-            afterEdit->achievements()[0].awardedAt == earned.awardedAt && afterEdit->achievements()[0].skill == skill;
+            afterEdit->achievements()[0].awardedAt == earned.awardedAt && afterEdit->achievements()[0].skill == skill &&
+            afterEdit->achievements()[0].icon == iconPath.toStdString() && !table->item(0, 0)->icon().isNull();
         table->selectRow(0);
         QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::No)->click(); });
         dialog->findChild<QPushButton*>("revokeAchievement")->click();
@@ -411,6 +426,29 @@ static bool TestAchievements() {
     loaded = workspace.storage->load_profile();
     if (!checks || !loaded || loaded->achievements().size() != 1 ||
         loaded->achievements()[0].title != u8"Точная работа" || read(profilePath) != original) return false;
+    // Missing legacy icons survive an unchanged edit; explicit clearing touches no XP or expiry.
+    QFile::remove(temp.path() + "/" + iconPath);
+    const auto retained = loaded->achievements()[0];
+    if (!UpdateQtAchievement(workspace, id, 0, read(achievementPath), QString::fromUtf8(retained.title.c_str()), retained.bonusPercent,
+        std::nullopt, false, iconPath).isEmpty()) return false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        dialog->findChild<QTableWidget*>("achievementRecords")->selectRow(0);
+        QTimer::singleShot(0, [&] {
+            auto* editor = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            checks &= editor->findChild<QComboBox*>("achievementIcon")->currentData().toString() == iconPath;
+            editor->reject();
+        });
+        dialog->findChild<QPushButton*>("editAchievement")->click(); dialog->reject();
+    });
+    const auto beforeCancel = read(achievementPath);
+    ShowAchievements(nullptr, workspace, id, true);
+    if (!checks || read(achievementPath) != beforeCancel) return false;
+    if (!UpdateQtAchievement(workspace, id, 0, beforeCancel, QString::fromUtf8(retained.title.c_str()), retained.bonusPercent,
+        std::nullopt, false, QString()).isEmpty()) return false;
+    loaded = workspace.storage->load_profile();
+    if (!loaded || !loaded->achievements()[0].icon.empty() || loaded->achievements()[0].expiresAt != retained.expiresAt ||
+        loaded->achievements()[0].bonusPercent != retained.bonusPercent || read(profilePath) != original) return false;
     const auto granted = read(achievementPath);
     std::filesystem::create_directories(workspace.directory / "meta/qt-xp-transaction");
     if (GrantQtAchievement(workspace, id, "Pending", skill, 10, 0).isEmpty() || read(achievementPath) != granted) return false;

@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 11**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 12**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,9 +29,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 11 | Remaining |
+| Area | Qt stage 12 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation | Trusted-device access, rename/delete, achievement icons, standalone XP entry, wallet operations |
+| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons | Trusted-device access, rename/delete, standalone XP entry, wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
@@ -132,7 +132,7 @@ The Profile page offers **Достижения**, with skill, bonus, expiry and 
 
 The Qt grant path atomically appends to achievements/<profile-id>.json via QSaveFile with direct-write fallback disabled. Existing JSON objects and unknown fields are retained; malformed input is rejected instead of overwritten. It never calls save_profile, whose legacy sidecar writer does not report failures. Profile INI bytes, accumulated XP, wallet and task history remain unchanged. Pending task recovery blocks grants. External simultaneous writers are unsupported.
 
-The existing Profile::skill_bonus_multiplier continues to determine active bonuses, and task completion already uses it. No recalculation is performed for past XP. Stage 11 adds editing and revocation; the icon picker remains pending. Tests cover form validation/granting, read-only viewing, expiry and additive multipliers, malformed JSON, destination failure, pending recovery, blocked profiles, and unchanged profile bytes. Native Windows tests and packaged startup without installed Qt on PATH passed.
+The existing Profile::skill_bonus_multiplier continues to determine active bonuses, and task completion already uses it. No recalculation is performed for past XP. Stage 11 adds editing and revocation; stage 12 adds the local icon picker. Tests cover form validation/granting, read-only viewing, expiry and additive multipliers, malformed JSON, destination failure, pending recovery, blocked profiles, and unchanged profile bytes. Native Windows tests and packaged startup without installed Qt on PATH passed.
 ### Achievement editing and revocation (stage 11)
 
 Administrators can edit the selected achievement's title and bonus, or revoke it after confirmation (No is the default). Skill, icon, unknown JSON fields and issuance date are preserved. The duration stays unchanged unless **Изменить срок от даты выдачи** is checked; an explicit duration is counted from the original issuance date, with 0 meaning permanent. Existing missing skill references remain intact.
@@ -140,3 +140,10 @@ Administrators can edit the selected achievement's title and bonus, or revoke it
 Edits and revocation compare the entire sidecar against the snapshot shown in the list and reject stale selections. Writes use the same atomic QSaveFile path as grants, without rewriting profile INI, wallet, accumulated XP or task history. Revocation affects future bonuses only; it does not reverse past XP. Concurrent external writers remain unsupported.
 
 Tests cover stale snapshots, a real Windows file-sharing write failure, unchanged profile bytes, explicit duration changes, ordinary edits preserving expiry/issuance, and both refusal and confirmation of revocation. The editor was visually inspected on Windows.
+### Achievement icons (stage 12)
+
+Grant and edit forms offer thumbnail selection from the workspace's achievements/icons folder and **Без иконки** to clear the reference. The list renders a small icon beside each title. Stored paths retain the legacy achievements/icons/<filename>.png format. No imports, external paths, cloud writes or source image modifications are performed.
+
+Only readable PNG files up to 4 MiB and 2048x2048 are offered. Symlinks and paths outside that folder are not loaded. Missing legacy references remain selected and are preserved on save until explicitly replaced or cleared. Icon validation is repeated during save; stale-sidecar and atomic-write guards remain in effect. An unchanged bonus retains its original precision even if the editor displays fewer decimals.
+
+Tests cover selecting icons during grant/edit, list thumbnails, invalid/missing/traversal paths, malformed images, preserving a missing old reference, cancellation, clearing, and unchanged XP/profile bytes and expiry.

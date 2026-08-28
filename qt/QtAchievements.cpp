@@ -7,10 +7,48 @@
 namespace {
 QString q(const std::string& value) { return QString::fromUtf8(value.data(), int(value.size())); }
 QString date(std::int64_t value) { return value ? QDateTime::fromSecsSinceEpoch(value).toString("dd.MM.yyyy HH:mm") : QString::fromUtf8("Без срока"); }
+QPixmap achievementIcon(const QtWorkspace& workspace, const QString& relative) {
+    const QString prefix = "achievements/icons/";
+    if (!relative.startsWith(prefix)) return {};
+    const auto name = relative.mid(prefix.size());
+    if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains(':') ||
+        !name.endsWith(".png", Qt::CaseInsensitive)) return {};
+    const auto root = q(workspace.directory.u8string());
+    const QFileInfo file(root + "/" + relative);
+    if (QFileInfo(root + "/achievements").isSymLink() ||
+        QFileInfo(root + "/achievements/icons").isSymLink() || file.isSymLink() ||
+        !file.isFile() || file.size() > 4 * 1024 * 1024) return {};
+    QFile input(file.absoluteFilePath());
+    if (!input.open(QIODevice::ReadOnly) || input.read(8) != QByteArray::fromHex("89504e470d0a1a0a")) return {};
+    input.close();
+    QImageReader reader(file.absoluteFilePath(), "png");
+    const auto size = reader.size();
+    if (!size.isValid() || size.width() > 2048 || size.height() > 2048) return {};
+    reader.setScaledSize(size.scaled(32, 32, Qt::KeepAspectRatio));
+    return QPixmap::fromImage(reader.read());
+}
+QComboBox* iconSelector(const QtWorkspace& workspace, const QString& current = {}) {
+    auto* combo = new QComboBox;
+    combo->setObjectName("achievementIcon"); combo->setIconSize(QSize(24, 24));
+    combo->setMaximumWidth(320);
+    combo->addItem(QString::fromUtf8("Без иконки"), QString());
+    const QDir directory(q(workspace.directory.u8string()) + "/achievements/icons");
+    for (const auto& name : directory.entryList(QDir::Files | QDir::NoSymLinks, QDir::Name)) {
+        const auto relative = "achievements/icons/" + name;
+        const auto pixmap = achievementIcon(workspace, relative);
+        if (!pixmap.isNull()) combo->addItem(QIcon(pixmap), name, relative);
+    }
+    if (!current.isEmpty() && combo->findData(current) < 0)
+        combo->addItem(QString::fromUtf8("Недоступна: ") + QFileInfo(current).fileName(), current);
+    combo->setCurrentIndex(combo->findData(current));
+    combo->setToolTip(QString::fromUtf8("PNG из achievements/icons. Недоступная старая ссылка сохраняется до явной замены."));
+    return combo;
+}
 }
 static QString MutateAchievement(QtWorkspace& workspace, const std::string& profileId,
     const QString& title, const std::string& skillId, double bonus, int days,
-    int index = -1, const QByteArray* expectedFile = nullptr, bool changeDuration = true, bool revoke = false) {
+    int index = -1, const QByteArray* expectedFile = nullptr, bool changeDuration = true, bool revoke = false,
+    std::optional<QString> icon = std::nullopt) {
     if (!revoke && (title.trimmed().isEmpty() || (!expectedFile && !workspace.catalog.contains_id(skillId)) ||
         !std::isfinite(bonus) || bonus < 0 || bonus > 10000 || days < 0 || days > 36500)
         ) return QString::fromUtf8("Укажите название, существующий навык, бонус 0–10000% и срок 0–36500 дней.");
@@ -46,10 +84,15 @@ static QString MutateAchievement(QtWorkspace& workspace, const std::string& prof
         return QString::fromUtf8("Запись больше не существует или формат списка изменился.");
     const auto now = QDateTime::currentSecsSinceEpoch();
     QJsonObject record = expectedFile ? records[index].toObject() : QJsonObject{};
+    if (!revoke && icon) {
+        if (!icon->isEmpty() && *icon != record["icon"].toString() && achievementIcon(workspace, *icon).isNull())
+            return QString::fromUtf8("Иконка недоступна. Выберите PNG из achievements/icons или вариант без иконки.");
+        record["icon"] = *icon;
+    }
     record["title"] = title.trimmed();
     record["bonus"] = bonus;
     if (record.contains("bonusPercent")) record["bonusPercent"] = bonus;
-    if (!expectedFile) { record["skill"] = q(skillId); record["awarded"] = now; record["icon"] = ""; }
+    if (!expectedFile) { record["skill"] = q(skillId); record["awarded"] = now; if (!icon) record["icon"] = ""; }
     if (changeDuration) {
         const auto awarded = expectedFile ? profile->achievements()[index].awardedAt : now;
         record["awarded"] = awarded;
@@ -70,14 +113,14 @@ static QString MutateAchievement(QtWorkspace& workspace, const std::string& prof
 }
 
 QString GrantQtAchievement(QtWorkspace& workspace, const std::string& profileId,
-    const QString& title, const std::string& skillId, double bonus, int days) {
-    return MutateAchievement(workspace, profileId, title, skillId, bonus, days);
+    const QString& title, const std::string& skillId, double bonus, int days, const QString& icon) {
+    return MutateAchievement(workspace, profileId, title, skillId, bonus, days, -1, nullptr, true, false, icon);
 }
 QString UpdateQtAchievement(QtWorkspace& workspace, const std::string& profileId,
     int index, const QByteArray& expectedFile, const QString& title, double bonus,
-    std::optional<int> durationDays, bool revoke) {
+    std::optional<int> durationDays, bool revoke, std::optional<QString> icon) {
     return MutateAchievement(workspace, profileId, title, {}, bonus, durationDays.value_or(0),
-        index, &expectedFile, durationDays.has_value(), revoke);
+        index, &expectedFile, durationDays.has_value(), revoke, icon);
 }
 
 void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string& profileId, bool admin) {
@@ -134,6 +177,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
             for (int col = 0; col < values.size(); ++col) {
                 auto* cell = new QTableWidgetItem(values[col]); cell->setToolTip(values[col]); table->setItem(row, col, cell);
             }
+            table->item(row, 0)->setIcon(QIcon(achievementIcon(workspace, q(item.icon))));
         }
         table->resizeColumnsToContents();
         table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -154,8 +198,11 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         QDialog editor(&dialog); editor.setObjectName("achievementEdit");
         editor.setWindowTitle(QString::fromUtf8("Редактирование достижения")); editor.setMinimumWidth(460);
         auto* form = new QFormLayout(&editor);
+        auto* icon = iconSelector(workspace, q(original.icon));
+        form->addRow(QString::fromUtf8("Иконка"), icon);
         auto* title = new QLineEdit(q(original.title)); title->setObjectName("achievementTitle");
         auto* bonus = new QDoubleSpinBox; bonus->setObjectName("achievementBonus"); bonus->setRange(0, 10000); bonus->setDecimals(6); bonus->setValue(original.bonusPercent);
+        const auto displayedBonus = bonus->value();
         auto* change = new QCheckBox(QString::fromUtf8("Изменить срок от даты выдачи")); change->setObjectName("changeAchievementDuration");
         auto* days = new QSpinBox; days->setObjectName("achievementDays"); days->setRange(0, 36500); days->setSpecialValueText(QString::fromUtf8("Без срока")); days->setEnabled(false);
         days->setValue(original.expiresAt ? int(std::clamp<std::int64_t>((original.expiresAt - original.awardedAt) / 86400, 0, 36500)) : 0);
@@ -169,8 +216,9 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
         QObject::connect(buttons, &QDialogButtonBox::rejected, &editor, &QDialog::reject);
         QObject::connect(buttons, &QDialogButtonBox::accepted, &editor, [&] {
-            const auto result = UpdateQtAchievement(workspace, profileId, index, expected, title->text(), bonus->value(),
-                change->isChecked() ? std::optional<int>(days->value()) : std::nullopt);
+            const auto result = UpdateQtAchievement(workspace, profileId, index, expected, title->text(),
+                bonus->value() == displayedBonus ? original.bonusPercent : bonus->value(),
+                change->isChecked() ? std::optional<int>(days->value()) : std::nullopt, false, icon->currentData().toString());
             if (!result.isEmpty()) { error->setText(result); return; }
             editor.accept();
         });
@@ -196,6 +244,8 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         editor.setWindowTitle(QString::fromUtf8("Выдать достижение"));
         editor.setMinimumWidth(440);
         auto* form = new QFormLayout(&editor);
+        auto* icon = iconSelector(workspace);
+        form->addRow(QString::fromUtf8("Иконка"), icon);
         auto* title = new QLineEdit; title->setObjectName("achievementTitle");
         auto* skill = new QComboBox; skill->setObjectName("achievementSkill");
         for (const auto& id : workspace.catalog.skills()) skill->addItem(q(workspace.catalog.display_name(id)), q(id));
@@ -212,7 +262,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
         QObject::connect(buttons, &QDialogButtonBox::rejected, &editor, &QDialog::reject);
         QObject::connect(buttons, &QDialogButtonBox::accepted, &editor, [&] {
-            const auto result = GrantQtAchievement(workspace, profileId, title->text(), skill->currentData().toString().toUtf8().toStdString(), bonus->value(), days->value());
+            const auto result = GrantQtAchievement(workspace, profileId, title->text(), skill->currentData().toString().toUtf8().toStdString(), bonus->value(), days->value(), icon->currentData().toString());
             if (!result.isEmpty()) { error->setText(result); return; }
             editor.accept();
         });
