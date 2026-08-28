@@ -12,6 +12,10 @@
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 // File-backed failure injection keeps the test on the real persistence path.
 class FailingProfileStorage : public IJobStorage {
@@ -291,6 +295,90 @@ static bool TestProfileDialogs() {
     return checks;
 }
 
+static bool TestTaskEditorTransaction() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    TaskEntry original;
+    original.id = "edit-fixture";
+    original.title = "Original";
+    original.description = "Original description";
+    original.createdAt = 123;
+    original.assignees = {"legacy-profile"};
+    original.skillIds = {"legacy-skill"};
+    if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, original, "test", &workspace.data.taskAudit).ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    const std::vector<std::string> files = {"meta/tasks.json", "meta/task-audit.log", "meta/updates/tasks.last-good.json"};
+    auto read = [&](const std::string& name) {
+        QFile f(temp.path() + "/" + QString::fromStdString(name));
+        f.open(QIODevice::ReadOnly); return f.readAll();
+    };
+    std::vector<QByteArray> before;
+    for (const auto& file : files) before.push_back(read(file));
+    TaskEntry draft = original;
+    draft.title = "Updated";
+    draft.description = "Updated description";
+    draft.priority = 2;
+    draft.pipelineStepId = "stage-new";
+    draft.pipelineStep = "New stage";
+    draft.deadlineAt = 1900000000;
+    auto edit = [&] { return EditTaskDetails(workspace.directory, workspace.data.tasks, workspace.data.taskAudit, draft, "test"); };
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    const auto failedWrite = edit();
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (failedWrite.ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+#ifdef _WIN32
+    // Allow the journal to read the audit, but deny actual append and rollback writes.
+    const auto auditPath = workspace.directory / "meta/task-audit.log";
+    const auto lock = CreateFileW(auditPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    const auto failedAudit = edit();
+    CloseHandle(lock);
+    if (failedAudit.ok || workspace.data.tasks.front().title != original.title) return false;
+    workspace.reload(); // Retry the interrupted rollback now that the file is unlocked.
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
+#endif
+    // Fail after several successful mutations, not just at the first write.
+    draft.assignees.clear();
+    if (edit().ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    draft.assignees = original.assignees;
+    if (!edit().ok || workspace.data.tasks.front().createdAt != 123 ||
+        workspace.data.tasks.front().pipelineStepId != draft.pipelineStepId) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    // Simulate interrupted metadata editing and exercise the startup recovery format.
+    const auto journal = workspace.directory / "meta/qt-xp-transaction";
+    std::filesystem::create_directories(journal);
+    {
+        std::ofstream manifest(journal / "manifest");
+        manifest << "FORGEMIRROR_QT_TASK_EDIT_1 3\n";
+        for (size_t i = 0; i < files.size(); ++i) {
+            std::filesystem::create_directories((journal / files[i]).parent_path());
+            std::ofstream out(journal / files[i], std::ios::binary);
+            out.write(before[i].constData(), before[i].size());
+            manifest << std::quoted(files[i]) << " 1\n";
+        }
+    }
+    workspace.reload();
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    auto& awarded = workspace.data.tasks.front();
+    awarded.participants.push_back({"legacy-profile", 100, 77, 22, "snapshot"});
+    awarded.status = 2;
+    awarded.score = 9;
+    if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    draft = awarded;
+    draft.category = 2;
+    if (edit().ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    draft = awarded;
+    draft.title = "Corrected title";
+    // The service ignores caller-supplied protected fields even outside the UI.
+    draft.status = 0;
+    draft.score = 0;
+    draft.participants.clear();
+    if (!edit().ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    const auto disk = LoadTasksData(workspace.directory).front();
+    return disk.status == 2 && disk.score == 9 && disk.participants.size() == 1 &&
+        disk.participants.front().rollbackSnapshot == "snapshot" && disk.participants.front().globalXp == 77;
+}
+
 static bool TestSkillEditor() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -366,6 +454,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     QTemporaryDir temp;
@@ -457,6 +546,24 @@ int main(int argc, char** argv) {
     if (LoadTasksData(workspace.directory).size() != 2) return fail("Task form did not persist");
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == "qt-smoke-task") table->selectRow(i);
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QLineEdit*>("entryTitle")->setText(QString::fromUtf8("Отредактировано через Qt"));
+        dialog->findChild<QPlainTextEdit*>("entryDescription")->setPlainText(QString::fromUtf8("Новое описание"));
+        dialog->findChild<QComboBox*>("taskPriority")->setCurrentIndex(2);
+        dialog->findChild<QCheckBox*>("taskHasDeadline")->setChecked(true);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/task-editor.png");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    window.findChild<QPushButton*>("editEntry")->click();
+    auto taskEdits = LoadTasksData(workspace.directory);
+    auto editedTask = std::find_if(taskEdits.begin(), taskEdits.end(), [&](const auto& t) { return t.id == task.id; });
+    if (editedTask == taskEdits.end() || editedTask->title != u8"Отредактировано через Qt" ||
+        editedTask->priority != 2 || editedTask->deadlineAt == 0 || editedTask->createdAt != task.createdAt ||
+        editedTask->assignees != task.assignees) return fail("Task editor did not preserve metadata");
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (table->item(i, 0)->data(Qt::UserRole).toString() == "qt-smoke-task") table->selectRow(i);
     QTimer::singleShot(0, [] {
         if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) dialog->accept();
     });
@@ -539,6 +646,24 @@ int main(int argc, char** argv) {
     const auto earned = workspace.storage->load_profile();
     if (!earned || earned->total_xp() != finished->participants[0].globalXp || earned->tasks_completed() != 1)
         return fail("XP form did not persist profile");
+    bool lockedXpFields = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        lockedXpFields = dialog && !dialog->findChild<QComboBox*>("taskCategory")->isEnabled() &&
+            !dialog->findChild<QSpinBox*>("taskPenalty")->isEnabled() &&
+            !dialog->findChild<QListWidget*>("taskAssignees")->isEnabled() &&
+            !dialog->findChild<QListWidget*>("taskSkills")->isEnabled();
+        if (dialog) {
+            dialog->findChild<QLineEdit*>("entryTitle")->setText("Cancelled correction");
+            dialog->reject();
+        }
+    });
+    window.findChild<QPushButton*>("editEntry")->click();
+    if (!lockedXpFields) return fail("Awarded task editor did not lock XP fields");
+    const auto afterCancel = LoadTasksData(workspace.directory);
+    const auto cancelledTask = std::find_if(afterCancel.begin(), afterCancel.end(), [&](const auto& t) { return t.id == task.id; });
+    if (cancelledTask == afterCancel.end() || cancelledTask->title == "Cancelled correction")
+        return fail("Cancelled editor persisted changes");
     nav->setCurrentRow(0);
     bool openedManager = false;
     QTimer::singleShot(0, [&] {

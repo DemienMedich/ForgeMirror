@@ -51,7 +51,7 @@ void finishJournal(const std::filesystem::path& root) {
     std::error_code ec;
     std::filesystem::remove_all(destination, ec);
 }
-void prepareJournal(const std::filesystem::path& root, const TaskCompletionPreview& preview) {
+void prepareJournal(const std::filesystem::path& root, const TaskCompletionPreview& preview, bool editing = false) {
     const auto pending = journalPath(root);
     if (std::filesystem::exists(pending)) throw std::runtime_error(u8"Сначала восстановите незавершённую XP-транзакцию перезапуском Qt.");
     const auto staging = root / "meta" / "qt-xp-staging";
@@ -63,7 +63,7 @@ void prepareJournal(const std::filesystem::path& root, const TaskCompletionPrevi
     for (const auto& p : preview.finalize.participants) files.push_back(p.profileId + ".ini");
     std::ofstream manifest(staging / "manifest", std::ios::binary);
     if (!manifest) throw std::runtime_error(u8"Не удалось создать журнал восстановления XP.");
-    manifest << "FORGEMIRROR_QT_XP_1 " << files.size() << '\n';
+    manifest << (editing ? "FORGEMIRROR_QT_TASK_EDIT_1 " : "FORGEMIRROR_QT_XP_1 ") << files.size() << '\n';
     for (const auto& name : files) {
         checkPath(root, name);
         const auto source = root / name;
@@ -96,7 +96,9 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     std::set<std::string> seen;
     std::string version;
     size_t count = 0;
-    if (!(manifest >> version >> count) || version != "FORGEMIRROR_QT_XP_1" || count < 4 || count > 10003)
+    if (!(manifest >> version >> count) ||
+        !((version == "FORGEMIRROR_QT_XP_1" && count >= 4 && count <= 10003) ||
+          (version == "FORGEMIRROR_QT_TASK_EDIT_1" && count == 3)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
         if (!(manifest >> std::quoted(name) >> exists)) throw std::runtime_error(u8"Неполный журнал XP.");
@@ -108,7 +110,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     }
     manifest >> std::ws;
     if (!manifest.eof() || !seen.count("meta/tasks.json") || !seen.count("meta/task-audit.log") ||
-        !seen.count("meta/updates/tasks.last-good.json") || entries.size() < 4)
+        !seen.count("meta/updates/tasks.last-good.json"))
         throw std::runtime_error(u8"Неполный журнал XP: требуется ручное восстановление.");
     manifest.close(); // Windows cannot rename the journal directory while this stream is open.
     for (const auto& entry : entries) {
@@ -123,6 +125,64 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     }
     finishJournal(root);
     return true;
+}
+
+AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const TaskEntry& draft, const std::string& actor) {
+    AppMutationResult result;
+    const auto found = std::find_if(tasks.begin(), tasks.end(), [&](const auto& t) { return t.id == draft.id; });
+    if (found == tasks.end()) { result.errorMessage = u8"Задача не найдена."; return result; }
+    const TaskEntry original = *found;
+    if (!original.participants.empty() && (draft.category != original.category ||
+        draft.deadlinePenaltyPercent != original.deadlinePenaltyPercent || draft.assignees != original.assignees ||
+        draft.skillIds != original.skillIds)) {
+        result.errorMessage = u8"Параметры начисленного XP зафиксированы. Их нельзя менять через редактор.";
+        return result;
+    }
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(directory, {}, true);
+        prepared = true;
+        auto apply = [&](const AppMutationResult& change) {
+            if (!change.ok) throw std::runtime_error(change.errorMessage);
+            result.changed = result.changed || change.changed;
+        };
+        if (draft.title != original.title || draft.description != original.description)
+            apply(AppUpdateTaskText(directory, tasks, draft.id, draft.title, draft.description, actor, &audit));
+        if (draft.priority != original.priority)
+            apply(AppUpdateTaskPriority(directory, tasks, draft.id, draft.priority, actor, &audit));
+        if (draft.projectId != original.projectId || draft.project != original.project)
+            apply(AppUpdateTaskProject(directory, tasks, draft.id, draft.projectId, draft.project, actor, &audit));
+        if (draft.pipelineStepId != original.pipelineStepId || draft.pipelineStep != original.pipelineStep)
+            apply(AppUpdateTaskPipelineStep(directory, tasks, draft.id, draft.pipelineStepId, draft.pipelineStep, actor, &audit));
+        if (draft.deadlineAt != original.deadlineAt)
+            apply(AppUpdateTaskDeadline(directory, tasks, draft.id,
+                draft.deadlineAt > 0 ? std::optional<std::int64_t>(draft.deadlineAt) : std::nullopt, actor, &audit));
+        if (draft.category != original.category)
+            apply(AppUpdateTaskCategory(directory, tasks, draft.id, draft.category, actor, &audit));
+        if (draft.deadlinePenaltyPercent != original.deadlinePenaltyPercent)
+            apply(AppUpdateTaskPenaltyPercent(directory, tasks, draft.id, draft.deadlinePenaltyPercent, actor, &audit));
+        if (draft.skillIds != original.skillIds)
+            apply(AppUpdateTaskSkillIds(directory, tasks, draft.id, draft.skillIds, actor, &audit));
+        if (draft.assignees != original.assignees)
+            apply(AppUpdateTaskAssignees(directory, tasks, draft.id, draft.assignees, actor, &audit));
+        finishJournal(directory);
+        result.ok = true;
+        result.changedCount = result.changed ? 1 : 0;
+    } catch (const std::exception& e) {
+        result = {};
+        result.errorMessage = e.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
+        }
+    }
+    return result;
 }
 
 TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<TaskEntry>& tasks,

@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "AppTaskCompletionService.h"
 #include "QtSkillEditor.h"
 #include "QtTaskCompletionDialog.h"
 #include "QtProfileDialogs.h"
@@ -281,7 +282,7 @@ void QtWindow::render() {
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : QString::fromUtf8("Создать задачу")));
-    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog));
+    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks));
     profileMetrics_->setVisible(page == ProfilePage);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -414,14 +415,18 @@ void QtWindow::createEntry(bool edit) {
     }
     const bool projectMode = navigation_->currentRow() == Projects;
     if (!projectMode && navigation_->currentRow() != Tasks) return;
-    if (edit && !projectMode) return;
+    const auto foundTask = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+        [&](const auto& entry) { return entry.id == u(selectedId()); });
+    if (edit && !projectMode && foundTask == workspace_.data.tasks.end()) return;
+    const TaskEntry originalTask = edit && !projectMode ? *foundTask : TaskEntry{};
     const auto projectId = edit ? u(selectedId()) : std::string();
     const auto foundProject = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
         [&](const auto& entry) { return entry.id == projectId; });
-    if (edit && foundProject == workspace_.data.projects.end()) return;
+    if (edit && projectMode && foundProject == workspace_.data.projects.end()) return;
     QDialog dialog(this);
     dialog.setWindowTitle(projectMode ? QString::fromUtf8("Новый проект") : QString::fromUtf8("Новая задача"));
-    if (edit) dialog.setWindowTitle(QString::fromUtf8("Редактирование проекта"));
+    if (edit) dialog.setWindowTitle(QString::fromUtf8(projectMode ? "Редактирование проекта" : "Редактирование задачи"));
+    dialog.setObjectName(projectMode ? "projectEditor" : "taskEditor");
     dialog.setMinimumWidth(480);
     auto* form = new QFormLayout(&dialog);
     auto* name = new QLineEdit;
@@ -429,7 +434,10 @@ void QtWindow::createEntry(bool edit) {
     auto* description = new QPlainTextEdit;
     description->setMaximumHeight(96);
     description->setObjectName("entryDescription");
-    if (edit) { name->setText(q(foundProject->name)); description->setPlainText(q(foundProject->description)); }
+    if (edit) {
+        name->setText(q(projectMode ? foundProject->name : originalTask.title));
+        description->setPlainText(q(projectMode ? foundProject->description : originalTask.description));
+    }
     form->addRow(QString::fromUtf8("Название"), name);
     form->addRow(QString::fromUtf8("Описание"), description);
     auto* project = new QComboBox;
@@ -441,6 +449,15 @@ void QtWindow::createEntry(bool edit) {
     auto* assignees = new QListWidget;
     auto* skills = new QListWidget;
     auto* penalty = new QSpinBox;
+    project->setObjectName("taskProject");
+    priority->setObjectName("taskPriority");
+    category->setObjectName("taskCategory");
+    pipeline->setObjectName("taskPipeline");
+    deadline->setObjectName("taskDeadline");
+    hasDeadline->setObjectName("taskHasDeadline");
+    assignees->setObjectName("taskAssignees");
+    skills->setObjectName("taskSkills");
+    penalty->setObjectName("taskPenalty");
     // Parent optional controls to the dialog even in the project-only form.
     for (QWidget* control : std::initializer_list<QWidget*>{project, priority, category, pipeline, deadline, hasDeadline, assignees, skills, penalty}) {
         control->setParent(&dialog);
@@ -470,6 +487,43 @@ void QtWindow::createEntry(bool edit) {
             item->setData(Qt::UserRole, q(id));
             item->setCheckState(Qt::Unchecked);
         }
+        if (edit) {
+            auto selectReference = [&](QComboBox* box, const std::string& id, const std::string& label) {
+                int index = box->findData(q(id));
+                if (index < 0 || (id.empty() && !label.empty())) {
+                    box->addItem(q(label.empty() ? id : label), q(id));
+                    index = box->count() - 1;
+                }
+                box->setCurrentIndex(index);
+            };
+            selectReference(project, originalTask.projectId, originalTask.project);
+            selectReference(pipeline, originalTask.pipelineStepId, originalTask.pipelineStep);
+            priority->setCurrentIndex(originalTask.priority);
+            category->setCurrentIndex(originalTask.category);
+            penalty->setValue(originalTask.deadlinePenaltyPercent);
+            hasDeadline->setChecked(originalTask.deadlineAt > 0);
+            if (originalTask.deadlineAt > 0) deadline->setDateTime(QDateTime::fromSecsSinceEpoch(originalTask.deadlineAt));
+            auto selectIds = [&](QListWidget* list, const std::vector<std::string>& ids) {
+                for (const auto& id : ids) {
+                    QListWidgetItem* found = nullptr;
+                    for (int i = 0; i < list->count(); ++i)
+                        if (list->item(i)->data(Qt::UserRole).toString() == q(id)) found = list->item(i);
+                    if (!found) {
+                        found = new QListWidgetItem(q(id) + QString::fromUtf8(" · недоступен"), list);
+                        found->setData(Qt::UserRole, q(id));
+                    }
+                    found->setCheckState(Qt::Checked);
+                }
+            };
+            selectIds(assignees, originalTask.assignees);
+            selectIds(skills, originalTask.skillIds);
+            if (!originalTask.participants.empty()) {
+                for (QWidget* control : std::initializer_list<QWidget*>{category, penalty, assignees, skills}) {
+                    control->setEnabled(false);
+                    control->setToolTip(QString::fromUtf8("Зафиксировано при начислении XP"));
+                }
+            }
+        }
         assignees->setMaximumHeight(96);
         skills->setMaximumHeight(96);
         form->addRow(QString::fromUtf8("Проект"), project);
@@ -480,9 +534,15 @@ void QtWindow::createEntry(bool edit) {
         form->addRow(QString::fromUtf8("Штраф за срок"), penalty);
         form->addRow(QString::fromUtf8("Исполнители"), assignees);
         form->addRow(QString::fromUtf8("Навыки"), skills);
+        if (edit && !originalTask.participants.empty()) {
+            auto* hint = new QLabel(QString::fromUtf8("XP уже начислен. Участники и параметры начисления зафиксированы."));
+            hint->setWordWrap(true);
+            form->addRow(hint);
+        }
     }
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
+    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
     form->addRow(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -497,24 +557,35 @@ void QtWindow::createEntry(bool edit) {
                 u(name->text().trimmed()), u(description->toPlainText()));
             if (!result.ok) { message(result.errorMessage); return; }
         } else {
-            TaskEntry task;
-            task.id = u(QUuid::createUuid().toString(QUuid::WithoutBraces));
+            TaskEntry task = originalTask;
+            if (!edit) task.id = u(QUuid::createUuid().toString(QUuid::WithoutBraces));
             task.title = u(name->text().trimmed());
             task.description = u(description->toPlainText());
-            task.createdAt = QDateTime::currentSecsSinceEpoch();
+            if (!edit) task.createdAt = QDateTime::currentSecsSinceEpoch();
             task.projectId = u(project->currentData().toString());
-            if (!task.projectId.empty()) task.project = u(project->currentText());
+            task.project = project->currentIndex() > 0 ? u(project->currentText()) : std::string();
             task.priority = priority->currentData().toInt();
             task.category = category->currentIndex();
             task.pipelineStepId = u(pipeline->currentData().toString());
-            if (!task.pipelineStepId.empty()) task.pipelineStep = u(pipeline->currentText());
-            if (hasDeadline->isChecked()) task.deadlineAt = deadline->dateTime().toSecsSinceEpoch();
+            task.pipelineStep = pipeline->currentIndex() > 0 ? u(pipeline->currentText()) : std::string();
+            task.deadlineAt = hasDeadline->isChecked() ? deadline->dateTime().toSecsSinceEpoch() : 0;
             task.deadlinePenaltyPercent = penalty->value();
-            for (int i = 0; i < assignees->count(); ++i) if (assignees->item(i)->checkState() == Qt::Checked)
-                task.assignees.push_back(u(assignees->item(i)->data(Qt::UserRole).toString()));
-            for (int i = 0; i < skills->count(); ++i) if (skills->item(i)->checkState() == Qt::Checked)
-                task.skillIds.push_back(u(skills->item(i)->data(Qt::UserRole).toString()));
-            auto result = AppCreateTaskEntry(workspace_.directory, workspace_.data.tasks, task, "admin/qt", &workspace_.data.taskAudit);
+            auto collectIds = [&](QListWidget* list, const std::vector<std::string>& previous) {
+                std::vector<std::string> selected;
+                for (int i = 0; i < list->count(); ++i) if (list->item(i)->checkState() == Qt::Checked)
+                    selected.push_back(u(list->item(i)->data(Qt::UserRole).toString()));
+                std::vector<std::string> ordered;
+                for (const auto& id : previous)
+                    if (std::find(selected.begin(), selected.end(), id) != selected.end()) ordered.push_back(id);
+                for (const auto& id : selected)
+                    if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) ordered.push_back(id);
+                return ordered;
+            };
+            task.assignees = collectIds(assignees, originalTask.assignees);
+            task.skillIds = collectIds(skills, originalTask.skillIds);
+            auto result = edit
+                ? EditTaskDetails(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt")
+                : AppCreateTaskEntry(workspace_.directory, workspace_.data.tasks, task, "admin/qt", &workspace_.data.taskAudit);
             if (!result.ok) { message(result.errorMessage); return; }
         }
         dialog.accept();

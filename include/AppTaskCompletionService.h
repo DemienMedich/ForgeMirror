@@ -32,5 +32,10 @@ TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<T
                                             const TaskCompletionInput& input);
 AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& tasks,
                                      std::vector<TaskAuditEntry>& audit, const TaskCompletionInput& input);
-// Recover a pending Qt XP transaction before loading any workspace data. Throws on failure.
+// Recover a pending Qt XP or metadata transaction before loading workspace data. Throws on failure.
 bool RecoverTaskCompletion(const std::filesystem::path& directory);
+
+// Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
+AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const TaskEntry& draft, const std::string& actor);
