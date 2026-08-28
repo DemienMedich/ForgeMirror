@@ -10,6 +10,7 @@
 #include "AppTaskProjectService.h"
 #include "AppTaskWorkflowService.h"
 #include "AppTeamValueReportService.h"
+#include "AppProfileMutationService.h"
 #include <QtWidgets>
 #include <algorithm>
 
@@ -106,8 +107,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     metricsLayout->setContentsMargins(0, 0, 0, 0);
     metricsLayout->setSpacing(8);
     const QStringList metricNames = {QString::fromUtf8("Уровень"), QString::fromUtf8("Всего XP"),
-        QString::fromUtf8("Выполнено задач"), QString::fromUtf8("XP до уровня")};
-    for (int i = 0; i < 4; ++i) {
+        QString::fromUtf8("Выполнено задач"), QString::fromUtf8("XP до уровня"), QString::fromUtf8("Кукоины")};
+    for (int i = 0; i < 5; ++i) {
         auto* metric = new QFrame;
         metric->setProperty("metric", true);
         metric->setFixedHeight(56);
@@ -161,6 +162,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     achievements_ = new QPushButton(QString::fromUtf8("Достижения"));
     achievements_->setObjectName("showAchievements");
     bottom->addWidget(achievements_);
+    removeSpirit_ = new QPushButton(QString::fromUtf8("Снять Злого духа · 200"));
+    removeSpirit_->setObjectName("removeEvilSpirit");
+    removeSpirit_->setToolTip(QString::fromUtf8("Личная операция: списывает 200 Кукоинов и пополняет локальное хранилище."));
+    bottom->addWidget(removeSpirit_);
     bottom->addStretch();
     content->addLayout(bottom);
     details_ = new QTextBrowser;
@@ -190,6 +195,24 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
+    });
+    connect(removeSpirit_, &QPushButton::clicked, this, [this] {
+        const auto id = u(profiles_->currentData().toString());
+        if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+            message(u8"Сначала завершите восстановление данных."); return;
+        }
+        if (!profileSession_.isUnlocked(*workspace_.storage, id)) {
+            render(); message(u8"Сначала войдите в выбранный профиль."); return;
+        }
+        QMessageBox confirm(QMessageBox::Question, QString::fromUtf8("Снять Злого духа"),
+            QString::fromUtf8("Списать 200 Кукоинов и снять Злого духа?"),
+            QMessageBox::Yes | QMessageBox::No, this);
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        auto result = AppRemoveEvilSpiritForCoins(*workspace_.storage, id, id,
+            workspace_.directory, workspace_.data.vault, 200.0);
+        if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось снять Злого духа." : result.errorMessage); return; }
+        reload();
     });
     connect(advanceStage_, &QPushButton::clicked, this, [this] {
         if (!requireAdmin() || !workspace_.modules.pipeline || navigation_->currentRow() != Tasks) return;
@@ -357,6 +380,8 @@ void QtWindow::render() {
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
+    removeSpirit_->setVisible(page == ProfilePage && unlocked);
+    removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
@@ -377,6 +402,8 @@ void QtWindow::render() {
             profileValues_[1]->setText(QString::number(profile->total_xp()));
             profileValues_[2]->setText(QString::number(profile->tasks_completed()));
             profileValues_[3]->setText(QString::number(profile->xp_to_next_level()));
+            profileValues_[4]->setText(QString::number(profile->wallet_balance(), 'f', 0));
+            removeSpirit_->setEnabled(unlocked && profile->spirit() == ProfileSpirit::Evil && profile->wallet_balance() + 0.000001 >= 200.0);
             for (const auto& skill : profile->list_skills())
                 row(skill.name, {q(workspace_.catalog.display_name(skill.name)), QString::number(skill.level),
                     QString::number(skill.xp), QString::number(skill.weight)});

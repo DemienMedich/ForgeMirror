@@ -39,7 +39,7 @@ private:
     QLabel* title_;
     QLabel* mode_;
     QWidget* profileMetrics_;
-    QLabel* profileValues_[4];
+    QLabel* profileValues_[5];
     QTableWidget* table_;
     QTextBrowser* details_;
     QPushButton* primary_;
@@ -47,4 +47,5 @@ private:
     QPushButton* editEntry_;
     QPushButton* advanceStage_;
     QPushButton* achievements_;
+    QPushButton* removeSpirit_;
 };

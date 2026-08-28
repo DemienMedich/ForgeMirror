@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 12**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 13**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,9 +29,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 12 | Remaining |
+| Area | Qt stage 13 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons | Trusted-device access, rename/delete, standalone XP entry, wallet operations |
+| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Trusted-device access, rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
@@ -147,3 +147,10 @@ Grant and edit forms offer thumbnail selection from the workspace's achievements
 Only readable PNG files up to 4 MiB and 2048x2048 are offered. Symlinks and paths outside that folder are not loaded. Missing legacy references remain selected and are preserved on save until explicitly replaced or cleared. Icon validation is repeated during save; stale-sidecar and atomic-write guards remain in effect. An unchanged bonus retains its original precision even if the editor displays fewer decimals.
 
 Tests cover selecting icons during grant/edit, list thumbnails, invalid/missing/traversal paths, malformed images, preserving a missing old reference, cancellation, clearing, and unchanged XP/profile bytes and expiry.
+### Personal wallet operation (stage 13)
+
+The profile metrics now include the wallet balance. After a session-only personal login, a profile carrying the Evil Spirit can use **Снять Злого духа · 200** when the wallet has enough coins. The action is hidden without personal access and confirmation defaults to No. Administrators do not gain this personal action merely by entering administrator mode.
+
+The existing AppRemoveEvilSpiritForCoins service performs the operation: it saves the updated profile, adds 200 coins and a spirit_cleanup entry to the local vault, and restores the original profile if the vault write fails. Pending Qt task/XP recovery blocks the action. No cloud wallet push is performed.
+
+Tests drive the actual personal login, cancellation and confirmation, then verify the 250 to 50 wallet change, spirit removal, 200 coin vault credit and log entry. Existing core tests cover insufficient funds and failed-vault rollback. The profile screen was inspected on Windows at the normal application size.

@@ -826,6 +826,42 @@ static bool TestProfessionEditor() {
         workspace.data.professions.front().name == u8"3D-художник";
 }
 
+static bool TestPersonalWallet() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    Profile profile("Wallet profile");
+    profile.set_password_encoded(EncodePassword("wallet-password"));
+    profile.set_wallet_balance(250.0);
+    profile.set_spirit(ProfileSpirit::Evil);
+    const auto created = workspace.storage->create_profile(profile);
+    if (!created) return false;
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* remove = window.findChild<QPushButton*>("removeEvilSpirit");
+    auto* access = window.findChild<QAction*>("profileAccess");
+    if (!remove || !access || remove->isVisible()) return false;
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        dialog->findChild<QLineEdit*>("profileLoginPassword")->setText("wallet-password");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    access->trigger();
+    if (!remove->isVisible() || !remove->isEnabled()) return false;
+    QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::No)->click(); });
+    remove->click();
+    workspace.storage->set_active_profile(created->id);
+    auto unchanged = workspace.storage->load_profile();
+    if (!unchanged || unchanged->spirit() != ProfileSpirit::Evil || unchanged->wallet_balance() != 250.0 || workspace.data.vault.balance != 0.0) return false;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); window.grab().save(artifacts + "/profile-wallet.png"); }
+    QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::Yes)->click(); });
+    remove->click();
+    workspace.storage->set_active_profile(created->id);
+    const auto changed = workspace.storage->load_profile();
+    const auto vault = LoadStorageVault(workspace.directory);
+    return changed && changed->spirit() == ProfileSpirit::None && changed->wallet_balance() == 50.0 &&
+        vault.balance == 200.0 && !vault.log.empty() && vault.log.back().action == "spirit_cleanup" && !remove->isEnabled();
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -840,6 +876,7 @@ int main(int argc, char** argv) {
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
+    if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
