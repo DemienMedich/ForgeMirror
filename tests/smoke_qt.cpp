@@ -298,6 +298,37 @@ static bool TestProfileDialogs() {
     return checks;
 }
 
+static bool TestProfileSession() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    Profile profile("Session profile");
+    profile.set_password_encoded(EncodePassword("secret"));
+    const auto created = workspace.storage->create_profile(profile);
+    if (!created) return false;
+    QtProfileSession session;
+    if (session.unlock(*workspace.storage, created->id, "wrong") ||
+        !session.unlock(*workspace.storage, created->id, "secret") ||
+        !session.isUnlocked(*workspace.storage, created->id)) return false;
+    QtProfileSession fresh;
+    if (fresh.isUnlocked(*workspace.storage, created->id)) return false;
+    if (session.isUnlocked(*workspace.storage, "other") || session.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!session.unlock(*workspace.storage, created->id, "secret")) return false;
+    profile.set_password_encoded(EncodePassword("changed"));
+    if (!workspace.storage->save_profile(profile) || session.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!session.unlock(*workspace.storage, created->id, "changed")) return false;
+    profile.set_blocked(true);
+    if (!workspace.storage->save_profile(profile) || session.isUnlocked(*workspace.storage, created->id) ||
+        session.unlock(*workspace.storage, created->id, "changed")) return false;
+    profile.set_blocked(false);
+    if (!workspace.storage->save_profile(profile) || !session.unlock(*workspace.storage, created->id, "changed")) return false;
+    if (!workspace.storage->set_archived(created->id, true) || session.isUnlocked(*workspace.storage, created->id) ||
+        session.unlock(*workspace.storage, created->id, "changed")) return false;
+    if (!workspace.storage->set_archived(created->id, false) || !workspace.storage->set_active_profile(created->id)) return false;
+    profile.set_password_encoded("");
+    if (!workspace.storage->save_profile(profile) || session.unlock(*workspace.storage, created->id, "")) return false;
+    return true;
+}
+
 static bool TestPipelineTransition() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -569,6 +600,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
@@ -579,6 +611,7 @@ int main(int argc, char** argv) {
     if (!temp.isValid()) return fail("Temporary directory unavailable");
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
     Profile profile(u8"Тестовый профиль");
+    profile.set_password_encoded(EncodePassword("profile-test-password"));
     workspace.catalog.add_skill(u8"Моделирование", 1.0, u8"Создание геометрии");
     workspace.catalog.add_skill(u8"Текстурирование", 1.0, u8"Подготовка материалов");
     workspace.catalog.add_skill(u8"Анимация", 1.0, u8"Движение персонажа");
@@ -626,6 +659,26 @@ int main(int argc, char** argv) {
     table->selectRow(0);
     auto* details = window.findChild<QTextBrowser*>("details");
     if (!details->toPlainText().contains("<без HTML>")) return fail("HTML escaping failed");
+    auto* access = window.findChild<QAction*>("profileAccess");
+    auto* ownPassword = window.findChild<QAction*>("changeOwnProfilePassword");
+    if (!access || !ownPassword || ownPassword->isEnabled()) return fail("Profile access not locked initially");
+    bool loginChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* password = dialog->findChild<QLineEdit*>("profileLoginPassword");
+        auto* submit = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        password->setText("wrong"); submit->click();
+        loginChecked = !dialog->findChild<QLabel*>("profileLoginNotice")->text().isEmpty() && password->text().isEmpty();
+        password->setText("profile-test-password");
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/profile-login.png"); }
+        submit->click();
+    });
+    access->trigger();
+    if (!loginChecked || !ownPassword->isEnabled() || primary->isVisible() || !nav->item(2)->isHidden())
+        return fail("Profile login failed or granted admin privileges");
+    access->trigger();
+    if (ownPassword->isEnabled()) return fail("Profile logout failed");
     // Drive the actual modal forms: authenticate, create, persist, and change status.
     if (!SetAdminPassword(workspace.directory, "qt-test-password")) return fail("Admin fixture failed");
     QAction* login = nullptr;

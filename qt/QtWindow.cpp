@@ -48,20 +48,26 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     menuButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(menuButton);
     menu->addAction(QString::fromUtf8("Вход / выход администратора"), this, [this] { authenticate(); });
+    profileAccessAction_ = menu->addAction(QString::fromUtf8("Войти в выбранный профиль"), this, [this] { authenticateProfile(); });
+    profileAccessAction_->setObjectName("profileAccess");
     auto* passwordAction = menu->addAction(QString::fromUtf8("Сменить пароль выбранного профиля"), this, [this] {
         const auto id = profiles_->currentData().toString();
-        if (id.isEmpty()) { message(u8"Сначала выберите профиль."); return; }
+        if (!profileSession_.isUnlocked(*workspace_.storage, u(id))) {
+            render(); message(u8"Сначала войдите в выбранный профиль."); return;
+        }
         ShowProfilePasswordDialog(this, workspace_, id, id, false);
+        render();
     });
+    ownPasswordAction_ = passwordAction;
     passwordAction->setObjectName("changeOwnProfilePassword");
     menu->addAction(QString::fromUtf8("Открыть папку данных Qt"), this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(q(workspace_.directory.u8string())));
     });
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
-            "Это первый этап переноса, не замена стабильной версии.\n"
+            "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Редакторы навыков/пайплайна, достижения, Pomodoro, 3D и настройки ещё не перенесены."));
+            "Достижения, Pomodoro, 3D и настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -169,7 +175,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         search_->clear();
         render();
     });
-    connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { render(); });
+    connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
@@ -203,6 +209,47 @@ bool QtWindow::requireAdmin() {
     }
     if (!admin_) message(u8"Для изменения данных войдите как администратор через меню ⋯.");
     return admin_;
+}
+
+void QtWindow::authenticateProfile() {
+    const auto id = u(profiles_->currentData().toString());
+    if (profileSession_.isUnlocked(*workspace_.storage, id)) { profileSession_.lock(); render(); return; }
+    if (id.empty()) return;
+    QDialog dialog(this);
+    dialog.setObjectName("profileLogin");
+    dialog.setWindowTitle(QString::fromUtf8("Доступ к профилю"));
+    dialog.setMinimumWidth(400);
+    auto* layout = new QFormLayout(&dialog);
+    auto* name = new QLabel(profiles_->currentText());
+    name->setTextFormat(Qt::PlainText);
+    name->setWordWrap(true);
+    layout->addRow(name);
+    auto* password = new QLineEdit;
+    password->setObjectName("profileLoginPassword");
+    password->setEchoMode(QLineEdit::Password);
+    layout->addRow(QString::fromUtf8("Пароль"), password);
+    auto* hint = new QLabel(QString::fromUtf8("Только эта сессия. При смене профиля доступ закрывается. Права администратора не предоставляются."));
+    hint->setWordWrap(true);
+    layout->addRow(hint);
+    auto* notice = new QLabel;
+    notice->setObjectName("profileLoginNotice");
+    notice->setWordWrap(true);
+    connect(password, &QLineEdit::textChanged, notice, &QLabel::clear);
+    layout->addRow(notice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Ok)->setText(QString::fromUtf8("Войти"));
+    buttons->button(QDialogButtonBox::Ok)->setProperty("primary", true);
+    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    layout->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        const bool accepted = profileSession_.unlock(*workspace_.storage, id, u(password->text()));
+        password->clear();
+        if (accepted) dialog.accept();
+        else { notice->setText(QString::fromUtf8("Неверный пароль или профиль недоступен. Для восстановления обратитесь к администратору.")); password->setFocus(); }
+    });
+    dialog.exec();
+    render();
 }
 
 void QtWindow::authenticate() {
@@ -253,6 +300,11 @@ QString QtWindow::selectedId() const {
 }
 
 void QtWindow::render() {
+    const auto profileId = u(profiles_->currentData().toString());
+    const bool unlocked = profileSession_.isUnlocked(*workspace_.storage, profileId);
+    profileAccessAction_->setText(QString::fromUtf8(unlocked ? "Выйти из профиля" : "Войти в выбранный профиль"));
+    profileAccessAction_->setEnabled(!profileId.empty());
+    ownPasswordAction_->setEnabled(unlocked);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
     navigation_->item(Pipeline)->setHidden(!workspace_.modules.pipeline);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
@@ -285,7 +337,8 @@ void QtWindow::render() {
         }
     };
     title_->setText(navigation_->item(page)->text());
-    mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8("Просмотр · Qt"));
+    mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") :
+        QString::fromUtf8(unlocked ? "Личный доступ · Qt" : "Просмотр · Qt"));
     statusFilter_->setVisible(page == Tasks);
     primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :

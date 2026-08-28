@@ -1,5 +1,6 @@
 #pragma once
 #include "QtWorkspace.h"
+#include "QtProfileSession.h"
 #include <QMainWindow>
 
 class QComboBox;
@@ -9,6 +10,7 @@ class QListWidget;
 class QPushButton;
 class QTableWidget;
 class QTextBrowser;
+class QAction;
 
 class QtWindow : public QMainWindow {
 public:
@@ -18,6 +20,7 @@ private:
     void render();
     void details();
     void authenticate();
+    void authenticateProfile();
     void createEntry(bool edit = false);
     void changeStatus();
     bool requireAdmin();
@@ -25,6 +28,9 @@ private:
     QString selectedId() const;
     QtWorkspace& workspace_;
     bool admin_ = false;
+    QtProfileSession profileSession_;
+    QAction* profileAccessAction_;
+    QAction* ownPasswordAction_;
     QComboBox* profiles_;
     QListWidget* navigation_;
     QLineEdit* search_;
