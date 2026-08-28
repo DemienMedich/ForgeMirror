@@ -39,3 +39,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& directory);
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const TaskEntry& draft, const std::string& actor);
+
+AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::vector<PipelineStep>& steps, const std::string& taskId,
+    const std::string& expectedStageId, const std::string& targetId, const std::string& actor);

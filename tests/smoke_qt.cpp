@@ -6,6 +6,7 @@
 #include "QtTheme.h"
 #include "QtProfileDialogs.h"
 #include "QtPipelineEditor.h"
+#include "QtPipelineTransition.h"
 #include "AppPipelineService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
@@ -297,6 +298,59 @@ static bool TestProfileDialogs() {
     return checks;
 }
 
+static bool TestPipelineTransition() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    PipelineStep first, second, third;
+    first.id = "first"; first.title = "First"; first.nextIds = {"second", "missing", "second", "first"};
+    first.doneCriteria = "Check geometry";
+    second.id = "second"; second.title = "Second";
+    third.id = "third"; third.title = "Unlinked";
+    workspace.data.pipelineSteps = {first, second, third};
+    TaskEntry task;
+    task.id = "transition-task"; task.title = "Pipeline task"; task.description = "Description";
+    task.pipelineStepId = first.id; task.pipelineStep = first.title;
+    if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test", &workspace.data.taskAudit).ok) return false;
+    auto advance = [&](const std::string& from, const std::string& to) {
+        return AdvanceTaskPipeline(workspace.directory, workspace.data.tasks, workspace.data.taskAudit,
+            workspace.data.pipelineSteps, task.id, from, to, "test");
+    };
+    if (advance("first", "third").ok || advance("first", "missing").ok ||
+        advance("first", "first").ok || advance("stale", "second").ok) return false;
+    auto bytes = [&](const char* name) { QFile f(temp.path() + "/meta/" + name); f.open(QIODevice::ReadOnly); return f.readAll(); };
+    const auto taskBytes = bytes("tasks.json"), auditBytes = bytes("task-audit.log");
+    QTimer::singleShot(0, [] { qobject_cast<QDialog*>(QApplication::activeModalWidget())->reject(); });
+    if (ShowPipelineTransition(nullptr, workspace, task.id) || bytes("tasks.json") != taskBytes) return false;
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    auto failed = advance("first", "second");
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (failed.ok || bytes("tasks.json") != taskBytes || bytes("task-audit.log") != auditBytes) return false;
+    bool checks = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* choices = dialog->findChild<QComboBox*>("nextStage");
+        auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        checks = choices->count() == 1 && choices->currentData().toString() == "second" && !save->isEnabled();
+        dialog->findChild<QCheckBox*>("stageReady")->setChecked(true);
+        checks &= save->isEnabled();
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QDir().mkpath(artifacts); dialog->resize(480, 360); QApplication::processEvents();
+            dialog->grab().save(artifacts + "/pipeline-transition.png");
+        }
+        save->click();
+    });
+    if (!ShowPipelineTransition(nullptr, workspace, task.id) || !checks) return false;
+    const auto disk = LoadTasksData(workspace.directory).front();
+    if (disk.pipelineStepId != "second" || disk.status != task.status || disk.id != task.id ||
+        workspace.data.taskAudit.back().field != "pipeline") return false;
+    if (advance("first", "second").ok || advance("second", "third").ok) return false;
+    workspace.data.tasks.front().pipelineStepId = "first";
+    workspace.data.tasks.front().status = 2;
+    if (advance("first", "second").ok) return false;
+    return true;
+}
+
 static bool TestPipelineEditor() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -515,6 +569,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
@@ -560,6 +615,7 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(1);
     if (table->rowCount() != 1 || !table->item(0, 0)->text().contains(QString::fromUtf8("Проверка Qt"))) return fail("Task loading failed");
     if (primary->isVisible()) return fail("Unauthenticated user can mutate data");
+    if (window.findChild<QPushButton*>("advanceStage")->isVisible()) return fail("Unauthenticated pipeline transition visible");
     search->setText("no-matches");
     if (table->rowCount() != 0) return fail("Search did not filter");
     search->clear();
@@ -596,6 +652,16 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(1);
     if (table->item(0, 5)->text() != "Updated stage" || LoadTasksData(workspace.directory).front().pipelineStepId != stage.id)
         return fail("Pipeline rename broke linked task display");
+    table->selectRow(0);
+    bool terminalChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        terminalChecked = dialog && dialog->findChild<QComboBox*>("nextStage")->count() == 0 &&
+            !dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->isEnabled();
+        if (dialog) dialog->reject();
+    });
+    window.findChild<QPushButton*>("advanceStage")->click();
+    if (!terminalChecked) return fail("Terminal stage transition should be unavailable");
     auto saveForm = [](const QString& title) {
         QTimer::singleShot(0, [title] {
             auto* dialog = QApplication::activeModalWidget();

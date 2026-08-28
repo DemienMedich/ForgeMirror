@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
 #include "QtSkillEditor.h"
@@ -146,6 +147,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     editEntry_ = new QPushButton(QString::fromUtf8("Редактировать"));
     editEntry_->setObjectName("editEntry");
     bottom->addWidget(editEntry_);
+    advanceStage_ = new QPushButton(QString::fromUtf8("Следующий этап"));
+    advanceStage_->setObjectName("advanceStage");
+    bottom->addWidget(advanceStage_);
     bottom->addStretch();
     content->addLayout(bottom);
     details_ = new QTextBrowser;
@@ -172,6 +176,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     connect(detailsToggle, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
+    connect(advanceStage_, &QPushButton::clicked, this, [this] {
+        if (!requireAdmin() || !workspace_.modules.pipeline || navigation_->currentRow() != Tasks) return;
+        if (ShowPipelineTransition(this, workspace_, u(selectedId()))) reload();
+    });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
@@ -287,6 +295,7 @@ void QtWindow::render() {
     profileMetrics_->setVisible(page == ProfilePage);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
+    advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
     summary_->clear();
 
     if (page == ProfilePage) {
@@ -372,6 +381,7 @@ void QtWindow::details() {
     details_->clear();
     changeStatus_->setEnabled(!id.empty());
     editEntry_->setEnabled(!id.empty());
+    advanceStage_->setEnabled(!id.empty());
     const int page = navigation_->currentRow();
     if (page == Tasks) {
         for (const auto& task : workspace_.data.tasks) if (task.id == id) {

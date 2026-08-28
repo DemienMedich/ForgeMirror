@@ -39,4 +39,5 @@ private:
     QPushButton* primary_;
     QPushButton* changeStatus_;
     QPushButton* editEntry_;
+    QPushButton* advanceStage_;
 };

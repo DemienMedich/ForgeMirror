@@ -127,6 +127,31 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     return true;
 }
 
+AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::vector<PipelineStep>& steps, const std::string& taskId,
+    const std::string& expectedStageId, const std::string& targetId, const std::string& actor) {
+    AppMutationResult result;
+    const auto task = std::find_if(tasks.begin(), tasks.end(), [&](const auto& t) { return t.id == taskId; });
+    const auto source = std::find_if(steps.begin(), steps.end(), [&](const auto& s) { return s.id == expectedStageId; });
+    const auto target = std::find_if(steps.begin(), steps.end(), [&](const auto& s) { return s.id == targetId; });
+    if (task == tasks.end() || expectedStageId.empty() || task->pipelineStepId != expectedStageId ||
+        source == steps.end() || target == steps.end() || targetId == expectedStageId ||
+        std::count_if(steps.begin(), steps.end(), [&](const auto& s) { return s.id == expectedStageId || s.id == targetId; }) != 2 ||
+        std::find(source->nextIds.begin(), source->nextIds.end(), targetId) == source->nextIds.end()) {
+        result.errorMessage = u8"Переход недоступен или схема изменилась. Обновите данные; начальный этап задаётся в редакторе задачи.";
+        return result;
+    }
+    if (task->status == 2) {
+        result.errorMessage = u8"Задача завершена. Сначала откройте её через изменение статуса.";
+        return result;
+    }
+    auto draft = *task;
+    draft.pipelineStepId = targetId;
+    draft.pipelineStep = target->title;
+    return EditTaskDetails(directory, tasks, audit, draft, actor);
+}
+
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const TaskEntry& draft, const std::string& actor) {

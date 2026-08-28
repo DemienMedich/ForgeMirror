@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 6**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 7**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,13 +29,13 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 6 | Remaining |
+| Area | Qt stage 7 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change | Personal login/access policies, rename/delete, achievements, standalone XP entry, wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, profession assignment and filters |
-| Pipeline | Stages, details, admin creation/editing including next-step links; current names in task rows | Guided task progression, deletion and reordering |
+| Pipeline | Stages, details, admin creation/editing including next-step links; current names in task rows and guided next-step transitions | Deletion and reordering |
 | Professions | Admin list | CRUD |
 | Reports | Admin project metrics from existing report service | CSV export and full report UI |
 | Audit | Admin task audit view | Other application logs |
@@ -101,3 +101,10 @@ Administrators can create or edit stages from Pipeline. Four compact tabs expose
 A complete candidate collection is saved once through AppSavePipelineData and its atomic primary-file replacement. Memory is updated only after success. Pending task/XP recovery blocks saving. Task and profile files are not rewritten when editing definitions; task rows resolve the current stage title by ID. Guided progression along nextIds is still pending, as are deletion and reordering.
 
 Tests exercise creation, cancellation, empty-title validation, injected primary-write failure, preservation of IDs/links/hints/notes, multiline criteria, and the administrator entry point with a linked task. All four tabs were inspected at the 520x440 minimum size on Windows.
+### Guided task transitions (stage 7)
+
+On Tasks, administrators can use **Следующий этап** while the pipeline module is enabled. The dialog shows the current completion criteria, destination description/input/owner, and requires explicit readiness confirmation. Changing the destination clears confirmation. Only existing nextIds are offered, without duplicates or self-links. Missing/unassigned stages and terminal stages explain why no transition is available. Completed tasks must first be reopened through the separate status workflow.
+
+AdvanceTaskPipeline rechecks the source ID, target, edge and unambiguous stage IDs before using the existing transactional metadata service. It changes only the stage, logs the transition, and leaves status and XP unchanged. Readiness is a human confirmation, not automated verification of the criteria. Manual stage assignment remains available to administrators in the task editor for initial assignment and corrections. External concurrent edits remain unsupported; refresh after editing files outside the app.
+
+Tests cover allowed/disallowed/stale/missing/self/terminal/completed transitions, choice deduplication, readiness gating, cancellation, failure rollback, audit persistence and administrator-only entry. The dialog was inspected at 480x360; native Windows tests and packaged startup without installed Qt on PATH passed with empty stderr.
