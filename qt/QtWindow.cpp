@@ -69,7 +69,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Редактирование достижений, Pomodoro, 3D и настройки ещё не перенесены."));
+            "Выбор иконок достижений, Pomodoro, 3D и настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);

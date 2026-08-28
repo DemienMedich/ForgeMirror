@@ -340,6 +340,8 @@ static bool TestAchievements() {
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         checks = dialog && !dialog->findChild<QPushButton*>("grantAchievement")->isVisible() &&
+            !dialog->findChild<QPushButton*>("editAchievement")->isVisible() &&
+            !dialog->findChild<QPushButton*>("revokeAchievement")->isVisible() &&
             dialog->findChild<QTableWidget*>("achievementRecords")->rowCount() == 1;
         if (dialog) dialog->reject();
     });
@@ -367,6 +369,48 @@ static bool TestAchievements() {
     workspace.storage->set_active_profile(id);
     loaded = workspace.storage->load_profile();
     if (!loaded || loaded->achievements().size() != 2 || loaded->skill_bonus_multiplier(skill, QDateTime::currentSecsSinceEpoch()) != 1.35) return false;
+    const auto editBaseline = read(achievementPath);
+#ifdef _WIN32
+    const auto lockedPath = std::filesystem::u8path(path.toUtf8().toStdString());
+    const auto editLock = CreateFileW(lockedPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (editLock == INVALID_HANDLE_VALUE) return false;
+    const auto failedEdit = UpdateQtAchievement(workspace, id, 0, editBaseline, "Failed edit", 5);
+    CloseHandle(editLock);
+    if (failedEdit.isEmpty() || read(achievementPath) != editBaseline) return false;
+#endif
+    if (UpdateQtAchievement(workspace, id, 0, before, "Stale", 5).isEmpty() || read(achievementPath) != editBaseline) return false;
+    if (!UpdateQtAchievement(workspace, id, 0, editBaseline, "Updated", 30, 2).isEmpty()) return false;
+    loaded = workspace.storage->load_profile();
+    if (!loaded || loaded->achievements()[0].awardedAt != earned.awardedAt ||
+        loaded->achievements()[0].expiresAt != earned.awardedAt + 2 * 86400 ||
+        loaded->achievements()[0].skill != skill) return false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* table = dialog->findChild<QTableWidget*>("achievementRecords"); table->selectRow(0);
+        QTimer::singleShot(0, [&] {
+            auto* editor = QApplication::activeModalWidget();
+            editor->findChild<QLineEdit*>("achievementTitle")->setText(QString::fromUtf8("Точная геометрия"));
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) editor->grab().save(artifacts + "/achievement-edit.png");
+            editor->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        });
+        dialog->findChild<QPushButton*>("editAchievement")->click();
+        const auto afterEdit = workspace.storage->load_profile();
+        checks &= afterEdit && afterEdit->achievements()[0].expiresAt == earned.awardedAt + 2 * 86400 &&
+            afterEdit->achievements()[0].awardedAt == earned.awardedAt && afterEdit->achievements()[0].skill == skill;
+        table->selectRow(0);
+        QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::No)->click(); });
+        dialog->findChild<QPushButton*>("revokeAchievement")->click();
+        checks &= table->rowCount() == 2;
+        QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::Yes)->click(); });
+        dialog->findChild<QPushButton*>("revokeAchievement")->click();
+        checks &= table->rowCount() == 1;
+        dialog->reject();
+    });
+    ShowAchievements(nullptr, workspace, id, true);
+    loaded = workspace.storage->load_profile();
+    if (!checks || !loaded || loaded->achievements().size() != 1 ||
+        loaded->achievements()[0].title != u8"Точная работа" || read(profilePath) != original) return false;
     const auto granted = read(achievementPath);
     std::filesystem::create_directories(workspace.directory / "meta/qt-xp-transaction");
     if (GrantQtAchievement(workspace, id, "Pending", skill, 10, 0).isEmpty() || read(achievementPath) != granted) return false;
