@@ -5,6 +5,7 @@
 #include "QtTaskCompletionDialog.h"
 #include "QtTheme.h"
 #include "QtProfileDialogs.h"
+#include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
 #include <iostream>
@@ -290,6 +291,75 @@ static bool TestProfileDialogs() {
     return checks;
 }
 
+static bool TestSkillEditor() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    auto read = [&] { QFile file(temp.path() + "/skills.txt"); file.open(QIODevice::ReadOnly); return file.readAll(); };
+    auto save = [&](const std::string& id, const QString& name, const QString& desc) {
+        return SaveQtSkill(workspace, id, name, 1.25, desc, "");
+    };
+    const auto before = read();
+    if (save({}, "", "Description").isEmpty() || read() != before) return false;
+    if (save({}, "Test", "line\nbreak").isEmpty() || read() != before) return false;
+    if (save({}, "Test|invalid", "Description").isEmpty() || read() != before) return false;
+    bool formChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog) return;
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        buttons->button(QDialogButtonBox::Save)->click();
+        formChecked = !dialog->findChild<QLabel*>("editorNotice")->text().isEmpty();
+        dialog->findChild<QLineEdit*>("skillName")->setText(QString::fromUtf8("Новый навык"));
+        dialog->findChild<QLineEdit*>("skillDescription")->setText(QString::fromUtf8("Описание нового навыка"));
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/skill-editor.png"); }
+        buttons->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowSkillEditor(nullptr, workspace) || !formChecked) return false;
+    const auto id = workspace.catalog.id_for_name(u8"Новый навык");
+    if (!id) return false;
+    Profile profile("Skill owner");
+    profile.add_skill(*id);
+    const auto owner = workspace.storage->create_profile(profile);
+    if (!owner) return false;
+    const auto ownerPath = temp.path() + "/" + QString::fromStdString(owner->id) + ".ini";
+    auto readOwner = [&] { QFile file(ownerPath); file.open(QIODevice::ReadOnly); return file.readAll(); };
+    const auto ownerBytes = readOwner();
+    const auto created = read();
+    if (save({}, QString::fromUtf8("Новый навык"), "Duplicate").isEmpty() || read() != created) return false;
+    // A failed atomic replacement must not modify memory or report success.
+    QFile locked(temp.path() + "/skills.txt");
+    // A directory at the target path is a deterministic I/O failure on all platforms.
+    if (!QFile::rename(locked.fileName(), locked.fileName() + ".original")) return false;
+    if (!QDir().mkdir(locked.fileName())) return false;
+    const bool failed = !save(*id, "Renamed", "Description").isEmpty();
+    QDir().rmdir(locked.fileName());
+    if (!QFile::rename(locked.fileName() + ".original", locked.fileName())) return false;
+    if (!failed || read() != created || workspace.catalog.display_name(*id) != u8"Новый навык") return false;
+    if (!save(*id, "Renamed", "Description").isEmpty()) return false;
+    SkillCatalog disk(workspace.directory);
+    if (disk.id_for_name("Renamed") != id || disk.weight(*id) != 1.25) return false;
+    // Unchanged submission is valid, not a false failure from legacy update_skill.
+    if (!save(*id, "Renamed", "Description").isEmpty()) return false;
+    if (readOwner() != ownerBytes) return false;
+    const auto edited = read();
+    std::filesystem::create_directories(workspace.directory / "meta/qt-xp-transaction");
+    if (save(*id, "Blocked", "Description").isEmpty() || read() != edited) return false;
+    std::filesystem::remove(workspace.directory / "meta/qt-xp-transaction");
+    QTimer::singleShot(0, [] { qobject_cast<QDialog*>(QApplication::activeModalWidget())->reject(); });
+    if (ShowSkillEditor(nullptr, workspace, *id) || read() != edited) return false;
+    workspace.catalog.add_skill("Linked", 1.0, "Linked description", "", {"unknown-profession"});
+    workspace.catalog.reload();
+    const auto linked = workspace.catalog.id_for_name("Linked");
+    if (!linked || !save(*linked, "Linked renamed", "Changed description").isEmpty() ||
+        workspace.catalog.professions(*linked) != std::vector<std::string>{"unknown-profession"}) return false;
+    // Legacy parsing cannot round-trip category + profession together: fail closed.
+    const auto linkedBytes = read();
+    if (SaveQtSkill(workspace, *linked, "Linked renamed", 1.25, "Changed description", "New category").isEmpty() ||
+        read() != linkedBytes) return false;
+    return true;
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -297,6 +367,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
     if (!TestProfileDialogs()) return 1;
+    if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -368,7 +439,19 @@ int main(int argc, char** argv) {
     saveForm(QString::fromUtf8("Проект Qt"));
     primary->click();
     if (LoadProjectsData(workspace.directory).size() != 1) return fail("Project form did not persist");
+    const auto originalProject = LoadProjectsData(workspace.directory).front();
+    if (!AppUpdateTaskProject(workspace.directory, workspace.data.tasks, task.id,
+        originalProject.id, originalProject.name, "test").ok) return fail("Project link fixture failed");
+    table->selectRow(0);
+    saveForm(QString::fromUtf8("Проект после правки"));
+    window.findChild<QPushButton*>("editEntry")->click();
+    const auto editedProjects = LoadProjectsData(workspace.directory);
+    if (editedProjects.size() != 1 || editedProjects.front().id != originalProject.id ||
+        editedProjects.front().createdAt != originalProject.createdAt ||
+        editedProjects.front().name != u8"Проект после правки") return fail("Project editing lost identity");
     nav->setCurrentRow(1);
+    if (table->rowCount() != 1 || table->item(0, 1)->text() != QString::fromUtf8("Проект после правки"))
+        return fail("Task retained stale project name after rename");
     saveForm(QString::fromUtf8("Создано через Qt"));
     primary->click();
     if (LoadTasksData(workspace.directory).size() != 2) return fail("Task form did not persist");

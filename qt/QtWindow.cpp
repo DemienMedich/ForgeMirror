@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtSkillEditor.h"
 #include "QtTaskCompletionDialog.h"
 #include "QtProfileDialogs.h"
 #include "AppTaskProjectService.h"
@@ -140,6 +141,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     changeStatus_->setObjectName("changeStatus");
     changeStatus_->setToolTip(QString::fromUtf8("Переходы проверяются ядром. Завершение открывает распределение XP."));
     bottom->addWidget(changeStatus_);
+    editEntry_ = new QPushButton(QString::fromUtf8("Редактировать"));
+    editEntry_->setObjectName("editEntry");
+    bottom->addWidget(editEntry_);
     bottom->addStretch();
     content->addLayout(bottom);
     details_ = new QTextBrowser;
@@ -165,6 +169,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
     connect(detailsToggle, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
+    connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
@@ -272,9 +277,11 @@ void QtWindow::render() {
     title_->setText(navigation_->item(page)->text());
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8("Просмотр · Qt"));
     statusFilter_->setVisible(page == Tasks);
-    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects) && admin_);
+    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
-        (page == Projects ? QString::fromUtf8("Создать проект") : QString::fromUtf8("Создать задачу")));
+        (page == Projects ? QString::fromUtf8("Создать проект") :
+         page == Catalog ? QString::fromUtf8("Создать навык") : QString::fromUtf8("Создать задачу")));
+    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog));
     profileMetrics_->setVisible(page == ProfilePage);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -304,7 +311,9 @@ void QtWindow::render() {
                  QString::fromUtf8("Приоритет"), QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
-            row(task.id, {q(AppTaskDisplayTitle(task)), q(task.project), q(AppTaskStatusLabel(task.status)),
+            const auto project = std::find_if(data.projects.begin(), data.projects.end(),
+                [&](const auto& entry) { return !task.projectId.empty() && entry.id == task.projectId; });
+            row(task.id, {q(AppTaskDisplayTitle(task)), q(project == data.projects.end() ? task.project : project->name), q(AppTaskStatusLabel(task.status)),
                 q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(task.pipelineStep)});
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
@@ -358,6 +367,7 @@ void QtWindow::details() {
     const auto id = u(selectedId());
     details_->clear();
     changeStatus_->setEnabled(!id.empty());
+    editEntry_->setEnabled(!id.empty());
     const int page = navigation_->currentRow();
     if (page == Tasks) {
         for (const auto& task : workspace_.data.tasks) if (task.id == id) {
@@ -390,8 +400,13 @@ void QtWindow::details() {
     }
 }
 
-void QtWindow::createEntry() {
+void QtWindow::createEntry(bool edit) {
     if (!requireAdmin()) return;
+    if (edit && selectedId().isEmpty()) return;
+    if (navigation_->currentRow() == Catalog) {
+        if (ShowSkillEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
+        return;
+    }
     if (navigation_->currentRow() == ProfilePage) {
         ShowProfileManager(this, workspace_, profiles_->currentData().toString());
         reload();
@@ -399,14 +414,22 @@ void QtWindow::createEntry() {
     }
     const bool projectMode = navigation_->currentRow() == Projects;
     if (!projectMode && navigation_->currentRow() != Tasks) return;
+    if (edit && !projectMode) return;
+    const auto projectId = edit ? u(selectedId()) : std::string();
+    const auto foundProject = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+        [&](const auto& entry) { return entry.id == projectId; });
+    if (edit && foundProject == workspace_.data.projects.end()) return;
     QDialog dialog(this);
     dialog.setWindowTitle(projectMode ? QString::fromUtf8("Новый проект") : QString::fromUtf8("Новая задача"));
+    if (edit) dialog.setWindowTitle(QString::fromUtf8("Редактирование проекта"));
     dialog.setMinimumWidth(480);
     auto* form = new QFormLayout(&dialog);
     auto* name = new QLineEdit;
     name->setObjectName("entryTitle");
     auto* description = new QPlainTextEdit;
     description->setMaximumHeight(96);
+    description->setObjectName("entryDescription");
+    if (edit) { name->setText(q(foundProject->name)); description->setPlainText(q(foundProject->description)); }
     form->addRow(QString::fromUtf8("Название"), name);
     form->addRow(QString::fromUtf8("Описание"), description);
     auto* project = new QComboBox;
@@ -466,7 +489,11 @@ void QtWindow::createEntry() {
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
         if (name->text().trimmed().isEmpty()) { name->setFocus(); return; }
         if (projectMode) {
-            auto result = AppSaveProjectEntry(workspace_.directory, workspace_.data.projects, -1,
+            const auto current = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+                [&](const auto& entry) { return entry.id == projectId; });
+            if (edit && current == workspace_.data.projects.end()) return;
+            const int index = edit ? int(std::distance(workspace_.data.projects.begin(), current)) : -1;
+            auto result = AppSaveProjectEntry(workspace_.directory, workspace_.data.projects, index,
                 u(name->text().trimmed()), u(description->toPlainText()));
             if (!result.ok) { message(result.errorMessage); return; }
         } else {

@@ -18,7 +18,7 @@ private:
     void render();
     void details();
     void authenticate();
-    void createEntry();
+    void createEntry(bool edit = false);
     void changeStatus();
     bool requireAdmin();
     void message(const std::string& error);
@@ -38,4 +38,5 @@ private:
     QTextBrowser* details_;
     QPushButton* primary_;
     QPushButton* changeStatus_;
+    QPushButton* editEntry_;
 };

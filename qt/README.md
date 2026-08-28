@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 3**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 4**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,12 +29,12 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 3 | Remaining |
+| Area | Qt stage 4 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change | Personal login/access policies, rename/delete, achievements, standalone XP entry, wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions and transactional XP completion | Full editing, bulk operations, reminders, delete rollback |
-| Projects | Admin list and creation | Editing/deletion, embedded project focus |
-| Skills | Catalog viewing and search | CRUD and profession filters |
+| Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
+| Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, profession assignment and filters |
 | Pipeline | Stages and expanded details | Editing and task stage progression |
 | Professions | Admin list | CRUD |
 | Reports | Admin project metrics from existing report service | CSV export and full report UI |
@@ -75,3 +75,13 @@ For a packaged startup check (no installed Qt on PATH):
 ```
 
 The screenshot/smoke flags are development diagnostics. They never default to the production workspace.
+
+### Project and skill editors (stage 4)
+
+Administrators can select a project or catalog skill and use **Редактировать**. Project editing preserves the ID and creation time; task rows resolve the current project name by ID without rewriting historical task snapshots. Deletion is not exposed in this increment.
+
+Skills support name, description, category and weight (0.5–1.6). Renaming preserves the skill ID, profile files and existing profession links. Existing profile XP and weights are not recalculated. Descriptions are required and single-line because the legacy text format cannot safely encode arbitrary multiline fields; pipe and control characters are rejected. New skills do not receive profession links in this increment.
+
+The legacy catalog writer does not return an I/O result. Qt therefore edits a temporary copy, reloads and compares every record, then uses QSaveFile with direct-write fallback disabled to replace skills.txt atomically. A changed source or failed verification/write leaves the original intact. Some legacy metadata combinations (notably category plus profession) cannot round-trip through the existing parser; Qt rejects such edits rather than silently losing metadata. Repairing that shared format is deferred. Do not edit the workspace externally during a save.
+
+Stage 4 tests cover real editor validation/creation/cancellation, duplicate and unsafe input rejection, a target-path I/O failure, stable skill IDs, unchanged profile bytes, profession preservation, rejection of lossy serialization, pending recovery, and project rename identity plus linked-task display.
