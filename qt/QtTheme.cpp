@@ -20,5 +20,7 @@ void ApplyQtTheme(QApplication& app) {
         "QPushButton { padding: 0 8px; } QListWidget::item { padding: 8px; }"
         "QPushButton#primary, QPushButton[primary=true] { background: #7554ad; color: white; border: 0; border-radius: 4px; }"
         "QPushButton#primary:hover, QPushButton[primary=true]:hover { background: #8764bf; } QLabel#title { font-weight: 600; }"
-        "QFrame[metric=true] { background: #26262c; border-radius: 4px; } QLabel[metricValue=true] { font-weight: 600; }");
+        "QFrame[metric=true] { background: #26262c; border-radius: 4px; } QLabel[metricValue=true] { font-weight: 600; }"
+        "QLabel[timerValue=true] { font-size: 30px; font-weight: 600; } QProgressBar { min-height: 8px; max-height: 8px; }"
+        "QProgressBar::chunk { background: #7554ad; }");
 }

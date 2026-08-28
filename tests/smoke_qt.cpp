@@ -9,6 +9,7 @@
 #include "QtProfessionEditor.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
+#include "QtPomodoro.h"
 #include "AppPipelineService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
@@ -862,6 +863,35 @@ static bool TestPersonalWallet() {
         vault.balance == 200.0 && !vault.log.empty() && vault.log.back().action == "spirit_cleanup" && !remove->isEnabled();
 }
 
+static bool TestPomodoro() {
+    QtPomodoro panel(nullptr, 2, 1, 1, 2);
+    panel.resize(720, 360); panel.show(); QApplication::processEvents();
+    auto* start = panel.findChild<QPushButton*>("pomodoroStart");
+    auto* pause = panel.findChild<QPushButton*>("pomodoroPause");
+    auto* next = panel.findChild<QPushButton*>("pomodoroNext");
+    auto* reset = panel.findChild<QPushButton*>("pomodoroReset");
+    auto* time = panel.findChild<QLabel*>("pomodoroTime");
+    auto* phase = panel.findChild<QLabel*>("pomodoroPhase");
+    auto* cycles = panel.findChild<QLabel*>("pomodoroCycles");
+    if (!start || !pause || !next || !reset || !time || !phase || !cycles || time->text() != "00:02") return false;
+    start->click(); panel.advanceSecondsForTest(1);
+    if (time->text() != "00:01" || !pause->isVisible()) return false;
+    pause->click(); panel.advanceSecondsForTest(2);
+    if (time->text() != "00:01" || start->text() != QString::fromUtf8("Продолжить")) return false;
+    start->click(); panel.advanceSecondsForTest(1);
+    if (!next->isVisible() || !cycles->text().contains("1 / 2")) return false;
+    next->click();
+    if (phase->text() != QString::fromUtf8("Перерыв")) return false;
+    panel.advanceSecondsForTest(1); next->click(); panel.advanceSecondsForTest(2);
+    if (!next->isVisible() || !cycles->text().contains("2 / 2")) return false;
+    next->click();
+    if (phase->text() != QString::fromUtf8("Длинный перерыв")) return false;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); panel.grab().save(artifacts + "/pomodoro.png"); }
+    reset->click();
+    return phase->text() == QString::fromUtf8("Фокус") && time->text() == "00:02" && !pause->isVisible();
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -877,6 +907,7 @@ int main(int argc, char** argv) {
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
+    if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -916,6 +947,9 @@ int main(int argc, char** argv) {
     auto* primary = window.findChild<QPushButton*>("primary");
     auto* status = window.findChild<QComboBox*>("statusFilter");
     if (!nav || !table || !search || !primary || !status) return fail("Missing UI controls");
+    nav->setCurrentRow(8);
+    if (!window.findChild<QWidget*>("pomodoroPanel")->isVisible() || table->isVisible() || search->isVisible())
+        return fail("Pomodoro page layout failed");
     nav->setCurrentRow(1);
     if (table->rowCount() != 1 || !table->item(0, 0)->text().contains(QString::fromUtf8("Проверка Qt"))) return fail("Task loading failed");
     if (primary->isVisible()) return fail("Unauthenticated user can mutate data");

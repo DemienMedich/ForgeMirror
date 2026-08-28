@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 13**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 14**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 13 | Remaining |
+| Area | Qt stage 14 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Trusted-device access, rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -154,3 +154,10 @@ The profile metrics now include the wallet balance. After a session-only persona
 The existing AppRemoveEvilSpiritForCoins service performs the operation: it saves the updated profile, adds 200 coins and a spirit_cleanup entry to the local vault, and restores the original profile if the vault write fails. Pending Qt task/XP recovery blocks the action. No cloud wallet push is performed.
 
 Tests drive the actual personal login, cancellation and confirmation, then verify the 250 to 50 wallet change, spirit removal, 200 coin vault credit and log entry. Existing core tests cover insufficient funds and failed-vault rollback. The profile screen was inspected on Windows at the normal application size.
+### Local Pomodoro timer (stage 14)
+
+A dedicated Pomodoro navigation page provides a local 25/5/15 minute timer with four focus intervals before a long break. It supports start, pause/resume, reset, a progress indicator, and explicit manual confirmation before each next interval. The timer object stays alive while navigating between Qt pages, but its state is intentionally session-only.
+
+This increment does not award coins, play sounds, auto-advance or persist settings. Those paths depend on personal access, vault schedule rules and settings persistence and will be connected separately rather than bypassed. The page follows the existing palette, keeps one primary action, and uses two compact functional panels.
+
+Tests deterministically cover countdown, pause stability, resume, normal break, long-break selection after two configurable test cycles, reset, and the actual navigation-page visibility. Native Windows rendering was inspected; no timer sleep is used in tests.

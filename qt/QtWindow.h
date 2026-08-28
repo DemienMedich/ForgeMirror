@@ -39,6 +39,8 @@ private:
     QLabel* title_;
     QLabel* mode_;
     QWidget* profileMetrics_;
+    QWidget* pomodoro_;
+    QWidget* bottomActions_;
     QLabel* profileValues_[5];
     QTableWidget* table_;
     QTextBrowser* details_;

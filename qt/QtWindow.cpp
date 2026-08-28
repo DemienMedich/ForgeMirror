@@ -1,5 +1,6 @@
 #include "QtWindow.h"
 #include "QtAchievements.h"
+#include "QtPomodoro.h"
 #include "QtProfessionEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -23,7 +24,7 @@ QString timeText(std::int64_t t) {
 QString field(const QString& name, const std::string& value) {
     return "<p><b>" + name.toHtmlEscaped() + "</b><br>" + q(value).toHtmlEscaped().replace("\n", "<br>") + "</p>";
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro };
 }
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
@@ -70,7 +71,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Pomodoro, 3D и настройки ещё не перенесены."));
+            "Награды и настройки Pomodoro, 3D и общие настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -82,7 +83,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     navigation_->setObjectName("navigation");
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
-        QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6")});
+        QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
+        QString::fromUtf8("Pomodoro")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -122,6 +124,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         metricsLayout->addWidget(metric, 1);
     }
     content->addWidget(profileMetrics_);
+    pomodoro_ = new QtPomodoro;
+    content->addWidget(pomodoro_, 1);
     auto* filters = new QHBoxLayout;
     search_ = new QLineEdit;
     search_->setObjectName("search");
@@ -145,7 +149,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     table_->verticalHeader()->setDefaultSectionSize(28);
     table_->horizontalHeader()->setStretchLastSection(true);
     content->addWidget(table_, 1);
-    auto* bottom = new QHBoxLayout;
+    bottomActions_ = new QWidget;
+    auto* bottom = new QHBoxLayout(bottomActions_);
+    bottom->setContentsMargins(0, 0, 0, 0);
     auto* detailsToggle = new QPushButton(QString::fromUtf8("Подробности"));
     detailsToggle->setCheckable(true);
     bottom->addWidget(detailsToggle);
@@ -167,7 +173,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     removeSpirit_->setToolTip(QString::fromUtf8("Личная операция: списывает 200 Кукоинов и пополняет локальное хранилище."));
     bottom->addWidget(removeSpirit_);
     bottom->addStretch();
-    content->addLayout(bottom);
+    content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
     details_->setObjectName("details");
     details_->setMaximumHeight(180);
@@ -339,6 +345,7 @@ void QtWindow::render() {
     ownPasswordAction_->setEnabled(unlocked);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
     navigation_->item(Pipeline)->setHidden(!workspace_.modules.pipeline);
+    navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
     for (int page : {Projects, Statistics, Audit}) navigation_->item(page)->setHidden(!admin_);
     int page = navigation_->currentRow();
@@ -371,6 +378,13 @@ void QtWindow::render() {
     title_->setText(navigation_->item(page)->text());
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") :
         QString::fromUtf8(unlocked ? "Личный доступ · Qt" : "Просмотр · Qt"));
+    const bool timerPage = page == Pomodoro;
+    summary_->setVisible(!timerPage);
+    search_->setVisible(!timerPage);
+    table_->setVisible(!timerPage);
+    bottomActions_->setVisible(!timerPage);
+    details_->setVisible(!timerPage && details_->isVisible());
+    pomodoro_->setVisible(timerPage);
     statusFilter_->setVisible(page == Tasks);
     primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
@@ -387,7 +401,9 @@ void QtWindow::render() {
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
     summary_->clear();
 
-    if (page == ProfilePage) {
+    if (page == Pomodoro) {
+        summary_->clear();
+    } else if (page == ProfilePage) {
         headers({QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Вес")});
         const auto id = u(profiles_->currentData().toString());
         std::optional<Profile> profile;
