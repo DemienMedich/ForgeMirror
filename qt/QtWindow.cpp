@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtAchievements.h"
 #include "QtProfessionEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -68,7 +69,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Достижения, Pomodoro, 3D и настройки ещё не перенесены."));
+            "Редактирование достижений, Pomodoro, 3D и настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -157,6 +158,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     advanceStage_ = new QPushButton(QString::fromUtf8("Следующий этап"));
     advanceStage_->setObjectName("advanceStage");
     bottom->addWidget(advanceStage_);
+    achievements_ = new QPushButton(QString::fromUtf8("Достижения"));
+    achievements_->setObjectName("showAchievements");
+    bottom->addWidget(achievements_);
     bottom->addStretch();
     content->addLayout(bottom);
     details_ = new QTextBrowser;
@@ -183,6 +187,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
     connect(detailsToggle, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
+    connect(achievements_, &QPushButton::clicked, this, [this] {
+        ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
+        render();
+    });
     connect(advanceStage_, &QPushButton::clicked, this, [this] {
         if (!requireAdmin() || !workspace_.modules.pipeline || navigation_->currentRow() != Tasks) return;
         if (ShowPipelineTransition(this, workspace_, u(selectedId()))) reload();
@@ -347,6 +355,8 @@ void QtWindow::render() {
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
     profileMetrics_->setVisible(page == ProfilePage);
+    achievements_->setVisible(page == ProfilePage);
+    achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);

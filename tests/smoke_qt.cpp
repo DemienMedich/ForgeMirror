@@ -5,6 +5,7 @@
 #include "QtTaskCompletionDialog.h"
 #include "QtTheme.h"
 #include "QtProfileDialogs.h"
+#include "QtAchievements.h"
 #include "QtProfessionEditor.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
@@ -297,6 +298,82 @@ static bool TestProfileDialogs() {
     checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "my-password";
     if (!checks) std::cerr << "profile dialog lifecycle failed\n";
     return checks;
+}
+
+static bool TestAchievements() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    workspace.catalog.add_skill("Modeling", 1, "Geometry");
+    const auto skill = *workspace.catalog.id_for_name("Modeling");
+    Profile profile("Achievement profile");
+    profile.set_total_xp(777); profile.set_wallet_balance(42);
+    const auto created = workspace.storage->create_profile(profile);
+    if (!created) return false;
+    const auto id = created->id;
+    auto read = [&](const QString& suffix) { QFile f(temp.path() + "/" + suffix); f.open(QIODevice::ReadOnly); return f.readAll(); };
+    const auto profilePath = QString::fromStdString(id) + ".ini";
+    const auto achievementPath = "achievements/" + QString::fromStdString(id) + ".json";
+    const auto original = read(profilePath);
+    if (GrantQtAchievement(workspace, id, "", skill, 10, 1).isEmpty() ||
+        GrantQtAchievement(workspace, id, "Invalid", "unknown", 10, 1).isEmpty()) return false;
+    if (!GrantQtAchievement(workspace, id, QString::fromUtf8("Мастер геометрии"), skill, 25, 1).isEmpty()) return false;
+    workspace.storage->set_active_profile(id);
+    auto loaded = workspace.storage->load_profile();
+    if (!loaded || loaded->achievements().size() != 1 || read(profilePath) != original ||
+        loaded->total_xp() != 777 || loaded->wallet_balance() != 42) return false;
+    const auto earned = loaded->achievements().front();
+    if (earned.expiresAt - earned.awardedAt != 86400 ||
+        loaded->skill_bonus_multiplier(skill, earned.awardedAt) != 1.25 ||
+        loaded->skill_bonus_multiplier(skill, earned.expiresAt + 1) != 1.0) return false;
+    const auto before = read(achievementPath);
+    const auto path = temp.path() + "/" + achievementPath;
+    if (!QFile::rename(path, path + ".original") || !QDir().mkdir(path)) return false;
+    const bool failed = !GrantQtAchievement(workspace, id, "Failed", skill, 10, 0).isEmpty();
+    QDir().rmdir(path);
+    if (!QFile::rename(path + ".original", path) || !failed || read(achievementPath) != before) return false;
+    {
+        QFile bad(path); if (!bad.open(QIODevice::WriteOnly)) return false; bad.write("not-json");
+    }
+    if (GrantQtAchievement(workspace, id, "Failed", skill, 10, 0).isEmpty() || read(achievementPath) != "not-json") return false;
+    { QFile restore(path); if (!restore.open(QIODevice::WriteOnly)) return false; restore.write(before); }
+    bool checks = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        checks = dialog && !dialog->findChild<QPushButton*>("grantAchievement")->isVisible() &&
+            dialog->findChild<QTableWidget*>("achievementRecords")->rowCount() == 1;
+        if (dialog) dialog->reject();
+    });
+    ShowAchievements(nullptr, workspace, id, false);
+    if (!checks || read(profilePath) != original || read(achievementPath) != before) return false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QTimer::singleShot(0, [&] {
+            auto* editor = QApplication::activeModalWidget();
+            auto* save = editor->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+            save->click();
+            checks &= !editor->findChild<QLabel*>("achievementError")->text().isEmpty();
+            editor->findChild<QLineEdit*>("achievementTitle")->setText(QString::fromUtf8("Точная работа"));
+            editor->findChild<QDoubleSpinBox*>("achievementBonus")->setValue(10);
+            save->click();
+        });
+        dialog->findChild<QPushButton*>("grantAchievement")->click();
+        checks &= dialog->findChild<QTableWidget*>("achievementRecords")->rowCount() == 2;
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->resize(600, 400); QApplication::processEvents(); dialog->grab().save(artifacts + "/achievements.png"); }
+        dialog->reject();
+    });
+    ShowAchievements(nullptr, workspace, id, true);
+    if (!checks || read(profilePath) != original) return false;
+    workspace.storage->set_active_profile(id);
+    loaded = workspace.storage->load_profile();
+    if (!loaded || loaded->achievements().size() != 2 || loaded->skill_bonus_multiplier(skill, QDateTime::currentSecsSinceEpoch()) != 1.35) return false;
+    const auto granted = read(achievementPath);
+    std::filesystem::create_directories(workspace.directory / "meta/qt-xp-transaction");
+    if (GrantQtAchievement(workspace, id, "Pending", skill, 10, 0).isEmpty() || read(achievementPath) != granted) return false;
+    std::filesystem::remove(workspace.directory / "meta/qt-xp-transaction");
+    loaded->set_blocked(true);
+    if (!workspace.storage->save_profile(*loaded) || GrantQtAchievement(workspace, id, "Blocked", skill, 10, 0).isEmpty()) return false;
+    return true;
 }
 
 static bool TestProfileSession() {
@@ -673,6 +750,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }

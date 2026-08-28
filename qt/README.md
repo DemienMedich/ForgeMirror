@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 9**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 10**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,9 +29,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 9 | Remaining |
+| Area | Qt stage 10 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock | Trusted-device access, rename/delete, achievements, standalone XP entry, wallet operations |
+| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting | Trusted-device access, rename/delete, achievement editing/revocation/icons, standalone XP entry, wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
@@ -126,3 +126,10 @@ The skill editor offers multiple checked professions, retains existing unknown I
 Two shared loader corrections are included only in the migration branch: SkillCatalog consumes both leading cat/prof metadata tokens in either order, and LoadProfessionsData strips the UTF-8 BOM before reading the first ID. The storage formats themselves are unchanged. Existing malformed IDs already embedded in profile/skill records are not rewritten automatically; unknown references remain visible for review. The stable branches and existing installer remain unchanged.
 
 Tests cover profession creation/edit/cancel, unsafe input, failed destination write, BOM-safe ID round-trip, category+profession metadata order and description preservation, binding addition/removal, unknown-link retention and rejection of new missing links. Both forms were visually inspected; native tests and packaged startup without installed Qt on PATH exited 0 with empty stderr.
+### Achievement viewing and granting (stage 10)
+
+The Profile page offers **Достижения**, with skill, bonus, expiry and active/expired state. Viewing remains public, consistent with legacy profile browsing. Only administrators see **Выдать достижение**. Grants require an existing catalog skill and an active, unblocked profile, a nonempty title, bonus 0–10000%, and duration 0–36500 days (0 means permanent). Duplicate achievements are allowed, as in the existing additive bonus model.
+
+The Qt grant path atomically appends to achievements/<profile-id>.json via QSaveFile with direct-write fallback disabled. Existing JSON objects and unknown fields are retained; malformed input is rejected instead of overwritten. It never calls save_profile, whose legacy sidecar writer does not report failures. Profile INI bytes, accumulated XP, wallet and task history remain unchanged. Pending task recovery blocks grants. External simultaneous writers are unsupported.
+
+The existing Profile::skill_bonus_multiplier continues to determine active bonuses, and task completion already uses it. No recalculation is performed for past XP. Editing, revocation and the icon picker remain pending. Tests cover form validation/granting, read-only viewing, expiry and additive multipliers, malformed JSON, destination failure, pending recovery, blocked profiles, and unchanged profile bytes. Native Windows tests and packaged startup without installed Qt on PATH passed.
