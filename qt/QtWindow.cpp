@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtProfessionEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
@@ -340,11 +341,11 @@ void QtWindow::render() {
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") :
         QString::fromUtf8(unlocked ? "Личный доступ · Qt" : "Просмотр · Qt"));
     statusFilter_->setVisible(page == Tasks);
-    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline) && admin_);
+    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : QString::fromUtf8("Создать задачу")));
-    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : QString::fromUtf8("Создать задачу")));
+    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
     profileMetrics_->setVisible(page == ProfilePage);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -389,9 +390,16 @@ void QtWindow::render() {
         headers({QString::fromUtf8("Проект"), QString::fromUtf8("Описание"), QString::fromUtf8("Создан")});
         for (const auto& project : data.projects) row(project.id, {q(project.name), q(project.description), timeText(project.createdAt)});
     } else if (page == Catalog) {
-        headers({QString::fromUtf8("Навык"), QString::fromUtf8("Вес"), QString::fromUtf8("Описание")});
-        for (const auto& id : workspace_.catalog.skills()) row(id, {q(workspace_.catalog.display_name(id)),
-            QString::number(workspace_.catalog.weight(id)), q(workspace_.catalog.description(id))});
+        headers({QString::fromUtf8("Навык"), QString::fromUtf8("Вес"), QString::fromUtf8("Описание"), QString::fromUtf8("Профессии")});
+        for (const auto& id : workspace_.catalog.skills()) {
+            QStringList names;
+            for (const auto& binding : workspace_.catalog.professions(id)) {
+                const auto found = std::find_if(data.professions.begin(), data.professions.end(), [&](const auto& p) { return p.id == binding; });
+                names << q(found == data.professions.end() ? binding : found->name);
+            }
+            row(id, {q(workspace_.catalog.display_name(id)), QString::number(workspace_.catalog.weight(id)),
+                q(workspace_.catalog.description(id)), names.join(", ")});
+        }
     } else if (page == Pipeline) {
         headers({QString::fromUtf8("Этап"), QString::fromUtf8("Название"), QString::fromUtf8("Ответственный"), QString::fromUtf8("Следующий шаг")});
         for (const auto& step : data.pipelineSteps) row(step.id, {q(step.stageCode), q(step.title), q(step.owner), q(step.nextStageLabel)});
@@ -470,6 +478,10 @@ void QtWindow::details() {
 void QtWindow::createEntry(bool edit) {
     if (!requireAdmin()) return;
     if (edit && selectedId().isEmpty()) return;
+    if (navigation_->currentRow() == Professions) {
+        if (ShowProfessionEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
+        return;
+    }
     if (navigation_->currentRow() == Pipeline) {
         if (ShowPipelineEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
         return;

@@ -879,17 +879,19 @@ void SkillCatalog::load() {
             }
             weight = parsedWeight ? parsed : parse_weight(parts[2], 1.0);
             if (desc.empty()) {
-                if (descStart < parts.size()) {
-                    if (is_cat_token(parts[descStart])) {
-                        category = extract_cat(parts[descStart]);
-                        desc = join_rest(descStart + 1);
-                    } else if (is_prof_token(parts[descStart])) {
-                        professionToken = extract_prof(parts[descStart]);
-                        desc = join_rest(descStart + 1);
-                    } else {
-                        desc = join_rest(descStart);
-                    }
+                // The writer emits category and profession tokens before the description.
+                // Consume each at most once, in either order; leave the remaining text intact.
+                bool sawCategory = false, sawProfession = false;
+                while (descStart < parts.size()) {
+                    if (!sawCategory && is_cat_token(parts[descStart])) {
+                        category = extract_cat(parts[descStart++]);
+                        sawCategory = true;
+                    } else if (!sawProfession && is_prof_token(parts[descStart])) {
+                        professionToken = extract_prof(parts[descStart++]);
+                        sawProfession = true;
+                    } else break;
                 }
+                desc = join_rest(descStart);
             }
         } else if (parts.size() >= 3) {
             name = parts[0];

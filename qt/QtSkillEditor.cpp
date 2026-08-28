@@ -3,6 +3,7 @@
 #include <QSaveFile>
 #include <QTemporaryDir>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 std::string u(const QString& value) { return value.toUtf8().toStdString(); }
@@ -26,7 +27,8 @@ bool safeField(const QString& text) {
 }
 
 QString SaveQtSkill(QtWorkspace& workspace, const std::string& id, const QString& name,
-                    double weight, const QString& description, const QString& category) {
+                    double weight, const QString& description, const QString& category,
+                    const std::optional<std::vector<std::string>>& professions) {
     const auto title = name.trimmed(), desc = description.trimmed(), cat = category.trimmed();
     if (title.isEmpty() || desc.isEmpty()) return QString::fromUtf8("Название и описание обязательны.");
     if (!safeField(title) || !safeField(desc) || !safeField(cat))
@@ -38,6 +40,16 @@ QString SaveQtSkill(QtWorkspace& workspace, const std::string& id, const QString
     if (!id.empty() && !workspace.catalog.contains_id(id)) return QString::fromUtf8("Навык больше не существует.");
     const auto duplicate = workspace.catalog.id_for_name(u(title));
     if (duplicate && *duplicate != id) return QString::fromUtf8("Навык с таким названием уже существует.");
+    const auto bindings = professions.value_or(workspace.catalog.professions(id));
+    for (const auto& binding : bindings) {
+        if (binding.empty() || !safeField(q(binding)) || binding.find_first_of(",;") != std::string::npos)
+            return QString::fromUtf8("Некорректный идентификатор профессии.");
+        const auto previous = workspace.catalog.professions(id);
+        if (std::find(previous.begin(), previous.end(), binding) == previous.end() &&
+            std::none_of(workspace.data.professions.begin(), workspace.data.professions.end(),
+                [&](const auto& p) { return p.id == binding; }))
+            return QString::fromUtf8("Выбранная профессия больше не существует.");
+    }
 
     // The legacy writer returns void. Confine it to a disposable directory and
     // verify every record after serialization before touching the live catalog.
@@ -57,8 +69,8 @@ QString SaveQtSkill(QtWorkspace& workspace, const std::string& id, const QString
     SkillCatalog candidate(std::filesystem::u8path(u(staging.path())));
     if (!equalCatalogs(candidate, workspace.catalog))
         return QString::fromUtf8("Каталог изменился на диске. Обновите данные и повторите действие.");
-    if (id.empty()) candidate.add_skill(u(title), weight, u(desc), u(cat));
-    else candidate.update_skill(id, u(title), weight, u(desc), u(cat), workspace.catalog.professions(id));
+    if (id.empty()) candidate.add_skill(u(title), weight, u(desc), u(cat), bindings);
+    else candidate.update_skill(id, u(title), weight, u(desc), u(cat), bindings);
     SkillCatalog verified(std::filesystem::u8path(u(staging.path())));
     const auto savedId = verified.id_for_name(u(title));
     if (!savedId || (!id.empty() && *savedId != id) || !equalCatalogs(candidate, verified) ||
@@ -105,7 +117,24 @@ bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string&
     form->addRow(QString::fromUtf8("Описание"), description);
     form->addRow(QString::fromUtf8("Категория"), category);
     form->addRow(QString::fromUtf8("Вес"), weight);
-    auto* hint = new QLabel(QString::fromUtf8("Описание — одна строка. Связи с профессиями и накопленный XP сохраняются."));
+    auto* professionList = new QListWidget;
+    professionList->setObjectName("skillProfessions");
+    professionList->setMaximumHeight(120);
+    const auto previousBindings = workspace.catalog.professions(id);
+    auto addProfession = [&](const std::string& key, const QString& title, bool checked) {
+        auto* item = new QListWidgetItem(title, professionList);
+        item->setData(Qt::UserRole, q(key));
+        item->setCheckState(checked ? Qt::Checked : Qt::Unchecked);
+    };
+    for (const auto& binding : previousBindings) {
+        const auto found = std::find_if(workspace.data.professions.begin(), workspace.data.professions.end(),
+            [&](const auto& p) { return p.id == binding; });
+        addProfession(binding, found == workspace.data.professions.end() ? q(binding) + QString::fromUtf8(" · недоступна") : q(found->name), true);
+    }
+    for (const auto& p : workspace.data.professions)
+        if (std::find(previousBindings.begin(), previousBindings.end(), p.id) == previousBindings.end()) addProfession(p.id, q(p.name), false);
+    form->addRow(QString::fromUtf8("Профессии"), professionList);
+    auto* hint = new QLabel(QString::fromUtf8("Описание — одна строка. Накопленный XP не меняется. Недоступные связи сохраняются, пока вы сами их не снимете."));
     hint->setWordWrap(true);
     form->addRow(hint);
     auto* notice = new QLabel;
@@ -123,7 +152,10 @@ bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string&
     form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
-        const auto error = SaveQtSkill(workspace, id, name->text(), weight->value(), description->text(), category->text());
+        std::vector<std::string> selected;
+        for (int i = 0; i < professionList->count(); ++i) if (professionList->item(i)->checkState() == Qt::Checked)
+            selected.push_back(u(professionList->item(i)->data(Qt::UserRole).toString()));
+        const auto error = SaveQtSkill(workspace, id, name->text(), weight->value(), description->text(), category->text(), selected);
         if (!error.isEmpty()) { notice->setText(error); return; }
         dialog.accept();
     });

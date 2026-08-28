@@ -1125,7 +1125,9 @@ std::vector<ProfessionEntry> LoadProfessionsData(const std::filesystem::path& st
     std::ifstream in(ProfessionsPath(storageDir), std::ios::binary);
     if (!in) return out;
     std::string line;
+    bool firstLine = true;
     while (std::getline(in, line)) {
+        if (firstLine) { StripUtf8Bom(line); firstLine = false; }
         if (line.empty() || line[0] == '#') continue;
         std::vector<std::string> parts;
         std::string part;

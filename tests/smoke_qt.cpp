@@ -5,6 +5,7 @@
 #include "QtTaskCompletionDialog.h"
 #include "QtTheme.h"
 #include "QtProfileDialogs.h"
+#include "QtProfessionEditor.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
 #include "AppPipelineService.h"
@@ -587,11 +588,83 @@ static bool TestSkillEditor() {
     const auto linked = workspace.catalog.id_for_name("Linked");
     if (!linked || !save(*linked, "Linked renamed", "Changed description").isEmpty() ||
         workspace.catalog.professions(*linked) != std::vector<std::string>{"unknown-profession"}) return false;
-    // Legacy parsing cannot round-trip category + profession together: fail closed.
-    const auto linkedBytes = read();
-    if (SaveQtSkill(workspace, *linked, "Linked renamed", 1.25, "Changed description", "New category").isEmpty() ||
-        read() != linkedBytes) return false;
+    // Both metadata tokens now survive save/reload, with unknown links preserved.
+    if (!SaveQtSkill(workspace, *linked, "Linked renamed", 1.25, "Changed description", "New category").isEmpty()) return false;
+    workspace.catalog.reload();
+    if (workspace.catalog.category(*linked) != "New category" ||
+        workspace.catalog.professions(*linked) != std::vector<std::string>{"unknown-profession"} ||
+        workspace.catalog.description(*linked) != "Changed description") return false;
+    workspace.data.professions = {{"artist", "Artist", "Art"}};
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* list = dialog->findChild<QListWidget*>("skillProfessions");
+        for (int i = 0; i < list->count(); ++i)
+            if (list->item(i)->data(Qt::UserRole).toString() == "artist") list->item(i)->setCheckState(Qt::Checked);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/skill-professions.png");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowSkillEditor(nullptr, workspace, *linked)) return false;
+    workspace.catalog.reload();
+    if (workspace.catalog.professions(*linked) != std::vector<std::string>{"unknown-profession", "artist"} || readOwner() != ownerBytes) return false;
+    const auto boundBytes = read();
+    if (SaveQtSkill(workspace, *linked, "Linked renamed", 1.25, "Changed description", "New category",
+        std::vector<std::string>{"missing-new"}).isEmpty() || read() != boundBytes) return false;
+    if (!SaveQtSkill(workspace, *linked, "Linked renamed", 1.25, "Changed description", "New category",
+        std::vector<std::string>{}).isEmpty() || !workspace.catalog.professions(*linked).empty()) return false;
+    QTemporaryDir parserFixture;
+    QFile parserFile(parserFixture.path() + "/skills.txt");
+    if (!parserFile.open(QIODevice::WriteOnly)) return false;
+    parserFile.write("reverse|Reverse|1.2|prof=one,two|cat=Art|Keep|pipe\nplain|Plain|1|Text only\n");
+    parserFile.close();
+    SkillCatalog parsed(std::filesystem::u8path(parserFixture.path().toStdString()));
+    if (parsed.category("reverse") != "Art" || parsed.professions("reverse") != std::vector<std::string>{"one", "two"} ||
+        parsed.description("reverse") != "Keep|pipe" || parsed.description("plain") != "Text only") return false;
     return true;
+}
+
+static bool TestProfessionEditor() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    bool checked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        save->click();
+        checked = !dialog->findChild<QLabel*>("professionNotice")->text().isEmpty();
+        dialog->findChild<QLineEdit*>("professionName")->setText(QString::fromUtf8("Художник"));
+        dialog->findChild<QLineEdit*>("professionDescription")->setText(QString::fromUtf8("Геометрия и материалы"));
+        save->click();
+    });
+    if (!ShowProfessionEditor(nullptr, workspace) || !checked || workspace.data.professions.size() != 1) return false;
+    const auto id = workspace.data.professions.front().id;
+    workspace.reload();
+    if (workspace.data.professions.size() != 1 || workspace.data.professions.front().id != id) return false; // BOM regression
+    auto read = [&] { QFile f(temp.path() + "/meta/professions.txt"); f.open(QIODevice::ReadOnly); return f.readAll(); };
+    const auto before = read();
+    QTimer::singleShot(0, [] { qobject_cast<QDialog*>(QApplication::activeModalWidget())->reject(); });
+    if (ShowProfessionEditor(nullptr, workspace, id) || read() != before) return false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* name = dialog->findChild<QLineEdit*>("professionName");
+        auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        name->setText("Invalid|name"); save->click();
+        checked &= read() == before;
+        name->setText(QString::fromUtf8("3D-художник"));
+        const auto file = temp.path() + "/meta/professions.txt";
+        checked &= QFile::rename(file, file + ".original") && QDir().mkdir(file);
+        save->click();
+        checked &= workspace.data.professions.front().name == u8"Художник";
+        QDir().rmdir(file);
+        checked &= QFile::rename(file + ".original", file) && read() == before;
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { dialog->findChild<QLabel*>("professionNotice")->clear(); dialog->grab().save(artifacts + "/profession-editor.png"); }
+        save->click();
+    });
+    if (!ShowProfessionEditor(nullptr, workspace, id) || !checked) return false;
+    workspace.reload();
+    return workspace.data.professions.size() == 1 && workspace.data.professions.front().id == id &&
+        workspace.data.professions.front().name == u8"3D-художник";
 }
 
 int main(int argc, char** argv) {
@@ -606,6 +679,7 @@ int main(int argc, char** argv) {
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
+    if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -693,6 +767,14 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(5);
+    QTimer::singleShot(0, [] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QLineEdit*>("professionName")->setText("Qt profession");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    if (LoadProfessionsData(workspace.directory).size() != 1) return fail("Profession entry point failed");
     nav->setCurrentRow(4);
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(stage.id)) table->selectRow(i);
