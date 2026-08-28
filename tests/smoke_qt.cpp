@@ -5,6 +5,8 @@
 #include "QtTaskCompletionDialog.h"
 #include "QtTheme.h"
 #include "QtProfileDialogs.h"
+#include "QtPipelineEditor.h"
+#include "AppPipelineService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -295,6 +297,65 @@ static bool TestProfileDialogs() {
     return checks;
 }
 
+static bool TestPipelineEditor() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    PipelineStep step;
+    step.id = "custom-editor-fixture";
+    step.title = "Original stage";
+    step.nextIds = {"missing-stage"};
+    step.hints = {"First hint", "Second hint"};
+    step.legacyNotes = "Historical note";
+    workspace.data.pipelineSteps = {step};
+    if (!AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps)) return false;
+    auto read = [&] { QFile file(temp.path() + "/meta/pipeline.json"); file.open(QIODevice::ReadOnly); return file.readAll(); };
+    const auto before = read();
+    QTimer::singleShot(0, [] { qobject_cast<QDialog*>(QApplication::activeModalWidget())->reject(); });
+    if (ShowPipelineEditor(nullptr, workspace) || read() != before) return false;
+    bool checked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* title = dialog->findChild<QLineEdit*>("stageTitle");
+        auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        title->clear();
+        save->click();
+        checked = !dialog->findChild<QLabel*>("pipelineNotice")->text().isEmpty() && read() == before;
+        title->setText(QString::fromUtf8("Проверка геометрии"));
+        dialog->findChild<QPlainTextEdit*>("stageDone")->setPlainText(QString::fromUtf8("Нет самопересечений\nМасштаб проверен"));
+        AppSetRecoveryPrimaryWriteFailureForTests(true);
+        save->click();
+        AppSetRecoveryPrimaryWriteFailureForTests(false);
+        checked &= read() == before && workspace.data.pipelineSteps.front().title == step.title;
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QDir().mkpath(artifacts);
+            dialog->findChild<QLabel*>("pipelineNotice")->clear();
+            dialog->resize(520, 440);
+            for (int i = 0; i < 4; ++i) {
+                dialog->findChild<QTabWidget*>("pipelineTabs")->setCurrentIndex(i);
+                QApplication::processEvents();
+                dialog->grab().save(artifacts + QString("/pipeline-tab-%1.png").arg(i));
+            }
+        }
+        save->click();
+    });
+    if (!ShowPipelineEditor(nullptr, workspace, step.id) || !checked) return false;
+    workspace.reload();
+    const auto updated = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+        [&](const auto& value) { return value.id == step.id; });
+    if (updated == workspace.data.pipelineSteps.end() || updated->title != u8"Проверка геометрии" ||
+        updated->nextIds != step.nextIds || updated->hints != step.hints || updated->legacyNotes != step.legacyNotes ||
+        updated->doneCriteria != u8"Нет самопересечений\nМасштаб проверен") return false;
+    const auto count = workspace.data.pipelineSteps.size();
+    QTimer::singleShot(0, [] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QLineEdit*>("stageTitle")->setText("Created stage");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowPipelineEditor(nullptr, workspace) || workspace.data.pipelineSteps.size() != count + 1) return false;
+    return true;
+}
+
 static bool TestTaskEditorTransaction() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -454,6 +515,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
@@ -478,6 +540,13 @@ int main(int argc, char** argv) {
     task.description = u8"Описание задачи";
     task.createdAt = QDateTime::currentSecsSinceEpoch();
     task.assignees = {createdProfile->id};
+    PipelineStep stage;
+    stage.id = "custom-ui-stage";
+    stage.title = "Old stage";
+    workspace.data.pipelineSteps = {stage};
+    if (!AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps)) return fail("Pipeline fixture failed");
+    task.pipelineStepId = stage.id;
+    task.pipelineStep = stage.title;
     if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test").ok) return fail("Task fixture failed");
     QtWindow window(workspace);
     window.show();
@@ -515,6 +584,18 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(4);
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(stage.id)) table->selectRow(i);
+    QTimer::singleShot(0, [] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QLineEdit*>("stageTitle")->setText("Updated stage");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    window.findChild<QPushButton*>("editEntry")->click();
+    nav->setCurrentRow(1);
+    if (table->item(0, 5)->text() != "Updated stage" || LoadTasksData(workspace.directory).front().pipelineStepId != stage.id)
+        return fail("Pipeline rename broke linked task display");
     auto saveForm = [](const QString& title) {
         QTimer::singleShot(0, [title] {
             auto* dialog = QApplication::activeModalWidget();

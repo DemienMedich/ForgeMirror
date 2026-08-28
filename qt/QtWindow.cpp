@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
 #include "QtSkillEditor.h"
 #include "QtTaskCompletionDialog.h"
@@ -278,11 +279,11 @@ void QtWindow::render() {
     title_->setText(navigation_->item(page)->text());
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8("Просмотр · Qt"));
     statusFilter_->setVisible(page == Tasks);
-    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog) && admin_);
+    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : QString::fromUtf8("Создать задачу")));
-    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : QString::fromUtf8("Создать задачу")));
+    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline));
     profileMetrics_->setVisible(page == ProfilePage);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -314,8 +315,10 @@ void QtWindow::render() {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
             const auto project = std::find_if(data.projects.begin(), data.projects.end(),
                 [&](const auto& entry) { return !task.projectId.empty() && entry.id == task.projectId; });
+            const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(),
+                [&](const auto& entry) { return !task.pipelineStepId.empty() && entry.id == task.pipelineStepId; });
             row(task.id, {q(AppTaskDisplayTitle(task)), q(project == data.projects.end() ? task.project : project->name), q(AppTaskStatusLabel(task.status)),
-                q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(task.pipelineStep)});
+                q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(stage == data.pipelineSteps.end() ? task.pipelineStep : stage->title)});
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
         summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4")
@@ -404,6 +407,10 @@ void QtWindow::details() {
 void QtWindow::createEntry(bool edit) {
     if (!requireAdmin()) return;
     if (edit && selectedId().isEmpty()) return;
+    if (navigation_->currentRow() == Pipeline) {
+        if (ShowPipelineEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
+        return;
+    }
     if (navigation_->currentRow() == Catalog) {
         if (ShowSkillEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
         return;
