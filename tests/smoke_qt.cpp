@@ -8,6 +8,7 @@
 #include "QtAchievements.h"
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
+#include "QtDisplaySettings.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPomodoro.h"
@@ -1026,6 +1027,32 @@ static bool TestRulesEditor() {
     return true;
 }
 
+static bool TestDisplaySettings(QApplication& app) {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
+    if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    auto settings = LoadQtDisplaySettings(directory); bool saved = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
+        scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS"); if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/display-settings.png");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click(); saved = true;
+    });
+    if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 || !settings.compactRows) return false;
+    QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
+    if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
+    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows) return false;
+    ApplyQtDisplaySettings(app, loaded); if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble()) return false;
+    ApplyQtDisplaySettings(app, QtDisplaySettings{});
+#ifdef _WIN32
+    const auto path = (directory / "meta/ui.ini").wstring(); const auto lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false; settings.scalePercent = 90; const bool blocked = SaveQtDisplaySettings(directory, settings); CloseHandle(lock);
+    if (blocked || !file.open(QIODevice::ReadOnly)) return false; const auto after = file.readAll(); file.close(); if (after != before) return false;
+#endif
+    return true;
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -1043,6 +1070,7 @@ int main(int argc, char** argv) {
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
+    if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -1085,6 +1113,15 @@ int main(int argc, char** argv) {
     auto* primary = window.findChild<QPushButton*>("primary");
     auto* status = window.findChild<QComboBox*>("statusFilter");
     if (!nav || !table || !search || !primary || !status) return fail("Missing UI controls");
+    auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
+    if (!displayAction) return fail("Display settings action missing");
+    QTimer::singleShot(0, [] {
+        auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
+        scale->setCurrentIndex(scale->findData(100)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    displayAction->trigger();
+    if (table->verticalHeader()->defaultSectionSize() != 24) return fail("Compact table setting not applied");
     nav->setCurrentRow(8);
     if (!window.findChild<QWidget*>("pomodoroPanel")->isVisible() || table->isVisible() || search->isVisible())
         return fail("Pomodoro page layout failed");

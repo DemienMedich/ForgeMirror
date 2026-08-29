@@ -51,7 +51,8 @@ std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory
 }
 }
 
-QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory) {
+QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
+    ApplyQtDisplaySettings(*qApp, displaySettings_);
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
     setMinimumSize(800, 520);
@@ -95,11 +96,16 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menu->addAction(QString::fromUtf8("Открыть папку данных Qt"), this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(q(workspace_.directory.u8string())));
     });
+    auto* displaySettings = menu->addAction(QString::fromUtf8("Настройки интерфейса Qt"), this, [this] {
+        if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
+        ApplyQtDisplaySettings(*qApp, displaySettings_); render();
+    });
+    displaySettings->setObjectName("qtDisplaySettingsAction");
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "3D и общие настройки ещё не перенесены."));
+            "3D и оставшиеся настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -188,7 +194,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     table_->setAlternatingRowColors(true);
     table_->setShowGrid(false);
     table_->verticalHeader()->hide();
-    table_->verticalHeader()->setDefaultSectionSize(28);
+    table_->verticalHeader()->setDefaultSectionSize(displaySettings_.compactRows ? 24 : 28);
     table_->horizontalHeader()->setStretchLastSection(true);
     content->addWidget(table_, 1);
     bottomActions_ = new QWidget;
@@ -418,6 +424,7 @@ void QtWindow::render() {
         return;
     }
     const auto previous = selectedId();
+    table_->verticalHeader()->setDefaultSectionSize(displaySettings_.compactRows ? 24 : 28);
     const auto& data = workspace_.data;
     QSignalBlocker blocker(table_);
     table_->setSortingEnabled(false);

@@ -1,6 +1,7 @@
 #pragma once
 #include "QtWorkspace.h"
 #include "QtProfileSession.h"
+#include "QtDisplaySettings.h"
 #include <QMainWindow>
 
 class QComboBox;
@@ -31,6 +32,7 @@ private:
     QtWorkspace& workspace_;
     bool admin_ = false;
     QtProfileSession profileSession_;
+    QtDisplaySettings displaySettings_;
     QAction* profileAccessAction_;
     QAction* ownPasswordAction_;
     QComboBox* profiles_;

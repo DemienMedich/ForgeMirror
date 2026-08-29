@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 21**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 22**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 21 | Remaining |
+| Area | Qt stage 22 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -40,7 +40,8 @@ Admin mutations require the existing admin password from the copied settings (th
 | Reports | Admin project metrics from existing report service | CSV export and full report UI |
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
-| Other | Separate workspace, refresh, F1–F6, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, remaining shortcuts, 3D, general settings, migration installer |
+| Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
+| Other | Separate workspace, refresh, F1–F6, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, remaining shortcuts, 3D, remaining settings, migration installer |
 
 ### Profile management
 
@@ -218,3 +219,11 @@ Administrators receive an F4 Rules page with the current level curve, category b
 Qt serializes the candidate through the existing GameplayConfig implementation in a temporary directory, reloads and compares every supported field, checks the UTF-8 BOM, then replaces `meta/gameplay.ini` using `QSaveFile` with direct-write fallback disabled. Symlinked metadata targets and pending Qt recovery are rejected. A failed commit leaves the previous file and active configuration unchanged. Unknown legacy keys are not preserved because the canonical core serializer does not support them.
 
 After a successful commit, the sanitized rules become the active process configuration and the workspace snapshot is refreshed. Bulk profile recalculation remains unavailable until it can use a crash-safe cross-file journal. Tests cover real form persistence, runtime application, canonical reload and a Windows sharing violation with byte-identical preservation. The editor and summary page were inspected natively.
+
+### Qt display settings (stage 22)
+
+The overflow menu exposes local Qt display settings to every user. Text scale can be set to 90, 100, 110 or 125 percent, and table rows can switch between the normal 28px and compact 24px density. Both changes apply immediately. The migration palette remains fixed, following the recorded design decision to preserve existing colors.
+
+Settings use a dedicated `[qt]` section in `meta/ui.ini`. The writer preserves the BOM, unrelated sections and unknown lines, rejects symlinked metadata paths and replaces the file through `QSaveFile` without direct-write fallback. This coexists with trusted-profile and Pomodoro settings rather than overwriting them. Simultaneous external writers remain unsupported.
+
+Tests cover dialog persistence, reload, live font application, compact row application, preservation of unrelated bytes and a real Windows sharing violation. The 125% dialog and compact main table were inspected natively without clipping.
