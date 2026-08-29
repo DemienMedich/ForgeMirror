@@ -7,6 +7,7 @@
 #include "QtProfileDialogs.h"
 #include "QtAchievements.h"
 #include "QtProfessionEditor.h"
+#include "QtRulesEditor.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPomodoro.h"
@@ -984,6 +985,47 @@ static bool TestPomodoro() {
     return phase->text() == QString::fromUtf8("Фокус") && time->text() == "30:00" && !pause->isVisible();
 }
 
+static bool TestRulesEditor() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    bool saved = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* base = dialog ? dialog->findChild<QSpinBox*>("rulesLevelBase") : nullptr;
+        auto* repeat = dialog ? dialog->findChild<QDoubleSpinBox*>("rulesRepeat") : nullptr;
+        auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
+        if (!base || !repeat || !buttons) { if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject(); return; }
+        base->setValue(2345); repeat->setValue(0.55);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/rules-editor.png"); }
+        buttons->button(QDialogButtonBox::Save)->click(); saved = true;
+    });
+    if (!ShowRulesEditor(nullptr, workspace) || !saved) return false;
+    const auto loaded = LoadGameplayConfig(workspace.directory);
+    if (loaded.levelBaseXp != 2345 || std::abs(loaded.repeatRewardFactor - 0.55f) > 0.0001f || GetGameplayConfig().levelBaseXp != 2345) return false;
+    QFile file(temp.path() + "/meta/gameplay.ini"); if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto before = file.readAll(); file.close(); if (!before.startsWith("\xEF\xBB\xBF")) return false;
+#ifdef _WIN32
+    const auto path = (workspace.directory / "meta/gameplay.ini").wstring();
+    const auto lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    bool failureShown = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QSpinBox*>("rulesLevelBase")->setValue(3456);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        failureShown = !dialog->findChild<QLabel*>("rulesNotice")->text().isEmpty();
+        qobject_cast<QDialog*>(dialog)->reject();
+    });
+    const bool blockedAccepted = ShowRulesEditor(nullptr, workspace);
+    CloseHandle(lock);
+    if (blockedAccepted || !failureShown) return false;
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto after = file.readAll(); file.close(); if (after != before) return false;
+#endif
+    return true;
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -1000,6 +1042,7 @@ int main(int argc, char** argv) {
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
+    if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -1047,7 +1090,7 @@ int main(int argc, char** argv) {
         return fail("Pomodoro page layout failed");
     nav->setCurrentRow(1);
     if (table->rowCount() != 1 || !table->item(0, 0)->text().contains(QString::fromUtf8("Проверка Qt"))) return fail("Task loading failed");
-    if (primary->isVisible()) return fail("Unauthenticated user can mutate data");
+    if (primary->isVisible() || !nav->item(9)->isHidden()) return fail("Unauthenticated user can mutate data");
     if (window.findChild<QPushButton*>("advanceStage")->isVisible()) return fail("Unauthenticated pipeline transition visible");
     search->setText("no-matches");
     if (table->rowCount() != 0) return fail("Search did not filter");
@@ -1095,6 +1138,23 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(9);
+    if (!primary->isVisible() || primary->text() != QString::fromUtf8("Изменить правила") || table->rowCount() != 13)
+        return fail("Rules page unavailable");
+    QTimer::singleShot(0, [] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QSpinBox*>("rulesLevelBase")->setValue(2468);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    if (workspace.data.rulesConfig.levelBaseXp != 2468 || GetGameplayConfig().levelBaseXp != 2468)
+        return fail("Rules page did not apply config");
+    bool rulesValueVisible = false;
+    for (int i = 0; i < table->rowCount(); ++i)
+        rulesValueVisible |= table->item(i, 0)->text() == QString::fromUtf8("Базовый XP уровня") && table->item(i, 1)->text() == "2468";
+    if (!rulesValueVisible) return fail("Rules page did not refresh");
+    const auto rulesArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!rulesArtifacts.isEmpty()) window.grab().save(rulesArtifacts + "/rules-page.png");
     nav->setCurrentRow(7);
     bool profileAuditVisible = false;
     for (int i = 0; i < table->rowCount(); ++i) profileAuditVisible |= table->item(i, 0)->text() == QString::fromUtf8("Профиль");

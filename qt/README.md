@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 20**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 21**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 20 | Remaining |
+| Area | Qt stage 21 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -39,7 +39,8 @@ Admin mutations require the existing admin password from the copied settings (th
 | Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
 | Reports | Admin project metrics from existing report service | CSV export and full report UI |
 | Audit | Admin task and profile-access audit view | Other application logs |
-| Other | Separate workspace, refresh, F1/F2/F3/F5/F6, Pomodoro timer/settings/sounds and guarded vault rewards | F4 rules, cloud, shortcuts, 3D, general settings, migration installer |
+| Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
+| Other | Separate workspace, refresh, F1–F6, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, remaining shortcuts, 3D, general settings, migration installer |
 
 ### Profile management
 
@@ -209,3 +210,11 @@ Administrators can move a uniquely identified stage one position up or down. Bou
 Each move swaps the two complete stage records and saves the full collection through the existing atomic recovery writer. IDs, task references, next-step links and stage contents are not rewritten. A failed replacement restores the original in-memory and on-disk order. Pending Qt recovery blocks reordering.
 
 Core tests cover successful persistence and forced-write rollback. The Qt smoke test drives both directions, checks selection-aware button states and confirms that table sorting cannot disguise the workflow order. The reordered table is captured on native Windows.
+
+### Gameplay rules (stage 21)
+
+Administrators receive an F4 Rules page with the current level curve, category base XP, focus bonuses, repeat/recovery factors and warmup-task count. Editing uses bounded integer and decimal fields. The page states explicitly that saved values affect future calculations and do not silently rewrite accumulated profile progress.
+
+Qt serializes the candidate through the existing GameplayConfig implementation in a temporary directory, reloads and compares every supported field, checks the UTF-8 BOM, then replaces `meta/gameplay.ini` using `QSaveFile` with direct-write fallback disabled. Symlinked metadata targets and pending Qt recovery are rejected. A failed commit leaves the previous file and active configuration unchanged. Unknown legacy keys are not preserved because the canonical core serializer does not support them.
+
+After a successful commit, the sanitized rules become the active process configuration and the workspace snapshot is refreshed. Bulk profile recalculation remains unavailable until it can use a crash-safe cross-file journal. Tests cover real form persistence, runtime application, canonical reload and a Windows sharing violation with byte-identical preservation. The editor and summary page were inspected natively.

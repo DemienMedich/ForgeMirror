@@ -2,6 +2,7 @@
 #include "QtAchievements.h"
 #include "QtPomodoro.h"
 #include "QtProfessionEditor.h"
+#include "QtRulesEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
@@ -34,7 +35,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -111,7 +112,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro")});
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -282,7 +283,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
-             {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
+             {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
         connect(action, &QShortcut::activated, this, [this, page = shortcut.second] {
             if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
@@ -409,7 +410,7 @@ void QtWindow::render() {
     navigation_->item(Pipeline)->setHidden(!workspace_.modules.pipeline);
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
-    for (int page : {Projects, Statistics, Audit}) navigation_->item(page)->setHidden(!admin_);
+    for (int page : {Projects, Statistics, Audit, Rules}) navigation_->item(page)->setHidden(!admin_);
     int page = navigation_->currentRow();
     if (page < 0) return;
     if (navigation_->item(page)->isHidden()) {
@@ -449,10 +450,10 @@ void QtWindow::render() {
     pomodoro_->setVisible(timerPage);
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
-    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions) && admin_);
+    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : QString::fromUtf8("Создать задачу")));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
     deleteEntry_->setVisible(admin_ && (page == Projects || page == Pipeline));
     moveUp_->setVisible(admin_ && page == Pipeline);
@@ -539,6 +540,20 @@ void QtWindow::render() {
             q(entry.taskId), q(entry.field), q(entry.oldValue), q(entry.newValue)});
         for (const auto& entry : profileAudit(workspace_.directory)) row(entry.profile, {QString::fromUtf8("Профиль"), timeText(entry.timestamp),
             QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)});
+    } else if (page == Rules) {
+        headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
+        const auto& rules = data.rulesConfig;
+        row("level_base", {QString::fromUtf8("Базовый XP уровня"), QString::number(rules.levelBaseXp)});
+        row("level_linear", {QString::fromUtf8("Линейный прирост"), QString::number(rules.levelLinearXp)});
+        row("level_quadratic", {QString::fromUtf8("Квадратичный прирост"), QString::number(rules.levelQuadraticXp)});
+        for (size_t i = 0; i < rules.categoryBaseXp.size(); ++i)
+            row("category_" + std::to_string(i), {QString::fromUtf8("Категория %1 · базовый XP").arg(QString::fromUtf8(Profile::kCategoryLabels[i])), QString::number(rules.categoryBaseXp[i])});
+        row("focus_base", {QString::fromUtf8("Базовый фокус-бонус"), QString::number(rules.focusBaseBonus, 'f', 2)});
+        row("focus_extra", {QString::fromUtf8("Дополнительный фокус-бонус"), QString::number(rules.focusAdditionalBonus, 'f', 2)});
+        row("repeat", {QString::fromUtf8("Коэффициент повтора"), QString::number(rules.repeatRewardFactor, 'f', 2)});
+        row("recovery", {QString::fromUtf8("Коэффициент прогрева"), QString::number(rules.recoveryRewardFactor, 'f', 2)});
+        row("warmup", {QString::fromUtf8("Задач прогрева"), QString::number(rules.recoveryWarmupTasks)});
+        summary_->setText(QString::fromUtf8("Правила применяются к будущим расчётам · накопленный прогресс не пересчитывается автоматически"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -612,6 +627,10 @@ void QtWindow::details() {
 void QtWindow::createEntry(bool edit) {
     if (!requireAdmin()) return;
     if (edit && selectedId().isEmpty()) return;
+    if (navigation_->currentRow() == Rules) {
+        if (ShowRulesEditor(this, workspace_)) reload();
+        return;
+    }
     if (navigation_->currentRow() == Professions) {
         if (ShowProfessionEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
         return;

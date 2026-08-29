@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; no cloud sync from the migration client; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 19 pushed as 18d699b. Stage 20 atomic pipeline ordering implemented; full verification passed. Stable branches unchanged.
+- State: Stage 20 pushed as fc3bcba. Stage 21 gameplay-rules page and checked editor implemented; full verification passed. Stable branches unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 20 ready for commit/push: selection-aware pipeline move up/down, visible persisted ordering and atomic primary-write rollback. smoke_qt/smoke_core/native passed, table inspected, package startup without Qt PATH exited 0 with empty stderr.
-- Next: Add crash-safe cross-file transactions before exposing profession/skill/profile deletion; then settings, cloud, vault and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 21 ready for commit/push: administrator F4 rules summary/editor, temporary canonical serialization, full-field reload check and atomic gameplay.ini replacement. smoke_qt/smoke_core/native passed, both layouts inspected, package startup without Qt PATH exited 0 with empty stderr.
+- Next: Add crash-safe cross-file transactions before exposing profession/skill/profile deletion or bulk rules recalculation; then cloud, vault, general settings and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtWindow.*, tests/smoke_core.cpp, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 20 tests cover both move directions, boundaries, disabled sorting and atomic rollback.
+- Working set (files/ids/commands): qt/QtRulesEditor.*, qt/QtWindow.cpp, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 21 tests cover form persistence, active config, BOM/canonical reload and Windows sharing failure with byte preservation.
 
 ---
 # Historical ledger (superseded by the current work above)
