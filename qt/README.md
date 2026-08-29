@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 22**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 23**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 22 | Remaining |
+| Area | Qt stage 23 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -41,7 +41,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
-| Other | Separate workspace, refresh, F1–F6, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, remaining shortcuts, 3D, remaining settings, migration installer |
+| Other | Separate workspace, refresh, contextual create/edit/delete/details shortcuts, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, 3D, remaining settings, migration installer |
 
 ### Profile management
 
@@ -227,3 +227,9 @@ The overflow menu exposes local Qt display settings to every user. Text scale ca
 Settings use a dedicated `[qt]` section in `meta/ui.ini`. The writer preserves the BOM, unrelated sections and unknown lines, rejects symlinked metadata paths and replaces the file through `QSaveFile` without direct-write fallback. This coexists with trusted-profile and Pomodoro settings rather than overwriting them. Simultaneous external writers remain unsupported.
 
 Tests cover dialog persistence, reload, live font application, compact row application, preservation of unrelated bytes and a real Windows sharing violation. The 125% dialog and compact main table were inspected natively without clipping.
+
+### Keyboard shortcuts (stage 23)
+
+The Qt window now provides shortcuts only for actions already implemented safely in the current page: Ctrl+N creates, Ctrl+E edits the selection, Delete removes a selected project or unused pipeline stage, Ctrl+R reloads the isolated local workspace, and Ctrl+I toggles details. Existing F1–F6 navigation remains unchanged. Ctrl+/ and the overflow-menu action open an in-app reference table.
+
+These bindings do not bypass context, selection or access checks. Unsupported pages remain unchanged, mutation shortcuts still require administrator login, and deletion keeps its existing confirmation and relationship checks. Modal dialogs block the main-window shortcuts while open. Tests verify every binding, the help-table contents and the functional details toggle; the help dialog is captured during native Windows visual QA.

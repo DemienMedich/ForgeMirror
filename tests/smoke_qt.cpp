@@ -1115,6 +1115,29 @@ int main(int argc, char** argv) {
     if (!nav || !table || !search || !primary || !status) return fail("Missing UI controls");
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
+    auto* shortcutHelpAction = window.findChild<QAction*>("shortcutHelpAction");
+    const std::vector<std::pair<const char*, QKeySequence>> shortcuts = {
+        {"shortcutCreate", QKeySequence::New}, {"shortcutEdit", QKeySequence("Ctrl+E")},
+        {"shortcutDelete", QKeySequence::Delete}, {"shortcutRefresh", QKeySequence::Refresh},
+        {"shortcutDetails", QKeySequence("Ctrl+I")}, {"shortcutHelp", QKeySequence("Ctrl+/")}
+    };
+    if (!shortcutHelpAction) return fail("Shortcut help action missing");
+    for (const auto& expected : shortcuts) {
+        const auto* shortcut = window.findChild<QShortcut*>(expected.first);
+        if (!shortcut || shortcut->key() != expected.second) return fail("Context shortcut missing or incorrect");
+    }
+    bool shortcutHelpChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* helpTable = dialog ? dialog->findChild<QTableWidget*>("shortcutHelpTable") : nullptr;
+        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 12 &&
+            helpTable->item(6, 0)->text() == "Ctrl+N" && helpTable->item(11, 0)->text() == "Ctrl+/";
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcuts.png"); }
+        if (dialog) dialog->accept();
+    });
+    shortcutHelpAction->trigger();
+    if (!shortcutHelpChecked) return fail("Shortcut help content failed");
     QTimer::singleShot(0, [] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(100)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
@@ -1139,6 +1162,9 @@ int main(int argc, char** argv) {
     table->selectRow(0);
     auto* details = window.findChild<QTextBrowser*>("details");
     if (!details->toPlainText().contains("<без HTML>")) return fail("HTML escaping failed");
+    auto* detailsShortcut = window.findChild<QShortcut*>("shortcutDetails");
+    if (!detailsShortcut || details->isVisible() || !QMetaObject::invokeMethod(detailsShortcut, "activated") || !details->isVisible())
+        return fail("Details shortcut failed");
     auto* access = window.findChild<QAction*>("profileAccess");
     auto* ownPassword = window.findChild<QAction*>("changeOwnProfilePassword");
     if (!access || !ownPassword || ownPassword->isEnabled()) return fail("Profile access not locked initially");

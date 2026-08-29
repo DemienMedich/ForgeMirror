@@ -101,6 +101,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         ApplyQtDisplaySettings(*qApp, displaySettings_); render();
     });
     displaySettings->setObjectName("qtDisplaySettingsAction");
+    auto* shortcutHelp = menu->addAction(QString::fromUtf8("Горячие клавиши"), this, [this] { showShortcutHelp(); });
+    shortcutHelp->setObjectName("shortcutHelpAction");
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
@@ -200,9 +202,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bottomActions_ = new QWidget;
     auto* bottom = new QHBoxLayout(bottomActions_);
     bottom->setContentsMargins(0, 0, 0, 0);
-    auto* detailsToggle = new QPushButton(QString::fromUtf8("Подробности"));
-    detailsToggle->setCheckable(true);
-    bottom->addWidget(detailsToggle);
+    detailsToggle_ = new QPushButton(QString::fromUtf8("Подробности"));
+    detailsToggle_->setObjectName("detailsToggle");
+    detailsToggle_->setCheckable(true);
+    bottom->addWidget(detailsToggle_);
     changeStatus_ = new QPushButton(QString::fromUtf8("Изменить статус"));
     changeStatus_->setObjectName("changeStatus");
     changeStatus_->setToolTip(QString::fromUtf8("Переходы проверяются ядром. Завершение открывает распределение XP."));
@@ -255,7 +258,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
-    connect(detailsToggle, &QPushButton::toggled, details_, &QWidget::setVisible);
+    connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
@@ -295,8 +298,59 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
         });
     }
+    auto bindShortcut = [this](const char* name, const QKeySequence& key, auto action) {
+        auto* shortcut = new QShortcut(key, this);
+        shortcut->setObjectName(name);
+        connect(shortcut, &QShortcut::activated, this, action);
+    };
+    bindShortcut("shortcutCreate", QKeySequence::New, [this] { createEntry(); });
+    bindShortcut("shortcutEdit", QKeySequence(QStringLiteral("Ctrl+E")), [this] { createEntry(true); });
+    bindShortcut("shortcutDelete", QKeySequence::Delete, [this] { deleteEntry(); });
+    bindShortcut("shortcutRefresh", QKeySequence::Refresh, [this] { reload(); });
+    bindShortcut("shortcutDetails", QKeySequence(QStringLiteral("Ctrl+I")), [this] {
+        if (detailsToggle_->isVisible() && detailsToggle_->isEnabled()) detailsToggle_->toggle();
+    });
+    bindShortcut("shortcutHelp", QKeySequence(QStringLiteral("Ctrl+/")), [this] { showShortcutHelp(); });
     navigation_->setCurrentRow(ProfilePage);
     reload();
+}
+
+void QtWindow::showShortcutHelp() {
+    QDialog dialog(this);
+    dialog.setObjectName("shortcutHelp");
+    dialog.setWindowTitle(QString::fromUtf8("Горячие клавиши"));
+    dialog.resize(540, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* intro = new QLabel(QString::fromUtf8(
+        "Команды работают в текущем разделе. Создание, правка и удаление по-прежнему требуют входа администратора и подходящего выбора."));
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    auto* table = new QTableWidget(12, 2, &dialog);
+    table->setObjectName("shortcutHelpTable");
+    table->setHorizontalHeaderLabels({QString::fromUtf8("Клавиша"), QString::fromUtf8("Действие")});
+    const std::vector<std::pair<QString, QString>> rows = {
+        {"F1", QString::fromUtf8("Профиль")}, {"F2", QString::fromUtf8("Навыки")},
+        {"F3", QString::fromUtf8("Пайплайн")}, {"F4", QString::fromUtf8("Правила")},
+        {"F5", QString::fromUtf8("Статистика")}, {"F6", QString::fromUtf8("Аудит")},
+        {"Ctrl+N", QString::fromUtf8("Создать запись")}, {"Ctrl+E", QString::fromUtf8("Редактировать выбранную запись")},
+        {"Delete", QString::fromUtf8("Удалить выбранный проект или этап")}, {"Ctrl+R", QString::fromUtf8("Перечитать локальные данные")},
+        {"Ctrl+I", QString::fromUtf8("Показать или скрыть подробности")}, {"Ctrl+/", QString::fromUtf8("Открыть эту памятку")}
+    };
+    for (int row = 0; row < int(rows.size()); ++row) {
+        table->setItem(row, 0, new QTableWidgetItem(rows[row].first));
+        table->setItem(row, 1, new QTableWidgetItem(rows[row].second));
+    }
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionMode(QAbstractItemView::NoSelection);
+    table->verticalHeader()->hide();
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    layout->addWidget(table);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    buttons->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
 }
 
 void QtWindow::message(const std::string& error) {

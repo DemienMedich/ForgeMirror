@@ -22,6 +22,7 @@ private:
     void details();
     void authenticate();
     void authenticateProfile();
+    void showShortcutHelp();
     void createEntry(bool edit = false);
     void deleteEntry();
     void movePipeline(int delta);
@@ -49,6 +50,7 @@ private:
     QTableWidget* table_;
     QTextBrowser* details_;
     QPushButton* primary_;
+    QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
     QPushButton* editEntry_;
     QPushButton* deleteEntry_;
