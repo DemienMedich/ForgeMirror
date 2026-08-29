@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 16**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 17**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -25,21 +25,21 @@ Qt never calls the cloud sync service. No Qt changes are written back to the ori
 
 `--storage-dir <path>` opens an explicit disposable development workspace. Production directory paths, parents and children are rejected. Do not deliberately point it at other live storage folders. A lock prevents multiple Qt clients from editing the same Qt workspace.
 
-Admin mutations require the existing admin password from the copied settings (the existing core's initial default for empty storage is `admin123`). Admin sessions are not persisted. Profile viewing remains available without a personal login session. Profile management is administrator-only; normal password changes require the current profile password. Session-only personal unlock is available; persistent trusted-device access remains outstanding.
+Admin mutations require the existing admin password from the copied settings (the existing core's initial default for empty storage is `admin123`). Admin sessions are not persisted. Profile viewing remains available without a personal login session. Profile management is administrator-only; normal password changes require the current profile password. Personal unlock may remain session-only or trust this local Qt workspace for 30/90 days.
 
 ## Coverage
 
-| Area | Qt stage 16 | Remaining |
+| Area | Qt stage 17 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Trusted-device access, rename/delete, standalone XP entry, other wallet operations |
+| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing including next-step links; current names in task rows and guided next-step transitions | Deletion and reordering |
 | Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
 | Reports | Admin project metrics from existing report service | CSV export and full report UI |
-| Audit | Admin task audit view | Other application logs |
-| Other | Separate workspace, refresh, F1/F2/F3/F5/F6 | F4 rules, cloud, shortcuts, Pomodoro/vault, 3D, settings, migration installer |
+| Audit | Admin task and profile-access audit view | Other application logs |
+| Other | Separate workspace, refresh, F1/F2/F3/F5/F6, Pomodoro timer/settings/sounds and guarded vault rewards | F4 rules, cloud, shortcuts, 3D, general settings, migration installer |
 
 ### Profile management
 
@@ -108,13 +108,13 @@ On Tasks, administrators can use **Следующий этап** while the pipel
 AdvanceTaskPipeline rechecks the source ID, target, edge and unambiguous stage IDs before using the existing transactional metadata service. It changes only the stage, logs the transition, and leaves status and XP unchanged. Readiness is a human confirmation, not automated verification of the criteria. Manual stage assignment remains available to administrators in the task editor for initial assignment and corrections. External concurrent edits remain unsupported; refresh after editing files outside the app.
 
 Tests cover allowed/disallowed/stale/missing/self/terminal/completed transitions, choice deduplication, readiness gating, cancellation, failure rollback, audit persistence and administrator-only entry. The dialog was inspected at 480x360; native Windows tests and packaged startup without installed Qt on PATH passed with empty stderr.
-### Session-only personal access (stage 8)
+### Personal access foundation (stage 8, extended in stage 17)
 
 The overflow menu offers **Войти в выбранный профиль** / **Выйти из профиля**. This follows the legacy selected-profile password flow: public profile/task browsing remains read-only, and personal unlock never grants administrator actions. Normal password change now requires both an unlocked session and the existing current-password check. Administrators retain their separate password-reset route in profile management.
 
-QtProfileSession stores only the profile ID and a SHA-256 credential fingerprint in memory. It writes no profile/session files and does not import legacy trusted-device grants. Switching profiles or explicitly logging out clears access. Each render and protected password action checks the stored credential and current blocked/archive/readability state; changes revoke access on that check. External changes become visible when data is checked/refreshed, not via a background watcher. Password change revokes the old session.
+QtProfileSession keeps the profile ID and a SHA-256 credential fingerprint in memory. Each render and protected password action checks the current credential plus blocked/archive/readability state. External changes become visible when data is checked/refreshed, not through a background watcher. Stage 17 optionally persists only the ID and expiry described below.
 
-This is a local UI access gate, not encryption or a security boundary against someone who can edit application files. The legacy password encoding is unchanged. Persistent trust (30/90 days), profile-access audit events, and the not-yet-ported personal wallet/Pomodoro actions remain pending.
+This is a local UI access gate, not encryption or a security boundary against someone who can edit application files. The legacy password encoding is unchanged.
 
 Tests cover incorrect/empty passwords, fresh-session denial, explicit logout, profile mismatch, password replacement, blocking/archive, UI login validation, non-escalation to administrator, and unchanged profile bytes during browsing/login.
 ### Professions and skill bindings (stage 9)
@@ -175,3 +175,13 @@ Administrators can enable end-of-interval sounds, choose separate focus and brea
 The four sound keys are written through the same checked atomic ui.ini update. Non-administrators do not see the sound controls. On Windows playback uses the existing MCI backend with a Unicode path and explicit volume; a missing or unsupported file reports a warning without preventing interval completion or its independently validated reward. Other platforms use the system signal.
 
 Tests cover administrator visibility, local sound discovery, rejection/removal of an external legacy path, exact persisted relative path, preservation of unrelated settings, and the existing atomic-write failure case. The expanded administrator layout was inspected on Windows.
+
+### Trusted profile access and audit (stage 17)
+
+The profile login offers session-only access or local trust for 30/90 days. Trust reuses the legacy `[profile] trusted=id:expiry` entry in `meta/ui.ini`; no password or credential fingerprint is written to disk. Expired entries are pruned. Explicit logout, a detected password/state change, and a successful password change remove the selected profile's trust. Switching the visible profile does not delete another profile's unexpired grant.
+
+Updates preserve the BOM, unrelated sections and unknown lines and use `QSaveFile` with direct-write fallback disabled. Symlinked metadata paths are rejected. Simultaneous external writers remain unsupported. A failed trust write fails the trusted login rather than pretending persistence succeeded. This local convenience is not encryption: anyone able to edit the workspace files can also edit its trust list.
+
+Successful password and trusted unlocks, logout and password changes append to the existing `meta/profile-audit.log`. The administrator Audit page shows the latest 500 profile events together with task audit rows and labels their sources separately. It treats log fields as table text. This is a bounded viewer, not log rotation or tamper protection.
+
+Tests cover 30-day persistence, restoration in a fresh session, explicit revocation, expiry pruning, password fingerprint invalidation, audit output, login choices and the merged administrator table. Native Windows screenshots for the login and audit page were inspected; packaged startup without installed Qt on `PATH` exited 0 with empty stderr.

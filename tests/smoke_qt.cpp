@@ -466,12 +466,45 @@ static bool TestProfileSession() {
     profile.set_password_encoded(EncodePassword("secret"));
     const auto created = workspace.storage->create_profile(profile);
     if (!created) return false;
-    QtProfileSession session;
+    QtProfileSession session(workspace.directory);
     if (session.unlock(*workspace.storage, created->id, "wrong") ||
         !session.unlock(*workspace.storage, created->id, "secret") ||
         !session.isUnlocked(*workspace.storage, created->id)) return false;
-    QtProfileSession fresh;
+    QtProfileSession fresh(workspace.directory);
     if (fresh.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!session.unlock(*workspace.storage, created->id, "secret", 30) || !session.isTrusted() || session.trustedUntil() <= QDateTime::currentSecsSinceEpoch()) return false;
+    QFile ui(temp.path() + "/meta/ui.ini"); if (!ui.open(QIODevice::ReadOnly)) return false;
+    const auto trustBytes = ui.readAll(); ui.close();
+    if (!trustBytes.contains("trusted=" + QByteArray::fromStdString(created->id) + ":")) return false;
+    QtProfileSession restored(workspace.directory);
+    if (!restored.isUnlocked(*workspace.storage, created->id) || !restored.isTrusted() || !restored.lock(true)) return false;
+    QtProfileSession forgotten(workspace.directory);
+    if (forgotten.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!ui.open(QIODevice::ReadWrite)) return false;
+    auto expiredBytes = ui.readAll();
+    expiredBytes.replace("trusted=", "trusted=" + QByteArray::fromStdString(created->id) + ":1");
+    if (!ui.resize(0) || !ui.seek(0) || ui.write(expiredBytes) != expiredBytes.size()) return false;
+    ui.close();
+    QtProfileSession expired(workspace.directory);
+    if (expired.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!ui.open(QIODevice::ReadOnly)) return false;
+    const auto prunedBytes = ui.readAll(); ui.close();
+    if (prunedBytes.contains(QByteArray::fromStdString(created->id) + ":1")) return false;
+#ifdef _WIN32
+    const auto trustPath = (workspace.directory / "meta/ui.ini").wstring();
+    const auto trustLock = CreateFileW(trustPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (trustLock == INVALID_HANDLE_VALUE) return false;
+    QtProfileSession writeBlocked(workspace.directory);
+    const bool blockedUnlock = writeBlocked.unlock(*workspace.storage, created->id, "secret", 30);
+    CloseHandle(trustLock);
+    if (blockedUnlock || writeBlocked.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!ui.open(QIODevice::ReadOnly)) return false;
+    const auto afterBlockedBytes = ui.readAll(); ui.close();
+    if (afterBlockedBytes != prunedBytes) return false;
+#endif
+    QFile audit(temp.path() + "/meta/profile-audit.log"); if (!audit.open(QIODevice::ReadOnly)) return false;
+    const auto auditBytes = audit.readAll();
+    if (!auditBytes.contains("|unlock|trust_days=30") || !auditBytes.contains("|trusted_unlock") || !auditBytes.contains("|lock")) return false;
     if (session.isUnlocked(*workspace.storage, "other") || session.isUnlocked(*workspace.storage, created->id)) return false;
     if (!session.unlock(*workspace.storage, created->id, "secret")) return false;
     profile.set_password_encoded(EncodePassword("changed"));
@@ -1030,9 +1063,11 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget();
         auto* password = dialog->findChild<QLineEdit*>("profileLoginPassword");
+        auto* trust = dialog->findChild<QComboBox*>("profileTrust");
         auto* submit = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        loginChecked = trust && trust->count() == 3 && trust->itemData(1).toInt() == 30 && trust->itemData(2).toInt() == 90;
         password->setText("wrong"); submit->click();
-        loginChecked = !dialog->findChild<QLabel*>("profileLoginNotice")->text().isEmpty() && password->text().isEmpty();
+        loginChecked &= !dialog->findChild<QLabel*>("profileLoginNotice")->text().isEmpty() && password->text().isEmpty();
         password->setText("profile-test-password");
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/profile-login.png"); }
@@ -1057,6 +1092,12 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(7);
+    bool profileAuditVisible = false;
+    for (int i = 0; i < table->rowCount(); ++i) profileAuditVisible |= table->item(i, 0)->text() == QString::fromUtf8("Профиль");
+    if (!profileAuditVisible) return fail("Profile audit is not visible");
+    const auto auditArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!auditArtifacts.isEmpty()) window.grab().save(auditArtifacts + "/profile-audit.png");
     nav->setCurrentRow(5);
     QTimer::singleShot(0, [] {
         auto* dialog = QApplication::activeModalWidget();

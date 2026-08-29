@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; no cloud sync from the migration client; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 15 pushed as e2568d3. Stage 16 Pomodoro sounds implemented; verified. Stable branches unchanged.
+- State: Stage 16 pushed as dfb2380. Stage 17 trusted profile access and profile audit implemented; full verification passed. Stable branches unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 16 ready for commit/push: administrator-only Pomodoro sound enable, separate focus/break choice, volume, system fallback and bounded workspace music WAV/MP3 paths; legacy sound keys saved atomically. smoke_qt/smoke_core/native pass with empty stderr; expanded UI inspected; package startup without Qt PATH exits 0.
-- Next: Continue Qt migration: persistent trusted-device access and profile audit, destructive operations with rollback, settings, cloud, vault and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 17 ready for commit/push: optional 30/90-day local trust in the existing ui.ini format, expiry/revocation on logout and password change, and merged profile events in the administrator Audit page. smoke_qt/smoke_core/native passed, new UI inspected, package startup without Qt PATH exited 0 with empty stderr.
+- Next: Continue Qt migration: destructive operations with rollback, settings, cloud, vault and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtTaskCompletionDialog.*, src/AppTaskCompletionService.cpp, include/AppTaskCompletionService.h, qt/QtTheme.*, tests/smoke_qt.cpp; build-qt.ps1 -Package. Stage 2 tests cover exact XP modifiers, form completion, byte-exact rollback for profile/task/audit failures and interrupted-transaction recovery; Windows screenshots inspected at 800x640 and 640x480.
+- Working set (files/ids/commands): qt/QtProfileSession.*, qt/QtWindow.cpp, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 17 tests cover persistence/restoration/revocation/expiry, Windows sharing failure and merged audit visibility; login and audit screenshots inspected on Windows.
 
 ---
 # Historical ledger (superseded by the current work above)

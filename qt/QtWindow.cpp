@@ -34,9 +34,22 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
 enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro };
+struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
+std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
+    const auto path = q((directory / "meta/profile-audit.log").u8string());
+    if (QFileInfo(path).isSymLink()) return {};
+    QFile file(path); if (!file.open(QIODevice::ReadOnly)) return {};
+    auto lines = QString::fromUtf8(file.readAll()).split('\n', Qt::SkipEmptyParts); if (lines.size() > 500) lines = lines.mid(lines.size() - 500);
+    std::vector<ProfileAuditRow> out;
+    for (const auto& line : lines) {
+        const auto fields = line.split('|'); bool ok = false; const auto timestamp = fields.value(0).toLongLong(&ok);
+        if (ok && fields.size() >= 3) out.push_back({timestamp, u(fields[1]), u(fields[2]), u(fields.value(3))});
+    }
+    return out;
+}
 }
 
-QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
+QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory) {
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
     setMinimumSize(800, 520);
@@ -68,7 +81,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         if (!profileSession_.isUnlocked(*workspace_.storage, u(id))) {
             render(); message(u8"Сначала войдите в выбранный профиль."); return;
         }
-        ShowProfilePasswordDialog(this, workspace_, id, id, false);
+        if (ShowProfilePasswordDialog(this, workspace_, id, id, false)) {
+            const bool forgotten = profileSession_.lock(true);
+            AppendProfileAudit(workspace_.directory, u(id), "password_change");
+            if (!forgotten) message(u8"Пароль изменён, но запись доверия удалить не удалось. Она может восстановить доступ после обновления.");
+        }
         render();
     });
     ownPasswordAction_ = passwordAction;
@@ -274,7 +291,10 @@ bool QtWindow::requireAdmin() {
 
 void QtWindow::authenticateProfile() {
     const auto id = u(profiles_->currentData().toString());
-    if (profileSession_.isUnlocked(*workspace_.storage, id)) { profileSession_.lock(); render(); return; }
+    if (profileSession_.isUnlocked(*workspace_.storage, id)) {
+        if (!profileSession_.lock(true)) message(u8"Не удалось удалить доверенный вход. Он может восстановиться после обновления.");
+        render(); return;
+    }
     if (id.empty()) return;
     QDialog dialog(this);
     dialog.setObjectName("profileLogin");
@@ -289,7 +309,10 @@ void QtWindow::authenticateProfile() {
     password->setObjectName("profileLoginPassword");
     password->setEchoMode(QLineEdit::Password);
     layout->addRow(QString::fromUtf8("Пароль"), password);
-    auto* hint = new QLabel(QString::fromUtf8("Только эта сессия. При смене профиля доступ закрывается. Права администратора не предоставляются."));
+    auto* trust = new QComboBox; trust->setObjectName("profileTrust");
+    trust->addItem(QString::fromUtf8("Только эта сессия"), 0); trust->addItem(QString::fromUtf8("30 дней"), 30); trust->addItem(QString::fromUtf8("90 дней"), 90);
+    layout->addRow(QString::fromUtf8("Доверять устройству"), trust);
+    auto* hint = new QLabel(QString::fromUtf8("Доверие хранится только в локальной копии Qt и не даёт прав администратора."));
     hint->setWordWrap(true);
     layout->addRow(hint);
     auto* notice = new QLabel;
@@ -304,7 +327,7 @@ void QtWindow::authenticateProfile() {
     layout->addRow(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
-        const bool accepted = profileSession_.unlock(*workspace_.storage, id, u(password->text()));
+        const bool accepted = profileSession_.unlock(*workspace_.storage, id, u(password->text()), trust->currentData().toInt());
         password->clear();
         if (accepted) dialog.accept();
         else { notice->setText(QString::fromUtf8("Неверный пароль или профиль недоступен. Для восстановления обратитесь к администратору.")); password->setFocus(); }
@@ -399,8 +422,8 @@ void QtWindow::render() {
         }
     };
     title_->setText(navigation_->item(page)->text());
-    mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") :
-        QString::fromUtf8(unlocked ? "Личный доступ · Qt" : "Просмотр · Qt"));
+    mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8(unlocked ?
+        (profileSession_.isTrusted() ? "Доверенный доступ · Qt" : "Личный доступ · Qt") : "Просмотр · Qt"));
     const bool timerPage = page == Pomodoro;
     summary_->setVisible(!timerPage);
     search_->setVisible(!timerPage);
@@ -491,10 +514,12 @@ void QtWindow::render() {
         summary_->setText(QString::fromUtf8("Всего задач: %1  ·  всего проектов: %2  ·  выдано XP: %3")
             .arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp));
     } else if (page == Audit) {
-        headers({QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Задача"),
+        headers({QString::fromUtf8("Источник"), QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Объект"),
             QString::fromUtf8("Поле"), QString::fromUtf8("Было"), QString::fromUtf8("Стало")});
-        for (const auto& entry : data.taskAudit) row(entry.taskId, {timeText(entry.timestamp), q(entry.actor),
+        for (const auto& entry : data.taskAudit) row(entry.taskId, {QString::fromUtf8("Задача"), timeText(entry.timestamp), q(entry.actor),
             q(entry.taskId), q(entry.field), q(entry.oldValue), q(entry.newValue)});
+        for (const auto& entry : profileAudit(workspace_.directory)) row(entry.profile, {QString::fromUtf8("Профиль"), timeText(entry.timestamp),
+            QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)});
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
