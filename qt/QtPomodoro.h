@@ -10,6 +10,7 @@ class QPushButton;
 class QTimer;
 class QSpinBox;
 class QCheckBox;
+class QComboBox;
 
 class QtPomodoro : public QWidget {
 public:
@@ -17,6 +18,7 @@ public:
         int workSeconds = 25 * 60, int breakSeconds = 5 * 60,
         int longBreakSeconds = 15 * 60, int cyclesBeforeLong = 4);
     void setRewardHandler(std::function<QString(int, std::int64_t)> handler) { rewardHandler_ = std::move(handler); }
+    void setAdministrator(bool administrator);
     void advanceSecondsForTest(int seconds);
 private:
     enum Phase { Work, Break, LongBreak };
@@ -25,6 +27,7 @@ private:
     void reset();
     void refresh();
     void saveSettings();
+    void playSound(Phase completed);
     int duration(Phase phase) const;
     QString phaseName(Phase phase) const;
     QTimer* timer_;
@@ -56,5 +59,10 @@ private:
     QSpinBox* longBreakMinutes_;
     QSpinBox* cyclesSetting_;
     QCheckBox* autoAdvanceSetting_;
+    QWidget* soundSettings_;
+    QCheckBox* soundEnabled_;
+    QComboBox* focusSound_;
+    QComboBox* breakSound_;
+    QSpinBox* soundVolume_;
     QDeadlineTimer deadline_;
 };

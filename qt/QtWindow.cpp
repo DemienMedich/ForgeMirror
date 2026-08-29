@@ -80,7 +80,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Звуки Pomodoro, 3D и общие настройки ещё не перенесены."));
+            "3D и общие настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -408,6 +408,7 @@ void QtWindow::render() {
     bottomActions_->setVisible(!timerPage);
     details_->setVisible(!timerPage && details_->isVisible());
     pomodoro_->setVisible(timerPage);
+    static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :

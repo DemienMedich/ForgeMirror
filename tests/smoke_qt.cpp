@@ -889,14 +889,17 @@ static bool TestPomodoro() {
     auto fail = [](int step) { std::cerr << "Pomodoro step " << step << " failed\n"; return false; };
     QTemporaryDir temp;
     QDir().mkpath(temp.path() + "/meta");
-    { QFile settings(temp.path() + "/meta/ui.ini"); if (!settings.open(QIODevice::WriteOnly)) return false; settings.write("[style]\nunknown=kept\n"); }
+    QDir().mkpath(temp.path() + "/music");
+    { QFile music(temp.path() + "/music/focus.mp3"); if (!music.open(QIODevice::WriteOnly)) return false; music.write("test"); }
+    { QFile settings(temp.path() + "/meta/ui.ini"); if (!settings.open(QIODevice::WriteOnly)) return false;
+      settings.write("[style]\nunknown=kept\n[pomodoro]\nsoundEnabled=0\nsoundFocus=../outside.mp3\n"); }
     QtPomodoro panel(nullptr, std::filesystem::u8path(temp.path().toUtf8().constData()), 2, 1, 1, 2);
     int rewards = 0;
     panel.setRewardHandler([&](int minutes, std::int64_t started) {
         if (minutes == 0 && started > 0) ++rewards;
         return QString::fromUtf8("Тестовая награда");
     });
-    panel.resize(720, 440); panel.show(); QApplication::processEvents();
+    panel.resize(720, 580); panel.show(); QApplication::processEvents();
     auto* start = panel.findChild<QPushButton*>("pomodoroStart");
     auto* pause = panel.findChild<QPushButton*>("pomodoroPause");
     auto* next = panel.findChild<QPushButton*>("pomodoroNext");
@@ -905,6 +908,11 @@ static bool TestPomodoro() {
     auto* phase = panel.findChild<QLabel*>("pomodoroPhase");
     auto* cycles = panel.findChild<QLabel*>("pomodoroCycles");
     if (!start || !pause || !next || !reset || !time || !phase || !cycles || time->text() != "00:02") return fail(1);
+    panel.setAdministrator(true);
+    auto* focusSound = panel.findChild<QComboBox*>("pomodoroFocusSound");
+    if (!panel.findChild<QWidget*>("pomodoroSoundEnabled")->isVisible() || focusSound->findData("music/focus.mp3") < 0 ||
+        focusSound->findData("../outside.mp3") >= 0) return fail(12);
+    focusSound->setCurrentIndex(focusSound->findData("music/focus.mp3"));
     start->click(); panel.advanceSecondsForTest(1);
     if (time->text() != "00:01" || !pause->isVisible()) return fail(2);
     pause->click(); panel.advanceSecondsForTest(2);
@@ -924,7 +932,8 @@ static bool TestPomodoro() {
     panel.findChild<QPushButton*>("pomodoroSaveSettings")->click();
     QFile settings(temp.path() + "/meta/ui.ini"); if (!settings.open(QIODevice::ReadOnly)) return false;
     const auto saved = settings.readAll();
-    if (!saved.contains("unknown=kept") || !saved.contains("workMinutes=30") || !saved.contains("autoAdvance=1")) { std::cerr << saved.constData() << '\n'; return fail(8); }
+    if (!saved.contains("unknown=kept") || !saved.contains("workMinutes=30") || !saved.contains("autoAdvance=1") ||
+        !saved.contains("soundFocus=music/focus.mp3") || saved.contains("../outside.mp3")) { std::cerr << saved.constData() << '\n'; return fail(8); }
     settings.close();
 #ifdef _WIN32
     const auto settingsPath = std::filesystem::u8path((temp.path() + "/meta/ui.ini").toUtf8().toStdString());

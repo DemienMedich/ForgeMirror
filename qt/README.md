@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 15**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 16**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 15 | Remaining |
+| Area | Qt stage 16 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Trusted-device access, rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -168,3 +168,10 @@ The Qt page reads the existing [pomodoro] keys from meta/ui.ini. Focus, break, l
 A fully completed focus can award the vault-defined number of coins. The selected profile must have an active personal session; the focus duration must meet pomodoro_min; its start must fall within pomodoro_start/pomodoro_end on a day enabled by pomodoro_days; and pomodoro_coin must be positive. The existing AppAdjustProfileWallet persistence path saves the reward. A paused/resumed full focus remains eligible; reset and incomplete intervals never invoke the reward. No cloud push occurs.
 
 Tests cover denial without personal login, successful +1 wallet persistence after login, schedule/minimum settings, deterministic full-cycle completion, unrelated ui.ini preservation, atomic settings output, auto-advance and existing wallet/spirit behavior after the reward. Sound selection and playback remain pending.
+### Pomodoro sounds (stage 16)
+
+Administrators can enable end-of-interval sounds, choose separate focus and break signals, and set volume. An empty selection uses the system signal. Other choices are legacy-format music/<filename> references discovered only from the isolated workspace music directory. WAV and MP3 files must be regular non-symlink files no larger than 20 MiB; absolute paths, traversal, nested paths and unsupported extensions are rejected. Missing legacy music references remain visible for review but cannot escape the music directory.
+
+The four sound keys are written through the same checked atomic ui.ini update. Non-administrators do not see the sound controls. On Windows playback uses the existing MCI backend with a Unicode path and explicit volume; a missing or unsupported file reports a warning without preventing interval completion or its independently validated reward. Other platforms use the system signal.
+
+Tests cover administrator visibility, local sound discovery, rejection/removal of an external legacy path, exact persisted relative path, preservation of unrelated settings, and the existing atomic-write failure case. The expanded administrator layout was inspected on Windows.

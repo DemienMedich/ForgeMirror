@@ -2,6 +2,11 @@
 #include <QtWidgets>
 #include <QSaveFile>
 #include <algorithm>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 
 namespace {
 QString settingsPath(const std::filesystem::path& storage) {
@@ -46,6 +51,30 @@ bool writePomodoro(const std::filesystem::path& storage, const QMap<QString, QSt
 int integer(const QMap<QString, QString>& values, const QString& key, int fallback, int low, int high) {
     bool ok = false; const int value = values.value(key).toInt(&ok); return std::clamp(ok ? value : fallback, low, high);
 }
+QString soundPath(const std::filesystem::path& storage, const QString& relative) {
+    if (relative.isEmpty()) return {};
+    const QString prefix = "music/";
+    if (!relative.startsWith(prefix)) return {};
+    const auto name = relative.mid(prefix.size());
+    if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains(':') || name.contains('"')) return {};
+    const auto extension = QFileInfo(name).suffix();
+    if (extension.compare("wav", Qt::CaseInsensitive) && extension.compare("mp3", Qt::CaseInsensitive)) return {};
+    const auto root = QString::fromUtf8(storage.u8string());
+    const QFileInfo directory(root + "/music"), file(directory.filePath() + "/" + name);
+    if (directory.isSymLink() || file.isSymLink() || !file.isFile() || file.size() > 20 * 1024 * 1024) return {};
+    return file.absoluteFilePath();
+}
+void fillSounds(QComboBox* combo, const std::filesystem::path& storage, const QString& current) {
+    combo->addItem(QString::fromUtf8("Системный сигнал"), QString());
+    const QDir directory(QString::fromUtf8((storage / "music").u8string()));
+    for (const auto& name : directory.entryList({"*.wav", "*.WAV", "*.mp3", "*.MP3"}, QDir::Files | QDir::NoSymLinks, QDir::Name)) {
+        const auto relative = "music/" + name;
+        if (!soundPath(storage, relative).isEmpty()) combo->addItem(name, relative);
+    }
+    if (current.startsWith("music/") && combo->findData(current) < 0)
+        combo->addItem(QString::fromUtf8("Недоступен: ") + QFileInfo(current).fileName(), current);
+    combo->setCurrentIndex(std::max(0, combo->findData(current)));
+}
 }
 
 QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workSeconds, int breakSeconds,
@@ -88,6 +117,19 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     form->addRow(QString::fromUtf8("Длинный, мин"), longBreakMinutes_); form->addRow(QString::fromUtf8("Фокусов"), cyclesSetting_); form->addRow(autoAdvanceSetting_);
     controlBox->addLayout(form);
     auto* save = new QPushButton(QString::fromUtf8("Сохранить настройки")); save->setObjectName("pomodoroSaveSettings"); controlBox->addWidget(save);
+    soundSettings_ = new QWidget;
+    auto* soundForm = new QFormLayout(soundSettings_); soundForm->setContentsMargins(0, 0, 0, 0); soundForm->setSpacing(8);
+    soundEnabled_ = new QCheckBox(QString::fromUtf8("Звук окончания")); soundEnabled_->setObjectName("pomodoroSoundEnabled");
+    soundEnabled_->setChecked(!saved.contains("soundEnabled") || saved.value("soundEnabled") == "1");
+    focusSound_ = new QComboBox; focusSound_->setObjectName("pomodoroFocusSound");
+    breakSound_ = new QComboBox; breakSound_->setObjectName("pomodoroBreakSound");
+    fillSounds(focusSound_, storage_, saved.value("soundFocus")); fillSounds(breakSound_, storage_, saved.value("soundBreak"));
+    soundVolume_ = new QSpinBox; soundVolume_->setObjectName("pomodoroSoundVolume"); soundVolume_->setRange(0, 100); soundVolume_->setSuffix(" %");
+    soundVolume_->setValue(integer(saved, "soundVolume", 80, 0, 100));
+    soundForm->addRow(soundEnabled_); soundForm->addRow(QString::fromUtf8("После фокуса"), focusSound_);
+    soundForm->addRow(QString::fromUtf8("После перерыва"), breakSound_); soundForm->addRow(QString::fromUtf8("Громкость"), soundVolume_);
+    soundSettings_->setToolTip(QString::fromUtf8("Администраторские сигналы из локальной папки music."));
+    controlBox->addWidget(soundSettings_); soundSettings_->hide();
     auto* note = new QLabel(QString::fromUtf8("Награда возможна только за полный фокус при личном входе и по правилам хранилища."));
     note->setWordWrap(true); controlBox->addWidget(note); controlBox->addStretch(); root->addWidget(controls, 2);
     timer_ = new QTimer(this); timer_->setInterval(250);
@@ -117,6 +159,7 @@ void QtPomodoro::startOrResume() {
 }
 void QtPomodoro::finishInterval() {
     timer_->stop(); running_ = false; remaining_ = 0; awaiting_ = true;
+    const auto completedPhase = phase_;
     if (phase_ == Work) {
         if (rewardHandler_) {
             const auto result = rewardHandler_(workSeconds_ / 60, workStartedAt_);
@@ -129,6 +172,7 @@ void QtPomodoro::finishInterval() {
         if (phase_ == LongBreak) cycles_ = 0;
         nextPhase_ = Work;
     }
+    playSound(completedPhase);
     if (autoAdvance_) { phase_ = nextPhase_; awaiting_ = false; remaining_ = duration(phase_); startOrResume(); return; }
     refresh();
 }
@@ -139,13 +183,36 @@ void QtPomodoro::reset() {
 void QtPomodoro::saveSettings() {
     const QMap<QString, QString> values = {{"workMinutes", QString::number(workMinutes_->value())},
         {"breakMinutes", QString::number(breakMinutes_->value())}, {"longBreakMinutes", QString::number(longBreakMinutes_->value())},
-        {"cyclesBeforeLong", QString::number(cyclesSetting_->value())}, {"autoAdvance", autoAdvanceSetting_->isChecked() ? "1" : "0"}};
+        {"cyclesBeforeLong", QString::number(cyclesSetting_->value())}, {"autoAdvance", autoAdvanceSetting_->isChecked() ? "1" : "0"},
+        {"soundEnabled", soundEnabled_->isChecked() ? "1" : "0"}, {"soundFocus", focusSound_->currentData().toString()},
+        {"soundBreak", breakSound_->currentData().toString()}, {"soundVolume", QString::number(soundVolume_->value())}};
     if (!writePomodoro(storage_, values)) { statusLabel_->setText(QString::fromUtf8("Не удалось сохранить настройки.")); return; }
     workSeconds_ = workMinutes_->value() * 60; breakSeconds_ = breakMinutes_->value() * 60;
     longBreakSeconds_ = longBreakMinutes_->value() * 60; cyclesBeforeLong_ = cyclesSetting_->value(); autoAdvance_ = autoAdvanceSetting_->isChecked();
     cycles_ = std::min(cycles_, cyclesBeforeLong_);
     if (!running_ && !awaiting_) remaining_ = duration(phase_);
     statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Настройки сохранены.")); refresh();
+}
+void QtPomodoro::setAdministrator(bool administrator) { soundSettings_->setVisible(administrator); }
+void QtPomodoro::playSound(Phase completed) {
+    if (!soundEnabled_->isChecked() || soundVolume_->value() <= 0) return;
+    const auto relative = completed == Work ? focusSound_->currentData().toString() : breakSound_->currentData().toString();
+    if (relative.isEmpty()) { QApplication::beep(); return; }
+    const auto path = soundPath(storage_, relative);
+    if (path.isEmpty()) { statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Сигнал не найден; интервал завершён.")); return; }
+#ifdef _WIN32
+    mciSendStringW(L"close forgemirror_qt_pomodoro", nullptr, 0, nullptr);
+    const auto type = path.endsWith(".wav", Qt::CaseInsensitive) ? "waveaudio" : "mpegvideo";
+    const auto open = QString("open \"%1\" type %2 alias forgemirror_qt_pomodoro").arg(path, type);
+    if (mciSendStringW(reinterpret_cast<LPCWSTR>(open.utf16()), nullptr, 0, nullptr) != 0) {
+        statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Не удалось воспроизвести сигнал; интервал завершён.")); return;
+    }
+    const auto volume = QString("setaudio forgemirror_qt_pomodoro volume to %1").arg(soundVolume_->value() * 10);
+    mciSendStringW(reinterpret_cast<LPCWSTR>(volume.utf16()), nullptr, 0, nullptr);
+    mciSendStringW(L"play forgemirror_qt_pomodoro from 0", nullptr, 0, nullptr);
+#else
+    QApplication::beep();
+#endif
 }
 void QtPomodoro::advanceSecondsForTest(int seconds) {
     if (!running_ || seconds <= 0) return;
