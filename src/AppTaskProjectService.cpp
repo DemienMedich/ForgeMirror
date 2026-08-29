@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <ctime>
 #include <fstream>
+#include <iterator>
 #include <locale>
 #include <sstream>
 
@@ -476,6 +477,7 @@ bool AppAppendTaskAudit(const std::filesystem::path& storageDir,
                         const std::string& oldValue,
                         const std::string& newValue,
                         std::vector<TaskAuditEntry>* cache) {
+    if (g_forceTaskAuditFailureForTests) return false;
     const std::string safeTaskId = SanitizeLogToken(taskId);
     const std::string safeField = SanitizeLogToken(field);
     if (safeTaskId.empty() || safeField.empty()) return false;
@@ -594,6 +596,15 @@ AppProjectDeleteResult AppDeleteProjectAndDetachTasks(const std::filesystem::pat
     const std::string removedProjectName = it->name;
     const auto prevProjects = projects;
     const auto prevTasks = tasks;
+    const auto prevAuditCache = auditCache ? *auditCache : std::vector<TaskAuditEntry>{};
+    const auto auditPath = TaskAuditStoragePath(storageDir);
+    const bool auditExisted = std::filesystem::exists(auditPath);
+    std::string auditBytes;
+    if (auditExisted) {
+        std::ifstream input(auditPath, std::ios::binary);
+        if (!input) { result.errorMessage = u8"Не удалось прочитать task-audit.log перед удалением."; return result; }
+        auditBytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
 
     projects.erase(std::remove_if(projects.begin(), projects.end(), [&](const ProjectEntry& p) { return p.id == projectId; }),
                    projects.end());
@@ -626,7 +637,26 @@ AppProjectDeleteResult AppDeleteProjectAndDetachTasks(const std::filesystem::pat
     for (const auto& entry : detachedAudit) {
         const std::string newValue = std::string(u8"Без проекта");
         if (!AppendTaskAuditIfChanged(storageDir, actor, entry.first, "project", entry.second, newValue, auditCache)) {
-            result.errorMessage = u8"Не удалось записать task-audit.log";
+            projects = prevProjects;
+            tasks = prevTasks;
+            if (auditCache) *auditCache = prevAuditCache;
+            const bool rollbackProjectsOk = AppSaveProjects(storageDir, projects);
+            const bool rollbackTasksOk = AppSaveTasks(storageDir, tasks);
+            bool rollbackAuditOk = true;
+            std::error_code ec;
+            if (auditExisted) {
+                std::ofstream output(auditPath, std::ios::binary | std::ios::trunc);
+                if (output) output.write(auditBytes.data(), static_cast<std::streamsize>(auditBytes.size()));
+                output.flush();
+                rollbackAuditOk = output.good();
+            } else {
+                std::filesystem::remove(auditPath, ec);
+                rollbackAuditOk = !ec;
+            }
+            result.detachedTasks = 0;
+            result.errorMessage = (!rollbackProjectsOk || !rollbackTasksOk || !rollbackAuditOk)
+                ? std::string(u8"Ошибка записи журнала и отката удаления. Проверьте файлы в meta/.")
+                : std::string(u8"Не удалось записать task-audit.log: удаление отменено.");
             return result;
         }
     }

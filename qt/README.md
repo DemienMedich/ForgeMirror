@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 17**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 18**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,11 +29,11 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 17 | Remaining |
+| Area | Qt stage 18 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
-| Projects | Admin list, creation and editing; stable IDs and current names in linked tasks | Deletion, embedded project focus |
+| Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing including next-step links; current names in task rows and guided next-step transitions | Deletion and reordering |
 | Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
@@ -185,3 +185,11 @@ Updates preserve the BOM, unrelated sections and unknown lines and use `QSaveFil
 Successful password and trusted unlocks, logout and password changes append to the existing `meta/profile-audit.log`. The administrator Audit page shows the latest 500 profile events together with task audit rows and labels their sources separately. It treats log fields as table text. This is a bounded viewer, not log rotation or tamper protection.
 
 Tests cover 30-day persistence, restoration in a fresh session, explicit revocation, expiry pruning, password fingerprint invalidation, audit output, login choices and the merged administrator table. Native Windows screenshots for the login and audit page were inspected; packaged startup without installed Qt on `PATH` exited 0 with empty stderr.
+
+### Project deletion with rollback (stage 18)
+
+Administrators can delete the selected project after a warning that names it and counts linked tasks. No is the default. Linked tasks are preserved and both their project ID and legacy project-name snapshot are cleared; each detachment is written to task audit. Awarded XP, participants and task status are untouched. A pending Qt recovery journal blocks the operation.
+
+Project and task collections are restored in memory and on disk if either primary save or the audit append fails. The pre-operation audit cache and file bytes are restored as well; an incomplete rollback reports the stronger recovery error instead of claiming success. This guards checked write failures, not power loss between the cross-file writes. External writers remain unsupported.
+
+Core tests cover successful detach persistence and forced audit failure with project/task/audit rollback. The Qt smoke test drives both cancellation and confirmation, verifies the task becomes projectless, and captures the real warning on Windows.

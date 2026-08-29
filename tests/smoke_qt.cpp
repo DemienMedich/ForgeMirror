@@ -1154,6 +1154,30 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(1);
     if (table->rowCount() != 1 || table->item(0, 1)->text() != QString::fromUtf8("Проект после правки"))
         return fail("Task retained stale project name after rename");
+    nav->setCurrentRow(2);
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(originalProject.id)) table->selectRow(i);
+    auto* deleteEntry = window.findChild<QPushButton*>("deleteEntry");
+    if (!deleteEntry || !deleteEntry->isVisible() || !deleteEntry->isEnabled()) return fail("Project delete action unavailable");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) confirm->button(QMessageBox::No)->click();
+    });
+    deleteEntry->click();
+    if (LoadProjectsData(workspace.directory).size() != 1) return fail("Project delete cancellation failed");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) confirm->grab().save(artifacts + "/project-delete.png");
+            confirm->button(QMessageBox::Yes)->click();
+        }
+    });
+    deleteEntry->click();
+    if (!LoadProjectsData(workspace.directory).empty()) return fail("Project delete did not persist");
+    const auto detachedTask = LoadTasksData(workspace.directory).front();
+    if (!detachedTask.projectId.empty() || !detachedTask.project.empty()) return fail("Project delete left task reference");
+    if (workspace.data.taskAudit.empty() || workspace.data.taskAudit.back().field != "project") return fail("Project delete audit missing");
+    nav->setCurrentRow(1);
+    if (table->rowCount() != 1 || !table->item(0, 1)->text().isEmpty()) return fail("Task retained deleted project");
     saveForm(QString::fromUtf8("Создано через Qt"));
     primary->click();
     if (LoadTasksData(workspace.directory).size() != 2) return fail("Task form did not persist");

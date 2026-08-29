@@ -282,6 +282,40 @@ static bool TestWorkspaceMutationsRollBackWhenSaveFails(const std::filesystem::p
     return true;
 }
 
+static bool TestProjectDeleteDetachesAndRollsBack(const std::filesystem::path& dir) {
+    auto fail = [](const char* reason) {
+        AppSetTaskAuditFailureHookForTests(false);
+        std::cerr << "projectDeleteRollback: " << reason << "\n";
+        return false;
+    };
+    ProjectEntry project; project.id = "project_delete"; project.name = "Delete me";
+    TaskEntry task; task.id = "linked_task"; task.title = "Linked";
+    task.projectId = project.id; task.project = project.name;
+    std::vector<ProjectEntry> projects{project};
+    std::vector<TaskEntry> tasks{task};
+    std::vector<TaskAuditEntry> audit;
+    if (!AppSaveProjects(dir, projects) || !AppSaveTasks(dir, tasks)) return fail("fixture save");
+    auto result = AppDeleteProjectAndDetachTasks(dir, projects, tasks, project.id, "admin", &audit);
+    if (!result.ok || result.detachedTasks != 1 || !projects.empty() || !tasks[0].projectId.empty() || !tasks[0].project.empty())
+        return fail("successful detach");
+    if (LoadProjectsData(dir).size() != 0 || !LoadTasksData(dir).front().projectId.empty() || audit.size() != 1)
+        return fail("successful persistence");
+
+    projects = {project}; tasks = {task}; audit.clear();
+    if (!AppSaveProjects(dir, projects) || !AppSaveTasks(dir, tasks)) return fail("rollback fixture save");
+    std::string auditBefore; ReadFile(dir / "meta/task-audit.log", auditBefore);
+    AppSetTaskAuditFailureHookForTests(true);
+    result = AppDeleteProjectAndDetachTasks(dir, projects, tasks, project.id, "admin", &audit);
+    AppSetTaskAuditFailureHookForTests(false);
+    if (result.ok || result.detachedTasks != 0 || projects.size() != 1 || tasks[0].projectId != project.id || !audit.empty())
+        return fail("memory rollback");
+    const auto diskProjects = LoadProjectsData(dir); const auto diskTasks = LoadTasksData(dir);
+    std::string auditAfter; ReadFile(dir / "meta/task-audit.log", auditAfter);
+    if (diskProjects.size() != 1 || diskTasks.size() != 1 || diskTasks[0].projectId != project.id || auditAfter != auditBefore)
+        return fail("disk rollback");
+    return true;
+}
+
 static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::path& dir) {
     auto fail = [](const char* reason) {
         std::cerr << "taskFinalizeRollback: " << reason << "\n";
@@ -1455,6 +1489,7 @@ int main() {
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
     const bool okWorkspaceRecovery = TestTasksPipelineRecovery(tmp / "workspace_recovery");
     const bool okWorkspaceSaveRollback = TestWorkspaceMutationsRollBackWhenSaveFails(tmp / "workspace_save_rollback");
+    const bool okProjectDeleteRollback = TestProjectDeleteDetachesAndRollsBack(tmp / "project_delete_rollback");
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
@@ -1500,7 +1535,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1513,6 +1548,7 @@ int main() {
               << " tasks=" << okTasks
               << " workspaceRecovery=" << okWorkspaceRecovery
               << " workspaceSaveRollback=" << okWorkspaceSaveRollback
+              << " projectDeleteRollback=" << okProjectDeleteRollback
               << " taskText=" << okTaskText
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract

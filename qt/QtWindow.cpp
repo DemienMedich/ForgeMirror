@@ -202,6 +202,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     editEntry_ = new QPushButton(QString::fromUtf8("Редактировать"));
     editEntry_->setObjectName("editEntry");
     bottom->addWidget(editEntry_);
+    deleteEntry_ = new QPushButton(QString::fromUtf8("Удалить"));
+    deleteEntry_->setObjectName("deleteEntry");
+    deleteEntry_->setToolTip(QString::fromUtf8("Удалить выбранный проект и отвязать от него задачи"));
+    bottom->addWidget(deleteEntry_);
     advanceStage_ = new QPushButton(QString::fromUtf8("Следующий этап"));
     advanceStage_->setObjectName("advanceStage");
     bottom->addWidget(advanceStage_);
@@ -238,6 +242,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(detailsToggle, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
+    connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
@@ -438,6 +443,7 @@ void QtWindow::render() {
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
+    deleteEntry_->setVisible(admin_ && page == Projects);
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -544,6 +550,7 @@ void QtWindow::details() {
     details_->clear();
     changeStatus_->setEnabled(!id.empty());
     editEntry_->setEnabled(!id.empty());
+    deleteEntry_->setEnabled(!id.empty());
     advanceStage_->setEnabled(!id.empty());
     const int page = navigation_->currentRow();
     if (page == Tasks) {
@@ -775,6 +782,31 @@ void QtWindow::createEntry(bool edit) {
         dialog.accept();
     });
     if (dialog.exec() == QDialog::Accepted) reload();
+}
+
+void QtWindow::deleteEntry() {
+    if (!requireAdmin() || navigation_->currentRow() != Projects) return;
+    if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+        message(u8"Сначала завершите восстановление данных."); return;
+    }
+    const auto id = u(selectedId());
+    const auto project = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+        [&](const auto& item) { return item.id == id; });
+    if (project == workspace_.data.projects.end()) return;
+    const auto linked = std::count_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+        [&](const auto& task) { return task.projectId == id; });
+    QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить проект"),
+        QString::fromUtf8("Удалить проект «%1»?\nСвязанные задачи: %2. Они сохранятся без проекта.")
+            .arg(q(project->name)).arg(linked), QMessageBox::Yes | QMessageBox::No, this);
+    confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
+    confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+    confirm.setDefaultButton(QMessageBox::No);
+    if (confirm.exec() != QMessageBox::Yes) return;
+    const auto result = AppDeleteProjectAndDetachTasks(workspace_.directory, workspace_.data.projects,
+        workspace_.data.tasks, id, "admin", &workspace_.data.taskAudit);
+    if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось удалить проект." : result.errorMessage); return; }
+    reload();
+    statusBar()->showMessage(QString::fromUtf8("Проект удалён · задач отвязано: %1").arg(result.detachedTasks), 5000);
 }
 
 void QtWindow::changeStatus() {
