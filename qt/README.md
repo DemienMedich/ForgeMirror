@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 14**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 15**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 14 | Remaining |
+| Area | Qt stage 15 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session-only personal unlock, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Trusted-device access, rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -161,3 +161,10 @@ A dedicated Pomodoro navigation page provides a local 25/5/15 minute timer with 
 This increment does not award coins, play sounds, auto-advance or persist settings. Those paths depend on personal access, vault schedule rules and settings persistence and will be connected separately rather than bypassed. The page follows the existing palette, keeps one primary action, and uses two compact functional panels.
 
 Tests deterministically cover countdown, pause stability, resume, normal break, long-break selection after two configurable test cycles, reset, and the actual navigation-page visibility. Native Windows rendering was inspected; no timer sleep is used in tests.
+### Pomodoro settings and guarded rewards (stage 15)
+
+The Qt page reads the existing [pomodoro] keys from meta/ui.ini. Focus, break, long-break duration, cycles before long break and manual/automatic transition mode can be saved. Saving uses QSaveFile without direct-write fallback and updates only these keys; unrelated sections and unknown lines are retained. Changes apply to the next interval, or immediately while idle.
+
+A fully completed focus can award the vault-defined number of coins. The selected profile must have an active personal session; the focus duration must meet pomodoro_min; its start must fall within pomodoro_start/pomodoro_end on a day enabled by pomodoro_days; and pomodoro_coin must be positive. The existing AppAdjustProfileWallet persistence path saves the reward. A paused/resumed full focus remains eligible; reset and incomplete intervals never invoke the reward. No cloud push occurs.
+
+Tests cover denial without personal login, successful +1 wallet persistence after login, schedule/minimum settings, deterministic full-cycle completion, unrelated ui.ini preservation, atomic settings output, auto-advance and existing wallet/spirit behavior after the reward. Sound selection and playback remain pending.

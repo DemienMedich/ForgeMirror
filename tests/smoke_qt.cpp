@@ -836,10 +836,26 @@ static bool TestPersonalWallet() {
     profile.set_spirit(ProfileSpirit::Evil);
     const auto created = workspace.storage->create_profile(profile);
     if (!created) return false;
+    const auto now = QDateTime::currentDateTime();
+    const int minute = now.time().hour() * 60 + now.time().minute();
+    workspace.data.vault.pomodoroDaysMask = 0x7f;
+    workspace.data.vault.pomodoroStartMinutes = (minute + 1439) % 1440;
+    workspace.data.vault.pomodoroEndMinutes = (minute + 2) % 1440;
+    workspace.data.vault.pomodoroMinMinutes = 20;
+    workspace.data.vault.pomodoroCoinsPerCycle = 1;
+    if (!SaveStorageVault(workspace.directory, workspace.data.vault)) return false;
+    workspace.data.vault = LoadStorageVault(workspace.directory);
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     auto* remove = window.findChild<QPushButton*>("removeEvilSpirit");
     auto* access = window.findChild<QAction*>("profileAccess");
     if (!remove || !access || remove->isVisible()) return false;
+    auto* pomodoro = static_cast<QtPomodoro*>(window.findChild<QWidget*>("pomodoroPanel"));
+    pomodoro->findChild<QPushButton*>("pomodoroStart")->click();
+    pomodoro->advanceSecondsForTest(25 * 60);
+    workspace.storage->set_active_profile(created->id);
+    if (workspace.storage->load_profile()->wallet_balance() != 250.0 ||
+        !pomodoro->findChild<QLabel*>("pomodoroStatus")->text().contains(QString::fromUtf8("личный вход"))) return false;
+    pomodoro->findChild<QPushButton*>("pomodoroReset")->click();
     QTimer::singleShot(0, [] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         dialog->findChild<QLineEdit*>("profileLoginPassword")->setText("wallet-password");
@@ -847,11 +863,17 @@ static bool TestPersonalWallet() {
     });
     access->trigger();
     if (!remove->isVisible() || !remove->isEnabled()) return false;
+    pomodoro->findChild<QPushButton*>("pomodoroStart")->click();
+    pomodoro->advanceSecondsForTest(25 * 60);
+    workspace.storage->set_active_profile(created->id);
+    auto rewarded = workspace.storage->load_profile();
+    if (!rewarded || rewarded->wallet_balance() != 251.0 ||
+        !pomodoro->findChild<QLabel*>("pomodoroStatus")->text().contains("+1")) return false;
     QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::No)->click(); });
     remove->click();
     workspace.storage->set_active_profile(created->id);
     auto unchanged = workspace.storage->load_profile();
-    if (!unchanged || unchanged->spirit() != ProfileSpirit::Evil || unchanged->wallet_balance() != 250.0 || workspace.data.vault.balance != 0.0) return false;
+    if (!unchanged || unchanged->spirit() != ProfileSpirit::Evil || unchanged->wallet_balance() != 251.0 || workspace.data.vault.balance != 0.0) return false;
     const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); window.grab().save(artifacts + "/profile-wallet.png"); }
     QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::Yes)->click(); });
@@ -859,13 +881,22 @@ static bool TestPersonalWallet() {
     workspace.storage->set_active_profile(created->id);
     const auto changed = workspace.storage->load_profile();
     const auto vault = LoadStorageVault(workspace.directory);
-    return changed && changed->spirit() == ProfileSpirit::None && changed->wallet_balance() == 50.0 &&
+    return changed && changed->spirit() == ProfileSpirit::None && changed->wallet_balance() == 51.0 &&
         vault.balance == 200.0 && !vault.log.empty() && vault.log.back().action == "spirit_cleanup" && !remove->isEnabled();
 }
 
 static bool TestPomodoro() {
-    QtPomodoro panel(nullptr, 2, 1, 1, 2);
-    panel.resize(720, 360); panel.show(); QApplication::processEvents();
+    auto fail = [](int step) { std::cerr << "Pomodoro step " << step << " failed\n"; return false; };
+    QTemporaryDir temp;
+    QDir().mkpath(temp.path() + "/meta");
+    { QFile settings(temp.path() + "/meta/ui.ini"); if (!settings.open(QIODevice::WriteOnly)) return false; settings.write("[style]\nunknown=kept\n"); }
+    QtPomodoro panel(nullptr, std::filesystem::u8path(temp.path().toUtf8().constData()), 2, 1, 1, 2);
+    int rewards = 0;
+    panel.setRewardHandler([&](int minutes, std::int64_t started) {
+        if (minutes == 0 && started > 0) ++rewards;
+        return QString::fromUtf8("Тестовая награда");
+    });
+    panel.resize(720, 440); panel.show(); QApplication::processEvents();
     auto* start = panel.findChild<QPushButton*>("pomodoroStart");
     auto* pause = panel.findChild<QPushButton*>("pomodoroPause");
     auto* next = panel.findChild<QPushButton*>("pomodoroNext");
@@ -873,23 +904,42 @@ static bool TestPomodoro() {
     auto* time = panel.findChild<QLabel*>("pomodoroTime");
     auto* phase = panel.findChild<QLabel*>("pomodoroPhase");
     auto* cycles = panel.findChild<QLabel*>("pomodoroCycles");
-    if (!start || !pause || !next || !reset || !time || !phase || !cycles || time->text() != "00:02") return false;
+    if (!start || !pause || !next || !reset || !time || !phase || !cycles || time->text() != "00:02") return fail(1);
     start->click(); panel.advanceSecondsForTest(1);
-    if (time->text() != "00:01" || !pause->isVisible()) return false;
+    if (time->text() != "00:01" || !pause->isVisible()) return fail(2);
     pause->click(); panel.advanceSecondsForTest(2);
-    if (time->text() != "00:01" || start->text() != QString::fromUtf8("Продолжить")) return false;
+    if (time->text() != "00:01" || start->text() != QString::fromUtf8("Продолжить")) return fail(3);
     start->click(); panel.advanceSecondsForTest(1);
-    if (!next->isVisible() || !cycles->text().contains("1 / 2")) return false;
+    if (!next->isVisible() || !cycles->text().contains("1 / 2") || rewards != 1) return fail(4);
     next->click();
-    if (phase->text() != QString::fromUtf8("Перерыв")) return false;
+    if (phase->text() != QString::fromUtf8("Перерыв")) return fail(5);
     panel.advanceSecondsForTest(1); next->click(); panel.advanceSecondsForTest(2);
-    if (!next->isVisible() || !cycles->text().contains("2 / 2")) return false;
+    if (!next->isVisible() || !cycles->text().contains("2 / 2") || rewards != 2) return fail(6);
     next->click();
-    if (phase->text() != QString::fromUtf8("Длинный перерыв")) return false;
+    if (phase->text() != QString::fromUtf8("Длинный перерыв")) return fail(7);
     const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); panel.grab().save(artifacts + "/pomodoro.png"); }
+    panel.findChild<QSpinBox*>("pomodoroWorkMinutes")->setValue(30);
+    panel.findChild<QCheckBox*>("pomodoroAutoAdvance")->setChecked(true);
+    panel.findChild<QPushButton*>("pomodoroSaveSettings")->click();
+    QFile settings(temp.path() + "/meta/ui.ini"); if (!settings.open(QIODevice::ReadOnly)) return false;
+    const auto saved = settings.readAll();
+    if (!saved.contains("unknown=kept") || !saved.contains("workMinutes=30") || !saved.contains("autoAdvance=1")) { std::cerr << saved.constData() << '\n'; return fail(8); }
+    settings.close();
+#ifdef _WIN32
+    const auto settingsPath = std::filesystem::u8path((temp.path() + "/meta/ui.ini").toUtf8().toStdString());
+    const auto lock = CreateFileW(settingsPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return fail(10);
+    panel.findChild<QSpinBox*>("pomodoroWorkMinutes")->setValue(31);
+    panel.findChild<QPushButton*>("pomodoroSaveSettings")->click();
+    CloseHandle(lock);
+    QFile unchanged(temp.path() + "/meta/ui.ini"); unchanged.open(QIODevice::ReadOnly);
+    if (unchanged.readAll() != saved || !panel.findChild<QLabel*>("pomodoroStatus")->text().contains(QString::fromUtf8("Не удалось"))) return fail(11);
+#endif
+    panel.advanceSecondsForTest(1);
+    if (phase->text() != QString::fromUtf8("Фокус") || !pause->isVisible()) return fail(9);
     reset->click();
-    return phase->text() == QString::fromUtf8("Фокус") && time->text() == "00:02" && !pause->isVisible();
+    return phase->text() == QString::fromUtf8("Фокус") && time->text() == "30:00" && !pause->isVisible();
 }
 
 int main(int argc, char** argv) {

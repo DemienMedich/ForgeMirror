@@ -24,6 +24,15 @@ QString timeText(std::int64_t t) {
 QString field(const QString& name, const std::string& value) {
     return "<p><b>" + name.toHtmlEscaped() + "</b><br>" + q(value).toHtmlEscaped().replace("\n", "<br>") + "</p>";
 }
+bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt) {
+    const auto local = QDateTime::fromSecsSinceEpoch(startedAt).toLocalTime();
+    const int weekday = local.date().dayOfWeek() % 7; // Sunday is 0 in vault format.
+    if (!(vault.pomodoroDaysMask & (1 << weekday))) return false;
+    const int minutes = local.time().hour() * 60 + local.time().minute();
+    const int start = vault.pomodoroStartMinutes, end = vault.pomodoroEndMinutes;
+    if (start == end) return false;
+    return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+}
 enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro };
 }
 
@@ -71,7 +80,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
-            "Награды и настройки Pomodoro, 3D и общие настройки ещё не перенесены."));
+            "Звуки Pomodoro, 3D и общие настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -124,7 +133,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace) {
         metricsLayout->addWidget(metric, 1);
     }
     content->addWidget(profileMetrics_);
-    pomodoro_ = new QtPomodoro;
+    auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
+    pomodoro_ = pomodoro;
+    pomodoro->setRewardHandler([this](int workMinutes, std::int64_t startedAt) -> QString {
+        const auto id = u(profiles_->currentData().toString());
+        if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) return QString::fromUtf8("Награда не начислена: требуется восстановление данных.");
+        if (!profileSession_.isUnlocked(*workspace_.storage, id)) return QString::fromUtf8("Фокус завершён. Для награды нужен личный вход.");
+        if (workspace_.data.vault.pomodoroCoinsPerCycle <= 0) return QString::fromUtf8("Фокус завершён. Награды отключены.");
+        if (workMinutes < workspace_.data.vault.pomodoroMinMinutes) return QString::fromUtf8("Фокус завершён, но короче минимального времени награды.");
+        if (!pomodoroWithinWindow(workspace_.data.vault, startedAt)) return QString::fromUtf8("Фокус завершён вне расписания наград.");
+        auto result = AppAdjustProfileWallet(*workspace_.storage, id, id, double(workspace_.data.vault.pomodoroCoinsPerCycle));
+        if (!result.ok || !result.profile) return QString::fromUtf8("Не удалось сохранить награду.");
+        const int amount = workspace_.data.vault.pomodoroCoinsPerCycle;
+        reload();
+        return QString::fromUtf8("Начислено Кукоинов: +%1").arg(amount);
+    });
     content->addWidget(pomodoro_, 1);
     auto* filters = new QHBoxLayout;
     search_ = new QLineEdit;
