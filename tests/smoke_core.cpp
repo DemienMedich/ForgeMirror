@@ -351,6 +351,14 @@ static bool TestPipelineDeleteCleansLinksAndRollsBack(const std::filesystem::pat
     if (rollbackFirst == rollbackDisk.end() || rollbackTarget == rollbackDisk.end() || rollbackThird == rollbackDisk.end() ||
         rollbackFirst->nextIds != first.nextIds || rollbackThird->nextIds != third.nextIds)
         return fail("disk rollback");
+
+    result = AppMovePipelineStep(dir, steps, 0, 1);
+    if (!result.ok || !result.changed || steps[0].id != target.id || steps[1].id != first.id) return fail("move save");
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    result = AppMovePipelineStep(dir, steps, 1, 2);
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (result.ok || steps[0].id != target.id || steps[1].id != first.id || steps[2].id != third.id)
+        return fail("move rollback");
     return true;
 }
 

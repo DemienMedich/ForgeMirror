@@ -207,6 +207,14 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     deleteEntry_->setObjectName("deleteEntry");
     deleteEntry_->setToolTip(QString::fromUtf8("Удалить выбранную запись с проверкой связей"));
     bottom->addWidget(deleteEntry_);
+    moveUp_ = new QPushButton(QString::fromUtf8("Выше"));
+    moveUp_->setObjectName("movePipelineUp");
+    moveUp_->setToolTip(QString::fromUtf8("Переместить этап на одну позицию выше"));
+    bottom->addWidget(moveUp_);
+    moveDown_ = new QPushButton(QString::fromUtf8("Ниже"));
+    moveDown_->setObjectName("movePipelineDown");
+    moveDown_->setToolTip(QString::fromUtf8("Переместить этап на одну позицию ниже"));
+    bottom->addWidget(moveDown_);
     advanceStage_ = new QPushButton(QString::fromUtf8("Следующий этап"));
     advanceStage_->setObjectName("advanceStage");
     bottom->addWidget(advanceStage_);
@@ -244,6 +252,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
+    connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });
+    connect(moveDown_, &QPushButton::clicked, this, [this] { movePipeline(1); });
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
@@ -445,6 +455,8 @@ void QtWindow::render() {
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
     deleteEntry_->setVisible(admin_ && (page == Projects || page == Pipeline));
+    moveUp_->setVisible(admin_ && page == Pipeline);
+    moveDown_->setVisible(admin_ && page == Pipeline);
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -539,7 +551,7 @@ void QtWindow::render() {
     if (page == Catalog) stretchColumn = 2;
     else if (page == Pipeline || page == Projects || page == Professions) stretchColumn = 1;
     table_->horizontalHeader()->setSectionResizeMode(stretchColumn, QHeaderView::Stretch);
-    table_->setSortingEnabled(true);
+    table_->setSortingEnabled(page != Pipeline);
     for (int index = 0; index < table_->rowCount(); ++index) {
         if (table_->item(index, 0)->data(Qt::UserRole).toString() == previous) { table_->selectRow(index); break; }
     }
@@ -552,8 +564,20 @@ void QtWindow::details() {
     changeStatus_->setEnabled(!id.empty());
     editEntry_->setEnabled(!id.empty());
     deleteEntry_->setEnabled(!id.empty());
+    moveUp_->setEnabled(false);
+    moveDown_->setEnabled(false);
     advanceStage_->setEnabled(!id.empty());
     const int page = navigation_->currentRow();
+    if (page == Pipeline) {
+        const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (step != workspace_.data.pipelineSteps.end() &&
+            std::count_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(), [&](const auto& item) { return item.id == id; }) == 1) {
+            const auto index = std::distance(workspace_.data.pipelineSteps.begin(), step);
+            moveUp_->setEnabled(index > 0);
+            moveDown_->setEnabled(index + 1 < std::ptrdiff_t(workspace_.data.pipelineSteps.size()));
+        }
+    }
     if (page == Tasks) {
         for (const auto& task : workspace_.data.tasks) if (task.id == id) {
             QStringList assignees;
@@ -839,6 +863,28 @@ void QtWindow::deleteEntry() {
     if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось удалить проект." : result.errorMessage); return; }
     reload();
     statusBar()->showMessage(QString::fromUtf8("Проект удалён · задач отвязано: %1").arg(result.detachedTasks), 5000);
+}
+
+void QtWindow::movePipeline(int delta) {
+    if (!requireAdmin() || navigation_->currentRow() != Pipeline || (delta != -1 && delta != 1)) return;
+    if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+        message(u8"Сначала завершите восстановление данных."); return;
+    }
+    const auto id = u(selectedId());
+    const auto matches = std::count_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+        [&](const auto& item) { return item.id == id; });
+    const auto found = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+        [&](const auto& item) { return item.id == id; });
+    if (id.empty() || matches != 1 || found == workspace_.data.pipelineSteps.end()) {
+        message(u8"Этап с неоднозначным ID нельзя переместить автоматически."); return;
+    }
+    const int from = int(std::distance(workspace_.data.pipelineSteps.begin(), found));
+    const int to = from + delta;
+    if (to < 0 || to >= int(workspace_.data.pipelineSteps.size())) return;
+    const auto result = AppMovePipelineStep(workspace_.directory, workspace_.data.pipelineSteps, from, to);
+    if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось изменить порядок этапов." : result.errorMessage); return; }
+    render();
+    statusBar()->showMessage(QString::fromUtf8("Порядок этапов сохранён"), 3000);
 }
 
 void QtWindow::changeStatus() {

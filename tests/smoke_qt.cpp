@@ -1134,6 +1134,25 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(4);
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(unusedStage.id)) table->selectRow(i);
+    auto* moveUp = window.findChild<QPushButton*>("movePipelineUp");
+    auto* moveDown = window.findChild<QPushButton*>("movePipelineDown");
+    const auto unusedBefore = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+        [&](const auto& item) { return item.id == unusedStage.id; });
+    const int unusedBeforeIndex = int(std::distance(workspace.data.pipelineSteps.begin(), unusedBefore));
+    if (!moveUp || !moveDown || !moveUp->isVisible() || !moveUp->isEnabled() || table->isSortingEnabled() || unusedBefore == workspace.data.pipelineSteps.end())
+        return fail("Pipeline reorder controls unavailable");
+    moveUp->click();
+    const auto unusedAfterUp = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+        [&](const auto& item) { return item.id == unusedStage.id; });
+    if (unusedAfterUp == workspace.data.pipelineSteps.end() || int(std::distance(workspace.data.pipelineSteps.begin(), unusedAfterUp)) != unusedBeforeIndex - 1 || !moveDown->isEnabled())
+        return fail("Pipeline move up failed");
+    const auto reorderArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!reorderArtifacts.isEmpty()) window.grab().save(reorderArtifacts + "/pipeline-reorder.png");
+    moveDown->click();
+    const auto unusedAfterDown = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+        [&](const auto& item) { return item.id == unusedStage.id; });
+    if (unusedAfterDown == workspace.data.pipelineSteps.end() || int(std::distance(workspace.data.pipelineSteps.begin(), unusedAfterDown)) != unusedBeforeIndex)
+        return fail("Pipeline move down failed");
     auto* deletePipeline = window.findChild<QPushButton*>("deleteEntry");
     if (!deletePipeline || !deletePipeline->isVisible() || !deletePipeline->isEnabled()) return fail("Pipeline delete action unavailable");
     QTimer::singleShot(0, [] {

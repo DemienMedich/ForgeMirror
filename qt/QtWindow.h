@@ -23,6 +23,7 @@ private:
     void authenticateProfile();
     void createEntry(bool edit = false);
     void deleteEntry();
+    void movePipeline(int delta);
     void changeStatus();
     bool requireAdmin();
     void message(const std::string& error);
@@ -49,6 +50,8 @@ private:
     QPushButton* changeStatus_;
     QPushButton* editEntry_;
     QPushButton* deleteEntry_;
+    QPushButton* moveUp_;
+    QPushButton* moveDown_;
     QPushButton* advanceStage_;
     QPushButton* achievements_;
     QPushButton* removeSpirit_;
