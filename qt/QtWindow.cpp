@@ -9,6 +9,7 @@
 #include "QtTaskCompletionDialog.h"
 #include "QtProfileDialogs.h"
 #include "AppTaskProjectService.h"
+#include "AppPipelineService.h"
 #include "AppTaskWorkflowService.h"
 #include "AppTeamValueReportService.h"
 #include "AppProfileMutationService.h"
@@ -204,7 +205,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bottom->addWidget(editEntry_);
     deleteEntry_ = new QPushButton(QString::fromUtf8("Удалить"));
     deleteEntry_->setObjectName("deleteEntry");
-    deleteEntry_->setToolTip(QString::fromUtf8("Удалить выбранный проект и отвязать от него задачи"));
+    deleteEntry_->setToolTip(QString::fromUtf8("Удалить выбранную запись с проверкой связей"));
     bottom->addWidget(deleteEntry_);
     advanceStage_ = new QPushButton(QString::fromUtf8("Следующий этап"));
     advanceStage_->setObjectName("advanceStage");
@@ -443,7 +444,7 @@ void QtWindow::render() {
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
-    deleteEntry_->setVisible(admin_ && page == Projects);
+    deleteEntry_->setVisible(admin_ && (page == Projects || page == Pipeline));
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -785,11 +786,42 @@ void QtWindow::createEntry(bool edit) {
 }
 
 void QtWindow::deleteEntry() {
-    if (!requireAdmin() || navigation_->currentRow() != Projects) return;
+    if (!requireAdmin()) return;
+    const int page = navigation_->currentRow();
+    if (page != Projects && page != Pipeline) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;
     }
     const auto id = u(selectedId());
+    if (page == Pipeline) {
+        const auto duplicateIds = std::count_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (id.empty() || duplicateIds != 1) { message(u8"Этап с неоднозначным ID нельзя удалить автоматически."); return; }
+        const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (step == workspace_.data.pipelineSteps.end()) return;
+        const auto linkedTasks = std::count_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+            [&](const auto& task) { return task.pipelineStepId == id; });
+        if (linkedTasks > 0) {
+            message(u8"Этап используется задачами. Сначала переведите или отвяжите их."); return;
+        }
+        int inboundLinks = 0;
+        for (const auto& source : workspace_.data.pipelineSteps)
+            inboundLinks += int(std::count(source.nextIds.begin(), source.nextIds.end(), id));
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить этап"),
+            QString::fromUtf8("Удалить этап «%1»?\nВходящих переходов будет удалено: %2.")
+                .arg(q(step->title)).arg(inboundLinks), QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        const int index = int(std::distance(workspace_.data.pipelineSteps.begin(), step));
+        const auto result = AppDeletePipelineStep(workspace_.directory, workspace_.data.pipelineSteps, index);
+        if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось удалить этап." : result.errorMessage); return; }
+        reload();
+        statusBar()->showMessage(QString::fromUtf8("Этап удалён · переходов очищено: %1").arg(inboundLinks), 5000);
+        return;
+    }
     const auto project = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
         [&](const auto& item) { return item.id == id; });
     if (project == workspace_.data.projects.end()) return;

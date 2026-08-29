@@ -164,7 +164,10 @@ AppPipelineMutationResult AppDeletePipelineStep(const std::filesystem::path& sto
         return result;
     }
     std::vector<PipelineStep> backup = steps;
+    const std::string removedId = steps[index].id;
     steps.erase(steps.begin() + index);
+    if (!removedId.empty()) for (auto& step : steps)
+        step.nextIds.erase(std::remove(step.nextIds.begin(), step.nextIds.end(), removedId), step.nextIds.end());
     if (!AppSavePipelineData(storageDir, steps)) {
         steps = std::move(backup);
         result.errorMessage = u8"Не удалось сохранить пайплайн.";

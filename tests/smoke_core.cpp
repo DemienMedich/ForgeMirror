@@ -316,6 +316,44 @@ static bool TestProjectDeleteDetachesAndRollsBack(const std::filesystem::path& d
     return true;
 }
 
+static bool TestPipelineDeleteCleansLinksAndRollsBack(const std::filesystem::path& dir) {
+    auto fail = [](const char* reason) {
+        AppSetRecoveryPrimaryWriteFailureForTests(false);
+        std::cerr << "pipelineDeleteRollback: " << reason << "\n";
+        return false;
+    };
+    PipelineStep first; first.id = "first"; first.title = "First"; first.nextIds = {"target", "target"};
+    PipelineStep target; target.id = "target"; target.title = "Target";
+    PipelineStep third; third.id = "third"; third.title = "Third"; third.nextIds = {"target", "missing"};
+    std::vector<PipelineStep> steps{first, target, third};
+    if (!AppSavePipelineData(dir, steps)) return fail("fixture save");
+    auto result = AppDeletePipelineStep(dir, steps, 1);
+    if (!result.ok || steps.size() != 2 || !steps[0].nextIds.empty() || steps[1].nextIds != std::vector<std::string>{"missing"})
+        return fail("link cleanup");
+    const auto disk = LoadPipelineData(dir);
+    const auto diskFirst = std::find_if(disk.begin(), disk.end(), [](const auto& item) { return item.id == "first"; });
+    const auto diskThird = std::find_if(disk.begin(), disk.end(), [](const auto& item) { return item.id == "third"; });
+    const auto diskTarget = std::find_if(disk.begin(), disk.end(), [](const auto& item) { return item.id == "target"; });
+    if (diskFirst == disk.end() || diskThird == disk.end() || diskTarget != disk.end() || !diskFirst->nextIds.empty() || diskThird->nextIds != std::vector<std::string>{"missing"})
+        return fail("cleanup persistence");
+
+    steps = {first, target, third};
+    if (!AppSavePipelineData(dir, steps)) return fail("rollback fixture save");
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    result = AppDeletePipelineStep(dir, steps, 1);
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (result.ok || steps.size() != 3 || steps[0].nextIds != first.nextIds || steps[2].nextIds != third.nextIds)
+        return fail("memory rollback");
+    const auto rollbackDisk = LoadPipelineData(dir);
+    const auto rollbackFirst = std::find_if(rollbackDisk.begin(), rollbackDisk.end(), [](const auto& item) { return item.id == "first"; });
+    const auto rollbackTarget = std::find_if(rollbackDisk.begin(), rollbackDisk.end(), [](const auto& item) { return item.id == "target"; });
+    const auto rollbackThird = std::find_if(rollbackDisk.begin(), rollbackDisk.end(), [](const auto& item) { return item.id == "third"; });
+    if (rollbackFirst == rollbackDisk.end() || rollbackTarget == rollbackDisk.end() || rollbackThird == rollbackDisk.end() ||
+        rollbackFirst->nextIds != first.nextIds || rollbackThird->nextIds != third.nextIds)
+        return fail("disk rollback");
+    return true;
+}
+
 static bool TestTaskFinalizeXpRollsBackWhenAuditFails(const std::filesystem::path& dir) {
     auto fail = [](const char* reason) {
         std::cerr << "taskFinalizeRollback: " << reason << "\n";
@@ -1490,6 +1528,7 @@ int main() {
     const bool okWorkspaceRecovery = TestTasksPipelineRecovery(tmp / "workspace_recovery");
     const bool okWorkspaceSaveRollback = TestWorkspaceMutationsRollBackWhenSaveFails(tmp / "workspace_save_rollback");
     const bool okProjectDeleteRollback = TestProjectDeleteDetachesAndRollsBack(tmp / "project_delete_rollback");
+    const bool okPipelineDeleteRollback = TestPipelineDeleteCleansLinksAndRollsBack(tmp / "pipeline_delete_rollback");
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
@@ -1535,7 +1574,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1549,6 +1588,7 @@ int main() {
               << " workspaceRecovery=" << okWorkspaceRecovery
               << " workspaceSaveRollback=" << okWorkspaceSaveRollback
               << " projectDeleteRollback=" << okProjectDeleteRollback
+              << " pipelineDeleteRollback=" << okPipelineDeleteRollback
               << " taskText=" << okTaskText
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract

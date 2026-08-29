@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 18**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 19**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,13 +29,13 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 18 | Remaining |
+| Area | Qt stage 19 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
-| Pipeline | Stages, details, admin creation/editing including next-step links; current names in task rows and guided next-step transitions | Deletion and reordering |
+| Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages including inbound-link cleanup; current names in task rows and guided next-step transitions | Reordering |
 | Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
 | Reports | Admin project metrics from existing report service | CSV export and full report UI |
 | Audit | Admin task and profile-access audit view | Other application logs |
@@ -193,3 +193,11 @@ Administrators can delete the selected project after a warning that names it and
 Project and task collections are restored in memory and on disk if either primary save or the audit append fails. The pre-operation audit cache and file bytes are restored as well; an incomplete rollback reports the stronger recovery error instead of claiming success. This guards checked write failures, not power loss between the cross-file writes. External writers remain unsupported.
 
 Core tests cover successful detach persistence and forced audit failure with project/task/audit rollback. The Qt smoke test drives both cancellation and confirmation, verifies the task becomes projectless, and captures the real warning on Windows.
+
+### Pipeline-stage deletion (stage 19)
+
+Administrators can delete a uniquely identified unused pipeline stage after confirmation. Stages referenced by tasks are blocked until those tasks are moved or detached; duplicate IDs are also blocked rather than guessed. Removing a stage deletes every inbound occurrence of its ID from other stages' `nextIds`, while unrelated and missing legacy links remain unchanged.
+
+The complete candidate pipeline is persisted once through the existing atomic recovery writer. A failed primary replacement restores the in-memory collection and leaves the previous pipeline on disk. No task file is rewritten because linked stages cannot enter this operation. A pending Qt recovery journal blocks deletion.
+
+Core tests cover duplicate inbound-link cleanup, preservation of unrelated links and forced primary-write rollback. Qt tests drive cancellation, successful deletion and rejection of a task-linked stage. The confirmation dialog is captured and inspected on native Windows.

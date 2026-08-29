@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; no cloud sync from the migration client; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 17 pushed as 137ddef. Stage 18 project deletion with checked rollback implemented; full verification passed. Stable branches unchanged.
+- State: Stage 18 pushed as 624e072. Stage 19 checked pipeline-stage deletion implemented; full verification passed. Stable branches unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 18 ready for commit/push: confirmed administrator project deletion, linked-task detachment and rollback of projects/tasks/audit on checked write failure. smoke_qt/smoke_core/native passed, warning inspected, package startup without Qt PATH exited 0 with empty stderr.
+- Now: Stage 19 ready for commit/push: unused pipeline-stage deletion, task/invalid-ID blocking, inbound nextIds cleanup and atomic primary-write rollback. smoke_qt/smoke_core/native passed, warning inspected, package startup without Qt PATH exits 0.
 - Next: Continue Qt migration: remaining destructive operations with rollback, settings, cloud, vault and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): src/AppTaskProjectService.cpp, qt/QtWindow.*, tests/smoke_core.cpp, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 18 tests cover successful detach, cancellation and project/task/audit rollback on forced audit failure.
+- Working set (files/ids/commands): src/AppPipelineService.cpp, qt/QtWindow.cpp, tests/smoke_core.cpp, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 19 tests cover cancellation, linked-stage blocking, inbound-link cleanup and atomic rollback.
 
 ---
 # Historical ledger (superseded by the current work above)

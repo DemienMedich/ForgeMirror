@@ -1025,7 +1025,10 @@ int main(int argc, char** argv) {
     PipelineStep stage;
     stage.id = "custom-ui-stage";
     stage.title = "Old stage";
-    workspace.data.pipelineSteps = {stage};
+    PipelineStep unusedStage;
+    unusedStage.id = "unused-ui-stage";
+    unusedStage.title = "Unused stage";
+    workspace.data.pipelineSteps = {stage, unusedStage};
     if (!AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps)) return fail("Pipeline fixture failed");
     task.pipelineStepId = stage.id;
     task.pipelineStep = stage.title;
@@ -1128,6 +1131,44 @@ int main(int argc, char** argv) {
     });
     window.findChild<QPushButton*>("advanceStage")->click();
     if (!terminalChecked) return fail("Terminal stage transition should be unavailable");
+    nav->setCurrentRow(4);
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(unusedStage.id)) table->selectRow(i);
+    auto* deletePipeline = window.findChild<QPushButton*>("deleteEntry");
+    if (!deletePipeline || !deletePipeline->isVisible() || !deletePipeline->isEnabled()) return fail("Pipeline delete action unavailable");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) confirm->button(QMessageBox::No)->click();
+    });
+    deletePipeline->click();
+    auto pipelineDisk = LoadPipelineData(workspace.directory);
+    if (std::none_of(pipelineDisk.begin(), pipelineDisk.end(), [&](const auto& item) { return item.id == unusedStage.id; }))
+        return fail("Pipeline delete cancellation failed");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) confirm->grab().save(artifacts + "/pipeline-delete.png");
+            confirm->button(QMessageBox::Yes)->click();
+        }
+    });
+    deletePipeline->click();
+    const auto remainingStages = LoadPipelineData(workspace.directory);
+    if (std::any_of(remainingStages.begin(), remainingStages.end(), [&](const auto& item) { return item.id == unusedStage.id; }) ||
+        std::none_of(remainingStages.begin(), remainingStages.end(), [&](const auto& item) { return item.id == stage.id; }) ||
+        LoadTasksData(workspace.directory).front().pipelineStepId != stage.id)
+        return fail("Pipeline delete persistence failed");
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(stage.id)) table->selectRow(i);
+    bool linkedStageBlocked = false;
+    QTimer::singleShot(0, [&] {
+        if (auto* warning = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            linkedStageBlocked = warning->text().contains(QString::fromUtf8("используется задачами"));
+            warning->accept();
+        }
+    });
+    deletePipeline->click();
+    pipelineDisk = LoadPipelineData(workspace.directory);
+    if (!linkedStageBlocked || std::none_of(pipelineDisk.begin(), pipelineDisk.end(), [&](const auto& item) { return item.id == stage.id; }))
+        return fail("Linked pipeline stage was not blocked");
     auto saveForm = [](const QString& title) {
         QTimer::singleShot(0, [title] {
             auto* dialog = QApplication::activeModalWidget();
