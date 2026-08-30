@@ -1,12 +1,7 @@
 #define SourceRoot ".."
 
 #ifndef AppVersion
-  // Fallback to current app version (kept in CMakeLists.txt). Override via /DAppVersion=... when building.
-#define AppVersion "0.5.54"
-#endif
-
-#if AppVersion == "0.0.0"
-  #pragma message "AppVersion is 0.0.0. Run installer/build-installer.ps1 (auto-reads APP_VERSION from CMakeLists.txt) or pass /DAppVersion=<version> to ISCC."
+  #error AppVersion must be read from VERSION by installer/build-installer.ps1
 #endif
 
 #ifndef OutputDir
@@ -41,7 +36,7 @@ Name: "desktopicon"; Description: "Create a desktop icon"; Flags: unchecked
 [Files]
 Source: "{#SourceRoot}\build-gui\Release\ForgeMirrorGui.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\build-gui\Release\glfw3.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceRoot}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "meta\shortcuts.json"
+Source: "{#SourceRoot}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "achievements\*.json,meta\cloud.ini,meta\gui-layout.ini,meta\ui.ini,meta\shortcuts.json"
 Source: "{#SourceRoot}\gui\fonts\*"; DestDir: "{app}\gui\fonts"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

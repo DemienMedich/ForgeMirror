@@ -3,10 +3,10 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; no cloud sync from the migration client; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 34 pushed as 995e492. Stage 35 adds profile rename through the checked snapshot editor while preserving stable IDs and history; full verification passed. Stable branches unchanged.
+- State: Stage 35 pushed as d942717. Stage 36 establishes canonical version 0.6.1 and a verified per-user Qt Setup.exe with upgrade/uninstall coverage. Stable branches unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 35 ready for commit/push: the profile editor validates and saves a display-name change together with profession/spirit/block state while preserving ID, XP, wallet, credentials, skills and task links. Full build, smoke_qt/smoke_core, native visual QA and packaged startup without Qt on PATH passed with empty stderr.
-- Next: Add crash-safe cross-file transactions before exposing profession/skill/profile deletion or bulk rules recalculation; then cloud, remaining settings and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 36 ready for commit/push: VERSION drives application, EXE and installer metadata plus artifact naming. ForgeMirrorSetup_0.6.1.exe passed clean install, real 0.6.0-to-0.6.1 in-place update, system-only-PATH startup, registry validation and uninstall while preserving user data.
+- Next: Add crash-safe bulk rules recalculation; then cloud, remaining settings and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
 - Working set (files/ids/commands): qt/QtDisplaySettings.*, qt/QtWindow.*, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 22 tests cover persistence/reload, live scale/density, unknown-line preservation and Windows sharing failure.
 

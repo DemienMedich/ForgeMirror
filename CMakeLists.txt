@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.15)
 project(ForgeMirror LANGUAGES C CXX)
 
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" APP_VERSION)
+string(STRIP "${APP_VERSION}" APP_VERSION)
+if(NOT APP_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "VERSION must contain SemVer MAJOR.MINOR.PATCH, got: ${APP_VERSION}")
+endif()
+string(REPLACE "." ";" APP_VERSION_PARTS "${APP_VERSION}")
+list(GET APP_VERSION_PARTS 0 APP_VERSION_MAJOR)
+list(GET APP_VERSION_PARTS 1 APP_VERSION_MINOR)
+list(GET APP_VERSION_PARTS 2 APP_VERSION_PATCH)
+configure_file(qt/ForgeMirrorVersion.rc.in "${CMAKE_CURRENT_BINARY_DIR}/ForgeMirrorVersion.rc" @ONLY)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -38,9 +49,10 @@ add_executable(ForgeMirror
 
 target_include_directories(ForgeMirror PRIVATE include)
 
-# Версия приложения
-set(APP_VERSION "0.5.54")
 target_compile_definitions(ForgeMirror PRIVATE APP_VERSION="${APP_VERSION}")
+if(WIN32)
+    target_sources(ForgeMirror PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/ForgeMirrorVersion.rc")
+endif()
 set_target_properties(ForgeMirror PROPERTIES OUTPUT_NAME "ForgeMirror")
 
 # Для Windows корректно установить кодировку консоли при необходимости вручную в приложении
@@ -67,8 +79,9 @@ if(BUILD_QT_GUI)
     endif()
     target_compile_definitions(ForgeMirrorQtUi PRIVATE APP_VERSION="${APP_VERSION}")
     add_executable(ForgeMirrorQt WIN32 qt/main.cpp)
+    target_compile_definitions(ForgeMirrorQt PRIVATE APP_VERSION="${APP_VERSION}")
     if(WIN32)
-        target_sources(ForgeMirrorQt PRIVATE gui/ForgeMirrorGui.rc)
+        target_sources(ForgeMirrorQt PRIVATE gui/ForgeMirrorGui.rc "${CMAKE_CURRENT_BINARY_DIR}/ForgeMirrorVersion.rc")
     endif()
     target_link_libraries(ForgeMirrorQt PRIVATE ForgeMirrorQtUi)
     enable_testing()
@@ -119,6 +132,9 @@ if(BUILD_IMGUI_GUI)
         src/CloudSync.cpp
         src/GameplayConfig.cpp
     )
+    if(WIN32)
+        target_sources(ForgeMirrorGui PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/ForgeMirrorVersion.rc")
+    endif()
 
     target_sources(ForgeMirrorGui PRIVATE ${IMGUI_SOURCES})
     target_include_directories(ForgeMirrorGui PRIVATE include libs/ufbx ${IMGUI_DIR} ${IMGUI_DIR}/backends)
@@ -159,7 +175,7 @@ if(BUILD_CORE_TESTS)
         src/AppWorkspaceDataService.cpp
     )
     target_include_directories(smoke_core PRIVATE include)
-    target_compile_definitions(smoke_core PRIVATE APP_VERSION="0.0.0")
+    target_compile_definitions(smoke_core PRIVATE APP_VERSION="${APP_VERSION}")
 endif()
 
 

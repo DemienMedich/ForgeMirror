@@ -13,10 +13,12 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName("ForgeMirrorQt");
     QCoreApplication::setOrganizationName("Pharos");
+    QCoreApplication::setApplicationVersion(APP_VERSION);
     ApplyQtTheme(app);
     QCommandLineParser parser;
     parser.setApplicationDescription(QString::fromUtf8("ForgeMirror Qt — изолированный клиент переноса"));
     parser.addHelpOption();
+    parser.addVersionOption();
     parser.addOption({"storage-dir", "Explicit test workspace (never use the production directory).", "path"});
     parser.addOption({"smoke-test", "Open the real window and exit after one second."});
     parser.addOption({"screenshot", "Save the Qt window as PNG before smoke-test exit.", "path"});
