@@ -1335,6 +1335,14 @@ int main(int argc, char** argv) {
     QFile uiReport(uiReportPath);
     if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
         return fail("Report export UI failed");
+    auto* reportView = window.findChild<QComboBox*>("reportView");
+    if (!reportView || reportView->count() != 2) return fail("Report view selector unavailable");
+    reportView->setCurrentIndex(1);
+    bool assigneeVisible = table->columnCount() == 8;
+    for (int i = 0; i < table->rowCount(); ++i)
+        assigneeVisible = assigneeVisible && table->item(i, 0)->text() == QString::fromUtf8("Тестовый профиль") &&
+            table->item(i, 1)->text() == QString::fromStdString(createdProfile->id);
+    if (!assigneeVisible || table->rowCount() != 1) return fail("Assignee report view failed");
     const auto reportArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!reportArtifacts.isEmpty()) window.grab().save(reportArtifacts + "/statistics-export.png");
     nav->setCurrentRow(9);

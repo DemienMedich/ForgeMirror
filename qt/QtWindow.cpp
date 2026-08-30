@@ -188,6 +188,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     statusFilter_->addItems({QString::fromUtf8("Все статусы"), QString::fromUtf8("Новая"),
                             QString::fromUtf8("В работе"), QString::fromUtf8("Выполнена")});
     filters->addWidget(statusFilter_);
+    reportView_ = new QComboBox;
+    reportView_->setObjectName("reportView");
+    reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
+    filters->addWidget(reportView_);
     content->addLayout(filters);
     table_ = new QTableWidget;
     table_->setObjectName("records");
@@ -262,6 +266,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
+    connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
     connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
@@ -517,6 +522,7 @@ void QtWindow::render() {
     pomodoro_->setVisible(timerPage);
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
+    reportView_->setVisible(page == Statistics);
     primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
@@ -595,12 +601,26 @@ void QtWindow::render() {
         headers({QString::fromUtf8("Профессия"), QString::fromUtf8("Описание")});
         for (const auto& item : data.professions) row(item.id, {q(item.name), q(item.description)});
     } else if (page == Statistics) {
-        headers({QString::fromUtf8("Проект"), QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")});
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
-        for (const auto& item : report.projects) row(item.id, {q(item.name), QString::number(item.activeTasks),
-            QString::number(item.doneTasks), QString::number(item.overdueTasks), QString::number(item.xpPendingTasks)});
-        summary_->setText(QString::fromUtf8("Всего задач: %1  ·  всего проектов: %2  ·  выдано XP: %3")
-            .arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp));
+        if (reportView_->currentIndex() == 0) {
+            headers({QString::fromUtf8("Проект"), QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")});
+            for (const auto& item : report.projects) row(item.id, {q(item.name), QString::number(item.activeTasks),
+                QString::number(item.doneTasks), QString::number(item.overdueTasks), QString::number(item.xpPendingTasks)});
+            summary_->setText(QString::fromUtf8("Всего задач: %1  ·  всего проектов: %2  ·  выдано XP: %3")
+                .arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp));
+        } else {
+            headers({QString::fromUtf8("Сотрудник"), "ID", QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"),
+                QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")});
+            for (const auto& item : report.assignees) {
+                const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
+                    [&](const auto& value) { return value.id == item.profileId; });
+                row(item.profileId, {profile == workspace_.profiles.end() ? q(item.profileId) : q(profile->name), q(item.profileId),
+                    QString::number(item.activeTasks), QString::number(item.doneTasks), QString::number(item.overdueTasks),
+                    QString::number(item.xpPendingTasks), QString::number(item.totalGlobalXp), QString::number(item.totalSkillXp)});
+            }
+            summary_->setText(QString::fromUtf8("Сотрудников в задачах: %1  ·  без исполнителя: %2  ·  выдано XP: %3")
+                .arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp));
+        }
     } else if (page == Audit) {
         headers({QString::fromUtf8("Источник"), QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Объект"),
             QString::fromUtf8("Поле"), QString::fromUtf8("Было"), QString::fromUtf8("Стало")});

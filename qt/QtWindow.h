@@ -41,6 +41,7 @@ private:
     QListWidget* navigation_;
     QLineEdit* search_;
     QComboBox* statusFilter_;
+    QComboBox* reportView_;
     QLabel* summary_;
     QLabel* title_;
     QLabel* mode_;

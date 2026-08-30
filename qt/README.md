@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 30**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 31**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 30 | Remaining |
+| Area | Qt stage 31 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -37,7 +37,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
 | Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
-| Reports | Admin project metrics and atomic UTF-8 CSV export from the existing report service | Assignee names, date ranges and richer report UI |
+| Reports | Admin project/employee metrics with resolved profile names, search and atomic UTF-8 CSV export | Date ranges, charts and richer drill-down |
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
@@ -243,6 +243,12 @@ Tests cover a forced audit failure after profiles and tasks were already written
 The administrator Statistics page now exposes **Экспорт CSV**. It builds a fresh local `TeamValueReport` at click time and writes the existing summary, project and assignee sections. The file uses UTF-8 with BOM so Cyrillic project names open predictably in common Windows spreadsheet tools. Cloud services are not invoked.
 
 The save dialog is an explicit compact Qt dialog with a timestamped `.csv` suggestion and automatic extension. Output is staged through `QSaveFile` with direct-write fallback disabled, so a failed replacement leaves an existing destination intact. Empty paths and directories are rejected. Tests cover BOM/Cyrillic/comma quoting, invalid targets, a real Windows sharing lock, and the actual Statistics-page dialog/action. Native QA captures the report table with its export control.
+
+### Employee report view (stage 31)
+
+Statistics now switches in place between **По проектам** and **По сотрудникам** without adding another navigation page. The employee table shows the current profile name plus stable ID, active/completed/overdue/pending-XP counts and both global and skill XP. Missing historical profile IDs remain visible as their ID rather than disappearing. The existing section search filters names and IDs in either view.
+
+The summary reports the number of employees represented in tasks, unassigned work and issued global XP. The selector is visible only on Statistics and preserves the compact single-row filter layout. Tests use the real report service and profile fixture, switch the actual combo, verify all eight columns and resolved name/ID, then capture the native employee view.
 
 ### Pipeline-stage deletion (stage 19)
 
