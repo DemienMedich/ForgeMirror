@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 25**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 26**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,10 +29,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 25 | Remaining |
+| Area | Qt stage 26 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
-| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
+| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation with project/category/skills/assignees/deadline/penalty/stage; restart-safe ordinary status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -207,6 +207,14 @@ Stage 24 promotes project deletion from ordinary rollback to restart-safe recove
 Task creation now uses the same three-file metadata journal as task editing: tasks, task audit and the task last-good backup are snapshotted before the first write. A failed task save or audit append restores disk bytes and the in-memory task/audit collections. If the process stops after saving any subset but before the journal commit rename, the next Qt startup or refresh restores the previous snapshot.
 
 The existing task form, validation and domain mutation remain unchanged; this stage only closes their persistence boundary. Tests inject a real post-task audit failure, require byte-identical restoration and confirm no pending journal remains after a successful rollback. The full UI smoke continues to create a task through the actual modal, so the production entry point is covered rather than merely testing a helper.
+
+### Crash-safe task status changes (stage 26)
+
+Ordinary task transitions that do not open the XP completion dialog now share the same metadata recovery boundary. This covers New to In progress, In progress to New, reopening a completed task to In progress, and closing a task whose XP was already awarded. The workflow service still owns transition validation; the Qt wrapper only makes its task save and audit append one recoverable operation.
+
+The status picker is now an explicit localized Qt dialog with `Применить` and `Отмена`, avoiding platform-default English button text while retaining the compact single-choice layout.
+
+Before mutation, the current tasks, audit and last-good task backup are journaled. Audit failure after a successful task save restores exact file bytes and both in-memory collections. An interrupted uncommitted transition is recovered at startup or refresh. Tests inject the audit failure at that exact boundary; the existing UI smoke drives a successful status selection and verifies persisted status.
 
 ### Pipeline-stage deletion (stage 19)
 

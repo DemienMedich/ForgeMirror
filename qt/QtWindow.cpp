@@ -1003,18 +1003,24 @@ void QtWindow::changeStatus() {
         states.push_back(2);
         labels << QString::fromUtf8("Выполнена — XP уже начислен");
     }
-    bool ok = false;
-    const auto selected = QInputDialog::getItem(this, QString::fromUtf8("Статус задачи"),
-        QString::fromUtf8("Новый статус:"), labels, 0, false, &ok);
-    if (!ok || labels.indexOf(selected) < 0) return;
+    QInputDialog statusDialog(this);
+    statusDialog.setWindowTitle(QString::fromUtf8("Статус задачи"));
+    statusDialog.setLabelText(QString::fromUtf8("Новый статус:"));
+    statusDialog.setComboBoxItems(labels);
+    statusDialog.setComboBoxEditable(false);
+    statusDialog.setOkButtonText(QString::fromUtf8("Применить"));
+    statusDialog.setCancelButtonText(QString::fromUtf8("Отмена"));
+    if (statusDialog.exec() != QDialog::Accepted) return;
+    const auto selected = statusDialog.textValue();
+    if (labels.indexOf(selected) < 0) return;
     const int next = states[size_t(labels.indexOf(selected))];
     if (next == 2 && found->participants.empty()) {
         ShowTaskCompletionDialog(this, workspace_, q(id), profiles_->currentData().toString());
         reload();
         return;
     }
-    AppTaskWorkflowService workflow(workspace_.directory, workspace_.data.tasks, &workspace_.data.taskAudit);
-    const auto result = workflow.UpdateStatus(id, next, "admin/qt");
+    const auto result = UpdateTaskStatusWithRecovery(workspace_.directory, workspace_.data.tasks,
+        workspace_.data.taskAudit, id, next, "admin/qt");
     if (!result.ok) message(result.errorMessage);
     else reload();
 }

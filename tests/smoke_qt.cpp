@@ -665,6 +665,13 @@ static bool TestTaskEditorTransaction() {
     if (failedCreate.ok || workspace.data.tasks.size() != 1 ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failedStatus = UpdateTaskStatusWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, original.id, 1, "test");
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failedStatus.ok || workspace.data.tasks.front().status != 0 ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     TaskEntry draft = original;
     draft.title = "Updated";
     draft.description = "Updated description";
@@ -1425,7 +1432,11 @@ int main(int argc, char** argv) {
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == "qt-smoke-task") table->selectRow(i);
     QTimer::singleShot(0, [] {
-        if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) dialog->accept();
+        if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/task-status.png");
+            dialog->accept();
+        }
     });
     window.findChild<QPushButton*>("changeStatus")->click();
     const auto persisted = LoadTasksData(workspace.directory);
