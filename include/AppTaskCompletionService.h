@@ -53,6 +53,10 @@ AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& dire
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const std::string& taskId, int newStatus, const std::string& actor);
 
+AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::string& taskId, const std::string& actor);
+
 AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const std::vector<PipelineStep>& steps, const std::string& taskId,

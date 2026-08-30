@@ -313,6 +313,42 @@ AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& dire
     return result;
 }
 
+AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::string& taskId, const std::string& actor) {
+    AppMutationResult result;
+    const auto matches = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
+    if (taskId.empty() || matches != 1) {
+        result.errorMessage = u8"Задача не найдена или её ID неоднозначен.";
+        return result;
+    }
+    const auto selected = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
+    if (!selected->participants.empty()) {
+        result.errorMessage = u8"По задаче уже начислен XP. Безопасный откат профилей ещё не перенесён в Qt.";
+        return result;
+    }
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(directory, {}, true);
+        prepared = true;
+        result = AppDeleteTasksByIds(directory, tasks, {taskId}, actor, &audit);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить задачу." : result.errorMessage);
+        finishJournal(directory);
+    } catch (const std::exception& error) {
+        result = {};
+        result.errorMessage = error.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
+        }
+    }
+    return result;
+}
+
 TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<TaskEntry>& tasks,
                                             const TaskCompletionInput& input) {
     TaskCompletionPreview result;

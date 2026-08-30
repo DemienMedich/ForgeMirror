@@ -672,6 +672,17 @@ static bool TestTaskEditorTransaction() {
     if (failedStatus.ok || workspace.data.tasks.front().status != 0 ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failedDelete = DeleteTaskWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, original.id, "test");
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failedDelete.ok || workspace.data.tasks.size() != 1 || workspace.data.tasks.front().id != original.id ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
+    auto duplicateTasks = std::vector<TaskEntry>{original, original};
+    auto duplicateAudit = workspace.data.taskAudit;
+    if (DeleteTaskWithRecovery(workspace.directory, duplicateTasks, duplicateAudit, original.id, "test").ok ||
+        duplicateTasks.size() != 2 || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     TaskEntry draft = original;
     draft.title = "Updated";
     draft.description = "Updated description";
@@ -723,6 +734,10 @@ static bool TestTaskEditorTransaction() {
     awarded.status = 2;
     awarded.score = 9;
     if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    const auto blockedDelete = DeleteTaskWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, awarded.id, "test");
+    if (blockedDelete.ok || workspace.data.tasks.size() != 1 ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     draft = awarded;
     draft.category = 2;
     if (edit().ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
@@ -1442,6 +1457,30 @@ int main(int argc, char** argv) {
     const auto persisted = LoadTasksData(workspace.directory);
     auto changed = std::find_if(persisted.begin(), persisted.end(), [](const auto& t) { return t.id == "qt-smoke-task"; });
     if (changed == persisted.end() || changed->status != 1) return fail("Status form did not persist");
+    QString deletableTaskId;
+    for (int i = 0; i < table->rowCount(); ++i) {
+        const auto candidate = table->item(i, 0)->data(Qt::UserRole).toString();
+        if (candidate != "qt-smoke-task") { deletableTaskId = candidate; table->selectRow(i); break; }
+    }
+    auto* deleteTask = window.findChild<QPushButton*>("deleteEntry");
+    if (deletableTaskId.isEmpty() || !deleteTask || !deleteTask->isVisible() || !deleteTask->isEnabled())
+        return fail("Task delete action unavailable");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) confirm->button(QMessageBox::No)->click();
+    });
+    deleteTask->click();
+    if (LoadTasksData(workspace.directory).size() != 2) return fail("Task delete cancellation failed");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) confirm->grab().save(artifacts + "/task-delete.png");
+            confirm->button(QMessageBox::Yes)->click();
+        }
+    });
+    deleteTask->click();
+    if (LoadTasksData(workspace.directory).size() != 1 ||
+        std::any_of(workspace.data.tasks.begin(), workspace.data.tasks.end(), [&](const auto& item) { return QString::fromStdString(item.id) == deletableTaskId; }))
+        return fail("Task delete persistence failed");
     login->trigger();
     if (primary->isVisible() || !nav->item(2)->isHidden()) return fail("Admin logout did not revoke controls");
     window.activateWindow();

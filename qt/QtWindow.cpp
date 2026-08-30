@@ -516,7 +516,7 @@ void QtWindow::render() {
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
-    deleteEntry_->setVisible(admin_ && (page == Projects || page == Pipeline));
+    deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Pipeline));
     moveUp_->setVisible(admin_ && page == Pipeline);
     moveDown_->setVisible(admin_ && page == Pipeline);
     profileMetrics_->setVisible(page == ProfilePage);
@@ -892,11 +892,36 @@ void QtWindow::createEntry(bool edit) {
 void QtWindow::deleteEntry() {
     if (!requireAdmin()) return;
     const int page = navigation_->currentRow();
-    if (page != Projects && page != Pipeline) return;
+    if (page != Tasks && page != Projects && page != Pipeline) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;
     }
     const auto id = u(selectedId());
+    if (page == Tasks) {
+        const auto matches = std::count_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+            [&](const auto& task) { return task.id == id; });
+        const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (id.empty() || matches != 1 || task == workspace_.data.tasks.end()) {
+            message(u8"Задача с неоднозначным ID не может быть удалена автоматически."); return;
+        }
+        if (!task->participants.empty()) {
+            message(u8"По задаче уже начислен XP. Удаление станет доступно после переноса транзакционного отката профилей."); return;
+        }
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить задачу"),
+            QString::fromUtf8("Удалить задачу «%1»?\nЭто действие будет записано в аудит.").arg(q(AppTaskDisplayTitle(*task))),
+            QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        const auto result = DeleteTaskWithRecovery(workspace_.directory, workspace_.data.tasks,
+            workspace_.data.taskAudit, id, "admin/qt");
+        if (!result.ok) { message(result.errorMessage); return; }
+        reload();
+        statusBar()->showMessage(QString::fromUtf8("Задача удалена"), 4000);
+        return;
+    }
     if (page == Pipeline) {
         const auto duplicateIds = std::count_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
             [&](const auto& item) { return item.id == id; });
