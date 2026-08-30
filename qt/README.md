@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 36**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.1` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
+This is **stage 37**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.2` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.1.exe`. Version `0.6.1` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.1.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.2.exe`. Version `0.6.2` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.2.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 36 | Remaining |
+| Area | Qt stage 37 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Standalone XP entry and other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -42,7 +42,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
 | Reports | Admin project/employee metrics with resolved profile names, search and atomic UTF-8 CSV export | Date ranges, charts and richer drill-down |
 | Audit | Admin task and profile-access audit view | Other application logs |
-| Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
+| Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
 | Other | Separate workspace, refresh, contextual create/edit/delete/details shortcuts, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, 3D, remaining settings, migration installer |
 
@@ -57,6 +57,12 @@ Editing changes display name, profession, spirit and blocked state in a single p
 The profile editor can change the visible name while keeping the file name and profile ID unchanged. Task assignees, XP rollback participants, audit entries and stored credentials therefore retain their existing identity links. Name, profession, spirit and blocked state are persisted in one checked profile snapshot rather than through separate partial writes.
 
 Both Qt and the domain snapshot service reject blank names and ASCII control characters; surrounding whitespace is normalized. Tests cover validation, an injected profile-write failure, successful Cyrillic rename, unchanged ID/XP/wallet/login/password/skills and refreshed manager display. Native QA captures the actual editor.
+
+### Transactional rules recalculation (stage 37)
+
+The Rules page now offers an explicit administrator action that previews the number of active and archived profiles and defaults to Cancel. Recalculation preserves each profile's accumulated total XP, synchronizes its skill catalog, and derives level and progress from the currently saved curve. Archived profiles remain archived.
+
+Every target ID and path is validated before mutation. Manifest `FORGEMIRROR_QT_RULES_REAPPLY_1` snapshots each active INI and, for archived profiles, both the archive location and the temporary active location used by `FileStorage`. Only then are all profiles loaded before profile content is rewritten. A failed save restores byte-identical files immediately; an interruption before commit is recovered on the next startup or refresh. The manifest accepts profile INIs only, rejects duplicate IDs and links, and cannot include task or configuration files. Tests cover partial-write rollback, interrupted recovery, successful active/archive commit, total-XP preservation and the real confirmation action.
 
 ### Empty archived profile deletion (stage 34)
 

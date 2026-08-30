@@ -28,6 +28,7 @@ private:
     void movePipeline(int delta);
     void changeStatus();
     void exportReport();
+    void reapplyRules();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -62,4 +63,5 @@ private:
     QPushButton* achievements_;
     QPushButton* removeSpirit_;
     QPushButton* exportReport_;
+    QPushButton* reapplyRules_;
 };

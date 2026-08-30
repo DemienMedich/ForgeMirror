@@ -17,6 +17,7 @@
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
 #include "AppProfileDeletionService.h"
+#include "AppProfileMutationService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -216,6 +217,56 @@ static bool TestTaskCompletion() {
     catch (const std::exception&) { rejectedJournal = true; }
     if (!rejectedJournal || bytes(a->id + ".ini") != beforeBadJournal || !std::filesystem::exists(journal))
         return fail("invalid recovery journal was not rejected safely");
+    return true;
+}
+
+static bool TestRulesReapplyRecovery() {
+    auto fail = [](const char* text) { std::cerr << "rulesReapply: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    Profile first("Active"), second("Archived");
+    first.set_total_xp(6000); second.set_total_xp(3200);
+    const auto active = workspace.storage->create_profile(first);
+    const auto archived = workspace.storage->create_profile(second);
+    if (!active || !archived || !workspace.storage->set_archived(archived->id, true)) return fail("fixtures");
+    auto read = [&](const std::string& path) {
+        QFile file(temp.path() + "/" + QString::fromStdString(path));
+        if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+        return file.readAll();
+    };
+    const auto activePath = active->id + ".ini";
+    const auto archivedPath = "archive/" + archived->id + ".ini";
+    const auto activeBefore = read(activePath), archivedBefore = read(archivedPath);
+    FailingProfileStorage failing(*workspace.storage);
+    AppContext context{workspace.directory, failing, workspace.catalog};
+    GameplayConfig changed = GetGameplayConfig();
+    changed.levelBaseXp = 300; changed.levelLinearXp = 20; changed.levelQuadraticXp = 2;
+    SetGameplayConfig(changed);
+    failing.failAt = 2;
+    const auto rejected = ReapplyRulesWithRecovery(context, active->id);
+    if (rejected.ok || read(activePath) != activeBefore || read(archivedPath) != archivedBefore ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("partial-write rollback");
+
+    PrepareRulesReapplyRecovery(workspace.directory, {{active->id, false}, {archived->id, true}});
+    { std::ofstream corrupt(workspace.directory / activePath, std::ios::binary | std::ios::trunc); corrupt << "interrupted"; }
+    workspace.reload();
+    SetGameplayConfig(changed);
+    if (read(activePath) != activeBefore || read(archivedPath) != archivedBefore) return fail("restart recovery");
+
+    failing.writes = 0; failing.failAt = 0;
+    const auto applied = ReapplyRulesWithRecovery(context, active->id);
+    if (!applied.ok || applied.affectedProfiles != 2 || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) {
+        std::cerr << "rulesReapply result: " << applied.errorMessage << " affected=" << applied.affectedProfiles << '\n';
+        return fail("commit");
+    }
+    if (!failing.set_active_profile(active->id)) return fail("active selection");
+    const auto afterActive = failing.load_profile();
+    if (!afterActive || afterActive->total_xp() != 6000 || afterActive->overall_level() == first.overall_level())
+        return fail("active XP preservation");
+    if (!failing.set_archived(archived->id, false) || !failing.set_active_profile(archived->id)) return fail("archived selection");
+    const auto afterArchived = failing.load_profile();
+    if (!failing.set_archived(archived->id, true) || !afterArchived || afterArchived->total_xp() != 3200 || afterArchived->overall_level() == second.overall_level())
+        return fail("archived XP preservation");
     return true;
 }
 
@@ -1350,6 +1401,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestRulesReapplyRecovery()) return 1;
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1536,6 +1588,20 @@ int main(int argc, char** argv) {
     for (int i = 0; i < table->rowCount(); ++i)
         rulesValueVisible |= table->item(i, 0)->text() == QString::fromUtf8("Базовый XP уровня") && table->item(i, 1)->text() == "2468";
     if (!rulesValueVisible) return fail("Rules page did not refresh");
+    auto* reapplyRules = window.findChild<QPushButton*>("reapplyRules");
+    if (!reapplyRules || !reapplyRules->isVisible() || !reapplyRules->isEnabled()) return fail("Rules reapply action unavailable");
+    QTimer::singleShot(0, [] {
+        auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if (confirm) {
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) confirm->grab().save(artifacts + "/rules-reapply-confirm.png");
+            confirm->button(QMessageBox::Yes)->click();
+        }
+    });
+    reapplyRules->click();
+    if (std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Профили пересчитаны")))
+        return fail("Rules reapply UI failed");
     const auto rulesArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!rulesArtifacts.isEmpty()) window.grab().save(rulesArtifacts + "/rules-page.png");
     nav->setCurrentRow(7);

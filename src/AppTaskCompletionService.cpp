@@ -140,7 +140,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5) ||
           (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002) ||
           (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
-          (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3)))
+          (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
+          (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
         if (!(manifest >> std::quoted(name) >> exists)) throw std::runtime_error(u8"Неполный журнал XP.");
@@ -154,6 +155,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) ||
             (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
+        if (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && !profileFile)
+            throw std::runtime_error(u8"Журнал пересчёта правил содержит посторонний файл.");
         checkPath(root, name);
         checkPath(pending, name);
         if (exists && !std::filesystem::is_regular_file(pending / name)) throw std::runtime_error(u8"Резервный файл XP отсутствует.");
@@ -163,6 +166,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     const bool professionTransaction = version == "FORGEMIRROR_QT_PROFESSION_DELETE_1";
     const bool skillTransaction = version == "FORGEMIRROR_QT_SKILL_DELETE_1";
     const bool profileDeleteTransaction = version == "FORGEMIRROR_QT_PROFILE_DELETE_1";
+    const bool rulesReapplyTransaction = version == "FORGEMIRROR_QT_RULES_REAPPLY_1";
     bool profileDeleteComplete = false;
     if (profileDeleteTransaction) {
         for (const auto& item : seen) if (item.size() > 4 && item.substr(item.size() - 4) == ".ini" && item.rfind("archive/", 0) != 0) {
@@ -170,7 +174,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             profileDeleteComplete = seen.count("archive/" + id + ".ini") && seen.count("achievements/" + id + ".json");
         }
     }
-    const bool commonComplete = profileDeleteTransaction ? profileDeleteComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
+    const bool commonComplete = rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
@@ -220,10 +224,56 @@ void PrepareProfileDeletionRecovery(const std::filesystem::path& directory, cons
         {profileId + ".ini", "archive/" + profileId + ".ini", "achievements/" + profileId + ".json"});
 }
 
+void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
+                                 const std::vector<std::pair<std::string, bool>>& profiles) {
+    std::vector<std::string> files;
+    std::set<std::string> uniqueIds;
+    files.reserve(profiles.size());
+    for (const auto& [id, archived] : profiles) {
+        if (!safeProfileId(id) || !uniqueIds.insert(id).second)
+            throw std::runtime_error(u8"Некорректный или повторяющийся профиль для пересчёта правил.");
+        files.push_back(id + ".ini");
+        if (archived) files.push_back("archive/" + id + ".ini");
+    }
+    if (files.empty()) throw std::runtime_error(u8"Нет профилей для пересчёта правил.");
+    prepareFileJournal(directory, "FORGEMIRROR_QT_RULES_REAPPLY_1", files);
+}
+
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory) {
     if (!std::filesystem::exists(journalPath(directory)))
         throw std::runtime_error(u8"Журнал Qt-транзакции отсутствует.");
     finishJournal(directory);
+}
+
+AppProfileMutationResult ReapplyRulesWithRecovery(AppContext& app,
+                                                  const std::string& restoreProfileId) {
+    const auto profiles = app.storage.list_profiles();
+    if (profiles.empty()) return AppReapplyRulesToProfiles(app, restoreProfileId);
+    std::vector<std::pair<std::string, bool>> journalProfiles;
+    journalProfiles.reserve(profiles.size());
+    for (const auto& profile : profiles) journalProfiles.emplace_back(profile.id, profile.archived);
+    AppProfileMutationResult result;
+    try {
+        PrepareRulesReapplyRecovery(app.storageDir, journalProfiles);
+        result = AppReapplyRulesToProfiles(app, restoreProfileId);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось пересчитать профили." : result.errorMessage);
+        CommitQtRecoveryTransaction(app.storageDir);
+    } catch (const std::exception& error) {
+        result.ok = false;
+        result.changed = false;
+        result.affectedProfiles = 0;
+        result.errorMessage = error.what();
+        try {
+            if (std::filesystem::exists(journalPath(app.storageDir))) {
+                RecoverTaskCompletion(app.storageDir);
+                result.errorMessage += u8" Изменения полностью отменены.";
+            }
+        } catch (const std::exception&) {
+            result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
+        }
+        if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
+    }
+    return result;
 }
 
 AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,

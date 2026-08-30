@@ -490,32 +490,68 @@ AppProfileMutationResult AppDeleteAchievement(IJobStorage& storage,
 AppProfileMutationResult AppReapplyRulesToProfiles(AppContext& app,
                                                    const std::string& restoreProfileId) {
     AppProfileMutationResult result;
-    auto list = app.storage.list_profiles();
+    const auto list = app.storage.list_profiles();
+    if (list.empty()) {
+        result.ok = true;
+        return result;
+    }
+    std::vector<Profile> profiles;
+    profiles.reserve(list.size());
     for (const auto& info : list) {
+        if (info.archived && !app.storage.set_archived(info.id, false)) {
+            RestoreActiveProfile(app.storage, restoreProfileId);
+            result.errorMessage = std::string(u8"Не удалось временно восстановить архивный профиль [") + info.id + u8"].";
+            return result;
+        }
         if (!app.storage.set_active_profile(info.id)) {
+            if (info.archived) app.storage.set_archived(info.id, true);
             RestoreActiveProfile(app.storage, restoreProfileId);
             result.errorMessage = std::string(u8"Не удалось активировать профиль [") + info.id + u8"].";
             return result;
         }
         auto profile = app.storage.load_profile();
         if (!profile) {
+            if (info.archived) app.storage.set_archived(info.id, true);
             RestoreActiveProfile(app.storage, restoreProfileId);
             result.errorMessage = std::string(u8"Не удалось загрузить профиль [") + info.id + u8"].";
             return result;
         }
-        SyncProfileWithCatalog(*profile, app.catalog);
-        const int level = profile->overall_level();
-        const int progress = profile->level_progress();
-        profile->set_level_and_progress(level, progress);
-        if (!app.storage.save_profile(*profile)) {
+        profiles.push_back(*profile);
+        if (info.archived && !app.storage.set_archived(info.id, true)) {
             RestoreActiveProfile(app.storage, restoreProfileId);
-            result.errorMessage = std::string(u8"Не удалось сохранить профиль [") + info.id + u8"].";
+            result.errorMessage = std::string(u8"Не удалось вернуть профиль в архив [") + info.id + u8"].";
             return result;
         }
-        result.changed = true;
-        result.affectedProfiles += 1;
     }
     RestoreActiveProfile(app.storage, restoreProfileId);
-    result.ok = true;
+    for (size_t index = 0; index < list.size(); ++index) {
+        const auto& info = list[index];
+        if (info.archived && !app.storage.set_archived(info.id, false)) {
+            result.errorMessage = std::string(u8"Не удалось временно восстановить архивный профиль [") + info.id + u8"].";
+            break;
+        }
+        if (!app.storage.set_active_profile(info.id)) {
+            if (info.archived) app.storage.set_archived(info.id, true);
+            result.errorMessage = std::string(u8"Не удалось активировать профиль [") + info.id + u8"].";
+            break;
+        }
+        auto profile = profiles[index];
+        SyncProfileWithCatalog(profile, app.catalog);
+        const int totalXp = profile.total_xp();
+        profile.set_total_xp(totalXp);
+        if (!app.storage.save_profile(profile)) {
+            if (info.archived) app.storage.set_archived(info.id, true);
+            result.errorMessage = std::string(u8"Не удалось сохранить профиль [") + info.id + u8"].";
+            break;
+        }
+        if (info.archived && !app.storage.set_archived(info.id, true)) {
+            result.errorMessage = std::string(u8"Не удалось вернуть профиль в архив [") + info.id + u8"].";
+            break;
+        }
+        ++result.affectedProfiles;
+    }
+    result.ok = result.affectedProfiles == int(list.size());
+    result.changed = result.affectedProfiles > 0;
+    RestoreActiveProfile(app.storage, restoreProfileId);
     return result;
 }

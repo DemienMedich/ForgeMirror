@@ -1,6 +1,7 @@
 #pragma once
 #include "AppContext.h"
 #include "AppTaskProjectService.h"
+#include "AppProfileMutationService.h"
 #include "Profile.h"
 
 struct TaskXpShare { std::string profileId; int percent = 0; };
@@ -43,7 +44,11 @@ void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
 void PrepareSkillDeletionRecovery(const std::filesystem::path& directory);
 void PrepareProfileDeletionRecovery(const std::filesystem::path& directory,
                                     const std::string& profileId);
+void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
+                                 const std::vector<std::pair<std::string, bool>>& profiles);
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory);
+AppProfileMutationResult ReapplyRulesWithRecovery(AppContext& app,
+                                                  const std::string& restoreProfileId);
 
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,

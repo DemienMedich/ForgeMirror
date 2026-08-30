@@ -285,6 +285,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     exportReport_->setObjectName("exportReport");
     exportReport_->setToolTip(QString::fromUtf8("Сохранить текущий локальный управленческий отчёт в UTF-8 CSV"));
     bottom->addWidget(exportReport_);
+    reapplyRules_ = new QPushButton(QString::fromUtf8("Пересчитать профили"));
+    reapplyRules_->setObjectName("reapplyRules");
+    reapplyRules_->setToolTip(QString::fromUtf8("Сохранить общий XP и пересчитать уровни всех активных и архивных профилей по текущим правилам"));
+    bottom->addWidget(reapplyRules_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -343,6 +347,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
+    connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -577,6 +582,7 @@ void QtWindow::render() {
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && page == Statistics);
+    reapplyRules_->setVisible(admin_ && page == Rules);
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -700,6 +706,25 @@ void QtWindow::render() {
         if (table_->item(index, 0)->data(Qt::UserRole).toString() == previous) { table_->selectRow(index); break; }
     }
     details();
+}
+
+void QtWindow::reapplyRules() {
+    if (!requireAdmin() || navigation_->currentRow() != Rules) return;
+    const auto profiles = workspace_.storage->list_profiles();
+    if (profiles.empty()) { message(u8"Нет профилей для пересчёта."); return; }
+    const int archived = int(std::count_if(profiles.begin(), profiles.end(), [](const auto& item) { return item.archived; }));
+    QMessageBox confirm(QMessageBox::Question, QString::fromUtf8("Пересчитать профили"),
+        QString::fromUtf8("Пересчитать уровни по текущей кривой, сохранив общий XP?\nПрофилей: %1, из них архивных: %2.")
+            .arg(int(profiles.size())).arg(archived), QMessageBox::Yes | QMessageBox::No, this);
+    confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Пересчитать"));
+    confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+    confirm.setDefaultButton(QMessageBox::No);
+    if (confirm.exec() != QMessageBox::Yes) return;
+    AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+    const auto result = ReapplyRulesWithRecovery(context, u(profiles_->currentData().toString()));
+    if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось пересчитать профили." : result.errorMessage); return; }
+    reload();
+    statusBar()->showMessage(QString::fromUtf8("Профили пересчитаны: %1 · общий XP сохранён").arg(result.affectedProfiles), 5000);
 }
 
 void QtWindow::exportReport() {
