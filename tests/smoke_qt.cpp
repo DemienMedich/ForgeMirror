@@ -16,6 +16,7 @@
 #include "AppPipelineService.h"
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
+#include "AppProfileDeletionService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -236,6 +237,7 @@ static bool TestProfileDialogs() {
     auto* failures = wrapper.get();
     workspace.storage = std::move(wrapper);
     bool checks = true;
+    QString disposableId;
     QTimer::singleShot(0, [&] {
         auto* manager = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!manager) { checks = false; return; }
@@ -247,6 +249,7 @@ static bool TestProfileDialogs() {
         });
         manager->findChild<QPushButton*>("createProfile")->click();
         checks &= delegate->list_profiles().size() == 2;
+        for (const auto& p : delegate->list_profiles()) if (p.id != created->id) disposableId = QString::fromStdString(p.id);
         auto* credentials = manager->findChild<QLineEdit*>("createdProfileCredentials");
         checks &= !credentials->text().isEmpty() && credentials->echoMode() == QLineEdit::Password;
         auto select = [&] {
@@ -301,14 +304,31 @@ static bool TestProfileDialogs() {
         manager->findChild<QPushButton*>("resetProfilePassword")->click();
         delegate->set_active_profile(created->id);
         checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "reset-password";
+        auto selectId = [&](const QString& target) {
+            for (int r = 0; r < table->rowCount(); ++r)
+                if (table->item(r, 0)->data(Qt::UserRole).toString() == target) table->selectRow(r);
+        };
+        selectId(disposableId);
+        QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+        archive->click();
+        manager->findChild<QCheckBox*>("showArchivedProfiles")->setChecked(true);
+        selectId(disposableId);
+        auto* permanentDelete = manager->findChild<QPushButton*>("deleteArchivedProfile");
+        checks &= permanentDelete && permanentDelete->isEnabled();
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) {
             QDir().mkpath(artifacts);
+            manager->grab().save(artifacts + "/profile-delete.png");
             manager->grab().save(artifacts + "/profile-manager.png");
             manager->resize(640, 440);
             QApplication::processEvents();
             manager->grab().save(artifacts + "/profile-manager-small.png");
         }
+        QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+        permanentDelete->click();
+        const auto afterPermanentDelete = delegate->list_profiles();
+        checks &= std::none_of(afterPermanentDelete.begin(), afterPermanentDelete.end(),
+            [&](const auto& p) { return QString::fromStdString(p.id) == disposableId; });
         manager->reject();
     });
     ShowProfileManager(nullptr, workspace, id);
@@ -1096,6 +1116,36 @@ static bool TestSkillDeletionRecovery() {
         !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
 }
 
+static bool TestProfileDeletionRecovery() {
+    auto fail = [](const char* text) { std::cerr << "profileDelete: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    auto created = workspace.storage->create_profile(Profile("Disposable"));
+    if (!created || !workspace.storage->set_archived(created->id, true)) return fail("fixture");
+    workspace.reload();
+    TaskEntry linked; linked.id = "profile-link"; linked.title = "Linked"; linked.assignees = {created->id};
+    const auto blocked = AppDeleteEmptyArchivedProfile(*workspace.storage, workspace.profiles, {linked}, created->id);
+    if (blocked.ok || blocked.linkedTasks != 1) return fail("task guard");
+
+    PrepareProfileDeletionRecovery(workspace.directory, created->id);
+    const auto interrupted = AppDeleteEmptyArchivedProfile(*workspace.storage, workspace.profiles, {}, created->id);
+    if (!interrupted.ok || !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("interrupted fixture");
+    workspace.reload();
+    const auto restored = std::find_if(workspace.profiles.begin(), workspace.profiles.end(),
+        [&](const auto& p) { return p.id == created->id && p.archived; });
+    if (restored == workspace.profiles.end()) return fail("restart recovery");
+
+    PrepareProfileDeletionRecovery(workspace.directory, created->id);
+    const auto removed = AppDeleteEmptyArchivedProfile(*workspace.storage, workspace.profiles, {}, created->id);
+    if (!removed.ok) { std::cerr << removed.errorMessage << '\n'; return fail("delete"); }
+    CommitQtRecoveryTransaction(workspace.directory);
+    workspace.reload();
+    return std::none_of(workspace.profiles.begin(), workspace.profiles.end(),
+               [&](const auto& p) { return p.id == created->id; }) &&
+        !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
+}
+
 static bool TestPersonalWallet() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -1304,6 +1354,7 @@ int main(int argc, char** argv) {
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     if (!TestProfessionDeletionRecovery()) { std::cerr << "Profession deletion recovery failed\n"; return 1; }
     if (!TestSkillDeletionRecovery()) { std::cerr << "Skill deletion recovery failed\n"; return 1; }
+    if (!TestProfileDeletionRecovery()) { std::cerr << "Profile deletion recovery failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }

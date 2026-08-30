@@ -34,7 +34,12 @@ bool safeBackupName(const std::string& name) {
     if (name == "meta/tasks.json" || name == "meta/projects.json" || name == "meta/task-audit.log" ||
         name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json" ||
         name == "meta/professions.txt" || name == "skills.txt") return true;
-    return name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4));
+    if (name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4))) return true;
+    if (name.rfind("archive/", 0) == 0 && name.size() > 12 && name.substr(name.size() - 4) == ".ini")
+        return safeProfileId(name.substr(8, name.size() - 12));
+    if (name.rfind("achievements/", 0) == 0 && name.size() > 18 && name.substr(name.size() - 5) == ".json")
+        return safeProfileId(name.substr(13, name.size() - 18));
+    return false;
 }
 void checkPath(const std::filesystem::path& root, const std::filesystem::path& relative);
 
@@ -134,17 +139,20 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_TASK_EDIT_1" && count == 3) ||
           (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5) ||
           (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002) ||
-          (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1)))
+          (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
+          (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
         if (!(manifest >> std::quoted(name) >> exists)) throw std::runtime_error(u8"Неполный журнал XP.");
         const bool projectFile = name == "meta/projects.json" || name == "meta/updates/projects.last-good.json";
         const bool professionFile = name == "meta/professions.txt" || name == "skills.txt";
         const bool profileFile = name.size() > 4 && name.substr(name.size() - 4) == ".ini";
+        const bool profileDeleteFile = profileFile || name.rfind("achievements/", 0) == 0;
         if (!safeBackupName(name) || (projectFile && version != "FORGEMIRROR_QT_PROJECT_DELETE_1") ||
             (professionFile && version != "FORGEMIRROR_QT_PROFESSION_DELETE_1" &&
              !(name == "skills.txt" && version == "FORGEMIRROR_QT_SKILL_DELETE_1")) ||
-            (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) || !seen.insert(name).second)
+            (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) ||
+            (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         checkPath(root, name);
         checkPath(pending, name);
@@ -154,7 +162,15 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     manifest >> std::ws;
     const bool professionTransaction = version == "FORGEMIRROR_QT_PROFESSION_DELETE_1";
     const bool skillTransaction = version == "FORGEMIRROR_QT_SKILL_DELETE_1";
-    const bool commonComplete = skillTransaction ? seen.count("skills.txt") : professionTransaction
+    const bool profileDeleteTransaction = version == "FORGEMIRROR_QT_PROFILE_DELETE_1";
+    bool profileDeleteComplete = false;
+    if (profileDeleteTransaction) {
+        for (const auto& item : seen) if (item.size() > 4 && item.substr(item.size() - 4) == ".ini" && item.rfind("archive/", 0) != 0) {
+            const auto id = item.substr(0, item.size() - 4);
+            profileDeleteComplete = seen.count("archive/" + id + ".ini") && seen.count("achievements/" + id + ".json");
+        }
+    }
+    const bool commonComplete = profileDeleteTransaction ? profileDeleteComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
@@ -196,6 +212,12 @@ void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
 
 void PrepareSkillDeletionRecovery(const std::filesystem::path& directory) {
     prepareFileJournal(directory, "FORGEMIRROR_QT_SKILL_DELETE_1", {"skills.txt"});
+}
+
+void PrepareProfileDeletionRecovery(const std::filesystem::path& directory, const std::string& profileId) {
+    if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для журнала удаления.");
+    prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_DELETE_1",
+        {profileId + ".ini", "archive/" + profileId + ".ini", "achievements/" + profileId + ".json"});
 }
 
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory) {

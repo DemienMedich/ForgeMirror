@@ -1,6 +1,8 @@
 #include "QtProfileDialogs.h"
 #include "QtWorkspace.h"
 #include "AppProfileMutationService.h"
+#include "AppProfileDeletionService.h"
+#include "AppTaskCompletionService.h"
 #include <QtWidgets>
 #include <algorithm>
 
@@ -114,7 +116,12 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     archive->setObjectName("archiveProfile");
     auto* password = new QPushButton(QString::fromUtf8("Сбросить пароль"));
     password->setObjectName("resetProfilePassword");
-    for (auto* button : {edit, archive, password}) actions->addWidget(button);
+    auto* remove = new QPushButton(QString::fromUtf8("Удалить навсегда"));
+    remove->setObjectName("deleteArchivedProfile");
+    remove->setToolTip(QString::fromUtf8("Только пустой архивный профиль без задач и прогресса"));
+    archive->setMinimumWidth(104);
+    remove->setMinimumWidth(128);
+    for (auto* button : {edit, archive, password, remove}) actions->addWidget(button);
     actions->addStretch();
     layout->addLayout(actions);
     auto* status = notice(layout);
@@ -144,6 +151,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         edit->setEnabled(info && !info->archived);
         password->setEnabled(info && !info->archived);
         archive->setEnabled(bool(info));
+        remove->setEnabled(info && info->archived);
         archive->setText(info && info->archived ? QString::fromUtf8("Восстановить") : QString::fromUtf8("В архив"));
     };
     auto refresh = [&] {
@@ -214,6 +222,34 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     QObject::connect(password, &QPushButton::clicked, &dialog, [&] {
         const auto info = selected();
         if (info && canWrite(workspace, status)) ShowProfilePasswordDialog(&dialog, workspace, q(info->id), activeId, true);
+    });
+    QObject::connect(remove, &QPushButton::clicked, &dialog, [&] {
+        const auto info = selected();
+        if (!info || !info->archived || !canWrite(workspace, status)) return;
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить профиль навсегда?"),
+            QString::fromUtf8("Удалить пустой архивный профиль «%1»?\nПрофиль с задачами или прогрессом будет защищён проверкой.").arg(q(info->name)),
+            QMessageBox::Yes | QMessageBox::No, &dialog);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить навсегда"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        bool prepared = false;
+        try {
+            PrepareProfileDeletionRecovery(workspace.directory, info->id);
+            prepared = true;
+            const auto result = AppDeleteEmptyArchivedProfile(*workspace.storage, workspace.profiles, workspace.data.tasks, info->id);
+            if (!result.ok) throw std::runtime_error(result.errorMessage);
+            CommitQtRecoveryTransaction(workspace.directory);
+            status->setText(QString::fromUtf8("Пустой архивный профиль удалён."));
+        } catch (const std::exception& error) {
+            std::string text = error.what();
+            if (prepared) {
+                try { RecoverTaskCompletion(workspace.directory); text += u8" Изменения полностью отменены."; }
+                catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
+            }
+            status->setText(q(text));
+        }
+        refresh();
     });
     QObject::connect(edit, &QPushButton::clicked, &dialog, [&] {
         const auto info = selected();

@@ -17,6 +17,7 @@ add_executable(ForgeMirror
     src/FakeApiClient.cpp
     src/FileStorage.cpp
     src/AppProfileService.cpp
+    src/AppProfileDeletionService.cpp
     src/AppProfileMutationService.cpp
     src/AppRecoveryStorage.cpp
     src/AppTaskProjectService.cpp
