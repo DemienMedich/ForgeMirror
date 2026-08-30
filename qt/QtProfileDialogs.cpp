@@ -262,6 +262,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         editor.setWindowTitle(QString::fromUtf8("Параметры профиля · ") + q(info->name));
         editor.setMinimumWidth(440);
         auto* form = new QFormLayout(&editor);
+        auto* profileName = new QLineEdit(q(loaded->name()));
+        profileName->setObjectName("profileName");
         auto* profession = new QComboBox;
         profession->setObjectName("profileProfession");
         profession->addItem(QString::fromUtf8("Без профессии"), "");
@@ -276,10 +278,12 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         auto* blocked = new QCheckBox(QString::fromUtf8("Заблокировать профиль"));
         blocked->setObjectName("profileBlocked");
         blocked->setChecked(loaded->is_blocked());
+        form->addRow(QString::fromUtf8("Имя"), profileName);
         form->addRow(QString::fromUtf8("Профессия"), profession);
         form->addRow(QString::fromUtf8("Дух"), spirit);
         form->addRow(blocked);
         auto* error = notice(form);
+        QObject::connect(profileName, &QLineEdit::textChanged, error, [=] { error->clear(); });
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
         buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
         buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
@@ -287,7 +291,12 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         QObject::connect(buttons, &QDialogButtonBox::rejected, &editor, &QDialog::reject);
         QObject::connect(buttons, &QDialogButtonBox::accepted, &editor, [&] {
             if (!canWrite(workspace, error)) return;
+            const auto candidateName = profileName->text().trimmed();
+            if (candidateName.isEmpty() || std::any_of(candidateName.begin(), candidateName.end(), [](QChar c) { return c.category() == QChar::Other_Control; })) {
+                error->setText(QString::fromUtf8("Введите непустое имя без управляющих символов.")); return;
+            }
             Profile draft = *loaded;
+            draft.set_name(u(candidateName));
             draft.set_profession_id(u(profession->currentData().toString()));
             draft.set_spirit(ProfileSpirit(spirit->currentData().toInt()));
             draft.set_blocked(blocked->isChecked());

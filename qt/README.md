@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 34**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 35**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,9 +29,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 34 | Remaining |
+| Area | Qt stage 35 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename, standalone XP entry, other wallet operations |
+| Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Standalone XP entry and other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
@@ -47,7 +47,13 @@ Admin mutations require the existing admin password from the copied settings (th
 
 On the Profile page, an administrator can open **Управление профилями**. The searchable list includes an optional archive view. Creation uses the existing service and generates a login/password; credentials are masked until explicitly revealed and are not copied to the clipboard or written to logs. Store them before closing the manager.
 
-Editing changes profession, spirit and blocked state in a single profile save, preserving XP, wallet, credentials and history. Unknown existing profession IDs remain selectable rather than being silently erased. Archiving requires confirmation, reports assigned active tasks, and preserves the profile and task history; restore is reversible. Archived profiles cannot be edited or receive XP. Permanent deletion is limited to empty archived profiles; renaming remains unavailable.
+Editing changes display name, profession, spirit and blocked state in a single profile save, preserving the stable profile ID, XP, wallet, credentials and history. Unknown existing profession IDs remain selectable rather than being silently erased. Empty or control-character names are rejected before writing. Archiving requires confirmation, reports assigned active tasks, and preserves the profile and task history; restore is reversible. Archived profiles cannot be edited or receive XP. Permanent deletion is limited to empty archived profiles.
+
+### Stable profile rename (stage 35)
+
+The profile editor can change the visible name while keeping the file name and profile ID unchanged. Task assignees, XP rollback participants, audit entries and stored credentials therefore retain their existing identity links. Name, profession, spirit and blocked state are persisted in one checked profile snapshot rather than through separate partial writes.
+
+Both Qt and the domain snapshot service reject blank names and ASCII control characters; surrounding whitespace is normalized. Tests cover validation, an injected profile-write failure, successful Cyrillic rename, unchanged ID/XP/wallet/login/password/skills and refreshed manager display. Native QA captures the actual editor.
 
 ### Empty archived profile deletion (stage 34)
 

@@ -211,7 +211,16 @@ AppProfileMutationResult AppSaveProfileSnapshot(IJobStorage& storage,
                                                 const std::string& restoreProfileId,
                                                 const std::string& profileId,
                                                 const Profile& profile) {
-    return PersistProfile(storage, restoreProfileId, profileId, profile);
+    const std::string trimmed = TrimCopy(profile.name());
+    if (trimmed.empty() || std::any_of(trimmed.begin(), trimmed.end(), [](unsigned char c) { return c < 0x20 || c == 0x7f; })) {
+        AppProfileMutationResult result;
+        result.userError = true;
+        result.errorMessage = u8"Введите непустое имя без управляющих символов.";
+        return result;
+    }
+    Profile normalized = profile;
+    normalized.set_name(trimmed);
+    return PersistProfile(storage, restoreProfileId, profileId, normalized);
 }
 
 AppProfileMutationResult AppChangeProfilePassword(IJobStorage& storage,

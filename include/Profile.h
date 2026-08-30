@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "Skill.h"
@@ -52,6 +53,7 @@ public:
     int level_progress() const { return levelProgress_; }
     int xp_to_next_level() const { return RequiredXpForLevel(overallLevel_) - levelProgress_; }
     const std::string& name() const { return name_; }
+    void set_name(std::string name) { name_ = std::move(name); }
     const std::string& login() const { return login_; }
     void set_login(std::string login) { login_ = std::move(login); }
     const std::string& password_encoded() const { return passwordEncoded_; }

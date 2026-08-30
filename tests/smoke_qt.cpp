@@ -259,10 +259,17 @@ static bool TestProfileDialogs() {
         QTimer::singleShot(0, [&] {
             auto* editor = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!editor) { checks = false; return; }
+            auto* profileName = editor->findChild<QLineEdit*>("profileName");
+            profileName->clear();
             editor->findChild<QComboBox*>("profileProfession")->setCurrentIndex(1);
             editor->findChild<QComboBox*>("profileSpirit")->setCurrentIndex(1);
             editor->findChild<QCheckBox*>("profileBlocked")->setChecked(true);
             auto* save = editor->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+            save->click();
+            checks &= !editor->findChild<QLabel*>("profileNotice")->text().isEmpty();
+            profileName->setText(QString::fromUtf8("Переименованный профиль"));
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) editor->grab().save(artifacts + "/profile-rename.png");
             failures->writes = 0;
             failures->failAt = 1;
             save->click();
@@ -274,7 +281,7 @@ static bool TestProfileDialogs() {
         manager->findChild<QPushButton*>("editProfile")->click();
         delegate->set_active_profile(created->id);
         auto edited = delegate->load_profile();
-        checks &= edited && edited->profession_id() == "artist" && edited->spirit() == ProfileSpirit::Good && edited->is_blocked();
+        checks &= edited && edited->name() == u8"Переименованный профиль" && edited->profession_id() == "artist" && edited->spirit() == ProfileSpirit::Good && edited->is_blocked();
         checks &= edited && edited->total_xp() == 777 && edited->wallet_balance() == 42 && edited->login() == original.login() &&
             edited->password_encoded() == original.password_encoded() && edited->list_skills().size() == 1;
         auto* archive = manager->findChild<QPushButton*>("archiveProfile");
