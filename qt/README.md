@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 27**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 28**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,10 +29,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 27 | Remaining |
+| Area | Qt stage 28 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
-| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation and ordinary status transitions, transactional metadata editing and XP completion; confirmed restart-safe deletion before XP | Bulk operations, reminders, deletion with profile XP rollback |
+| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation and ordinary status transitions, transactional metadata editing and XP completion; confirmed restart-safe deletion before XP; new awards carry guarded before/after rollback metadata | Bulk operations, reminders, guarded deletion of awarded tasks and legacy rollback review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -221,6 +221,14 @@ Before mutation, the current tasks, audit and last-good task backup are journale
 Administrators can delete a uniquely identified task that has no stored XP participants. Confirmation defaults to Cancel and states that deletion is audited. The same three-file metadata journal protects the task collection, audit and last-good backup; an audit failure after task persistence restores exact disk bytes and in-memory state, while an interrupted uncommitted operation is recovered on startup or refresh.
 
 Tasks with stored participants are deliberately blocked even when their recorded XP values are zero. Their rollback snapshots affect profile XP, levels, counters, skills and category history, so deleting them safely requires a journal that includes every participant profile. The legacy ImGui sequence performs those saves separately and is not reused as a false transaction. Tests cover cancellation, confirmed UI deletion, forced audit failure, ambiguous IDs and the awarded-task guard; the native warning dialog is captured for visual QA.
+
+### Guarded XP rollback metadata (stage 28)
+
+New XP completions store a versioned rollback envelope for each participant. It contains the existing task-related snapshot from immediately before the award plus a canonical snapshot of the expected state immediately after it. Both payloads use the existing reversible encoding inside the already encoded task JSON field; no password, wallet or unrelated profile metadata is added.
+
+Before a future awarded-task deletion may restore the earlier snapshot, Qt can now require the participant's current task-related state to match the stored postcondition exactly. Later global XP, skill XP, task counters, category scores/cooldowns, recovery state or skill-list changes make the comparison fail and protect that newer progress. Wallet, credentials, achievements, profession and spirit are outside the task snapshot and are not overwritten by rollback.
+
+Legacy snapshots remain readable by the existing apply helper but have no postcondition, so they cannot pass the new safety check. This stage intentionally records the evidence for new completions without yet exposing awarded-task deletion. Tests verify envelope persistence, exact postcondition matching, rejection after later progress, and restoration of the pre-award profile state.
 
 ### Pipeline-stage deletion (stage 19)
 

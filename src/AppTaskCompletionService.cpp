@@ -415,11 +415,11 @@ TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<T
             auto loaded = app.storage.load_profile();
             require(bool(loaded), u8"Не удалось прочитать профиль участника.");
             Profile profile = *loaded;
+            const Profile beforeTask = profile;
             require(!profile.is_blocked(), u8"Заблокированному профилю нельзя начислить XP.");
             TaskParticipant participant;
             participant.profileId = share.profileId;
             participant.percent = share.percent;
-            participant.rollbackSnapshot = SerializeProfileTaskRollbackSnapshot(profile);
             const auto skillPools = AppTaskWorkflowService::DistributeIntegerPool(pools[i], result.skillPercents);
             for (size_t s = 0; s < input.skills.size(); ++s) if (skillPools[s] > 0) {
                 const auto& id = input.skills[s].skillId;
@@ -462,6 +462,7 @@ TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<T
             }
             const auto& cooldowns = profile.category_cooldowns();
             profile.set_inactivity_tasks(std::max(0, *std::min_element(cooldowns.begin(), cooldowns.end())));
+            participant.rollbackSnapshot = SerializeProfileTaskRollbackEnvelope(beforeTask, profile);
             request.assignees.push_back(share.profileId);
             request.participants.push_back(participant);
             result.participantNames.push_back(profile.name());

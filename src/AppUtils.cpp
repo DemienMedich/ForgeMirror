@@ -597,8 +597,37 @@ std::string SerializeProfileTaskRollbackSnapshot(const Profile& profile) {
     return ss.str();
 }
 
+namespace {
+constexpr const char* kTaskRollbackV2 = "FORGEMIRROR_TASK_ROLLBACK_2\n";
+bool ParseTaskRollbackEnvelope(const std::string& value, std::string& before, std::string& after) {
+    if (value.rfind(kTaskRollbackV2, 0) != 0) return false;
+    std::istringstream input(value.substr(std::strlen(kTaskRollbackV2)));
+    std::string beforeLine, afterLine, extra;
+    if (!std::getline(input, beforeLine) || !std::getline(input, afterLine) || std::getline(input, extra) ||
+        beforeLine.rfind("before=", 0) != 0 || afterLine.rfind("after=", 0) != 0) return false;
+    before = DecodePassword(beforeLine.substr(7));
+    after = DecodePassword(afterLine.substr(6));
+    return !before.empty() && !after.empty();
+}
+}
+
+std::string SerializeProfileTaskRollbackEnvelope(const Profile& before, const Profile& after) {
+    return std::string(kTaskRollbackV2) + "before=" + EncodePassword(SerializeProfileTaskRollbackSnapshot(before)) +
+        "\nafter=" + EncodePassword(SerializeProfileTaskRollbackSnapshot(after)) + "\n";
+}
+
+bool ProfileMatchesTaskRollbackPostcondition(const std::string& snapshot, const Profile& profile) {
+    std::string before, after;
+    return ParseTaskRollbackEnvelope(snapshot, before, after) && after == SerializeProfileTaskRollbackSnapshot(profile);
+}
+
 bool ApplyProfileTaskRollbackSnapshot(const std::string& snapshot, Profile& profile) {
     if (snapshot.empty()) return false;
+    std::string before, after;
+    if (snapshot.rfind(kTaskRollbackV2, 0) == 0) {
+        if (!ParseTaskRollbackEnvelope(snapshot, before, after)) return false;
+        return ApplyProfileTaskRollbackSnapshot(before, profile);
+    }
     auto trim = [](std::string value) {
         auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
         value.erase(value.begin(), std::find_if(value.begin(), value.end(),

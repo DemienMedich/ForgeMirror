@@ -131,9 +131,18 @@ static bool TestTaskCompletion() {
     storage.set_active_profile(a->id);
     const auto after = storage.load_profile();
     if (!after || after->total_xp() != 240 || after->tasks_completed() != 1 || after->category_best_score(0) != 10) return fail("profile XP not saved");
+    const auto& rollback = workspace.data.tasks[0].participants[0].rollbackSnapshot;
+    if (rollback.rfind("FORGEMIRROR_TASK_ROLLBACK_2\n", 0) != 0 ||
+        !ProfileMatchesTaskRollbackPostcondition(rollback, *after)) return fail("rollback postcondition missing");
+    const auto persistedRollback = LoadTasksData(workspace.directory).front().participants.front().rollbackSnapshot;
+    if (persistedRollback != rollback || !ProfileMatchesTaskRollbackPostcondition(persistedRollback, *after))
+        return fail("rollback envelope did not persist");
+    auto advanced = *after;
+    advanced.grant_global_xp(1);
+    if (ProfileMatchesTaskRollbackPostcondition(rollback, advanced)) return fail("later progress accepted as rollback postcondition");
     if (CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input).ok) return fail("duplicate XP accepted");
     Profile restored = *after;
-    if (!ApplyProfileTaskRollbackSnapshot(workspace.data.tasks[0].participants[0].rollbackSnapshot, restored) || restored.total_xp() != 0 || restored.tasks_completed() != 0)
+    if (!ApplyProfileTaskRollbackSnapshot(rollback, restored) || restored.total_xp() != 0 || restored.tasks_completed() != 0)
         return fail("task rollback snapshot invalid");
     // A full deadline penalty closes the task with zero XP, without losing participants.
     task.id = "zero-pool";
