@@ -655,6 +655,16 @@ static bool TestTaskEditorTransaction() {
     };
     std::vector<QByteArray> before;
     for (const auto& file : files) before.push_back(read(file));
+    TaskEntry createCandidate;
+    createCandidate.id = "create-rollback-fixture";
+    createCandidate.title = "Must roll back";
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failedCreate = CreateTaskWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, createCandidate, "test");
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failedCreate.ok || workspace.data.tasks.size() != 1 ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     TaskEntry draft = original;
     draft.title = "Updated";
     draft.description = "Updated description";

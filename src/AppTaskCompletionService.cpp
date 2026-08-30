@@ -260,6 +260,32 @@ AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
     return result;
 }
 
+AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const TaskEntry& task, const std::string& actor) {
+    AppMutationResult result;
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(directory, {}, true);
+        prepared = true;
+        result = AppCreateTaskEntry(directory, tasks, task, actor, &audit);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось создать задачу." : result.errorMessage);
+        finishJournal(directory);
+    } catch (const std::exception& error) {
+        result = {};
+        result.errorMessage = error.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
+        }
+    }
+    return result;
+}
+
 TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<TaskEntry>& tasks,
                                             const TaskCompletionInput& input) {
     TaskCompletionPreview result;

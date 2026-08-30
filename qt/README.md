@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 24**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 25**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,10 +29,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 24 | Remaining |
+| Area | Qt stage 25 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
-| Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
+| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -201,6 +201,12 @@ Core tests cover successful detach persistence and forced audit failure with pro
 ### Crash-safe project deletion (stage 24)
 
 Stage 24 promotes project deletion from ordinary rollback to restart-safe recovery using manifest `FORGEMIRROR_QT_PROJECT_DELETE_1`. Its five-entry allowlist is strict: projects, tasks, both last-good backups and task audit. Duplicate, missing, linked or unexpected paths fail closed. Other XP and task-edit manifest formats cannot smuggle project files into their broader participant-file journal.
+
+### Crash-safe task creation (stage 25)
+
+Task creation now uses the same three-file metadata journal as task editing: tasks, task audit and the task last-good backup are snapshotted before the first write. A failed task save or audit append restores disk bytes and the in-memory task/audit collections. If the process stops after saving any subset but before the journal commit rename, the next Qt startup or refresh restores the previous snapshot.
+
+The existing task form, validation and domain mutation remain unchanged; this stage only closes their persistence boundary. Tests inject a real post-task audit failure, require byte-identical restoration and confirm no pending journal remains after a successful rollback. The full UI smoke continues to create a task through the actual modal, so the production entry point is covered rather than merely testing a helper.
 
 ### Pipeline-stage deletion (stage 19)
 

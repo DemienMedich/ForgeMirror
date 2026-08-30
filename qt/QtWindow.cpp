@@ -881,7 +881,7 @@ void QtWindow::createEntry(bool edit) {
             task.skillIds = collectIds(skills, originalTask.skillIds);
             auto result = edit
                 ? EditTaskDetails(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt")
-                : AppCreateTaskEntry(workspace_.directory, workspace_.data.tasks, task, "admin/qt", &workspace_.data.taskAudit);
+                : CreateTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt");
             if (!result.ok) { message(result.errorMessage); return; }
         }
         dialog.accept();
