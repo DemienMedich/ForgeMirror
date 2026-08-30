@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 28**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 29**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,10 +29,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 28 | Remaining |
+| Area | Qt stage 29 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
-| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation and ordinary status transitions, transactional metadata editing and XP completion; confirmed restart-safe deletion before XP; new awards carry guarded before/after rollback metadata | Bulk operations, reminders, guarded deletion of awarded tasks and legacy rollback review |
+| Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -226,9 +226,17 @@ Tasks with stored participants are deliberately blocked even when their recorded
 
 New XP completions store a versioned rollback envelope for each participant. It contains the existing task-related snapshot from immediately before the award plus a canonical snapshot of the expected state immediately after it. Both payloads use the existing reversible encoding inside the already encoded task JSON field; no password, wallet or unrelated profile metadata is added.
 
-Before a future awarded-task deletion may restore the earlier snapshot, Qt can now require the participant's current task-related state to match the stored postcondition exactly. Later global XP, skill XP, task counters, category scores/cooldowns, recovery state or skill-list changes make the comparison fail and protect that newer progress. Wallet, credentials, achievements, profession and spirit are outside the task snapshot and are not overwritten by rollback.
+Before an awarded-task deletion may restore the earlier snapshot, Qt requires the participant's current task-related state to match the stored postcondition semantically after normal FileStorage/Profile canonicalization. Later global XP, skill XP, task counters, category scores/cooldowns, recovery state or skill-list changes make the comparison fail and protect that newer progress. Wallet, credentials, achievements, profession and spirit are outside the task snapshot and are not overwritten by rollback.
 
-Legacy snapshots remain readable by the existing apply helper but have no postcondition, so they cannot pass the new safety check. This stage intentionally records the evidence for new completions without yet exposing awarded-task deletion. Tests verify envelope persistence, exact postcondition matching, rejection after later progress, and restoration of the pre-award profile state.
+Legacy snapshots remain readable by the existing apply helper but have no postcondition, so they cannot pass the new safety check. Tests verify envelope persistence, canonical postcondition matching, rejection after later progress, and restoration of the pre-award profile state.
+
+### Guarded awarded-task deletion (stage 29)
+
+Administrators may now delete a task awarded by the Qt-v2 completion path and roll back its participant profiles when every current profile still matches that task's stored postcondition. The confirmation names the destructive XP rollback. Missing, archived, duplicate or changed participants, malformed envelopes and legacy snapshots fail before the journal or any file mutation begins.
+
+The existing XP recovery journal snapshots every participant INI together with tasks, task audit and the task last-good backup. Profile rollback saves occur first, followed by audited task deletion; only then is the journal atomically marked complete. A profile-save, task-save or audit failure restores all participant files plus task/audit memory and disk. Process interruption before commit is recovered on startup, while a completed deletion is not resurrected.
+
+Tests cover a forced audit failure after profiles and tasks were already written, byte-safe recovery to the post-award state, rejection after later progress, successful UI deletion and restoration of pre-award XP/task counters. The legacy ImGui rollback sequence remains unchanged and legacy awarded tasks stay protected rather than risking newer progress.
 
 ### Pipeline-stage deletion (stage 19)
 

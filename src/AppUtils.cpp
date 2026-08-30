@@ -618,7 +618,10 @@ std::string SerializeProfileTaskRollbackEnvelope(const Profile& before, const Pr
 
 bool ProfileMatchesTaskRollbackPostcondition(const std::string& snapshot, const Profile& profile) {
     std::string before, after;
-    return ParseTaskRollbackEnvelope(snapshot, before, after) && after == SerializeProfileTaskRollbackSnapshot(profile);
+    if (!ParseTaskRollbackEnvelope(snapshot, before, after) || after.rfind("[task_rollback]\n", 0) != 0) return false;
+    Profile normalizedExpected = profile;
+    if (!ApplyProfileTaskRollbackSnapshot(after, normalizedExpected)) return false;
+    return SerializeProfileTaskRollbackSnapshot(normalizedExpected) == SerializeProfileTaskRollbackSnapshot(profile);
 }
 
 bool ApplyProfileTaskRollbackSnapshot(const std::string& snapshot, Profile& profile) {

@@ -349,6 +349,63 @@ AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
     return result;
 }
 
+AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::string& taskId, const std::string& restoreProfileId, const std::string& actor) {
+    AppMutationResult result;
+    RestoreSelection restore{app.storage, restoreProfileId};
+    const auto matches = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
+    if (taskId.empty() || matches != 1) { result.errorMessage = u8"Задача не найдена или её ID неоднозначен."; return result; }
+    const auto selected = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
+    if (selected->participants.empty()) return DeleteTaskWithRecovery(app.storageDir, tasks, audit, taskId, actor);
+
+    std::set<std::string> profileIds;
+    std::vector<Profile> rollbackProfiles;
+    rollbackProfiles.reserve(selected->participants.size());
+    for (const auto& participant : selected->participants) {
+        if (!safeProfileId(participant.profileId) || !profileIds.insert(participant.profileId).second ||
+            !app.storage.set_active_profile(participant.profileId)) {
+            result.errorMessage = u8"Профиль участника недоступен или повторяется. Удаление остановлено."; return result;
+        }
+        auto profile = app.storage.load_profile();
+        if (!profile || !ProfileMatchesTaskRollbackPostcondition(participant.rollbackSnapshot, *profile)) {
+            result.errorMessage = u8"Профиль участника изменился после этой задачи или использует legacy snapshot. Новый прогресс нельзя откатывать."; return result;
+        }
+        Profile before = *profile;
+        if (!ApplyProfileTaskRollbackSnapshot(participant.rollbackSnapshot, before)) {
+            result.errorMessage = u8"Rollback snapshot участника повреждён."; return result;
+        }
+        rollbackProfiles.push_back(std::move(before));
+    }
+
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    TaskCompletionPreview journal;
+    journal.finalize.participants = selected->participants;
+    bool prepared = false;
+    try {
+        prepareJournal(app.storageDir, journal);
+        prepared = true;
+        for (size_t i = 0; i < rollbackProfiles.size(); ++i) {
+            if (!app.storage.set_active_profile(selected->participants[i].profileId) || !app.storage.save_profile(rollbackProfiles[i]))
+                throw std::runtime_error(u8"Не удалось сохранить откат профиля участника.");
+        }
+        result = AppDeleteTasksByIds(app.storageDir, tasks, {taskId}, actor, &audit);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить задачу." : result.errorMessage);
+        finishJournal(app.storageDir);
+    } catch (const std::exception& error) {
+        result = {};
+        result.errorMessage = error.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { RecoverTaskCompletion(app.storageDir); result.errorMessage += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
+        }
+    }
+    return result;
+}
+
 TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<TaskEntry>& tasks,
                                             const TaskCompletionInput& input) {
     TaskCompletionPreview result;

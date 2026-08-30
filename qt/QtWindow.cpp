@@ -905,18 +905,22 @@ void QtWindow::deleteEntry() {
         if (id.empty() || matches != 1 || task == workspace_.data.tasks.end()) {
             message(u8"Задача с неоднозначным ID не может быть удалена автоматически."); return;
         }
-        if (!task->participants.empty()) {
-            message(u8"По задаче уже начислен XP. Удаление станет доступно после переноса транзакционного отката профилей."); return;
-        }
+        const bool awarded = !task->participants.empty();
         QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить задачу"),
-            QString::fromUtf8("Удалить задачу «%1»?\nЭто действие будет записано в аудит.").arg(q(AppTaskDisplayTitle(*task))),
+            (awarded
+                ? QString::fromUtf8("Удалить задачу «%1» и откатить её XP?\nОперация остановится, если после неё профиль менялся.")
+                : QString::fromUtf8("Удалить задачу «%1»?\nЭто действие будет записано в аудит."))
+                .arg(q(AppTaskDisplayTitle(*task))),
             QMessageBox::Yes | QMessageBox::No, this);
         confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
         confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
         confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
-        const auto result = DeleteTaskWithRecovery(workspace_.directory, workspace_.data.tasks,
-            workspace_.data.taskAudit, id, "admin/qt");
+        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+        const auto result = awarded
+            ? DeleteAwardedTaskWithRecovery(context, workspace_.data.tasks, workspace_.data.taskAudit,
+                id, u(profiles_->currentData().toString()), "admin/qt")
+            : DeleteTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, id, "admin/qt");
         if (!result.ok) { message(result.errorMessage); return; }
         reload();
         statusBar()->showMessage(QString::fromUtf8("Задача удалена"), 4000);

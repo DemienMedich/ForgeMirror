@@ -131,12 +131,32 @@ static bool TestTaskCompletion() {
     storage.set_active_profile(a->id);
     const auto after = storage.load_profile();
     if (!after || after->total_xp() != 240 || after->tasks_completed() != 1 || after->category_best_score(0) != 10) return fail("profile XP not saved");
-    const auto& rollback = workspace.data.tasks[0].participants[0].rollbackSnapshot;
+    const auto rollback = workspace.data.tasks[0].participants[0].rollbackSnapshot;
     if (rollback.rfind("FORGEMIRROR_TASK_ROLLBACK_2\n", 0) != 0 ||
         !ProfileMatchesTaskRollbackPostcondition(rollback, *after)) return fail("rollback postcondition missing");
     const auto persistedRollback = LoadTasksData(workspace.directory).front().participants.front().rollbackSnapshot;
     if (persistedRollback != rollback || !ProfileMatchesTaskRollbackPostcondition(persistedRollback, *after))
         return fail("rollback envelope did not persist");
+    const auto auditBeforeAwardedDelete = workspace.data.taskAudit.size();
+    const auto profileBytesBeforeAwardedDelete = bytes(a->id + ".ini");
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failedAwardedDelete = DeleteAwardedTaskWithRecovery(context, workspace.data.tasks,
+        workspace.data.taskAudit, input.taskId, a->id, "test");
+    AppSetTaskAuditFailureHookForTests(false);
+    storage.set_active_profile(a->id);
+    const auto afterFailedAwardedDelete = storage.load_profile();
+    if (failedAwardedDelete.ok || workspace.data.tasks.empty() || workspace.data.taskAudit.size() != auditBeforeAwardedDelete ||
+        !afterFailedAwardedDelete || !ProfileMatchesTaskRollbackPostcondition(rollback, *afterFailedAwardedDelete) ||
+        bytes(a->id + ".ini") != profileBytesBeforeAwardedDelete ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("awarded delete rollback failed");
+    auto laterProgress = *afterFailedAwardedDelete;
+    laterProgress.grant_global_xp(1);
+    if (!storage.save_profile(laterProgress)) return fail("later progress fixture failed");
+    const auto staleDelete = DeleteAwardedTaskWithRecovery(context, workspace.data.tasks,
+        workspace.data.taskAudit, input.taskId, a->id, "test");
+    if (staleDelete.ok || workspace.data.tasks.empty() || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("later progress did not block awarded delete");
+    if (!storage.set_active_profile(a->id) || !storage.save_profile(*afterFailedAwardedDelete)) return fail("later progress fixture restore failed");
     auto advanced = *after;
     advanced.grant_global_xp(1);
     if (ProfileMatchesTaskRollbackPostcondition(rollback, advanced)) return fail("later progress accepted as rollback postcondition");
@@ -1565,6 +1585,8 @@ int main(int argc, char** argv) {
     const auto earned = workspace.storage->load_profile();
     if (!earned || earned->total_xp() != finished->participants[0].globalXp || earned->tasks_completed() != 1)
         return fail("XP form did not persist profile");
+    if (!ProfileMatchesTaskRollbackPostcondition(finished->participants[0].rollbackSnapshot, *earned))
+        return fail("XP form rollback postcondition mismatch immediately after completion");
     bool lockedXpFields = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -1583,6 +1605,29 @@ int main(int argc, char** argv) {
     const auto cancelledTask = std::find_if(afterCancel.begin(), afterCancel.end(), [&](const auto& t) { return t.id == task.id; });
     if (cancelledTask == afterCancel.end() || cancelledTask->title == "Cancelled correction")
         return fail("Cancelled editor persisted changes");
+    workspace.storage->set_active_profile(createdProfile->id);
+    const auto beforeUiDelete = workspace.storage->load_profile();
+    if (!beforeUiDelete || !ProfileMatchesTaskRollbackPostcondition(cancelledTask->participants[0].rollbackSnapshot, *beforeUiDelete))
+        return fail("Profile changed before awarded delete UI");
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) confirm->grab().save(artifacts + "/task-delete-xp.png");
+            confirm->button(QMessageBox::Yes)->click();
+            QTimer::singleShot(0, [] {
+                if (auto* error = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                    std::cerr << "Awarded delete UI error: " << error->text().toUtf8().constData() << '\n';
+                    error->accept();
+                }
+            });
+        }
+    });
+    window.findChild<QPushButton*>("deleteEntry")->click();
+    if (!LoadTasksData(workspace.directory).empty()) return fail("Awarded task deletion did not persist");
+    workspace.storage->set_active_profile(createdProfile->id);
+    const auto rolledBackProfile = workspace.storage->load_profile();
+    if (!rolledBackProfile || rolledBackProfile->total_xp() != 0 || rolledBackProfile->tasks_completed() != 0)
+        return fail("Awarded task profile rollback failed");
     nav->setCurrentRow(0);
     bool openedManager = false;
     QTimer::singleShot(0, [&] {
