@@ -14,6 +14,7 @@
 #include "QtPipelineTransition.h"
 #include "QtPomodoro.h"
 #include "AppPipelineService.h"
+#include "AppProfessionService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -980,6 +981,56 @@ static bool TestProfessionEditor() {
         workspace.data.professions.front().name == u8"3D-художник";
 }
 
+static bool TestProfessionDeletionRecovery() {
+    auto fail = [](const char* text) { std::cerr << "professionDelete: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.data.professions = {{"artist", "Artist", "3D"}};
+    if (!AppSaveProfessionsData(workspace.directory, workspace.data.professions)) return fail("profession fixture");
+    workspace.catalog.add_skill("Modeling", 1.0, "Modeling", "Art", {"artist"});
+    const auto skillId = workspace.catalog.id_for_name("Modeling");
+    if (!skillId) return fail("skill fixture");
+    auto created = workspace.storage->create_profile(Profile("Alice"));
+    if (!created || !workspace.storage->set_active_profile(created->id)) return fail("profile fixture");
+    auto profile = workspace.storage->load_profile();
+    profile->set_profession_id("artist");
+    if (!workspace.storage->save_profile(*profile)) return fail("profile binding");
+    workspace.reload();
+
+    auto bytes = [&](const QString& relative) {
+        QFile file(temp.path() + "/" + relative);
+        if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+        return file.readAll();
+    };
+    const auto professionBytes = bytes("meta/professions.txt");
+    const auto skillBytes = bytes("skills.txt");
+    const auto profileBytes = bytes(QString::fromStdString(created->id) + ".ini");
+    const std::vector<std::string> profileIds = {created->id};
+
+    PrepareProfessionDeletionRecovery(workspace.directory, profileIds);
+    const auto interrupted = AppDeleteProfessionEntry(workspace.directory, workspace.data.professions, *workspace.storage,
+        workspace.profiles, workspace.catalog, created->id, "artist");
+    if (!interrupted.ok || !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("interrupted transaction fixture");
+    workspace.reload();
+    if (bytes("meta/professions.txt") != professionBytes || bytes("skills.txt") != skillBytes ||
+        bytes(QString::fromStdString(created->id) + ".ini") != profileBytes ||
+        workspace.data.professions.size() != 1 || !workspace.catalog.has_profession(*skillId, "artist"))
+        return fail("restart recovery");
+
+    PrepareProfessionDeletionRecovery(workspace.directory, profileIds);
+    const auto removed = AppDeleteProfessionEntry(workspace.directory, workspace.data.professions, *workspace.storage,
+        workspace.profiles, workspace.catalog, created->id, "artist");
+    if (!removed.ok || removed.affectedProfiles != 1 || removed.affectedSkills != 1) return fail("delete result");
+    CommitQtRecoveryTransaction(workspace.directory);
+    workspace.reload();
+    if (!workspace.data.professions.empty() || workspace.catalog.has_profession(*skillId, "artist") ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("commit state");
+    if (!workspace.storage->set_active_profile(created->id)) return fail("profile reload");
+    const auto cleared = workspace.storage->load_profile();
+    return cleared && cleared->profession_id().empty();
+}
+
 static bool TestPersonalWallet() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -1186,6 +1237,7 @@ int main(int argc, char** argv) {
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
+    if (!TestProfessionDeletionRecovery()) { std::cerr << "Profession deletion recovery failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
@@ -1376,6 +1428,20 @@ int main(int argc, char** argv) {
     });
     primary->click();
     if (LoadProfessionsData(workspace.directory).size() != 1) return fail("Profession entry point failed");
+    table->selectRow(0);
+    auto* deleteProfession = window.findChild<QPushButton*>("deleteEntry");
+    if (!deleteProfession || !deleteProfession->isVisible() || !deleteProfession->isEnabled())
+        return fail("Profession delete control unavailable");
+    const auto professionArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!professionArtifacts.isEmpty()) window.grab().save(professionArtifacts + "/profession-delete.png");
+    QTimer::singleShot(0, [] {
+        auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if (confirm) confirm->button(QMessageBox::Yes)->click();
+    });
+    deleteProfession->click();
+    if (!LoadProfessionsData(workspace.directory).empty() ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("Profession delete entry point failed");
     nav->setCurrentRow(4);
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(stage.id)) table->selectRow(i);

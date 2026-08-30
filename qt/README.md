@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 31**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 32**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,14 +29,14 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 31 | Remaining |
+| Area | Qt stage 32 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
-| Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
+| Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
 | Reports | Admin project/employee metrics with resolved profile names, search and atomic UTF-8 CSV export | Date ranges, charts and richer drill-down |
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
@@ -123,7 +123,13 @@ Tests cover incorrect/empty passwords, fresh-session denial, explicit logout, pr
 
 Administrators can create and rename professions, keeping their IDs. The form rejects duplicate names, pipe characters and control/newline characters because professions.txt is a line-based format. It invokes the existing domain serializer in a temporary directory, verifies all records after reload and atomically replaces the destination via QSaveFile. Failed writes leave the original file and in-memory collection unchanged. Cancel creates nothing. Do not modify the workspace externally while editing.
 
-The skill editor offers multiple checked professions, retains existing unknown IDs until explicitly removed, and shows profession names in the catalog table (also searchable). All skill fields and bindings are saved together through the existing checked atomic path. Profile files, accumulated XP and profile skill weights are not rewritten. Permanent profession deletion remains unavailable until cross-file rollback is ported.
+The skill editor offers multiple checked professions, retains existing unknown IDs until explicitly removed, and shows profession names in the catalog table (also searchable). All skill fields and bindings are saved together through the existing checked atomic path. Profile files, accumulated XP and profile skill weights are not rewritten by ordinary skill edits.
+
+### Profession deletion (stage 32)
+
+Administrators can delete a uniquely identified profession after a confirmation that reports linked active profiles and skills. The operation removes the profession from `professions.txt`, active profile assignments and skill bindings together. A durable journal stores the original profession catalog, skill catalog and every active profile before the first write; startup restores the exact files after an interruption, while a normal completion commits the journal only after all writes succeed.
+
+Deletion is blocked when the profession is still assigned to an archived profile. Restore that profile and remove or change its profession first; Qt does not silently rewrite archived user data. Duplicate profession IDs, unsafe profile IDs, links in journal paths and malformed or incomplete journals fail closed. Tests cover interrupted recovery, committed deletion, affected-record counts, cleared bindings and the real confirmation/button path.
 
 Two shared loader corrections are included only in the migration branch: SkillCatalog consumes both leading cat/prof metadata tokens in either order, and LoadProfessionsData strips the UTF-8 BOM before reading the first ID. The storage formats themselves are unchanged. Existing malformed IDs already embedded in profile/skill records are not rewritten automatically; unknown references remain visible for review. The stable branches and existing installer remain unchanged.
 

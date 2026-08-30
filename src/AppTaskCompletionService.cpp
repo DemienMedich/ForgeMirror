@@ -32,7 +32,8 @@ bool safeProfileId(const std::string& id) {
 std::filesystem::path journalPath(const std::filesystem::path& root) { return root / "meta" / "qt-xp-transaction"; }
 bool safeBackupName(const std::string& name) {
     if (name == "meta/tasks.json" || name == "meta/projects.json" || name == "meta/task-audit.log" ||
-        name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json") return true;
+        name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json" ||
+        name == "meta/professions.txt" || name == "skills.txt") return true;
     return name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4));
 }
 void checkPath(const std::filesystem::path& root, const std::filesystem::path& relative);
@@ -131,12 +132,17 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     if (!(manifest >> version >> count) ||
         !((version == "FORGEMIRROR_QT_XP_1" && count >= 4 && count <= 10003) ||
           (version == "FORGEMIRROR_QT_TASK_EDIT_1" && count == 3) ||
-          (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5)))
+          (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5) ||
+          (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
         if (!(manifest >> std::quoted(name) >> exists)) throw std::runtime_error(u8"Неполный журнал XP.");
         const bool projectFile = name == "meta/projects.json" || name == "meta/updates/projects.last-good.json";
-        if (!safeBackupName(name) || (projectFile && version != "FORGEMIRROR_QT_PROJECT_DELETE_1") || !seen.insert(name).second)
+        const bool professionFile = name == "meta/professions.txt" || name == "skills.txt";
+        const bool profileFile = name.size() > 4 && name.substr(name.size() - 4) == ".ini";
+        if (!safeBackupName(name) || (projectFile && version != "FORGEMIRROR_QT_PROJECT_DELETE_1") ||
+            (professionFile && version != "FORGEMIRROR_QT_PROFESSION_DELETE_1") ||
+            (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         checkPath(root, name);
         checkPath(pending, name);
@@ -144,8 +150,10 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         entries.emplace_back(name, exists);
     }
     manifest >> std::ws;
-    const bool commonComplete = seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") &&
-        seen.count("meta/updates/tasks.last-good.json");
+    const bool professionTransaction = version == "FORGEMIRROR_QT_PROFESSION_DELETE_1";
+    const bool commonComplete = professionTransaction
+        ? seen.count("meta/professions.txt") && seen.count("skills.txt")
+        : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
         (seen.count("meta/projects.json") && seen.count("meta/updates/projects.last-good.json"));
     if (!manifest.eof() || !commonComplete || !projectComplete)
@@ -169,6 +177,18 @@ void PrepareProjectDeletionRecovery(const std::filesystem::path& directory) {
     prepareFileJournal(directory, "FORGEMIRROR_QT_PROJECT_DELETE_1",
         {"meta/projects.json", "meta/updates/projects.last-good.json", "meta/tasks.json",
          "meta/updates/tasks.last-good.json", "meta/task-audit.log"});
+}
+
+void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
+                                       const std::vector<std::string>& profileIds) {
+    std::vector<std::string> files = {"meta/professions.txt", "skills.txt"};
+    std::set<std::string> uniqueIds;
+    for (const auto& id : profileIds) {
+        if (!safeProfileId(id) || !uniqueIds.insert(id).second)
+            throw std::runtime_error(u8"Некорректный или повторяющийся профиль для журнала профессии.");
+        files.push_back(id + ".ini");
+    }
+    prepareFileJournal(directory, "FORGEMIRROR_QT_PROFESSION_DELETE_1", files);
 }
 
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory) {

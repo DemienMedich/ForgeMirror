@@ -15,6 +15,7 @@
 #include "AppTaskWorkflowService.h"
 #include "AppTeamValueReportService.h"
 #include "AppProfileMutationService.h"
+#include "AppProfessionService.h"
 #include <QtWidgets>
 #include <algorithm>
 
@@ -26,6 +27,20 @@ QString timeText(std::int64_t t) {
 }
 QString field(const QString& name, const std::string& value) {
     return "<p><b>" + name.toHtmlEscaped() + "</b><br>" + q(value).toHtmlEscaped().replace("\n", "<br>") + "</p>";
+}
+bool archivedProfileUsesProfession(const std::filesystem::path& directory, const std::string& profileId,
+                                   const std::string& professionId) {
+    const auto path = directory / "archive" / (profileId + ".ini");
+    if (std::filesystem::is_symlink(std::filesystem::symlink_status(path))) return true;
+    QFile file(q(path.u8string()));
+    if (!file.open(QIODevice::ReadOnly)) return true;
+    bool profileSection = false;
+    for (const auto& raw : QString::fromUtf8(file.readAll()).split('\n')) {
+        const auto line = raw.trimmed();
+        if (line.startsWith('[') && line.endsWith(']')) { profileSection = line == "[profile]"; continue; }
+        if (profileSection && line.startsWith("profession=") && u(line.mid(11).trimmed()) == professionId) return true;
+    }
+    return false;
 }
 bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt) {
     const auto local = QDateTime::fromSecsSinceEpoch(startedAt).toLocalTime();
@@ -528,7 +543,7 @@ void QtWindow::render() {
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
-    deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Pipeline));
+    deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Pipeline || page == Professions));
     moveUp_->setVisible(admin_ && page == Pipeline);
     moveDown_->setVisible(admin_ && page == Pipeline);
     profileMetrics_->setVisible(page == ProfilePage);
@@ -938,11 +953,68 @@ void QtWindow::createEntry(bool edit) {
 void QtWindow::deleteEntry() {
     if (!requireAdmin()) return;
     const int page = navigation_->currentRow();
-    if (page != Tasks && page != Projects && page != Pipeline) return;
+    if (page != Tasks && page != Projects && page != Pipeline && page != Professions) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;
     }
     const auto id = u(selectedId());
+    if (page == Professions) {
+        const auto matches = std::count_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+            [&](const auto& profession) { return profession.id == id; });
+        const auto profession = std::find_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (id.empty() || matches != 1 || profession == workspace_.data.professions.end()) {
+            message(u8"Профессию с неоднозначным ID нельзя удалить автоматически."); return;
+        }
+        int linkedProfiles = 0;
+        std::vector<std::string> activeProfileIds;
+        for (const auto& info : workspace_.profiles) {
+            if (info.archived) {
+                if (archivedProfileUsesProfession(workspace_.directory, info.id, id)) {
+                    message(u8"Профессия назначена архивному профилю. Сначала восстановите профиль и снимите профессию."); return;
+                }
+                continue;
+            }
+            activeProfileIds.push_back(info.id);
+            if (workspace_.storage->set_active_profile(info.id)) {
+                const auto profile = workspace_.storage->load_profile();
+                if (profile && profile->profession_id() == id) ++linkedProfiles;
+            }
+        }
+        workspace_.storage->set_active_profile(u(profiles_->currentData().toString()));
+        int linkedSkills = 0;
+        for (const auto& skillId : workspace_.catalog.skills()) if (workspace_.catalog.has_profession(skillId, id)) ++linkedSkills;
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить профессию"),
+            QString::fromUtf8("Удалить профессию «%1»?\nСвязи будут сняты: профили — %2, навыки — %3.")
+                .arg(q(profession->name)).arg(linkedProfiles).arg(linkedSkills), QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        bool prepared = false;
+        AppProfessionMutationResult result;
+        try {
+            PrepareProfessionDeletionRecovery(workspace_.directory, activeProfileIds);
+            prepared = true;
+            result = AppDeleteProfessionEntry(workspace_.directory, workspace_.data.professions, *workspace_.storage,
+                workspace_.profiles, workspace_.catalog, u(profiles_->currentData().toString()), id);
+            if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить профессию." : result.errorMessage);
+            CommitQtRecoveryTransaction(workspace_.directory);
+        } catch (const std::exception& error) {
+            std::string text = error.what();
+            if (prepared) {
+                try { RecoverTaskCompletion(workspace_.directory); text += u8" Изменения полностью отменены."; }
+                catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
+            }
+            reload();
+            message(text);
+            return;
+        }
+        reload();
+        statusBar()->showMessage(QString::fromUtf8("Профессия удалена · профилей очищено: %1 · навыков: %2")
+            .arg(result.affectedProfiles).arg(result.affectedSkills), 5000);
+        return;
+    }
     if (page == Tasks) {
         const auto matches = std::count_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
             [&](const auto& task) { return task.id == id; });

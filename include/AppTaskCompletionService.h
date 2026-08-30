@@ -38,6 +38,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& directory);
 // Project deletion spans projects, tasks and audit. The Qt caller brackets the existing
 // mutation with this journal so a process interruption restores one coherent snapshot.
 void PrepareProjectDeletionRecovery(const std::filesystem::path& directory);
+void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
+                                       const std::vector<std::string>& profileIds);
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory);
 
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
