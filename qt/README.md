@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 29**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 30**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 29 | Remaining |
+| Area | Qt stage 30 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -37,7 +37,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Skills | Catalog viewing/search, admin creation and editing with checked atomic persistence | Delete/merge, dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
 | Professions | Admin list, creation and editing; assignment through profile manager and skill editor | Deletion with rollback |
-| Reports | Admin project metrics from existing report service | CSV export and full report UI |
+| Reports | Admin project metrics and atomic UTF-8 CSV export from the existing report service | Assignee names, date ranges and richer report UI |
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary and checked editor for leveling, category XP, focus/repeat/recovery factors | Transactional bulk recalculation of existing profiles |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
@@ -237,6 +237,12 @@ Administrators may now delete a task awarded by the Qt-v2 completion path and ro
 The existing XP recovery journal snapshots every participant INI together with tasks, task audit and the task last-good backup. Profile rollback saves occur first, followed by audited task deletion; only then is the journal atomically marked complete. A profile-save, task-save or audit failure restores all participant files plus task/audit memory and disk. Process interruption before commit is recovered on startup, while a completed deletion is not resurrected.
 
 Tests cover a forced audit failure after profiles and tasks were already written, byte-safe recovery to the post-award state, rejection after later progress, successful UI deletion and restoration of pre-award XP/task counters. The legacy ImGui rollback sequence remains unchanged and legacy awarded tasks stay protected rather than risking newer progress.
+
+### Management report CSV export (stage 30)
+
+The administrator Statistics page now exposes **Экспорт CSV**. It builds a fresh local `TeamValueReport` at click time and writes the existing summary, project and assignee sections. The file uses UTF-8 with BOM so Cyrillic project names open predictably in common Windows spreadsheet tools. Cloud services are not invoked.
+
+The save dialog is an explicit compact Qt dialog with a timestamped `.csv` suggestion and automatic extension. Output is staged through `QSaveFile` with direct-write fallback disabled, so a failed replacement leaves an existing destination intact. Empty paths and directories are rejected. Tests cover BOM/Cyrillic/comma quoting, invalid targets, a real Windows sharing lock, and the actual Statistics-page dialog/action. Native QA captures the report table with its export control.
 
 ### Pipeline-stage deletion (stage 19)
 

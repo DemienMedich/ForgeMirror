@@ -3,6 +3,7 @@
 #include "QtPomodoro.h"
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
+#include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
@@ -235,6 +236,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     removeSpirit_->setObjectName("removeEvilSpirit");
     removeSpirit_->setToolTip(QString::fromUtf8("Личная операция: списывает 200 Кукоинов и пополняет локальное хранилище."));
     bottom->addWidget(removeSpirit_);
+    exportReport_ = new QPushButton(QString::fromUtf8("Экспорт CSV"));
+    exportReport_->setObjectName("exportReport");
+    exportReport_->setToolTip(QString::fromUtf8("Сохранить текущий локальный управленческий отчёт в UTF-8 CSV"));
+    bottom->addWidget(exportReport_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -291,6 +296,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (ShowPipelineTransition(this, workspace_, u(selectedId()))) reload();
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
+    connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -523,6 +529,7 @@ void QtWindow::render() {
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
+    exportReport_->setVisible(admin_ && page == Statistics);
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -632,6 +639,25 @@ void QtWindow::render() {
         if (table_->item(index, 0)->data(Qt::UserRole).toString() == previous) { table_->selectRow(index); break; }
     }
     details();
+}
+
+void QtWindow::exportReport() {
+    if (!requireAdmin() || navigation_->currentRow() != Statistics) return;
+    const auto suggested = QString::fromUtf8("ForgeMirror-report-%1.csv").arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+    QFileDialog dialog(this, QString::fromUtf8("Экспорт управленческого отчёта"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter(QString::fromUtf8("CSV-файлы (*.csv)"));
+    dialog.setDefaultSuffix("csv");
+    dialog.selectFile(suggested);
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    auto path = dialog.selectedFiles().front();
+    if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
+    const auto report = BuildTeamValueReport(workspace_.data.tasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
+    QString error;
+    if (!ExportTeamValueReportCsv(path, report, &error)) { message(error.toUtf8().toStdString()); return; }
+    statusBar()->showMessage(QString::fromUtf8("Отчёт сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);
 }
 
 void QtWindow::details() {

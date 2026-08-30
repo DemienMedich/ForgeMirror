@@ -9,6 +9,7 @@
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
 #include "QtDisplaySettings.h"
+#include "QtReportExport.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPomodoro.h"
@@ -782,6 +783,33 @@ static bool TestTaskEditorTransaction() {
         disk.participants.front().rollbackSnapshot == "snapshot" && disk.participants.front().globalXp == 77;
 }
 
+static bool TestReportExport() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    TeamValueReport report;
+    report.totalTasks = 1;
+    TeamValueProjectMetric project; project.id = "project"; project.name = u8"Проект, «Фарос»"; project.totalTasks = 1;
+    report.projects.push_back(project);
+    const auto path = temp.path() + "/report.csv";
+    QString error;
+    if (!ExportTeamValueReportCsv(path, report, &error) || !error.isEmpty()) return false;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto bytes = file.readAll();
+    if (!bytes.startsWith("\xEF\xBB\xBF") || !bytes.contains(QString::fromUtf8("Проект, «Фарос»").toUtf8())) return false;
+    if (ExportTeamValueReportCsv(QString(), report, &error) || error.isEmpty() ||
+        ExportTeamValueReportCsv(temp.path(), report, &error)) return false;
+#ifdef _WIN32
+    const auto wide = std::filesystem::u8path(path.toStdString()).wstring();
+    const auto lock = CreateFileW(wide.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    const bool replaced = ExportTeamValueReportCsv(path, report, &error);
+    CloseHandle(lock);
+    if (replaced) return false;
+#endif
+    return true;
+}
+
 static bool TestProjectDeletionRecovery() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -1162,6 +1190,7 @@ int main(int argc, char** argv) {
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
+    if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -1292,6 +1321,22 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(6);
+    auto* exportReport = window.findChild<QPushButton*>("exportReport");
+    if (!exportReport || !exportReport->isVisible()) return fail("Report export action unavailable");
+    const auto uiReportPath = temp.path() + "/ui-report.csv";
+    QTimer::singleShot(0, [uiReportPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(uiReportPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportReport->click();
+    QFile uiReport(uiReportPath);
+    if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
+        return fail("Report export UI failed");
+    const auto reportArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!reportArtifacts.isEmpty()) window.grab().save(reportArtifacts + "/statistics-export.png");
     nav->setCurrentRow(9);
     if (!primary->isVisible() || primary->text() != QString::fromUtf8("Изменить правила") || table->rowCount() != 13)
         return fail("Rules page unavailable");
