@@ -29,6 +29,7 @@ private:
     void changeStatus();
     void exportReport();
     void reapplyRules();
+    void grantDirectXp();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -64,4 +65,5 @@ private:
     QPushButton* removeSpirit_;
     QPushButton* exportReport_;
     QPushButton* reapplyRules_;
+    QPushButton* directXp_;
 };

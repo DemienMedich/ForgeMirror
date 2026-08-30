@@ -289,6 +289,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reapplyRules_->setObjectName("reapplyRules");
     reapplyRules_->setToolTip(QString::fromUtf8("Сохранить общий XP и пересчитать уровни всех активных и архивных профилей по текущим правилам"));
     bottom->addWidget(reapplyRules_);
+    directXp_ = new QPushButton(QString::fromUtf8("Добавить XP"));
+    directXp_->setObjectName("directXp");
+    directXp_->setToolTip(QString::fromUtf8("Вручную начислить XP одному навыку выбранного активного профиля"));
+    bottom->addWidget(directXp_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -348,6 +352,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
     connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
+    connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -583,6 +588,8 @@ void QtWindow::render() {
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && page == Statistics);
     reapplyRules_->setVisible(admin_ && page == Rules);
+    directXp_->setVisible(admin_ && page == ProfilePage);
+    directXp_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -725,6 +732,64 @@ void QtWindow::reapplyRules() {
     if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось пересчитать профили." : result.errorMessage); return; }
     reload();
     statusBar()->showMessage(QString::fromUtf8("Профили пересчитаны: %1 · общий XP сохранён").arg(result.affectedProfiles), 5000);
+}
+
+void QtWindow::grantDirectXp() {
+    if (!requireAdmin() || navigation_->currentRow() != ProfilePage) return;
+    const auto profileId = u(profiles_->currentData().toString());
+    if (profileId.empty()) { message(u8"Сначала выберите профиль."); return; }
+    const auto skills = workspace_.catalog.skills();
+    if (skills.empty()) { message(u8"Каталог навыков пуст."); return; }
+    if (!workspace_.storage->set_active_profile(profileId)) { message(u8"Активный профиль недоступен."); return; }
+    const auto profile = workspace_.storage->load_profile();
+    if (!profile) { message(u8"Не удалось загрузить профиль."); return; }
+    QDialog dialog(this);
+    dialog.setObjectName("directXpDialog");
+    dialog.setWindowTitle(QString::fromUtf8("Ручное начисление XP"));
+    dialog.setMinimumWidth(440);
+    auto* form = new QFormLayout(&dialog);
+    auto* hint = new QLabel(QString::fromUtf8(
+        "Базовая сумма добавляется в общий XP. Навык получает эту сумму с бонусом активного достижения. Дух, повтор и прогрев здесь не применяются."));
+    hint->setWordWrap(true); form->addRow(hint);
+    auto* skill = new QComboBox; skill->setObjectName("directXpSkill");
+    for (const auto& id : skills) skill->addItem(q(workspace_.catalog.display_name(id)), q(id));
+    auto* amount = new QSpinBox; amount->setObjectName("directXpAmount"); amount->setRange(1, 100000000); amount->setValue(100);
+    amount->setGroupSeparatorShown(true);
+    auto* preview = new QLabel; preview->setObjectName("directXpPreview"); preview->setWordWrap(true);
+    form->addRow(QString::fromUtf8("Навык"), skill);
+    form->addRow(QString::fromUtf8("Базовый XP"), amount);
+    form->addRow(QString::fromUtf8("Результат"), preview);
+    auto updatePreview = [=] {
+        const auto id = u(skill->currentData().toString());
+        const double multiplier = profile->skill_bonus_multiplier(id, QDateTime::currentSecsSinceEpoch());
+        const auto finalSkill = qRound64(double(amount->value()) * multiplier);
+        preview->setText(QString::fromUtf8("Общий XP: +%1 · навык: +%2 XP%3")
+            .arg(amount->value()).arg(finalSkill)
+            .arg(multiplier > 1.000001 ? QString::fromUtf8(" · бонус достижения %1%").arg((multiplier - 1.0) * 100.0, 0, 'f', 1) : QString()));
+    };
+    connect(skill, &QComboBox::currentIndexChanged, &dialog, updatePreview);
+    connect(amount, &QSpinBox::valueChanged, &dialog, updatePreview);
+    updatePreview();
+    auto* notice = new QLabel; notice->setObjectName("directXpNotice"); notice->setWordWrap(true); form->addRow(notice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Начислить"));
+    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+        const auto result = GrantDirectSkillXpWithRecovery(context, profileId, profileId,
+            u(skill->currentData().toString()), amount->value(), QDateTime::currentSecsSinceEpoch());
+        if (!result.ok) { notice->setText(q(result.errorMessage)); return; }
+        dialog.setProperty("awardedGlobalXp", result.awardedGlobalXp);
+        dialog.setProperty("awardedSkillXp", result.awardedSkillXp);
+        dialog.accept();
+    });
+    if (dialog.exec() != QDialog::Accepted) return;
+    const int globalXp = dialog.property("awardedGlobalXp").toInt();
+    const int skillXp = dialog.property("awardedSkillXp").toInt();
+    reload();
+    statusBar()->showMessage(QString::fromUtf8("Начислено: общий XP +%1 · навык +%2 XP").arg(globalXp).arg(skillXp), 5000);
 }
 
 void QtWindow::exportReport() {

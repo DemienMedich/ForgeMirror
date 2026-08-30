@@ -46,9 +46,14 @@ void PrepareProfileDeletionRecovery(const std::filesystem::path& directory,
                                     const std::string& profileId);
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
                                  const std::vector<std::pair<std::string, bool>>& profiles);
+void PrepareDirectXpRecovery(const std::filesystem::path& directory,
+                             const std::string& profileId);
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory);
 AppProfileMutationResult ReapplyRulesWithRecovery(AppContext& app,
                                                   const std::string& restoreProfileId);
+AppProfileMutationResult GrantDirectSkillXpWithRecovery(AppContext& app,
+    const std::string& restoreProfileId, const std::string& profileId,
+    const std::string& skillId, int amount, std::int64_t nowSec);
 
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,

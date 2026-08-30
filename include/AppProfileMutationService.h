@@ -28,6 +28,8 @@ struct AppProfileMutationResult {
     bool userError = false;
     bool changed = false;
     int affectedProfiles = 0;
+    int awardedGlobalXp = 0;
+    int awardedSkillXp = 0;
     std::optional<Profile> profile;
     std::string errorMessage;
 };
@@ -75,6 +77,14 @@ AppProfileMutationResult AppAdjustProfileWallet(IJobStorage& storage,
                                                 const std::string& restoreProfileId,
                                                 const std::string& profileId,
                                                 double delta);
+
+AppProfileMutationResult AppGrantDirectSkillXp(IJobStorage& storage,
+                                               SkillCatalog& catalog,
+                                               const std::string& restoreProfileId,
+                                               const std::string& profileId,
+                                               const std::string& skillId,
+                                               int amount,
+                                               std::int64_t nowSec);
 
 AppProfileMutationResult AppRemoveEvilSpiritForCoins(IJobStorage& storage,
                                                      const std::string& restoreProfileId,

@@ -270,6 +270,55 @@ static bool TestRulesReapplyRecovery() {
     return true;
 }
 
+static bool TestDirectXpRecovery() {
+    auto fail = [](const char* text) { std::cerr << "directXp: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.catalog.add_skill("drawing", 1.0, "Drawing");
+    const auto skillId = *workspace.catalog.id_for_name("drawing");
+    Profile profile("Artist");
+    Achievement bonus; bonus.title = "Bonus"; bonus.skill = skillId; bonus.bonusPercent = 50; bonus.awardedAt = 1;
+    profile.add_achievement(bonus);
+    const auto created = workspace.storage->create_profile(profile);
+    if (!created) return fail("fixture");
+    auto read = [&](const std::string& path) {
+        QFile file(temp.path() + "/" + QString::fromStdString(path));
+        if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+        return file.readAll();
+    };
+    const auto profilePath = created->id + ".ini";
+    const auto achievementPath = "achievements/" + created->id + ".json";
+    const auto beforeProfile = read(profilePath), beforeAchievements = read(achievementPath);
+    FailingProfileStorage failing(*workspace.storage);
+    AppContext context{workspace.directory, failing, workspace.catalog};
+    failing.failAt = 1;
+    const auto rejected = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
+    if (rejected.ok || read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("write rollback");
+
+    PrepareDirectXpRecovery(workspace.directory, created->id);
+    { std::ofstream changed(workspace.directory / profilePath, std::ios::binary | std::ios::trunc); changed << "interrupted"; }
+    { std::ofstream changed(workspace.directory / achievementPath, std::ios::binary | std::ios::trunc); changed << "[]"; }
+    workspace.reload();
+    if (read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements) return fail("restart recovery");
+
+    failing.writes = 0; failing.failAt = 0;
+    const auto applied = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
+    if (!applied.ok || applied.awardedGlobalXp != 100 || applied.awardedSkillXp != 150 ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("commit");
+    failing.set_active_profile(created->id);
+    const auto after = failing.load_profile();
+    if (!after || after->total_xp() != 100 || after->list_skills().size() != 1 || after->list_skills()[0].xp != 150)
+        return fail("persisted values");
+    auto blocked = *after; blocked.set_blocked(true);
+    if (!failing.save_profile(blocked)) return fail("blocked fixture");
+    const auto blockedBytes = read(profilePath);
+    const auto denied = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 10, 1000);
+    if (denied.ok || read(profilePath) != blockedBytes || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("blocked guard");
+    return true;
+}
+
 static bool TestProfileDialogs() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -1402,6 +1451,7 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
     if (!TestRulesReapplyRecovery()) return 1;
+    if (!TestDirectXpRecovery()) return 1;
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1549,6 +1599,27 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(0);
+    auto* directXp = window.findChild<QPushButton*>("directXp");
+    if (!directXp || !directXp->isVisible() || !directXp->isEnabled()) return fail("Direct XP action unavailable");
+    workspace.storage->set_active_profile(createdProfile->id);
+    const auto directXpOriginal = workspace.storage->load_profile();
+    if (!directXpOriginal) return fail("Direct XP original profile unavailable");
+    const int directXpBefore = directXpOriginal->total_xp();
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "directXpDialog") return;
+        dialog->findChild<QSpinBox*>("directXpAmount")->setValue(200);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/direct-xp.png");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    directXp->click();
+    workspace.storage->set_active_profile(createdProfile->id);
+    const auto directXpProfile = workspace.storage->load_profile();
+    if (!directXpProfile || directXpProfile->total_xp() != directXpBefore + 200 ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Начислено"))) return fail("Direct XP UI failed");
+    if (!workspace.storage->save_profile(*directXpOriginal)) return fail("Direct XP fixture restore failed");
     nav->setCurrentRow(6);
     auto* exportReport = window.findChild<QPushButton*>("exportReport");
     if (!exportReport || !exportReport->isVisible()) return fail("Report export action unavailable");

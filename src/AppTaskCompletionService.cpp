@@ -141,6 +141,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002) ||
           (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
           (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
+          (version == "FORGEMIRROR_QT_DIRECT_XP_1" && count == 2) ||
           (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
@@ -157,6 +158,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         if (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && !profileFile)
             throw std::runtime_error(u8"Журнал пересчёта правил содержит посторонний файл.");
+        if (version == "FORGEMIRROR_QT_DIRECT_XP_1" && !profileDeleteFile)
+            throw std::runtime_error(u8"Журнал ручного XP содержит посторонний файл.");
         checkPath(root, name);
         checkPath(pending, name);
         if (exists && !std::filesystem::is_regular_file(pending / name)) throw std::runtime_error(u8"Резервный файл XP отсутствует.");
@@ -167,6 +170,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     const bool skillTransaction = version == "FORGEMIRROR_QT_SKILL_DELETE_1";
     const bool profileDeleteTransaction = version == "FORGEMIRROR_QT_PROFILE_DELETE_1";
     const bool rulesReapplyTransaction = version == "FORGEMIRROR_QT_RULES_REAPPLY_1";
+    const bool directXpTransaction = version == "FORGEMIRROR_QT_DIRECT_XP_1";
     bool profileDeleteComplete = false;
     if (profileDeleteTransaction) {
         for (const auto& item : seen) if (item.size() > 4 && item.substr(item.size() - 4) == ".ini" && item.rfind("archive/", 0) != 0) {
@@ -174,7 +178,12 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             profileDeleteComplete = seen.count("archive/" + id + ".ini") && seen.count("achievements/" + id + ".json");
         }
     }
-    const bool commonComplete = rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
+    bool directXpComplete = false;
+    if (directXpTransaction) for (const auto& item : seen) if (item.size() > 4 && item.substr(item.size() - 4) == ".ini") {
+        const auto id = item.substr(0, item.size() - 4);
+        directXpComplete = item.rfind("archive/", 0) != 0 && seen.count("achievements/" + id + ".json");
+    }
+    const bool commonComplete = directXpTransaction ? directXpComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
@@ -239,6 +248,12 @@ void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
     prepareFileJournal(directory, "FORGEMIRROR_QT_RULES_REAPPLY_1", files);
 }
 
+void PrepareDirectXpRecovery(const std::filesystem::path& directory, const std::string& profileId) {
+    if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для ручного XP.");
+    prepareFileJournal(directory, "FORGEMIRROR_QT_DIRECT_XP_1",
+        {profileId + ".ini", "achievements/" + profileId + ".json"});
+}
+
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory) {
     if (!std::filesystem::exists(journalPath(directory)))
         throw std::runtime_error(u8"Журнал Qt-транзакции отсутствует.");
@@ -263,6 +278,31 @@ AppProfileMutationResult ReapplyRulesWithRecovery(AppContext& app,
         result.changed = false;
         result.affectedProfiles = 0;
         result.errorMessage = error.what();
+        try {
+            if (std::filesystem::exists(journalPath(app.storageDir))) {
+                RecoverTaskCompletion(app.storageDir);
+                result.errorMessage += u8" Изменения полностью отменены.";
+            }
+        } catch (const std::exception&) {
+            result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
+        }
+        if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
+    }
+    return result;
+}
+
+AppProfileMutationResult GrantDirectSkillXpWithRecovery(AppContext& app,
+    const std::string& restoreProfileId, const std::string& profileId,
+    const std::string& skillId, int amount, std::int64_t nowSec) {
+    AppProfileMutationResult result;
+    try {
+        PrepareDirectXpRecovery(app.storageDir, profileId);
+        result = AppGrantDirectSkillXp(app.storage, app.catalog, restoreProfileId, profileId, skillId, amount, nowSec);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось начислить XP." : result.errorMessage);
+        CommitQtRecoveryTransaction(app.storageDir);
+    } catch (const std::exception& error) {
+        result.ok = false; result.changed = false; result.affectedProfiles = 0;
+        result.awardedGlobalXp = 0; result.awardedSkillXp = 0; result.errorMessage = error.what();
         try {
             if (std::filesystem::exists(journalPath(app.storageDir))) {
                 RecoverTaskCompletion(app.storageDir);

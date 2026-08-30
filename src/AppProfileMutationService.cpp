@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "AppUtils.h"
@@ -553,5 +554,55 @@ AppProfileMutationResult AppReapplyRulesToProfiles(AppContext& app,
     result.ok = result.affectedProfiles == int(list.size());
     result.changed = result.affectedProfiles > 0;
     RestoreActiveProfile(app.storage, restoreProfileId);
+    return result;
+}
+
+AppProfileMutationResult AppGrantDirectSkillXp(IJobStorage& storage,
+                                               SkillCatalog& catalog,
+                                               const std::string& restoreProfileId,
+                                               const std::string& profileId,
+                                               const std::string& skillId,
+                                               int amount,
+                                               std::int64_t nowSec) {
+    AppProfileMutationResult loaded = LoadProfileForMutation(storage, restoreProfileId, profileId);
+    if (!loaded.ok || !loaded.profile) return loaded;
+    if (amount <= 0 || amount > 100000000) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false; loaded.userError = true; loaded.profile.reset();
+        loaded.errorMessage = u8"Количество XP должно быть от 1 до 100 000 000.";
+        return loaded;
+    }
+    if (!catalog.contains_id(skillId)) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false; loaded.userError = true; loaded.profile.reset();
+        loaded.errorMessage = u8"Навык отсутствует в каталоге.";
+        return loaded;
+    }
+    Profile profile = *loaded.profile;
+    if (profile.is_blocked()) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false; loaded.userError = true; loaded.profile.reset();
+        loaded.errorMessage = u8"Профиль заблокирован. Начисление XP запрещено.";
+        return loaded;
+    }
+    const double multiplier = profile.skill_bonus_multiplier(skillId, nowSec);
+    const double calculated = static_cast<double>(amount) * multiplier;
+    if (!std::isfinite(calculated) || calculated > std::numeric_limits<int>::max() ||
+        profile.total_xp() > std::numeric_limits<int>::max() - amount) {
+        RestoreActiveProfile(storage, restoreProfileId);
+        loaded.ok = false; loaded.userError = true; loaded.profile.reset();
+        loaded.errorMessage = u8"Начисление XP выходит за безопасный диапазон.";
+        return loaded;
+    }
+    const int skillXp = static_cast<int>(std::round(calculated));
+    profile.add_skill(skillId, 1, catalog.weight(skillId));
+    profile.grant_xp(skillId, skillXp);
+    profile.grant_global_xp(amount);
+    auto result = PersistProfile(storage, restoreProfileId, profileId, profile);
+    if (result.ok) {
+        result.awardedGlobalXp = amount;
+        result.awardedSkillXp = skillXp;
+        result.affectedProfiles = 1;
+    }
     return result;
 }
