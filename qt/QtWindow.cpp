@@ -938,9 +938,26 @@ void QtWindow::deleteEntry() {
     confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
     confirm.setDefaultButton(QMessageBox::No);
     if (confirm.exec() != QMessageBox::Yes) return;
-    const auto result = AppDeleteProjectAndDetachTasks(workspace_.directory, workspace_.data.projects,
-        workspace_.data.tasks, id, "admin", &workspace_.data.taskAudit);
-    if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось удалить проект." : result.errorMessage); return; }
+    AppProjectDeleteResult result;
+    bool prepared = false;
+    try {
+        PrepareProjectDeletionRecovery(workspace_.directory);
+        prepared = true;
+        result = AppDeleteProjectAndDetachTasks(workspace_.directory, workspace_.data.projects,
+            workspace_.data.tasks, id, "admin", &workspace_.data.taskAudit);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить проект." : result.errorMessage);
+        CommitQtRecoveryTransaction(workspace_.directory);
+    } catch (const std::exception& error) {
+        std::string text = error.what();
+        bool recovered = !prepared;
+        if (prepared) {
+            try { RecoverTaskCompletion(workspace_.directory); recovered = true; text += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
+        }
+        if (recovered && prepared) reload();
+        message(text);
+        return;
+    }
     reload();
     statusBar()->showMessage(QString::fromUtf8("Проект удалён · задач отвязано: %1").arg(result.detachedTasks), 5000);
 }

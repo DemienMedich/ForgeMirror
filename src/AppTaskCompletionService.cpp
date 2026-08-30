@@ -31,8 +31,40 @@ bool safeProfileId(const std::string& id) {
 }
 std::filesystem::path journalPath(const std::filesystem::path& root) { return root / "meta" / "qt-xp-transaction"; }
 bool safeBackupName(const std::string& name) {
-    if (name == "meta/tasks.json" || name == "meta/task-audit.log" || name == "meta/updates/tasks.last-good.json") return true;
+    if (name == "meta/tasks.json" || name == "meta/projects.json" || name == "meta/task-audit.log" ||
+        name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json") return true;
     return name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4));
+}
+void checkPath(const std::filesystem::path& root, const std::filesystem::path& relative);
+
+void prepareFileJournal(const std::filesystem::path& root, const std::string& version,
+                        const std::vector<std::string>& files) {
+    const auto pending = journalPath(root);
+    if (std::filesystem::exists(pending)) throw std::runtime_error(u8"Сначала восстановите незавершённую Qt-транзакцию перезапуском приложения.");
+    const auto staging = root / "meta" / "qt-xp-staging";
+    checkPath(root, "meta/qt-xp-staging");
+    checkPath(root, "meta/qt-xp-finished");
+    std::filesystem::remove_all(staging);
+    std::filesystem::create_directories(staging);
+    std::ofstream manifest(staging / "manifest", std::ios::binary);
+    if (!manifest) throw std::runtime_error(u8"Не удалось создать журнал восстановления Qt.");
+    manifest << version << ' ' << files.size() << '\n';
+    for (const auto& name : files) {
+        if (!safeBackupName(name)) throw std::runtime_error(u8"Некорректный путь журнала Qt.");
+        checkPath(root, name);
+        const auto source = root / name;
+        const bool exists = std::filesystem::exists(source);
+        if (exists) {
+            if (!std::filesystem::is_regular_file(source)) throw std::runtime_error(u8"Ожидался обычный файл Qt-транзакции.");
+            std::filesystem::create_directories((staging / name).parent_path());
+            std::filesystem::copy_file(source, staging / name);
+        }
+        manifest << std::quoted(name) << ' ' << exists << '\n';
+    }
+    manifest.flush();
+    if (!manifest) throw std::runtime_error(u8"Не удалось сохранить журнал восстановления Qt.");
+    manifest.close();
+    std::filesystem::rename(staging, pending);
 }
 // Reject links in every path component, not just in the final file.
 void checkPath(const std::filesystem::path& root, const std::filesystem::path& relative) {
@@ -98,19 +130,25 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     size_t count = 0;
     if (!(manifest >> version >> count) ||
         !((version == "FORGEMIRROR_QT_XP_1" && count >= 4 && count <= 10003) ||
-          (version == "FORGEMIRROR_QT_TASK_EDIT_1" && count == 3)))
+          (version == "FORGEMIRROR_QT_TASK_EDIT_1" && count == 3) ||
+          (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
         if (!(manifest >> std::quoted(name) >> exists)) throw std::runtime_error(u8"Неполный журнал XP.");
-        if (!safeBackupName(name) || !seen.insert(name).second) throw std::runtime_error(u8"Некорректный путь в журнале XP.");
+        const bool projectFile = name == "meta/projects.json" || name == "meta/updates/projects.last-good.json";
+        if (!safeBackupName(name) || (projectFile && version != "FORGEMIRROR_QT_PROJECT_DELETE_1") || !seen.insert(name).second)
+            throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         checkPath(root, name);
         checkPath(pending, name);
         if (exists && !std::filesystem::is_regular_file(pending / name)) throw std::runtime_error(u8"Резервный файл XP отсутствует.");
         entries.emplace_back(name, exists);
     }
     manifest >> std::ws;
-    if (!manifest.eof() || !seen.count("meta/tasks.json") || !seen.count("meta/task-audit.log") ||
-        !seen.count("meta/updates/tasks.last-good.json"))
+    const bool commonComplete = seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") &&
+        seen.count("meta/updates/tasks.last-good.json");
+    const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
+        (seen.count("meta/projects.json") && seen.count("meta/updates/projects.last-good.json"));
+    if (!manifest.eof() || !commonComplete || !projectComplete)
         throw std::runtime_error(u8"Неполный журнал XP: требуется ручное восстановление.");
     manifest.close(); // Windows cannot rename the journal directory while this stream is open.
     for (const auto& entry : entries) {
@@ -125,6 +163,18 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     }
     finishJournal(root);
     return true;
+}
+
+void PrepareProjectDeletionRecovery(const std::filesystem::path& directory) {
+    prepareFileJournal(directory, "FORGEMIRROR_QT_PROJECT_DELETE_1",
+        {"meta/projects.json", "meta/updates/projects.last-good.json", "meta/tasks.json",
+         "meta/updates/tasks.last-good.json", "meta/task-audit.log"});
+}
+
+void CommitQtRecoveryTransaction(const std::filesystem::path& directory) {
+    if (!std::filesystem::exists(journalPath(directory)))
+        throw std::runtime_error(u8"Журнал Qt-транзакции отсутствует.");
+    finishJournal(directory);
 }
 
 AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,

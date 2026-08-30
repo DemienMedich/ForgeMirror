@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 23**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task XP completion without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
+This is **stage 24**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional task and project recovery without changing the stable ImGui implementation. The Qt preview deliberately retains base version 0.5.54; it is not a new stable release, and the existing installer still packages ImGui.
 
 ## Build and run
 
@@ -29,7 +29,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 23 | Remaining |
+| Area | Qt stage 24 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, admin creation/archive/restore, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Rename/delete, standalone XP entry, other wallet operations |
 | Tasks | List, search, status filter, details and awarded XP, admin creation with project/category/skills/assignees/deadline/penalty/stage; status transitions, transactional metadata editing and XP completion | Bulk operations, reminders, delete rollback |
@@ -192,9 +192,15 @@ Tests cover 30-day persistence, restoration in a fresh session, explicit revocat
 
 Administrators can delete the selected project after a warning that names it and counts linked tasks. No is the default. Linked tasks are preserved and both their project ID and legacy project-name snapshot are cleared; each detachment is written to task audit. Awarded XP, participants and task status are untouched. A pending Qt recovery journal blocks the operation.
 
-Project and task collections are restored in memory and on disk if either primary save or the audit append fails. The pre-operation audit cache and file bytes are restored as well; an incomplete rollback reports the stronger recovery error instead of claiming success. This guards checked write failures, not power loss between the cross-file writes. External writers remain unsupported.
+Before the first mutation, Qt now snapshots projects, tasks, their last-good backups and task audit into the shared recovery directory. The journal is atomically marked complete only after every checked write succeeds. A process interruption before that rename restores the complete previous snapshot during startup or refresh; an interruption after the rename cannot undo the committed deletion.
 
-Core tests cover successful detach persistence and forced audit failure with project/task/audit rollback. The Qt smoke test drives both cancellation and confirmation, verifies the task becomes projectless, and captures the real warning on Windows.
+Project and task collections are also restored immediately in memory and on disk if either primary save or the audit append fails. The pre-operation audit cache and file bytes are restored as well; an incomplete rollback leaves the durable journal for the next startup instead of claiming success. This guards process interruption and checked write failures, not arbitrary disk loss or external concurrent writers.
+
+Core tests cover successful detach persistence and forced audit failure with project/task/audit rollback. Qt tests additionally simulate interruption after all mutation writes but before the commit rename, verify restoration of every file on reload, then verify that a committed deletion stays deleted. The UI smoke test drives both cancellation and confirmation, verifies the task becomes projectless, and captures the real warning on Windows.
+
+### Crash-safe project deletion (stage 24)
+
+Stage 24 promotes project deletion from ordinary rollback to restart-safe recovery using manifest `FORGEMIRROR_QT_PROJECT_DELETE_1`. Its five-entry allowlist is strict: projects, tasks, both last-good backups and task audit. Duplicate, missing, linked or unexpected paths fail closed. Other XP and task-edit manifest formats cannot smuggle project files into their broader participant-file journal.
 
 ### Pipeline-stage deletion (stage 19)
 

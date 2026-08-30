@@ -721,6 +721,35 @@ static bool TestTaskEditorTransaction() {
         disk.participants.front().rollbackSnapshot == "snapshot" && disk.participants.front().globalXp == 77;
 }
 
+static bool TestProjectDeletionRecovery() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toStdString());
+    QtWorkspace workspace(directory);
+    ProjectEntry project; project.id = "journal-project"; project.name = "Journal project"; project.createdAt = 123;
+    TaskEntry task; task.id = "journal-task"; task.title = "Journal task"; task.projectId = project.id; task.project = project.name;
+    workspace.data.projects = {project}; workspace.data.tasks = {task};
+    if (!AppSaveProjects(directory, workspace.data.projects) || !AppSaveTasks(directory, workspace.data.tasks)) return false;
+
+    PrepareProjectDeletionRecovery(directory);
+    auto interrupted = AppDeleteProjectAndDetachTasks(directory, workspace.data.projects, workspace.data.tasks,
+        project.id, "test", &workspace.data.taskAudit);
+    if (!interrupted.ok || !std::filesystem::exists(directory / "meta/qt-xp-transaction")) return false;
+    workspace.reload(); // Startup/reload must undo an operation that never reached the commit rename.
+    if (workspace.data.projects.size() != 1 || workspace.data.tasks.size() != 1 ||
+        workspace.data.tasks.front().projectId != project.id || !workspace.data.taskAudit.empty()) return false;
+
+    PrepareProjectDeletionRecovery(directory);
+    auto committed = AppDeleteProjectAndDetachTasks(directory, workspace.data.projects, workspace.data.tasks,
+        project.id, "test", &workspace.data.taskAudit);
+    if (!committed.ok) return false;
+    CommitQtRecoveryTransaction(directory);
+    workspace.reload();
+    return workspace.data.projects.empty() && workspace.data.tasks.size() == 1 &&
+        workspace.data.tasks.front().projectId.empty() && workspace.data.taskAudit.size() == 1 &&
+        !std::filesystem::exists(directory / "meta/qt-xp-transaction");
+}
+
 static bool TestSkillEditor() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -1064,6 +1093,7 @@ int main(int argc, char** argv) {
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
+    if (!TestProjectDeletionRecovery()) { std::cerr << "Project deletion recovery failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
