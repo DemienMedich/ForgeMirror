@@ -23,6 +23,7 @@ add_executable(ForgeMirror
     src/AppTaskWorkflowService.cpp
     src/AppTeamValueReportService.cpp
     src/AppProfessionService.cpp
+    src/AppSkillService.cpp
     src/AppPipelineService.cpp
     src/AppMetaService.cpp
     src/AppShortcutsService.cpp

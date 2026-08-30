@@ -16,6 +16,7 @@
 #include "AppTeamValueReportService.h"
 #include "AppProfileMutationService.h"
 #include "AppProfessionService.h"
+#include "AppSkillService.h"
 #include <QtWidgets>
 #include <algorithm>
 
@@ -40,6 +41,31 @@ bool archivedProfileUsesProfession(const std::filesystem::path& directory, const
         if (line.startsWith('[') && line.endsWith(']')) { profileSection = line == "[profile]"; continue; }
         if (profileSection && line.startsWith("profession=") && u(line.mid(11).trimmed()) == professionId) return true;
     }
+    return false;
+}
+bool archivedProfileUsesSkill(const std::filesystem::path& directory, const std::string& profileId,
+                              const std::string& skillId) {
+    const auto path = directory / "archive" / (profileId + ".ini");
+    if (std::filesystem::is_symlink(std::filesystem::symlink_status(path))) return true;
+    QFile file(q(path.u8string()));
+    if (!file.open(QIODevice::ReadOnly)) return true;
+    bool skillsSection = false;
+    for (const auto& raw : QString::fromUtf8(file.readAll()).split('\n')) {
+        const auto line = raw.trimmed();
+        if (line.startsWith('[') && line.endsWith(']')) { skillsSection = line == "[skills]"; continue; }
+        if (skillsSection && line.startsWith("names=")) {
+            const auto names = line.mid(6).split(',', Qt::SkipEmptyParts);
+            for (const auto& name : names) if (u(name.trimmed()) == skillId) return true;
+        }
+    }
+    const auto achievementsPath = directory / "achievements" / (profileId + ".json");
+    if (std::filesystem::is_symlink(std::filesystem::symlink_status(achievementsPath))) return true;
+    QFile achievements(q(achievementsPath.u8string()));
+    if (!achievements.exists()) return false;
+    if (!achievements.open(QIODevice::ReadOnly)) return true;
+    const auto document = QJsonDocument::fromJson(achievements.readAll());
+    if (!document.isArray()) return true;
+    for (const auto& value : document.array()) if (value.toObject().value("skill").toString() == q(skillId)) return true;
     return false;
 }
 bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt) {
@@ -543,7 +569,7 @@ void QtWindow::render() {
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
-    deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Pipeline || page == Professions));
+    deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions));
     moveUp_->setVisible(admin_ && page == Pipeline);
     moveDown_->setVisible(admin_ && page == Pipeline);
     profileMetrics_->setVisible(page == ProfilePage);
@@ -953,11 +979,52 @@ void QtWindow::createEntry(bool edit) {
 void QtWindow::deleteEntry() {
     if (!requireAdmin()) return;
     const int page = navigation_->currentRow();
-    if (page != Tasks && page != Projects && page != Pipeline && page != Professions) return;
+    if (page != Tasks && page != Projects && page != Catalog && page != Pipeline && page != Professions) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;
     }
     const auto id = u(selectedId());
+    if (page == Catalog) {
+        if (id.empty() || std::count(workspace_.catalog.skills().begin(), workspace_.catalog.skills().end(), id) != 1) {
+            message(u8"Навык с неоднозначным ID нельзя удалить автоматически."); return;
+        }
+        for (const auto& info : workspace_.profiles) if (info.archived &&
+            archivedProfileUsesSkill(workspace_.directory, info.id, id)) {
+            message(u8"Навык используется архивным профилем. Сначала восстановите профиль и перенесите его данные."); return;
+        }
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить навык"),
+            QString::fromUtf8("Удалить неиспользуемый навык «%1»?\nСвязи с задачами, профилями и достижениями будут проверены повторно.")
+                .arg(q(workspace_.catalog.display_name(id))), QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        bool prepared = false;
+        try {
+            PrepareSkillDeletionRecovery(workspace_.directory);
+            prepared = true;
+            const auto result = AppDeleteUnusedSkill(workspace_.directory, workspace_.catalog, *workspace_.storage,
+                workspace_.profiles, workspace_.data.tasks, u(profiles_->currentData().toString()), id);
+            if (!result.ok) {
+                auto error = result.errorMessage;
+                if (result.linkedTasks || result.linkedProfiles || result.linkedAchievements)
+                    error += u8" Задачи: " + std::to_string(result.linkedTasks) + u8", профили: " +
+                        std::to_string(result.linkedProfiles) + u8", достижения: " + std::to_string(result.linkedAchievements) + ".";
+                throw std::runtime_error(error);
+            }
+            CommitQtRecoveryTransaction(workspace_.directory);
+        } catch (const std::exception& error) {
+            std::string text = error.what();
+            if (prepared) {
+                try { RecoverTaskCompletion(workspace_.directory); text += u8" Изменения полностью отменены."; }
+                catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
+            }
+            reload(); message(text); return;
+        }
+        reload();
+        statusBar()->showMessage(QString::fromUtf8("Навык удалён"), 4000);
+        return;
+    }
     if (page == Professions) {
         const auto matches = std::count_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
             [&](const auto& profession) { return profession.id == id; });

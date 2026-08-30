@@ -40,6 +40,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& directory);
 void PrepareProjectDeletionRecovery(const std::filesystem::path& directory);
 void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
                                        const std::vector<std::string>& profileIds);
+void PrepareSkillDeletionRecovery(const std::filesystem::path& directory);
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory);
 
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.

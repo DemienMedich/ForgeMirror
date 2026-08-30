@@ -15,6 +15,7 @@
 #include "QtPomodoro.h"
 #include "AppPipelineService.h"
 #include "AppProfessionService.h"
+#include "AppSkillService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -1031,6 +1032,70 @@ static bool TestProfessionDeletionRecovery() {
     return cleared && cleared->profession_id().empty();
 }
 
+static bool TestSkillDeletionRecovery() {
+    auto fail = [](const char* text) { std::cerr << "skillDelete: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    if (!workspace.catalog.add_skill("Keeper", 1.0, "Retained")) return fail("keeper fixture");
+    if (!workspace.catalog.add_skill("Disposable", 1.2, "Unused", "Test", {"legacy-prof"})) return fail("fixture");
+    workspace.catalog.reload(); // Canonicalize the catalog's mandatory defaults before byte-level recovery checks.
+    const auto disposable = workspace.catalog.id_for_name("Disposable");
+    if (!disposable) return fail("fixture id");
+    QFile source(temp.path() + "/skills.txt");
+    if (!source.open(QIODevice::ReadOnly)) return fail("fixture bytes");
+    const auto original = source.readAll();
+    source.close();
+
+    PrepareSkillDeletionRecovery(workspace.directory);
+    const auto interrupted = AppDeleteUnusedSkill(workspace.directory, workspace.catalog, *workspace.storage,
+        workspace.profiles, workspace.data.tasks, {}, *disposable);
+    if (!interrupted.ok || !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("interrupted fixture");
+    workspace.reload();
+    QFile restored(temp.path() + "/skills.txt");
+    if (!restored.open(QIODevice::ReadOnly) || restored.readAll() != original || !workspace.catalog.contains_id(*disposable))
+        return fail("restart recovery");
+    restored.close();
+
+    QFile locked(temp.path() + "/skills.txt");
+    if (!locked.open(QIODevice::ReadOnly)) return fail("lock fixture");
+    PrepareSkillDeletionRecovery(workspace.directory);
+    const auto lockedDelete = AppDeleteUnusedSkill(workspace.directory, workspace.catalog, *workspace.storage,
+        workspace.profiles, workspace.data.tasks, {}, *disposable);
+    if (lockedDelete.ok) return fail("locked destination accepted");
+    locked.close();
+    if (!RecoverTaskCompletion(workspace.directory)) return fail("locked rollback");
+    workspace.reload();
+    if (!workspace.catalog.contains_id(*disposable)) return fail("locked rollback state");
+
+    auto created = workspace.storage->create_profile(Profile("Linked"));
+    if (!created || !workspace.storage->set_active_profile(created->id)) return fail("profile fixture");
+    auto profile = workspace.storage->load_profile();
+    profile->add_skill(*disposable);
+    Achievement achievement; achievement.title = "Linked"; achievement.skill = *disposable;
+    profile->add_achievement(achievement);
+    if (!workspace.storage->save_profile(*profile)) return fail("profile save");
+    workspace.reload();
+    TaskEntry task; task.id = "linked-skill-task"; task.title = "Linked"; task.skillIds = {*disposable};
+    workspace.data.tasks.push_back(task);
+    const auto blocked = AppDeleteUnusedSkill(workspace.directory, workspace.catalog, *workspace.storage,
+        workspace.profiles, workspace.data.tasks, created->id, *disposable);
+    if (blocked.ok || blocked.linkedTasks != 1 || blocked.linkedProfiles != 1 || blocked.linkedAchievements != 1 ||
+        !workspace.catalog.contains_id(*disposable)) return fail("relationship guard");
+
+    profile->set_skills({}); profile->set_achievements({});
+    if (!workspace.storage->save_profile(*profile)) return fail("unlink profile");
+    workspace.data.tasks.clear();
+    PrepareSkillDeletionRecovery(workspace.directory);
+    const auto removed = AppDeleteUnusedSkill(workspace.directory, workspace.catalog, *workspace.storage,
+        workspace.profiles, workspace.data.tasks, created->id, *disposable);
+    if (!removed.ok) { std::cerr << removed.errorMessage << "\n"; return fail("delete"); }
+    CommitQtRecoveryTransaction(workspace.directory);
+    workspace.reload();
+    return !workspace.catalog.contains_id(*disposable) &&
+        !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
+}
+
 static bool TestPersonalWallet() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -1238,6 +1303,7 @@ int main(int argc, char** argv) {
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     if (!TestProfessionDeletionRecovery()) { std::cerr << "Profession deletion recovery failed\n"; return 1; }
+    if (!TestSkillDeletionRecovery()) { std::cerr << "Skill deletion recovery failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
@@ -1442,6 +1508,26 @@ int main(int argc, char** argv) {
     if (!LoadProfessionsData(workspace.directory).empty() ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
         return fail("Profession delete entry point failed");
+    if (!workspace.catalog.add_skill("Qt disposable", 1.0, "Delete entry point"))
+        return fail("Skill delete UI fixture failed");
+    const auto disposableSkill = workspace.catalog.id_for_name("Qt disposable");
+    if (!disposableSkill) return fail("Skill delete UI fixture ID failed");
+    nav->setCurrentRow(3);
+    for (int i = 0; i < table->rowCount(); ++i)
+        if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(*disposableSkill)) table->selectRow(i);
+    auto* deleteSkill = window.findChild<QPushButton*>("deleteEntry");
+    if (!deleteSkill || !deleteSkill->isVisible() || !deleteSkill->isEnabled())
+        return fail("Skill delete control unavailable");
+    const auto skillDeleteArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!skillDeleteArtifacts.isEmpty()) window.grab().save(skillDeleteArtifacts + "/skill-delete.png");
+    QTimer::singleShot(0, [] {
+        auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if (confirm) confirm->button(QMessageBox::Yes)->click();
+    });
+    deleteSkill->click();
+    if (workspace.catalog.contains_id(*disposableSkill) ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("Skill delete entry point failed");
     nav->setCurrentRow(4);
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == QString::fromStdString(stage.id)) table->selectRow(i);

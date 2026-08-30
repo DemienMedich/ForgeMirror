@@ -796,6 +796,7 @@ bool SkillCatalog::remove_skill(const std::string& idOrName) {
     weightsById_.erase(id);
     descriptionsById_.erase(id);
     categoriesById_.erase(id);
+    professionsById_.erase(id);
     orderedIds_.erase(std::remove(orderedIds_.begin(), orderedIds_.end(), id), orderedIds_.end());
     save();
     return true;
