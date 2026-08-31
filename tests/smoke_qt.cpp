@@ -10,6 +10,7 @@
 #include "QtRulesEditor.h"
 #include "QtVaultEditor.h"
 #include "QtBannerEditor.h"
+#include "QtCloudSettings.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineEditor.h"
@@ -21,6 +22,7 @@
 #include "AppProfileDeletionService.h"
 #include "AppProfileMutationService.h"
 #include "AppShortcutsService.h"
+#include "CloudSync.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -404,6 +406,49 @@ static bool TestBannerEditor() {
 #endif
     QString error;
     return DeleteBannerTextChecked(workspace, 0, &error) && workspace.data.bannerTexts.empty() && LoadBannerTexts(workspace.directory).empty();
+}
+
+static bool TestCloudSettings() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + QString::fromUtf8("/внешнее-облако")).toUtf8().toStdString());
+    std::filesystem::create_directories(workspace); std::filesystem::create_directories(cloud);
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget()); if (!dialog || dialog->objectName() != "cloudSettings") return;
+        dialog->findChild<QCheckBox*>("cloudEnabled")->setChecked(true);
+        dialog->findChild<QLineEdit*>("cloudRoot")->setText(QString::fromUtf8(cloud.u8string()));
+        dialog->findChild<QCheckBox*>("cloudAutoPush")->setChecked(false);
+        dialog->findChild<QCheckBox*>("cloudIncludeAdmin")->setChecked(true);
+        dialog->findChild<QCheckBox*>("cloudAutoSync")->setChecked(true);
+        dialog->findChild<QSpinBox*>("cloudMinutes")->setValue(27);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/cloud-settings.png"); }
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowCloudSettings(nullptr, workspace)) return false;
+    const auto saved = LoadCloudSyncConfig(workspace);
+    if (!saved.enabled || saved.root != cloud || !saved.autoPull || saved.autoPush || !saved.includeAdminProfiles || !saved.autoSyncEnabled || saved.autoSyncMinutes != 27) return false;
+    QFile config(QString::fromUtf8((workspace / "meta/cloud.ini").u8string())); if (!config.open(QIODevice::ReadOnly)) return false;
+    const auto before = config.readAll(); config.close();
+    bool overlapSeen = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget()); dialog->findChild<QLineEdit*>("cloudRoot")->setText(QString::fromUtf8(workspace.u8string()));
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        QTimer::singleShot(0, [dialog, &overlapSeen] { overlapSeen = !dialog->findChild<QLabel*>("cloudNotice")->text().isEmpty(); dialog->reject(); });
+    });
+    if (ShowCloudSettings(nullptr, workspace) || !overlapSeen || !config.open(QIODevice::ReadOnly) || config.readAll() != before) return false; config.close();
+#ifdef _WIN32
+    const auto path = (workspace / "meta/cloud.ini").wstring(); const HANDLE lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false; bool lockSeen = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget()); dialog->findChild<QCheckBox*>("cloudAutoPush")->setChecked(true);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        QTimer::singleShot(0, [dialog, &lockSeen] { lockSeen = !dialog->findChild<QLabel*>("cloudNotice")->text().isEmpty(); dialog->reject(); });
+    });
+    const bool accepted = ShowCloudSettings(nullptr, workspace); CloseHandle(lock);
+    if (accepted || !lockSeen || !config.open(QIODevice::ReadOnly) || config.readAll() != before) return false; config.close();
+#endif
+    return true;
 }
 
 static bool TestProfileDialogs() {
@@ -1563,6 +1608,7 @@ int main(int argc, char** argv) {
     if (!TestDirectXpRecovery()) return 1;
     if (!TestVaultEditor()) { std::cerr << "Vault editor failed\n"; return 1; }
     if (!TestBannerEditor()) { std::cerr << "Banner editor failed\n"; return 1; }
+    if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1682,6 +1728,13 @@ int main(int argc, char** argv) {
     window.findChild<QPushButton*>("deleteEntry")->click();
     if (!workspace.data.shortcuts.empty() || table->rowCount() != 0 || !QFileInfo::exists(shortcutTarget.fileName()))
         return fail("Shortcut UI delete removed data incorrectly");
+    nav->setCurrentRow(13);
+    if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настроить облако") ||
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("без передачи данных"))) return fail("Cloud readiness page unavailable");
+    const auto cloudArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!cloudArtifacts.isEmpty()) window.grab().save(cloudArtifacts + "/cloud-page.png");
+    QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });
+    primary->click();
     nav->setCurrentRow(8);
     if (!window.findChild<QWidget*>("pomodoroPanel")->isVisible() || table->isVisible() || search->isVisible())
         return fail("Pomodoro page layout failed");

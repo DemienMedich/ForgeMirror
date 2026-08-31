@@ -5,6 +5,7 @@
 #include "QtRulesEditor.h"
 #include "QtVaultEditor.h"
 #include "QtBannerEditor.h"
+#include "QtCloudSettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -20,6 +21,7 @@
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
 #include "AppShortcutsService.h"
+#include "CloudSync.h"
 #include <QtWidgets>
 #include <algorithm>
 
@@ -80,7 +82,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -151,7 +153,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
-            "Qt работает с отдельной копией данных. Облачная синхронизация отключена.\n"
+            "Qt работает с отдельной копией данных. Доступна только конфигурация облака без передачи файлов.\n"
             "3D и оставшиеся настройки ещё не перенесены."));
     });
     menuButton->setMenu(menu);
@@ -170,7 +172,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер")});
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -604,10 +606,10 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
-    primary_->setVisible(page == Shortcuts || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
+    primary_->setVisible(page == Shortcuts || page == Cloud || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : page == Banner ? QString::fromUtf8("Добавить фразу") : QString::fromUtf8("Создать задачу")));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : page == Banner ? QString::fromUtf8("Добавить фразу") : page == Cloud ? QString::fromUtf8("Настроить облако") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions || page == Banner));
     deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Banner)));
     moveUp_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
@@ -751,6 +753,24 @@ void QtWindow::render() {
         headers({QString::fromUtf8("Фраза")});
         for (size_t index = 0; index < data.bannerTexts.size(); ++index) row(std::to_string(index), {q(data.bannerTexts[index])});
         summary_->setText(QString::fromUtf8("Фраз в ротации: %1 · смена каждые 60 секунд").arg(data.bannerTexts.size()));
+    } else if (page == Cloud) {
+        headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
+        const auto config = LoadCloudSyncConfig(workspace_.directory);
+        const auto root = ResolveCloudRootPath(config, workspace_.directory);
+        std::error_code ec; const bool rootExists = std::filesystem::is_directory(root, ec) && !ec;
+        row("enabled", {QString::fromUtf8("Конфигурация"), QString::fromUtf8(config.enabled ? "Включена" : "Выключена")});
+        row("root", {QString::fromUtf8("Папка"), q(root.u8string())});
+        row("ready", {QString::fromUtf8("Доступность папки"), QString::fromUtf8(rootExists ? "Готова" : "Не найдена")});
+        row("auto", {QString::fromUtf8("Автоматизация стабильной версии"), QString::fromUtf8("pull: %1 · push: %2 · каждые %3 мин")
+            .arg(config.autoPull ? QString::fromUtf8("да") : QString::fromUtf8("нет"))
+            .arg(config.autoPush ? QString::fromUtf8("да") : QString::fromUtf8("нет")).arg(config.autoSyncMinutes)});
+        if (config.enabled && rootExists) {
+            const auto drift = InspectCloudWorkspaceDrift(config, workspace_.directory, 0);
+            row("drift", {QString::fromUtf8("Различия до первой синхронизации"), QString::number(drift.issueCount)});
+        }
+        const auto manifest = LoadCloudManifest(config, workspace_.directory);
+        row("manifest", {QString::fromUtf8("Версия в manifest"), manifest.appVersion.empty() ? QString::fromUtf8("—") : q(manifest.appVersion)});
+        summary_->setText(QString::fromUtf8("Диагностика без передачи данных · push, pull и разрешение конфликтов в Qt пока заблокированы"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -929,6 +949,10 @@ void QtWindow::details() {
 }
 
 void QtWindow::createEntry(bool edit) {
+    if (navigation_->currentRow() == Cloud) {
+        if (!edit && ShowCloudSettings(this, workspace_.directory)) render();
+        return;
+    }
     if (navigation_->currentRow() == Shortcuts) {
         if (edit) return;
         QDialog dialog(this); dialog.setObjectName("shortcutEditor"); dialog.setWindowTitle(QString::fromUtf8("Добавить ярлык")); dialog.setMinimumWidth(520);
