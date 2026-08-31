@@ -18,6 +18,7 @@
 #include "AppProfileMutationService.h"
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
+#include "AppShortcutsService.h"
 #include <QtWidgets>
 #include <algorithm>
 
@@ -78,7 +79,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -163,7 +164,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище")});
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -295,6 +296,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     directXp_->setObjectName("directXp");
     directXp_->setToolTip(QString::fromUtf8("Вручную начислить XP одному навыку выбранного активного профиля"));
     bottom->addWidget(directXp_);
+    openShortcut_ = new QPushButton(QString::fromUtf8("Открыть"));
+    openShortcut_->setObjectName("openShortcut");
+    openShortcut_->setToolTip(QString::fromUtf8("Открыть выбранный локальный файл через Windows"));
+    bottom->addWidget(openShortcut_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -325,6 +330,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });
     connect(moveDown_, &QPushButton::clicked, this, [this] { movePipeline(1); });
+    connect(openShortcut_, &QPushButton::clicked, this, [this] {
+        if (navigation_->currentRow() != Shortcuts) return;
+        const auto found = std::find_if(workspace_.data.shortcuts.begin(), workspace_.data.shortcuts.end(),
+            [this](const auto& entry) { return entry.id == u(selectedId()); });
+        std::error_code ec;
+        const bool exists = found != workspace_.data.shortcuts.end() &&
+            std::filesystem::exists(std::filesystem::u8path(found->path), ec) && !ec;
+        if (!exists || !QDesktopServices::openUrl(QUrl::fromLocalFile(q(found->path)))) message(u8"Не удалось открыть ярлык.");
+    });
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
@@ -533,6 +547,7 @@ void QtWindow::render() {
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
     navigation_->item(Pipeline)->setHidden(!workspace_.modules.pipeline);
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
+    navigation_->item(Shortcuts)->setHidden(!workspace_.modules.shortcuts);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
     for (int page : {Projects, Statistics, Audit, Rules, Vault}) navigation_->item(page)->setHidden(!admin_);
     int page = navigation_->currentRow();
@@ -576,14 +591,15 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
-    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault) && admin_);
+    primary_->setVisible(page == Shortcuts || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : QString::fromUtf8("Создать задачу")));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
-    deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions));
-    moveUp_->setVisible(admin_ && page == Pipeline);
-    moveDown_->setVisible(admin_ && page == Pipeline);
+    deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions)));
+    moveUp_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
+    moveDown_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
+    openShortcut_->setVisible(page == Shortcuts);
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -710,6 +726,14 @@ void QtWindow::render() {
             .arg(vault.pomodoroCoinsPerCycle)
             .arg(QTime(vault.pomodoroStartMinutes / 60, vault.pomodoroStartMinutes % 60).toString("HH:mm"))
             .arg(QTime(vault.pomodoroEndMinutes / 60, vault.pomodoroEndMinutes % 60).toString("HH:mm")));
+    } else if (page == Shortcuts) {
+        headers({QString::fromUtf8("Название"), QString::fromUtf8("Путь"), QString::fromUtf8("Состояние")});
+        for (const auto& shortcut : data.shortcuts) {
+            std::error_code ec;
+            const bool exists = std::filesystem::exists(std::filesystem::u8path(shortcut.path), ec) && !ec;
+            row(shortcut.id, {q(shortcut.label), q(shortcut.path), QString::fromUtf8(exists ? "Доступен" : "Файл не найден")});
+        }
+        summary_->setText(QString::fromUtf8("Локальные ярлыки: %1 · запуск выполняется через системное приложение Windows").arg(data.shortcuts.size()));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -720,9 +744,9 @@ void QtWindow::render() {
     // Give free width to readable content instead of stretching the final numeric column.
     int stretchColumn = 0;
     if (page == Catalog) stretchColumn = 2;
-    else if (page == Pipeline || page == Projects || page == Professions) stretchColumn = 1;
+    else if (page == Pipeline || page == Projects || page == Professions || page == Shortcuts) stretchColumn = 1;
     table_->horizontalHeader()->setSectionResizeMode(stretchColumn, QHeaderView::Stretch);
-    table_->setSortingEnabled(page != Pipeline);
+    table_->setSortingEnabled(page != Pipeline && page != Shortcuts);
     for (int index = 0; index < table_->rowCount(); ++index) {
         if (table_->item(index, 0)->data(Qt::UserRole).toString() == previous) { table_->selectRow(index); break; }
     }
@@ -833,6 +857,7 @@ void QtWindow::details() {
     deleteEntry_->setEnabled(!id.empty());
     moveUp_->setEnabled(false);
     moveDown_->setEnabled(false);
+    openShortcut_->setEnabled(false);
     advanceStage_->setEnabled(!id.empty());
     const int page = navigation_->currentRow();
     if (page == Pipeline) {
@@ -843,6 +868,16 @@ void QtWindow::details() {
             const auto index = std::distance(workspace_.data.pipelineSteps.begin(), step);
             moveUp_->setEnabled(index > 0);
             moveDown_->setEnabled(index + 1 < std::ptrdiff_t(workspace_.data.pipelineSteps.size()));
+        }
+    } else if (page == Shortcuts) {
+        const auto found = std::find_if(workspace_.data.shortcuts.begin(), workspace_.data.shortcuts.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (found != workspace_.data.shortcuts.end()) {
+            const auto index = std::distance(workspace_.data.shortcuts.begin(), found);
+            moveUp_->setEnabled(index > 0);
+            moveDown_->setEnabled(index + 1 < std::ptrdiff_t(workspace_.data.shortcuts.size()));
+            std::error_code ec;
+            openShortcut_->setEnabled(std::filesystem::exists(std::filesystem::u8path(found->path), ec) && !ec);
         }
     }
     if (page == Tasks) {
@@ -877,6 +912,35 @@ void QtWindow::details() {
 }
 
 void QtWindow::createEntry(bool edit) {
+    if (navigation_->currentRow() == Shortcuts) {
+        if (edit) return;
+        QDialog dialog(this); dialog.setObjectName("shortcutEditor"); dialog.setWindowTitle(QString::fromUtf8("Добавить ярлык")); dialog.setMinimumWidth(520);
+        auto* form = new QFormLayout(&dialog);
+        auto* hint = new QLabel(QString::fromUtf8("Выберите существующий локальный файл. ForgeMirror хранит только название и путь, сам файл не копируется."));
+        hint->setWordWrap(true); form->addRow(hint);
+        auto* label = new QLineEdit; label->setObjectName("shortcutLabel"); label->setMaxLength(96);
+        auto* path = new QLineEdit; path->setObjectName("shortcutPath"); path->setReadOnly(true);
+        auto* browse = new QPushButton(QString::fromUtf8("Выбрать файл…")); browse->setObjectName("shortcutBrowse");
+        form->addRow(QString::fromUtf8("Название"), label); form->addRow(QString::fromUtf8("Путь"), path); form->addRow(browse);
+        auto* notice = new QLabel; notice->setObjectName("shortcutNotice"); notice->setWordWrap(true); form->addRow(notice);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+        buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Добавить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+        buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
+        connect(browse, &QPushButton::clicked, &dialog, [&] {
+            QFileDialog picker(&dialog, QString::fromUtf8("Выберите файл ярлыка")); picker.setOption(QFileDialog::DontUseNativeDialog);
+            picker.setFileMode(QFileDialog::ExistingFile);
+            if (picker.exec() == QDialog::Accepted && !picker.selectedFiles().isEmpty()) path->setText(QDir::toNativeSeparators(picker.selectedFiles().front()));
+        });
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+            const auto result = AppAddShortcut(workspace_.directory, workspace_.data.shortcuts,
+                u(label->text().trimmed()), u(QDir::fromNativeSeparators(path->text().trimmed())));
+            if (!result.ok) { notice->setText(q(result.errorMessage)); return; }
+            dialog.accept();
+        });
+        if (dialog.exec() == QDialog::Accepted) { reload(); statusBar()->showMessage(QString::fromUtf8("Ярлык добавлен"), 3000); }
+        return;
+    }
     if (!requireAdmin()) return;
     if (edit && selectedId().isEmpty()) return;
     if (navigation_->currentRow() == Rules) {
@@ -1085,8 +1149,20 @@ void QtWindow::createEntry(bool edit) {
 }
 
 void QtWindow::deleteEntry() {
-    if (!requireAdmin()) return;
     const int page = navigation_->currentRow();
+    if (page == Shortcuts) {
+        const auto id = u(selectedId());
+        const auto found = std::find_if(workspace_.data.shortcuts.begin(), workspace_.data.shortcuts.end(), [&](const auto& item) { return item.id == id; });
+        if (found == workspace_.data.shortcuts.end()) return;
+        QMessageBox confirm(QMessageBox::Question, QString::fromUtf8("Удалить ярлык"),
+            QString::fromUtf8("Удалить ярлык «%1»? Сам файл останется на месте.").arg(q(found->label)), QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить")); confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена")); confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        const auto result = AppDeleteShortcut(workspace_.directory, workspace_.data.shortcuts, int(std::distance(workspace_.data.shortcuts.begin(), found)));
+        if (!result.ok) { message(result.errorMessage); return; }
+        render(); statusBar()->showMessage(QString::fromUtf8("Ярлык удалён · файл сохранён"), 3000); return;
+    }
+    if (!requireAdmin()) return;
     if (page != Tasks && page != Projects && page != Catalog && page != Pipeline && page != Professions) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;
@@ -1285,7 +1361,18 @@ void QtWindow::deleteEntry() {
 }
 
 void QtWindow::movePipeline(int delta) {
-    if (!requireAdmin() || navigation_->currentRow() != Pipeline || (delta != -1 && delta != 1)) return;
+    const int page = navigation_->currentRow();
+    if (page == Shortcuts && (delta == -1 || delta == 1)) {
+        const auto id = u(selectedId());
+        const auto found = std::find_if(workspace_.data.shortcuts.begin(), workspace_.data.shortcuts.end(), [&](const auto& item) { return item.id == id; });
+        if (found == workspace_.data.shortcuts.end()) return;
+        const int from = int(std::distance(workspace_.data.shortcuts.begin(), found)), to = from + delta;
+        if (to < 0 || to >= int(workspace_.data.shortcuts.size())) return;
+        const auto result = AppMoveShortcut(workspace_.directory, workspace_.data.shortcuts, from, to);
+        if (!result.ok) { message(result.errorMessage); return; }
+        render(); statusBar()->showMessage(QString::fromUtf8("Порядок ярлыков сохранён"), 3000); return;
+    }
+    if (!requireAdmin() || page != Pipeline || (delta != -1 && delta != 1)) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;
     }

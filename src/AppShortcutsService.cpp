@@ -1,4 +1,5 @@
 #include "AppShortcutsService.h"
+#include "AppRecoveryStorage.h"
 
 #include <algorithm>
 #include <chrono>
@@ -14,27 +15,6 @@ namespace {
 
 std::filesystem::path ShortcutsStoragePath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "shortcuts.json";
-}
-
-bool WriteAllUtf8BomAtomic(const std::filesystem::path& path, const std::string& payloadWithoutBom) {
-    auto parent = path.parent_path();
-    if (!parent.empty()) {
-        std::error_code ec;
-        std::filesystem::create_directories(parent, ec);
-    }
-    auto tmp = path;
-    tmp += ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (!out) return false;
-        static constexpr unsigned char bom[] = {0xEF, 0xBB, 0xBF};
-        out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-        out.write(payloadWithoutBom.data(), static_cast<std::streamsize>(payloadWithoutBom.size()));
-        if (!out.good()) return false;
-    }
-    std::error_code ec;
-    std::filesystem::rename(tmp, path, ec);
-    return !ec;
 }
 
 std::string EscapeJson(const std::string& value) {
@@ -79,10 +59,18 @@ bool IsValidIndex(const std::vector<ShortcutEntry>& shortcuts, int index) {
     return index >= 0 && index < static_cast<int>(shortcuts.size());
 }
 
+bool IsSymlinkOrUnreadable(const std::filesystem::path& path) {
+    std::error_code ec;
+    const auto status = std::filesystem::symlink_status(path, ec);
+    return std::filesystem::is_symlink(status) || (ec && ec != std::errc::no_such_file_or_directory);
+}
+
 } // namespace
 
 bool AppSaveShortcutsData(const std::filesystem::path& storageDir,
                           const std::vector<ShortcutEntry>& shortcuts) {
+    const auto target = ShortcutsStoragePath(storageDir);
+    if (IsSymlinkOrUnreadable(target) || IsSymlinkOrUnreadable(target.parent_path())) return false;
     std::ostringstream out;
     out.imbue(std::locale::classic());
     out << "[\n";
@@ -95,7 +83,7 @@ bool AppSaveShortcutsData(const std::filesystem::path& storageDir,
         out << "\n";
     }
     out << "]";
-    return WriteAllUtf8BomAtomic(ShortcutsStoragePath(storageDir), out.str());
+    return AppWriteUtf8BomWithRecovery(target, out.str());
 }
 
 AppShortcutMutationResult AppAddShortcut(const std::filesystem::path& storageDir,
@@ -107,11 +95,12 @@ AppShortcutMutationResult AppAddShortcut(const std::filesystem::path& storageDir
         result.errorMessage = u8"Укажите путь к ярлыку.";
         return result;
     }
-    if (!std::filesystem::exists(path)) {
+    const auto localPath = std::filesystem::u8path(path);
+    if (!std::filesystem::exists(localPath)) {
         result.errorMessage = u8"Файл не найден: " + path;
         return result;
     }
-    std::string finalLabel = label.empty() ? std::filesystem::path(path).stem().string() : label;
+    std::string finalLabel = label.empty() ? localPath.stem().u8string() : label;
     ShortcutEntry entry;
     entry.id = GenerateShortcutId(CurrentUnixSeconds(), shortcuts.size() + 1);
     entry.label = finalLabel;

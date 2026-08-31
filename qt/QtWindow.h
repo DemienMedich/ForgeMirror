@@ -66,4 +66,5 @@ private:
     QPushButton* exportReport_;
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
+    QPushButton* openShortcut_;
 };

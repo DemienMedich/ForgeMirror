@@ -19,6 +19,7 @@
 #include "AppSkillService.h"
 #include "AppProfileDeletionService.h"
 #include "AppProfileMutationService.h"
+#include "AppShortcutsService.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
 #include <QtTest/QTest>
@@ -1495,6 +1496,28 @@ static bool TestDisplaySettings(QApplication& app) {
     return true;
 }
 
+static bool TestShortcutPersistence() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QFile first(temp.path() + "/first tool.exe"), second(temp.path() + "/second.txt");
+    if (!first.open(QIODevice::WriteOnly) || first.write("one") != 3) return false; first.close();
+    if (!second.open(QIODevice::WriteOnly) || second.write("two") != 3) return false; second.close();
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+    std::vector<ShortcutEntry> shortcuts;
+    if (!AppAddShortcut(directory, shortcuts, u8"Первый", first.fileName().toUtf8().toStdString()).ok ||
+        !AppAddShortcut(directory, shortcuts, u8"Второй", second.fileName().toUtf8().toStdString()).ok || shortcuts.size() != 2) return false;
+    if (!AppMoveShortcut(directory, shortcuts, 1, 0).ok || shortcuts.front().label != u8"Второй") return false;
+    const auto loaded = LoadShortcutsData(directory);
+    if (loaded.size() != 2 || loaded.front().label != u8"Второй") return false;
+    QFile stored(temp.path() + "/meta/shortcuts.json"); if (!stored.open(QIODevice::ReadOnly)) return false;
+    const auto before = stored.readAll(); stored.close();
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    const auto failed = AppDeleteShortcut(directory, shortcuts, 0);
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (failed.ok || shortcuts.size() != 2 || shortcuts.front().label != u8"Второй" || !stored.open(QIODevice::ReadOnly)) return false;
+    const auto after = stored.readAll(); stored.close();
+    return before == after;
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -1520,6 +1543,7 @@ int main(int argc, char** argv) {
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
+    if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
@@ -1595,6 +1619,33 @@ int main(int argc, char** argv) {
     });
     displayAction->trigger();
     if (table->verticalHeader()->defaultSectionSize() != 24) return fail("Compact table setting not applied");
+    QFile shortcutTarget(temp.path() + "/launch target.txt");
+    if (!shortcutTarget.open(QIODevice::WriteOnly) || shortcutTarget.write("target") != 6) return fail("Shortcut target fixture failed");
+    shortcutTarget.close();
+    nav->setCurrentRow(11);
+    if (nav->item(11)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Добавить ярлык"))
+        return fail("Shortcut page unavailable without admin access");
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "shortcutEditor") return;
+        dialog->findChild<QLineEdit*>("shortcutLabel")->setText(QString::fromUtf8("Тестовый запуск"));
+        dialog->findChild<QLineEdit*>("shortcutPath")->setText(QDir::toNativeSeparators(shortcutTarget.fileName()));
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcut-editor.png"); }
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    if (workspace.data.shortcuts.size() != 1 || table->rowCount() != 1 ||
+        table->item(0, 0)->text() != QString::fromUtf8("Тестовый запуск")) return fail("Shortcut UI add failed");
+    table->selectRow(0);
+    auto* openShortcut = window.findChild<QPushButton*>("openShortcut");
+    if (!openShortcut || !openShortcut->isEnabled()) return fail("Shortcut open action unavailable");
+    const auto shortcutArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!shortcutArtifacts.isEmpty()) window.grab().save(shortcutArtifacts + "/shortcut-page.png");
+    QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+    window.findChild<QPushButton*>("deleteEntry")->click();
+    if (!workspace.data.shortcuts.empty() || table->rowCount() != 0 || !QFileInfo::exists(shortcutTarget.fileName()))
+        return fail("Shortcut UI delete removed data incorrectly");
     nav->setCurrentRow(8);
     if (!window.findChild<QWidget*>("pomodoroPanel")->isVisible() || table->isVisible() || search->isVisible())
         return fail("Pomodoro page layout failed");
