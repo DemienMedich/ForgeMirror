@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 38**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.3` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
+This is **stage 39**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.4` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.3.exe`. Version `0.6.3` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.3.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.4.exe`. Version `0.6.4` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.4.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 38 | Remaining |
+| Area | Qt stage 39 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Other wallet operations and richer activity history |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -44,7 +44,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
-| Other | Separate workspace, refresh, contextual create/edit/delete/details shortcuts, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds and guarded vault rewards | Cloud, 3D, remaining settings, migration installer |
+| Other | Separate workspace, refresh, contextual create/edit/delete/details shortcuts, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards and administrator vault settings/log | Cloud, 3D and remaining settings |
 
 ### Profile management
 
@@ -63,6 +63,12 @@ Both Qt and the domain snapshot service reject blank names and ASCII control cha
 The Profile page now exposes **Добавить XP** to administrators for the selected active profile. This ports the stable `addxp` operation rather than inventing a synthetic completed task: the entered base amount is added to global XP, while the selected skill receives the same amount multiplied by its currently active achievement bonus. Task category, score, spirit, repeat and recovery modifiers do not apply. The dialog previews both resulting amounts before saving.
 
 The operation rejects missing catalog skills, blocked or unavailable profiles, non-positive values and integer overflow. Manifest `FORGEMIRROR_QT_DIRECT_XP_1` snapshots the profile INI and its achievement JSON before either can be rewritten. A checked save failure restores byte-identical files immediately, and an interrupted operation is recovered on startup or refresh. Tests cover injected failure, interrupted two-file recovery, a 50% achievement bonus, global/skill persistence, the blocked-profile guard and the actual Qt form.
+
+### Storage vault administration (stage 39)
+
+Administrators now have a **Хранилище** page that shows the encrypted central balance, currency code, recent operation log and the effective Pomodoro reward window. The page does not expose arbitrary balance editing. Its settings dialog ports the stable controls for currency name/code, retained log count, reward start/end, minimum focus duration, coins per cycle and enabled weekdays.
+
+Saving copies the complete current vault, including balance and log, through the canonical serializer in a temporary directory and reloads it for validation. Qt then replaces `meta/storage.json` with `QSaveFile` and direct-write fallback disabled; symbolic links and pending recovery transactions are rejected. Tests verify Cyrillic settings, preservation of balance/log, all reward fields, a real Windows sharing lock with byte-identical failure, the administrator-only navigation page and the production dialog route.
 
 ### Transactional rules recalculation (stage 37)
 

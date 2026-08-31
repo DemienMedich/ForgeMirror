@@ -8,6 +8,7 @@
 #include "QtAchievements.h"
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
+#include "QtVaultEditor.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineEditor.h"
@@ -316,6 +317,56 @@ static bool TestDirectXpRecovery() {
     const auto denied = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 10, 1000);
     if (denied.ok || read(profilePath) != blockedBytes || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
         return fail("blocked guard");
+    return true;
+}
+
+static bool TestVaultEditor() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.data.vault.balance = 321.5;
+    workspace.data.vault.log.push_back({1700000000, 12.0, "test", "preserve"});
+    if (!SaveStorageVault(workspace.directory, workspace.data.vault)) return false;
+    workspace.reload();
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "vaultEditor") return;
+        dialog->findChild<QLineEdit*>("vaultCurrencyName")->setText(QString::fromUtf8("Фаркойн"));
+        dialog->findChild<QLineEdit*>("vaultCurrencyCode")->setText("FRC");
+        dialog->findChild<QSpinBox*>("vaultLogLimit")->setValue(12);
+        dialog->findChild<QTimeEdit*>("vaultPomodoroStart")->setTime(QTime(8, 15));
+        dialog->findChild<QTimeEdit*>("vaultPomodoroEnd")->setTime(QTime(19, 45));
+        dialog->findChild<QSpinBox*>("vaultPomodoroMinimum")->setValue(25);
+        dialog->findChild<QSpinBox*>("vaultPomodoroCoins")->setValue(3);
+        for (int index = 0; index < 7; ++index) dialog->findChild<QCheckBox*>(QString("vaultDay%1").arg(index))->setChecked(index == 1 || index == 3);
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/vault-editor.png");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowVaultEditor(nullptr, workspace)) return false;
+    const auto saved = LoadStorageVault(workspace.directory);
+    if (saved.currencyName != u8"Фаркойн" || saved.currencyCode != "FRC" || saved.logLimit != 12 ||
+        saved.pomodoroStartMinutes != 8 * 60 + 15 || saved.pomodoroEndMinutes != 19 * 60 + 45 ||
+        saved.pomodoroMinMinutes != 25 || saved.pomodoroCoinsPerCycle != 3 || saved.pomodoroDaysMask != ((1 << 1) | (1 << 3)) ||
+        std::abs(saved.balance - 321.5) > 0.000001 || saved.log.size() != 1 || saved.log[0].note != "preserve") return false;
+#ifdef _WIN32
+    const auto path = (workspace.directory / "meta/storage.json").wstring();
+    QFile before(QString::fromStdWString(path)); if (!before.open(QIODevice::ReadOnly)) return false; const auto bytes = before.readAll(); before.close();
+    const HANDLE lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    bool lockFailureSeen = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        dialog->findChild<QLineEdit*>("vaultCurrencyCode")->setText("LOCKED");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        QTimer::singleShot(0, [dialog, &lockFailureSeen] {
+            lockFailureSeen = !dialog->findChild<QLabel*>("vaultNotice")->text().isEmpty();
+            dialog->reject();
+        });
+    });
+    const bool accepted = ShowVaultEditor(nullptr, workspace); CloseHandle(lock);
+    QFile after(QString::fromStdWString(path));
+    if (accepted || !lockFailureSeen || !after.open(QIODevice::ReadOnly) || after.readAll() != bytes) return false;
+#endif
     return true;
 }
 
@@ -1452,6 +1503,7 @@ int main(int argc, char** argv) {
     if (!TestTaskCompletion()) return 1;
     if (!TestRulesReapplyRecovery()) return 1;
     if (!TestDirectXpRecovery()) return 1;
+    if (!TestVaultEditor()) { std::cerr << "Vault editor failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1620,6 +1672,12 @@ int main(int argc, char** argv) {
     if (!directXpProfile || directXpProfile->total_xp() != directXpBefore + 200 ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Начислено"))) return fail("Direct XP UI failed");
     if (!workspace.storage->save_profile(*directXpOriginal)) return fail("Direct XP fixture restore failed");
+    nav->setCurrentRow(10);
+    if (!primary->isVisible() || primary->text() != QString::fromUtf8("Настройки хранилища") ||
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Баланс хранилища")))
+        return fail("Vault page unavailable");
+    QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });
+    primary->click();
     nav->setCurrentRow(6);
     auto* exportReport = window.findChild<QPushButton*>("exportReport");
     if (!exportReport || !exportReport->isVisible()) return fail("Report export action unavailable");

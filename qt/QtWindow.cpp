@@ -3,6 +3,7 @@
 #include "QtPomodoro.h"
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
+#include "QtVaultEditor.h"
 #include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -77,7 +78,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -162,7 +163,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4")});
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -178,6 +179,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     toolbar->addWidget(primary_);
     content->addLayout(toolbar);
     summary_ = new QLabel;
+    summary_->setObjectName("summary");
     summary_->setTextFormat(Qt::PlainText);
     summary_->setWordWrap(true);
     content->addWidget(summary_);
@@ -532,7 +534,7 @@ void QtWindow::render() {
     navigation_->item(Pipeline)->setHidden(!workspace_.modules.pipeline);
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
-    for (int page : {Projects, Statistics, Audit, Rules}) navigation_->item(page)->setHidden(!admin_);
+    for (int page : {Projects, Statistics, Audit, Rules, Vault}) navigation_->item(page)->setHidden(!admin_);
     int page = navigation_->currentRow();
     if (page < 0) return;
     if (navigation_->item(page)->isHidden()) {
@@ -574,10 +576,10 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
-    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules) && admin_);
+    primary_->setVisible((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault) && admin_);
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : QString::fromUtf8("Создать задачу")));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
     deleteEntry_->setVisible(admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions));
     moveUp_->setVisible(admin_ && page == Pipeline);
@@ -696,6 +698,18 @@ void QtWindow::render() {
         row("recovery", {QString::fromUtf8("Коэффициент прогрева"), QString::number(rules.recoveryRewardFactor, 'f', 2)});
         row("warmup", {QString::fromUtf8("Задач прогрева"), QString::number(rules.recoveryWarmupTasks)});
         summary_->setText(QString::fromUtf8("Правила применяются к будущим расчётам · накопленный прогресс не пересчитывается автоматически"));
+    } else if (page == Vault) {
+        headers({QString::fromUtf8("Время"), QString::fromUtf8("Действие"), QString::fromUtf8("Сумма"), QString::fromUtf8("Примечание")});
+        const auto& vault = data.vault;
+        for (int index = int(vault.log.size()) - 1; index >= 0; --index) {
+            const auto& entry = vault.log[size_t(index)];
+            row(std::to_string(index), {timeText(entry.timestamp), q(entry.action), QString::number(entry.amount, 'f', 2), q(entry.note)});
+        }
+        summary_->setText(QString::fromUtf8("Баланс хранилища: %1 %2 · журнал: %3 из %4 · Pomodoro: %5 монет, %6–%7")
+            .arg(vault.balance, 0, 'f', 2).arg(q(vault.currencyCode)).arg(vault.log.size()).arg(vault.logLimit)
+            .arg(vault.pomodoroCoinsPerCycle)
+            .arg(QTime(vault.pomodoroStartMinutes / 60, vault.pomodoroStartMinutes % 60).toString("HH:mm"))
+            .arg(QTime(vault.pomodoroEndMinutes / 60, vault.pomodoroEndMinutes % 60).toString("HH:mm")));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -867,6 +881,10 @@ void QtWindow::createEntry(bool edit) {
     if (edit && selectedId().isEmpty()) return;
     if (navigation_->currentRow() == Rules) {
         if (ShowRulesEditor(this, workspace_)) reload();
+        return;
+    }
+    if (navigation_->currentRow() == Vault) {
+        if (ShowVaultEditor(this, workspace_)) reload();
         return;
     }
     if (navigation_->currentRow() == Professions) {
