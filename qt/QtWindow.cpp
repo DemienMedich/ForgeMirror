@@ -4,6 +4,7 @@
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
 #include "QtVaultEditor.h"
+#include "QtBannerEditor.h"
 #include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -79,7 +80,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -156,6 +157,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
     layout->addLayout(header);
+    banner_ = new QLabel;
+    banner_->setObjectName("bannerStrip"); banner_->setAlignment(Qt::AlignCenter); banner_->setFixedHeight(28);
+    banner_->setProperty("banner", true); layout->addWidget(banner_);
+    auto* bannerTimer = new QTimer(this); bannerTimer->setInterval(60000);
+    connect(bannerTimer, &QTimer::timeout, this, [this] { ++bannerIndex_; updateBanner(); }); bannerTimer->start();
 
     auto* body = new QHBoxLayout;
     body->setSpacing(16);
@@ -164,7 +170,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки")});
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -400,7 +406,7 @@ void QtWindow::showShortcutHelp() {
     dialog.resize(540, 520);
     auto* layout = new QVBoxLayout(&dialog);
     auto* intro = new QLabel(QString::fromUtf8(
-        "Команды работают в текущем разделе. Создание, правка и удаление по-прежнему требуют входа администратора и подходящего выбора."));
+        "Команды работают в текущем разделе. Защищённые операции требуют входа администратора; локальные ярлыки доступны всем пользователям."));
     intro->setWordWrap(true);
     layout->addWidget(intro);
     auto* table = new QTableWidget(12, 2, &dialog);
@@ -508,6 +514,13 @@ void QtWindow::authenticate() {
     render();
 }
 
+void QtWindow::updateBanner() {
+    if (workspace_.data.bannerTexts.empty()) { banner_->clear(); banner_->hide(); bannerIndex_ = 0; return; }
+    bannerIndex_ %= int(workspace_.data.bannerTexts.size());
+    const auto text = q(workspace_.data.bannerTexts[size_t(bannerIndex_)]);
+    banner_->setText(text); banner_->setToolTip(text); banner_->show();
+}
+
 void QtWindow::reload() {
     const auto previous = profiles_->currentData().toString();
     try {
@@ -525,7 +538,7 @@ void QtWindow::reload() {
         const int index = profiles_->findData(previous);
         if (index >= 0) profiles_->setCurrentIndex(index);
     }
-    render();
+    updateBanner(); render();
     if (!workspace_.data.recoveryWarnings.empty()) {
         QStringList warnings;
         for (const auto& warning : workspace_.data.recoveryWarnings) warnings << q(warning);
@@ -549,7 +562,7 @@ void QtWindow::render() {
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Shortcuts)->setHidden(!workspace_.modules.shortcuts);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
-    for (int page : {Projects, Statistics, Audit, Rules, Vault}) navigation_->item(page)->setHidden(!admin_);
+    for (int page : {Projects, Statistics, Audit, Rules, Vault, Banner}) navigation_->item(page)->setHidden(!admin_);
     int page = navigation_->currentRow();
     if (page < 0) return;
     if (navigation_->item(page)->isHidden()) {
@@ -591,12 +604,12 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
-    primary_->setVisible(page == Shortcuts || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault) && admin_));
+    primary_->setVisible(page == Shortcuts || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : QString::fromUtf8("Создать задачу")));
-    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions));
-    deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions)));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : page == Banner ? QString::fromUtf8("Добавить фразу") : QString::fromUtf8("Создать задачу")));
+    editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions || page == Banner));
+    deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Banner)));
     moveUp_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
     moveDown_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
     openShortcut_->setVisible(page == Shortcuts);
@@ -734,6 +747,10 @@ void QtWindow::render() {
             row(shortcut.id, {q(shortcut.label), q(shortcut.path), QString::fromUtf8(exists ? "Доступен" : "Файл не найден")});
         }
         summary_->setText(QString::fromUtf8("Локальные ярлыки: %1 · запуск выполняется через системное приложение Windows").arg(data.shortcuts.size()));
+    } else if (page == Banner) {
+        headers({QString::fromUtf8("Фраза")});
+        for (size_t index = 0; index < data.bannerTexts.size(); ++index) row(std::to_string(index), {q(data.bannerTexts[index])});
+        summary_->setText(QString::fromUtf8("Фраз в ротации: %1 · смена каждые 60 секунд").arg(data.bannerTexts.size()));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -943,6 +960,12 @@ void QtWindow::createEntry(bool edit) {
     }
     if (!requireAdmin()) return;
     if (edit && selectedId().isEmpty()) return;
+    if (navigation_->currentRow() == Banner) {
+        bool ok = false; const int index = edit ? selectedId().toInt(&ok) : -1;
+        if (edit && !ok) return;
+        if (ShowBannerEditor(this, workspace_, index)) { bannerIndex_ = std::max(0, index); updateBanner(); render(); }
+        return;
+    }
     if (navigation_->currentRow() == Rules) {
         if (ShowRulesEditor(this, workspace_)) reload();
         return;
@@ -1163,6 +1186,16 @@ void QtWindow::deleteEntry() {
         render(); statusBar()->showMessage(QString::fromUtf8("Ярлык удалён · файл сохранён"), 3000); return;
     }
     if (!requireAdmin()) return;
+    if (page == Banner) {
+        bool ok = false; const int index = selectedId().toInt(&ok);
+        if (!ok || index < 0 || index >= int(workspace_.data.bannerTexts.size())) return;
+        QMessageBox confirm(QMessageBox::Question, QString::fromUtf8("Удалить фразу"),
+            QString::fromUtf8("Удалить выбранную фразу из ротации баннера?"), QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить")); confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена")); confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        QString error; if (!DeleteBannerTextChecked(workspace_, index, &error)) { message(u(error)); return; }
+        bannerIndex_ = 0; updateBanner(); render(); statusBar()->showMessage(QString::fromUtf8("Фраза удалена"), 3000); return;
+    }
     if (page != Tasks && page != Projects && page != Catalog && page != Pipeline && page != Professions) return;
     if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
         message(u8"Сначала завершите восстановление данных."); return;

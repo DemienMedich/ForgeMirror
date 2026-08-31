@@ -30,6 +30,7 @@ private:
     void exportReport();
     void reapplyRules();
     void grantDirectXp();
+    void updateBanner();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -47,6 +48,7 @@ private:
     QLabel* summary_;
     QLabel* title_;
     QLabel* mode_;
+    QLabel* banner_;
     QWidget* profileMetrics_;
     QWidget* pomodoro_;
     QWidget* bottomActions_;
@@ -67,4 +69,5 @@ private:
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* openShortcut_;
+    int bannerIndex_ = 0;
 };

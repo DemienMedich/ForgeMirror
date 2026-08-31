@@ -9,6 +9,7 @@
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
 #include "QtVaultEditor.h"
+#include "QtBannerEditor.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineEditor.h"
@@ -369,6 +370,40 @@ static bool TestVaultEditor() {
     if (accepted || !lockFailureSeen || !after.open(QIODevice::ReadOnly) || after.readAll() != bytes) return false;
 #endif
     return true;
+}
+
+static bool TestBannerEditor() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().toStdString()));
+    workspace.data.bannerTexts = {u8"Первая фраза"};
+    if (!SaveBannerTexts(workspace.directory, workspace.data.bannerTexts)) return false;
+    workspace.reload();
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "bannerEditor") return;
+        dialog->findChild<QPlainTextEdit*>("bannerText")->setPlainText(QString::fromUtf8("Обновлённая фраза"));
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/banner-editor.png"); }
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowBannerEditor(nullptr, workspace, 0) || workspace.data.bannerTexts != std::vector<std::string>{u8"Обновлённая фраза"}) return false;
+#ifdef _WIN32
+    const auto path = (workspace.directory / "meta/banner.json").wstring();
+    QFile stored(QString::fromStdWString(path)); if (!stored.open(QIODevice::ReadOnly)) return false; const auto before = stored.readAll(); stored.close();
+    const HANDLE lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    bool failureSeen = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        dialog->findChild<QPlainTextEdit*>("bannerText")->setPlainText("LOCKED");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        QTimer::singleShot(0, [dialog, &failureSeen] { failureSeen = !dialog->findChild<QLabel*>("bannerNotice")->text().isEmpty(); dialog->reject(); });
+    });
+    const bool accepted = ShowBannerEditor(nullptr, workspace); CloseHandle(lock);
+    if (accepted || !failureSeen || !stored.open(QIODevice::ReadOnly) || stored.readAll() != before) return false; stored.close();
+#endif
+    QString error;
+    return DeleteBannerTextChecked(workspace, 0, &error) && workspace.data.bannerTexts.empty() && LoadBannerTexts(workspace.directory).empty();
 }
 
 static bool TestProfileDialogs() {
@@ -1527,6 +1562,7 @@ int main(int argc, char** argv) {
     if (!TestRulesReapplyRecovery()) return 1;
     if (!TestDirectXpRecovery()) return 1;
     if (!TestVaultEditor()) { std::cerr << "Vault editor failed\n"; return 1; }
+    if (!TestBannerEditor()) { std::cerr << "Banner editor failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1651,7 +1687,7 @@ int main(int argc, char** argv) {
         return fail("Pomodoro page layout failed");
     nav->setCurrentRow(1);
     if (table->rowCount() != 1 || !table->item(0, 0)->text().contains(QString::fromUtf8("Проверка Qt"))) return fail("Task loading failed");
-    if (primary->isVisible() || !nav->item(9)->isHidden()) return fail("Unauthenticated user can mutate data");
+    if (primary->isVisible() || !nav->item(9)->isHidden() || !nav->item(12)->isHidden()) return fail("Unauthenticated user can mutate data");
     if (window.findChild<QPushButton*>("advanceStage")->isVisible()) return fail("Unauthenticated pipeline transition visible");
     search->setText("no-matches");
     if (table->rowCount() != 0) return fail("Search did not filter");
@@ -1729,6 +1765,26 @@ int main(int argc, char** argv) {
         return fail("Vault page unavailable");
     QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });
     primary->click();
+    nav->setCurrentRow(12);
+    if (nav->item(12)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Добавить фразу"))
+        return fail("Banner page unavailable");
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "bannerEditor") return;
+        dialog->findChild<QPlainTextEdit*>("bannerText")->setPlainText(QString::fromUtf8("Фраза из Qt"));
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    auto* bannerStrip = window.findChild<QLabel*>("bannerStrip");
+    if (!bannerStrip || !bannerStrip->isVisible() || bannerStrip->text() != QString::fromUtf8("Фраза из Qt") || table->rowCount() != 1)
+        return fail("Banner strip did not refresh");
+    table->selectRow(0);
+    const auto bannerArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!bannerArtifacts.isEmpty()) window.grab().save(bannerArtifacts + "/banner-page.png");
+    QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+    window.findChild<QPushButton*>("deleteEntry")->click();
+    if (!workspace.data.bannerTexts.empty() || bannerStrip->isVisible() || table->rowCount() != 0)
+        return fail("Banner deletion did not refresh");
     nav->setCurrentRow(6);
     auto* exportReport = window.findChild<QPushButton*>("exportReport");
     if (!exportReport || !exportReport->isVisible()) return fail("Report export action unavailable");
