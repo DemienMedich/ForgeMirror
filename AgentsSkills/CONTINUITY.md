@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; the migration client may only perform confirmed manual cloud pull with a full backup, never push or automatic sync; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 43 pushed as b54a2c1 on codex/qt-gui. Guarded manual pull now stages before applying and recovers interrupted commits. Stable branches unchanged.
+- State: Stage 44 verified on codex/qt-gui. Local task/pipeline conflict recovery is complete; stable branches remain unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 43 version 0.6.8 passed build, smoke_core, smoke_qt, native UI inspection, installer 0.6.7-to-0.6.8 update, system-only-PATH startup and uninstall with preserved data. Release evidence: docs/releases/ForgeMirror-0.6.8.md. Code committed and pushed.
-- Next: Add explicit cloud conflict recovery; then push/automatic sync only after equally guarded recovery, followed by 3D and remaining settings. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 44 version 0.6.9 passed build, smoke_core, smoke_qt, native UI inspection, installer 0.6.8-to-0.6.9 update, system-only-PATH startup and uninstall with preserved data. Release evidence: docs/releases/ForgeMirror-0.6.9.md.
+- Next: Add guarded local-to-cloud push only with complete rollback; automatic sync remains disabled. Then continue 3D and remaining settings. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtCloudPull.*, qt/QtWorkspace.cpp, qt/QtWindow.*, tests/smoke_qt.cpp; build-qt.ps1 -Package. Pull stages in a temporary copy, retains a full sibling qt-cloud-backup-UUID, and journals changed files in meta/qt-cloud-pull.json; startup recovery validates paths and SHA-256 before restoring.
+- Working set (files/ids/commands): qt/QtCloudConflict.*, qt/QtWindow.*, tests/smoke_qt.cpp; build-qt.ps1 -Package; installer/build-qt-installer.ps1. Only cloud-to-local apply and local backup restore are enabled; local-to-cloud push stays unavailable.
 
 ---
 # Historical ledger (superseded by the current work above)

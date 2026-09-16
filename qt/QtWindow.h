@@ -32,6 +32,7 @@ private:
     void grantDirectXp();
     void updateBanner();
     void pullCloud();
+    void resolveCloudConflict();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -71,5 +72,6 @@ private:
     QPushButton* directXp_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
+    QPushButton* cloudResolve_;
     int bannerIndex_ = 0;
 };

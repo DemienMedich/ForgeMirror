@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 43**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.8` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
+This is **stage 44**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.9` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.8.exe`. Version `0.6.8` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.8.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.9.exe`. Version `0.6.9` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.9.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 43 | Remaining |
+| Area | Qt stage 44 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Other wallet operations and richer activity history |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -44,7 +44,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
-| Other | Separate workspace, rotating banner with administrator phrase management, cloud configuration/readiness inspection and confirmed manual pull with full backup, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards and administrator vault settings/log | Cloud push, automatic sync, conflict recovery, 3D and remaining settings |
+| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline version comparison, cloud-to-local apply and local snapshot restore, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards and administrator vault settings/log | Cloud push, automatic sync, storage conflict recovery, 3D and remaining settings |
 
 ### Guarded manual cloud pull (stage 43)
 
@@ -53,6 +53,12 @@ The **Облако** page is available to every user and reads the existing `met
 Qt rejects overlapping roots, symlinks and Windows reparse points, then runs the existing pull against a disposable staging copy. A storage conflict or malformed changed JSON aborts before local writes. Before applying changed files, it keeps a complete sibling backup named `qt-cloud-backup-<uuid>` and atomically records a SHA-256 checked recovery journal at `meta/qt-cloud-pull.json`. Each destination is replaced through QSaveFile. A write failure restores only journaled files; startup and reload recover an interrupted commit before loading data. An invalid journal blocks loading. Backups stay outside the workspace so repeated pulls do not recursively copy earlier backups. Successful data is reloaded from disk. The confirmation explicitly warns that cloud files replace local edits; difference counts cover tasks/pipeline only, not every transferred file. Qt still does not push, auto-sync, upload a wallet, download a release or auto-resolve a conflict.
 
 The compact settings dialog edits the external root, enabled state, stable-client auto-pull/auto-push flags, administrator-profile inclusion and automatic interval. It rejects empty roots and any root equal to, inside or containing the Qt workspace. `SaveCloudSyncConfig` performs the existing checked Windows replacement and the dialog reloads every edited field before accepting. Tests cover Cyrillic-safe absolute paths, overlapping-root rejection, a real sharing lock with byte-identical preservation, pull and backup contents, no-op/disabled/overlap rejection, malformed JSON and storage conflicts, Windows sharing-lock rollback, interrupted-commit recovery, unsafe journal rejection, and the production button cancellation/confirmation/reload route. JSON syntax validation does not constitute a full schema or cross-reference audit.
+
+### Task and pipeline conflict recovery (stage 44)
+
+**Сравнить версии** opens a compact two-tab dialog for `meta/tasks.json` and `meta/pipeline.json`. Each tab shows separate local/cloud rows with domain entry counts, byte size and an elided full-path cell. The five newest compatible snapshots from `meta/updates` are listed below with 40-pixel restore actions. Confirmation defaults to cancel and repeats the source, destination and effect before writing.
+
+Applying cloud data or restoring a snapshot changes only the isolated local Qt workspace. The source must be a regular non-symlink JSON file and is re-read immediately before commit to reject stale previews. The current local file is first written as a compatible timestamped snapshot, cloud acceptance also stores the cloud source, and the target is replaced using `QSaveFile` without direct-write fallback. Malformed JSON and Windows sharing locks leave the target bytes unchanged. This stage deliberately does not upload a selected local version, modify the cloud root, resolve `storage.json`, prune snapshots or perform a full domain-schema/cross-reference audit.
 
 ### Rotating banner and phrase management (stage 41)
 

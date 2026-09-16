@@ -7,6 +7,7 @@
 #include "QtBannerEditor.h"
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
+#include "QtCloudConflict.h"
 #include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -311,8 +312,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bottom->addWidget(openShortcut_);
     cloudPull_ = new QPushButton(QString::fromUtf8("Получить из облака"));
     cloudPull_->setObjectName("cloudPull");
+    cloudPull_->setStyleSheet("min-height: 40px; max-height: 40px;");
     cloudPull_->setToolTip(QString::fromUtf8("Ручной pull после подтверждения; перед копированием создаётся полный снимок рабочей папки"));
     bottom->addWidget(cloudPull_);
+    cloudResolve_ = new QPushButton(QString::fromUtf8("Сравнить версии"));
+    cloudResolve_->setObjectName("cloudResolve"); cloudResolve_->setStyleSheet("min-height: 40px; max-height: 40px;");
+    cloudResolve_->setToolTip(QString::fromUtf8("Сравнить задачи и пайплайн, принять облачную версию или восстановить локальный снимок"));
+    bottom->addWidget(cloudResolve_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -353,6 +359,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (!exists || !QDesktopServices::openUrl(QUrl::fromLocalFile(q(found->path)))) message(u8"Не удалось открыть ярлык.");
     });
     connect(cloudPull_, &QPushButton::clicked, this, [this] { pullCloud(); });
+    connect(cloudResolve_, &QPushButton::clicked, this, [this] { resolveCloudConflict(); });
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
@@ -623,6 +630,7 @@ void QtWindow::render() {
     moveDown_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
     openShortcut_->setVisible(page == Shortcuts);
     cloudPull_->setVisible(page == Cloud);
+    cloudResolve_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -772,13 +780,16 @@ void QtWindow::render() {
         row("auto", {QString::fromUtf8("Автоматизация стабильной версии"), QString::fromUtf8("pull: %1 · push: %2 · каждые %3 мин")
             .arg(config.autoPull ? QString::fromUtf8("да") : QString::fromUtf8("нет"))
             .arg(config.autoPush ? QString::fromUtf8("да") : QString::fromUtf8("нет")).arg(config.autoSyncMinutes)});
+        int driftCount = 0;
         if (config.enabled && rootExists) {
-            const auto drift = InspectCloudWorkspaceDrift(config, workspace_.directory, 0);
+            const auto drift = InspectCloudWorkspaceDrift(config, workspace_.directory, 0); driftCount = drift.issueCount;
             row("drift", {QString::fromUtf8("Различия до первой синхронизации"), QString::number(drift.issueCount)});
         }
         const auto manifest = LoadCloudManifest(config, workspace_.directory);
         row("manifest", {QString::fromUtf8("Версия в manifest"), manifest.appVersion.empty() ? QString::fromUtf8("—") : q(manifest.appVersion)});
         cloudPull_->setEnabled(config.enabled && rootExists);
+        const bool hasBackups = !ListCloudWorkspaceBackups(workspace_.directory).empty();
+        cloudResolve_->setEnabled((config.enabled && rootExists && driftCount > 0) || hasBackups);
         summary_->setText(QString::fromUtf8("Ручной pull с подтверждением и полной резервной копией · автоматический pull, push и разрешение конфликтов заблокированы"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
@@ -1241,6 +1252,12 @@ void QtWindow::pullCloud() {
     if (result.sync.storageConflict) {
         QMessageBox::warning(this, QString::fromUtf8("Конфликт storage.json"), q(result.message));
     }
+}
+
+void QtWindow::resolveCloudConflict() {
+    if (!ShowCloudConflictResolver(this, workspace_.directory)) return;
+    profileSession_.lock();
+    if (reload()) statusBar()->showMessage(QString::fromUtf8("Локальная версия обновлена; облако не изменялось."), 15000);
 }
 
 void QtWindow::deleteEntry() {

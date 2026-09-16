@@ -12,6 +12,7 @@
 #include "QtBannerEditor.h"
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
+#include "QtCloudConflict.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineEditor.h"
@@ -553,6 +554,98 @@ static bool TestCloudPullTransaction() {
     window.close();
     CloudSyncConfig disabled = config; disabled.enabled = false;
     return !RunQtCloudPullTransaction(disabled, workspace, CloudRole::Viewer).sync.ok;
+}
+
+static bool TestCloudConflictResolver() {
+    auto fail = [](const char* step) { std::cerr << "cloudConflict: " << step << '\n'; return false; };
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + "/cloud").toUtf8().toStdString());
+    std::filesystem::create_directories(workspace / "meta"); std::filesystem::create_directories(cloud / "meta");
+    auto write = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QDir().mkpath(QFileInfo(QString::fromUtf8(path.u8string())).absolutePath());
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    auto read = [](const std::filesystem::path& path) {
+        QFile file(QString::fromUtf8(path.u8string())); if (!file.open(QIODevice::ReadOnly)) return QByteArray(); return file.readAll();
+    };
+    const QByteArray local = "[{\"id\":\"local\",\"title\":\"Local\"}]";
+    const QByteArray remote = "[{\"id\":\"remote\",\"title\":\"Cloud\"}]";
+    if (!write(workspace / "meta/tasks.json", local) || !write(cloud / "meta/tasks.json", remote) ||
+        !write(workspace / "meta/pipeline.json", "{\"steps\":[]}") || !write(cloud / "meta/pipeline.json", "{\"steps\":[]}")) return false;
+    CloudSyncConfig config; config.enabled = true; config.root = cloud;
+    if (!SaveCloudSyncConfig(workspace, config)) return false;
+    const auto applied = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
+    const auto listedAfterApply = ListCloudWorkspaceBackups(workspace, "meta/tasks.json");
+    if (!applied.ok || !applied.changed || applied.backupPath.empty() || read(workspace / "meta/tasks.json") != remote ||
+        read(applied.backupPath) != local || listedAfterApply.size() < 2) {
+        std::cerr << "cloudConflict detail ok=" << applied.ok << " changed=" << applied.changed
+                  << " path=" << applied.backupPath.u8string() << " backups=" << listedAfterApply.size()
+                  << " message=" << applied.message << '\n';
+        return fail("apply cloud");
+    }
+    const auto backups = ListCloudWorkspaceBackups(workspace, "meta/tasks.json");
+    const auto localBackup = std::find_if(backups.begin(), backups.end(), [](const auto& item) { return item.sourceKind == "local"; });
+    if (localBackup == backups.end()) return fail("find local backup");
+    const auto restored = ApplyQtCloudWorkspaceFile(workspace, localBackup->path, "meta/tasks.json", "restore");
+    if (!restored.ok || !restored.changed || read(workspace / "meta/tasks.json") != local) return fail("restore backup");
+    if (!write(cloud / "meta/tasks.json", "{broken")) return false;
+    const auto malformed = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
+    if (malformed.ok || read(workspace / "meta/tasks.json") != local) return fail("malformed source");
+    const auto foreign = workspace.parent_path() / "foreign.json";
+    if (!write(foreign, remote) || ApplyQtCloudWorkspaceFile(workspace, foreign, "meta/tasks.json", "cloud").ok ||
+        ApplyQtCloudWorkspaceFile(workspace, foreign, "meta/tasks.json", "restore").ok) return fail("foreign source");
+#ifdef _WIN32
+    if (!write(cloud / "meta/tasks.json", remote)) return false;
+    const HANDLE lock = CreateFileW((workspace / "meta/tasks.json").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    const auto locked = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
+    CloseHandle(lock);
+    if (locked.ok || read(workspace / "meta/tasks.json") != local) return fail("sharing lock");
+#endif
+    if (!write(cloud / "meta/tasks.json", remote)) return false;
+    bool inspected = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* table = dialog ? dialog->findChild<QTableWidget*>("tasksComparison") : nullptr;
+        auto* apply = dialog ? dialog->findChild<QPushButton*>("applyCloudTasks") : nullptr;
+        inspected = dialog && dialog->objectName() == "cloudConflictResolver" && table && table->rowCount() == 2 &&
+            apply && apply->height() >= 40;
+        if (!inspected) std::cerr << "cloudConflict inspect dialog=" << bool(dialog)
+            << " name=" << (dialog ? dialog->objectName().toStdString() : "") << " table=" << bool(table)
+            << " rows=" << (table ? table->rowCount() : -1) << " apply=" << bool(apply)
+            << " height=" << (apply ? apply->height() : -1) << '\n';
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/cloud-conflict.png"); }
+        QTimer::singleShot(0, [] {
+            if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                if (box->defaultButton() != box->button(QMessageBox::Cancel)) return;
+                box->button(QMessageBox::Yes)->click();
+            }
+        });
+        if (apply) apply->click();
+    });
+    const bool dialogChanged = ShowCloudConflictResolver(nullptr, workspace);
+    if (!dialogChanged || !inspected || read(workspace / "meta/tasks.json") != remote) {
+        std::cerr << "cloudConflict dialog changed=" << dialogChanged << " inspected=" << inspected
+                  << " local=" << read(workspace / "meta/tasks.json").toStdString() << '\n';
+        return fail("dialog apply");
+    }
+    QtWorkspace uiWorkspace(workspace); QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
+    auto* nav = window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(13);
+    auto* route = window.findChild<QPushButton*>("cloudResolve");
+    if (!route || !route->isVisible() || !route->isEnabled() || route->height() < 40) return fail("window route");
+    bool routeOpened = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        routeOpened = dialog && dialog->objectName() == "cloudConflictResolver";
+        if (dialog) dialog->reject();
+    });
+    route->click();
+    if (!routeOpened) return fail("window route dialog");
+    window.close();
+    return true;
 }
 
 static bool TestProfileDialogs() {
@@ -1714,6 +1807,7 @@ int main(int argc, char** argv) {
     if (!TestBannerEditor()) { std::cerr << "Banner editor failed\n"; return 1; }
     if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
     if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
+    if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
