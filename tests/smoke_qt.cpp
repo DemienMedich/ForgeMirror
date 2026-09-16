@@ -11,6 +11,7 @@
 #include "QtVaultEditor.h"
 #include "QtBannerEditor.h"
 #include "QtCloudSettings.h"
+#include "QtCloudPull.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineEditor.h"
@@ -449,6 +450,109 @@ static bool TestCloudSettings() {
     if (accepted || !lockSeen || !config.open(QIODevice::ReadOnly) || config.readAll() != before) return false; config.close();
 #endif
     return true;
+}
+
+static bool TestCloudPullTransaction() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + "/cloud").toUtf8().toStdString());
+    std::filesystem::create_directories(workspace / "meta");
+    std::filesystem::create_directories(cloud / "meta");
+    auto write = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    if (!write(workspace / "meta/tasks.json", "[{\"id\":\"local\"}]") ||
+        !write(cloud / "meta/tasks.json", "[{\"id\":\"cloud\"}]")) return false;
+    CloudSyncConfig config; config.enabled = true; config.root = cloud;
+    const auto result = RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer);
+    QFile pulled(QString::fromUtf8((workspace / "meta/tasks.json").u8string()));
+    if (!result.sync.ok || !result.sync.changed || result.backupPath.empty() ||
+        !std::filesystem::is_directory(result.backupPath) || !pulled.open(QIODevice::ReadOnly) ||
+        !pulled.readAll().contains("cloud")) return false;
+    QFile backup(QString::fromUtf8((result.backupPath / "meta/tasks.json").u8string()));
+    if (!backup.open(QIODevice::ReadOnly) || !backup.readAll().contains("local")) return false;
+    pulled.close(); backup.close();
+    auto bytes = [](const std::filesystem::path& path) {
+        QFile file(QString::fromUtf8(path.u8string()));
+        if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+        return file.readAll();
+    };
+    const auto identical = RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer);
+    if (!identical.sync.ok || identical.sync.changed || !identical.backupPath.empty()) return false;
+    auto overlap = config; overlap.root = workspace;
+    if (RunQtCloudPullTransaction(overlap, workspace, CloudRole::Viewer).sync.ok) return false;
+    overlap.root = workspace.parent_path();
+    if (RunQtCloudPullTransaction(overlap, workspace, CloudRole::Viewer).sync.ok) return false;
+    if (!write(cloud / "meta/tasks.json", "{broken")) return false;
+    if (RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer).sync.ok ||
+        !bytes(workspace / "meta/tasks.json").contains("cloud")) return false;
+    if (!write(cloud / "meta/tasks.json", "[{\"id\":\"next\"}]") ||
+        !write(workspace / "meta/storage.json", "{\"rev\":1,\"balance\":1}") ||
+        !write(cloud / "meta/storage.json", "{\"rev\":1,\"balance\":2}")) return false;
+    const auto conflict = RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer);
+    if (conflict.sync.ok || !conflict.sync.storageConflict ||
+        !bytes(workspace / "meta/tasks.json").contains("cloud")) return false;
+    std::filesystem::remove(cloud / "meta/storage.json");
+#ifdef _WIN32
+    if (!write(workspace / "meta/banner.json", "[\"local\"]") ||
+        !write(cloud / "meta/banner.json", "[\"remote\"]")) return false;
+    const HANDLE lock = CreateFileW((workspace / "meta/tasks.json").c_str(), GENERIC_READ,
+        FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    const auto failed = RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer);
+    CloseHandle(lock);
+    if (failed.sync.ok || !failed.rolledBack || bytes(workspace / "meta/banner.json") != "[\"local\"]" ||
+        !bytes(workspace / "meta/tasks.json").contains("cloud") ||
+        std::filesystem::exists(workspace / "meta/qt-cloud-pull.json")) return false;
+#endif
+    // Recreate an interrupted commit, then recover through the actual workspace constructor.
+    const QByteArray before = bytes(result.backupPath / "meta/tasks.json");
+    QJsonArray entries{QJsonObject{{"path", "meta/tasks.json"}, {"existed", true},
+        {"hash", QString::fromLatin1(QCryptographicHash::hash(before, QCryptographicHash::Sha256).toHex())}},
+        QJsonObject{{"path", "meta/banner.json"}, {"existed", false}}};
+    const auto journal = workspace / "meta/qt-cloud-pull.json";
+    auto journalBytes = QJsonDocument(QJsonObject{{"version", 1},
+        {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", entries}}).toJson();
+    if (!write(journal, journalBytes)) return false;
+    { QtWorkspace recovered(workspace); }
+    if (bytes(workspace / "meta/tasks.json") != before || std::filesystem::exists(journal) ||
+        std::filesystem::exists(workspace / "meta/banner.json")) return false;
+    entries.append(QJsonObject{{"path", "../outside.ini"}, {"existed", false}});
+    journalBytes = QJsonDocument(QJsonObject{{"version", 1},
+        {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", entries}}).toJson();
+    if (!write(journal, journalBytes)) return false;
+    bool rejected = false;
+    try { RecoverQtCloudPull(workspace); } catch (const std::exception&) { rejected = true; }
+    if (!rejected || !std::filesystem::exists(journal) || bytes(workspace / "meta/tasks.json") != before) return false;
+    std::filesystem::remove(journal);
+    if (!SaveCloudSyncConfig(workspace, config) || !SaveBannerTexts(cloud, {"remote"})) return false;
+    QtWorkspace uiWorkspace(workspace);
+    QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
+    window.findChild<QListWidget*>("navigation")->setCurrentRow(13);
+    auto* pull = window.findChild<QPushButton*>("cloudPull");
+    if (!pull || !pull->isEnabled()) return false;
+    QTimer::singleShot(0, [] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))
+            box->button(QMessageBox::Cancel)->click();
+    });
+    pull->click();
+    if (bytes(workspace / "meta/tasks.json") != before) return false;
+    bool confirmed = false;
+    QTimer::singleShot(0, [&] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            confirmed = box->defaultButton() == box->button(QMessageBox::Cancel);
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); box->grab().save(artifacts + "/cloud-pull-confirm.png"); }
+            box->button(QMessageBox::Yes)->click();
+        }
+    });
+    pull->click();
+    if (!confirmed || !bytes(workspace / "meta/tasks.json").contains("next") ||
+        uiWorkspace.data.bannerTexts != std::vector<std::string>{"remote"}) return false;
+    window.close();
+    CloudSyncConfig disabled = config; disabled.enabled = false;
+    return !RunQtCloudPullTransaction(disabled, workspace, CloudRole::Viewer).sync.ok;
 }
 
 static bool TestProfileDialogs() {
@@ -1609,6 +1713,7 @@ int main(int argc, char** argv) {
     if (!TestVaultEditor()) { std::cerr << "Vault editor failed\n"; return 1; }
     if (!TestBannerEditor()) { std::cerr << "Banner editor failed\n"; return 1; }
     if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
+    if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1729,8 +1834,10 @@ int main(int argc, char** argv) {
     if (!workspace.data.shortcuts.empty() || table->rowCount() != 0 || !QFileInfo::exists(shortcutTarget.fileName()))
         return fail("Shortcut UI delete removed data incorrectly");
     nav->setCurrentRow(13);
+    auto* cloudPull = window.findChild<QPushButton*>("cloudPull");
     if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настроить облако") ||
-        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("без передачи данных"))) return fail("Cloud readiness page unavailable");
+        !cloudPull || !cloudPull->isVisible() || cloudPull->isEnabled() ||
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("полной резервной копией"))) return fail("Cloud guarded pull page unavailable");
     const auto cloudArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!cloudArtifacts.isEmpty()) window.grab().save(cloudArtifacts + "/cloud-page.png");
     QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });

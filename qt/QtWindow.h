@@ -17,7 +17,7 @@ class QtWindow : public QMainWindow {
 public:
     explicit QtWindow(QtWorkspace& workspace);
 private:
-    void reload();
+    bool reload();
     void render();
     void details();
     void authenticate();
@@ -31,6 +31,7 @@ private:
     void reapplyRules();
     void grantDirectXp();
     void updateBanner();
+    void pullCloud();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -69,5 +70,6 @@ private:
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* openShortcut_;
+    QPushButton* cloudPull_;
     int bannerIndex_ = 0;
 };

@@ -1,9 +1,11 @@
 #include "QtWorkspace.h"
+#include "QtCloudPull.h"
 #include "AppProfileService.h"
 #include "AppTaskCompletionService.h"
 
 namespace {
 std::filesystem::path prepare(std::filesystem::path directory) {
+    RecoverQtCloudPull(directory);
     RecoverTaskCompletion(directory);
     return directory;
 }
@@ -18,6 +20,7 @@ QtWorkspace::QtWorkspace(std::filesystem::path path)
 }
 
 void QtWorkspace::reload() {
+    RecoverQtCloudPull(directory);
     RecoverTaskCompletion(directory);
     catalog.reload();
     data = LoadWorkspaceDataSnapshot(directory, modules);

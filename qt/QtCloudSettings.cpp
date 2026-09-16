@@ -23,7 +23,7 @@ bool ShowCloudSettings(QWidget* parent, const std::filesystem::path& workspaceDi
     const auto current = LoadCloudSyncConfig(workspaceDirectory);
     QDialog dialog(parent); dialog.setObjectName("cloudSettings"); dialog.setWindowTitle(QString::fromUtf8("Настройки облака")); dialog.setMinimumWidth(580);
     auto* form = new QFormLayout(&dialog);
-    auto* warning = new QLabel(QString::fromUtf8("На этом этапе Qt только сохраняет конфигурацию и проверяет готовность. Копирование, push, pull и разрешение конфликтов отключены."));
+    auto* warning = new QLabel(QString::fromUtf8("Qt сохраняет конфигурацию и проверяет готовность. Ручной pull запускается отдельно с подтверждением и полной резервной копией; push, автоматическая синхронизация и разрешение конфликтов отключены."));
     warning->setWordWrap(true); warning->setProperty("warning", true); form->addRow(warning);
     auto* enabled = new QCheckBox(QString::fromUtf8("Включить конфигурацию облака")); enabled->setObjectName("cloudEnabled"); enabled->setChecked(current.enabled);
     auto* root = new QLineEdit(QString::fromUtf8(current.root.u8string())); root->setObjectName("cloudRoot");
