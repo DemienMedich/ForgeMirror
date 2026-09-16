@@ -33,6 +33,7 @@ private:
     void updateBanner();
     void pullCloud();
     void resolveCloudConflict();
+    void resolveStorageConflict();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -73,5 +74,6 @@ private:
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
     QPushButton* cloudResolve_;
+    QPushButton* storageResolve_;
     int bannerIndex_ = 0;
 };

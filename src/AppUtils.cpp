@@ -1166,6 +1166,16 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     return data;
 }
 
+bool ValidateStorageVaultFile(const std::filesystem::path& storageDir) {
+    std::ifstream in(StorageVaultPath(storageDir), std::ios::binary);
+    if (!in) return false;
+    const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string storedHash;
+    if (!ExtractJsonStringField(content, "content_hash", storedHash) || storedHash.empty()) return false;
+    const auto data = LoadStorageVault(storageDir);
+    return storedHash == BuildVaultContentHash(data, FormatVaultAmount(data.balance));
+}
+
 bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data) {
     std::filesystem::create_directories(storageDir / "meta");
     std::int64_t existingRev = 0;

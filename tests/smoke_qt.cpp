@@ -13,6 +13,7 @@
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
 #include "QtCloudConflict.h"
+#include "QtStorageConflict.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
 #include "QtPipelineEditor.h"
@@ -685,6 +686,58 @@ static bool TestCloudConflictResolver() {
     route->click();
     if (!routeOpened) return fail("window route dialog");
     window.close();
+    return true;
+}
+
+static bool TestStorageConflictResolver() {
+    auto fail = [](const char* step) { std::cerr << "storageConflict: " << step << '\n'; return false; };
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + "/cloud").toUtf8().toStdString());
+    std::filesystem::create_directories(workspace); std::filesystem::create_directories(cloud);
+    CloudSyncConfig config; config.enabled = true; config.root = cloud;
+    if (!SaveCloudSyncConfig(workspace, config)) return false;
+    StorageVaultData local; local.currencyName = "Local coin"; local.currencyCode = "LOC"; local.balance = 10; local.log.push_back({100, 10, "local", "entry"});
+    StorageVaultData remote; remote.currencyName = "Cloud coin"; remote.currencyCode = "CLD"; remote.balance = 25; remote.log.push_back({200, 25, "cloud", "entry"});
+    if (!SaveStorageVault(workspace, local) || !SaveStorageVault(cloud, remote) || !HasQtStorageConflict(workspace)) return fail("fixture");
+    const auto accepted = ResolveQtStorageConflict(workspace, true);
+    if (!accepted.ok || !accepted.changed || std::abs(LoadStorageVault(workspace).balance - 25) > 0.001 || HasQtStorageConflict(workspace)) return fail("accept cloud");
+    QDir updates(QString::fromUtf8((workspace / "meta/updates").u8string()));
+    if (updates.entryList({"storage.local.*.json"}, QDir::Files).isEmpty() || updates.entryList({"storage.cloud.*.json"}, QDir::Files).isEmpty()) return fail("backups");
+    local.balance = 42; local.currencyCode = "NEW"; if (!SaveStorageVault(workspace, local)) return false;
+    const auto pushed = ResolveQtStorageConflict(workspace, false);
+    if (!pushed.ok || !pushed.changed || std::abs(LoadStorageVault(cloud).balance - 42) > 0.001) return fail("keep local");
+    QFile malformed(QString::fromUtf8((cloud / "meta/storage.json").u8string()));
+    if (!malformed.open(QIODevice::WriteOnly | QIODevice::Truncate) || malformed.write("{broken") != 7) return false; malformed.close();
+    const auto before = LoadStorageVault(workspace).balance;
+    if (ResolveQtStorageConflict(workspace, true).ok || std::abs(LoadStorageVault(workspace).balance - before) > 0.001) return fail("malformed");
+    if (!SaveStorageVault(cloud, remote)) return false;
+    QFile tampered(QString::fromUtf8((cloud / "meta/storage.json").u8string()));
+    if (!tampered.open(QIODevice::ReadOnly)) return false; auto tamperedBytes = tampered.readAll(); tampered.close();
+    tamperedBytes.replace("Cloud coin", "False coin");
+    if (!tampered.open(QIODevice::WriteOnly | QIODevice::Truncate) || tampered.write(tamperedBytes) != tamperedBytes.size()) return false; tampered.close();
+    if (ResolveQtStorageConflict(workspace, true).ok) return fail("content hash");
+    if (!SaveStorageVault(cloud, remote)) return false;
+#ifdef _WIN32
+    const auto cloudPath = (cloud / "meta/storage.json").wstring();
+    const HANDLE lock = CreateFileW(cloudPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+    const auto locked = ResolveQtStorageConflict(workspace, false); CloseHandle(lock);
+    if (locked.ok || std::abs(LoadStorageVault(cloud).balance - 25) > 0.001) return fail("sharing lock");
+#endif
+    bool inspected = false; bool localChanged = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* table = dialog ? dialog->findChild<QTableWidget*>("storageComparison") : nullptr;
+        auto* accept = dialog ? dialog->findChild<QPushButton*>("acceptCloudStorage") : nullptr;
+        inspected = dialog && table && table->rowCount() == 2 && accept && accept->height() >= 40;
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/storage-conflict.png"); }
+        QTimer::singleShot(0, [&] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) { inspected = inspected && box->defaultButton() == box->button(QMessageBox::Cancel) && box->button(QMessageBox::Yes)->height() >= 40; box->button(QMessageBox::Yes)->click(); } });
+        if (accept) accept->click();
+    });
+    if (!ShowQtStorageConflictResolver(nullptr, workspace, &localChanged) || !inspected || !localChanged ||
+        std::abs(LoadStorageVault(workspace).balance - 25) > 0.001) return fail("dialog accept");
     return true;
 }
 
@@ -1848,6 +1901,7 @@ int main(int argc, char** argv) {
     if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
     if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
+    if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
@@ -1969,8 +2023,9 @@ int main(int argc, char** argv) {
         return fail("Shortcut UI delete removed data incorrectly");
     nav->setCurrentRow(13);
     auto* cloudPull = window.findChild<QPushButton*>("cloudPull");
+    auto* storageResolve = window.findChild<QPushButton*>("storageResolve");
     if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настроить облако") ||
-        !cloudPull || !cloudPull->isVisible() || cloudPull->isEnabled() ||
+        !cloudPull || !cloudPull->isVisible() || cloudPull->isEnabled() || !storageResolve || !storageResolve->isVisible() || storageResolve->isEnabled() ||
         !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Ручные pull"))) return fail("Cloud guarded pull page unavailable");
     const auto cloudArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!cloudArtifacts.isEmpty()) window.grab().save(cloudArtifacts + "/cloud-page.png");

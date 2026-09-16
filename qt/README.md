@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 45**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.10` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
+This is **stage 46**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.11` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.10.exe`. Version `0.6.10` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.10.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.11.exe`. Version `0.6.11` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.11.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 45 | Remaining |
+| Area | Qt stage 46 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Other wallet operations and richer activity history |
 | Tasks | List, search, status filter, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -44,7 +44,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
-| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards and administrator vault settings/log | Whole-workspace push, automatic sync, storage conflict recovery, 3D and remaining settings |
+| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards and administrator vault settings/log | Whole-workspace push, automatic sync, 3D and remaining settings |
 
 ### Guarded manual cloud pull (stage 43)
 
@@ -64,7 +64,13 @@ Applying cloud data or restoring a snapshot changes only the isolated local Qt w
 
 The same comparison dialog can explicitly upload one local `tasks.json` or `pipeline.json`. It never sends the whole workspace. Before replacement, the current local source and existing cloud target are copied into compatible local `meta/updates` snapshots. Source and target are re-read after preview; an intervening change aborts the operation. The destination uses `QSaveFile` with direct-write fallback disabled, so a sharing lock or commit failure leaves the cloud bytes unchanged. The configured root must exist, remain separate from the workspace and contain no symlink/reparse traversal.
 
-Push is manual and file-scoped. Automatic pull/push, timers, background conflict decisions, `storage.json` upload and snapshot pruning remain disabled.
+Stage 45 push is manual and limited to tasks/pipeline. Automatic pull/push, timers, background conflict decisions and snapshot pruning remain disabled.
+
+### Storage conflict recovery (stage 46)
+
+An administrator-only action appears when local and cloud `meta/storage.json` differ. The comparison shows balance, currency, revision, journal size, update time and paths. Resolution always selects one complete wallet version; balances and journal entries are never guessed, added or merged. Confirmation defaults to cancel and explicitly warns that the other balance, journal and reward rules will be replaced.
+
+Both original files are first written to timestamped local `meta/updates/storage.local.*.json` and `storage.cloud.*.json` snapshots. Both JSON structure and the canonical vault `content_hash` are validated, source and target are re-read to reject stale previews, roots and reparse traversal are guarded, and replacement uses `QSaveFile` without direct-write fallback. Automatic resolution remains disabled.
 
 ### Rotating banner and phrase management (stage 41)
 

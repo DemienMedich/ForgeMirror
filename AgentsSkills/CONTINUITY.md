@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; cloud mutations require explicit confirmation, local backup and atomic replacement; automatic sync remains disabled. Use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 45 verified on codex/qt-gui. Guarded file-scoped task/pipeline push is complete; stable branches remain unchanged.
+- State: Stage 46 verified on codex/qt-gui. Explicit administrator storage conflict recovery is complete; stable branches remain unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 45 version 0.6.10 passed build, smoke_core, smoke_qt, native UI inspection, installer 0.6.9-to-0.6.10 update, system-only-PATH startup and uninstall with preserved data. Release evidence: docs/releases/ForgeMirror-0.6.10.md.
-- Next: Address storage conflict recovery before considering any whole-workspace push or automatic sync. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 46 version 0.6.11 passed build, smoke_core, smoke_qt, native UI inspection, installer 0.6.10-to-0.6.11 update, system-only-PATH startup and uninstall with preserved data. Release evidence: docs/releases/ForgeMirror-0.6.11.md.
+- Next: Continue remaining settings and 3D before considering any whole-workspace push or automatic sync. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtCloudConflict.*, qt/QtWindow.*, tests/smoke_qt.cpp; build-qt.ps1 -Package; installer/build-qt-installer.ps1. Push remains explicit and limited to tasks/pipeline; automatic sync stays unavailable.
+- Working set (files/ids/commands): qt/QtStorageConflict.*, qt/QtWindow.*, src/AppUtils.cpp, tests/smoke_qt.cpp; build-qt.ps1 -Package; installer/build-qt-installer.ps1. Storage choice remains explicit and administrator-only; automatic sync stays unavailable.
 
 ---
 # Historical ledger (superseded by the current work above)

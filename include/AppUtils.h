@@ -80,6 +80,7 @@ void AppendProfileAudit(const std::filesystem::path& storageDir, const std::stri
 ModuleToggles LoadModuleToggles();
 // Storage vault data (meta/storage.json).
 StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir);
+bool ValidateStorageVaultFile(const std::filesystem::path& storageDir);
 bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data);
 
 // Banner text storage (meta/banner.json).

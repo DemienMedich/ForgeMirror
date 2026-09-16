@@ -8,6 +8,7 @@
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
 #include "QtCloudConflict.h"
+#include "QtStorageConflict.h"
 #include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -319,6 +320,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     cloudResolve_->setObjectName("cloudResolve"); cloudResolve_->setStyleSheet("min-height: 40px; max-height: 40px;");
     cloudResolve_->setToolTip(QString::fromUtf8("Сравнить задачи и пайплайн, принять облачную версию или восстановить локальный снимок"));
     bottom->addWidget(cloudResolve_);
+    storageResolve_ = new QPushButton(QString::fromUtf8("Разрешить storage.json"));
+    storageResolve_->setObjectName("storageResolve"); storageResolve_->setStyleSheet("min-height: 40px; max-height: 40px;");
+    storageResolve_->setToolTip(QString::fromUtf8("Сравнить баланс, журнал и ревизию кошелька и выбрать целую версию"));
+    bottom->addWidget(storageResolve_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -360,6 +365,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(cloudPull_, &QPushButton::clicked, this, [this] { pullCloud(); });
     connect(cloudResolve_, &QPushButton::clicked, this, [this] { resolveCloudConflict(); });
+    connect(storageResolve_, &QPushButton::clicked, this, [this] { resolveStorageConflict(); });
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
@@ -631,6 +637,7 @@ void QtWindow::render() {
     openShortcut_->setVisible(page == Shortcuts);
     cloudPull_->setVisible(page == Cloud);
     cloudResolve_->setVisible(page == Cloud);
+    storageResolve_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -790,6 +797,7 @@ void QtWindow::render() {
         cloudPull_->setEnabled(config.enabled && rootExists);
         const bool hasBackups = !ListCloudWorkspaceBackups(workspace_.directory).empty();
         cloudResolve_->setEnabled((config.enabled && rootExists && driftCount > 0) || hasBackups);
+        storageResolve_->setEnabled(admin_ && config.enabled && rootExists && HasQtStorageConflict(workspace_.directory));
         summary_->setText(QString::fromUtf8("Ручные pull и отправка отдельных tasks/pipeline требуют подтверждения и резервной копии · автоматическая синхронизация заблокирована"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
@@ -1258,6 +1266,15 @@ void QtWindow::resolveCloudConflict() {
     if (!ShowCloudConflictResolver(this, workspace_.directory)) return;
     profileSession_.lock();
     if (reload()) statusBar()->showMessage(QString::fromUtf8("Локальная версия обновлена; облако не изменялось."), 15000);
+}
+
+void QtWindow::resolveStorageConflict() {
+    if (!requireAdmin()) return;
+    bool localChanged = false;
+    if (!ShowQtStorageConflictResolver(this, workspace_.directory, &localChanged)) return;
+    if (localChanged) { profileSession_.lock(); if (!reload()) return; }
+    else render();
+    statusBar()->showMessage(QString::fromUtf8("Конфликт storage.json разрешён; обе исходные версии сохранены в meta/updates."), 15000);
 }
 
 void QtWindow::deleteEntry() {
