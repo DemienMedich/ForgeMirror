@@ -1,14 +1,14 @@
 # Current work: Qt migration (2026-08-28)
 
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
-- Constraints/Assumptions: Preserve develop; no cloud sync from the migration client; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
+- Constraints/Assumptions: Preserve develop; the migration client may only perform confirmed manual cloud pull with a full backup, never push or automatic sync; use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 35 pushed as d942717. Stage 36 establishes canonical version 0.6.1 and a verified per-user Qt Setup.exe with upgrade/uninstall coverage. Stable branches unchanged.
+- State: Stage 43 pushed as b54a2c1 on codex/qt-gui. Guarded manual pull now stages before applying and recovers interrupted commits. Stable branches unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 36 ready for commit/push: VERSION drives application, EXE and installer metadata plus artifact naming. ForgeMirrorSetup_0.6.1.exe passed clean install, real 0.6.0-to-0.6.1 in-place update, system-only-PATH startup, registry validation and uninstall while preserving user data.
-- Next: Add crash-safe bulk rules recalculation; then cloud, remaining settings and 3D. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 43 version 0.6.8 passed build, smoke_core, smoke_qt, native UI inspection, installer 0.6.7-to-0.6.8 update, system-only-PATH startup and uninstall with preserved data. Release evidence: docs/releases/ForgeMirror-0.6.8.md. Code committed and pushed.
+- Next: Add explicit cloud conflict recovery; then push/automatic sync only after equally guarded recovery, followed by 3D and remaining settings. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtDisplaySettings.*, qt/QtWindow.*, tests/smoke_qt.cpp, qt/README.md; build-qt.ps1 -Package. Stage 22 tests cover persistence/reload, live scale/density, unknown-line preservation and Windows sharing failure.
+- Working set (files/ids/commands): qt/QtCloudPull.*, qt/QtWorkspace.cpp, qt/QtWindow.*, tests/smoke_qt.cpp; build-qt.ps1 -Package. Pull stages in a temporary copy, retains a full sibling qt-cloud-backup-UUID, and journals changed files in meta/qt-cloud-pull.json; startup recovery validates paths and SHA-256 before restoring.
 
 ---
 # Historical ledger (superseded by the current work above)
