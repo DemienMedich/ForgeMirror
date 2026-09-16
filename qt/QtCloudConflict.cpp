@@ -22,6 +22,16 @@ bool samePath(const std::filesystem::path& first, const std::filesystem::path& s
     return a == b;
 #endif
 }
+bool pathsOverlap(const std::filesystem::path& first, const std::filesystem::path& second) {
+    std::error_code ec; auto a = std::filesystem::weakly_canonical(first, ec); if (ec) return true;
+    auto b = std::filesystem::weakly_canonical(second, ec); if (ec) return true;
+    auto as = QDir::fromNativeSeparators(q(a)); auto bs = QDir::fromNativeSeparators(q(b));
+#ifdef _WIN32
+    as = as.toCaseFolded(); bs = bs.toCaseFolded();
+#endif
+    if (!as.endsWith('/')) as += '/'; if (!bs.endsWith('/')) bs += '/';
+    return as.startsWith(bs) || bs.startsWith(as);
+}
 bool safePath(const std::filesystem::path& path) {
     std::filesystem::path current;
     for (const auto& part : std::filesystem::absolute(path)) {
@@ -92,13 +102,13 @@ QString label(const std::string& relative) {
     return QString::fromUtf8(relative == "meta/tasks.json" ? "Задачи" : "Пайплайн");
 }
 
-bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target) {
+bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target, const QString& action) {
     QMessageBox box(QMessageBox::Warning, title,
-        QString::fromUtf8("Источник\n%1\n\nБудет заменено\n%2\n\nТекущая локальная версия сначала сохранится в meta/updates.")
+        QString::fromUtf8("Источник\n%1\n\nБудет заменено\n%2\n\nТекущая заменяемая версия сначала сохранится в локальном meta/updates.")
             .arg(source, target), QMessageBox::Yes | QMessageBox::Cancel, parent);
     box.setObjectName("cloudConflictConfirm");
     box.setDefaultButton(QMessageBox::Cancel);
-    box.button(QMessageBox::Yes)->setText(QString::fromUtf8("Применить"));
+    box.button(QMessageBox::Yes)->setText(action);
     box.button(QMessageBox::Cancel)->setText(QString::fromUtf8("Отмена"));
     box.button(QMessageBox::Yes)->setMinimumWidth(120); box.button(QMessageBox::Yes)->setStyleSheet("min-height: 40px; max-height: 40px;");
     box.button(QMessageBox::Cancel)->setMinimumWidth(120); box.button(QMessageBox::Cancel)->setStyleSheet("min-height: 40px; max-height: 40px;");
@@ -150,13 +160,55 @@ QtCloudConflictResult ApplyQtCloudWorkspaceFile(const std::filesystem::path& wor
     return result;
 }
 
+QtCloudConflictResult PushQtCloudWorkspaceFile(const std::filesystem::path& workspace,
+                                               const std::string& relative) {
+    QtCloudConflictResult result;
+    if (!supported(relative)) { result.message = u8"Неподдерживаемый файл для отправки."; return result; }
+    const auto config = LoadCloudSyncConfig(workspace);
+    const auto root = ResolveCloudRootPath(config, workspace);
+    if (!config.enabled || !std::filesystem::is_directory(root) || pathsOverlap(root, workspace)) {
+        result.message = u8"Облачный корень недоступен или пересекается с рабочей папкой."; return result;
+    }
+    const auto source = workspace / std::filesystem::u8path(relative);
+    const auto target = root / std::filesystem::u8path(relative);
+    QString error;
+    const auto sourceBytes = readFile(source, error);
+    if (!error.isEmpty() || !validDocument(sourceBytes, error)) { result.message = error.toUtf8().toStdString(); return result; }
+    QByteArray targetBytes; const bool targetExisted = std::filesystem::exists(target);
+    if (targetExisted) {
+        targetBytes = readFile(target, error);
+        if (!error.isEmpty()) { result.message = error.toUtf8().toStdString(); return result; }
+        if (targetBytes == sourceBytes) { result.ok = true; result.message = u8"Локальная и облачная версии уже совпадают."; return result; }
+    } else if (!safePath(target.parent_path())) {
+        result.message = u8"Запись через ссылку запрещена."; return result;
+    }
+    const auto localBackup = backupPath(workspace, relative, "local");
+    if (!atomicWrite(localBackup, sourceBytes, error)) { result.message = error.toUtf8().toStdString(); return result; }
+    if (targetExisted) {
+        result.backupPath = backupPath(workspace, relative, "cloud");
+        if (!atomicWrite(result.backupPath, targetBytes, error)) { result.message = error.toUtf8().toStdString(); result.backupPath.clear(); return result; }
+    }
+    // Both ends must still match the preview immediately before the atomic replacement.
+    const auto checkedSource = readFile(source, error);
+    if (!error.isEmpty() || checkedSource != sourceBytes) { result.message = u8"Локальная версия изменилась после проверки. Откройте сравнение заново."; return result; }
+    if (targetExisted) {
+        const auto checkedTarget = readFile(target, error);
+        if (!error.isEmpty() || checkedTarget != targetBytes) { result.message = u8"Облачная версия изменилась после проверки. Откройте сравнение заново."; return result; }
+    } else if (std::filesystem::exists(target)) {
+        result.message = u8"Облачный файл появился после проверки. Откройте сравнение заново."; return result;
+    }
+    if (!atomicWrite(target, sourceBytes, error)) { result.message = error.toUtf8().toStdString(); return result; }
+    result.ok = true; result.changed = true; result.message = u8"Локальная версия отправлена в облако.";
+    return result;
+}
+
 bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& workspace) {
     const auto config = LoadCloudSyncConfig(workspace);
     const auto root = ResolveCloudRootPath(config, workspace);
     QDialog dialog(parent); dialog.setObjectName("cloudConflictResolver");
     dialog.setWindowTitle(QString::fromUtf8("Сравнение облачных версий")); dialog.resize(820, 560); dialog.setMinimumSize(720, 480);
     auto* layout = new QVBoxLayout(&dialog); layout->setContentsMargins(18, 16, 18, 16); layout->setSpacing(12);
-    auto* intro = new QLabel(QString::fromUtf8("Выберите отдельный файл для замены локальной версии. Облако здесь не изменяется."));
+    auto* intro = new QLabel(QString::fromUtf8("Выберите направление для отдельного файла. Любая замена требует подтверждения и резервной копии."));
     intro->setWordWrap(true); intro->setProperty("warning", true); layout->addWidget(intro);
     auto* tabs = new QTabWidget; tabs->setObjectName("cloudConflictTabs"); layout->addWidget(tabs, 1);
     bool changed = false;
@@ -177,8 +229,11 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         comparison->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed); comparison->setColumnWidth(1, 160);
         comparison->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
         comparison->setTextElideMode(Qt::ElideMiddle); comparison->setMaximumHeight(118); box->addWidget(comparison);
-        auto* apply = new QPushButton(QString::fromUtf8("Применить облачную версию")); apply->setObjectName(relative == "meta/tasks.json" ? "applyCloudTasks" : "applyCloudPipeline");
-        apply->setProperty("primary", true); apply->setStyleSheet("min-height: 40px; max-height: 40px;"); apply->setEnabled(std::filesystem::is_regular_file(cloud)); box->addWidget(apply, 0, Qt::AlignLeft);
+        auto* actions = new QHBoxLayout; actions->setSpacing(8);
+        auto* apply = new QPushButton(QString::fromUtf8("Принять из облака")); apply->setObjectName(relative == "meta/tasks.json" ? "applyCloudTasks" : "applyCloudPipeline");
+        apply->setProperty("primary", true); apply->setStyleSheet("min-height: 40px; max-height: 40px;"); apply->setEnabled(std::filesystem::is_regular_file(cloud)); actions->addWidget(apply);
+        auto* push = new QPushButton(QString::fromUtf8("Отправить локальную")); push->setObjectName(relative == "meta/tasks.json" ? "pushCloudTasks" : "pushCloudPipeline");
+        push->setStyleSheet("min-height: 40px; max-height: 40px;"); push->setEnabled(config.enabled && std::filesystem::is_regular_file(local)); actions->addWidget(push); actions->addStretch(); box->addLayout(actions);
         auto* backups = new QTableWidget; backups->setObjectName(relative == "meta/tasks.json" ? "tasksBackups" : "pipelineBackups");
         backups->setColumnCount(4); backups->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Источник"), QString::fromUtf8("Сводка"), QString::fromUtf8("Действие")});
         backups->verticalHeader()->hide(); backups->setEditTriggers(QAbstractItemView::NoEditTriggers); backups->setSelectionMode(QAbstractItemView::NoSelection); backups->setShowGrid(false);
@@ -190,7 +245,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
             backups->setItem(i, 2, new QTableWidgetItem(preview(snapshot.path, relative)));
             auto* restore = new QPushButton(QString::fromUtf8("Восстановить")); restore->setStyleSheet("min-height: 40px; max-height: 40px;"); backups->setRowHeight(i, 44); backups->setCellWidget(i, 3, restore);
             QObject::connect(restore, &QPushButton::clicked, &dialog, [&, snapshot, relative, local] {
-                if (!confirm(&dialog, QString::fromUtf8("Восстановить снимок"), preview(snapshot.path, relative) + "\n" + q(snapshot.path), preview(local, relative) + "\n" + q(local))) return;
+                if (!confirm(&dialog, QString::fromUtf8("Восстановить снимок"), preview(snapshot.path, relative) + "\n" + q(snapshot.path), preview(local, relative) + "\n" + q(local), QString::fromUtf8("Восстановить"))) return;
                 const auto result = ApplyQtCloudWorkspaceFile(workspace, snapshot.path, relative, "restore");
                 if (!result.ok) QMessageBox::warning(&dialog, QString::fromUtf8("Восстановление"), q(result.message));
                 else { changed = changed || result.changed; dialog.accept(); }
@@ -202,9 +257,15 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         backups->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed); backups->setColumnWidth(3, 150);
         box->addWidget(new QLabel(QString::fromUtf8("Последние локальные снимки"))); box->addWidget(backups, 1);
         QObject::connect(apply, &QPushButton::clicked, &dialog, [&, relative, local, cloud] {
-            if (!confirm(&dialog, QString::fromUtf8("Применить облачную версию"), preview(cloud, relative) + "\n" + q(cloud), preview(local, relative) + "\n" + q(local))) return;
+            if (!confirm(&dialog, QString::fromUtf8("Применить облачную версию"), preview(cloud, relative) + "\n" + q(cloud), preview(local, relative) + "\n" + q(local), QString::fromUtf8("Применить"))) return;
             const auto result = ApplyQtCloudWorkspaceFile(workspace, cloud, relative, "cloud");
             if (!result.ok) QMessageBox::warning(&dialog, QString::fromUtf8("Облачная версия"), q(result.message));
+            else { changed = changed || result.changed; dialog.accept(); }
+        });
+        QObject::connect(push, &QPushButton::clicked, &dialog, [&, relative, local, cloud] {
+            if (!confirm(&dialog, QString::fromUtf8("Отправить локальную версию"), preview(local, relative) + "\n" + q(local), preview(cloud, relative) + "\n" + q(cloud), QString::fromUtf8("Отправить"))) return;
+            const auto result = PushQtCloudWorkspaceFile(workspace, relative);
+            if (!result.ok) QMessageBox::warning(&dialog, QString::fromUtf8("Отправка в облако"), q(result.message));
             else { changed = changed || result.changed; dialog.accept(); }
         });
         tabs->addTab(page, label(relative));

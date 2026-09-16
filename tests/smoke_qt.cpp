@@ -590,6 +590,21 @@ static bool TestCloudConflictResolver() {
     if (localBackup == backups.end()) return fail("find local backup");
     const auto restored = ApplyQtCloudWorkspaceFile(workspace, localBackup->path, "meta/tasks.json", "restore");
     if (!restored.ok || !restored.changed || read(workspace / "meta/tasks.json") != local) return fail("restore backup");
+    const auto pushed = PushQtCloudWorkspaceFile(workspace, "meta/tasks.json");
+    if (!pushed.ok || !pushed.changed || pushed.backupPath.empty() || read(cloud / "meta/tasks.json") != local ||
+        read(pushed.backupPath) != remote) return fail("push local");
+    std::filesystem::remove(cloud / "meta/pipeline.json");
+    const auto createdPush = PushQtCloudWorkspaceFile(workspace, "meta/pipeline.json");
+    if (!createdPush.ok || !createdPush.changed || !std::filesystem::is_regular_file(cloud / "meta/pipeline.json"))
+        return fail("push new cloud file");
+    CloudSyncConfig overlapConfig = config; overlapConfig.root = workspace;
+    if (!SaveCloudSyncConfig(workspace, overlapConfig) || PushQtCloudWorkspaceFile(workspace, "meta/tasks.json").ok ||
+        !SaveCloudSyncConfig(workspace, config)) return fail("push overlap guard");
+    if (!write(workspace / "meta/tasks.json", "{broken")) return false;
+    const auto malformedPush = PushQtCloudWorkspaceFile(workspace, "meta/tasks.json");
+    if (malformedPush.ok || read(cloud / "meta/tasks.json") != local) return fail("malformed local push");
+    if (!write(workspace / "meta/tasks.json", local) || PushQtCloudWorkspaceFile(workspace, "meta/projects.json").ok)
+        return fail("unsupported push");
     if (!write(cloud / "meta/tasks.json", "{broken")) return false;
     const auto malformed = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
     if (malformed.ok || read(workspace / "meta/tasks.json") != local) return fail("malformed source");
@@ -603,6 +618,11 @@ static bool TestCloudConflictResolver() {
     const auto locked = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
     CloseHandle(lock);
     if (locked.ok || read(workspace / "meta/tasks.json") != local) return fail("sharing lock");
+    const HANDLE cloudLock = CreateFileW((cloud / "meta/tasks.json").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (cloudLock == INVALID_HANDLE_VALUE) return false;
+    const auto lockedPush = PushQtCloudWorkspaceFile(workspace, "meta/tasks.json");
+    CloseHandle(cloudLock);
+    if (lockedPush.ok || read(cloud / "meta/tasks.json") != remote) return fail("cloud sharing lock");
 #endif
     if (!write(cloud / "meta/tasks.json", remote)) return false;
     bool inspected = false;
@@ -610,8 +630,9 @@ static bool TestCloudConflictResolver() {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* table = dialog ? dialog->findChild<QTableWidget*>("tasksComparison") : nullptr;
         auto* apply = dialog ? dialog->findChild<QPushButton*>("applyCloudTasks") : nullptr;
+        auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudTasks") : nullptr;
         inspected = dialog && dialog->objectName() == "cloudConflictResolver" && table && table->rowCount() == 2 &&
-            apply && apply->height() >= 40;
+            apply && apply->height() >= 40 && push && push->height() >= 40;
         if (!inspected) std::cerr << "cloudConflict inspect dialog=" << bool(dialog)
             << " name=" << (dialog ? dialog->objectName().toStdString() : "") << " table=" << bool(table)
             << " rows=" << (table ? table->rowCount() : -1) << " apply=" << bool(apply)
@@ -632,6 +653,25 @@ static bool TestCloudConflictResolver() {
                   << " local=" << read(workspace / "meta/tasks.json").toStdString() << '\n';
         return fail("dialog apply");
     }
+    const QByteArray upload = "[{\"id\":\"upload\",\"title\":\"Upload\"}]";
+    if (!write(workspace / "meta/tasks.json", upload)) return false;
+    bool pushConfirmed = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudTasks") : nullptr;
+        QTimer::singleShot(0, [&] {
+            if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                pushConfirmed = box->defaultButton() == box->button(QMessageBox::Cancel) &&
+                    box->text().contains(QString::fromUtf8("Будет заменено"));
+                const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+                if (!artifacts.isEmpty()) box->grab().save(artifacts + "/cloud-push-confirm.png");
+                box->button(QMessageBox::Yes)->click();
+            }
+        });
+        if (push) push->click();
+    });
+    const bool pushChanged = ShowCloudConflictResolver(nullptr, workspace);
+    if (!pushChanged || !pushConfirmed || read(cloud / "meta/tasks.json") != upload) return fail("dialog push");
     QtWorkspace uiWorkspace(workspace); QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
     auto* nav = window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(13);
     auto* route = window.findChild<QPushButton*>("cloudResolve");
@@ -1931,7 +1971,7 @@ int main(int argc, char** argv) {
     auto* cloudPull = window.findChild<QPushButton*>("cloudPull");
     if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настроить облако") ||
         !cloudPull || !cloudPull->isVisible() || cloudPull->isEnabled() ||
-        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("полной резервной копией"))) return fail("Cloud guarded pull page unavailable");
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Ручные pull"))) return fail("Cloud guarded pull page unavailable");
     const auto cloudArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!cloudArtifacts.isEmpty()) window.grab().save(cloudArtifacts + "/cloud-page.png");
     QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });

@@ -17,4 +17,8 @@ QtCloudConflictResult ApplyQtCloudWorkspaceFile(
     const std::string& relativePath,
     const std::string& sourceKind);
 
+QtCloudConflictResult PushQtCloudWorkspaceFile(
+    const std::filesystem::path& workspaceDirectory,
+    const std::string& relativePath);
+
 bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& workspaceDirectory);

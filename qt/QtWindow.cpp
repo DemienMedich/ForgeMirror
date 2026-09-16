@@ -790,7 +790,7 @@ void QtWindow::render() {
         cloudPull_->setEnabled(config.enabled && rootExists);
         const bool hasBackups = !ListCloudWorkspaceBackups(workspace_.directory).empty();
         cloudResolve_->setEnabled((config.enabled && rootExists && driftCount > 0) || hasBackups);
-        summary_->setText(QString::fromUtf8("Ручной pull с подтверждением и полной резервной копией · автоматический pull, push и разрешение конфликтов заблокированы"));
+        summary_->setText(QString::fromUtf8("Ручные pull и отправка отдельных tasks/pipeline требуют подтверждения и резервной копии · автоматическая синхронизация заблокирована"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
