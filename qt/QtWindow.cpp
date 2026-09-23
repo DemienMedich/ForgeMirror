@@ -107,6 +107,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
     setMinimumSize(800, 520);
+    if (displaySettings_.fullscreen) setWindowState(windowState() | Qt::WindowFullScreen);
     auto* root = new QWidget(this);
     auto* layout = new QVBoxLayout(root);
     layout->setContentsMargins(16, 8, 16, 8);
@@ -149,7 +150,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     auto* displaySettings = menu->addAction(QString::fromUtf8("Настройки интерфейса Qt"), this, [this] {
         if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
-        ApplyQtDisplaySettings(*qApp, displaySettings_); render();
+        ApplyQtDisplaySettings(*qApp, displaySettings_);
+        if (displaySettings_.fullscreen) showFullScreen(); else showNormal();
+        render();
     });
     displaySettings->setObjectName("qtDisplaySettingsAction");
     auto* shortcutHelp = menu->addAction(QString::fromUtf8("Горячие клавиши"), this, [this] { showShortcutHelp(); });
@@ -508,6 +511,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (detailsToggle_->isVisible() && detailsToggle_->isEnabled()) detailsToggle_->toggle();
     });
     bindShortcut("shortcutHelp", QKeySequence(QStringLiteral("Ctrl+/")), [this] { showShortcutHelp(); });
+    bindShortcut("shortcutFullscreen", QKeySequence(Qt::Key_F11), [this] {
+        auto next = displaySettings_;
+        next.fullscreen = !isFullScreen();
+        if (!SaveQtDisplaySettings(workspace_.directory, next)) { message(u8"Не удалось сохранить режим окна."); return; }
+        displaySettings_ = next;
+        if (next.fullscreen) showFullScreen(); else showNormal();
+    });
     navigation_->setCurrentRow(ProfilePage);
     reload();
 }
@@ -522,7 +532,7 @@ void QtWindow::showShortcutHelp() {
         "Команды работают в текущем разделе. Защищённые операции требуют входа администратора; локальные ярлыки доступны всем пользователям."));
     intro->setWordWrap(true);
     layout->addWidget(intro);
-    auto* table = new QTableWidget(12, 2, &dialog);
+    auto* table = new QTableWidget(13, 2, &dialog);
     table->setObjectName("shortcutHelpTable");
     table->setHorizontalHeaderLabels({QString::fromUtf8("Клавиша"), QString::fromUtf8("Действие")});
     const std::vector<std::pair<QString, QString>> rows = {
@@ -531,7 +541,8 @@ void QtWindow::showShortcutHelp() {
         {"F5", QString::fromUtf8("Статистика")}, {"F6", QString::fromUtf8("Аудит")},
         {"Ctrl+N", QString::fromUtf8("Создать запись")}, {"Ctrl+E", QString::fromUtf8("Редактировать выбранную запись")},
         {"Delete", QString::fromUtf8("Удалить выбранный проект или этап")}, {"Ctrl+R", QString::fromUtf8("Перечитать локальные данные")},
-        {"Ctrl+I", QString::fromUtf8("Показать или скрыть подробности")}, {"Ctrl+/", QString::fromUtf8("Открыть эту памятку")}
+        {"Ctrl+I", QString::fromUtf8("Показать или скрыть подробности")}, {"Ctrl+/", QString::fromUtf8("Открыть эту памятку")},
+        {"F11", QString::fromUtf8("Переключить полноэкранный режим")}
     };
     for (int row = 0; row < int(rows.size()); ++row) {
         table->setItem(row, 0, new QTableWidgetItem(rows[row].first));
