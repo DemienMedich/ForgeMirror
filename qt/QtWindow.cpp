@@ -441,6 +441,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     directXp_->setObjectName("directXp");
     directXp_->setToolTip(QString::fromUtf8("Вручную начислить XP одному навыку выбранного активного профиля"));
     bottom->addWidget(directXp_);
+    walletAdjust_ = new QPushButton(QString::fromUtf8("Изменить кошелёк"));
+    walletAdjust_->setObjectName("adjustProfileWallet");
+    walletAdjust_->setToolTip(QString::fromUtf8("Администраторское начисление или списание Кукоинов с записью в аудит"));
+    bottom->addWidget(walletAdjust_);
     openShortcut_ = new QPushButton(QString::fromUtf8("Открыть"));
     openShortcut_->setObjectName("openShortcut");
     openShortcut_->setToolTip(QString::fromUtf8("Открыть выбранный локальный файл через Windows"));
@@ -565,6 +569,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
     connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
     connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
+    connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -914,6 +919,8 @@ void QtWindow::render() {
     reapplyRules_->setVisible(admin_ && page == Rules);
     directXp_->setVisible(admin_ && page == ProfilePage);
     directXp_->setEnabled(!profiles_->currentData().toString().isEmpty());
+    walletAdjust_->setVisible(admin_ && page == ProfilePage);
+    walletAdjust_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -1240,6 +1247,109 @@ void QtWindow::grantDirectXp() {
     const int skillXp = dialog.property("awardedSkillXp").toInt();
     reload();
     statusBar()->showMessage(QString::fromUtf8("Начислено: общий XP +%1 · навык +%2 XP").arg(globalXp).arg(skillXp), 5000);
+}
+
+void QtWindow::adjustWallet() {
+    if (!requireAdmin() || navigation_->currentRow() != ProfilePage) return;
+    const auto profileId = u(profiles_->currentData().toString());
+    if (profileId.empty()) { message(u8"Сначала выберите профиль."); return; }
+    if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+        message(u8"Сначала завершите восстановление данных."); return;
+    }
+    if (!workspace_.storage->set_active_profile(profileId)) { message(u8"Активный профиль недоступен."); return; }
+    const auto profile = workspace_.storage->load_profile();
+    if (!profile) { message(u8"Не удалось загрузить профиль."); return; }
+
+    QDialog dialog(this);
+    dialog.setObjectName("walletAdjustmentDialog");
+    dialog.setWindowTitle(QString::fromUtf8("Изменение кошелька профиля"));
+    dialog.setMinimumWidth(420);
+    auto* form = new QFormLayout(&dialog);
+    form->addRow(QString::fromUtf8("Профиль"), new QLabel(q(profile->name())));
+    auto* operation = new QComboBox;
+    operation->setObjectName("walletOperation");
+    operation->addItems({QString::fromUtf8("Начислить"), QString::fromUtf8("Списать")});
+    auto* amount = new QDoubleSpinBox;
+    amount->setObjectName("walletAmount");
+    amount->setDecimals(2);
+    amount->setRange(0.01, 1000000000.0);
+    amount->setValue(1.0);
+    amount->setGroupSeparatorShown(true);
+    amount->setSuffix(QStringLiteral(" ") + q(workspace_.data.vault.currencyName.empty()
+        ? (workspace_.data.vault.currencyCode.empty() ? std::string(u8"Кукоин") : workspace_.data.vault.currencyCode)
+        : workspace_.data.vault.currencyName));
+    auto* reason = new QLineEdit;
+    reason->setObjectName("walletReason");
+    reason->setMaxLength(120);
+    reason->setPlaceholderText(QString::fromUtf8("Например: корректировка награды"));
+    auto* preview = new QLabel;
+    preview->setObjectName("walletPreview");
+    preview->setWordWrap(true);
+    auto* notice = new QLabel;
+    notice->setObjectName("walletNotice");
+    notice->setWordWrap(true);
+    form->addRow(QString::fromUtf8("Операция"), operation);
+    form->addRow(QString::fromUtf8("Сумма"), amount);
+    form->addRow(QString::fromUtf8("Основание"), reason);
+    form->addRow(QString::fromUtf8("Баланс"), preview);
+    form->addRow(notice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Применить"));
+    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    form->addRow(buttons);
+    const auto currency = amount->suffix();
+    auto updatePreview = [=] {
+        const bool debit = operation->currentIndex() == 1;
+        const double value = amount->value();
+        const double after = profile->wallet_balance() + (debit ? -value : value);
+        preview->setText(QString::fromUtf8("%1 → %2%3")
+            .arg(profile->wallet_balance(), 0, 'f', 2)
+            .arg(after, 0, 'f', 2).arg(currency));
+        buttons->button(QDialogButtonBox::Save)->setEnabled(!debit || value <= profile->wallet_balance() + 0.000001);
+    };
+    connect(operation, &QComboBox::currentIndexChanged, &dialog, updatePreview);
+    connect(amount, &QDoubleSpinBox::valueChanged, &dialog, updatePreview);
+    updatePreview();
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        const bool debit = operation->currentIndex() == 1;
+        const double value = amount->value();
+        const auto memo = reason->text().trimmed();
+        if (memo.isEmpty()) { notice->setText(QString::fromUtf8("Укажите основание операции для аудита.")); return; }
+        if (debit && value > profile->wallet_balance() + 0.000001) {
+            notice->setText(QString::fromUtf8("Сумма списания превышает баланс профиля.")); return;
+        }
+        QMessageBox confirm(QMessageBox::Question, QString::fromUtf8("Подтвердить операцию"),
+            QString::fromUtf8("%1 %2 профилю «%3»?\nБаланс: %4 → %5\nОснование: %6")
+                .arg(debit ? QString::fromUtf8("Списать") : QString::fromUtf8("Начислить"))
+                .arg(currency.trimmed())
+                .arg(q(profile->name()))
+                .arg(profile->wallet_balance(), 0, 'f', 2)
+                .arg(profile->wallet_balance() + (debit ? -value : value), 0, 'f', 2)
+                .arg(memo), QMessageBox::Yes | QMessageBox::No, &dialog);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Подтвердить"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        const auto result = AppAdjustProfileWallet(*workspace_.storage, profileId, profileId, debit ? -value : value);
+        if (!result.ok || !result.profile) {
+            notice->setText(result.errorMessage.empty() ? QString::fromUtf8("Не удалось сохранить кошелёк.") : q(result.errorMessage));
+            return;
+        }
+        const QString audit = QStringLiteral("%1|%2|%3")
+            .arg(debit ? QStringLiteral("debit") : QStringLiteral("credit"))
+            .arg(value, 0, 'f', 2).arg(memo);
+        const bool auditRecorded = AppendProfileAudit(workspace_.directory, profileId, "wallet_adjustment", u(audit));
+        dialog.setProperty("walletAuditRecorded", auditRecorded);
+        dialog.accept();
+    });
+    if (dialog.exec() != QDialog::Accepted) return;
+    const bool auditRecorded = dialog.property("walletAuditRecorded").toBool();
+    reload();
+    statusBar()->showMessage(auditRecorded
+        ? QString::fromUtf8("Кошелёк профиля обновлён, запись добавлена в аудит.")
+        : QString::fromUtf8("Баланс обновлён, но запись в аудит не удалось сохранить."), 7000);
 }
 
 void QtWindow::exportReport() {

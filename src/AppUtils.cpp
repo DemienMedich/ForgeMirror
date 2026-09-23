@@ -814,14 +814,15 @@ bool SetAdminStayLoggedIn(const std::filesystem::path& storageDir, bool enabled)
 }
 
 
-void AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
+bool AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
                         const std::string& action, const std::string& details) {
-    if (storageDir.empty() || profileId.empty() || action.empty()) return;
+    if (storageDir.empty() || profileId.empty() || action.empty()) return false;
     std::error_code ec;
     const auto path = storageDir / "meta" / "profile-audit.log";
     std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) return false;
     std::ofstream out(path, std::ios::binary | std::ios::app);
-    if (!out) return;
+    if (!out) return false;
     auto sanitize = [](std::string value) {
         for (char& c : value) {
             if (c == '\r' || c == '\n' || c == '|') c = ' ';
@@ -835,6 +836,8 @@ void AppendProfileAudit(const std::filesystem::path& storageDir, const std::stri
         out << "|" << sanitize(details);
     }
     out << "\n";
+    out.flush();
+    return out.good();
 }
 std::filesystem::path BannerTextPath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "banner.json";

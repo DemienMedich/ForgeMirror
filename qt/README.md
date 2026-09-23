@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 54**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–54 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 55**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–55 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,9 +32,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt stage 48 | Remaining |
+| Area | Qt coverage through stage 55 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Other wallet operations and richer activity history |
+| Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal and administrator wallet credit/debit with required reason and profile audit | Broader wallet activity history |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks; overdue and pending-XP filters, four sort modes persisted locally | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
@@ -71,6 +71,12 @@ The task toolbar can narrow by project or pipeline step, including explicit unas
 ### Task quick filters (stage 54, implementation checkpoint)
 
 Quick filters now cover tasks assigned to the selected profile, due today, overdue, due within seven local calendar days, without a project, awaiting XP, or active. Their selection persists in `[qt]`. XP-pending means completed with no positive XP recorded for any participant, matching the existing client rule. The seven-day range uses local calendar boundaries.
+
+### Administrator profile wallet adjustment (stage 55, implementation checkpoint)
+
+The Qt Profile page exposes **Изменить кошелёк** to administrators. The dialog supports credit or debit with a positive amount, requires an audit reason, previews the resulting balance and asks for a separate confirmation. A debit larger than the loaded balance is disabled and rejected again on submission. The existing `AppAdjustProfileWallet` mutation service performs persistence; after a successful balance change, Qt appends a `wallet_adjustment` record with direction, amount and reason to `meta/profile-audit.log`, and reports if that append fails. Wallet and audit writes are not one cross-file transaction. The action is blocked while task/XP recovery is pending. It does not change the central vault or push any wallet data to cloud. Stage 55 is an implementation checkpoint; no installer lifecycle verification is implied.
+
+The Qt application target compiled successfully. The refreshed portable package is `Z:\CPP\ForgeMirror\package-qt\ForgeMirrorQt.exe`; startup remained alive in a disposable workspace with Qt removed from `PATH`, and `Qt6Gui.dll` plus `platforms/qwindows.dll` were present. No automated tests or installer lifecycle verification were run for this stage; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

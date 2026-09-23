@@ -34,6 +34,7 @@ private:
     void exportReport();
     void reapplyRules();
     void grantDirectXp();
+    void adjustWallet();
     void updateBanner();
     void pullCloud();
     void resolveCloudConflict();
@@ -103,6 +104,7 @@ private:
     QPushButton* exportReport_;
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
+    QPushButton* walletAdjust_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
     QPushButton* cloudResolve_;

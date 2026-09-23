@@ -73,7 +73,7 @@ std::string SerializeProfileTaskRollbackSnapshot(const Profile& profile);
 std::string SerializeProfileTaskRollbackEnvelope(const Profile& before, const Profile& after);
 bool ProfileMatchesTaskRollbackPostcondition(const std::string& snapshot, const Profile& profile);
 bool ApplyProfileTaskRollbackSnapshot(const std::string& snapshot, Profile& profile);
-void AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
+bool AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
                         const std::string& action, const std::string& details = {});
 
 // Load module toggles from environment (FORGEMIRROR_DISABLE_MODULES=tasks,pipeline,...).
