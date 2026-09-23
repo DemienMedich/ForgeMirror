@@ -342,6 +342,14 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Средний"), QString::fromUtf8("Высокий"), QString::fromUtf8("Критический")});
     priorityFilter_->setCurrentIndex(displaySettings_.taskPriorityFilter);
     filters->addWidget(priorityFilter_);
+    quickTaskFilter_ = new QComboBox;
+    quickTaskFilter_->setObjectName("quickTaskFilter");
+    quickTaskFilter_->setMaximumWidth(155);
+    quickTaskFilter_->addItems({QString::fromUtf8("Все задачи"), QString::fromUtf8("Мне назначено"),
+        QString::fromUtf8("На сегодня"), QString::fromUtf8("Просрочено"), QString::fromUtf8("7 дней"),
+        QString::fromUtf8("Без проекта"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Активные")});
+    quickTaskFilter_->setCurrentIndex(displaySettings_.taskQuickFilter);
+    filters->addWidget(quickTaskFilter_);
     taskProjectFilter_ = new QComboBox;
     taskProjectFilter_->setObjectName("taskProjectFilter");
     taskProjectFilter_->setMaximumWidth(170);
@@ -474,6 +482,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(priorityFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(quickTaskFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
@@ -752,6 +761,7 @@ void QtWindow::saveDisplayContext() {
     if (page >= 0) displaySettings_.lastPage = page;
     displaySettings_.taskStatusFilter = statusFilter_->currentIndex();
     displaySettings_.taskPriorityFilter = priorityFilter_->currentIndex();
+    displaySettings_.taskQuickFilter = quickTaskFilter_->currentIndex();
     displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
     displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
     displaySettings_.reportView = reportView_->currentIndex();
@@ -877,6 +887,7 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     priorityFilter_->setVisible(page == Tasks);
+    quickTaskFilter_->setVisible(page == Tasks);
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
@@ -961,6 +972,13 @@ void QtWindow::render() {
                  QString::fromUtf8("Приоритет"), QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
         const auto selectedProject = u(taskProjectFilter_->currentData().toString());
         const auto selectedPipeline = u(taskPipelineFilter_->currentData().toString());
+        const int quickFilter = quickTaskFilter_->currentIndex();
+        const auto now = QDateTime::currentDateTime();
+        const auto todayStart = now.date().startOfDay(now.timeZone()).toSecsSinceEpoch();
+        const auto tomorrowStart = now.date().addDays(1).startOfDay(now.timeZone()).toSecsSinceEpoch();
+        const auto nextWeekStart = now.date().addDays(7).startOfDay(now.timeZone()).toSecsSinceEpoch();
+        const auto nowSeconds = now.toSecsSinceEpoch();
+        const auto activeProfileId = u(profiles_->currentData().toString());
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
             if (priorityFilter_->currentIndex() && AppNormalizeTaskPriority(task.priority) != priorityFilter_->currentIndex() - 1) continue;
@@ -968,18 +986,34 @@ void QtWindow::render() {
                 [&](const auto& entry) { return !task.projectId.empty() && entry.id == task.projectId; });
             const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(),
                 [&](const auto& entry) { return !task.pipelineStepId.empty() && entry.id == task.pipelineStepId; });
-            if (selectedProject == "__none__" && (!task.projectId.empty() || !task.project.empty())) continue;
+            const auto resolvedProjectName = project == data.projects.end() ? task.project : project->name;
+            const auto resolvedPipelineName = stage == data.pipelineSteps.end() ? task.pipelineStep : stage->title;
+            if (selectedProject == "__none__" && !resolvedProjectName.empty()) continue;
             if (!selectedProject.empty() && selectedProject != "__none__") {
                 const auto selected = std::find_if(data.projects.begin(), data.projects.end(), [&selectedProject](const auto& entry) { return entry.id == selectedProject; });
-                if (selected == data.projects.end() || (task.projectId != selectedProject &&
-                    !(task.projectId.empty() && task.project == selected->name))) continue;
+                if (selected == data.projects.end() || (task.projectId != selectedProject && resolvedProjectName != selected->name)) continue;
             }
-            if (selectedPipeline == "__none__" && (!task.pipelineStepId.empty() || !task.pipelineStep.empty())) continue;
+            if (selectedPipeline == "__none__" && !resolvedPipelineName.empty()) continue;
             if (!selectedPipeline.empty() && selectedPipeline != "__none__") {
                 const auto selected = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(), [&selectedPipeline](const auto& entry) { return entry.id == selectedPipeline; });
+                const auto selectedLabel = selected == data.pipelineSteps.end() ? std::string() :
+                    (selected->stageCode.empty() ? selected->title : selected->stageCode + " · " + selected->title);
                 if (selected == data.pipelineSteps.end() || (task.pipelineStepId != selectedPipeline &&
-                    !(task.pipelineStepId.empty() && task.pipelineStep == selected->title))) continue;
+                    resolvedPipelineName != selected->title && task.pipelineStep != selectedLabel)) continue;
             }
+            const auto taskStatus = AppNormalizeTaskStatus(task.status);
+            const bool assignedToProfile = !activeProfileId.empty() &&
+                (std::find(task.assignees.begin(), task.assignees.end(), activeProfileId) != task.assignees.end() ||
+                 std::any_of(task.participants.begin(), task.participants.end(), [&activeProfileId](const auto& item) { return item.profileId == activeProfileId; }));
+            const bool needsXp = taskStatus == 2 && std::none_of(task.participants.begin(), task.participants.end(),
+                [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
+            if (quickFilter == 1 && !assignedToProfile) continue;
+            if (quickFilter == 2 && (task.deadlineAt < todayStart || task.deadlineAt >= tomorrowStart)) continue;
+            if (quickFilter == 3 && (task.deadlineAt <= 0 || task.deadlineAt >= nowSeconds || taskStatus == 2)) continue;
+            if (quickFilter == 4 && (task.deadlineAt < todayStart || task.deadlineAt >= nextWeekStart)) continue;
+            if (quickFilter == 5 && !resolvedProjectName.empty()) continue;
+            if (quickFilter == 6 && !needsXp) continue;
+            if (quickFilter == 7 && taskStatus == 2) continue;
             row(task.id, {q(AppTaskDisplayTitle(task)), q(project == data.projects.end() ? task.project : project->name), q(AppTaskStatusLabel(task.status)),
                 q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(stage == data.pipelineSteps.end() ? task.pipelineStep : stage->title)});
         }

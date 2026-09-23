@@ -12,6 +12,7 @@ struct QtDisplaySettings {
     int lastPage = 0;
     int taskStatusFilter = 0;
     int taskPriorityFilter = 0;
+    int taskQuickFilter = 0;
     QString taskProjectId;
     QString taskPipelineStepId;
     int reportView = 0;

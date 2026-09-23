@@ -57,6 +57,7 @@ private:
     QLineEdit* search_;
     QComboBox* statusFilter_;
     QComboBox* priorityFilter_;
+    QComboBox* quickTaskFilter_;
     QComboBox* taskProjectFilter_;
     QComboBox* taskPipelineFilter_;
     QComboBox* reportView_;
