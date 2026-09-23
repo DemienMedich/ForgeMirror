@@ -30,11 +30,18 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "taskProjectId") out.taskProjectId = value;
             else if (key == "taskPipelineStepId") out.taskPipelineStepId = value;
             else if (key == "reportView") { bool ok = false; const int index = value.toInt(&ok); out.reportView = ok ? std::clamp(index, 0, 1) : 0; }
+            else if (key == "reportDateRange") { bool ok = false; const int index = value.toInt(&ok); out.reportDateRange = ok ? std::clamp(index, 0, 4) : 0; }
+            else if (key == "reportDateFrom") out.reportDateFrom = QDate::fromString(value, Qt::ISODate);
+            else if (key == "reportDateTo") out.reportDateTo = QDate::fromString(value, Qt::ISODate);
             else if (key == "projectSortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
             else if (key == "projectsXpPendingOnly") out.projectsXpPendingOnly = value == "1";
         }
     }
+    const auto today = QDate::currentDate();
+    if (!out.reportDateFrom.isValid()) out.reportDateFrom = today.addDays(-29);
+    if (!out.reportDateTo.isValid()) out.reportDateTo = today;
+    if (out.reportDateFrom > out.reportDateTo) out.reportDateFrom = out.reportDateTo;
     return out;
 }
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings) {
@@ -56,6 +63,12 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     auto pipelineId = settings.taskPipelineStepId; pipelineId.remove('\r'); pipelineId.remove('\n');
     set("taskProjectId", projectId); set("taskPipelineStepId", pipelineId);
     set("reportView", QString::number(std::clamp(settings.reportView, 0, 1)));
+    set("reportDateRange", QString::number(std::clamp(settings.reportDateRange, 0, 4)));
+    const auto today = QDate::currentDate();
+    const auto reportFrom = settings.reportDateFrom.isValid() ? settings.reportDateFrom : today.addDays(-29);
+    const auto reportTo = settings.reportDateTo.isValid() ? settings.reportDateTo : today;
+    set("reportDateFrom", (reportFrom <= reportTo ? reportFrom : reportTo).toString(Qt::ISODate));
+    set("reportDateTo", reportTo.toString(Qt::ISODate));
     set("projectSortMode", QString::number(std::clamp(settings.projectSortMode, 0, 3)));
     set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");
     set("projectsXpPendingOnly", settings.projectsXpPendingOnly ? "1" : "0");

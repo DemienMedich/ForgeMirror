@@ -113,6 +113,39 @@ std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory
     }
     return out;
 }
+QString reportPeriodLabel(int range, const QDate& from, const QDate& to) {
+    switch (range) {
+    case 1: return QString::fromUtf8("Задачи созданы за 30 дней");
+    case 2: return QString::fromUtf8("Задачи созданы за 90 дней");
+    case 3: return QString::fromUtf8("Задачи созданы с начала года");
+    case 4: return QString::fromUtf8("Созданы %1–%2").arg(from.toString("dd.MM.yyyy"), to.toString("dd.MM.yyyy"));
+    default: return QString::fromUtf8("За всё время");
+    }
+}
+std::vector<TaskEntry> reportTasksForRange(const std::vector<TaskEntry>& tasks, int range,
+                                           QDate customFrom, QDate customTo,
+                                           int* missingCreationDateCount = nullptr) {
+    if (missingCreationDateCount) *missingCreationDateCount = 0;
+    if (range <= 0) return tasks;
+    const QDate today = QDate::currentDate();
+    QDate from = customFrom, to = customTo;
+    if (range == 1) { from = today.addDays(-29); to = today; }
+    else if (range == 2) { from = today.addDays(-89); to = today; }
+    else if (range == 3) { from = QDate(today.year(), 1, 1); to = today; }
+    if (!from.isValid() || !to.isValid() || from > to) return {};
+    const auto begin = QDateTime(from, QTime(0, 0), Qt::LocalTime).toSecsSinceEpoch();
+    const auto end = QDateTime(to.addDays(1), QTime(0, 0), Qt::LocalTime).toSecsSinceEpoch();
+    std::vector<TaskEntry> filtered;
+    filtered.reserve(tasks.size());
+    for (const auto& task : tasks) {
+        if (task.createdAt <= 0) {
+            if (missingCreationDateCount) ++*missingCreationDateCount;
+            continue;
+        }
+        if (task.createdAt >= begin && task.createdAt < end) filtered.push_back(task);
+    }
+    return filtered;
+}
 }
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
@@ -364,6 +397,34 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
+    reportDateRange_ = new QComboBox;
+    reportDateRange_->setObjectName("reportDateRange");
+    reportDateRange_->setMaximumWidth(180);
+    reportDateRange_->addItems({QString::fromUtf8("Всё время"), QString::fromUtf8("30 дней"),
+        QString::fromUtf8("90 дней"), QString::fromUtf8("С начала года"), QString::fromUtf8("Период…")});
+    reportDateRange_->setCurrentIndex(displaySettings_.reportDateRange);
+    reportDateRange_->setToolTip(QString::fromUtf8("Фильтр по дате создания задач; статусы и XP показываются текущие"));
+    filters->addWidget(reportDateRange_);
+    reportFrom_ = new QDateEdit(displaySettings_.reportDateFrom);
+    reportFrom_->setObjectName("reportDateFrom");
+    reportFrom_->setCalendarPopup(true);
+    reportFrom_->setDisplayFormat("dd.MM.yyyy");
+    reportFrom_->setMaximumWidth(118);
+    reportTo_ = new QDateEdit(displaySettings_.reportDateTo);
+    reportTo_->setObjectName("reportDateTo");
+    reportTo_->setCalendarPopup(true);
+    reportTo_->setDisplayFormat("dd.MM.yyyy");
+    reportTo_->setMaximumWidth(118);
+    reportCustomRange_ = new QWidget;
+    reportCustomRange_->setObjectName("reportCustomRange");
+    auto* reportDateLayout = new QHBoxLayout(reportCustomRange_);
+    reportDateLayout->setContentsMargins(0, 0, 0, 0);
+    reportDateLayout->setSpacing(4);
+    reportDateLayout->addWidget(new QLabel(QString::fromUtf8("с")));
+    reportDateLayout->addWidget(reportFrom_);
+    reportDateLayout->addWidget(new QLabel(QString::fromUtf8("по")));
+    reportDateLayout->addWidget(reportTo_);
+    filters->addWidget(reportCustomRange_);
     projectsOverdue_ = new QCheckBox(QString::fromUtf8("Просроченные"));
     projectsOverdue_->setObjectName("projectsOverdueOnly");
     projectsOverdue_->setMaximumWidth(120);
@@ -490,6 +551,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(reportDateRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(reportFrom_, &QDateEdit::dateChanged, this, [this](const QDate& date) {
+        if (date > reportTo_->date()) { QSignalBlocker blocker(reportTo_); reportTo_->setDate(date); }
+        saveDisplayContext(); render();
+    });
+    connect(reportTo_, &QDateEdit::dateChanged, this, [this](const QDate& date) {
+        if (date < reportFrom_->date()) { QSignalBlocker blocker(reportFrom_); reportFrom_->setDate(date); }
+        saveDisplayContext(); render();
+    });
     connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
@@ -770,6 +840,9 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
     displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
     displaySettings_.reportView = reportView_->currentIndex();
+    displaySettings_.reportDateRange = reportDateRange_->currentIndex();
+    displaySettings_.reportDateFrom = reportFrom_->date();
+    displaySettings_.reportDateTo = reportTo_->date();
     displaySettings_.projectSortMode = projectSort_->currentIndex();
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
     displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
@@ -896,6 +969,8 @@ void QtWindow::render() {
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
+    reportDateRange_->setVisible(page == Statistics);
+    reportCustomRange_->setVisible(page == Statistics && reportDateRange_->currentIndex() == 4);
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
     projectSort_->setVisible(page == Projects);
@@ -1065,13 +1140,19 @@ void QtWindow::render() {
         headers({QString::fromUtf8("Профессия"), QString::fromUtf8("Описание")});
         for (const auto& item : data.professions) row(item.id, {q(item.name), q(item.description)});
     } else if (page == Statistics) {
-        const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
+        int missingCreationDates = 0;
+        const auto reportTasks = reportTasksForRange(data.tasks, reportDateRange_->currentIndex(),
+            reportFrom_->date(), reportTo_->date(), &missingCreationDates);
+        const auto report = BuildTeamValueReport(reportTasks, data.projects, QDateTime::currentSecsSinceEpoch());
+        const auto periodLabel = reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date());
+        const auto missingNote = missingCreationDates
+            ? QString::fromUtf8(" · без даты создания исключено: %1").arg(missingCreationDates) : QString();
         if (reportView_->currentIndex() == 0) {
             headers({QString::fromUtf8("Проект"), QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")});
             for (const auto& item : report.projects) row(item.id, {q(item.name), QString::number(item.activeTasks),
                 QString::number(item.doneTasks), QString::number(item.overdueTasks), QString::number(item.xpPendingTasks)});
-            summary_->setText(QString::fromUtf8("Всего задач: %1  ·  всего проектов: %2  ·  выдано XP: %3")
-                .arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp));
+            summary_->setText(QString::fromUtf8("%1 · задач: %2 · проектов в каталоге: %3 · XP: %4 · состояние на сейчас%5")
+                .arg(periodLabel).arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp).arg(missingNote));
         } else {
             headers({QString::fromUtf8("Сотрудник"), "ID", QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"),
                 QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")});
@@ -1082,8 +1163,8 @@ void QtWindow::render() {
                     QString::number(item.activeTasks), QString::number(item.doneTasks), QString::number(item.overdueTasks),
                     QString::number(item.xpPendingTasks), QString::number(item.totalGlobalXp), QString::number(item.totalSkillXp)});
             }
-            summary_->setText(QString::fromUtf8("Сотрудников в задачах: %1  ·  без исполнителя: %2  ·  выдано XP: %3")
-                .arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp));
+            summary_->setText(QString::fromUtf8("%1 · сотрудников в задачах: %2 · без исполнителя: %3 · XP: %4 · состояние на сейчас%5")
+                .arg(periodLabel).arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp).arg(missingNote));
         }
     } else if (page == Audit) {
         headers({QString::fromUtf8("Источник"), QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Объект"),
@@ -1356,6 +1437,8 @@ void QtWindow::exportReport() {
     if (!requireAdmin() || navigation_->currentRow() != Statistics) return;
     const auto suggested = QString::fromUtf8("ForgeMirror-report-%1.csv").arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
     QFileDialog dialog(this, QString::fromUtf8("Экспорт управленческого отчёта"));
+    dialog.setWindowTitle(QString::fromUtf8("Экспорт отчёта · %1")
+        .arg(reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date())));
     dialog.setOption(QFileDialog::DontUseNativeDialog);
     dialog.setAcceptMode(QFileDialog::AcceptSave);
     dialog.setFileMode(QFileDialog::AnyFile);
@@ -1365,7 +1448,9 @@ void QtWindow::exportReport() {
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
     auto path = dialog.selectedFiles().front();
     if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
-    const auto report = BuildTeamValueReport(workspace_.data.tasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
+    const auto tasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
+        reportFrom_->date(), reportTo_->date());
+    const auto report = BuildTeamValueReport(tasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
     QString error;
     if (!ExportTeamValueReportCsv(path, report, &error)) { message(error.toUtf8().toStdString()); return; }
     statusBar()->showMessage(QString::fromUtf8("Отчёт сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);

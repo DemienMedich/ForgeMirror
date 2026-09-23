@@ -6,6 +6,8 @@
 #include <QMainWindow>
 
 class QComboBox;
+class QDateEdit;
+class QWidget;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -62,6 +64,10 @@ private:
     QComboBox* taskProjectFilter_;
     QComboBox* taskPipelineFilter_;
     QComboBox* reportView_;
+    QComboBox* reportDateRange_;
+    QDateEdit* reportFrom_;
+    QDateEdit* reportTo_;
+    QWidget* reportCustomRange_;
     QComboBox* projectSort_;
     QCheckBox* projectsOverdue_;
     QCheckBox* projectsXpPending_;

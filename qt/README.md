@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 55**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–55 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 56**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–56 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -40,7 +40,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
-| Reports | Admin project/employee metrics with resolved profile names, search and atomic UTF-8 CSV export | Date ranges, charts and richer drill-down |
+| Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods and atomic UTF-8 CSV export using the selected period | Charts and richer drill-down |
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale, compact-table density, persistent fullscreen toggle with F11, legacy frameless mode with native drag handle; fixed migration palette | Additional accessibility options |
@@ -77,6 +77,12 @@ Quick filters now cover tasks assigned to the selected profile, due today, overd
 The Qt Profile page exposes **Изменить кошелёк** to administrators. The dialog supports credit or debit with a positive amount, requires an audit reason, previews the resulting balance and asks for a separate confirmation. A debit larger than the loaded balance is disabled and rejected again on submission. The existing `AppAdjustProfileWallet` mutation service performs persistence; after a successful balance change, Qt appends a `wallet_adjustment` record with direction, amount and reason to `meta/profile-audit.log`, and reports if that append fails. Wallet and audit writes are not one cross-file transaction. The action is blocked while task/XP recovery is pending. It does not change the central vault or push any wallet data to cloud. Stage 55 is an implementation checkpoint; no installer lifecycle verification is implied.
 
 The Qt application target compiled successfully. The refreshed portable package is `Z:\CPP\ForgeMirror\package-qt\ForgeMirrorQt.exe`; startup remained alive in a disposable workspace with Qt removed from `PATH`, and `Qt6Gui.dll` plus `platforms/qwindows.dll` were present. No automated tests or installer lifecycle verification were run for this stage; `0.6.11` remains the latest verified installer.
+
+### Statistics creation-date periods (stage 56, implementation checkpoint)
+
+Statistics can show all tasks, the last 30 or 90 local calendar days, the current year, or a custom inclusive date range. The period is based on task `createdAt`; task status, overdue state and awarded XP are current values, not historical snapshots. In a bounded period, legacy tasks with no creation timestamp are excluded and their count is shown in the summary. Project and employee tables plus CSV export use the same filtered tasks. The range and custom dates persist in the Qt `[qt]` section of `meta/ui.ini` without changing other settings.
+
+The Qt application target compiled successfully. The refreshed portable package `Z:\CPP\ForgeMirror\package-qt\ForgeMirrorQt.exe` stayed alive on startup in a disposable workspace with Qt removed from `PATH`; `Qt6Gui.dll` and `platforms/qwindows.dll` were present. Automated tests and installer lifecycle verification were not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

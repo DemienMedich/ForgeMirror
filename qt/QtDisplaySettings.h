@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <QDate>
 #include <QString>
 class QApplication;
 class QWidget;
@@ -16,6 +17,9 @@ struct QtDisplaySettings {
     QString taskProjectId;
     QString taskPipelineStepId;
     int reportView = 0;
+    int reportDateRange = 0;
+    QDate reportDateFrom;
+    QDate reportDateTo;
     int projectSortMode = 0;
     bool projectsOverdueOnly = false;
     bool projectsXpPendingOnly = false;
