@@ -15,6 +15,7 @@ class QTextBrowser;
 class QAction;
 class QSlider;
 class QCheckBox;
+class QToolButton;
 
 class QtWindow : public QMainWindow {
 public:
@@ -80,6 +81,7 @@ private:
     QTableWidget* table_;
     QTextBrowser* details_;
     QPushButton* primary_;
+    QToolButton* dragHandle_;
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
     QPushButton* editEntry_;

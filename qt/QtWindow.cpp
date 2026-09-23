@@ -30,6 +30,19 @@
 #include <algorithm>
 
 namespace {
+class WindowDragHandle final : public QToolButton {
+public:
+    using QToolButton::QToolButton;
+protected:
+    void mousePressEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton && window() && window()->windowHandle()) {
+            window()->windowHandle()->startSystemMove();
+            event->accept();
+            return;
+        }
+        QToolButton::mousePressEvent(event);
+    }
+};
 QString q(const std::string& s) { return QString::fromUtf8(s.data(), int(s.size())); }
 std::string u(const QString& s) { return s.toUtf8().toStdString(); }
 QString timeText(std::int64_t t) {
@@ -107,12 +120,19 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
     setMinimumSize(800, 520);
+    setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
     if (displaySettings_.fullscreen) setWindowState(windowState() | Qt::WindowFullScreen);
     auto* root = new QWidget(this);
     auto* layout = new QVBoxLayout(root);
     layout->setContentsMargins(16, 8, 16, 8);
     layout->setSpacing(8);
     auto* header = new QHBoxLayout;
+    dragHandle_ = new WindowDragHandle;
+    dragHandle_->setText(QString::fromUtf8("⋮⋮"));
+    dragHandle_->setToolTip(QString::fromUtf8("Перетащить окно"));
+    dragHandle_->setFixedSize(28, 28);
+    dragHandle_->setVisible(!displaySettings_.decorated);
+    header->addWidget(dragHandle_);
     header->addWidget(new QLabel(QString::fromUtf8("Профиль:")));
     profiles_ = new QComboBox;
     profiles_->setObjectName("profiles");
@@ -151,6 +171,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* displaySettings = menu->addAction(QString::fromUtf8("Настройки интерфейса Qt"), this, [this] {
         if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
         ApplyQtDisplaySettings(*qApp, displaySettings_);
+        setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
+        dragHandle_->setVisible(!displaySettings_.decorated);
         if (displaySettings_.fullscreen) showFullScreen(); else showNormal();
         render();
     });
