@@ -330,31 +330,45 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(search_);
     statusFilter_ = new QComboBox;
     statusFilter_->setObjectName("statusFilter");
+    statusFilter_->setMaximumWidth(135);
     statusFilter_->addItems({QString::fromUtf8("Все статусы"), QString::fromUtf8("Новая"),
                             QString::fromUtf8("В работе"), QString::fromUtf8("Выполнена")});
     statusFilter_->setCurrentIndex(displaySettings_.taskStatusFilter);
     filters->addWidget(statusFilter_);
     priorityFilter_ = new QComboBox;
     priorityFilter_->setObjectName("priorityFilter");
+    priorityFilter_->setMaximumWidth(150);
     priorityFilter_->addItems({QString::fromUtf8("Любой приоритет"), QString::fromUtf8("Низкий"),
         QString::fromUtf8("Средний"), QString::fromUtf8("Высокий"), QString::fromUtf8("Критический")});
     priorityFilter_->setCurrentIndex(displaySettings_.taskPriorityFilter);
     filters->addWidget(priorityFilter_);
+    taskProjectFilter_ = new QComboBox;
+    taskProjectFilter_->setObjectName("taskProjectFilter");
+    taskProjectFilter_->setMaximumWidth(170);
+    filters->addWidget(taskProjectFilter_);
+    taskPipelineFilter_ = new QComboBox;
+    taskPipelineFilter_->setObjectName("taskPipelineFilter");
+    taskPipelineFilter_->setMaximumWidth(180);
+    filters->addWidget(taskPipelineFilter_);
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
+    reportView_->setMaximumWidth(145);
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
     projectsOverdue_ = new QCheckBox(QString::fromUtf8("Просроченные"));
     projectsOverdue_->setObjectName("projectsOverdueOnly");
+    projectsOverdue_->setMaximumWidth(120);
     projectsOverdue_->setChecked(displaySettings_.projectsOverdueOnly);
     filters->addWidget(projectsOverdue_);
     projectsXpPending_ = new QCheckBox(QString::fromUtf8("Ждут XP"));
     projectsXpPending_->setObjectName("projectsXpPendingOnly");
+    projectsXpPending_->setMaximumWidth(105);
     projectsXpPending_->setChecked(displaySettings_.projectsXpPendingOnly);
     filters->addWidget(projectsXpPending_);
     projectSort_ = new QComboBox;
     projectSort_->setObjectName("projectSort");
+    projectSort_->setMaximumWidth(150);
     projectSort_->addItems({QString::fromUtf8("Название"), QString::fromUtf8("Число задач"),
         QString::fromUtf8("Просрочка"), QString::fromUtf8("Ожидают XP")});
     projectSort_->setCurrentIndex(displaySettings_.projectSortMode);
@@ -460,6 +474,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(priorityFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
@@ -712,6 +728,7 @@ bool QtWindow::reload() {
         const int index = profiles_->findData(preferred);
         if (index >= 0) profiles_->setCurrentIndex(index);
     }
+    refreshTaskFilterChoices();
     const int page = std::clamp(displaySettings_.lastPage, 0, navigation_->count() - 1);
     if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
     updateBanner(); render();
@@ -735,12 +752,42 @@ void QtWindow::saveDisplayContext() {
     if (page >= 0) displaySettings_.lastPage = page;
     displaySettings_.taskStatusFilter = statusFilter_->currentIndex();
     displaySettings_.taskPriorityFilter = priorityFilter_->currentIndex();
+    displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
+    displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
     displaySettings_.reportView = reportView_->currentIndex();
     displaySettings_.projectSortMode = projectSort_->currentIndex();
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
     displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
     if (!SaveQtDisplaySettings(workspace_.directory, displaySettings_))
         statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить последний раздел и профиль."), 5000);
+}
+
+void QtWindow::refreshTaskFilterChoices() {
+    const auto selectedProject = taskProjectFilter_->currentData().toString().isEmpty()
+        ? displaySettings_.taskProjectId : taskProjectFilter_->currentData().toString();
+    const auto selectedPipeline = taskPipelineFilter_->currentData().toString().isEmpty()
+        ? displaySettings_.taskPipelineStepId : taskPipelineFilter_->currentData().toString();
+    {
+        QSignalBlocker blocker(taskProjectFilter_);
+        taskProjectFilter_->clear();
+        taskProjectFilter_->addItem(QString::fromUtf8("Все проекты"), QString());
+        taskProjectFilter_->addItem(QString::fromUtf8("Без проекта"), QStringLiteral("__none__"));
+        for (const auto& project : workspace_.data.projects) taskProjectFilter_->addItem(q(project.name), q(project.id));
+        const int index = taskProjectFilter_->findData(selectedProject);
+        taskProjectFilter_->setCurrentIndex(index >= 0 ? index : 0);
+    }
+    {
+        QSignalBlocker blocker(taskPipelineFilter_);
+        taskPipelineFilter_->clear();
+        taskPipelineFilter_->addItem(QString::fromUtf8("Все этапы"), QString());
+        taskPipelineFilter_->addItem(QString::fromUtf8("Без этапа"), QStringLiteral("__none__"));
+        for (const auto& step : workspace_.data.pipelineSteps) {
+            const auto label = step.stageCode.empty() ? step.title : step.stageCode + " · " + step.title;
+            taskPipelineFilter_->addItem(q(label), q(step.id));
+        }
+        const int index = taskPipelineFilter_->findData(selectedPipeline);
+        taskPipelineFilter_->setCurrentIndex(index >= 0 ? index : 0);
+    }
 }
 
 void QtWindow::loadSelectedModel() {
@@ -830,6 +877,8 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     priorityFilter_->setVisible(page == Tasks);
+    taskProjectFilter_->setVisible(page == Tasks);
+    taskPipelineFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
@@ -910,6 +959,8 @@ void QtWindow::render() {
     } else if (page == Tasks) {
         headers({QString::fromUtf8("Задача"), QString::fromUtf8("Проект"), QString::fromUtf8("Статус"),
                  QString::fromUtf8("Приоритет"), QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
+        const auto selectedProject = u(taskProjectFilter_->currentData().toString());
+        const auto selectedPipeline = u(taskPipelineFilter_->currentData().toString());
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
             if (priorityFilter_->currentIndex() && AppNormalizeTaskPriority(task.priority) != priorityFilter_->currentIndex() - 1) continue;
@@ -917,6 +968,18 @@ void QtWindow::render() {
                 [&](const auto& entry) { return !task.projectId.empty() && entry.id == task.projectId; });
             const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(),
                 [&](const auto& entry) { return !task.pipelineStepId.empty() && entry.id == task.pipelineStepId; });
+            if (selectedProject == "__none__" && (!task.projectId.empty() || !task.project.empty())) continue;
+            if (!selectedProject.empty() && selectedProject != "__none__") {
+                const auto selected = std::find_if(data.projects.begin(), data.projects.end(), [&selectedProject](const auto& entry) { return entry.id == selectedProject; });
+                if (selected == data.projects.end() || (task.projectId != selectedProject &&
+                    !(task.projectId.empty() && task.project == selected->name))) continue;
+            }
+            if (selectedPipeline == "__none__" && (!task.pipelineStepId.empty() || !task.pipelineStep.empty())) continue;
+            if (!selectedPipeline.empty() && selectedPipeline != "__none__") {
+                const auto selected = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(), [&selectedPipeline](const auto& entry) { return entry.id == selectedPipeline; });
+                if (selected == data.pipelineSteps.end() || (task.pipelineStepId != selectedPipeline &&
+                    !(task.pipelineStepId.empty() && task.pipelineStep == selected->title))) continue;
+            }
             row(task.id, {q(AppTaskDisplayTitle(task)), q(project == data.projects.end() ? task.project : project->name), q(AppTaskStatusLabel(task.status)),
                 q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(stage == data.pipelineSteps.end() ? task.pipelineStep : stage->title)});
         }

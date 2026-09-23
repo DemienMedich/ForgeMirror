@@ -42,6 +42,7 @@ private:
     void saveModelSettings();
     void updateModelSettingsFromControls();
     void saveDisplayContext();
+    void refreshTaskFilterChoices();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -56,6 +57,8 @@ private:
     QLineEdit* search_;
     QComboBox* statusFilter_;
     QComboBox* priorityFilter_;
+    QComboBox* taskProjectFilter_;
+    QComboBox* taskPipelineFilter_;
     QComboBox* reportView_;
     QComboBox* projectSort_;
     QCheckBox* projectsOverdue_;

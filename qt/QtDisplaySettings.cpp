@@ -26,6 +26,8 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 15) : 0; }
             else if (key == "taskStatusFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskStatusFilter = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "taskPriorityFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskPriorityFilter = ok ? std::clamp(index, 0, 4) : 0; }
+            else if (key == "taskProjectId") out.taskProjectId = value;
+            else if (key == "taskPipelineStepId") out.taskPipelineStepId = value;
             else if (key == "reportView") { bool ok = false; const int index = value.toInt(&ok); out.reportView = ok ? std::clamp(index, 0, 1) : 0; }
             else if (key == "projectSortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
@@ -48,6 +50,9 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 15)));
     set("taskStatusFilter", QString::number(std::clamp(settings.taskStatusFilter, 0, 3)));
     set("taskPriorityFilter", QString::number(std::clamp(settings.taskPriorityFilter, 0, 4)));
+    auto projectId = settings.taskProjectId; projectId.remove('\r'); projectId.remove('\n');
+    auto pipelineId = settings.taskPipelineStepId; pipelineId.remove('\r'); pipelineId.remove('\n');
+    set("taskProjectId", projectId); set("taskPipelineStepId", pipelineId);
     set("reportView", QString::number(std::clamp(settings.reportView, 0, 1)));
     set("projectSortMode", QString::number(std::clamp(settings.projectSortMode, 0, 3)));
     set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");

@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 52**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–52 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 53**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–53 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -35,7 +35,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Area | Qt stage 48 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance and personal evil-spirit removal | Other wallet operations and richer activity history |
-| Tasks | List, search, status and priority filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
+| Tasks | List, search, status, priority, project and pipeline-stage filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks; overdue and pending-XP filters, four sort modes persisted locally | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -63,6 +63,10 @@ The Qt project list now filters to projects with overdue tasks or pending XP and
 ### Task priority filter (stage 52, implementation checkpoint)
 
 The task list now filters by low, medium, high or critical priority alongside status. The selected priority persists in `[qt]` and uses the shared domain normalization, so unexpected stored values do not create a fifth category.
+
+### Task project and pipeline filters (stage 53, implementation checkpoint)
+
+The task toolbar can narrow by project or pipeline step, including explicit unassigned choices. Selections persist as project/step IDs, so renaming an item keeps the filter attached to it. Legacy tasks without IDs still match by their stored names. These filters apply only to the task list and do not alter task records.
 
 ### Guarded manual cloud pull (stage 43)
 
