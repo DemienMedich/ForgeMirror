@@ -1979,7 +1979,7 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* helpTable = dialog ? dialog->findChild<QTableWidget*>("shortcutHelpTable") : nullptr;
-        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 12 &&
+        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 13 &&
             helpTable->item(6, 0)->text() == "Ctrl+N" && helpTable->item(11, 0)->text() == "Ctrl+/";
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcuts.png"); }
@@ -2191,7 +2191,17 @@ int main(int argc, char** argv) {
     if (!rulesArtifacts.isEmpty()) window.grab().save(rulesArtifacts + "/rules-page.png");
     nav->setCurrentRow(7);
     bool profileAuditVisible = false;
-    for (int i = 0; i < table->rowCount(); ++i) profileAuditVisible |= table->item(i, 0)->text() == QString::fromUtf8("Профиль");
+    QDateTime previousAuditTime;
+    bool auditChronological = true;
+    for (int i = 0; i < table->rowCount(); ++i) {
+        profileAuditVisible |= table->item(i, 0)->text() == QString::fromUtf8("Профиль");
+        const auto currentAuditTime = QDateTime::fromString(table->item(i, 1)->text(), "dd.MM.yyyy HH:mm");
+        if (currentAuditTime.isValid()) {
+            if (previousAuditTime.isValid() && currentAuditTime > previousAuditTime) auditChronological = false;
+            previousAuditTime = currentAuditTime;
+        }
+    }
+    if (!auditChronological) return fail("Audit rows are not newest first");
     if (!profileAuditVisible) return fail("Profile audit is not visible");
     const auto auditArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!auditArtifacts.isEmpty()) window.grab().save(auditArtifacts + "/profile-audit.png");

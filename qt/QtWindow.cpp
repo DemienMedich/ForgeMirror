@@ -1179,10 +1179,20 @@ void QtWindow::render() {
     } else if (page == Audit) {
         headers({QString::fromUtf8("Источник"), QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Объект"),
             QString::fromUtf8("Поле"), QString::fromUtf8("Было"), QString::fromUtf8("Стало")});
-        for (const auto& entry : data.taskAudit) row(entry.taskId, {QString::fromUtf8("Задача"), timeText(entry.timestamp), q(entry.actor),
-            q(entry.taskId), q(entry.field), q(entry.oldValue), q(entry.newValue)});
-        for (const auto& entry : profileAudit(workspace_.directory)) row(entry.profile, {QString::fromUtf8("Профиль"), timeText(entry.timestamp),
-            QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)});
+        struct AuditDisplayRow { std::int64_t timestamp; std::string id; QStringList values; };
+        std::vector<AuditDisplayRow> entries;
+        entries.reserve(data.taskAudit.size());
+        for (const auto& entry : data.taskAudit) entries.push_back({entry.timestamp, entry.taskId,
+            {QString::fromUtf8("Задача"), timeText(entry.timestamp), q(entry.actor), q(entry.taskId), q(entry.field), q(entry.oldValue), q(entry.newValue)}});
+        const auto profileEntries = profileAudit(workspace_.directory);
+        entries.reserve(entries.size() + profileEntries.size());
+        for (const auto& entry : profileEntries) entries.push_back({entry.timestamp, entry.profile,
+            {QString::fromUtf8("Профиль"), timeText(entry.timestamp), QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)}});
+        std::stable_sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+            return left.timestamp > right.timestamp;
+        });
+        for (const auto& entry : entries) row(entry.id, entry.values);
+        summary_->setText(QString::fromUtf8("Событий: %1 · показано: %2 · сначала новые").arg(entries.size()).arg(table_->rowCount()));
     } else if (page == Rules) {
         headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
         const auto& rules = data.rulesConfig;

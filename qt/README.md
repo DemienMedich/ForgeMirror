@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 59**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–59 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 60**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–60 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 55 | Remaining |
+| Area | Qt coverage through stage 60 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal and administrator wallet credit/debit with required reason and profile audit | Broader wallet activity history |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -41,7 +41,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
 | Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods, current-status distribution chart, aggregate-to-task detail view by selection plus **Подробности** or double-click, and atomic UTF-8 CSV export using the selected period | Historical trend charts and richer drill-down |
-| Audit | Admin task and profile-access audit view | Other application logs |
+| Audit | Admin task and profile-access audit view, merged by timestamp with newest events first and visible/total counts | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale, compact-table density, persistent fullscreen toggle with F11, legacy frameless mode with native drag handle; fixed migration palette | Additional accessibility options |
 | Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Whole-workspace push, automatic sync and remaining settings parity |
@@ -82,23 +82,31 @@ The Qt application target compiled successfully. The refreshed portable package 
 
 Statistics can show all tasks, the last 30 or 90 local calendar days, the current year, or a custom inclusive date range. The period is based on task `createdAt`; task status, overdue state and awarded XP are current values, not historical snapshots. In a bounded period, legacy tasks with no creation timestamp are excluded and their count is shown in the summary. Project and employee tables plus CSV export use the same filtered tasks. The range and custom dates persist in the Qt `[qt]` section of `meta/ui.ini` without changing other settings.
 
-The Qt application target compiled successfully for stage 59. The refreshed portable package `Z:\\CPP\\ForgeMirror\\package-qt\\ForgeMirrorQt.exe` stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`; `Qt6Gui.dll` and `platforms/qwindows.dll` were present. This is a startup smoke check, not an interaction test. Automated tests and installer lifecycle verification were not run; `0.6.11` remains the latest verified installer.
+The Qt application target compiled successfully at the stage 56 checkpoint. No automated tests or installer lifecycle verification were run for that checkpoint; `0.6.11` remains the latest verified installer.
 
 ### Statistics task drill-down (stage 57, implementation checkpoint)
 
 Selecting a project or employee row in Statistics and opening **Подробности** lists the matching tasks in the active creation-date period, with current status, creation/deadline dates and recorded XP. Employee membership uses task assignees and XP participants; project membership uses stable project IDs with the legacy-name fallback, including an explicit no-project group. This is read-only and uses the same filtered task set as the aggregate and CSV export.
 
-The Qt application target compiled successfully for stage 59. The refreshed portable package `Z:\\CPP\\ForgeMirror\\package-qt\\ForgeMirrorQt.exe` stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`; `Qt6Gui.dll` and `platforms/qwindows.dll` were present. This is a startup smoke check, not an interaction test. Automated tests and installer lifecycle verification were not run; `0.6.11` remains the latest verified installer.
+The Qt application target compiled successfully at the stage 57 checkpoint. No automated tests or installer lifecycle verification were run for that checkpoint; `0.6.11` remains the latest verified installer.
 
 ### Statistics status distribution (stage 58, implementation checkpoint)
 
 Statistics now includes a compact horizontal bar chart for new, in-progress and completed tasks in the selected creation-date period. It uses the same report cohort as the table and export, scales bars to the largest category, and shows exact counts. The caption states that statuses are current; reconstructing a historical trend from audit events is deferred. The widget uses the existing Qt palette and has an accessible name and text description.
 
+The Qt application target compiled and its packaged startup was checked without Qt in `PATH`. Automated tests and installer lifecycle verification were not run; `0.6.11` remains the latest verified installer.
+
 ### Statistics drill-down shortcut (stage 59, implementation checkpoint)
 
 Double-clicking a project or employee row on Statistics opens **Подробности** and shows the tasks belonging to that aggregate in the selected creation-date period. Single selection continues to refresh details when that pane is already open. Double-click behavior is limited to Statistics so task and catalog tables retain their own interaction patterns.
 
-The Qt application target compiled successfully for stage 59. The refreshed portable package `Z:\\CPP\\ForgeMirror\\package-qt\\ForgeMirrorQt.exe` stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`; `Qt6Gui.dll` and `platforms/qwindows.dll` were present. This is a startup smoke check, not an interaction test. Automated tests and installer lifecycle verification were not run; `0.6.11` remains the latest verified installer.
+The Qt application target compiled successfully for stage 59. The refreshed portable package `Z:\CPP\ForgeMirror\package-qt\ForgeMirrorQt.exe` stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`; `Qt6Gui.dll` and `platforms/qwindows.dll` were present. This is a startup smoke check, not an interaction test. Automated tests and installer lifecycle verification were not run; `0.6.11` remains the latest verified installer.
+
+### Chronological audit view (stage 60, implementation checkpoint)
+
+The administrator Audit page now merges task and profile events and orders them by timestamp, newest first. Its summary shows the total number of loaded events and the number currently visible after the shared search filter. The existing bounded profile log and task audit loader behavior are unchanged.
+
+The Qt app and smoke target compiled, and packaged startup stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`. The smoke test exposed a stale shortcut-help row-count expectation, which now matches the existing 13-row help table; execution then stopped at the existing project-edit identity assertion, before reaching the new audit-order assertion. No installer lifecycle verification was run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 
