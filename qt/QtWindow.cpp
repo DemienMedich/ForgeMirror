@@ -1149,7 +1149,7 @@ void QtWindow::render() {
             ? QString::fromUtf8(" · без даты создания исключено: %1").arg(missingCreationDates) : QString();
         if (reportView_->currentIndex() == 0) {
             headers({QString::fromUtf8("Проект"), QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")});
-            for (const auto& item : report.projects) row(item.id, {q(item.name), QString::number(item.activeTasks),
+            for (const auto& item : report.projects) row(item.id.empty() ? "__no_project" : item.id, {q(item.name), QString::number(item.activeTasks),
                 QString::number(item.doneTasks), QString::number(item.overdueTasks), QString::number(item.xpPendingTasks)});
             summary_->setText(QString::fromUtf8("%1 · задач: %2 · проектов в каталоге: %3 · XP: %4 · состояние на сейчас%5")
                 .arg(periodLabel).arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp).arg(missingNote));
@@ -1505,6 +1505,43 @@ void QtWindow::details() {
                 + field(QString::fromUtf8("Штраф за срок"), std::to_string(task.deadlinePenaltyPercent) + "%")
                 + (xp.empty() ? QString() : field(QString::fromUtf8("Начисленный XP"), xp)));
         }
+    } else if (page == Statistics && table_->currentRow() >= 0) {
+        const auto targetId = selectedId();
+        const auto targetKey = u(targetId);
+        const bool employeeView = reportView_->currentIndex() == 1;
+        const auto targetName = table_->item(table_->currentRow(), 0)->text();
+        const auto reportTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
+            reportFrom_->date(), reportTo_->date());
+        QString html = field(employeeView ? QString::fromUtf8("Сотрудник") : QString::fromUtf8("Проект"), u(targetName));
+        int matched = 0;
+        for (const auto& task : reportTasks) {
+            bool belongs = false;
+            if (employeeView) {
+                belongs = std::find(task.assignees.begin(), task.assignees.end(), targetKey) != task.assignees.end() ||
+                    std::any_of(task.participants.begin(), task.participants.end(), [&](const auto& participant) {
+                        return participant.profileId == targetKey;
+                    });
+            } else {
+                const std::string projectKey = !task.projectId.empty() ? task.projectId :
+                    (task.project.empty() ? "__no_project" : "name:" + task.project);
+                belongs = projectKey == targetKey;
+            }
+            if (!belongs) continue;
+            ++matched;
+            int globalXp = 0, skillXp = 0;
+            for (const auto& participant : task.participants) {
+                if (employeeView && participant.profileId != targetKey) continue;
+                globalXp += std::max(0, participant.globalXp);
+                skillXp += std::max(0, participant.skillXp);
+            }
+            const QString taskTitle = QString::fromUtf8("%1 · %2")
+                .arg(q(AppTaskDisplayTitle(task)), q(AppTaskStatusLabel(task.status)));
+            html += field(taskTitle, u(timeText(task.createdAt))) + field(QString::fromUtf8("Срок"), u(timeText(task.deadlineAt)))
+                + field(QString::fromUtf8("XP"), std::to_string(globalXp) + " / " + std::to_string(skillXp) + u8" (глобальный / навыки)");
+        }
+        if (!matched) html += QString::fromUtf8("<p>В выбранном периоде связанных задач нет.</p>");
+        else html.prepend(QString::fromUtf8("<p>Задач в выбранном периоде: %1</p>").arg(matched));
+        details_->setHtml(html);
     } else if (page == Pipeline) {
         for (const auto& step : workspace_.data.pipelineSteps) if (step.id == id)
             details_->setHtml(field(QString::fromUtf8("Описание"), step.description) + field(QString::fromUtf8("Вход"), step.input)
