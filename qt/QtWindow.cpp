@@ -9,6 +9,7 @@
 #include "QtCloudPull.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
+#include "QtModelViewer.h"
 #include "QtReportExport.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -85,7 +86,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud, ModelViewerPage, ModelSettingsPage };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -175,7 +176,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако")});
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако"),
+        QString::fromUtf8("3D просмотр"), QString::fromUtf8("Настройки 3D")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -195,6 +197,69 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     summary_->setTextFormat(Qt::PlainText);
     summary_->setWordWrap(true);
     content->addWidget(summary_);
+    modelSettings_ = LoadQtModelSettings(workspace_.directory);
+    modelPage_ = new QWidget;
+    modelPage_->setObjectName("modelPage");
+    auto* modelLayout = new QVBoxLayout(modelPage_);
+    modelLayout->setContentsMargins(0, 0, 0, 0);
+    modelLayout->setSpacing(8);
+    modelStatus_ = new QLabel;
+    modelStatus_->setObjectName("modelStatus");
+    modelLayout->addWidget(modelStatus_);
+    modelViewer_ = new QtModelViewer;
+    modelViewer_->setSettings(modelSettings_);
+    modelLayout->addWidget(modelViewer_, 1);
+    auto* modelActions = new QHBoxLayout;
+    modelActions->addStretch();
+    auto* openModelSettings = new QPushButton(QString::fromUtf8("Настройки 3D"));
+    openModelSettings->setObjectName("openModelSettings");
+    openModelSettings->setFixedHeight(28);
+    modelActions->addWidget(openModelSettings);
+    modelLayout->addLayout(modelActions);
+    content->addWidget(modelPage_, 1);
+    modelSettingsPage_ = new QWidget;
+    modelSettingsPage_->setObjectName("modelSettingsPage");
+    auto* modelForm = new QFormLayout(modelSettingsPage_);
+    modelForm->setContentsMargins(0, 0, 0, 0);
+    modelForm->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+    modelChoice_ = new QComboBox;
+    modelChoice_->setObjectName("modelChoice");
+    modelChoice_->addItem(QString::fromUtf8("Не выбрана"), QString());
+    for (const auto& name : ListQtModels(workspace_.directory)) modelChoice_->addItem(name, name);
+    modelPath_ = new QLineEdit;
+    modelPath_->setObjectName("modelPath");
+    auto* modelPathRow = new QWidget;
+    auto* modelPathLayout = new QHBoxLayout(modelPathRow);
+    modelPathLayout->setContentsMargins(0, 0, 0, 0);
+    modelPathLayout->addWidget(modelPath_, 1);
+    auto* browseModel = new QPushButton(QString::fromUtf8("Обзор…"));
+    browseModel->setFixedHeight(28);
+    modelPathLayout->addWidget(browseModel);
+    modelYaw_ = new QSlider(Qt::Horizontal); modelYaw_->setRange(-314, 314); modelYaw_->setObjectName("modelYaw");
+    modelPitch_ = new QSlider(Qt::Horizontal); modelPitch_->setRange(-157, 157); modelPitch_->setObjectName("modelPitch");
+    modelZoom_ = new QSlider(Qt::Horizontal); modelZoom_->setRange(30, 300); modelZoom_->setObjectName("modelZoom");
+    modelSpeed_ = new QSlider(Qt::Horizontal); modelSpeed_->setRange(0, 300); modelSpeed_->setObjectName("modelSpeed");
+    modelAutoRotate_ = new QCheckBox(QString::fromUtf8("Автоматический поворот")); modelAutoRotate_->setObjectName("modelAutoRotate");
+    modelColor_ = new QPushButton; modelColor_->setObjectName("modelColor"); modelColor_->setFixedHeight(28);
+    modelForm->addRow(QString::fromUtf8("Модель в папке models"), modelChoice_);
+    modelForm->addRow(QString::fromUtf8("Путь к OBJ / FBX"), modelPathRow);
+    modelForm->addRow(QString::fromUtf8("Поворот по горизонтали"), modelYaw_);
+    modelForm->addRow(QString::fromUtf8("Наклон"), modelPitch_);
+    modelForm->addRow(QString::fromUtf8("Масштаб"), modelZoom_);
+    modelForm->addRow(modelAutoRotate_);
+    modelForm->addRow(QString::fromUtf8("Скорость поворота"), modelSpeed_);
+    modelForm->addRow(QString::fromUtf8("Цвет линий"), modelColor_);
+    modelForm->addRow(QString(), new QLabel(QString::fromUtf8("Перетаскивайте модель мышью, колесом меняйте масштаб. Настройки хранятся в локальном meta/ui.ini.")));
+    content->addWidget(modelSettingsPage_, 1);
+    modelPage_->hide(); modelSettingsPage_->hide();
+    modelTimer_ = new QTimer(this);
+    modelTimer_->setInterval(33);
+    connect(modelTimer_, &QTimer::timeout, this, [this] {
+        if (navigation_->currentRow() != ModelViewerPage || !modelSettings_.autoRotate || modelSettings_.autoSpeed <= 0) return;
+        modelSettings_.yaw += modelSettings_.autoSpeed / 30.0f;
+        modelViewer_->setSettings(modelSettings_);
+    });
+    modelTimer_->start();
     profileMetrics_ = new QWidget;
     profileMetrics_->setObjectName("profileMetrics");
     auto* metricsLayout = new QHBoxLayout(profileMetrics_);
@@ -349,7 +414,34 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
     connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
-    connect(primary_, &QPushButton::clicked, this, [this] { createEntry(); });
+    connect(primary_, &QPushButton::clicked, this, [this] { if (navigation_->currentRow() == ModelSettingsPage) saveModelSettings(); else createEntry(); });
+    connect(openModelSettings, &QPushButton::clicked, this, [this] { navigation_->setCurrentRow(ModelSettingsPage); });
+    connect(browseModel, &QPushButton::clicked, this, [this] {
+        const auto path = QFileDialog::getOpenFileName(this, QString::fromUtf8("Выбрать 3D-модель"), modelPath_->text(),
+            QString::fromUtf8("Модели OBJ / FBX (*.obj *.fbx)"));
+        if (path.isEmpty()) return;
+        modelPath_->setText(path);
+        loadSelectedModel();
+    });
+    connect(modelChoice_, &QComboBox::currentIndexChanged, this, [this] {
+        if (restoringModelSettings_) return;
+        const auto name = modelChoice_->currentData().toString();
+        modelPath_->setText(name.isEmpty() ? QString() : q((workspace_.directory / "models" / u(name)).u8string()));
+        loadSelectedModel();
+    });
+    auto modelControlChanged = [this] { if (!restoringModelSettings_) updateModelSettingsFromControls(); };
+    for (auto* slider : {modelYaw_, modelPitch_, modelZoom_, modelSpeed_}) connect(slider, &QSlider::valueChanged, this, modelControlChanged);
+    connect(modelAutoRotate_, &QCheckBox::toggled, this, modelControlChanged);
+    connect(modelPath_, &QLineEdit::editingFinished, this, [this] { if (!restoringModelSettings_) loadSelectedModel(); });
+    connect(modelColor_, &QPushButton::clicked, this, [this] {
+        const auto color = QColorDialog::getColor(modelSettings_.lineColor, this, QString::fromUtf8("Цвет линий"));
+        if (!color.isValid()) return;
+        modelSettings_.lineColor = color;
+        modelColor_->setStyleSheet(QStringLiteral("background-color: %1;").arg(color.name()));
+        modelViewer_->setSettings(modelSettings_);
+    });
+    modelPath_->setText(modelSettings_.modelPath);
+    loadSelectedModel();
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });
@@ -573,12 +665,43 @@ QString QtWindow::selectedId() const {
     return item ? item->data(Qt::UserRole).toString() : QString();
 }
 
+void QtWindow::loadSelectedModel() {
+    modelSettings_.modelPath = modelPath_->text().trimmed();
+    modelViewer_->setSettings(modelSettings_);
+    const auto result = modelViewer_->loadModel(std::filesystem::u8path(u(modelSettings_.modelPath)));
+    modelStatus_->setText(result.ok
+        ? QString::fromUtf8("%1 треугольников · %2").arg(result.triangles).arg(QFileInfo(modelSettings_.modelPath).fileName())
+        : result.error);
+}
+
+void QtWindow::updateModelSettingsFromControls() {
+    modelSettings_.yaw = modelYaw_->value() / 100.0f;
+    modelSettings_.pitch = modelPitch_->value() / 100.0f;
+    modelSettings_.zoom = modelZoom_->value() / 100.0f;
+    modelSettings_.autoSpeed = modelSpeed_->value() / 100.0f;
+    modelSettings_.autoRotate = modelAutoRotate_->isChecked();
+    modelSettings_.modelPath = modelPath_->text().trimmed();
+    modelViewer_->setSettings(modelSettings_);
+}
+
+void QtWindow::saveModelSettings() {
+    updateModelSettingsFromControls();
+    if (!SaveQtModelSettings(workspace_.directory, modelSettings_)) {
+        message(u8"Не удалось сохранить настройки 3D в meta/ui.ini.");
+        return;
+    }
+    loadSelectedModel();
+    message(u8"Настройки 3D сохранены.");
+}
+
 void QtWindow::render() {
     const auto profileId = u(profiles_->currentData().toString());
     const bool unlocked = profileSession_.isUnlocked(*workspace_.storage, profileId);
     profileAccessAction_->setText(QString::fromUtf8(unlocked ? "Выйти из профиля" : "Войти в выбранный профиль"));
     profileAccessAction_->setEnabled(!profileId.empty());
     ownPasswordAction_->setEnabled(unlocked);
+    navigation_->item(ModelViewerPage)->setHidden(!workspace_.modules.view3d);
+    navigation_->item(ModelSettingsPage)->setHidden(!workspace_.modules.view3d || !admin_);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
     navigation_->item(Pipeline)->setHidden(!workspace_.modules.pipeline);
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
@@ -617,19 +740,22 @@ void QtWindow::render() {
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8(unlocked ?
         (profileSession_.isTrusted() ? "Доверенный доступ · Qt" : "Личный доступ · Qt") : "Просмотр · Qt"));
     const bool timerPage = page == Pomodoro;
-    summary_->setVisible(!timerPage);
-    search_->setVisible(!timerPage);
-    table_->setVisible(!timerPage);
-    bottomActions_->setVisible(!timerPage);
-    details_->setVisible(!timerPage && details_->isVisible());
+    const bool modelPage = page == ModelViewerPage || page == ModelSettingsPage;
+    summary_->setVisible(!timerPage && !modelPage);
+    search_->setVisible(!timerPage && !modelPage);
+    table_->setVisible(!timerPage && !modelPage);
+    bottomActions_->setVisible(!timerPage && !modelPage);
+    details_->setVisible(!timerPage && !modelPage && details_->isVisible());
     pomodoro_->setVisible(timerPage);
+    modelPage_->setVisible(page == ModelViewerPage);
+    modelSettingsPage_->setVisible(page == ModelSettingsPage);
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
-    primary_->setVisible(page == Shortcuts || page == Cloud || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
+    primary_->setVisible(page == Shortcuts || page == Cloud || (page == ModelSettingsPage && admin_) || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
-         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : page == Banner ? QString::fromUtf8("Добавить фразу") : page == Cloud ? QString::fromUtf8("Настроить облако") : QString::fromUtf8("Создать задачу")));
+         page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : page == Banner ? QString::fromUtf8("Добавить фразу") : page == Cloud ? QString::fromUtf8("Настроить облако") : page == ModelSettingsPage ? QString::fromUtf8("Сохранить настройки") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions || page == Banner));
     deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Banner)));
     moveUp_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
@@ -651,6 +777,30 @@ void QtWindow::render() {
     changeStatus_->setVisible(page == Tasks && admin_);
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
     summary_->clear();
+
+    if (modelPage) {
+        table_->setRowCount(0);
+        table_->setColumnCount(0);
+        if (page == ModelViewerPage) {
+            modelStatus_->setText(modelViewer_->triangleCount()
+                ? QString::fromUtf8("%1 треугольников · %2").arg(modelViewer_->triangleCount()).arg(QFileInfo(modelPath_->text()).fileName())
+                : QString::fromUtf8("Модель не загружена"));
+        } else {
+            restoringModelSettings_ = true;
+            modelPath_->setText(modelSettings_.modelPath);
+            const auto choice = modelChoice_->findData(QFileInfo(modelSettings_.modelPath).fileName());
+            modelChoice_->setCurrentIndex(choice >= 0 ? choice : 0);
+            modelYaw_->setValue(qRound(modelSettings_.yaw * 100));
+            modelPitch_->setValue(qRound(modelSettings_.pitch * 100));
+            modelZoom_->setValue(qRound(modelSettings_.zoom * 100));
+            modelSpeed_->setValue(qRound(modelSettings_.autoSpeed * 100));
+            modelAutoRotate_->setChecked(modelSettings_.autoRotate);
+            modelColor_->setStyleSheet(QStringLiteral("background-color: %1;").arg(modelSettings_.lineColor.name()));
+            restoringModelSettings_ = false;
+        }
+        statusBar()->showMessage(QString::fromUtf8("Локальная копия · без облака · ") + q(workspace_.directory.u8string()));
+        return;
+    }
 
     if (page == Pomodoro) {
         summary_->clear();

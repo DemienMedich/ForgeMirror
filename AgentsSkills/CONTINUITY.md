@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; cloud mutations require explicit confirmation, local backup and atomic replacement; automatic sync remains disabled. Use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 46 verified on codex/qt-gui. Explicit administrator storage conflict recovery is complete; stable branches remain unchanged.
+- State: Stage 47 implementation is on codex/qt-gui. Qt now has an OBJ/FBX wireframe viewer and administrator-only 3D settings; stable branches remain unchanged.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stage 46 version 0.6.11 passed build, smoke_core, smoke_qt, native UI inspection, installer 0.6.10-to-0.6.11 update, system-only-PATH startup and uninstall with preserved data. Release evidence: docs/releases/ForgeMirror-0.6.11.md.
-- Next: Continue remaining settings and 3D before considering any whole-workspace push or automatic sync. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Qt target compiles after stage 47 changes. This is not a release checkpoint: no tests or installer lifecycle checks were run in this increment. Stage 46 remains the latest verified installer, version 0.6.11; release evidence: docs/releases/ForgeMirror-0.6.11.md.
+- Next: Finish and review remaining settings parity, then prepare a versioned installer checkpoint with the required lifecycle verification. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtStorageConflict.*, qt/QtWindow.*, src/AppUtils.cpp, tests/smoke_qt.cpp; build-qt.ps1 -Package; installer/build-qt-installer.ps1. Storage choice remains explicit and administrator-only; automatic sync stays unavailable.
+- Working set (files/ids/commands): qt/QtModelViewer.*, qt/QtWindow.*, CMakeLists.txt, qt/README.md; compile with `cmake --build build-qt --config Release --target ForgeMirrorQt --parallel 4`. Storage choice remains explicit and administrator-only; automatic sync stays unavailable.
 
 ---
 # Historical ledger (superseded by the current work above)

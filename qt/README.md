@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 46**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. The Qt client now has user-facing version `0.6.11` and a separately verified per-user installer; the preserved ImGui baseline remains version 0.5.54.
+This is **stage 47**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; this stage's viewer build is not yet a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -44,7 +44,13 @@ Admin mutations require the existing admin password from the copied settings (th
 | Audit | Admin task and profile-access audit view | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale and compact-table density; fixed migration palette | Additional accessibility options |
-| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards and administrator vault settings/log | Whole-workspace push, automatic sync, 3D and remaining settings |
+| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Whole-workspace push, automatic sync and remaining settings parity |
+
+### 3D viewer and settings (stage 47, implementation checkpoint)
+
+When the existing `view3d` module toggle is enabled, the sidebar exposes a model viewport and an administrator-only settings page. OBJ and FBX meshes are rendered as wireframes; drag rotates, the wheel changes zoom, and the legacy automatic rotation control remains available. Models in the local `models/` directory are listed, with a file picker for another path. Viewer settings are stored in `[qt3d]` in the isolated workspace's `meta/ui.ini`; legacy `[view3d]` values are read as defaults, and unrelated INI sections are preserved on save. Existing Qt palette and navigation indexes are unchanged.
+
+The application target compiled successfully for this checkpoint. No tests, installer packaging, or installer lifecycle verification were run, so version `0.6.11` remains the latest verified release. FBX parsing uses the already bundled ufbx source.
 
 ### Guarded manual cloud pull (stage 43)
 

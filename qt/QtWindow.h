@@ -2,6 +2,7 @@
 #include "QtWorkspace.h"
 #include "QtProfileSession.h"
 #include "QtDisplaySettings.h"
+#include "QtModelViewer.h"
 #include <QMainWindow>
 
 class QComboBox;
@@ -12,6 +13,8 @@ class QPushButton;
 class QTableWidget;
 class QTextBrowser;
 class QAction;
+class QSlider;
+class QCheckBox;
 
 class QtWindow : public QMainWindow {
 public:
@@ -34,6 +37,9 @@ private:
     void pullCloud();
     void resolveCloudConflict();
     void resolveStorageConflict();
+    void loadSelectedModel();
+    void saveModelSettings();
+    void updateModelSettingsFromControls();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
@@ -55,6 +61,21 @@ private:
     QWidget* profileMetrics_;
     QWidget* pomodoro_;
     QWidget* bottomActions_;
+    QWidget* modelPage_;
+    QWidget* modelSettingsPage_;
+    QtModelViewer* modelViewer_;
+    QtModelSettings modelSettings_;
+    QComboBox* modelChoice_;
+    QLineEdit* modelPath_;
+    QSlider* modelYaw_;
+    QSlider* modelPitch_;
+    QSlider* modelZoom_;
+    QSlider* modelSpeed_;
+    QCheckBox* modelAutoRotate_;
+    QPushButton* modelColor_;
+    QLabel* modelStatus_;
+    QTimer* modelTimer_;
+    bool restoringModelSettings_ = false;
     QLabel* profileValues_[5];
     QTableWidget* table_;
     QTextBrowser* details_;
