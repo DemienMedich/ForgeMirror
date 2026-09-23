@@ -11,6 +11,7 @@ struct QtDisplaySettings {
     QString lastProfileId;
     int lastPage = 0;
     int taskStatusFilter = 0;
+    int taskPriorityFilter = 0;
     int reportView = 0;
     int projectSortMode = 0;
     bool projectsOverdueOnly = false;

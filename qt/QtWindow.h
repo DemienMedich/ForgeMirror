@@ -55,6 +55,7 @@ private:
     QListWidget* navigation_;
     QLineEdit* search_;
     QComboBox* statusFilter_;
+    QComboBox* priorityFilter_;
     QComboBox* reportView_;
     QComboBox* projectSort_;
     QCheckBox* projectsOverdue_;

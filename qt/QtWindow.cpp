@@ -334,6 +334,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
                             QString::fromUtf8("В работе"), QString::fromUtf8("Выполнена")});
     statusFilter_->setCurrentIndex(displaySettings_.taskStatusFilter);
     filters->addWidget(statusFilter_);
+    priorityFilter_ = new QComboBox;
+    priorityFilter_->setObjectName("priorityFilter");
+    priorityFilter_->addItems({QString::fromUtf8("Любой приоритет"), QString::fromUtf8("Низкий"),
+        QString::fromUtf8("Средний"), QString::fromUtf8("Высокий"), QString::fromUtf8("Критический")});
+    priorityFilter_->setCurrentIndex(displaySettings_.taskPriorityFilter);
+    filters->addWidget(priorityFilter_);
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
@@ -453,6 +459,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(priorityFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
@@ -727,6 +734,7 @@ void QtWindow::saveDisplayContext() {
     const int page = navigation_->currentRow();
     if (page >= 0) displaySettings_.lastPage = page;
     displaySettings_.taskStatusFilter = statusFilter_->currentIndex();
+    displaySettings_.taskPriorityFilter = priorityFilter_->currentIndex();
     displaySettings_.reportView = reportView_->currentIndex();
     displaySettings_.projectSortMode = projectSort_->currentIndex();
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
@@ -821,6 +829,7 @@ void QtWindow::render() {
     modelSettingsPage_->setVisible(page == ModelSettingsPage);
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
+    priorityFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
@@ -903,6 +912,7 @@ void QtWindow::render() {
                  QString::fromUtf8("Приоритет"), QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
+            if (priorityFilter_->currentIndex() && AppNormalizeTaskPriority(task.priority) != priorityFilter_->currentIndex() - 1) continue;
             const auto project = std::find_if(data.projects.begin(), data.projects.end(),
                 [&](const auto& entry) { return !task.projectId.empty() && entry.id == task.projectId; });
             const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(),
