@@ -2342,6 +2342,9 @@ int main(int argc, char** argv) {
     const auto originalProject = LoadProjectsData(workspace.directory).front();
     if (!AppUpdateTaskProject(workspace.directory, workspace.data.tasks, task.id,
         originalProject.id, originalProject.name, "test").ok) return fail("Project link fixture failed");
+    nav->setCurrentRow(1);
+    nav->setCurrentRow(2);
+    table->setCurrentCell(0, 0);
     table->selectRow(0);
     saveForm(QString::fromUtf8("Проект после правки"));
     window.findChild<QPushButton*>("editEntry")->click();

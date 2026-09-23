@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 60**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–60 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 61**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–61 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 60 | Remaining |
+| Area | Qt coverage through stage 61 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal and administrator wallet credit/debit with required reason and profile audit | Broader wallet activity history |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -106,7 +106,13 @@ The Qt application target compiled successfully for stage 59. The refreshed port
 
 The administrator Audit page now merges task and profile events and orders them by timestamp, newest first. Its summary shows the total number of loaded events and the number currently visible after the shared search filter. The existing bounded profile log and task audit loader behavior are unchanged.
 
-The Qt app and smoke target compiled, and packaged startup stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`. The smoke test exposed a stale shortcut-help row-count expectation, which now matches the existing 13-row help table; execution then stopped at the existing project-edit identity assertion, before reaching the new audit-order assertion. No installer lifecycle verification was run; `0.6.11` remains the latest verified installer.
+The Qt app and smoke target compiled, and packaged startup stayed alive for four seconds in a disposable workspace with Qt removed from `PATH`. The first full smoke run exposed a stale shortcut-help row-count expectation and a project-list fixture that was not refreshed after directly linking a task. Both test setup issues were corrected in stage 61; the suite now reaches and passes the audit-order assertion. No installer lifecycle verification was run; `0.6.11` remains the latest verified installer.
+
+### Qt smoke fixture refresh (stage 61, implementation checkpoint)
+
+The project-edit smoke scenario now re-renders the project table after it changes task/project links through the core service. The report-backed project list intentionally omits catalog entries with no tasks; the fixture now reflects that contract before attempting to edit a project. It also selects a current table cell explicitly so the same row drives the detail and edit actions.
+
+`ctest --test-dir build-qt -C Release --output-on-failure` passes `smoke_qt` (1/1), including the reverse-chronological audit assertion. The packaged app startup check from stage 60 remains valid; installer lifecycle verification was not run, so `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 
