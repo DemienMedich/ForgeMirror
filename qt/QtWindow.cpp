@@ -11,6 +11,7 @@
 #include "QtStorageConflict.h"
 #include "QtModelViewer.h"
 #include "QtReportExport.h"
+#include "QtReportChart.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
@@ -255,6 +256,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     summary_->setTextFormat(Qt::PlainText);
     summary_->setWordWrap(true);
     content->addWidget(summary_);
+    statisticsChart_ = new QtReportChart;
+    content->addWidget(statisticsChart_);
     modelSettings_ = LoadQtModelSettings(workspace_.directory);
     modelPage_ = new QWidget;
     modelPage_->setObjectName("modelPage");
@@ -955,6 +958,7 @@ void QtWindow::render() {
     const bool timerPage = page == Pomodoro;
     const bool modelPage = page == ModelViewerPage || page == ModelSettingsPage;
     summary_->setVisible(!timerPage && !modelPage);
+    statisticsChart_->setVisible(page == Statistics);
     search_->setVisible(!timerPage && !modelPage);
     table_->setVisible(!timerPage && !modelPage);
     bottomActions_->setVisible(!timerPage && !modelPage);
@@ -1145,6 +1149,7 @@ void QtWindow::render() {
             reportFrom_->date(), reportTo_->date(), &missingCreationDates);
         const auto report = BuildTeamValueReport(reportTasks, data.projects, QDateTime::currentSecsSinceEpoch());
         const auto periodLabel = reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date());
+        statisticsChart_->setValues(report.newTasks, report.inProgressTasks, report.doneTasks, periodLabel);
         const auto missingNote = missingCreationDates
             ? QString::fromUtf8(" · без даты создания исключено: %1").arg(missingCreationDates) : QString();
         if (reportView_->currentIndex() == 0) {

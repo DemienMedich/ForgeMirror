@@ -18,6 +18,7 @@ class QAction;
 class QSlider;
 class QCheckBox;
 class QToolButton;
+class QtReportChart;
 
 class QtWindow : public QMainWindow {
 public:
@@ -72,6 +73,7 @@ private:
     QCheckBox* projectsOverdue_;
     QCheckBox* projectsXpPending_;
     QLabel* summary_;
+    QtReportChart* statisticsChart_;
     QLabel* title_;
     QLabel* mode_;
     QLabel* banner_;
