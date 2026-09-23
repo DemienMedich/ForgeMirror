@@ -567,6 +567,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
+    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
+        if (navigation_->currentRow() != Statistics) return;
+        if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
+        details();
+    });
     connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { if (navigation_->currentRow() == ModelSettingsPage) saveModelSettings(); else createEntry(); });
     connect(openModelSettings, &QPushButton::clicked, this, [this] { navigation_->setCurrentRow(ModelSettingsPage); });
