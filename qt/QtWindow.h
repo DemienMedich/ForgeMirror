@@ -56,6 +56,9 @@ private:
     QLineEdit* search_;
     QComboBox* statusFilter_;
     QComboBox* reportView_;
+    QComboBox* projectSort_;
+    QCheckBox* projectsOverdue_;
+    QCheckBox* projectsXpPending_;
     QLabel* summary_;
     QLabel* title_;
     QLabel* mode_;

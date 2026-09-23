@@ -15,10 +15,20 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         const auto key = line.section('=', 0, 0).trimmed(), value = line.section('=', 1).trimmed();
         if (section == "profile" && key == "lastProfileId") out.lastProfileId = value;
         if (section == "ui" && key == "windowDecorated") out.decorated = value != "0";
+        if (section == "projects") {
+            if (key == "sortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
+            else if (key == "overdueOnly") out.projectsOverdueOnly = value == "1";
+            else if (key == "xpPendingOnly") out.projectsXpPendingOnly = value == "1";
+        }
         if (section == "qt") {
             if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0";
             else if (key == "lastProfileId") out.lastProfileId = value;
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 15) : 0; }
+            else if (key == "taskStatusFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskStatusFilter = ok ? std::clamp(index, 0, 3) : 0; }
+            else if (key == "reportView") { bool ok = false; const int index = value.toInt(&ok); out.reportView = ok ? std::clamp(index, 0, 1) : 0; }
+            else if (key == "projectSortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
+            else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
+            else if (key == "projectsXpPendingOnly") out.projectsXpPendingOnly = value == "1";
         }
     }
     return out;
@@ -35,6 +45,11 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0");
     auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 15)));
+    set("taskStatusFilter", QString::number(std::clamp(settings.taskStatusFilter, 0, 3)));
+    set("reportView", QString::number(std::clamp(settings.reportView, 0, 1)));
+    set("projectSortMode", QString::number(std::clamp(settings.projectSortMode, 0, 3)));
+    set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");
+    set("projectsXpPendingOnly", settings.projectsXpPendingOnly ? "1" : "0");
     const auto bytes = (bom ? QByteArray("\xEF\xBB\xBF") : QByteArray()) + lines.join('\n').toUtf8();
     QDir().mkpath(meta); QSaveFile output(path); output.setDirectWriteFallback(false);
     return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();

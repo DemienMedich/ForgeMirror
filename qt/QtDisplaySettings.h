@@ -10,6 +10,11 @@ struct QtDisplaySettings {
     bool decorated = true;
     QString lastProfileId;
     int lastPage = 0;
+    int taskStatusFilter = 0;
+    int reportView = 0;
+    int projectSortMode = 0;
+    bool projectsOverdueOnly = false;
+    bool projectsXpPendingOnly = false;
 };
 QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);

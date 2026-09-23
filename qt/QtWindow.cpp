@@ -332,11 +332,27 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     statusFilter_->setObjectName("statusFilter");
     statusFilter_->addItems({QString::fromUtf8("Все статусы"), QString::fromUtf8("Новая"),
                             QString::fromUtf8("В работе"), QString::fromUtf8("Выполнена")});
+    statusFilter_->setCurrentIndex(displaySettings_.taskStatusFilter);
     filters->addWidget(statusFilter_);
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
+    reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
+    projectsOverdue_ = new QCheckBox(QString::fromUtf8("Просроченные"));
+    projectsOverdue_->setObjectName("projectsOverdueOnly");
+    projectsOverdue_->setChecked(displaySettings_.projectsOverdueOnly);
+    filters->addWidget(projectsOverdue_);
+    projectsXpPending_ = new QCheckBox(QString::fromUtf8("Ждут XP"));
+    projectsXpPending_->setObjectName("projectsXpPendingOnly");
+    projectsXpPending_->setChecked(displaySettings_.projectsXpPendingOnly);
+    filters->addWidget(projectsXpPending_);
+    projectSort_ = new QComboBox;
+    projectSort_->setObjectName("projectSort");
+    projectSort_->addItems({QString::fromUtf8("Название"), QString::fromUtf8("Число задач"),
+        QString::fromUtf8("Просрочка"), QString::fromUtf8("Ожидают XP")});
+    projectSort_->setCurrentIndex(displaySettings_.projectSortMode);
+    filters->addWidget(projectSort_);
     content->addLayout(filters);
     table_ = new QTableWidget;
     table_->setObjectName("records");
@@ -436,8 +452,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
-    connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
-    connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { render(); });
+    connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
     connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { if (navigation_->currentRow() == ModelSettingsPage) saveModelSettings(); else createEntry(); });
@@ -707,6 +726,11 @@ void QtWindow::saveDisplayContext() {
     if (!profileId.isEmpty()) displaySettings_.lastProfileId = profileId;
     const int page = navigation_->currentRow();
     if (page >= 0) displaySettings_.lastPage = page;
+    displaySettings_.taskStatusFilter = statusFilter_->currentIndex();
+    displaySettings_.reportView = reportView_->currentIndex();
+    displaySettings_.projectSortMode = projectSort_->currentIndex();
+    displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
+    displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
     if (!SaveQtDisplaySettings(workspace_.directory, displaySettings_))
         statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить последний раздел и профиль."), 5000);
 }
@@ -798,6 +822,9 @@ void QtWindow::render() {
     static_cast<QtPomodoro*>(pomodoro_)->setAdministrator(admin_);
     statusFilter_->setVisible(page == Tasks);
     reportView_->setVisible(page == Statistics);
+    projectsOverdue_->setVisible(page == Projects);
+    projectsXpPending_->setVisible(page == Projects);
+    projectSort_->setVisible(page == Projects);
     primary_->setVisible(page == Shortcuts || page == Cloud || (page == ModelSettingsPage && admin_) || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
@@ -888,7 +915,24 @@ void QtWindow::render() {
             .arg(report.activeTasks).arg(report.overdueTasks).arg(report.xpPendingTasks).arg(table_->rowCount()));
     } else if (page == Projects) {
         headers({QString::fromUtf8("Проект"), QString::fromUtf8("Описание"), QString::fromUtf8("Создан")});
-        for (const auto& project : data.projects) row(project.id, {q(project.name), q(project.description), timeText(project.createdAt)});
+        const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
+        auto metrics = report.projects;
+        const int sortMode = std::clamp(projectSort_->currentIndex(), 0, 3);
+        std::sort(metrics.begin(), metrics.end(), [sortMode](const auto& a, const auto& b) {
+            if (sortMode == 1 && a.totalTasks != b.totalTasks) return a.totalTasks > b.totalTasks;
+            if (sortMode == 2 && a.overdueTasks != b.overdueTasks) return a.overdueTasks > b.overdueTasks;
+            if (sortMode == 3 && a.xpPendingTasks != b.xpPendingTasks) return a.xpPendingTasks > b.xpPendingTasks;
+            return q(a.name).compare(q(b.name), Qt::CaseInsensitive) < 0;
+        });
+        for (const auto& metric : metrics) {
+            const auto project = std::find_if(data.projects.begin(), data.projects.end(), [&metric](const auto& item) { return item.id == metric.id; });
+            if (project == data.projects.end()) continue;
+            if (projectsOverdue_->isChecked() && metric.overdueTasks == 0) continue;
+            if (projectsXpPending_->isChecked() && metric.xpPendingTasks == 0) continue;
+            row(project->id, {q(project->name), q(project->description), timeText(project->createdAt)});
+        }
+        summary_->setText(QString::fromUtf8("Проектов: %1 · просрочка: %2 · ждут XP: %3 · показано: %4")
+            .arg(report.totalProjects).arg(report.projectsWithOverdue).arg(report.projectsWithXpPending).arg(table_->rowCount()));
     } else if (page == Catalog) {
         headers({QString::fromUtf8("Навык"), QString::fromUtf8("Вес"), QString::fromUtf8("Описание"), QString::fromUtf8("Профессии")});
         for (const auto& id : workspace_.catalog.skills()) {
