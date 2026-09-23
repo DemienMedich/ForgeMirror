@@ -431,9 +431,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(navigation_, &QListWidget::currentRowChanged, this, [this] {
         QSignalBlocker blocker(search_);
         search_->clear();
+        saveDisplayContext();
         render();
     });
-    connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); render(); });
+    connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { render(); });
@@ -681,9 +682,12 @@ bool QtWindow::reload() {
         for (const auto& profile : workspace_.profiles) {
             if (!profile.archived) profiles_->addItem(q(profile.name), q(profile.id));
         }
-        const int index = profiles_->findData(previous);
+        const auto preferred = previous.isEmpty() ? displaySettings_.lastProfileId : previous;
+        const int index = profiles_->findData(preferred);
         if (index >= 0) profiles_->setCurrentIndex(index);
     }
+    const int page = std::clamp(displaySettings_.lastPage, 0, navigation_->count() - 1);
+    if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
     updateBanner(); render();
     if (!workspace_.data.recoveryWarnings.empty()) {
         QStringList warnings;
@@ -696,6 +700,15 @@ bool QtWindow::reload() {
 QString QtWindow::selectedId() const {
     const auto* item = table_->item(table_->currentRow(), 0);
     return item ? item->data(Qt::UserRole).toString() : QString();
+}
+
+void QtWindow::saveDisplayContext() {
+    const auto profileId = profiles_->currentData().toString();
+    if (!profileId.isEmpty()) displaySettings_.lastProfileId = profileId;
+    const int page = navigation_->currentRow();
+    if (page >= 0) displaySettings_.lastPage = page;
+    if (!SaveQtDisplaySettings(workspace_.directory, displaySettings_))
+        statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить последний раздел и профиль."), 5000);
 }
 
 void QtWindow::loadSelectedModel() {

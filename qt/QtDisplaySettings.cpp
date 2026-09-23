@@ -13,9 +13,12 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
     for (const auto& raw : QString::fromUtf8(bytes).split('\n')) {
         const auto line = raw.trimmed(); if (line.startsWith('[') && line.endsWith(']')) { section = line.mid(1, line.size() - 2); continue; }
         const auto key = line.section('=', 0, 0).trimmed(), value = line.section('=', 1).trimmed();
+        if (section == "profile" && key == "lastProfileId") out.lastProfileId = value;
         if (section == "ui" && key == "windowDecorated") out.decorated = value != "0";
         if (section == "qt") {
             if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0";
+            else if (key == "lastProfileId") out.lastProfileId = value;
+            else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 15) : 0; }
         }
     }
     return out;
@@ -30,6 +33,8 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     if (begin < 0) { if (!lines.isEmpty() && !lines.back().isEmpty()) lines << ""; begin = lines.size(); lines << "[qt]"; end = lines.size(); }
     auto set = [&](const QString& key, const QString& value) { for (int i = begin + 1; i < end; ++i) if (lines[i].section('=', 0, 0).trimmed() == key) { lines[i] = key + '=' + value; return; } lines.insert(end++, key + '=' + value); };
     set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0");
+    auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
+    set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 15)));
     const auto bytes = (bom ? QByteArray("\xEF\xBB\xBF") : QByteArray()) + lines.join('\n').toUtf8();
     QDir().mkpath(meta); QSaveFile output(path); output.setDirectWriteFallback(false);
     return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
@@ -52,6 +57,6 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* notice = new QLabel; notice->setObjectName("qtSettingsNotice"); notice->setWordWrap(true); form->addRow(notice);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel); buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true); buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] { QtDisplaySettings next{scale->currentData().toInt(), compact->isChecked(), fullscreen->isChecked(), decorated->isChecked()}; if (!SaveQtDisplaySettings(directory, next)) { notice->setText(QString::fromUtf8("Не удалось атомарно сохранить настройки.")); return; } settings = next; dialog.accept(); });
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] { auto next = settings; next.scalePercent = scale->currentData().toInt(); next.compactRows = compact->isChecked(); next.fullscreen = fullscreen->isChecked(); next.decorated = decorated->isChecked(); if (!SaveQtDisplaySettings(directory, next)) { notice->setText(QString::fromUtf8("Не удалось атомарно сохранить настройки.")); return; } settings = next; dialog.accept(); });
     return dialog.exec() == QDialog::Accepted;
 }

@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 49**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–49 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 50**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–50 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -52,9 +52,9 @@ When the existing `view3d` module toggle is enabled, the sidebar exposes a model
 
 The application target compiled successfully for stage 47. No tests, installer packaging, or installer lifecycle verification were run, so version `0.6.11` remains the latest verified release. FBX parsing uses the already bundled ufbx source.
 
-### Window display settings (stage 48, implementation checkpoint)
+### Window display settings and context (stages 48–50, implementation checkpoints)
 
-The Qt display dialog persists fullscreen and decorated/frameless mode alongside text scale and compact table density. F11 toggles fullscreen and saves the preference immediately, so the next launch restores it. Legacy `ui.windowDecorated` is imported as a default. Frameless mode exposes a compact drag handle using the platform's native move operation. The palette stays fixed as requested. Stages 48 and 49 are implementation checkpoints; no tests or installer lifecycle verification were run, and version `0.6.11` remains the latest verified release.
+The Qt display dialog persists fullscreen and decorated/frameless mode alongside text scale and compact table density. F11 toggles fullscreen and saves the preference immediately, so the next launch restores it. Legacy `ui.windowDecorated` and `[profile] lastProfileId` are imported as defaults. The Qt client saves the last selected profile and navigation page in `[qt]`; it does not import legacy unlock or trust values. Frameless mode exposes a compact drag handle using the platform's native move operation. The palette stays fixed as requested. These remain implementation checkpoints; no tests or installer lifecycle verification were run, and version `0.6.11` remains the latest verified release.
 
 ### Guarded manual cloud pull (stage 43)
 

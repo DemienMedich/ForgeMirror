@@ -41,6 +41,7 @@ private:
     void loadSelectedModel();
     void saveModelSettings();
     void updateModelSettingsFromControls();
+    void saveDisplayContext();
     bool requireAdmin();
     void message(const std::string& error);
     QString selectedId() const;
