@@ -140,6 +140,7 @@ private:
     QCheckBox* logInfo_;
     QCheckBox* logWarnings_;
     QCheckBox* logErrors_;
+    QComboBox* logSourceFilter_;
     QPushButton* logPresetAll_;
     QPushButton* logPresetWarningsErrors_;
     QPushButton* logPresetErrors_;

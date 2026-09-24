@@ -516,6 +516,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     logErrors_ = new QCheckBox(QString::fromUtf8("Ошибки"));
     logErrors_->setObjectName("logErrors"); logErrors_->setChecked(true);
     filters->addWidget(logErrors_);
+    logSourceFilter_ = new QComboBox;
+    logSourceFilter_->setObjectName("logSourceFilter");
+    logSourceFilter_->setMaximumWidth(190);
+    logSourceFilter_->setToolTip(QString::fromUtf8("Показывать записи выбранного источника"));
+    filters->addWidget(logSourceFilter_);
     logPresetAll_ = new QPushButton(QString::fromUtf8("Все уровни"));
     logPresetAll_->setObjectName("logPresetAll");
     logPresetAll_->setToolTip(QString::fromUtf8("Показать сообщения всех уровней"));
@@ -715,6 +720,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(logInfo_, &QCheckBox::toggled, this, [this] { render(); });
     connect(logWarnings_, &QCheckBox::toggled, this, [this] { render(); });
     connect(logErrors_, &QCheckBox::toggled, this, [this] { render(); });
+    connect(logSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
     const auto setLogLevels = [this](bool info, bool warnings, bool errors) {
         const QSignalBlocker infoBlocker(logInfo_);
         const QSignalBlocker warningsBlocker(logWarnings_);
@@ -1298,6 +1304,7 @@ void QtWindow::render() {
     logInfo_->setVisible(page == Logs);
     logWarnings_->setVisible(page == Logs);
     logErrors_->setVisible(page == Logs);
+    logSourceFilter_->setVisible(page == Logs);
     logPresetAll_->setVisible(page == Logs);
     logPresetWarningsErrors_->setVisible(page == Logs);
     logPresetErrors_->setVisible(page == Logs);
@@ -1551,6 +1558,22 @@ void QtWindow::render() {
     } else if (page == Logs) {
         headers({QString::fromUtf8("#"), QString::fromUtf8("Время"), QString::fromUtf8("Уровень"),
             QString::fromUtf8("Источник"), QString::fromUtf8("Сообщение")});
+        const auto selectedSource = logSourceFilter_->currentData().toString();
+        QStringList sources;
+        for (const auto& entry : appLogs_) {
+            const auto source = q(entry.source);
+            if (!source.isEmpty() && !sources.contains(source)) sources.push_back(source);
+        }
+        sources.sort(Qt::CaseInsensitive);
+        {
+            const QSignalBlocker sourceBlocker(logSourceFilter_);
+            logSourceFilter_->clear();
+            logSourceFilter_->addItem(QString::fromUtf8("Все источники"), QString());
+            for (const auto& source : sources) logSourceFilter_->addItem(source, source);
+            const int selectedIndex = logSourceFilter_->findData(selectedSource);
+            logSourceFilter_->setCurrentIndex(std::max(0, selectedIndex));
+        }
+        const auto sourceFilter = logSourceFilter_->currentData().toString();
         int total = 0;
         int visible = 0;
         for (auto it = appLogs_.rbegin(); it != appLogs_.rend(); ++it) {
@@ -1558,6 +1581,7 @@ void QtWindow::render() {
             const bool enabled = it->level == AppLogLevel::Info ? logInfo_->isChecked()
                 : it->level == AppLogLevel::Warning ? logWarnings_->isChecked() : logErrors_->isChecked();
             if (!enabled) continue;
+            if (!sourceFilter.isEmpty() && q(it->source) != sourceFilter) continue;
             const QString level = it->level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                 : it->level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
             const QStringList values{QString::number(total), timeText(it->timestamp), level, q(it->source), q(it->message)};
@@ -2065,9 +2089,11 @@ void QtWindow::exportLogs() {
     if (!path.endsWith(".txt", Qt::CaseInsensitive)) path += ".txt";
     QByteArray bytes("\xEF\xBB\xBF", 3);
     int count = 0;
+    const auto sourceFilter = logSourceFilter_->currentData().toString();
     for (auto it = appLogs_.rbegin(); it != appLogs_.rend(); ++it) {
         const bool enabled = it->level == AppLogLevel::Info ? logInfo_->isChecked()
             : it->level == AppLogLevel::Warning ? logWarnings_->isChecked() : logErrors_->isChecked();
+        if (!sourceFilter.isEmpty() && q(it->source) != sourceFilter) continue;
         const QString level = it->level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
             : it->level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
         const QStringList values{QString::number(count + 1), timeText(it->timestamp), level, q(it->source), q(it->message)};
