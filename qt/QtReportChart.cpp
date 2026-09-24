@@ -3,14 +3,40 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QSizePolicy>
+#include <QDateTime>
 #include <algorithm>
 
 QtReportChart::QtReportChart(QWidget* parent) : QWidget(parent) {
     setObjectName("statisticsStatusChart");
-    setFixedHeight(76);
+    setFixedHeight(144);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     setAccessibleName(QString::fromUtf8("Распределение задач по текущим статусам"));
-    setToolTip(QString::fromUtf8("Распределение задач выбранного периода по их текущим статусам; график не показывает историческую динамику."));
+    setToolTip(QString::fromUtf8("Сверху — текущие статусы задач выбранного периода. Снизу — переходы в «Выполнена» по дате из сохранённого аудита (до 200 событий)."));
+}
+
+void QtReportChart::setCompletionTrend(const std::array<int, 12>& monthlyCompletions) {
+    monthlyCompletions_ = monthlyCompletions;
+    QStringList values;
+    for (const int value : monthlyCompletions_) values << QString::number(value);
+    setAccessibleDescription(accessibleDescription() + QString::fromUtf8(" Завершения по месяцам, последние 12 месяцев: ") + values.join(", ") +
+        QString::fromUtf8(". Учтены только переходы, оставшиеся в последних 200 событиях task-audit.log."));
+    update();
+}
+
+std::array<int, 12> QtReportChart::BuildMonthlyCompletionTrend(const std::vector<TaskAuditEntry>& audit,
+                                                               const QDate& currentDate) {
+    std::array<int, 12> result{};
+    if (!currentDate.isValid()) return result;
+    const auto firstMonth = QDate(currentDate.year(), currentDate.month(), 1).addMonths(-11);
+    for (const auto& entry : audit) {
+        if (entry.field != "status" || QString::fromUtf8(entry.newValue.data(), int(entry.newValue.size())) != QString::fromUtf8("Выполнена") || entry.timestamp <= 0)
+            continue;
+        const auto date = QDateTime::fromSecsSinceEpoch(entry.timestamp).date();
+        const auto month = QDate(date.year(), date.month(), 1);
+        const int index = (month.year() - firstMonth.year()) * 12 + month.month() - firstMonth.month();
+        if (index >= 0 && index < int(result.size())) ++result[size_t(index)];
+    }
+    return result;
 }
 
 void QtReportChart::setValues(int newTasks, int inProgressTasks, int doneTasks, const QString& periodLabel) {
@@ -69,5 +95,45 @@ void QtReportChart::paintEvent(QPaintEvent* event) {
             painter.setBrush(accentColor);
             painter.drawRoundedRect(QRectF(track.left(), track.top(), filledWidth, track.height()), 3.5, 3.5);
         }
+    }
+
+    painter.setPen(mutedColor);
+    painter.drawText(QRect(0, 70, width(), 16), Qt::AlignLeft | Qt::AlignVCenter,
+        QString::fromUtf8("Завершения по месяцу перехода · последние 12 месяцев · сохранённый аудит (до 200 событий)"));
+    const QRectF plot(24, 91, std::max(0, width() - 36), 34);
+    painter.setPen(QPen(trackColor, 1));
+    painter.drawLine(QPointF(plot.left(), plot.bottom()), QPointF(plot.right(), plot.bottom()));
+    const int trendMax = *std::max_element(monthlyCompletions_.begin(), monthlyCompletions_.end());
+    if (trendMax == 0) {
+        painter.setPen(mutedColor);
+        painter.drawText(QRectF(plot.left(), plot.top(), plot.width(), plot.height()), Qt::AlignCenter,
+            QString::fromUtf8("Нет завершений в сохранённой части аудита"));
+    } else {
+        QPolygonF line;
+        for (int index = 0; index < int(monthlyCompletions_.size()); ++index) {
+            const qreal x = plot.left() + (monthlyCompletions_.size() == 1 ? 0.0 : plot.width() * index / (monthlyCompletions_.size() - 1));
+            const qreal y = plot.bottom() - plot.height() * monthlyCompletions_[size_t(index)] / trendMax;
+            line << QPointF(x, y);
+        }
+        painter.setPen(QPen(accentColor, 2));
+        painter.drawPolyline(line);
+        painter.setBrush(accentColor);
+        for (int index = 0; index < line.size(); ++index) {
+            painter.drawEllipse(line[index], 2.5, 2.5);
+            if (monthlyCompletions_[size_t(index)] > 0) {
+                painter.setPen(textColor);
+                painter.drawText(QRectF(line[index].x() - 14, line[index].y() - 15, 28, 13), Qt::AlignCenter,
+                    QString::number(monthlyCompletions_[size_t(index)]));
+                painter.setPen(QPen(accentColor, 2));
+            }
+        }
+    }
+    const auto firstMonth = QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1).addMonths(-11);
+    painter.setPen(mutedColor);
+    const qreal step = monthlyCompletions_.size() > 1 ? plot.width() / (monthlyCompletions_.size() - 1) : plot.width();
+    for (int index = 0; index < int(monthlyCompletions_.size()); index += 2) {
+        const qreal center = plot.left() + step * index;
+        painter.drawText(QRectF(center - step * 0.48, 127, step * 0.96, 15), Qt::AlignHCenter | Qt::AlignTop,
+            firstMonth.addMonths(index).toString("MM/yy"));
     }
 }

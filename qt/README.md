@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 67**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–67 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 68**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–68 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 67 | Remaining |
+| Area | Qt coverage through stage 68 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward and profile-scoped wallet activity history | Broader profile history and audit-write transactionality |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -40,7 +40,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
-| Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods, current-status distribution chart, aggregate-to-task detail view by selection plus **Подробности** or double-click, and atomic UTF-8 CSV export using the selected period | Historical trend charts and richer drill-down |
+| Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods, current-status distribution chart, monthly completion trend from retained status audit events, aggregate-to-task detail view by selection plus **Подробности** or double-click, and atomic UTF-8 CSV export using the selected period | Richer drill-down; trends beyond retained audit events |
 | Audit | Admin task and profile-access audit view, merged by timestamp with newest events first, persisted source plus actor/object/field/search filters, visible/total counts, and atomic UTF-8 CSV export of visible events | Other application logs |
 | Application logs | Current Qt session messages and status notifications, newest first, global search, level toggles, UTF-8 TXT export of visible entries and clear action; capped at 200 in memory | Persistent history and full source-module parity |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
@@ -150,6 +150,10 @@ The Profile page exposes **История кошелька** only to an administ
 The Projects page adds **Задачи проекта** for the selected row. It opens Tasks with that project selected and clears search, status, priority, quick-task and pipeline filters so the destination actually shows the project's tasks. The selected project is highlighted by the existing table selection; no second navigation or separate focus state is introduced.
 
 `smoke_qt` drives the action from a project linked to a real task and verifies the destination page, project filter and visible linked task. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Monthly completion trend (stage 68, implementation checkpoint)
+
+The Statistics chart adds a 12-month line for task transitions into **Выполнена**, binned by the audit event timestamp. It is distinct from the current-status distribution above it. The application retains at most 200 task-audit events in memory, so the chart explicitly labels its source and limit; months with no retained completion event show zero and must not be read as proof that no completion occurred. This trend is independent of the task-creation cohort selected for the table and CSV. `smoke_qt` checks month boundaries, status filtering, oldest/newest month placement and exclusion of events outside the 12-month window. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

@@ -1299,6 +1299,7 @@ void QtWindow::render() {
         const auto report = BuildTeamValueReport(reportTasks, data.projects, QDateTime::currentSecsSinceEpoch());
         const auto periodLabel = reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date());
         statisticsChart_->setValues(report.newTasks, report.inProgressTasks, report.doneTasks, periodLabel);
+        statisticsChart_->setCompletionTrend(QtReportChart::BuildMonthlyCompletionTrend(data.taskAudit));
         const auto missingNote = missingCreationDates
             ? QString::fromUtf8(" · без даты создания исключено: %1").arg(missingCreationDates) : QString();
         if (reportView_->currentIndex() == 0) {

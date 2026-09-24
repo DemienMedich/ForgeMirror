@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtReportChart.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskCompletionService.h"
 #include "AppRecoveryStorage.h"
@@ -32,6 +33,7 @@
 #include <QtTest/QTest>
 #include <iostream>
 #include <algorithm>
+#include <numeric>
 #include <fstream>
 #include <iomanip>
 #ifdef _WIN32
@@ -1771,6 +1773,28 @@ static bool TestPersonalWallet() {
     return true;
 }
 
+static bool TestMonthlyCompletionTrend() {
+    const QDate current(2026, 9, 24);
+    const QDate firstMonth(2025, 10, 1);
+    auto entry = [](const QDate& date, const std::string& field, const std::string& status) {
+        TaskAuditEntry item;
+        item.timestamp = QDateTime(date, QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch();
+        item.field = field;
+        item.newValue = status;
+        return item;
+    };
+    std::vector<TaskAuditEntry> audit{
+        entry(firstMonth, "status", u8"Выполнена"),
+        entry(firstMonth.addDays(12), "status", u8"Выполнена"),
+        entry(firstMonth.addDays(4), "status", u8"В работе"),
+        entry(firstMonth.addMonths(11), "status", u8"Выполнена"),
+        entry(firstMonth.addDays(-1), "status", u8"Выполнена"),
+        entry(firstMonth.addDays(2), "priority", u8"Выполнена")};
+    const auto counts = QtReportChart::BuildMonthlyCompletionTrend(audit, current);
+    return counts[0] == 2 && counts[1] == 0 && counts[11] == 1 &&
+        std::accumulate(counts.begin(), counts.end(), 0) == 3;
+}
+
 static bool TestPomodoro() {
     auto fail = [](int step) { std::cerr << "Pomodoro step " << step << " failed\n"; return false; };
     QTemporaryDir temp;
@@ -1958,6 +1982,7 @@ int main(int argc, char** argv) {
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
+    if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
