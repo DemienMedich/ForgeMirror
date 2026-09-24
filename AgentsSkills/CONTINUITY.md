@@ -3,12 +3,12 @@
 - Goal (incl. success criteria): Migrate the ImGui frontend to Qt without losing the stable version or production data.
 - Constraints/Assumptions: Preserve develop; cloud mutations require explicit confirmation, local backup and atomic replacement; automatic sync remains disabled. Use Qt Widgets and the existing domain services. Full feature parity is not yet achieved.
 - Key decisions: Baseline 7306152 (0.5.54) is pushed as codex/pre-qt-2026-08-28. Implementation branch is codex/qt-gui. Production data is never the default Qt workspace.
-- State: Stage 54 implementation is on codex/qt-gui. Qt task browsing now includes persisted deadline, assignment and XP quick filters; stable branches remain unchanged.
+- State: Stage 72 is pushed on codex/qt-gui. Administrators can batch-update status, priority or active-profile assignees from one multi-select dialog; XP-participant tasks are skipped for assignee changes, and completed tasks remain outside bulk status changes.
 - Done: Qt CMake target, isolated workspace, profile/catalog/pipeline browsing, admin project/task creation, workflow status changes, search, filters, smoke test, package script. smoke_qt and smoke_core passed; packaged startup returned 0 with no Qt on PATH and empty stderr; production-directory guard returned 1, including case variation; rendered window inspected.
-- Now: Stages 47–53 compiled and were pushed. Stage 54 adds quick task filters for assignment, local-day deadlines, overdue, seven-day horizon, missing project, pending XP and active status; compile verification is pending. This is not a release checkpoint: no tests or installer lifecycle checks were run. Stage 46 remains the latest verified installer, version 0.6.11; release evidence: docs/releases/ForgeMirror-0.6.11.md.
-- Next: Finish remaining settings parity, then prepare a versioned installer checkpoint with the required lifecycle verification. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
+- Now: Stage 72 (`00f66be`) is verified and pushed. On 2026-09-24, `build-qt.ps1 -Package`, `smoke_qt` (1/1), `smoke_core`, and packaged startup without Qt in PATH passed. Installer lifecycle checks were not run; version 0.6.11 remains the latest verified installer; release evidence: docs/releases/ForgeMirror-0.6.11.md.
+- Next: Continue remaining Qt parity; prepare a versioned installer checkpoint only with the required lifecycle verification. Existing malformed cross-file IDs are not rewritten automatically; unknown references are preserved for review.
 - Open questions (UNCONFIRMED if needed): None blocking this increment; full parity requires further implementation.
-- Working set (files/ids/commands): qt/QtModelViewer.*, qt/QtDisplaySettings.*, qt/QtWindow.*, CMakeLists.txt, qt/README.md; compile with `cmake --build build-qt --config Release --target ForgeMirrorQt --parallel 4`. Storage choice remains explicit and administrator-only; automatic sync stays unavailable.
+- Working set (files/ids/commands): qt/QtWindow.*, qt/QtReportChart.*, CMakeLists.txt, qt/README.md, AgentsSkills/CONTINUITY.md; target build: `cmake --build build-qt --config Release --target ForgeMirrorQt --parallel 4`. Storage choice remains explicit and administrator-only; automatic sync stays unavailable.
 
 ---
 # Historical ledger (superseded by the current work above)
@@ -354,7 +354,7 @@ UI аудит:
   - Cloud quick-diff UX: confirm-modal теперь показывает явную разницу `до -> после` по ключевым метрикам и размеру файла, а backup-preview читает те же доменные счётчики из snapshot-файла, что и live-preview.
   - Tasks detail UX: правая панель задач стала компактнее, summary-метаданные теперь читаются сверху без длинной вертикальной таблицы, а редкие админские действия не захламляют основной контекст задачи.
 - Now:
-  - Общий UX pass: пункт 7 `плотность таблиц и читаемость строк` завершён.
+  - Qt-перенос: Stage 64 `целевые фильтры журнала` закоммичен и отправлен в `codex/qt-gui` (`c11919b`); `smoke_qt` проходит, развёрнутая сборка запускается без Qt в `PATH`. Последний проверенный установщик остаётся `0.6.11`; установщик в этом этапе не собирался.
 - Next:
   - Перейти к пункту 8: единые empty/active/focus states по всем модулям.
 - Open questions (UNCONFIRMED if needed):
