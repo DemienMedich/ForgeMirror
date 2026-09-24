@@ -1848,7 +1848,7 @@ static bool TestBulkTaskStatusUi() {
     QApplication::processEvents();
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* table = window.findChild<QTableWidget*>("records");
-    auto* bulk = window.findChild<QPushButton*>("bulkTaskStatus");
+    auto* bulk = window.findChild<QPushButton*>("bulkTaskEdit");
     if (!navigation || !table || !bulk) return false;
     navigation->setCurrentRow(1);
     if (table->selectionMode() != QAbstractItemView::ExtendedSelection || bulk->isVisible()) return false;
@@ -1868,14 +1868,22 @@ static bool TestBulkTaskStatusUi() {
         table->selectionModel()->select(table->model()->index(row, 0),
             QItemSelectionModel::Select | QItemSelectionModel::Rows);
     };
+    auto rowFor = [table](const QString& id) {
+        for (int row = 0; row < table->rowCount(); ++row)
+            if (table->item(row, 0)->data(Qt::UserRole).toString() == id) return row;
+        return -1;
+    };
     table->setCurrentCell(0, 0);
     table->clearSelection();
-    select(0); select(1);
+    select(rowFor("bulk-first")); select(rowFor("bulk-second"));
     if (!bulk->isEnabled()) return false;
     QTimer::singleShot(0, [] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
-        if (!dialog || dialog->objectName() != "bulkTaskStatusDialog") return;
-        dialog->findChild<QComboBox*>("bulkTaskTargetStatus")->setCurrentIndex(1);
+        if (!dialog || dialog->objectName() != "bulkTaskEditDialog") return;
+        dialog->findChild<QComboBox*>("bulkTaskOperation")->setCurrentIndex(
+            dialog->findChild<QComboBox*>("bulkTaskOperation")->findData(QStringLiteral("status")));
+        auto* target = dialog->findChild<QComboBox*>("bulkTaskTarget");
+        target->setCurrentIndex(target->findData(1));
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
     });
     bulk->click();
@@ -1886,10 +1894,36 @@ static bool TestBulkTaskStatusUi() {
     if (firstSaved == saved.end() || secondSaved == saved.end() || completedSaved == saved.end() ||
         firstSaved->status != 1 || secondSaved->status != 1 || completedSaved->status != 2 || workspace.data.taskAudit.size() != 2)
         return false;
+    table->clearSelection();
+    select(rowFor("bulk-first")); select(rowFor("bulk-second"));
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "bulkTaskEditDialog") return;
+        auto* operation = dialog->findChild<QComboBox*>("bulkTaskOperation");
+        operation->setCurrentIndex(operation->findData(QStringLiteral("priority")));
+        auto* target = dialog->findChild<QComboBox*>("bulkTaskTarget");
+        target->setCurrentIndex(target->findData(2));
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    bulk->click();
+    const auto reprioritized = LoadTasksData(workspace.directory);
+    for (const auto& task : reprioritized)
+        if ((task.id == "bulk-first" || task.id == "bulk-second") && task.priority != 2) return false;
+    if (workspace.data.taskAudit.size() != 4) return false;
     table->setCurrentCell(0, 0);
     table->clearSelection();
-    select(0); select(2);
-    return !bulk->isEnabled();
+    select(rowFor("bulk-first")); select(rowFor("bulk-completed"));
+    if (!bulk->isEnabled()) return false;
+    bool completedStatusUnavailable = false;
+    QTimer::singleShot(0, [&completedStatusUnavailable] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* operation = dialog ? dialog->findChild<QComboBox*>("bulkTaskOperation") : nullptr;
+        completedStatusUnavailable = operation && operation->count() == 1 &&
+            operation->currentData().toString() == QStringLiteral("priority");
+        if (dialog) dialog->reject();
+    });
+    bulk->click();
+    return completedStatusUnavailable;
 }
 
 static bool TestPomodoro() {

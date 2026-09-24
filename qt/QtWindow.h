@@ -36,7 +36,7 @@ private:
     void deleteEntry();
     void movePipeline(int delta);
     void changeStatus();
-    void bulkChangeStatus();
+    void bulkEditTasks();
     void exportReport();
     void exportAudit();
     void exportLogs();
@@ -116,7 +116,7 @@ private:
     QToolButton* dragHandle_;
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
-    QPushButton* bulkStatus_;
+    QPushButton* bulkEdit_;
     QPushButton* editEntry_;
     QPushButton* deleteEntry_;
     QPushButton* moveUp_;

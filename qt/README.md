@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 70**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–70 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 71**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–71 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,10 +32,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 70 | Remaining |
+| Area | Qt coverage through stage 71 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward and profile-scoped wallet activity history | Broader profile history and audit-write transactionality |
-| Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines; administrator multi-select status change between New and In Progress | Other bulk edits, reminders while the app is closed, legacy/stale awarded-task cleanup review |
+| Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines; administrator multi-select status and priority edits | Bulk project/pipeline/deadline/assignee edits, reminders while the app is closed, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks; overdue and pending-XP filters, four sort modes persisted locally; open the selected project's tasks with project filter and unrelated task filters cleared | — |
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -161,7 +161,11 @@ While Qt is open, it checks active tasks once per minute and once shortly after 
 
 ### Bulk task status change (stage 70, implementation checkpoint)
 
-Administrators can select multiple rows on Tasks and use **Массовый статус** to move eligible unfinished tasks between **Новая** and **В работе**. Completed tasks disable the action when selected; completion and XP distribution remain in the individual task workflow. The existing core bulk status service persists changes and records each transition in task audit. The migration information dialog now points to the current coverage document rather than claiming the already-ported 3D viewer is missing. `smoke_qt` checks unauthenticated gating, admin access, multi-selection, persisted statuses/audit and completed-task exclusion. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.
+
+### Bulk task status and priority (stage 71, implementation checkpoint)
+
+On Tasks, administrators can select multiple rows and use **Массовое изменение** to set status or priority. Completed tasks are excluded from the status option, while priority changes remain available. Status completion and XP distribution still use the individual task workflow. Existing core bulk mutation services persist each change and append task-audit events. `smoke_qt` covers admin gating, both operations, persisted task values and audit events, plus priority-only behavior when a completed task is selected. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 
