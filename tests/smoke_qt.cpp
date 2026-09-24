@@ -1826,6 +1826,72 @@ static bool TestDeadlineReminders() {
     return window.statusBar()->currentMessage().isEmpty();
 }
 
+static bool TestBulkTaskStatusUi() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    TaskEntry first;
+    first.id = "bulk-first";
+    first.title = "First bulk task";
+    first.status = 0;
+    TaskEntry second;
+    second.id = "bulk-second";
+    second.title = "Second bulk task";
+    second.status = 0;
+    TaskEntry completed;
+    completed.id = "bulk-completed";
+    completed.title = "Completed task";
+    completed.status = 2;
+    workspace.data.tasks = {first, second, completed};
+    if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* bulk = window.findChild<QPushButton*>("bulkTaskStatus");
+    if (!navigation || !table || !bulk) return false;
+    navigation->setCurrentRow(1);
+    if (table->selectionMode() != QAbstractItemView::ExtendedSelection || bulk->isVisible()) return false;
+
+    QAction* adminAction = nullptr;
+    for (auto* menu : window.findChildren<QMenu*>())
+        for (auto* action : menu->actions())
+            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return false;
+    QTimer::singleShot(0, [] {
+        auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+        if (input) { input->setTextValue(QString::fromUtf8("admin123")); input->accept(); }
+    });
+    adminAction->trigger();
+    if (!bulk->isVisible()) return false;
+    auto select = [table](int row) {
+        table->selectionModel()->select(table->model()->index(row, 0),
+            QItemSelectionModel::Select | QItemSelectionModel::Rows);
+    };
+    table->setCurrentCell(0, 0);
+    table->clearSelection();
+    select(0); select(1);
+    if (!bulk->isEnabled()) return false;
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "bulkTaskStatusDialog") return;
+        dialog->findChild<QComboBox*>("bulkTaskTargetStatus")->setCurrentIndex(1);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    bulk->click();
+    const auto saved = LoadTasksData(workspace.directory);
+    const auto firstSaved = std::find_if(saved.begin(), saved.end(), [](const auto& task) { return task.id == "bulk-first"; });
+    const auto secondSaved = std::find_if(saved.begin(), saved.end(), [](const auto& task) { return task.id == "bulk-second"; });
+    const auto completedSaved = std::find_if(saved.begin(), saved.end(), [](const auto& task) { return task.id == "bulk-completed"; });
+    if (firstSaved == saved.end() || secondSaved == saved.end() || completedSaved == saved.end() ||
+        firstSaved->status != 1 || secondSaved->status != 1 || completedSaved->status != 2 || workspace.data.taskAudit.size() != 2)
+        return false;
+    table->setCurrentCell(0, 0);
+    table->clearSelection();
+    select(0); select(2);
+    return !bulk->isEnabled();
+}
+
 static bool TestPomodoro() {
     auto fail = [](int step) { std::cerr << "Pomodoro step " << step << " failed\n"; return false; };
     QTemporaryDir temp;
@@ -2015,6 +2081,7 @@ int main(int argc, char** argv) {
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
+    if (!TestBulkTaskStatusUi()) { std::cerr << "Bulk task status UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };

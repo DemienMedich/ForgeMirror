@@ -218,7 +218,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
             "Qt работает с отдельной копией данных. Доступен только подтверждаемый ручной pull с полной резервной копией.\n"
-            "3D и оставшиеся настройки ещё не перенесены."));
+            "Список перенесённых функций и ограничений находится в qt/README.md."));
     });
     menuButton->setMenu(menu);
     header->addWidget(menuButton);
@@ -519,6 +519,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     changeStatus_->setObjectName("changeStatus");
     changeStatus_->setToolTip(QString::fromUtf8("Переходы проверяются ядром. Завершение открывает распределение XP."));
     bottom->addWidget(changeStatus_);
+    bulkStatus_ = new QPushButton(QString::fromUtf8("Массовый статус"));
+    bulkStatus_->setObjectName("bulkTaskStatus");
+    bulkStatus_->setToolTip(QString::fromUtf8("Перевести несколько выбранных задач между «Новая» и «В работе»; завершение требует отдельного начисления XP"));
+    bottom->addWidget(bulkStatus_);
     editEntry_ = new QPushButton(QString::fromUtf8("Редактировать"));
     editEntry_->setObjectName("editEntry");
     bottom->addWidget(editEntry_);
@@ -660,6 +664,14 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         details();
         const auto id = table_->currentItem() ? table_->currentItem()->data(Qt::UserRole).toString() : QString();
         projectFocus_->setEnabled(navigation_->currentRow() == Projects && !id.isEmpty() && id != QStringLiteral("__no_project"));
+        bool allowed = table_->selectionModel()->selectedRows().size() >= 2;
+        for (const auto& index : table_->selectionModel()->selectedRows()) {
+            const auto selectedId = u(table_->item(index.row(), 0)->data(Qt::UserRole).toString());
+            const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+                [&](const auto& item) { return item.id == selectedId; });
+            if (task == workspace_.data.tasks.end() || AppNormalizeTaskStatus(task->status) == 2) allowed = false;
+        }
+        bulkStatus_->setEnabled(navigation_->currentRow() == Tasks && admin_ && allowed);
     });
     connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
         if (navigation_->currentRow() != Statistics) return;
@@ -740,6 +752,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (ShowPipelineTransition(this, workspace_, u(selectedId()))) reload();
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
+    connect(bulkStatus_, &QPushButton::clicked, this, [this] { bulkChangeStatus(); });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
     connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
     connect(exportLogs_, &QPushButton::clicked, this, [this] { exportLogs(); });
@@ -1073,6 +1086,7 @@ void QtWindow::render() {
     const auto previous = selectedId();
     table_->verticalHeader()->setDefaultSectionSize(displaySettings_.compactRows ? 24 : 28);
     const auto& data = workspace_.data;
+    table_->setSelectionMode(page == Tasks ? QAbstractItemView::ExtendedSelection : QAbstractItemView::SingleSelection);
     QSignalBlocker blocker(table_);
     table_->setSortingEnabled(false);
     table_->clear();
@@ -1158,6 +1172,8 @@ void QtWindow::render() {
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
+    bulkStatus_->setVisible(page == Tasks && admin_);
+    bulkStatus_->setEnabled(false);
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
     summary_->clear();
 
@@ -2485,6 +2501,64 @@ void QtWindow::movePipeline(int delta) {
     if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось изменить порядок этапов." : result.errorMessage); return; }
     render();
     statusBar()->showMessage(QString::fromUtf8("Порядок этапов сохранён"), 3000);
+}
+
+void QtWindow::bulkChangeStatus() {
+    if (!requireAdmin() || navigation_->currentRow() != Tasks) return;
+    if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+        message(u8"Сначала завершите восстановление данных.");
+        return;
+    }
+    std::unordered_set<std::string> taskIds;
+    for (const auto& index : table_->selectionModel()->selectedRows()) {
+        const auto id = u(table_->item(index.row(), 0)->data(Qt::UserRole).toString());
+        const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (task == workspace_.data.tasks.end() || AppNormalizeTaskStatus(task->status) == 2) {
+            message(u8"Выбранные завершённые или недоступные задачи нужно обрабатывать отдельно.");
+            return;
+        }
+        taskIds.insert(id);
+    }
+    if (taskIds.size() < 2) {
+        message(u8"Выберите не менее двух задач.");
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setObjectName("bulkTaskStatusDialog");
+    dialog.setWindowTitle(QString::fromUtf8("Массовое изменение статуса"));
+    dialog.setMinimumWidth(380);
+    auto* form = new QFormLayout(&dialog);
+    auto* count = new QLabel(QString::fromUtf8("Выбрано задач: %1").arg(taskIds.size()));
+    auto* target = new QComboBox;
+    target->setObjectName("bulkTaskTargetStatus");
+    target->addItems({QString::fromUtf8("Новая"), QString::fromUtf8("В работе")});
+    target->setCurrentIndex(1);
+    auto* hint = new QLabel(QString::fromUtf8("Завершение и начисление XP выполняются отдельно для каждой задачи."));
+    hint->setWordWrap(true);
+    form->addRow(count);
+    form->addRow(QString::fromUtf8("Новый статус"), target);
+    form->addRow(hint);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Применить"));
+    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    const auto result = AppBulkUpdateTaskStatus(workspace_.directory, workspace_.data.tasks,
+        taskIds, target->currentIndex(), "admin", &workspace_.data.taskAudit);
+    if (!result.ok) {
+        reload();
+        message(result.errorMessage.empty() ? std::string(u8"Не удалось изменить статусы выбранных задач.") : result.errorMessage);
+        return;
+    }
+    reload();
+    statusBar()->showMessage(QString::fromUtf8("Статус обновлён: %1 · без изменений: %2")
+        .arg(result.changedCount).arg(int(taskIds.size()) - result.changedCount), 7000);
 }
 
 void QtWindow::changeStatus() {
