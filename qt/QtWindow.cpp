@@ -2537,17 +2537,22 @@ void QtWindow::bulkEditTasks() {
     operation->setObjectName("bulkTaskOperation");
     operation->addItem(QString::fromUtf8("Статус"), QStringLiteral("status"));
     operation->addItem(QString::fromUtf8("Приоритет"), QStringLiteral("priority"));
+    operation->addItem(QString::fromUtf8("Исполнители"), QStringLiteral("assignees"));
     if (hasCompleted) operation->setCurrentIndex(1);
     auto* target = new QComboBox;
     target->setObjectName("bulkTaskTarget");
-    auto updateTargets = [operation, target] {
+    auto* targetLabel = new QLabel(QString::fromUtf8("Новое значение"));
+    auto updateTargets = [operation, target, targetLabel] {
         const QSignalBlocker blocker(target);
         target->clear();
-        if (operation->currentData().toString() == QStringLiteral("status")) {
+        const auto mode = operation->currentData().toString();
+        target->setVisible(mode != QStringLiteral("assignees"));
+        targetLabel->setVisible(mode != QStringLiteral("assignees"));
+        if (mode == QStringLiteral("status")) {
             target->addItem(QString::fromUtf8("Новая"), 0);
             target->addItem(QString::fromUtf8("В работе"), 1);
             target->setCurrentIndex(1);
-        } else {
+        } else if (mode == QStringLiteral("priority")) {
             target->addItem(QString::fromUtf8("Низкий"), 0);
             target->addItem(QString::fromUtf8("Средний"), 1);
             target->addItem(QString::fromUtf8("Высокий"), 2);
@@ -2557,43 +2562,101 @@ void QtWindow::bulkEditTasks() {
     };
     if (hasCompleted) operation->removeItem(0);
     updateTargets();
+    auto* assigneeList = new QListWidget;
+    assigneeList->setObjectName("bulkTaskAssignees");
+    assigneeList->setMaximumHeight(180);
+    for (const auto& profile : workspace_.profiles) {
+        auto* item = new QListWidgetItem(q(profile.name), assigneeList);
+        item->setData(Qt::UserRole, q(profile.id));
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
+            (profile.archived ? Qt::ItemFlags{} : Qt::ItemIsUserCheckable));
+        item->setCheckState(Qt::Unchecked);
+        if (profile.archived) item->setForeground(palette().color(QPalette::Disabled, QPalette::Text));
+    }
+    auto* assigneeLabel = new QLabel(QString::fromUtf8("Исполнители"));
+    const bool assigningInitially = operation->currentData().toString() == QStringLiteral("assignees");
+    assigneeList->setVisible(assigningInitially);
+    assigneeLabel->setVisible(assigningInitially);
+    int skippedCount = 0;
+    for (const auto& id : taskIds) {
+        const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (task != workspace_.data.tasks.end() && !task->participants.empty()) ++skippedCount;
+    }
     auto* hint = new QLabel;
-    hint->setText(operation->currentData().toString() == QStringLiteral("status")
-        ? QString::fromUtf8("Завершение и начисление XP выполняются отдельно для каждой задачи.")
-        : QString::fromUtf8("Изменение приоритета не меняет статус и начисление XP."));
+    auto updateHint = [hint, operation, skippedCount] {
+        const auto mode = operation->currentData().toString();
+        if (mode == QStringLiteral("status")) hint->setText(QString::fromUtf8("Завершение и начисление XP выполняются отдельно для каждой задачи."));
+        else if (mode == QStringLiteral("priority")) hint->setText(QString::fromUtf8("Изменение приоритета не меняет статус и начисление XP."));
+        else hint->setText(QString::fromUtf8("Задачи с XP-участниками будут пропущены: %1. Выберите хотя бы одного активного исполнителя.").arg(skippedCount));
+    };
+    updateHint();
     hint->setWordWrap(true);
     form->addRow(count);
     form->addRow(QString::fromUtf8("Поле"), operation);
-    form->addRow(QString::fromUtf8("Новое значение"), target);
+    form->addRow(targetLabel, target);
+    form->addRow(assigneeLabel, assigneeList);
     form->addRow(hint);
-    connect(operation, &QComboBox::currentIndexChanged, &dialog, [updateTargets, hint, operation] {
-        updateTargets();
-        hint->setText(operation->currentData().toString() == QStringLiteral("status")
-            ? QString::fromUtf8("Завершение и начисление XP выполняются отдельно для каждой задачи.")
-            : QString::fromUtf8("Изменение приоритета не меняет статус и начисление XP."));
-    });
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Применить"));
-    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+    auto* applyButton = buttons->button(QDialogButtonBox::Save);
+    applyButton->setText(QString::fromUtf8("Применить"));
+    applyButton->setProperty("primary", true);
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
     form->addRow(buttons);
+    auto updateAssigneeVisibility = [operation, assigneeList, assigneeLabel] {
+        const bool visible = operation->currentData().toString() == QStringLiteral("assignees");
+        assigneeList->setVisible(visible);
+        assigneeLabel->setVisible(visible);
+    };
+    auto updateApplyEnabled = [operation, assigneeList, applyButton] {
+        if (operation->currentData().toString() != QStringLiteral("assignees")) {
+            applyButton->setEnabled(true);
+            return;
+        }
+        bool selected = false;
+        for (int index = 0; index < assigneeList->count(); ++index) {
+            const auto* item = assigneeList->item(index);
+            if (item->flags().testFlag(Qt::ItemIsUserCheckable) && item->checkState() == Qt::Checked) selected = true;
+        }
+        applyButton->setEnabled(selected);
+    };
+    connect(operation, &QComboBox::currentIndexChanged, &dialog,
+        [updateTargets, updateHint, updateApplyEnabled, updateAssigneeVisibility] {
+            updateTargets(); updateHint(); updateAssigneeVisibility(); updateApplyEnabled();
+        });
+    connect(assigneeList, &QListWidget::itemChanged, &dialog, [updateApplyEnabled] { updateApplyEnabled(); });
+    updateApplyEnabled();
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     if (dialog.exec() != QDialog::Accepted) return;
 
-    const auto result = operation->currentData().toString() == QStringLiteral("status")
+    std::vector<std::string> assignees;
+    if (operation->currentData().toString() == QStringLiteral("assignees")) {
+        for (int index = 0; index < assigneeList->count(); ++index) {
+            const auto* item = assigneeList->item(index);
+            if (item->flags().testFlag(Qt::ItemIsUserCheckable) && item->checkState() == Qt::Checked)
+                assignees.push_back(u(item->data(Qt::UserRole).toString()));
+        }
+        if (assignees.empty()) return;
+    }
+
+    const auto mode = operation->currentData().toString();
+    const auto result = mode == QStringLiteral("status")
         ? AppBulkUpdateTaskStatus(workspace_.directory, workspace_.data.tasks, taskIds,
             target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
-        : AppBulkUpdateTaskPriority(workspace_.directory, workspace_.data.tasks, taskIds,
-            target->currentData().toInt(), "admin", &workspace_.data.taskAudit);
+        : mode == QStringLiteral("priority")
+        ? AppBulkUpdateTaskPriority(workspace_.directory, workspace_.data.tasks, taskIds,
+            target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
+        : AppBulkUpdateTaskAssignees(workspace_.directory, workspace_.data.tasks, taskIds,
+            assignees, "admin", &workspace_.data.taskAudit);
     if (!result.ok) {
         reload();
-        message(result.errorMessage.empty() ? std::string(u8"Не удалось изменить статусы выбранных задач.") : result.errorMessage);
+        message(result.errorMessage.empty() ? std::string(u8"Не удалось применить массовое изменение.") : result.errorMessage);
         return;
     }
     reload();
-    statusBar()->showMessage(QString::fromUtf8("Обновлено задач: %1 · без изменений: %2")
-        .arg(result.changedCount).arg(int(taskIds.size()) - result.changedCount), 7000);
+    statusBar()->showMessage(QString::fromUtf8("Обновлено: %1 · пропущено: %2")
+        .arg(result.changedCount).arg(result.skippedCount), 7000);
 }
 
 void QtWindow::changeStatus() {

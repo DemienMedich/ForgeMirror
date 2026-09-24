@@ -1826,9 +1826,12 @@ static bool TestDeadlineReminders() {
     return window.statusBar()->currentMessage().isEmpty();
 }
 
-static bool TestBulkTaskStatusUi() {
+static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    const auto executor = workspace.storage->create_profile(Profile(u8"Активный исполнитель"));
+    const auto archivedExecutor = workspace.storage->create_profile(Profile(u8"Архивный исполнитель"));
+    if (!executor || !archivedExecutor || !workspace.storage->set_archived(archivedExecutor->id, true)) return false;
     TaskEntry first;
     first.id = "bulk-first";
     first.title = "First bulk task";
@@ -1843,6 +1846,7 @@ static bool TestBulkTaskStatusUi() {
     completed.status = 2;
     workspace.data.tasks = {first, second, completed};
     if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
+    workspace.reload();
     QtWindow window(workspace);
     window.show();
     QApplication::processEvents();
@@ -1910,6 +1914,44 @@ static bool TestBulkTaskStatusUi() {
     for (const auto& task : reprioritized)
         if ((task.id == "bulk-first" || task.id == "bulk-second") && task.priority != 2) return false;
     if (workspace.data.taskAudit.size() != 4) return false;
+    auto firstInMemory = std::find_if(workspace.data.tasks.begin(), workspace.data.tasks.end(),
+        [](const auto& task) { return task.id == "bulk-first"; });
+    if (firstInMemory == workspace.data.tasks.end()) return false;
+    firstInMemory->participants.push_back({executor->id, 100, 100, 0, "xp-awarded"});
+    if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
+    table->clearSelection();
+    select(rowFor("bulk-first")); select(rowFor("bulk-second"));
+    bool assigneePickerChecked = false;
+    QTimer::singleShot(0, [executorId = executor->id, archivedId = archivedExecutor->id, &assigneePickerChecked] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "bulkTaskEditDialog") return;
+        auto* operation = dialog->findChild<QComboBox*>("bulkTaskOperation");
+        operation->setCurrentIndex(operation->findData(QStringLiteral("assignees")));
+        auto* list = dialog->findChild<QListWidget*>("bulkTaskAssignees");
+        auto* apply = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        const int activeIndex = list->findItems(QString::fromUtf8("Активный исполнитель"), Qt::MatchExactly).empty()
+            ? -1 : list->row(list->findItems(QString::fromUtf8("Активный исполнитель"), Qt::MatchExactly).front());
+        int archivedIndex = -1;
+        for (int index = 0; index < list->count(); ++index)
+            if (list->item(index)->data(Qt::UserRole).toString() == QString::fromStdString(archivedId)) archivedIndex = index;
+        if (activeIndex >= 0 && archivedIndex >= 0 && !apply->isEnabled() &&
+            !list->item(archivedIndex)->flags().testFlag(Qt::ItemIsUserCheckable)) {
+            list->item(activeIndex)->setCheckState(Qt::Checked);
+            assigneePickerChecked = apply->isEnabled() &&
+                list->item(activeIndex)->data(Qt::UserRole).toString() == QString::fromStdString(executorId);
+        }
+        if (assigneePickerChecked) apply->click(); else dialog->reject();
+    });
+    bulk->click();
+    if (!assigneePickerChecked) return false;
+    const auto assigned = LoadTasksData(workspace.directory);
+    const auto assignedFirst = std::find_if(assigned.begin(), assigned.end(), [](const auto& task) { return task.id == "bulk-first"; });
+    const auto assignedSecond = std::find_if(assigned.begin(), assigned.end(), [](const auto& task) { return task.id == "bulk-second"; });
+    if (assignedFirst == assigned.end() || assignedSecond == assigned.end() ||
+        assignedFirst->assignees != std::vector<std::string>{executor->id} ||
+        assignedSecond->assignees != std::vector<std::string>{executor->id} || workspace.data.taskAudit.size() != 5 ||
+        workspace.data.taskAudit.back().taskId != "bulk-second" || workspace.data.taskAudit.back().field != "assignees" ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("пропущено: 1"))) return false;
     table->setCurrentCell(0, 0);
     table->clearSelection();
     select(rowFor("bulk-first")); select(rowFor("bulk-completed"));
@@ -1918,7 +1960,9 @@ static bool TestBulkTaskStatusUi() {
     QTimer::singleShot(0, [&completedStatusUnavailable] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* operation = dialog ? dialog->findChild<QComboBox*>("bulkTaskOperation") : nullptr;
-        completedStatusUnavailable = operation && operation->count() == 1 &&
+        completedStatusUnavailable = operation && operation->count() == 2 &&
+            operation->findData(QStringLiteral("status")) < 0 &&
+            operation->findData(QStringLiteral("assignees")) >= 0 &&
             operation->currentData().toString() == QStringLiteral("priority");
         if (dialog) dialog->reject();
     });
@@ -2115,7 +2159,7 @@ int main(int argc, char** argv) {
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
-    if (!TestBulkTaskStatusUi()) { std::cerr << "Bulk task status UI failed\n"; return 1; }
+    if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
