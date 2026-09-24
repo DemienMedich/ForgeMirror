@@ -2288,6 +2288,38 @@ int main(int argc, char** argv) {
         !uiAuditBytes.contains(QString::fromUtf8("Источник,Время,Автор,Объект,Поле,Было,Стало").toUtf8()) ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Экспортировано событий: %1").arg(auditRowsBeforeExport)))
         return fail("Audit export UI content or visible row count failed");
+    nav->setCurrentRow(16);
+    auto* logInfo = window.findChild<QCheckBox*>("logInfo");
+    auto* exportLogs = window.findChild<QPushButton*>("exportLogs");
+    auto* clearLogs = window.findChild<QPushButton*>("clearLogs");
+    if (!logInfo || !exportLogs || !clearLogs || !logInfo->isVisible() || !exportLogs->isVisible() || !clearLogs->isVisible())
+        return fail("Qt application log controls unavailable");
+    const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");
+    search->setText(startupLogToken);
+    if (table->rowCount() == 0 || !table->item(0, 4)->text().contains(startupLogToken, Qt::CaseInsensitive))
+        return fail("Qt startup event was not captured in the application log");
+    logInfo->setChecked(false);
+    if (table->rowCount() != 0) return fail("Qt log level filter did not hide info entries");
+    logInfo->setChecked(true);
+    if (table->rowCount() == 0) return fail("Qt log level filter did not restore info entries");
+    const auto uiLogPath = temp.path() + "/ui-app-log.txt";
+    QTimer::singleShot(0, [uiLogPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(uiLogPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportLogs->click();
+    QFile uiLogs(uiLogPath);
+    if (!uiLogs.open(QIODevice::ReadOnly)) return fail("Qt application log export did not create a file");
+    const auto uiLogBytes = uiLogs.readAll();
+    if (!uiLogBytes.startsWith("\xEF\xBB\xBF") || !uiLogBytes.contains(startupLogToken.toUtf8()))
+        return fail("Qt application log export content or encoding failed");
+    clearLogs->click();
+    auto* logSummary = window.findChild<QLabel*>("summary");
+    if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||
+        !table->item(0, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive))
+        return fail("Qt application log clear failed");
     const auto auditArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!auditArtifacts.isEmpty()) window.grab().save(auditArtifacts + "/profile-audit.png");
     nav->setCurrentRow(5);

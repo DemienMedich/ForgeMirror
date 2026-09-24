@@ -101,7 +101,7 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud, ModelViewerPage, ModelSettingsPage };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud, ModelViewerPage, ModelSettingsPage, Logs };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -237,7 +237,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
         QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако"),
-        QString::fromUtf8("3D просмотр"), QString::fromUtf8("Настройки 3D")});
+        QString::fromUtf8("3D просмотр"), QString::fromUtf8("Настройки 3D"), QString::fromUtf8("Логи")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -453,6 +453,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 2));
     auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
     filters->addWidget(auditSourceFilter_);
+    logInfo_ = new QCheckBox(QString::fromUtf8("Инфо"));
+    logInfo_->setObjectName("logInfo"); logInfo_->setChecked(true);
+    filters->addWidget(logInfo_);
+    logWarnings_ = new QCheckBox(QString::fromUtf8("Предупреждения"));
+    logWarnings_->setObjectName("logWarnings"); logWarnings_->setChecked(true);
+    filters->addWidget(logWarnings_);
+    logErrors_ = new QCheckBox(QString::fromUtf8("Ошибки"));
+    logErrors_->setObjectName("logErrors"); logErrors_->setChecked(true);
+    filters->addWidget(logErrors_);
     content->addLayout(filters);
     auditFilters_ = new QWidget;
     auditFilters_->setObjectName("auditFilters");
@@ -534,6 +543,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     exportAudit_->setObjectName("exportAudit");
     exportAudit_->setToolTip(QString::fromUtf8("Сохранить видимые после поиска события аудита в UTF-8 CSV"));
     bottom->addWidget(exportAudit_);
+    exportLogs_ = new QPushButton(QString::fromUtf8("Экспорт логов"));
+    exportLogs_->setObjectName("exportLogs");
+    exportLogs_->setToolTip(QString::fromUtf8("Сохранить найденные сообщения текущей Qt-сессии в UTF-8 TXT"));
+    bottom->addWidget(exportLogs_);
+    clearLogs_ = new QPushButton(QString::fromUtf8("Очистить логи"));
+    clearLogs_->setObjectName("clearLogs");
+    bottom->addWidget(clearLogs_);
     reapplyRules_ = new QPushButton(QString::fromUtf8("Пересчитать профили"));
     reapplyRules_->setObjectName("reapplyRules");
     reapplyRules_->setToolTip(QString::fromUtf8("Сохранить общий XP и пересчитать уровни всех активных и архивных профилей по текущим правилам"));
@@ -575,6 +591,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     layout->addLayout(body, 1);
     setCentralWidget(root);
     statusBar()->showMessage(QString::fromUtf8("Локальная копия · без облака · ") + q(workspace_.directory.u8string()));
+    connect(statusBar(), &QStatusBar::messageChanged, this, [this](const QString& text) {
+        if (text.isEmpty()) return;
+        const bool failed = text.contains(QString::fromUtf8("не удалось"), Qt::CaseInsensitive) ||
+            text.contains(QString::fromUtf8("ошибка"), Qt::CaseInsensitive);
+        appendLog(failed ? AppLogLevel::Error : AppLogLevel::Info, "Qt", u(text));
+        if (navigation_->currentRow() == Logs) render();
+    });
 
     connect(refresh, &QPushButton::clicked, this, [this] { reload(); });
     connect(navigation_, &QListWidget::currentRowChanged, this, [this] {
@@ -602,6 +625,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(auditSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(logInfo_, &QCheckBox::toggled, this, [this] { render(); });
+    connect(logWarnings_, &QCheckBox::toggled, this, [this] { render(); });
+    connect(logErrors_, &QCheckBox::toggled, this, [this] { render(); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     for (auto* filter : {auditActorFilter_, auditObjectFilter_, auditFieldFilter_})
@@ -693,6 +719,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
     connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
+    connect(exportLogs_, &QPushButton::clicked, this, [this] { exportLogs(); });
+    connect(clearLogs_, &QPushButton::clicked, this, [this] {
+        appLogs_.clear(); search_->clear(); render();
+        statusBar()->showMessage(QString::fromUtf8("Журнал Qt-сессии очищен."), 4000);
+    });
     connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
     connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
     connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
@@ -767,7 +798,16 @@ void QtWindow::showShortcutHelp() {
 }
 
 void QtWindow::message(const std::string& error) {
+    appendLog(AppLogLevel::Warning, "Qt", error);
     QMessageBox::warning(this, QString::fromUtf8("ForgeMirror"), q(error));
+    if (navigation_->currentRow() == Logs) render();
+}
+
+void QtWindow::appendLog(AppLogLevel level, const std::string& source, const std::string& text) {
+    if (text.empty()) return;
+    appLogs_.push_back({QDateTime::currentSecsSinceEpoch(), level, source, text});
+    constexpr size_t maxEntries = 200;
+    if (appLogs_.size() > maxEntries) appLogs_.erase(appLogs_.begin());
 }
 
 bool QtWindow::requireAdmin() {
@@ -871,6 +911,7 @@ bool QtWindow::reload() {
     refreshTaskFilterChoices();
     const int page = std::clamp(displaySettings_.lastPage, 0, navigation_->count() - 1);
     if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
+    appendLog(AppLogLevel::Info, "Qt", "Локальное рабочее пространство загружено или обновлено.");
     updateBanner(); render();
     if (!workspace_.data.recoveryWarnings.empty()) {
         QStringList warnings;
@@ -1034,6 +1075,9 @@ void QtWindow::render() {
     projectSort_->setVisible(page == Projects);
     auditSourceFilter_->setVisible(page == Audit);
     auditFilters_->setVisible(page == Audit);
+    logInfo_->setVisible(page == Logs);
+    logWarnings_->setVisible(page == Logs);
+    logErrors_->setVisible(page == Logs);
     primary_->setVisible(page == Shortcuts || page == Cloud || (page == ModelSettingsPage && admin_) || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
@@ -1052,6 +1096,8 @@ void QtWindow::render() {
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && page == Statistics);
     exportAudit_->setVisible(admin_ && page == Audit);
+    exportLogs_->setVisible(page == Logs);
+    clearLogs_->setVisible(page == Logs);
     reapplyRules_->setVisible(admin_ && page == Rules);
     directXp_->setVisible(admin_ && page == ProfilePage);
     directXp_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -1259,6 +1305,25 @@ void QtWindow::render() {
         }
         summary_->setText(QString::fromUtf8("Событий: %1 · источник: %2 · показано: %3 · сначала новые")
             .arg(entries.size()).arg(sourceCount).arg(table_->rowCount()));
+    } else if (page == Logs) {
+        headers({QString::fromUtf8("#"), QString::fromUtf8("Время"), QString::fromUtf8("Уровень"),
+            QString::fromUtf8("Источник"), QString::fromUtf8("Сообщение")});
+        int total = 0;
+        int visible = 0;
+        for (auto it = appLogs_.rbegin(); it != appLogs_.rend(); ++it) {
+            ++total;
+            const bool enabled = it->level == AppLogLevel::Info ? logInfo_->isChecked()
+                : it->level == AppLogLevel::Warning ? logWarnings_->isChecked() : logErrors_->isChecked();
+            if (!enabled) continue;
+            const QString level = it->level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
+                : it->level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
+            const QStringList values{QString::number(total), timeText(it->timestamp), level, q(it->source), q(it->message)};
+            if (!values.join(' ').contains(search_->text(), Qt::CaseInsensitive)) continue;
+            ++visible;
+            row(std::to_string(total), values);
+        }
+        summary_->setText(QString::fromUtf8("Показано: %1 из %2 · журнал только текущего запуска Qt")
+            .arg(visible).arg(total));
     } else if (page == Rules) {
         headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
         const auto& rules = data.rulesConfig;
@@ -1579,6 +1644,49 @@ void QtWindow::exportAudit() {
     }
     statusBar()->showMessage(QString::fromUtf8("Экспортировано событий: %1 · %2")
         .arg(rows.size()).arg(QDir::toNativeSeparators(path)), 7000);
+}
+
+void QtWindow::exportLogs() {
+    if (navigation_->currentRow() != Logs) return;
+    const auto suggested = QString::fromUtf8("ForgeMirror-app-log-%1.txt")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+    QFileDialog dialog(this, QString::fromUtf8("Экспорт логов Qt-сессии"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter(QString::fromUtf8("Текстовые файлы (*.txt)"));
+    dialog.setDefaultSuffix("txt");
+    dialog.selectFile(suggested);
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    auto path = dialog.selectedFiles().front();
+    if (!path.endsWith(".txt", Qt::CaseInsensitive)) path += ".txt";
+    QByteArray bytes("\xEF\xBB\xBF", 3);
+    int count = 0;
+    for (auto it = appLogs_.rbegin(); it != appLogs_.rend(); ++it) {
+        const bool enabled = it->level == AppLogLevel::Info ? logInfo_->isChecked()
+            : it->level == AppLogLevel::Warning ? logWarnings_->isChecked() : logErrors_->isChecked();
+        const QString level = it->level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
+            : it->level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
+        const QStringList values{QString::number(count + 1), timeText(it->timestamp), level, q(it->source), q(it->message)};
+        if (!enabled || !values.join(' ').contains(search_->text(), Qt::CaseInsensitive)) continue;
+        auto clean = [](QString value) {
+            return value.replace('\r', ' ').replace('\n', ' ').replace('|', '/');
+        };
+        bytes += QStringLiteral("%1 | %2 | %3 | %4 | %5\n")
+            .arg(count + 1).arg(clean(values[1]), clean(values[2]), clean(values[3]), clean(values[4])).toUtf8();
+        ++count;
+    }
+    if (count == 0) {
+        statusBar()->showMessage(QString::fromUtf8("Нет видимых записей для экспорта."), 5000);
+        return;
+    }
+    QSaveFile output(path);
+    if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+        message(u8"Не удалось сохранить журнал Qt-сессии.");
+        return;
+    }
+    statusBar()->showMessage(QString::fromUtf8("Экспортировано записей: %1 · %2")
+        .arg(count).arg(QDir::toNativeSeparators(path)), 7000);
 }
 
 void QtWindow::details() {

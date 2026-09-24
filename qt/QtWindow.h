@@ -3,6 +3,7 @@
 #include "QtProfileSession.h"
 #include "QtDisplaySettings.h"
 #include "QtModelViewer.h"
+#include "AppDomainTypes.h"
 #include <QMainWindow>
 
 class QComboBox;
@@ -36,6 +37,7 @@ private:
     void changeStatus();
     void exportReport();
     void exportAudit();
+    void exportLogs();
     void reapplyRules();
     void grantDirectXp();
     void adjustWallet();
@@ -50,6 +52,7 @@ private:
     void refreshTaskFilterChoices();
     bool requireAdmin();
     void message(const std::string& error);
+    void appendLog(AppLogLevel level, const std::string& source, const std::string& message);
     QString selectedId() const;
     QtWorkspace& workspace_;
     bool admin_ = false;
@@ -118,6 +121,11 @@ private:
     QPushButton* removeSpirit_;
     QPushButton* exportReport_;
     QPushButton* exportAudit_;
+    QPushButton* exportLogs_;
+    QPushButton* clearLogs_;
+    QCheckBox* logInfo_;
+    QCheckBox* logWarnings_;
+    QCheckBox* logErrors_;
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* walletAdjust_;
@@ -126,4 +134,5 @@ private:
     QPushButton* cloudResolve_;
     QPushButton* storageResolve_;
     int bannerIndex_ = 0;
+    std::vector<AppLogEntry> appLogs_;
 };
