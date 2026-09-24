@@ -1832,6 +1832,16 @@ static bool TestBulkTaskEditsUi() {
     const auto executor = workspace.storage->create_profile(Profile(u8"Активный исполнитель"));
     const auto archivedExecutor = workspace.storage->create_profile(Profile(u8"Архивный исполнитель"));
     if (!executor || !archivedExecutor || !workspace.storage->set_archived(archivedExecutor->id, true)) return false;
+    ProjectEntry bulkProject;
+    bulkProject.id = "bulk-project";
+    bulkProject.name = "Bulk project";
+    PipelineStep bulkStep;
+    bulkStep.id = "bulk-step";
+    bulkStep.title = "Bulk step";
+    workspace.data.projects = {bulkProject};
+    workspace.data.pipelineSteps = {bulkStep};
+    if (!AppSaveProjects(workspace.directory, workspace.data.projects) ||
+        !AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps)) return false;
     TaskEntry first;
     first.id = "bulk-first";
     first.title = "First bulk task";
@@ -1914,6 +1924,37 @@ static bool TestBulkTaskEditsUi() {
     for (const auto& task : reprioritized)
         if ((task.id == "bulk-first" || task.id == "bulk-second") && task.priority != 2) return false;
     if (workspace.data.taskAudit.size() != 4) return false;
+    auto applyBulkValue = [&](const QString& mode, const QString& targetValue) {
+        table->clearSelection();
+        select(rowFor("bulk-first")); select(rowFor("bulk-second"));
+        bool applied = false;
+        QTimer::singleShot(0, [mode, targetValue, &applied] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!dialog || dialog->objectName() != "bulkTaskEditDialog") return;
+            auto* operation = dialog->findChild<QComboBox*>("bulkTaskOperation");
+            operation->setCurrentIndex(operation->findData(mode));
+            if (mode == QStringLiteral("deadline")) {
+                dialog->findChild<QDateTimeEdit*>("bulkTaskDeadline")->setDateTime(QDateTime::fromSecsSinceEpoch(1900000000));
+            } else {
+                auto* target = dialog->findChild<QComboBox*>("bulkTaskTarget");
+                target->setCurrentIndex(target->findData(targetValue));
+            }
+            applied = true;
+            dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        });
+        bulk->click();
+        return applied;
+    };
+    if (!applyBulkValue(QStringLiteral("project"), QStringLiteral("bulk-project"))) return false;
+    if (!applyBulkValue(QStringLiteral("pipeline"), QStringLiteral("bulk-step"))) return false;
+    if (!applyBulkValue(QStringLiteral("deadline"), QString())) return false;
+    const auto bulkRefs = LoadTasksData(workspace.directory);
+    for (const auto& task : bulkRefs) {
+        if (task.id != "bulk-first" && task.id != "bulk-second") continue;
+        if (task.projectId != "bulk-project" || task.project != "Bulk project" ||
+            task.pipelineStepId != "bulk-step" || task.pipelineStep != "Bulk step" || task.deadlineAt != 1900000000) return false;
+    }
+    if (workspace.data.taskAudit.size() != 10) return false;
     auto firstInMemory = std::find_if(workspace.data.tasks.begin(), workspace.data.tasks.end(),
         [](const auto& task) { return task.id == "bulk-first"; });
     if (firstInMemory == workspace.data.tasks.end()) return false;
@@ -1949,7 +1990,7 @@ static bool TestBulkTaskEditsUi() {
     const auto assignedSecond = std::find_if(assigned.begin(), assigned.end(), [](const auto& task) { return task.id == "bulk-second"; });
     if (assignedFirst == assigned.end() || assignedSecond == assigned.end() ||
         assignedFirst->assignees != std::vector<std::string>{executor->id} ||
-        assignedSecond->assignees != std::vector<std::string>{executor->id} || workspace.data.taskAudit.size() != 5 ||
+        assignedSecond->assignees != std::vector<std::string>{executor->id} || workspace.data.taskAudit.size() != 11 ||
         workspace.data.taskAudit.back().taskId != "bulk-second" || workspace.data.taskAudit.back().field != "assignees" ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("пропущено: 1"))) return false;
     table->setCurrentCell(0, 0);
@@ -1960,7 +2001,7 @@ static bool TestBulkTaskEditsUi() {
     QTimer::singleShot(0, [&completedStatusUnavailable] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* operation = dialog ? dialog->findChild<QComboBox*>("bulkTaskOperation") : nullptr;
-        completedStatusUnavailable = operation && operation->count() == 2 &&
+        completedStatusUnavailable = operation && operation->count() == 5 &&
             operation->findData(QStringLiteral("status")) < 0 &&
             operation->findData(QStringLiteral("assignees")) >= 0 &&
             operation->currentData().toString() == QStringLiteral("priority");

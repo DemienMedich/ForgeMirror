@@ -2537,18 +2537,38 @@ void QtWindow::bulkEditTasks() {
     operation->setObjectName("bulkTaskOperation");
     operation->addItem(QString::fromUtf8("Статус"), QStringLiteral("status"));
     operation->addItem(QString::fromUtf8("Приоритет"), QStringLiteral("priority"));
+    operation->addItem(QString::fromUtf8("Проект"), QStringLiteral("project"));
+    if (workspace_.modules.pipeline) operation->addItem(QString::fromUtf8("Этап процесса"), QStringLiteral("pipeline"));
+    operation->addItem(QString::fromUtf8("Срок"), QStringLiteral("deadline"));
     operation->addItem(QString::fromUtf8("Исполнители"), QStringLiteral("assignees"));
     if (hasCompleted) operation->setCurrentIndex(1);
     auto* target = new QComboBox;
     target->setObjectName("bulkTaskTarget");
     auto* targetLabel = new QLabel(QString::fromUtf8("Новое значение"));
-    auto updateTargets = [operation, target, targetLabel] {
+    auto* deadline = new QDateTimeEdit(QDateTime::currentDateTime().addDays(1));
+    deadline->setObjectName("bulkTaskDeadline");
+    deadline->setCalendarPopup(true);
+    deadline->setDisplayFormat("dd.MM.yyyy HH:mm");
+    auto* hasDeadline = new QCheckBox(QString::fromUtf8("Указать срок"));
+    hasDeadline->setObjectName("bulkTaskHasDeadline");
+    hasDeadline->setChecked(true);
+    auto updateTargets = [this, operation, target, targetLabel, deadline, hasDeadline] {
         const QSignalBlocker blocker(target);
         target->clear();
         const auto mode = operation->currentData().toString();
-        target->setVisible(mode != QStringLiteral("assignees"));
-        targetLabel->setVisible(mode != QStringLiteral("assignees"));
-        if (mode == QStringLiteral("status")) {
+        const bool targetMode = mode != QStringLiteral("assignees") && mode != QStringLiteral("deadline");
+        target->setVisible(targetMode);
+        targetLabel->setVisible(targetMode);
+        const bool deadlineMode = mode == QStringLiteral("deadline");
+        deadline->setVisible(deadlineMode);
+        hasDeadline->setVisible(deadlineMode);
+        if (mode == QStringLiteral("project")) {
+            target->addItem(QString::fromUtf8("Без проекта"), QString());
+            for (const auto& project : workspace_.data.projects) target->addItem(q(project.name), q(project.id));
+        } else if (mode == QStringLiteral("pipeline")) {
+            target->addItem(QString::fromUtf8("Без этапа"), QString());
+            for (const auto& step : workspace_.data.pipelineSteps) target->addItem(q(step.title), q(step.id));
+        } else if (mode == QStringLiteral("status")) {
             target->addItem(QString::fromUtf8("Новая"), 0);
             target->addItem(QString::fromUtf8("В работе"), 1);
             target->setCurrentIndex(1);
@@ -2588,13 +2608,21 @@ void QtWindow::bulkEditTasks() {
         const auto mode = operation->currentData().toString();
         if (mode == QStringLiteral("status")) hint->setText(QString::fromUtf8("Завершение и начисление XP выполняются отдельно для каждой задачи."));
         else if (mode == QStringLiteral("priority")) hint->setText(QString::fromUtf8("Изменение приоритета не меняет статус и начисление XP."));
-        else hint->setText(QString::fromUtf8("Задачи с XP-участниками будут пропущены: %1. Выберите хотя бы одного активного исполнителя.").arg(skippedCount));
+        else if (mode == QStringLiteral("assignees")) hint->setText(QString::fromUtf8("Задачи с XP-участниками будут пропущены: %1. Выберите хотя бы одного активного исполнителя.").arg(skippedCount));
+        else if (mode == QStringLiteral("project")) hint->setText(QString::fromUtf8("Выбранный проект будет назначен всем выбранным задачам."));
+        else if (mode == QStringLiteral("pipeline")) hint->setText(QString::fromUtf8("Выбранный этап будет назначен всем выбранным задачам."));
+        else hint->setText(QString::fromUtf8("Срок можно снять, отключив флажок «Указать срок»."));
     };
     updateHint();
     hint->setWordWrap(true);
     form->addRow(count);
     form->addRow(QString::fromUtf8("Поле"), operation);
     form->addRow(targetLabel, target);
+    form->addRow(QString::fromUtf8("Срок"), deadline);
+    form->addRow(QString(), hasDeadline);
+    deadline->setVisible(false);
+    hasDeadline->setVisible(false);
+    connect(hasDeadline, &QCheckBox::toggled, deadline, &QWidget::setEnabled);
     form->addRow(assigneeLabel, assigneeList);
     form->addRow(hint);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
@@ -2641,12 +2669,35 @@ void QtWindow::bulkEditTasks() {
     }
 
     const auto mode = operation->currentData().toString();
+    const auto referenceId = u(target->currentData().toString());
+    std::string referenceName;
+    if (mode == QStringLiteral("project") && !referenceId.empty()) {
+        const auto found = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+            [&](const auto& item) { return item.id == referenceId; });
+        if (found == workspace_.data.projects.end()) { message(u8"Выбранный проект больше недоступен."); return; }
+        referenceName = found->name;
+    } else if (mode == QStringLiteral("pipeline") && !referenceId.empty()) {
+        const auto found = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+            [&](const auto& item) { return item.id == referenceId; });
+        if (found == workspace_.data.pipelineSteps.end()) { message(u8"Выбранный этап больше недоступен."); return; }
+        referenceName = found->title;
+    }
     const auto result = mode == QStringLiteral("status")
         ? AppBulkUpdateTaskStatus(workspace_.directory, workspace_.data.tasks, taskIds,
             target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
         : mode == QStringLiteral("priority")
         ? AppBulkUpdateTaskPriority(workspace_.directory, workspace_.data.tasks, taskIds,
             target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
+        : mode == QStringLiteral("project")
+        ? AppBulkUpdateTaskProject(workspace_.directory, workspace_.data.tasks, taskIds,
+            referenceId, referenceName, "admin", &workspace_.data.taskAudit)
+        : mode == QStringLiteral("pipeline")
+        ? AppBulkUpdateTaskPipelineStep(workspace_.directory, workspace_.data.tasks, taskIds,
+            referenceId, referenceName, "admin", &workspace_.data.taskAudit)
+        : mode == QStringLiteral("deadline")
+        ? AppBulkUpdateTaskDeadline(workspace_.directory, workspace_.data.tasks, taskIds,
+            hasDeadline->isChecked() ? std::optional<std::int64_t>(deadline->dateTime().toSecsSinceEpoch()) : std::nullopt,
+            "admin", &workspace_.data.taskAudit)
         : AppBulkUpdateTaskAssignees(workspace_.directory, workspace_.data.tasks, taskIds,
             assignees, "admin", &workspace_.data.taskAudit);
     if (!result.ok) {

@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 72**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–72 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 73**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, closed-app reminders, persistent application logs, and smaller parity items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–73 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,10 +32,10 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 72 | Remaining |
+| Area | Qt coverage through stage 73 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward and profile-scoped wallet activity history | Broader profile history and audit-write transactionality |
-| Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines; administrator multi-select status, priority and assignee edits | Bulk project/pipeline/deadline edits, reminders while the app is closed, legacy/stale awarded-task cleanup review |
+| Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines; administrator multi-select status, priority, project, pipeline stage, deadline and assignee edits | Reminders while the app is closed, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks; overdue and pending-XP filters, four sort modes persisted locally; open the selected project's tasks with project filter and unrelated task filters cleared | — |
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
@@ -170,6 +170,10 @@ On Tasks, administrators can select multiple rows and use **Массовое и�
 ### Bulk task assignee edits (stage 72, implementation checkpoint)
 
 The same administrator dialog can assign one or more active profiles to all selected tasks. Archived profiles cannot be selected. Tasks with XP participants are skipped to preserve the existing completion and reward workflow; the dialog previews how many selected tasks will be skipped, and the result message reports changed and skipped counts. The existing core service persists each eligible assignment and appends task-audit events. `smoke_qt` covers active/archived profile selection, empty-selection gating, persisted assignments, XP-task skip behavior, audit scope and continued priority-only editing for a selection containing a completed task. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Bulk task project, pipeline and deadline edits (stage 73, implementation checkpoint)
+
+The administrator multi-select dialog now also assigns or clears a project, assigns or clears a pipeline stage when that module is enabled, and sets or removes a deadline. Existing domain services persist the edits and add task-audit events; the selection containing completed tasks still excludes only bulk status changes. `smoke_qt` verifies the selected project and stage IDs/names, the persisted deadline, and the dialog's available operations. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 
