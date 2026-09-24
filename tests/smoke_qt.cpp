@@ -20,6 +20,7 @@
 #include "QtAuditExport.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
+#include "QtPipelineMap.h"
 #include "QtPomodoro.h"
 #include "AppPipelineService.h"
 #include "AppProfessionService.h"
@@ -1795,6 +1796,32 @@ static bool TestMonthlyCompletionTrend() {
         std::accumulate(counts.begin(), counts.end(), 0) == 3;
 }
 
+static bool TestPipelineMap() {
+    PipelineStep start; start.id = "start"; start.stageCode = "A"; start.title = "Start"; start.branch = "Main"; start.description = "Entry point"; start.nextIds = {"left", "right"};
+    PipelineStep left; left.id = "left"; left.stageCode = "B1"; left.title = "Left branch"; left.branch = "Left"; left.owner = "Artist"; left.nextIds = {"removed-step"};
+    PipelineStep right; right.id = "right"; right.stageCode = "B2"; right.title = "Right branch"; right.branch = "Right";
+    bool inspected = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* view = dialog ? dialog->findChild<QGraphicsView*>("pipelineMapView") : nullptr;
+        auto* summary = dialog ? dialog->findChild<QLabel*>("pipelineMapSummary") : nullptr;
+        auto* details = dialog ? dialog->findChild<QTextBrowser*>("pipelineMapDetails") : nullptr;
+        if (!dialog || !view || !view->scene() || !summary || !details) { if (dialog) dialog->reject(); return; }
+        view->scene()->clearSelection();
+        for (auto* item : view->scene()->items()) if (item->data(Qt::UserRole).toString() == "left") item->setSelected(true);
+        inspected = summary->text().contains(QString::fromUtf8("Этапов: 3 · переходов: 3 · недоступных связей: 1")) &&
+            details->toPlainText().contains("Left branch") && details->toPlainText().contains("removed-step");
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/pipeline-map.png"); }
+        dialog->reject();
+    });
+    if (!ShowQtPipelineMap(nullptr, {start, left, right}) || !inspected) {
+        std::cerr << "pipelineMap: graph, summary or node details failed\n";
+        return false;
+    }
+    return true;
+}
+
 static bool TestCatalogProfessionFilter() {
     auto fail = [](const char* step) { std::cerr << "catalogProfessionFilter: " << step << '\n'; return false; };
     QTemporaryDir temp;
@@ -2275,6 +2302,7 @@ int main(int argc, char** argv) {
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
+    if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }

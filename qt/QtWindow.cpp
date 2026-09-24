@@ -14,6 +14,7 @@
 #include "QtAuditExport.h"
 #include "QtReportChart.h"
 #include "QtPipelineTransition.h"
+#include "QtPipelineMap.h"
 #include "QtPipelineEditor.h"
 #include "AppTaskCompletionService.h"
 #include "QtSkillEditor.h"
@@ -568,6 +569,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     moveDown_->setObjectName("movePipelineDown");
     moveDown_->setToolTip(QString::fromUtf8("Переместить этап на одну позицию ниже"));
     bottom->addWidget(moveDown_);
+    pipelineMap_ = new QPushButton(QString::fromUtf8("Карта переходов"));
+    pipelineMap_->setObjectName("pipelineMap");
+    pipelineMap_->setToolTip(QString::fromUtf8("Просмотреть этапы по веткам и допустимые переходы между ними"));
+    bottom->addWidget(pipelineMap_);
     advanceStage_ = new QPushButton(QString::fromUtf8("Следующий этап"));
     advanceStage_->setObjectName("advanceStage");
     bottom->addWidget(advanceStage_);
@@ -742,6 +747,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });
     connect(moveDown_, &QPushButton::clicked, this, [this] { movePipeline(1); });
+    connect(pipelineMap_, &QPushButton::clicked, this, [this] { ShowQtPipelineMap(this, workspace_.data.pipelineSteps); });
     connect(openShortcut_, &QPushButton::clicked, this, [this] {
         if (navigation_->currentRow() != Shortcuts) return;
         const auto found = std::find_if(workspace_.data.shortcuts.begin(), workspace_.data.shortcuts.end(),
@@ -1257,6 +1263,7 @@ void QtWindow::render() {
     deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Banner)));
     moveUp_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
     moveDown_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
+    pipelineMap_->setVisible(page == Pipeline && !workspace_.data.pipelineSteps.empty());
     openShortcut_->setVisible(page == Shortcuts);
     cloudPull_->setVisible(page == Cloud);
     cloudResolve_->setVisible(page == Cloud);

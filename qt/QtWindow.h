@@ -128,6 +128,7 @@ private:
     QPushButton* deleteEntry_;
     QPushButton* moveUp_;
     QPushButton* moveDown_;
+    QPushButton* pipelineMap_;
     QPushButton* advanceStage_;
     QPushButton* achievements_;
     QPushButton* removeSpirit_;
