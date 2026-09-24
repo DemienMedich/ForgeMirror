@@ -5,6 +5,7 @@
 #include "QtModelViewer.h"
 #include "AppDomainTypes.h"
 #include <QMainWindow>
+#include <unordered_set>
 
 class QComboBox;
 class QDateEdit;
@@ -42,6 +43,7 @@ private:
     void grantDirectXp();
     void adjustWallet();
     void showWalletHistory();
+    void checkDeadlineReminders();
     void updateBanner();
     void pullCloud();
     void resolveCloudConflict();
@@ -138,4 +140,5 @@ private:
     QPushButton* storageResolve_;
     int bannerIndex_ = 0;
     std::vector<AppLogEntry> appLogs_;
+    std::unordered_set<std::string> remindedDeadlineTaskIds_;
 };

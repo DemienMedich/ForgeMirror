@@ -228,6 +228,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     banner_->setProperty("banner", true); layout->addWidget(banner_);
     auto* bannerTimer = new QTimer(this); bannerTimer->setInterval(60000);
     connect(bannerTimer, &QTimer::timeout, this, [this] { ++bannerIndex_; updateBanner(); }); bannerTimer->start();
+    auto* deadlineReminderTimer = new QTimer(this);
+    deadlineReminderTimer->setObjectName("deadlineReminderTimer");
+    deadlineReminderTimer->setInterval(60000);
+    connect(deadlineReminderTimer, &QTimer::timeout, this, [this] { checkDeadlineReminders(); });
+    deadlineReminderTimer->start();
+    QTimer::singleShot(2500, this, [this] { checkDeadlineReminders(); });
 
     auto* body = new QHBoxLayout;
     body->setSpacing(16);
@@ -1702,6 +1708,23 @@ void QtWindow::showWalletHistory() {
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
     dialog.exec();
+}
+
+void QtWindow::checkDeadlineReminders() {
+    if (!isVisible()) return;
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    const auto limit = now + 24 * 60 * 60;
+    const TaskEntry* nearest = nullptr;
+    for (const auto& task : workspace_.data.tasks) {
+        if (task.deadlineAt <= now || task.deadlineAt > limit || AppNormalizeTaskStatus(task.status) == 2 ||
+            remindedDeadlineTaskIds_.count(task.id)) continue;
+        if (!nearest || task.deadlineAt < nearest->deadlineAt) nearest = &task;
+    }
+    if (!nearest) return;
+    remindedDeadlineTaskIds_.insert(nearest->id);
+    const auto title = AppTaskDisplayTitle(*nearest);
+    statusBar()->showMessage(QString::fromUtf8("Срок задачи «%1» наступит %2.")
+        .arg(q(title), timeText(nearest->deadlineAt)), 10000);
 }
 
 void QtWindow::exportReport() {

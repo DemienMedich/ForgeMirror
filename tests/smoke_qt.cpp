@@ -1795,6 +1795,37 @@ static bool TestMonthlyCompletionTrend() {
         std::accumulate(counts.begin(), counts.end(), 0) == 3;
 }
 
+static bool TestDeadlineReminders() {
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    TaskEntry upcoming;
+    upcoming.id = "deadline-upcoming";
+    upcoming.title = u8"Проверить сборку";
+    upcoming.deadlineAt = now + 2 * 60 * 60;
+    TaskEntry overdue;
+    overdue.id = "deadline-overdue";
+    overdue.title = "Old deadline";
+    overdue.deadlineAt = now - 60;
+    TaskEntry completed;
+    completed.id = "deadline-completed";
+    completed.title = "Already done";
+    completed.deadlineAt = now + 60;
+    completed.status = 2;
+    workspace.data.tasks = {upcoming, overdue, completed};
+    if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* timer = window.findChild<QTimer*>("deadlineReminderTimer");
+    if (!timer || !QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
+    const auto first = window.statusBar()->currentMessage();
+    if (!first.contains(QString::fromUtf8("Проверить сборку")) || !first.contains(QString::fromUtf8("Срок задачи"))) return false;
+    window.statusBar()->clearMessage();
+    if (!QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
+    return window.statusBar()->currentMessage().isEmpty();
+}
+
 static bool TestPomodoro() {
     auto fail = [](int step) { std::cerr << "Pomodoro step " << step << " failed\n"; return false; };
     QTemporaryDir temp;
@@ -1983,6 +2014,7 @@ int main(int argc, char** argv) {
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
+    if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
