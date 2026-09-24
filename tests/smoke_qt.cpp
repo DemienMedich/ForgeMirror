@@ -2674,6 +2674,21 @@ int main(int argc, char** argv) {
         !uiAuditBytes.contains(QString::fromUtf8("Источник,Время,Автор,Объект,Поле,Было,Стало").toUtf8()) ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Экспортировано событий: %1").arg(auditRowsBeforeExport)))
         return fail("Audit export UI content or visible row count failed");
+    QtWindow viewerWindow(workspace);
+    viewerWindow.show();
+    QApplication::processEvents();
+    auto* viewerNavigation = viewerWindow.findChild<QListWidget*>("navigation");
+    auto* viewerTable = viewerWindow.findChild<QTableWidget*>("records");
+    auto* viewerAuditExport = viewerWindow.findChild<QPushButton*>("exportAudit");
+    auto* viewerAuditSource = viewerWindow.findChild<QComboBox*>("auditSourceFilter");
+    if (!viewerNavigation || !viewerTable || !viewerAuditExport || !viewerAuditSource || viewerNavigation->item(7)->isHidden())
+        return fail("Task audit page was not exposed to a non-administrator");
+    viewerNavigation->setCurrentRow(7);
+    if (viewerTable->rowCount() == 0 || viewerAuditSource->isVisible() || viewerAuditExport->isVisible())
+        return fail("Non-administrator task audit controls or rows are incorrect");
+    for (int index = 0; index < viewerTable->rowCount(); ++index)
+        if (viewerTable->item(index, 0)->text() != QString::fromUtf8("Задача"))
+            return fail("Non-administrator task audit leaked profile activity");
     nav->setCurrentRow(16);
     auto* logInfo = window.findChild<QCheckBox*>("logInfo");
     auto* logWarnings = window.findChild<QCheckBox*>("logWarnings");

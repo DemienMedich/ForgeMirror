@@ -1260,7 +1260,8 @@ void QtWindow::render() {
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Shortcuts)->setHidden(!workspace_.modules.shortcuts);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
-    for (int page : {Projects, Statistics, Audit, Rules, Vault, Banner}) navigation_->item(page)->setHidden(!admin_);
+    for (int page : {Projects, Statistics, Rules, Vault, Banner}) navigation_->item(page)->setHidden(!admin_);
+    navigation_->item(Audit)->setHidden(!workspace_.modules.tasks);
     int page = navigation_->currentRow();
     if (page < 0) return;
     if (navigation_->item(page)->isHidden()) {
@@ -1318,7 +1319,7 @@ void QtWindow::render() {
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
     projectSort_->setVisible(page == Projects);
-    auditSourceFilter_->setVisible(page == Audit);
+    auditSourceFilter_->setVisible(page == Audit && admin_);
     auditFilters_->setVisible(page == Audit);
     logInfo_->setVisible(page == Logs);
     logWarnings_->setVisible(page == Logs);
@@ -1545,6 +1546,10 @@ void QtWindow::render() {
                 .arg(periodLabel).arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp).arg(missingNote));
         }
     } else if (page == Audit) {
+        if (!admin_ && auditSourceFilter_->currentIndex() != 1) {
+            const QSignalBlocker sourceBlocker(auditSourceFilter_);
+            auditSourceFilter_->setCurrentIndex(1);
+        }
         headers({QString::fromUtf8("Источник"), QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Объект"),
             QString::fromUtf8("Поле"), QString::fromUtf8("Было"), QString::fromUtf8("Стало")});
         struct AuditDisplayRow { std::int64_t timestamp; int source; std::string id; QStringList values; };
@@ -1552,10 +1557,12 @@ void QtWindow::render() {
         entries.reserve(data.taskAudit.size());
         for (const auto& entry : data.taskAudit) entries.push_back({entry.timestamp, 1, entry.taskId,
             {QString::fromUtf8("Задача"), timeText(entry.timestamp), q(entry.actor), q(entry.taskId), q(entry.field), q(entry.oldValue), q(entry.newValue)}});
-        const auto profileEntries = profileAudit(workspace_.directory);
-        entries.reserve(entries.size() + profileEntries.size());
-        for (const auto& entry : profileEntries) entries.push_back({entry.timestamp, 2, entry.profile,
-            {QString::fromUtf8("Профиль"), timeText(entry.timestamp), QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)}});
+        if (admin_) {
+            const auto profileEntries = profileAudit(workspace_.directory);
+            entries.reserve(entries.size() + profileEntries.size());
+            for (const auto& entry : profileEntries) entries.push_back({entry.timestamp, 2, entry.profile,
+                {QString::fromUtf8("Профиль"), timeText(entry.timestamp), QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)}});
+        }
         std::stable_sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
             return left.timestamp > right.timestamp;
         });
