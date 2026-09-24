@@ -876,7 +876,9 @@ void QtWindow::appendLog(AppLogLevel level, const std::string& source, const std
 }
 
 void QtWindow::loadAppLogs() {
+    const auto metaPath = q((workspace_.directory / "meta").u8string());
     const auto path = q((workspace_.directory / "meta/qt-application-log.json").u8string());
+    if (QFileInfo(metaPath).isSymLink()) { appLogPersistenceWarning_ = true; return; }
     const QFileInfo info(path);
     if (!info.exists()) return;
     if (info.isSymLink() || info.size() > 4 * 1024 * 1024) {
@@ -906,8 +908,9 @@ void QtWindow::loadAppLogs() {
 }
 
 bool QtWindow::saveAppLogs() const {
+    const auto metaPath = q((workspace_.directory / "meta").u8string());
     const auto path = q((workspace_.directory / "meta/qt-application-log.json").u8string());
-    if (QFileInfo(path).isSymLink()) return false;
+    if (QFileInfo(metaPath).isSymLink() || QFileInfo(path).isSymLink()) return false;
     QJsonArray entries;
     for (const auto& entry : appLogs_) {
         QJsonObject value;
@@ -919,6 +922,7 @@ bool QtWindow::saveAppLogs() const {
     }
     const auto bytes = QJsonDocument(entries).toJson(QJsonDocument::Compact);
     QSaveFile file(path);
+    file.setDirectWriteFallback(false);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) return false;
     return true;
 }

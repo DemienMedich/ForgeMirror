@@ -135,7 +135,7 @@ The Audit page adds independent case-insensitive filters for actor, task/profile
 
 ### Qt application session log (stage 65, implementation checkpoint)
 
-The new **Логи** page keeps the latest 200 Qt-session messages in memory. Status-bar notifications and warning dialogs are captured with timestamp and source, displayed newest first, and filtered by the shared search field and Info/Warning/Error toggles. Users can export the visible entries as UTF-8 text or clear the current session log; the clear acknowledgement is itself recorded. No application log file is read, modified or uploaded, and the log is not persisted across restarts.
+The new **Логи** page captures Qt status-bar notifications and warning dialogs with timestamp and source, displays newest first, and filters by the shared search field and Info/Warning/Error toggles. Stage 74 later added the bounded local persistence described below; application log files are not included in the explicit cloud-transfer lists.
 
 The Qt smoke test checks the page controls, search/level intersection, UTF-8 export and clear acknowledgement. `build-qt.ps1 -Package` passes `smoke_qt` (1/1) and `smoke_core`; the refreshed package stayed alive for four seconds in an isolated workspace with Qt removed from `PATH`. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
