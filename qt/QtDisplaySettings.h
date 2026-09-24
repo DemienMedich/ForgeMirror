@@ -23,6 +23,7 @@ struct QtDisplaySettings {
     int projectSortMode = 0;
     bool projectsOverdueOnly = false;
     bool projectsXpPendingOnly = false;
+    int auditSourceFilter = 0;
 };
 QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);

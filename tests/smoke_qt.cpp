@@ -1867,7 +1867,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); bool saved = false;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
@@ -1877,7 +1877,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 || !settings.compactRows) return false;
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
-    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows) return false;
+    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows || loaded.auditSourceFilter != 2) return false;
     ApplyQtDisplaySettings(app, loaded); if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble()) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});
 #ifdef _WIN32
@@ -2228,6 +2228,22 @@ int main(int argc, char** argv) {
     if (!profileAuditVisible) return fail("Profile audit is not visible");
     auto* exportAudit = window.findChild<QPushButton*>("exportAudit");
     if (!exportAudit || !exportAudit->isVisible() || table->rowCount() == 0) return fail("Audit export action unavailable");
+    auto* auditSourceFilter = window.findChild<QComboBox*>("auditSourceFilter");
+    if (!auditSourceFilter || !auditSourceFilter->isVisible() || auditSourceFilter->count() != 3 || auditSourceFilter->currentIndex() != 0)
+        return fail("Audit source filter unavailable");
+    bool taskAuditVisible = false;
+    for (int index = 0; index < table->rowCount(); ++index)
+        taskAuditVisible |= table->item(index, 0)->text() == QString::fromUtf8("Задача");
+    if (!taskAuditVisible) return fail("Task audit source is missing");
+    auditSourceFilter->setCurrentIndex(1);
+    if (table->rowCount() == 0) return fail("Task audit filter returned no rows");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (table->item(index, 0)->text() != QString::fromUtf8("Задача")) return fail("Task audit filter leaked another source");
+    if (LoadQtDisplaySettings(workspace.directory).auditSourceFilter != 1) return fail("Audit source filter did not persist");
+    auditSourceFilter->setCurrentIndex(2);
+    if (table->rowCount() == 0) return fail("Profile audit filter returned no rows");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (table->item(index, 0)->text() != QString::fromUtf8("Профиль")) return fail("Profile audit filter leaked another source");
     const int auditRowsBeforeExport = table->rowCount();
     const auto uiAuditPath = temp.path() + "/ui-audit.csv";
     QTimer::singleShot(0, [uiAuditPath] {

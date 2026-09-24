@@ -446,6 +446,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Просрочка"), QString::fromUtf8("Ожидают XP")});
     projectSort_->setCurrentIndex(displaySettings_.projectSortMode);
     filters->addWidget(projectSort_);
+    auditSourceFilter_ = new QComboBox;
+    auditSourceFilter_->setObjectName("auditSourceFilter");
+    auditSourceFilter_->setMaximumWidth(145);
+    auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили")});
+    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 2));
+    auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
+    filters->addWidget(auditSourceFilter_);
     content->addLayout(filters);
     table_ = new QTableWidget;
     table_->setObjectName("records");
@@ -569,6 +576,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         saveDisplayContext(); render();
     });
     connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(auditSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
@@ -860,6 +868,7 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.projectSortMode = projectSort_->currentIndex();
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
     displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
+    displaySettings_.auditSourceFilter = auditSourceFilter_->currentIndex();
     if (!SaveQtDisplaySettings(workspace_.directory, displaySettings_))
         statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить последний раздел и профиль."), 5000);
 }
@@ -989,6 +998,7 @@ void QtWindow::render() {
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
     projectSort_->setVisible(page == Projects);
+    auditSourceFilter_->setVisible(page == Audit);
     primary_->setVisible(page == Shortcuts || page == Cloud || (page == ModelSettingsPage && admin_) || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
@@ -1186,20 +1196,26 @@ void QtWindow::render() {
     } else if (page == Audit) {
         headers({QString::fromUtf8("Источник"), QString::fromUtf8("Время"), QString::fromUtf8("Автор"), QString::fromUtf8("Объект"),
             QString::fromUtf8("Поле"), QString::fromUtf8("Было"), QString::fromUtf8("Стало")});
-        struct AuditDisplayRow { std::int64_t timestamp; std::string id; QStringList values; };
+        struct AuditDisplayRow { std::int64_t timestamp; int source; std::string id; QStringList values; };
         std::vector<AuditDisplayRow> entries;
         entries.reserve(data.taskAudit.size());
-        for (const auto& entry : data.taskAudit) entries.push_back({entry.timestamp, entry.taskId,
+        for (const auto& entry : data.taskAudit) entries.push_back({entry.timestamp, 1, entry.taskId,
             {QString::fromUtf8("Задача"), timeText(entry.timestamp), q(entry.actor), q(entry.taskId), q(entry.field), q(entry.oldValue), q(entry.newValue)}});
         const auto profileEntries = profileAudit(workspace_.directory);
         entries.reserve(entries.size() + profileEntries.size());
-        for (const auto& entry : profileEntries) entries.push_back({entry.timestamp, entry.profile,
+        for (const auto& entry : profileEntries) entries.push_back({entry.timestamp, 2, entry.profile,
             {QString::fromUtf8("Профиль"), timeText(entry.timestamp), QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)}});
         std::stable_sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
             return left.timestamp > right.timestamp;
         });
-        for (const auto& entry : entries) row(entry.id, entry.values);
-        summary_->setText(QString::fromUtf8("Событий: %1 · показано: %2 · сначала новые").arg(entries.size()).arg(table_->rowCount()));
+        int sourceCount = 0;
+        for (const auto& entry : entries) {
+            if (auditSourceFilter_->currentIndex() != 0 && entry.source != auditSourceFilter_->currentIndex()) continue;
+            ++sourceCount;
+            row(entry.id, entry.values);
+        }
+        summary_->setText(QString::fromUtf8("Событий: %1 · источник: %2 · показано: %3 · сначала новые")
+            .arg(entries.size()).arg(sourceCount).arg(table_->rowCount()));
     } else if (page == Rules) {
         headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
         const auto& rules = data.rulesConfig;
