@@ -2675,10 +2675,26 @@ int main(int argc, char** argv) {
         return fail("Audit export UI content or visible row count failed");
     nav->setCurrentRow(16);
     auto* logInfo = window.findChild<QCheckBox*>("logInfo");
+    auto* logWarnings = window.findChild<QCheckBox*>("logWarnings");
+    auto* logErrors = window.findChild<QCheckBox*>("logErrors");
+    auto* logPresetAll = window.findChild<QPushButton*>("logPresetAll");
+    auto* logPresetWarningsErrors = window.findChild<QPushButton*>("logPresetWarningsErrors");
+    auto* logPresetErrors = window.findChild<QPushButton*>("logPresetErrors");
     auto* exportLogs = window.findChild<QPushButton*>("exportLogs");
     auto* clearLogs = window.findChild<QPushButton*>("clearLogs");
-    if (!logInfo || !exportLogs || !clearLogs || !logInfo->isVisible() || !exportLogs->isVisible() || !clearLogs->isVisible())
+    if (!logInfo || !logWarnings || !logErrors || !logPresetAll || !logPresetWarningsErrors || !logPresetErrors ||
+        !exportLogs || !clearLogs || !logInfo->isVisible() || !logPresetAll->isVisible() || !logPresetWarningsErrors->isVisible() ||
+        !logPresetErrors->isVisible() || !exportLogs->isVisible() || !clearLogs->isVisible())
         return fail("Qt application log controls unavailable");
+    logPresetWarningsErrors->click();
+    if (logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
+        return fail("Qt log warning/error preset did not select the expected levels");
+    logPresetErrors->click();
+    if (logInfo->isChecked() || logWarnings->isChecked() || !logErrors->isChecked())
+        return fail("Qt log errors-only preset did not select the expected level");
+    logPresetAll->click();
+    if (!logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
+        return fail("Qt log all-levels preset did not restore all levels");
     const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");
     search->setText(startupLogToken);
     if (table->rowCount() == 0 || !table->item(0, 4)->text().contains(startupLogToken, Qt::CaseInsensitive))

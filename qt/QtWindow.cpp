@@ -516,6 +516,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     logErrors_ = new QCheckBox(QString::fromUtf8("Ошибки"));
     logErrors_->setObjectName("logErrors"); logErrors_->setChecked(true);
     filters->addWidget(logErrors_);
+    logPresetAll_ = new QPushButton(QString::fromUtf8("Все уровни"));
+    logPresetAll_->setObjectName("logPresetAll");
+    logPresetAll_->setToolTip(QString::fromUtf8("Показать сообщения всех уровней"));
+    filters->addWidget(logPresetAll_);
+    logPresetWarningsErrors_ = new QPushButton(QString::fromUtf8("Предупреждения + ошибки"));
+    logPresetWarningsErrors_->setObjectName("logPresetWarningsErrors");
+    logPresetWarningsErrors_->setToolTip(QString::fromUtf8("Скрыть информационные сообщения"));
+    filters->addWidget(logPresetWarningsErrors_);
+    logPresetErrors_ = new QPushButton(QString::fromUtf8("Только ошибки"));
+    logPresetErrors_->setObjectName("logPresetErrors");
+    logPresetErrors_->setToolTip(QString::fromUtf8("Оставить только сообщения об ошибках"));
+    filters->addWidget(logPresetErrors_);
     content->addLayout(filters);
     auditFilters_ = new QWidget;
     auditFilters_->setObjectName("auditFilters");
@@ -703,6 +715,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(logInfo_, &QCheckBox::toggled, this, [this] { render(); });
     connect(logWarnings_, &QCheckBox::toggled, this, [this] { render(); });
     connect(logErrors_, &QCheckBox::toggled, this, [this] { render(); });
+    const auto setLogLevels = [this](bool info, bool warnings, bool errors) {
+        const QSignalBlocker infoBlocker(logInfo_);
+        const QSignalBlocker warningsBlocker(logWarnings_);
+        const QSignalBlocker errorsBlocker(logErrors_);
+        logInfo_->setChecked(info);
+        logWarnings_->setChecked(warnings);
+        logErrors_->setChecked(errors);
+        render();
+    };
+    connect(logPresetAll_, &QPushButton::clicked, this, [setLogLevels] { setLogLevels(true, true, true); });
+    connect(logPresetWarningsErrors_, &QPushButton::clicked, this, [setLogLevels] { setLogLevels(false, true, true); });
+    connect(logPresetErrors_, &QPushButton::clicked, this, [setLogLevels] { setLogLevels(false, false, true); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     for (auto* filter : {auditActorFilter_, auditObjectFilter_, auditFieldFilter_})
@@ -1274,6 +1298,9 @@ void QtWindow::render() {
     logInfo_->setVisible(page == Logs);
     logWarnings_->setVisible(page == Logs);
     logErrors_->setVisible(page == Logs);
+    logPresetAll_->setVisible(page == Logs);
+    logPresetWarningsErrors_->setVisible(page == Logs);
+    logPresetErrors_->setVisible(page == Logs);
     primary_->setVisible(page == Shortcuts || page == Cloud || (page == ModelSettingsPage && admin_) || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :

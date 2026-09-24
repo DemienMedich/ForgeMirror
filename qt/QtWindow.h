@@ -140,6 +140,9 @@ private:
     QCheckBox* logInfo_;
     QCheckBox* logWarnings_;
     QCheckBox* logErrors_;
+    QPushButton* logPresetAll_;
+    QPushButton* logPresetWarningsErrors_;
+    QPushButton* logPresetErrors_;
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* walletAdjust_;
