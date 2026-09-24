@@ -2240,6 +2240,34 @@ int main(int argc, char** argv) {
     for (int index = 0; index < table->rowCount(); ++index)
         if (table->item(index, 0)->text() != QString::fromUtf8("Задача")) return fail("Task audit filter leaked another source");
     if (LoadQtDisplaySettings(workspace.directory).auditSourceFilter != 1) return fail("Audit source filter did not persist");
+    auto* auditActorFilter = window.findChild<QLineEdit*>("auditActorFilter");
+    auto* auditObjectFilter = window.findChild<QLineEdit*>("auditObjectFilter");
+    auto* auditFieldFilter = window.findChild<QLineEdit*>("auditFieldFilter");
+    auto* auditFilterReset = window.findChild<QPushButton*>("auditFilterReset");
+    if (!auditActorFilter || !auditObjectFilter || !auditFieldFilter || !auditFilterReset)
+        return fail("Focused audit filters unavailable");
+    const auto actorToken = table->item(0, 2)->text();
+    auditActorFilter->setText(actorToken);
+    if (table->rowCount() == 0) return fail("Audit actor filter returned no rows");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (!table->item(index, 2)->text().contains(actorToken, Qt::CaseInsensitive)) return fail("Audit actor filter leaked a row");
+    const auto taskToken = table->item(0, 3)->text();
+    auditObjectFilter->setText(taskToken);
+    if (table->rowCount() == 0) return fail("Audit object filter returned no rows");
+    for (int index = 0; index < table->rowCount(); ++index) {
+        const auto searchable = table->item(index, 3)->text() + QLatin1Char(' ') + table->item(index, 5)->text() + QLatin1Char(' ') + table->item(index, 6)->text();
+        if (!searchable.contains(taskToken, Qt::CaseInsensitive)) return fail("Audit object filter leaked a row");
+    }
+    const auto fieldToken = table->item(0, 4)->text();
+    auditFieldFilter->setText(fieldToken);
+    if (table->rowCount() == 0) return fail("Audit field filter returned no rows");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (!table->item(index, 4)->text().contains(fieldToken, Qt::CaseInsensitive)) return fail("Audit field filter leaked a row");
+    auditFieldFilter->setText(QString::fromUtf8("audit-field-that-does-not-exist"));
+    if (table->rowCount() != 0) return fail("Audit filters did not intersect");
+    auditFilterReset->click();
+    if (auditSourceFilter->currentIndex() != 0 || !search->text().isEmpty() || table->rowCount() == 0)
+        return fail("Audit filter reset failed");
     auditSourceFilter->setCurrentIndex(2);
     if (table->rowCount() == 0) return fail("Profile audit filter returned no rows");
     for (int index = 0; index < table->rowCount(); ++index)

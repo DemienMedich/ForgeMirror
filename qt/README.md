@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 63**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–63 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 64**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–64 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 63 | Remaining |
+| Area | Qt coverage through stage 64 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal and administrator wallet credit/debit with required reason and profile audit | Broader wallet activity history |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
@@ -41,7 +41,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Pipeline | Stages, details, admin creation/editing, checked deletion of unused stages, atomic up/down reordering; current names in task rows and guided next-step transitions | Visual branch map |
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
 | Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods, current-status distribution chart, aggregate-to-task detail view by selection plus **Подробности** or double-click, and atomic UTF-8 CSV export using the selected period | Historical trend charts and richer drill-down |
-| Audit | Admin task and profile-access audit view, merged by timestamp with newest events first, persisted source/search filters, visible/total counts, and atomic UTF-8 CSV export of visible events | Other application logs |
+| Audit | Admin task and profile-access audit view, merged by timestamp with newest events first, persisted source plus actor/object/field/search filters, visible/total counts, and atomic UTF-8 CSV export of visible events | Other application logs |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale, compact-table density, persistent fullscreen toggle with F11, legacy frameless mode with native drag handle; fixed migration palette | Additional accessibility options |
 | Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Whole-workspace push, automatic sync and remaining settings parity |
@@ -125,6 +125,12 @@ The smoke suite covers commas, quotes and embedded newlines, rejects malformed r
 The Audit toolbar can show all events, task events or profile events. The selection is stored in the Qt `[qt]` section of `meta/ui.ini`; unrelated legacy settings remain intact. Search applies on top of the source filter, and the CSV action exports exactly the currently visible rows. The summary distinguishes all loaded events, events after source filtering, and rows visible after search.
 
 The smoke test verifies source separation, persistence across settings reload, and that the export action uses the selected source. `ctest --test-dir build-qt -C Release --output-on-failure` passes 1/1; the refreshed package also stayed alive in an isolated workspace with Qt removed from `PATH`. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Focused audit search (stage 64, implementation checkpoint)
+
+The Audit page adds independent case-insensitive filters for actor, task/profile ID plus old/new values, and field/action. They combine with source and general search filters; **Сбросить** clears all audit-specific and general search criteria and returns the source selector to all events. These transient fields are not persisted, matching the source ImGui log filters. The CSV exporter continues to serialize only rows remaining in the table.
+
+`smoke_qt` verifies each criterion, intersecting criteria, reset behavior and interaction with the source selector; `ctest --test-dir build-qt -C Release --output-on-failure` passes 1/1. The refreshed package stayed alive in a disposable workspace with Qt removed from `PATH`. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

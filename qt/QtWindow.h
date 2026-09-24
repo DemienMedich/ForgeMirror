@@ -72,6 +72,11 @@ private:
     QWidget* reportCustomRange_;
     QComboBox* projectSort_;
     QComboBox* auditSourceFilter_;
+    QWidget* auditFilters_;
+    QLineEdit* auditActorFilter_;
+    QLineEdit* auditObjectFilter_;
+    QLineEdit* auditFieldFilter_;
+    QPushButton* auditFilterReset_;
     QCheckBox* projectsOverdue_;
     QCheckBox* projectsXpPending_;
     QLabel* summary_;

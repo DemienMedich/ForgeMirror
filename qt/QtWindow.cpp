@@ -454,6 +454,31 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
     filters->addWidget(auditSourceFilter_);
     content->addLayout(filters);
+    auditFilters_ = new QWidget;
+    auditFilters_->setObjectName("auditFilters");
+    auto* auditFilterLayout = new QHBoxLayout(auditFilters_);
+    auditFilterLayout->setContentsMargins(0, 0, 0, 0);
+    auditFilterLayout->setSpacing(6);
+    auditActorFilter_ = new QLineEdit;
+    auditActorFilter_->setObjectName("auditActorFilter");
+    auditActorFilter_->setPlaceholderText(QString::fromUtf8("Актор"));
+    auditActorFilter_->setClearButtonEnabled(true);
+    auditFilterLayout->addWidget(auditActorFilter_);
+    auditObjectFilter_ = new QLineEdit;
+    auditObjectFilter_->setObjectName("auditObjectFilter");
+    auditObjectFilter_->setPlaceholderText(QString::fromUtf8("Задача / профиль / значение"));
+    auditObjectFilter_->setClearButtonEnabled(true);
+    auditFilterLayout->addWidget(auditObjectFilter_, 2);
+    auditFieldFilter_ = new QLineEdit;
+    auditFieldFilter_->setObjectName("auditFieldFilter");
+    auditFieldFilter_->setPlaceholderText(QString::fromUtf8("Поле / действие"));
+    auditFieldFilter_->setClearButtonEnabled(true);
+    auditFilterLayout->addWidget(auditFieldFilter_);
+    auditFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить"));
+    auditFilterReset_->setObjectName("auditFilterReset");
+    auditFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск и все фильтры аудита"));
+    auditFilterLayout->addWidget(auditFilterReset_);
+    content->addWidget(auditFilters_);
     table_ = new QTableWidget;
     table_->setObjectName("records");
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -579,6 +604,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(auditSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    for (auto* filter : {auditActorFilter_, auditObjectFilter_, auditFieldFilter_})
+        connect(filter, &QLineEdit::textChanged, this, [this] { render(); });
+    connect(auditFilterReset_, &QPushButton::clicked, this, [this] {
+        search_->clear();
+        auditActorFilter_->clear();
+        auditObjectFilter_->clear();
+        auditFieldFilter_->clear();
+        auditSourceFilter_->setCurrentIndex(0);
+    });
     connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
     connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
         if (navigation_->currentRow() != Statistics) return;
@@ -999,6 +1033,7 @@ void QtWindow::render() {
     projectsXpPending_->setVisible(page == Projects);
     projectSort_->setVisible(page == Projects);
     auditSourceFilter_->setVisible(page == Audit);
+    auditFilters_->setVisible(page == Audit);
     primary_->setVisible(page == Shortcuts || page == Cloud || (page == ModelSettingsPage && admin_) || ((page == ProfilePage || page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Rules || page == Vault || page == Banner) && admin_));
     primary_->setText(page == ProfilePage ? QString::fromUtf8("Управление профилями") :
         (page == Projects ? QString::fromUtf8("Создать проект") :
@@ -1212,6 +1247,14 @@ void QtWindow::render() {
         for (const auto& entry : entries) {
             if (auditSourceFilter_->currentIndex() != 0 && entry.source != auditSourceFilter_->currentIndex()) continue;
             ++sourceCount;
+            const auto& values = entry.values;
+            if (!auditActorFilter_->text().trimmed().isEmpty() &&
+                !values[2].contains(auditActorFilter_->text().trimmed(), Qt::CaseInsensitive)) continue;
+            const auto searchableObject = values[3] + QLatin1Char(' ') + values[5] + QLatin1Char(' ') + values[6];
+            if (!auditObjectFilter_->text().trimmed().isEmpty() &&
+                !searchableObject.contains(auditObjectFilter_->text().trimmed(), Qt::CaseInsensitive)) continue;
+            if (!auditFieldFilter_->text().trimmed().isEmpty() &&
+                !values[4].contains(auditFieldFilter_->text().trimmed(), Qt::CaseInsensitive)) continue;
             row(entry.id, entry.values);
         }
         summary_->setText(QString::fromUtf8("Событий: %1 · источник: %2 · показано: %3 · сначала новые")
