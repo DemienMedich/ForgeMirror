@@ -11,6 +11,7 @@
 #include "QtStorageConflict.h"
 #include "QtModelViewer.h"
 #include "QtReportExport.h"
+#include "QtAuditExport.h"
 #include "QtReportChart.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineEditor.h"
@@ -497,6 +498,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     exportReport_->setObjectName("exportReport");
     exportReport_->setToolTip(QString::fromUtf8("Сохранить текущий локальный управленческий отчёт в UTF-8 CSV"));
     bottom->addWidget(exportReport_);
+    exportAudit_ = new QPushButton(QString::fromUtf8("Экспорт аудита"));
+    exportAudit_->setObjectName("exportAudit");
+    exportAudit_->setToolTip(QString::fromUtf8("Сохранить видимые после поиска события аудита в UTF-8 CSV"));
+    bottom->addWidget(exportAudit_);
     reapplyRules_ = new QPushButton(QString::fromUtf8("Пересчитать профили"));
     reapplyRules_->setObjectName("reapplyRules");
     reapplyRules_->setToolTip(QString::fromUtf8("Сохранить общий XP и пересчитать уровни всех активных и архивных профилей по текущим правилам"));
@@ -645,6 +650,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
+    connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
     connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
     connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
     connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
@@ -1000,6 +1006,7 @@ void QtWindow::render() {
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && page == Statistics);
+    exportAudit_->setVisible(admin_ && page == Audit);
     reapplyRules_->setVisible(admin_ && page == Rules);
     directXp_->setVisible(admin_ && page == ProfilePage);
     directXp_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -1474,6 +1481,45 @@ void QtWindow::exportReport() {
     QString error;
     if (!ExportTeamValueReportCsv(path, report, &error)) { message(error.toUtf8().toStdString()); return; }
     statusBar()->showMessage(QString::fromUtf8("Отчёт сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);
+}
+
+void QtWindow::exportAudit() {
+    if (!requireAdmin() || navigation_->currentRow() != Audit) return;
+    QStringList headers;
+    headers.reserve(table_->columnCount());
+    for (int column = 0; column < table_->columnCount(); ++column)
+        headers << table_->horizontalHeaderItem(column)->text();
+    QVector<QStringList> rows;
+    rows.reserve(table_->rowCount());
+    for (int index = 0; index < table_->rowCount(); ++index) {
+        QStringList values;
+        values.reserve(table_->columnCount());
+        for (int column = 0; column < table_->columnCount(); ++column)
+            values << table_->item(index, column)->text();
+        rows.push_back(std::move(values));
+    }
+    if (rows.isEmpty()) {
+        statusBar()->showMessage(QString::fromUtf8("Нет видимых событий для экспорта."), 5000);
+        return;
+    }
+    QFileDialog dialog(this, QString::fromUtf8("Экспорт видимых событий аудита"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter(QString::fromUtf8("CSV-файлы (*.csv)"));
+    dialog.setDefaultSuffix("csv");
+    dialog.selectFile(QString::fromUtf8("ForgeMirror-audit-%1.csv")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss")));
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    auto path = dialog.selectedFiles().front();
+    if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
+    QString error;
+    if (!ExportQtAuditCsv(path, headers, rows, &error)) {
+        message(u(error));
+        return;
+    }
+    statusBar()->showMessage(QString::fromUtf8("Экспортировано событий: %1 · %2")
+        .arg(rows.size()).arg(QDir::toNativeSeparators(path)), 7000);
 }
 
 void QtWindow::details() {

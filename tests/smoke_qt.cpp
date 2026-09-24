@@ -16,6 +16,7 @@
 #include "QtStorageConflict.h"
 #include "QtDisplaySettings.h"
 #include "QtReportExport.h"
+#include "QtAuditExport.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPomodoro.h"
@@ -1361,6 +1362,27 @@ static bool TestReportExport() {
     return true;
 }
 
+static bool TestAuditExport() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto path = temp.path() + "/audit.csv";
+    const QStringList headers = {QString::fromUtf8("Источник"), QString::fromUtf8("Поле"), QString::fromUtf8("Детали")};
+    const QVector<QStringList> rows = {{QString::fromUtf8("Задача"), QString::fromUtf8("поле, старое"),
+        QString::fromUtf8("Текст \"с кавычками\"\nследующая строка")}};
+    QString error;
+    if (!ExportQtAuditCsv(path, headers, rows, &error) || !error.isEmpty()) return false;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto original = file.readAll();
+    if (!original.startsWith("\xEF\xBB\xBF") ||
+        !original.contains("\"поле, старое\"") ||
+        !original.contains("\"Текст \"\"с кавычками\"\"\nследующая строка\"")) return false;
+    if (ExportQtAuditCsv(path, headers, {{QString::fromUtf8("только одна колонка")}}, &error) || error.isEmpty()) return false;
+    file.close();
+    if (!file.open(QIODevice::ReadOnly) || file.readAll() != original) return false;
+    return !ExportQtAuditCsv(temp.path(), headers, rows, &error) && !error.isEmpty();
+}
+
 static bool TestProjectDeletionRecovery() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -1920,6 +1942,7 @@ int main(int argc, char** argv) {
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
+    if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -2203,6 +2226,24 @@ int main(int argc, char** argv) {
     }
     if (!auditChronological) return fail("Audit rows are not newest first");
     if (!profileAuditVisible) return fail("Profile audit is not visible");
+    auto* exportAudit = window.findChild<QPushButton*>("exportAudit");
+    if (!exportAudit || !exportAudit->isVisible() || table->rowCount() == 0) return fail("Audit export action unavailable");
+    const int auditRowsBeforeExport = table->rowCount();
+    const auto uiAuditPath = temp.path() + "/ui-audit.csv";
+    QTimer::singleShot(0, [uiAuditPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(uiAuditPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportAudit->click();
+    QFile uiAudit(uiAuditPath);
+    if (!uiAudit.open(QIODevice::ReadOnly)) return fail("Audit export UI did not create a file");
+    const auto uiAuditBytes = uiAudit.readAll();
+    if (!uiAuditBytes.startsWith("\xEF\xBB\xBF") ||
+        !uiAuditBytes.contains(QString::fromUtf8("Источник,Время,Автор,Объект,Поле,Было,Стало").toUtf8()) ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Экспортировано событий: %1").arg(auditRowsBeforeExport)))
+        return fail("Audit export UI content or visible row count failed");
     const auto auditArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!auditArtifacts.isEmpty()) window.grab().save(auditArtifacts + "/profile-audit.png");
     nav->setCurrentRow(5);

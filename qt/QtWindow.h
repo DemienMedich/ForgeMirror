@@ -35,6 +35,7 @@ private:
     void movePipeline(int delta);
     void changeStatus();
     void exportReport();
+    void exportAudit();
     void reapplyRules();
     void grantDirectXp();
     void adjustWallet();
@@ -110,6 +111,7 @@ private:
     QPushButton* achievements_;
     QPushButton* removeSpirit_;
     QPushButton* exportReport_;
+    QPushButton* exportAudit_;
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* walletAdjust_;
