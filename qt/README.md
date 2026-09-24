@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 65**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–65 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 66**, not a feature-complete replacement for ImGui. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–66 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,9 +32,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 65 | Remaining |
+| Area | Qt coverage through stage 66 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal and administrator wallet credit/debit with required reason and profile audit | Broader wallet activity history |
+| Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward and profile-scoped wallet activity history | Broader profile history and audit-write transactionality |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback | Bulk operations, reminders, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks; overdue and pending-XP filters, four sort modes persisted locally | Embedded project focus |
 | Skills | Catalog viewing/search, admin creation/editing and guarded deletion of unused records with checked persistence | Merge and dedicated profession filters |
@@ -138,6 +138,12 @@ The Audit page adds independent case-insensitive filters for actor, task/profile
 The new **Логи** page keeps the latest 200 Qt-session messages in memory. Status-bar notifications and warning dialogs are captured with timestamp and source, displayed newest first, and filtered by the shared search field and Info/Warning/Error toggles. Users can export the visible entries as UTF-8 text or clear the current session log; the clear acknowledgement is itself recorded. No application log file is read, modified or uploaded, and the log is not persisted across restarts.
 
 The Qt smoke test checks the page controls, search/level intersection, UTF-8 export and clear acknowledgement. `build-qt.ps1 -Package` passes `smoke_qt` (1/1) and `smoke_core`; the refreshed package stayed alive for four seconds in an isolated workspace with Qt removed from `PATH`. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Profile wallet activity history (stage 66, implementation checkpoint)
+
+The Profile page exposes **История кошелька** only to an administrator or after personal profile unlock. The read-only dialog shows newest wallet events first: administrator credits/debits with their reason, Pomodoro rewards, and evil-spirit removal. Successful Qt Pomodoro rewards and spirit removals now append profile-audit events; if audit append fails after a successful mutation, the UI reports that separately instead of implying the wallet operation failed. Existing wallet/admin and spirit event encodings remain compatible with the shared audit format. The history is a view over the existing capped profile audit file; audit append and balance mutation are not one cross-file transaction.
+
+`smoke_qt` verifies access gating, all three operation types and UTF-8 reasons in the history dialog. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

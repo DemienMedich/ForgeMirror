@@ -111,7 +111,7 @@ std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory
     std::vector<ProfileAuditRow> out;
     for (const auto& line : lines) {
         const auto fields = line.split('|'); bool ok = false; const auto timestamp = fields.value(0).toLongLong(&ok);
-        if (ok && fields.size() >= 3) out.push_back({timestamp, u(fields[1]), u(fields[2]), u(fields.value(3))});
+        if (ok && fields.size() >= 3) out.push_back({timestamp, u(fields[1]), u(fields[2]), u(fields.mid(3).join('|'))});
     }
     return out;
 }
@@ -355,8 +355,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         auto result = AppAdjustProfileWallet(*workspace_.storage, id, id, double(workspace_.data.vault.pomodoroCoinsPerCycle));
         if (!result.ok || !result.profile) return QString::fromUtf8("Не удалось сохранить награду.");
         const int amount = workspace_.data.vault.pomodoroCoinsPerCycle;
+        const bool auditRecorded = AppendProfileAudit(workspace_.directory, id, "pomodoro_reward",
+            "credit " + std::to_string(amount) + " pomodoro_focus");
         reload();
-        return QString::fromUtf8("Начислено Кукоинов: +%1").arg(amount);
+        return auditRecorded ? QString::fromUtf8("Начислено Кукоинов: +%1").arg(amount)
+            : QString::fromUtf8("Начислено Кукоинов: +%1; запись в историю не сохранена.").arg(amount);
     });
     content->addWidget(pomodoro_, 1);
     auto* filters = new QHBoxLayout;
@@ -562,6 +565,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     walletAdjust_->setObjectName("adjustProfileWallet");
     walletAdjust_->setToolTip(QString::fromUtf8("Администраторское начисление или списание Кукоинов с записью в аудит"));
     bottom->addWidget(walletAdjust_);
+    walletHistory_ = new QPushButton(QString::fromUtf8("История кошелька"));
+    walletHistory_->setObjectName("profileWalletHistory");
+    walletHistory_->setToolTip(QString::fromUtf8("Операции кошелька выбранного профиля"));
+    bottom->addWidget(walletHistory_);
     openShortcut_ = new QPushButton(QString::fromUtf8("Открыть"));
     openShortcut_->setObjectName("openShortcut");
     openShortcut_->setToolTip(QString::fromUtf8("Открыть выбранный локальный файл через Windows"));
@@ -710,6 +717,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         auto result = AppRemoveEvilSpiritForCoins(*workspace_.storage, id, id,
             workspace_.directory, workspace_.data.vault, 200.0);
         if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось снять Злого духа." : result.errorMessage); return; }
+        if (!AppendProfileAudit(workspace_.directory, id, "spirit_purchase", "evil->none cost=200"))
+            statusBar()->showMessage(QString::fromUtf8("Дух снят, но запись в историю кошелька не сохранена."), 7000);
         reload();
     });
     connect(advanceStage_, &QPushButton::clicked, this, [this] {
@@ -727,6 +736,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
     connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
     connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
+    connect(walletHistory_, &QPushButton::clicked, this, [this] { showWalletHistory(); });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -1103,6 +1113,8 @@ void QtWindow::render() {
     directXp_->setEnabled(!profiles_->currentData().toString().isEmpty());
     walletAdjust_->setVisible(admin_ && page == ProfilePage);
     walletAdjust_->setEnabled(!profiles_->currentData().toString().isEmpty());
+    walletHistory_->setVisible(page == ProfilePage && (admin_ || unlocked));
+    walletHistory_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
@@ -1582,6 +1594,79 @@ void QtWindow::adjustWallet() {
     statusBar()->showMessage(auditRecorded
         ? QString::fromUtf8("Кошелёк профиля обновлён, запись добавлена в аудит.")
         : QString::fromUtf8("Баланс обновлён, но запись в аудит не удалось сохранить."), 7000);
+}
+
+void QtWindow::showWalletHistory() {
+    const auto profileId = u(profiles_->currentData().toString());
+    if (navigation_->currentRow() != ProfilePage || profileId.empty() ||
+        (!admin_ && !profileSession_.isUnlocked(*workspace_.storage, profileId))) return;
+
+    QDialog dialog(this);
+    dialog.setObjectName("profileWalletHistoryDialog");
+    dialog.setWindowTitle(QString::fromUtf8("История кошелька профиля"));
+    dialog.resize(720, 400);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* table = new QTableWidget(&dialog);
+    table->setObjectName("profileWalletHistoryTable");
+    table->setColumnCount(4);
+    table->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Операция"),
+        QString::fromUtf8("Сумма"), QString::fromUtf8("Основание")});
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setAlternatingRowColors(true);
+    table->setShowGrid(false);
+    table->verticalHeader()->hide();
+    table->horizontalHeader()->setStretchLastSection(true);
+    const QString currency = q(workspace_.data.vault.currencyName.empty()
+        ? (workspace_.data.vault.currencyCode.empty() ? std::string(u8"Кукоин") : workspace_.data.vault.currencyCode)
+        : workspace_.data.vault.currencyName);
+    auto entries = profileAudit(workspace_.directory);
+    std::reverse(entries.begin(), entries.end());
+    for (const auto& entry : entries) {
+        if (entry.profile != profileId) continue;
+        QString operation, amount, reason;
+        const auto details = q(entry.details);
+        const auto parts = details.split('|');
+        if (entry.action == "wallet_adjustment" || entry.action == "pomodoro_reward") {
+            const bool pipeFormat = parts.size() >= 2;
+            const auto direction = pipeFormat ? parts.value(0) : details.section(' ', 0, 0);
+            bool amountOk = false;
+            const double parsedAmount = pipeFormat ? parts.value(1).toDouble(&amountOk)
+                : details.section(' ', 1, 1).toDouble(&amountOk);
+            if (!amountOk) continue;
+            const bool debit = direction == "debit";
+            operation = entry.action == "pomodoro_reward" ? QString::fromUtf8("Награда Pomodoro")
+                : debit ? QString::fromUtf8("Списание") : QString::fromUtf8("Начисление");
+            amount = (debit ? "−" : "+") + QString::number(parsedAmount, 'f', 2) + " " + currency;
+            reason = pipeFormat ? parts.mid(2).join('|') : details.section(' ', 2);
+            if (entry.action == "pomodoro_reward" && reason == "pomodoro_focus")
+                reason = QString::fromUtf8("Завершённый фокус");
+        } else if (entry.action == "spirit_purchase") {
+            const auto marker = details.indexOf("cost=");
+            bool ok = false;
+            const double value = marker >= 0 ? details.mid(marker + 5).toDouble(&ok) : 0.0;
+            if (!ok) continue;
+            operation = QString::fromUtf8("Снятие Злого духа");
+            amount = "−" + QString::number(value, 'f', 2) + " " + currency;
+            reason = QString::fromUtf8("Перевод в хранилище");
+        } else continue;
+
+        const int row = table->rowCount();
+        table->insertRow(row);
+        const QStringList values{timeText(entry.timestamp), operation, amount, reason};
+        for (int column = 0; column < values.size(); ++column) {
+            auto* item = new QTableWidgetItem(values[column]);
+            item->setToolTip(values[column]);
+            table->setItem(row, column, item);
+        }
+    }
+    table->resizeColumnsToContents();
+    layout->addWidget(table, 1);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    buttons->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
 }
 
 void QtWindow::exportReport() {

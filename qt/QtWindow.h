@@ -41,6 +41,7 @@ private:
     void reapplyRules();
     void grantDirectXp();
     void adjustWallet();
+    void showWalletHistory();
     void updateBanner();
     void pullCloud();
     void resolveCloudConflict();
@@ -129,6 +130,7 @@ private:
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* walletAdjust_;
+    QPushButton* walletHistory_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
     QPushButton* cloudResolve_;

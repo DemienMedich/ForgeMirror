@@ -1717,8 +1717,9 @@ static bool TestPersonalWallet() {
     workspace.data.vault = LoadStorageVault(workspace.directory);
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     auto* remove = window.findChild<QPushButton*>("removeEvilSpirit");
+    auto* history = window.findChild<QPushButton*>("profileWalletHistory");
     auto* access = window.findChild<QAction*>("profileAccess");
-    if (!remove || !access || remove->isVisible()) return false;
+    if (!remove || !history || !access || remove->isVisible() || history->isVisible()) return false;
     auto* pomodoro = static_cast<QtPomodoro*>(window.findChild<QWidget*>("pomodoroPanel"));
     pomodoro->findChild<QPushButton*>("pomodoroStart")->click();
     pomodoro->advanceSecondsForTest(25 * 60);
@@ -1732,7 +1733,7 @@ static bool TestPersonalWallet() {
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
     });
     access->trigger();
-    if (!remove->isVisible() || !remove->isEnabled()) return false;
+    if (!remove->isVisible() || !remove->isEnabled() || !history->isVisible()) return false;
     pomodoro->findChild<QPushButton*>("pomodoroStart")->click();
     pomodoro->advanceSecondsForTest(25 * 60);
     workspace.storage->set_active_profile(created->id);
@@ -1751,8 +1752,23 @@ static bool TestPersonalWallet() {
     workspace.storage->set_active_profile(created->id);
     const auto changed = workspace.storage->load_profile();
     const auto vault = LoadStorageVault(workspace.directory);
-    return changed && changed->spirit() == ProfileSpirit::None && changed->wallet_balance() == 51.0 &&
-        vault.balance == 200.0 && !vault.log.empty() && vault.log.back().action == "spirit_cleanup" && !remove->isEnabled();
+    if (!changed || changed->spirit() != ProfileSpirit::None || changed->wallet_balance() != 51.0 ||
+        vault.balance != 200.0 || vault.log.empty() || vault.log.back().action != "spirit_cleanup" || remove->isEnabled()) return false;
+    if (!AppendProfileAudit(workspace.directory, created->id, "wallet_adjustment", "credit|12.50|проверка истории")) return false;
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* table = dialog ? dialog->findChild<QTableWidget*>("profileWalletHistoryTable") : nullptr;
+        if (!table || table->rowCount() < 3 || table->columnCount() != 4) return;
+        bool foundPomodoro = false, foundSpirit = false, foundReason = false;
+        for (int row = 0; row < table->rowCount(); ++row) {
+            foundPomodoro |= table->item(row, 1)->text().contains(QString::fromUtf8("Pomodoro"));
+            foundSpirit |= table->item(row, 1)->text().contains(QString::fromUtf8("Злого духа"));
+            foundReason |= table->item(row, 3)->text().contains(QString::fromUtf8("проверка истории"));
+        }
+        if (foundPomodoro && foundSpirit && foundReason) dialog->accept();
+    });
+    history->click();
+    return true;
 }
 
 static bool TestPomodoro() {
