@@ -569,6 +569,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     walletHistory_->setObjectName("profileWalletHistory");
     walletHistory_->setToolTip(QString::fromUtf8("Операции кошелька выбранного профиля"));
     bottom->addWidget(walletHistory_);
+    projectFocus_ = new QPushButton(QString::fromUtf8("Задачи проекта"));
+    projectFocus_->setObjectName("focusProjectTasks");
+    projectFocus_->setToolTip(QString::fromUtf8("Открыть задачи выбранного проекта с проектным фильтром"));
+    bottom->addWidget(projectFocus_);
     openShortcut_ = new QPushButton(QString::fromUtf8("Открыть"));
     openShortcut_->setObjectName("openShortcut");
     openShortcut_->setToolTip(QString::fromUtf8("Открыть выбранный локальный файл через Windows"));
@@ -646,7 +650,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         auditFieldFilter_->clear();
         auditSourceFilter_->setCurrentIndex(0);
     });
-    connect(table_, &QTableWidget::itemSelectionChanged, this, [this] { details(); });
+    connect(table_, &QTableWidget::itemSelectionChanged, this, [this] {
+        details();
+        const auto id = table_->currentItem() ? table_->currentItem()->data(Qt::UserRole).toString() : QString();
+        projectFocus_->setEnabled(navigation_->currentRow() == Projects && !id.isEmpty() && id != QStringLiteral("__no_project"));
+    });
     connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
         if (navigation_->currentRow() != Statistics) return;
         if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
@@ -737,6 +745,27 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
     connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
     connect(walletHistory_, &QPushButton::clicked, this, [this] { showWalletHistory(); });
+    connect(projectFocus_, &QPushButton::clicked, this, [this] {
+        if (navigation_->currentRow() != Projects || !table_->currentItem()) return;
+        const auto projectId = table_->currentItem()->data(Qt::UserRole).toString();
+        if (projectId.isEmpty() || projectId == QStringLiteral("__no_project")) return;
+        const int projectIndex = taskProjectFilter_->findData(projectId);
+        if (projectIndex < 0) return;
+        {
+            QSignalBlocker statusBlock(statusFilter_);
+            QSignalBlocker priorityBlock(priorityFilter_);
+            QSignalBlocker quickBlock(quickTaskFilter_);
+            QSignalBlocker pipelineBlock(taskPipelineFilter_);
+            statusFilter_->setCurrentIndex(0);
+            priorityFilter_->setCurrentIndex(0);
+            quickTaskFilter_->setCurrentIndex(0);
+            taskPipelineFilter_->setCurrentIndex(0);
+        }
+        search_->clear();
+        taskProjectFilter_->setCurrentIndex(projectIndex);
+        navigation_->setCurrentRow(Tasks);
+        statusBar()->showMessage(QString::fromUtf8("Показаны задачи выбранного проекта."), 4000);
+    });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -1115,6 +1144,11 @@ void QtWindow::render() {
     walletAdjust_->setEnabled(!profiles_->currentData().toString().isEmpty());
     walletHistory_->setVisible(page == ProfilePage && (admin_ || unlocked));
     walletHistory_->setEnabled(!profiles_->currentData().toString().isEmpty());
+    projectFocus_->setVisible(page == Projects);
+    const bool projectSelected = page == Projects && table_->currentItem() &&
+        !table_->currentItem()->data(Qt::UserRole).toString().isEmpty() &&
+        table_->currentItem()->data(Qt::UserRole).toString() != QStringLiteral("__no_project");
+    projectFocus_->setEnabled(projectSelected);
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);

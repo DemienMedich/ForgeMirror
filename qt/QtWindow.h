@@ -131,6 +131,7 @@ private:
     QPushButton* directXp_;
     QPushButton* walletAdjust_;
     QPushButton* walletHistory_;
+    QPushButton* projectFocus_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
     QPushButton* cloudResolve_;

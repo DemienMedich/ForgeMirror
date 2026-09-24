@@ -2477,6 +2477,15 @@ int main(int argc, char** argv) {
         originalProject.id, originalProject.name, "test").ok) return fail("Project link fixture failed");
     nav->setCurrentRow(1);
     nav->setCurrentRow(2);
+    auto* focusProject = window.findChild<QPushButton*>("focusProjectTasks");
+    table->setCurrentCell(0, 0);
+    table->selectRow(0);
+    if (!focusProject || !focusProject->isVisible() || !focusProject->isEnabled()) return fail("Project task focus action unavailable");
+    focusProject->click();
+    if (nav->currentRow() != 1 || window.findChild<QComboBox*>("taskProjectFilter")->currentData().toString() != QString::fromStdString(originalProject.id) ||
+        table->rowCount() != 1 || table->item(0, 1)->text() != QString::fromUtf8("Проект Qt"))
+        return fail("Project task focus did not open the filtered task list");
+    nav->setCurrentRow(2);
     table->setCurrentCell(0, 0);
     table->selectRow(0);
     saveForm(QString::fromUtf8("Проект после правки"));
