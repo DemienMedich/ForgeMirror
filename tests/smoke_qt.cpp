@@ -1721,8 +1721,9 @@ static bool TestPersonalWallet() {
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     auto* remove = window.findChild<QPushButton*>("removeEvilSpirit");
     auto* history = window.findChild<QPushButton*>("profileWalletHistory");
+    auto* profileHistory = window.findChild<QPushButton*>("profileActivityHistory");
     auto* access = window.findChild<QAction*>("profileAccess");
-    if (!remove || !history || !access || remove->isVisible() || history->isVisible()) return false;
+    if (!remove || !history || !profileHistory || !access || remove->isVisible() || history->isVisible() || profileHistory->isVisible()) return false;
     auto* pomodoro = static_cast<QtPomodoro*>(window.findChild<QWidget*>("pomodoroPanel"));
     pomodoro->findChild<QPushButton*>("pomodoroStart")->click();
     pomodoro->advanceSecondsForTest(25 * 60);
@@ -1736,7 +1737,7 @@ static bool TestPersonalWallet() {
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
     });
     access->trigger();
-    if (!remove->isVisible() || !remove->isEnabled() || !history->isVisible()) return false;
+    if (!remove->isVisible() || !remove->isEnabled() || !history->isVisible() || !profileHistory->isVisible()) return false;
     pomodoro->findChild<QPushButton*>("pomodoroStart")->click();
     pomodoro->advanceSecondsForTest(25 * 60);
     workspace.storage->set_active_profile(created->id);
@@ -1771,6 +1772,26 @@ static bool TestPersonalWallet() {
         if (foundPomodoro && foundSpirit && foundReason) dialog->accept();
     });
     history->click();
+    if (!AppendProfileAudit(workspace.directory, created->id, "password_reset") ||
+        !AppendProfileAudit(workspace.directory, created->id, "test_profile_event", "profile history marker")) return false;
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* table = dialog ? dialog->findChild<QTableWidget*>("profileActivityHistoryTable") : nullptr;
+        if (!table || table->rowCount() < 6 || table->columnCount() != 3) return;
+        bool foundWallet = false, foundPassword = false, foundUnknown = false, foundSpirit = false;
+        for (int row = 0; row < table->rowCount(); ++row) {
+            foundWallet |= table->item(row, 1)->text().contains(QString::fromUtf8("Изменение кошелька")) &&
+                table->item(row, 2)->text().contains(QString::fromUtf8("проверка истории"));
+            foundPassword |= table->item(row, 1)->text() == QString::fromUtf8("Сброс пароля");
+            foundUnknown |= table->item(row, 1)->text() == "test_profile_event" &&
+                table->item(row, 2)->text() == "profile history marker";
+            foundSpirit |= table->item(row, 1)->text().contains(QString::fromUtf8("Злого духа"));
+        }
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/profile-activity-history.png"); }
+        if (foundWallet && foundPassword && foundUnknown && foundSpirit) dialog->accept();
+    });
+    profileHistory->click();
     return true;
 }
 

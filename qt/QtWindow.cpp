@@ -34,6 +34,7 @@
 #include <QJsonObject>
 #include <QtWidgets>
 #include <algorithm>
+#include <unordered_map>
 
 namespace {
 class WindowDragHandle final : public QToolButton {
@@ -118,6 +119,19 @@ std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory
         if (ok && fields.size() >= 3) out.push_back({timestamp, u(fields[1]), u(fields[2]), u(fields.mid(3).join('|'))});
     }
     return out;
+}
+QString profileAuditActionLabel(const std::string& action) {
+    static const std::unordered_map<std::string, QString> labels{
+        {"create", QString::fromUtf8("Создание профиля")}, {"unlock", QString::fromUtf8("Вход в профиль")},
+        {"trusted_unlock", QString::fromUtf8("Вход по доверенному устройству")}, {"lock", QString::fromUtf8("Выход из профиля")},
+        {"password_change", QString::fromUtf8("Смена пароля")}, {"password_reset", QString::fromUtf8("Сброс пароля")},
+        {"block", QString::fromUtf8("Блокировка профиля")}, {"unblock", QString::fromUtf8("Снятие блокировки")},
+        {"wallet_adjustment", QString::fromUtf8("Изменение кошелька")},
+        {"pomodoro_reward", QString::fromUtf8("Награда Pomodoro")}, {"spirit_purchase", QString::fromUtf8("Снятие Злого духа")},
+        {"spirit", QString::fromUtf8("Изменение духа")}
+    };
+    const auto found = labels.find(action);
+    return found == labels.end() ? q(action) : found->second;
 }
 QString reportPeriodLabel(int range, const QDate& from, const QDate& to) {
     switch (range) {
@@ -614,6 +628,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     walletHistory_->setObjectName("profileWalletHistory");
     walletHistory_->setToolTip(QString::fromUtf8("Операции кошелька выбранного профиля"));
     bottom->addWidget(walletHistory_);
+    profileHistory_ = new QPushButton(QString::fromUtf8("История профиля"));
+    profileHistory_->setObjectName("profileActivityHistory");
+    profileHistory_->setToolTip(QString::fromUtf8("События из локального аудита профилей; без истории задач и XP"));
+    bottom->addWidget(profileHistory_);
     projectFocus_ = new QPushButton(QString::fromUtf8("Задачи проекта"));
     projectFocus_->setObjectName("focusProjectTasks");
     projectFocus_->setToolTip(QString::fromUtf8("Открыть задачи выбранного проекта с проектным фильтром"));
@@ -803,6 +821,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(directXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
     connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
     connect(walletHistory_, &QPushButton::clicked, this, [this] { showWalletHistory(); });
+    connect(profileHistory_, &QPushButton::clicked, this, [this] { showProfileHistory(); });
     connect(projectFocus_, &QPushButton::clicked, this, [this] {
         if (navigation_->currentRow() != Projects || !table_->currentItem()) return;
         const auto projectId = table_->currentItem()->data(Qt::UserRole).toString();
@@ -1283,6 +1302,8 @@ void QtWindow::render() {
     walletAdjust_->setEnabled(!profiles_->currentData().toString().isEmpty());
     walletHistory_->setVisible(page == ProfilePage && (admin_ || unlocked));
     walletHistory_->setEnabled(!profiles_->currentData().toString().isEmpty());
+    profileHistory_->setVisible(page == ProfilePage && (admin_ || unlocked));
+    profileHistory_->setEnabled(!profiles_->currentData().toString().isEmpty());
     projectFocus_->setVisible(page == Projects);
     const bool projectSelected = page == Projects && table_->currentItem() &&
         !table_->currentItem()->data(Qt::UserRole).toString().isEmpty() &&
@@ -1777,6 +1798,58 @@ void QtWindow::adjustWallet() {
     statusBar()->showMessage(auditRecorded
         ? QString::fromUtf8("Кошелёк профиля обновлён, запись добавлена в аудит.")
         : QString::fromUtf8("Баланс обновлён, но запись в аудит не удалось сохранить."), 7000);
+}
+
+void QtWindow::showProfileHistory() {
+    const auto profileId = u(profiles_->currentData().toString());
+    if (navigation_->currentRow() != ProfilePage || profileId.empty() ||
+        (!admin_ && !profileSession_.isUnlocked(*workspace_.storage, profileId))) return;
+
+    QDialog dialog(this);
+    dialog.setObjectName("profileActivityHistoryDialog");
+    dialog.setWindowTitle(QString::fromUtf8("История событий профиля"));
+    dialog.resize(820, 460);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* summary = new QLabel(QString::fromUtf8("Локальные события входа, управления профилем и кошельком · читаются последние 500 событий аудита по рабочему пространству. История задач и XP ведётся отдельно."));
+    summary->setObjectName("profileActivityHistorySummary");
+    summary->setWordWrap(true);
+    layout->addWidget(summary);
+    auto* table = new QTableWidget(&dialog);
+    table->setObjectName("profileActivityHistoryTable");
+    table->setColumnCount(3);
+    table->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Событие"), QString::fromUtf8("Детали")});
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setAlternatingRowColors(true);
+    table->setShowGrid(false);
+    table->setWordWrap(true);
+    table->verticalHeader()->hide();
+    table->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setStretchLastSection(false);
+    auto entries = profileAudit(workspace_.directory);
+    std::reverse(entries.begin(), entries.end());
+    for (const auto& entry : entries) {
+        if (entry.profile != profileId) continue;
+        const int row = table->rowCount();
+        table->insertRow(row);
+        const QStringList values{timeText(entry.timestamp), profileAuditActionLabel(entry.action), q(entry.details).isEmpty() ? QString::fromUtf8("—") : q(entry.details)};
+        for (int column = 0; column < values.size(); ++column) {
+            auto* item = new QTableWidgetItem(values[column]);
+            item->setToolTip(values[column]);
+            table->setItem(row, column, item);
+        }
+    }
+    summary->setText(QString::fromUtf8("Событий профиля: %1 · локальный аудит, последние 500 событий по рабочему пространству. История задач и XP ведётся отдельно.")
+        .arg(table->rowCount()));
+    table->setColumnWidth(0, 142);
+    table->setColumnWidth(1, 210);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    buttons->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
 }
 
 void QtWindow::showWalletHistory() {

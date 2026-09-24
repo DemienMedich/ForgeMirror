@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 77**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–77 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 78**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–78 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,9 +32,9 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 77 | Remaining |
+| Area | Qt coverage through stage 78 | Remaining |
 | --- | --- | --- |
-| Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward and profile-scoped wallet activity history | Broader profile history and audit-write transactionality |
+| Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward, wallet history and read-only profile activity history | Task/XP history and audit-write transactionality |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines, including optional notification while the window is hidden in the system tray; administrator multi-select status, priority, project, pipeline stage, deadline and assignee edits | Reminders after the process exits, legacy/stale awarded-task cleanup review |
 | Projects | Admin list, creation, editing and confirmed deletion with task detachment; stable IDs and current names in linked tasks; overdue and pending-XP filters, four sort modes persisted locally; open the selected project's tasks with project filter and unrelated task filters cleared | — |
 | Skills | Catalog viewing/search, persisted profession filter for all/unbound/known/orphaned bindings, admin creation/editing and guarded deletion of unused records with checked persistence | Merge |
@@ -190,6 +190,10 @@ The catalog filter switches between all skills, skills without a profession, a k
 ### Pipeline branch map (stage 77, implementation checkpoint)
 
 The Pipeline page opens a read-only map grouped by the existing branch labels. Each stage shows its code, title, responsible person and outgoing count; arrows follow the saved `nextIds` and node details list the selected stage's description and destinations. References to deleted or unavailable stages appear as separate warning nodes rather than being dropped. Dragging pans the canvas and Ctrl+wheel zooms it. The map performs no writes; stage edits remain in the existing editor. `smoke_qt` checks branch transitions, an unavailable target and selected-node details. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Profile activity history (stage 78, implementation checkpoint)
+
+The Profile page adds a read-only **История профиля** dialog for an administrator or the unlocked selected profile. It shows the newest matching events in the existing local `meta/profile-audit.log`, with Russian labels for known actions and the original action name for future/unknown entries. The source remains bounded to the latest 500 workspace audit lines. The dialog states that task and XP history are recorded separately; it does not claim to provide them, and wallet writes are still not transactional with audit appends. Tests cover visibility before/after personal unlock, known wallet/security events, unknown-action fallback and details. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

@@ -47,6 +47,7 @@ private:
     void grantDirectXp();
     void adjustWallet();
     void showWalletHistory();
+    void showProfileHistory();
     void checkDeadlineReminders();
     void updateBanner();
     void pullCloud();
@@ -143,6 +144,7 @@ private:
     QPushButton* directXp_;
     QPushButton* walletAdjust_;
     QPushButton* walletHistory_;
+    QPushButton* profileHistory_;
     QPushButton* projectFocus_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
