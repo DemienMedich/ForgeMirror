@@ -534,6 +534,20 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     logPresetErrors_->setToolTip(QString::fromUtf8("Оставить только сообщения об ошибках"));
     filters->addWidget(logPresetErrors_);
     content->addLayout(filters);
+    auto* logOptions = new QWidget;
+    logOptions->setObjectName("logOptions");
+    auto* logOptionsLayout = new QHBoxLayout(logOptions);
+    logOptionsLayout->setContentsMargins(0, 0, 0, 0);
+    logAutoScroll_ = new QCheckBox(QString::fromUtf8("Автопрокрутка"));
+    logAutoScroll_->setObjectName("logAutoScroll");
+    logAutoScroll_->setChecked(displaySettings_.logAutoScroll);
+    logOptionsLayout->addWidget(logAutoScroll_);
+    logCompactView_ = new QCheckBox(QString::fromUtf8("Компактно"));
+    logCompactView_->setObjectName("logCompactView");
+    logCompactView_->setChecked(displaySettings_.logCompactView);
+    logOptionsLayout->addWidget(logCompactView_);
+    logOptionsLayout->addStretch();
+    content->addWidget(logOptions);
     auditFilters_ = new QWidget;
     auditFilters_->setObjectName("auditFilters");
     auto* auditFilterLayout = new QHBoxLayout(auditFilters_);
@@ -721,6 +735,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(logWarnings_, &QCheckBox::toggled, this, [this] { render(); });
     connect(logErrors_, &QCheckBox::toggled, this, [this] { render(); });
     connect(logSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
+    connect(logAutoScroll_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    connect(logCompactView_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     const auto setLogLevels = [this](bool info, bool warnings, bool errors) {
         const QSignalBlocker infoBlocker(logInfo_);
         const QSignalBlocker warningsBlocker(logWarnings_);
@@ -1144,6 +1160,8 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
     displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
     displaySettings_.auditSourceFilter = auditSourceFilter_->currentIndex();
+    displaySettings_.logAutoScroll = logAutoScroll_->isChecked();
+    displaySettings_.logCompactView = logCompactView_->isChecked();
     if (!SaveQtDisplaySettings(workspace_.directory, displaySettings_))
         statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить последний раздел и профиль."), 5000);
 }
@@ -1260,6 +1278,7 @@ void QtWindow::render() {
     auto headers = [this](QStringList labels) {
         table_->setColumnCount(labels.size());
         table_->setHorizontalHeaderLabels(labels);
+        for (int column = 0; column < labels.size(); ++column) table_->setColumnHidden(column, false);
     };
     auto row = [this](const std::string& id, const QStringList& values) {
         if (!values.join(' ').contains(search_->text(), Qt::CaseInsensitive)) return;
@@ -1305,6 +1324,7 @@ void QtWindow::render() {
     logWarnings_->setVisible(page == Logs);
     logErrors_->setVisible(page == Logs);
     logSourceFilter_->setVisible(page == Logs);
+    logAutoScroll_->parentWidget()->setVisible(page == Logs);
     logPresetAll_->setVisible(page == Logs);
     logPresetWarningsErrors_->setVisible(page == Logs);
     logPresetErrors_->setVisible(page == Logs);
@@ -1558,6 +1578,8 @@ void QtWindow::render() {
     } else if (page == Logs) {
         headers({QString::fromUtf8("#"), QString::fromUtf8("Время"), QString::fromUtf8("Уровень"),
             QString::fromUtf8("Источник"), QString::fromUtf8("Сообщение")});
+        table_->setColumnHidden(1, logCompactView_->isChecked());
+        table_->setColumnHidden(3, logCompactView_->isChecked());
         const auto selectedSource = logSourceFilter_->currentData().toString();
         QStringList sources;
         for (const auto& entry : appLogs_) {
@@ -1591,6 +1613,7 @@ void QtWindow::render() {
         }
         summary_->setText(QString::fromUtf8("Показано: %1 из %2 · история между запусками · %3")
             .arg(visible).arg(total).arg(appLogPersistenceWarning_ ? QString::fromUtf8("ошибка сохранения") : QString::fromUtf8("сохранено локально")));
+        if (logAutoScroll_->isChecked()) table_->scrollToBottom();
     } else if (page == Rules) {
         headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
         const auto& rules = data.rulesConfig;

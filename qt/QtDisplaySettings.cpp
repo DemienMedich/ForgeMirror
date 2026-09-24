@@ -38,6 +38,8 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
             else if (key == "projectsXpPendingOnly") out.projectsXpPendingOnly = value == "1";
             else if (key == "auditSourceFilter") { bool ok = false; const int index = value.toInt(&ok); out.auditSourceFilter = ok ? std::clamp(index, 0, 2) : 0; }
+            else if (key == "logAutoScroll") out.logAutoScroll = value != "0";
+            else if (key == "logCompactView") out.logCompactView = value == "1";
         }
     }
     const auto today = QDate::currentDate();
@@ -77,6 +79,8 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");
     set("projectsXpPendingOnly", settings.projectsXpPendingOnly ? "1" : "0");
     set("auditSourceFilter", QString::number(std::clamp(settings.auditSourceFilter, 0, 2)));
+    set("logAutoScroll", settings.logAutoScroll ? "1" : "0");
+    set("logCompactView", settings.logCompactView ? "1" : "0");
     const auto bytes = (bom ? QByteArray("\xEF\xBB\xBF") : QByteArray()) + lines.join('\n').toUtf8();
     QDir().mkpath(meta); QSaveFile output(path); output.setDirectWriteFallback(false);
     return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();

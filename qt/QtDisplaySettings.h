@@ -26,6 +26,8 @@ struct QtDisplaySettings {
     bool projectsOverdueOnly = false;
     bool projectsXpPendingOnly = false;
     int auditSourceFilter = 0;
+    bool logAutoScroll = true;
+    bool logCompactView = false;
 };
 QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);

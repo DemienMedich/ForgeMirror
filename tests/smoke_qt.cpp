@@ -2240,7 +2240,8 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; bool saved = false;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2;
+    settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
@@ -2256,7 +2257,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 2 || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 2 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     ApplyQtDisplaySettings(app, loaded); if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble()) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});
@@ -2703,6 +2704,22 @@ int main(int argc, char** argv) {
     for (int index = 0; index < table->rowCount(); ++index)
         if (table->item(index, 3)->text() != QStringLiteral("Qt")) return fail("Qt application log source filter leaked another source");
     logSourceFilter->setCurrentIndex(0);
+    auto* logAutoScroll = window.findChild<QCheckBox*>("logAutoScroll");
+    auto* logCompactView = window.findChild<QCheckBox*>("logCompactView");
+    if (!logAutoScroll || !logCompactView || !logAutoScroll->isVisible() || !logCompactView->isVisible())
+        return fail("Qt log display options unavailable");
+    logAutoScroll->setChecked(true);
+    logCompactView->setChecked(true);
+    if (!table->isColumnHidden(1) || !table->isColumnHidden(3))
+        return fail("Qt compact log view did not hide timestamp and source columns");
+    const int logRowsBeforeAutoscroll = table->rowCount();
+    for (int index = 0; index < 20; ++index)
+        window.statusBar()->showMessage(QString::fromUtf8("Проверка автопрокрутки Qt-журнала %1").arg(index));
+    QApplication::processEvents();
+    if (table->rowCount() != logRowsBeforeAutoscroll + 20 || table->verticalScrollBar()->maximum() == 0 ||
+        table->verticalScrollBar()->value() != table->verticalScrollBar()->maximum())
+        return fail("Qt application log did not append and autoscroll to a new entry");
+    logAutoScroll->setChecked(false);
     const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");
     search->setText(startupLogToken);
     if (table->rowCount() == 0 || !table->item(0, 4)->text().contains(startupLogToken, Qt::CaseInsensitive))
@@ -2740,6 +2757,11 @@ int main(int argc, char** argv) {
     if (!restartedNavigation || !restartedTable) return fail("Qt application log restart window failed");
     restartedNavigation->setCurrentRow(16);
     if (restartedTable->rowCount() < 2) return fail("Qt application log history did not survive a window restart");
+    auto* restartedAutoScroll = restartedWindow.findChild<QCheckBox*>("logAutoScroll");
+    auto* restartedCompactView = restartedWindow.findChild<QCheckBox*>("logCompactView");
+    if (!restartedAutoScroll || !restartedCompactView || restartedAutoScroll->isChecked() ||
+        !restartedCompactView->isChecked() || !restartedTable->isColumnHidden(1) || !restartedTable->isColumnHidden(3))
+        return fail("Qt log display preferences did not persist across a window restart");
     bool restoredClearEntry = false;
     for (int index = 0; index < restartedTable->rowCount(); ++index)
         restoredClearEntry |= restartedTable->item(index, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive);
