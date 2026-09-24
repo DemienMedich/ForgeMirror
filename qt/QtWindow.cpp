@@ -28,6 +28,9 @@
 #include "AppSkillService.h"
 #include "AppShortcutsService.h"
 #include "CloudSync.h"
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtWidgets>
 #include <algorithm>
 
@@ -151,6 +154,7 @@ std::vector<TaskEntry> reportTasksForRange(const std::vector<TaskEntry>& tasks, 
 }
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
+    loadAppLogs();
     ApplyQtDisplaySettings(*qApp, displaySettings_);
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
@@ -757,7 +761,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
     connect(exportLogs_, &QPushButton::clicked, this, [this] { exportLogs(); });
     connect(clearLogs_, &QPushButton::clicked, this, [this] {
-        appLogs_.clear(); search_->clear(); render();
+        appLogs_.clear();
+        appLogPersistenceWarning_ = !saveAppLogs();
+        search_->clear(); render();
         statusBar()->showMessage(QString::fromUtf8("Журнал Qt-сессии очищен."), 4000);
     });
     connect(reapplyRules_, &QPushButton::clicked, this, [this] { reapplyRules(); });
@@ -866,6 +872,55 @@ void QtWindow::appendLog(AppLogLevel level, const std::string& source, const std
     appLogs_.push_back({QDateTime::currentSecsSinceEpoch(), level, source, text});
     constexpr size_t maxEntries = 200;
     if (appLogs_.size() > maxEntries) appLogs_.erase(appLogs_.begin());
+    appLogPersistenceWarning_ = !saveAppLogs();
+}
+
+void QtWindow::loadAppLogs() {
+    const auto path = q((workspace_.directory / "meta/qt-application-log.json").u8string());
+    const QFileInfo info(path);
+    if (!info.exists()) return;
+    if (info.isSymLink() || info.size() > 4 * 1024 * 1024) {
+        appLogPersistenceWarning_ = true;
+        return;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) { appLogPersistenceWarning_ = true; return; }
+    QJsonParseError error;
+    const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+    if (error.error != QJsonParseError::NoError || !document.isArray()) {
+        appLogPersistenceWarning_ = true;
+        return;
+    }
+    for (const auto& value : document.array()) {
+        if (!value.isObject()) continue;
+        const auto entry = value.toObject();
+        const auto timestamp = entry.value("timestamp").toVariant().toLongLong();
+        const auto level = entry.value("level").toInt(-1);
+        if (timestamp <= 0 || level < 0 || level > 2) continue;
+        appLogs_.push_back({timestamp, static_cast<AppLogLevel>(level),
+            u(entry.value("source").toString()), u(entry.value("message").toString())});
+    }
+    constexpr size_t maxEntries = 200;
+    if (appLogs_.size() > maxEntries)
+        appLogs_.erase(appLogs_.begin(), appLogs_.end() - static_cast<std::ptrdiff_t>(maxEntries));
+}
+
+bool QtWindow::saveAppLogs() const {
+    const auto path = q((workspace_.directory / "meta/qt-application-log.json").u8string());
+    if (QFileInfo(path).isSymLink()) return false;
+    QJsonArray entries;
+    for (const auto& entry : appLogs_) {
+        QJsonObject value;
+        value.insert("timestamp", qlonglong(entry.timestamp));
+        value.insert("level", int(entry.level));
+        value.insert("source", q(entry.source));
+        value.insert("message", q(entry.message));
+        entries.append(value);
+    }
+    const auto bytes = QJsonDocument(entries).toJson(QJsonDocument::Compact);
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) return false;
+    return true;
 }
 
 bool QtWindow::requireAdmin() {
@@ -1391,8 +1446,8 @@ void QtWindow::render() {
             ++visible;
             row(std::to_string(total), values);
         }
-        summary_->setText(QString::fromUtf8("Показано: %1 из %2 · журнал только текущего запуска Qt")
-            .arg(visible).arg(total));
+        summary_->setText(QString::fromUtf8("Показано: %1 из %2 · история между запусками · %3")
+            .arg(visible).arg(total).arg(appLogPersistenceWarning_ ? QString::fromUtf8("ошибка сохранения") : QString::fromUtf8("сохранено локально")));
     } else if (page == Rules) {
         headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
         const auto& rules = data.rulesConfig;

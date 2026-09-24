@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 73**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, closed-app reminders, persistent application logs, and smaller parity items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–73 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 74**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, closed-app reminders, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–74 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 73 | Remaining |
+| Area | Qt coverage through stage 74 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward and profile-scoped wallet activity history | Broader profile history and audit-write transactionality |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines; administrator multi-select status, priority, project, pipeline stage, deadline and assignee edits | Reminders while the app is closed, legacy/stale awarded-task cleanup review |
@@ -42,7 +42,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
 | Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods, current-status distribution chart, monthly completion trend from retained status audit events, aggregate-to-task detail view by selection plus **Подробности** or double-click, and atomic UTF-8 CSV export using the selected period | Richer drill-down; trends beyond retained audit events |
 | Audit | Admin task and profile-access audit view, merged by timestamp with newest events first, persisted source plus actor/object/field/search filters, visible/total counts, and atomic UTF-8 CSV export of visible events | Other application logs |
-| Application logs | Current Qt session messages and status notifications, newest first, global search, level toggles, UTF-8 TXT export of visible entries and clear action; capped at 200 in memory | Persistent history and full source-module parity |
+| Application logs | Qt messages and status notifications persist locally across restarts, newest first, global search, level toggles, UTF-8 TXT export of visible entries and clear action; capped at 200 entries and stored outside cloud file lists | Full source-module parity and log rotation policy |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale, compact-table density, persistent fullscreen toggle with F11, legacy frameless mode with native drag handle; fixed migration palette | Additional accessibility options |
 | Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Whole-workspace push, automatic sync and remaining settings parity |
@@ -174,6 +174,10 @@ The same administrator dialog can assign one or more active profiles to all sele
 ### Bulk task project, pipeline and deadline edits (stage 73, implementation checkpoint)
 
 The administrator multi-select dialog now also assigns or clears a project, assigns or clears a pipeline stage when that module is enabled, and sets or removes a deadline. Existing domain services persist the edits and add task-audit events; the selection containing completed tasks still excludes only bulk status changes. `smoke_qt` verifies the selected project and stage IDs/names, the persisted deadline, and the dialog's available operations. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Persistent local application log (stage 74, implementation checkpoint)
+
+The Qt application log now restores its latest 200 entries from `meta/qt-application-log.json` in the isolated Qt workspace. Each update uses `QSaveFile`; symlink targets are rejected, and the page reports when persistence fails. Clearing the log writes an empty history before the usual clear acknowledgement is recorded. The file is not included in the explicit cloud-transfer lists. `smoke_qt` verifies export and clearing plus recovery of prior entries when a second window opens on the same workspace. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

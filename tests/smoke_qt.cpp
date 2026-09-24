@@ -2579,6 +2579,21 @@ int main(int argc, char** argv) {
     if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||
         !table->item(0, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive))
         return fail("Qt application log clear failed");
+    QFile persistedLog(temp.path() + "/meta/qt-application-log.json");
+    if (!persistedLog.open(QIODevice::ReadOnly) || !persistedLog.readAll().contains("Журнал Qt-сессии очищен"))
+        return fail("Qt application log was not persisted locally");
+    QtWindow restartedWindow(workspace);
+    restartedWindow.show();
+    QApplication::processEvents();
+    auto* restartedNavigation = restartedWindow.findChild<QListWidget*>("navigation");
+    auto* restartedTable = restartedWindow.findChild<QTableWidget*>("records");
+    if (!restartedNavigation || !restartedTable) return fail("Qt application log restart window failed");
+    restartedNavigation->setCurrentRow(16);
+    if (restartedTable->rowCount() < 2) return fail("Qt application log history did not survive a window restart");
+    bool restoredClearEntry = false;
+    for (int index = 0; index < restartedTable->rowCount(); ++index)
+        restoredClearEntry |= restartedTable->item(index, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive);
+    if (!restoredClearEntry) return fail("Qt application log did not restore the previous session entry");
     const auto auditArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!auditArtifacts.isEmpty()) window.grab().save(auditArtifacts + "/profile-audit.png");
     nav->setCurrentRow(5);

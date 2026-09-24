@@ -57,6 +57,8 @@ private:
     bool requireAdmin();
     void message(const std::string& error);
     void appendLog(AppLogLevel level, const std::string& source, const std::string& message);
+    void loadAppLogs();
+    bool saveAppLogs() const;
     QString selectedId() const;
     QtWorkspace& workspace_;
     bool admin_ = false;
@@ -142,5 +144,6 @@ private:
     QPushButton* storageResolve_;
     int bannerIndex_ = 0;
     std::vector<AppLogEntry> appLogs_;
+    bool appLogPersistenceWarning_ = false;
     std::unordered_set<std::string> remindedDeadlineTaskIds_;
 };
