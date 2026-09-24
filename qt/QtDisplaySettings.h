@@ -17,6 +17,7 @@ struct QtDisplaySettings {
     int taskQuickFilter = 0;
     QString taskProjectId;
     QString taskPipelineStepId;
+    QString catalogProfessionId;
     int reportView = 0;
     int reportDateRange = 0;
     QDate reportDateFrom;

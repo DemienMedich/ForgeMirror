@@ -29,6 +29,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "taskQuickFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskQuickFilter = ok ? std::clamp(index, 0, 7) : 0; }
             else if (key == "taskProjectId") out.taskProjectId = value;
             else if (key == "taskPipelineStepId") out.taskPipelineStepId = value;
+            else if (key == "catalogProfessionId") out.catalogProfessionId = value;
             else if (key == "reportView") { bool ok = false; const int index = value.toInt(&ok); out.reportView = ok ? std::clamp(index, 0, 1) : 0; }
             else if (key == "reportDateRange") { bool ok = false; const int index = value.toInt(&ok); out.reportDateRange = ok ? std::clamp(index, 0, 4) : 0; }
             else if (key == "reportDateFrom") out.reportDateFrom = QDate::fromString(value, Qt::ISODate);
@@ -63,6 +64,8 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     auto projectId = settings.taskProjectId; projectId.remove('\r'); projectId.remove('\n');
     auto pipelineId = settings.taskPipelineStepId; pipelineId.remove('\r'); pipelineId.remove('\n');
     set("taskProjectId", projectId); set("taskPipelineStepId", pipelineId);
+    auto catalogProfessionId = settings.catalogProfessionId; catalogProfessionId.remove('\r'); catalogProfessionId.remove('\n');
+    set("catalogProfessionId", catalogProfessionId);
     set("reportView", QString::number(std::clamp(settings.reportView, 0, 1)));
     set("reportDateRange", QString::number(std::clamp(settings.reportDateRange, 0, 4)));
     const auto today = QDate::currentDate();

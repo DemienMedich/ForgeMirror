@@ -57,6 +57,7 @@ private:
     void updateModelSettingsFromControls();
     void saveDisplayContext();
     void refreshTaskFilterChoices();
+    void refreshCatalogProfessionChoices();
     bool requireAdmin();
     void message(const std::string& error);
     void appendLog(AppLogLevel level, const std::string& source, const std::string& message);
@@ -77,6 +78,7 @@ private:
     QComboBox* quickTaskFilter_;
     QComboBox* taskProjectFilter_;
     QComboBox* taskPipelineFilter_;
+    QComboBox* catalogProfessionFilter_;
     QComboBox* reportView_;
     QComboBox* reportDateRange_;
     QDateEdit* reportFrom_;

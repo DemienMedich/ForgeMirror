@@ -1795,6 +1795,46 @@ static bool TestMonthlyCompletionTrend() {
         std::accumulate(counts.begin(), counts.end(), 0) == 3;
 }
 
+static bool TestCatalogProfessionFilter() {
+    auto fail = [](const char* step) { std::cerr << "catalogProfessionFilter: " << step << '\n'; return false; };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return fail("temp");
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.data.professions = {{"artist", "Artist", "Art"}};
+    if (!AppSaveProfessionsData(workspace.directory, workspace.data.professions) ||
+        !workspace.catalog.add_skill("Bound", 1.0, "Known profession", {}, {"artist"}) ||
+        !workspace.catalog.add_skill("Unbound", 1.0, "No profession") ||
+        !workspace.catalog.add_skill("Orphan", 1.0, "Missing profession", {}, {"removed-profession"})) return fail("fixture");
+    QtWindow window(workspace);
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* filter = window.findChild<QComboBox*>("catalogProfessionFilter");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !filter || !table) return fail("widgets");
+    int catalogPage = -1;
+    for (int i = 0; i < navigation->count(); ++i)
+        if (navigation->item(i)->text().contains(QString::fromUtf8("Навык"), Qt::CaseInsensitive)) catalogPage = i;
+    if (catalogPage < 0) return fail("page");
+    navigation->setCurrentRow(catalogPage);
+    if (table->rowCount() != 3 || filter->findData("artist") < 0 || filter->findData("removed-profession") < 0) return fail("all choices");
+    filter->setCurrentIndex(filter->findData("artist"));
+    if (table->item(0, 0)->text() != "Bound") return fail("known filter");
+    filter->setCurrentIndex(filter->findData("__none__"));
+    if (table->item(0, 0)->text() != "Unbound") return fail("unbound filter");
+    filter->setCurrentIndex(filter->findData("removed-profession"));
+    if (table->item(0, 0)->text() != "Orphan") return fail("orphan filter");
+    const auto saved = LoadQtDisplaySettings(workspace.directory);
+    if (saved.catalogProfessionId != "removed-profession") return fail("persist");
+    QtWindow reopened(workspace);
+    auto* restoredFilter = reopened.findChild<QComboBox*>("catalogProfessionFilter");
+    auto* restoredNavigation = reopened.findChild<QListWidget*>("navigation");
+    auto* restoredTable = reopened.findChild<QTableWidget*>("records");
+    if (!restoredFilter || !restoredNavigation || !restoredTable) return fail("restore widgets");
+    restoredNavigation->setCurrentRow(catalogPage);
+    if (restoredFilter->currentData().toString() != "removed-profession") return fail("restore selection");
+    if (restoredTable->rowCount() != 1) return fail("restore rows");
+    return true;
+}
+
 static bool TestDeadlineReminders() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -2236,6 +2276,7 @@ int main(int argc, char** argv) {
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
+    if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
     QTemporaryDir temp;

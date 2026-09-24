@@ -399,6 +399,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     search_->setPlaceholderText(QString::fromUtf8("Поиск по текущему разделу…"));
     search_->setClearButtonEnabled(true);
     filters->addWidget(search_);
+    catalogProfessionFilter_ = new QComboBox;
+    catalogProfessionFilter_->setObjectName("catalogProfessionFilter");
+    catalogProfessionFilter_->setMaximumWidth(190);
+    catalogProfessionFilter_->setToolTip(QString::fromUtf8("Показать навыки, связанные с выбранной профессией"));
+    filters->addWidget(catalogProfessionFilter_);
     statusFilter_ = new QComboBox;
     statusFilter_->setObjectName("statusFilter");
     statusFilter_->setMaximumWidth(135);
@@ -659,6 +664,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(quickTaskFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(catalogProfessionFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportDateRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportFrom_, &QDateEdit::dateChanged, this, [this](const QDate& date) {
@@ -839,7 +845,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         displaySettings_ = next;
         if (next.fullscreen) showFullScreen(); else showNormal();
     });
-    navigation_->setCurrentRow(ProfilePage);
     reload();
 }
 
@@ -1047,6 +1052,7 @@ bool QtWindow::reload() {
         if (index >= 0) profiles_->setCurrentIndex(index);
     }
     refreshTaskFilterChoices();
+    refreshCatalogProfessionChoices();
     const int page = std::clamp(displaySettings_.lastPage, 0, navigation_->count() - 1);
     if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
     appendLog(AppLogLevel::Info, "Qt", "Локальное рабочее пространство загружено или обновлено.");
@@ -1074,6 +1080,7 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.taskQuickFilter = quickTaskFilter_->currentIndex();
     displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
     displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
+    displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
     displaySettings_.reportView = reportView_->currentIndex();
     displaySettings_.reportDateRange = reportDateRange_->currentIndex();
     displaySettings_.reportDateFrom = reportFrom_->date();
@@ -1112,6 +1119,30 @@ void QtWindow::refreshTaskFilterChoices() {
         const int index = taskPipelineFilter_->findData(selectedPipeline);
         taskPipelineFilter_->setCurrentIndex(index >= 0 ? index : 0);
     }
+}
+
+void QtWindow::refreshCatalogProfessionChoices() {
+    const auto current = catalogProfessionFilter_->currentData().toString();
+    const auto selected = current.isEmpty() ? displaySettings_.catalogProfessionId : current;
+    QSignalBlocker blocker(catalogProfessionFilter_);
+    catalogProfessionFilter_->clear();
+    catalogProfessionFilter_->addItem(QString::fromUtf8("Все профессии"), QString());
+    catalogProfessionFilter_->addItem(QString::fromUtf8("Без профессии"), QStringLiteral("__none__"));
+    std::unordered_set<std::string> known;
+    for (const auto& profession : workspace_.data.professions) {
+        known.insert(profession.id);
+        catalogProfessionFilter_->addItem(q(profession.name), q(profession.id));
+    }
+    std::unordered_set<std::string> orphaned;
+    for (const auto& skillId : workspace_.catalog.skills()) {
+        for (const auto& professionId : workspace_.catalog.professions(skillId)) {
+            if (known.find(professionId) == known.end() && orphaned.insert(professionId).second)
+                catalogProfessionFilter_->addItem(QString::fromUtf8("Неизвестная: %1").arg(q(professionId)), q(professionId));
+        }
+    }
+    const int index = catalogProfessionFilter_->findData(selected);
+    catalogProfessionFilter_->setCurrentIndex(index >= 0 ? index : 0);
+    displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
 }
 
 void QtWindow::loadSelectedModel() {
@@ -1206,6 +1237,7 @@ void QtWindow::render() {
     quickTaskFilter_->setVisible(page == Tasks);
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
+    catalogProfessionFilter_->setVisible(page == Catalog);
     reportView_->setVisible(page == Statistics);
     reportDateRange_->setVisible(page == Statistics);
     reportCustomRange_->setVisible(page == Statistics && reportDateRange_->currentIndex() == 4);
@@ -1379,15 +1411,22 @@ void QtWindow::render() {
             .arg(report.totalProjects).arg(report.projectsWithOverdue).arg(report.projectsWithXpPending).arg(table_->rowCount()));
     } else if (page == Catalog) {
         headers({QString::fromUtf8("Навык"), QString::fromUtf8("Вес"), QString::fromUtf8("Описание"), QString::fromUtf8("Профессии")});
+        const auto professionFilter = catalogProfessionFilter_->currentData().toString();
         for (const auto& id : workspace_.catalog.skills()) {
+            const auto bindings = workspace_.catalog.professions(id);
+            if (professionFilter == QStringLiteral("__none__") && !bindings.empty()) continue;
+            if (!professionFilter.isEmpty() && professionFilter != QStringLiteral("__none__") &&
+                std::find(bindings.begin(), bindings.end(), u(professionFilter)) == bindings.end()) continue;
             QStringList names;
-            for (const auto& binding : workspace_.catalog.professions(id)) {
+            for (const auto& binding : bindings) {
                 const auto found = std::find_if(data.professions.begin(), data.professions.end(), [&](const auto& p) { return p.id == binding; });
                 names << q(found == data.professions.end() ? binding : found->name);
             }
             row(id, {q(workspace_.catalog.display_name(id)), QString::number(workspace_.catalog.weight(id)),
                 q(workspace_.catalog.description(id)), names.join(", ")});
         }
+        summary_->setText(QString::fromUtf8("Навыков: %1 · показано: %2")
+            .arg(workspace_.catalog.skills().size()).arg(table_->rowCount()));
     } else if (page == Pipeline) {
         headers({QString::fromUtf8("Этап"), QString::fromUtf8("Название"), QString::fromUtf8("Ответственный"), QString::fromUtf8("Следующий шаг")});
         for (const auto& step : data.pipelineSteps) row(step.id, {q(step.stageCode), q(step.title), q(step.owner), q(step.nextStageLabel)});
