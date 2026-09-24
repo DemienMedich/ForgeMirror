@@ -21,7 +21,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "xpPendingOnly") out.projectsXpPendingOnly = value == "1";
         }
         if (section == "qt") {
-            if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0";
+            if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1";
             else if (key == "lastProfileId") out.lastProfileId = value;
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 15) : 0; }
             else if (key == "taskStatusFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskStatusFilter = ok ? std::clamp(index, 0, 3) : 0; }
@@ -54,7 +54,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     for (int i = 0; i < lines.size(); ++i) { const auto line = lines[i].trimmed(); if (line == "[qt]") { begin = i; continue; } if (begin >= 0 && i > begin && line.startsWith('[')) { end = i; break; } }
     if (begin < 0) { if (!lines.isEmpty() && !lines.back().isEmpty()) lines << ""; begin = lines.size(); lines << "[qt]"; end = lines.size(); }
     auto set = [&](const QString& key, const QString& value) { for (int i = begin + 1; i < end; ++i) if (lines[i].section('=', 0, 0).trimmed() == key) { lines[i] = key + '=' + value; return; } lines.insert(end++, key + '=' + value); };
-    set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0");
+    set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0");
     auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 15)));
     set("taskStatusFilter", QString::number(std::clamp(settings.taskStatusFilter, 0, 3)));
@@ -91,11 +91,17 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* compact = new QCheckBox(QString::fromUtf8("Компактные строки таблиц")); compact->setObjectName("qtCompactRows"); compact->setChecked(settings.compactRows);
     auto* fullscreen = new QCheckBox(QString::fromUtf8("Полноэкранный режим (F11)")); fullscreen->setObjectName("qtFullscreen"); fullscreen->setChecked(settings.fullscreen);
     auto* decorated = new QCheckBox(QString::fromUtf8("Показывать рамку окна")); decorated->setObjectName("qtDecorated"); decorated->setChecked(settings.decorated);
-    form->addRow(QString::fromUtf8("Масштаб текста"), scale); form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated);
+    auto* tray = new QCheckBox(QString::fromUtf8("При закрытии сворачивать в трей и продолжать напоминания"));
+    tray->setObjectName("qtMinimizeToTray");
+    tray->setChecked(settings.minimizeToTray);
+    tray->setEnabled(QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages());
+    tray->setToolTip(tray->isEnabled() ? QString::fromUtf8("Окно скроется, но приложение останется запущенным. Выход доступен из меню значка в трее.")
+        : QString::fromUtf8("Системный трей недоступен в этой среде."));
+    form->addRow(QString::fromUtf8("Масштаб текста"), scale); form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray);
     auto* hint = new QLabel(QString::fromUtf8("Цветовая схема зафиксирована для миграции и здесь не меняется.")); hint->setWordWrap(true); form->addRow(hint);
     auto* notice = new QLabel; notice->setObjectName("qtSettingsNotice"); notice->setWordWrap(true); form->addRow(notice);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel); buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true); buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] { auto next = settings; next.scalePercent = scale->currentData().toInt(); next.compactRows = compact->isChecked(); next.fullscreen = fullscreen->isChecked(); next.decorated = decorated->isChecked(); if (!SaveQtDisplaySettings(directory, next)) { notice->setText(QString::fromUtf8("Не удалось атомарно сохранить настройки.")); return; } settings = next; dialog.accept(); });
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] { auto next = settings; next.scalePercent = scale->currentData().toInt(); next.compactRows = compact->isChecked(); next.fullscreen = fullscreen->isChecked(); next.decorated = decorated->isChecked(); next.minimizeToTray = tray->isEnabled() && tray->isChecked(); if (!SaveQtDisplaySettings(directory, next)) { notice->setText(QString::fromUtf8("Не удалось атомарно сохранить настройки.")); return; } settings = next; dialog.accept(); });
     return dialog.exec() == QDialog::Accepted;
 }

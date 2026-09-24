@@ -9,6 +9,7 @@ struct QtDisplaySettings {
     bool compactRows = false;
     bool fullscreen = false;
     bool decorated = true;
+    bool minimizeToTray = false;
     QString lastProfileId;
     int lastPage = 0;
     int taskStatusFilter = 0;

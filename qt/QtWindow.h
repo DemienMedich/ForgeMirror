@@ -21,11 +21,14 @@ class QSlider;
 class QCheckBox;
 class QToolButton;
 class QtReportChart;
+class QSystemTrayIcon;
+class QCloseEvent;
 
 class QtWindow : public QMainWindow {
 public:
     explicit QtWindow(QtWorkspace& workspace);
 private:
+    void closeEvent(QCloseEvent* event) override;
     bool reload();
     void render();
     void details();
@@ -145,5 +148,6 @@ private:
     int bannerIndex_ = 0;
     std::vector<AppLogEntry> appLogs_;
     bool appLogPersistenceWarning_ = false;
+    QSystemTrayIcon* trayIcon_ = nullptr;
     std::unordered_set<std::string> remindedDeadlineTaskIds_;
 };

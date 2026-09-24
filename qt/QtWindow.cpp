@@ -212,6 +212,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         ApplyQtDisplaySettings(*qApp, displaySettings_);
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
         dragHandle_->setVisible(!displaySettings_.decorated);
+        if (trayIcon_) trayIcon_->setVisible(displaySettings_.minimizeToTray);
         if (displaySettings_.fullscreen) showFullScreen(); else showNormal();
         render();
     });
@@ -225,6 +226,26 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             "Список перенесённых функций и ограничений находится в qt/README.md."));
     });
     menuButton->setMenu(menu);
+    if (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) {
+        trayIcon_ = new QSystemTrayIcon(style()->standardIcon(QStyle::SP_ComputerIcon), this);
+        trayIcon_->setToolTip(QString::fromUtf8("ForgeMirror · локальные напоминания"));
+        auto* trayMenu = new QMenu(this);
+        auto* openAction = trayMenu->addAction(QString::fromUtf8("Показать ForgeMirror"));
+        trayMenu->addSeparator();
+        auto* exitAction = trayMenu->addAction(QString::fromUtf8("Выход"));
+        trayIcon_->setContextMenu(trayMenu);
+        connect(openAction, &QAction::triggered, this, [this] {
+            if (displaySettings_.fullscreen) showFullScreen(); else showNormal();
+            raise(); activateWindow();
+        });
+        connect(trayIcon_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+            if (reason != QSystemTrayIcon::Trigger && reason != QSystemTrayIcon::DoubleClick) return;
+            if (displaySettings_.fullscreen) showFullScreen(); else showNormal();
+            raise(); activateWindow();
+        });
+        connect(exitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
+        trayIcon_->setVisible(displaySettings_.minimizeToTray);
+    }
     header->addWidget(menuButton);
     layout->addLayout(header);
     banner_ = new QLabel;
@@ -1785,8 +1806,21 @@ void QtWindow::showWalletHistory() {
     dialog.exec();
 }
 
+void QtWindow::closeEvent(QCloseEvent* event) {
+    if (displaySettings_.minimizeToTray && trayIcon_ && trayIcon_->isVisible()) {
+        event->ignore();
+        hide();
+        trayIcon_->showMessage(QString::fromUtf8("ForgeMirror работает в фоне"),
+            QString::fromUtf8("Напоминания о сроках продолжаются. Для полного выхода выберите «Выход» в меню значка."),
+            QSystemTrayIcon::Information, 5000);
+        return;
+    }
+    QMainWindow::closeEvent(event);
+}
+
 void QtWindow::checkDeadlineReminders() {
-    if (!isVisible()) return;
+    const bool background = !isVisible() && displaySettings_.minimizeToTray && trayIcon_ && trayIcon_->isVisible();
+    if (!isVisible() && !background) return;
     const auto now = QDateTime::currentSecsSinceEpoch();
     const auto limit = now + 24 * 60 * 60;
     const TaskEntry* nearest = nullptr;
@@ -1798,8 +1832,13 @@ void QtWindow::checkDeadlineReminders() {
     if (!nearest) return;
     remindedDeadlineTaskIds_.insert(nearest->id);
     const auto title = AppTaskDisplayTitle(*nearest);
-    statusBar()->showMessage(QString::fromUtf8("Срок задачи «%1» наступит %2.")
-        .arg(q(title), timeText(nearest->deadlineAt)), 10000);
+    const auto text = QString::fromUtf8("Срок задачи «%1» наступит %2.")
+        .arg(q(title), timeText(nearest->deadlineAt));
+    if (background) {
+        trayIcon_->showMessage(QString::fromUtf8("ForgeMirror · срок задачи"), text,
+            QSystemTrayIcon::Information, 10000);
+        appendLog(AppLogLevel::Info, "Reminder", u(text));
+    } else statusBar()->showMessage(text, 10000);
 }
 
 void QtWindow::exportReport() {

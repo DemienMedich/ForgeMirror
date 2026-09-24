@@ -1798,11 +1798,19 @@ static bool TestMonthlyCompletionTrend() {
 static bool TestDeadlineReminders() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
+    auto displaySettings = LoadQtDisplaySettings(workspace.directory);
+    displaySettings.minimizeToTray = trayAvailable;
+    if (!SaveQtDisplaySettings(workspace.directory, displaySettings)) return false;
     const auto now = QDateTime::currentSecsSinceEpoch();
     TaskEntry upcoming;
     upcoming.id = "deadline-upcoming";
     upcoming.title = u8"Проверить сборку";
     upcoming.deadlineAt = now + 2 * 60 * 60;
+    TaskEntry upcomingSecond;
+    upcomingSecond.id = "deadline-upcoming-second";
+    upcomingSecond.title = u8"Проверить релиз";
+    upcomingSecond.deadlineAt = now + 3 * 60 * 60;
     TaskEntry overdue;
     overdue.id = "deadline-overdue";
     overdue.title = "Old deadline";
@@ -1823,7 +1831,28 @@ static bool TestDeadlineReminders() {
     if (!first.contains(QString::fromUtf8("Проверить сборку")) || !first.contains(QString::fromUtf8("Срок задачи"))) return false;
     window.statusBar()->clearMessage();
     if (!QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
-    return window.statusBar()->currentMessage().isEmpty();
+    if (!window.statusBar()->currentMessage().isEmpty()) return false;
+    if (trayAvailable) {
+        auto* tray = window.findChild<QSystemTrayIcon*>();
+        if (!tray || !tray->isVisible()) return false;
+        workspace.data.tasks.push_back(upcomingSecond);
+        if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
+        window.close();
+        if (window.isVisible() || !QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
+        QFile log(temp.path() + "/meta/qt-application-log.json");
+        if (!log.open(QIODevice::ReadOnly)) return false;
+        const auto document = QJsonDocument::fromJson(log.readAll());
+        bool trayReminderLogged = false;
+        for (const auto& entry : document.array())
+            trayReminderLogged |= entry.toObject().value("message").toString().contains(QString::fromUtf8("Проверить релиз"));
+        if (!trayReminderLogged) return false;
+        auto* trayMenu = tray->contextMenu();
+        if (!trayMenu || trayMenu->actions().isEmpty()) return false;
+        trayMenu->actions().front()->trigger();
+        QApplication::processEvents();
+        if (!window.isVisible()) return false;
+    }
+    return true;
 }
 
 static bool TestBulkTaskEditsUi() {
@@ -2127,13 +2156,20 @@ static bool TestDisplaySettings(QApplication& app) {
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
+        auto* tray = dialog->findChild<QCheckBox*>("qtMinimizeToTray");
+        const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
+        if (!tray || tray->isEnabled() != trayAvailable) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        tray->setChecked(trayAvailable);
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS"); if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/display-settings.png");
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click(); saved = true;
     });
-    if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 || !settings.compactRows) return false;
+    if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 || !settings.compactRows ||
+        settings.minimizeToTray != (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
-    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows || loaded.auditSourceFilter != 2) return false;
+    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
+        loaded.auditSourceFilter != 2 || loaded.minimizeToTray !=
+            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     ApplyQtDisplaySettings(app, loaded); if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble()) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});
 #ifdef _WIN32
