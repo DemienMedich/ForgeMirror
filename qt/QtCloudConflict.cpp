@@ -4,6 +4,7 @@
 #include <QtWidgets>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <stdexcept>
 #ifdef _WIN32
 #define NOMINMAX
@@ -14,12 +15,14 @@ namespace {
 QString q(const std::filesystem::path& path) { return QString::fromStdWString(path.wstring()); }
 QString q(const std::string& text) { return QString::fromUtf8(text); }
 bool supported(const std::string& path) {
-    return path == "meta/tasks.json" || path == "meta/pipeline.json" || path == "meta/projects.json" || path == "meta/banner.json";
+    return path == "meta/tasks.json" || path == "meta/pipeline.json" || path == "meta/projects.json" ||
+        path == "meta/banner.json" || path == "meta/gameplay.ini";
 }
 QString objectName(const std::string& relative, const char* kind) {
     const auto stem = relative == "meta/tasks.json" ? QStringLiteral("tasks")
         : relative == "meta/pipeline.json" ? QStringLiteral("pipeline")
-        : relative == "meta/projects.json" ? QStringLiteral("projects") : QStringLiteral("banner");
+        : relative == "meta/projects.json" ? QStringLiteral("projects")
+        : relative == "meta/banner.json" ? QStringLiteral("banner") : QStringLiteral("gameplay");
     auto title = stem;
     title[0] = title[0].toUpper();
     const auto operation = QString::fromLatin1(kind);
@@ -79,6 +82,59 @@ bool validDocument(const QByteArray& bytes, QString& error) {
     return true;
 }
 
+bool validGameplayConfig(const QByteArray& bytes, QString& error) {
+    const auto text = QString::fromUtf8(bytes);
+    if (text.toUtf8() != bytes) {
+        error = QString::fromUtf8("Файл правил содержит некорректный UTF-8.");
+        return false;
+    }
+    const QSet<QString> levelingKeys{"base", "linear", "quadratic"};
+    const QSet<QString> categoryKeys{"e", "d", "c", "b", "a"};
+    const QSet<QString> floatKeys{"focus_base", "focus_bonus", "repeat_factor", "recovery_factor"};
+    const QRegularExpression integerPattern(QStringLiteral("^-?\\d+$"));
+    const QRegularExpression floatPattern(QStringLiteral("^-?\\d+(?:[.,]\\d+)?$"));
+    QString section;
+    int recognized = 0;
+    for (auto line : text.split('\n')) {
+        line = line.trimmed();
+        if (line.startsWith(QChar(0xFEFF))) line.remove(0, 1);
+        if (line.isEmpty() || line.startsWith('#') || line.startsWith(';')) continue;
+        if (line.startsWith('[') && line.endsWith(']')) {
+            section = line.mid(1, line.size() - 2);
+            continue;
+        }
+        const auto separator = line.indexOf('=');
+        if (separator < 0) continue;
+        const auto key = line.left(separator).trimmed().toLower();
+        const auto value = line.mid(separator + 1).trimmed();
+        const bool integer = (section == QStringLiteral("leveling") && levelingKeys.contains(key)) ||
+            (section == QStringLiteral("categories") && categoryKeys.contains(key)) ||
+            (section == QStringLiteral("rewards") && key == QStringLiteral("recovery_tasks"));
+        const bool decimal = section == QStringLiteral("rewards") && floatKeys.contains(key);
+        if (!integer && !decimal) continue;
+        if (integer ? !integerPattern.match(value).hasMatch() : !floatPattern.match(value).hasMatch()) {
+            error = QString::fromUtf8("Файл правил содержит некорректное числовое значение.");
+            return false;
+        }
+        bool converted = false;
+        const auto numeric = integer ? value.toLongLong(&converted) : value.toDouble(&converted);
+        if (!converted || (integer ? std::abs(double(numeric)) > 1000000000.0 : !std::isfinite(numeric) || std::abs(numeric) > 1000000000.0)) {
+            error = QString::fromUtf8("Числовое значение в файле правил выходит за допустимые пределы.");
+            return false;
+        }
+        ++recognized;
+    }
+    if (recognized == 0) {
+        error = QString::fromUtf8("В файле не найдено ни одного распознанного параметра правил.");
+        return false;
+    }
+    return true;
+}
+
+bool validSource(const QByteArray& bytes, const std::string& relative, QString& error) {
+    return relative == "meta/gameplay.ini" ? validGameplayConfig(bytes, error) : validDocument(bytes, error);
+}
+
 bool atomicWrite(const std::filesystem::path& path, const QByteArray& bytes, QString& error) {
     const QFileInfo info(q(path));
     if (!safePath(path.parent_path()) || info.isSymLink() || QFileInfo(info.absolutePath()).isSymLink()) { error = QString::fromUtf8("Запись через ссылку запрещена."); return false; }
@@ -96,10 +152,12 @@ std::filesystem::path backupPath(const std::filesystem::path& workspace, const s
     // Match CloudSync's public backup parser: punctuation is replaced before the extension is appended.
     const std::string stem = relative == "meta/tasks.json" ? "meta_tasks_json"
         : relative == "meta/pipeline.json" ? "meta_pipeline_json"
-        : relative == "meta/projects.json" ? "meta_projects_json" : "meta_banner_json";
+        : relative == "meta/projects.json" ? "meta_projects_json"
+        : relative == "meta/banner.json" ? "meta_banner_json" : "meta_gameplay_ini";
+    const auto extension = std::filesystem::u8path(relative).extension().string();
     auto stamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     std::filesystem::path candidate;
-    do candidate = dir / (stem + "." + kind + "." + std::to_string(stamp++) + ".json");
+    do candidate = dir / (stem + "." + kind + "." + std::to_string(stamp++) + extension);
     while (std::filesystem::exists(candidate));
     return candidate;
 }
@@ -108,6 +166,13 @@ QString preview(const std::filesystem::path& path, const std::string& relative) 
     std::error_code ec;
     if (!std::filesystem::is_regular_file(path, ec) || ec) return QString::fromUtf8("нет файла");
     try {
+        if (relative == "meta/gameplay.ini") {
+            QString error;
+            const auto bytes = readFile(path, error);
+            if (!error.isEmpty() || !validGameplayConfig(bytes, error))
+                return QString::fromUtf8("некорректный файл · %1 байт").arg(std::filesystem::file_size(path, ec));
+            return QString::fromUtf8("правила XP · %1 байт").arg(bytes.size());
+        }
         qsizetype count = 0;
         QString unit;
         if (relative == "meta/tasks.json") { count = qsizetype(LoadTasksDataFromFile(path).size()); unit = QString::fromUtf8("задач"); }
@@ -134,7 +199,8 @@ QString preview(const std::filesystem::path& path, const std::string& relative) 
 QString label(const std::string& relative) {
     return QString::fromUtf8(relative == "meta/tasks.json" ? "Задачи"
         : relative == "meta/pipeline.json" ? "Пайплайн"
-        : relative == "meta/projects.json" ? "Проекты" : "Баннер");
+        : relative == "meta/projects.json" ? "Проекты"
+        : relative == "meta/banner.json" ? "Баннер" : "Правила XP");
 }
 
 bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target, const QString& action) {
@@ -172,7 +238,7 @@ QtCloudConflictResult ApplyQtCloudWorkspaceFile(const std::filesystem::path& wor
     }
     QString error;
     const auto sourceBytes = readFile(source, error);
-    if (!error.isEmpty() || !validDocument(sourceBytes, error)) { result.message = error.toUtf8().toStdString(); return result; }
+    if (!error.isEmpty() || !validSource(sourceBytes, relative, error)) { result.message = error.toUtf8().toStdString(); return result; }
     const auto target = workspace / std::filesystem::u8path(relative);
     QByteArray targetBytes;
     if (std::filesystem::exists(target)) {
@@ -208,7 +274,7 @@ QtCloudConflictResult PushQtCloudWorkspaceFile(const std::filesystem::path& work
     const auto target = root / std::filesystem::u8path(relative);
     QString error;
     const auto sourceBytes = readFile(source, error);
-    if (!error.isEmpty() || !validDocument(sourceBytes, error)) { result.message = error.toUtf8().toStdString(); return result; }
+    if (!error.isEmpty() || !validSource(sourceBytes, relative, error)) { result.message = error.toUtf8().toStdString(); return result; }
     QByteArray targetBytes; const bool targetExisted = std::filesystem::exists(target);
     if (targetExisted) {
         targetBytes = readFile(target, error);
@@ -306,7 +372,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         tabs->addTab(page, label(relative));
     };
     addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json");
-    addFileTab("meta/projects.json"); addFileTab("meta/banner.json");
+    addFileTab("meta/projects.json"); addFileTab("meta/banner.json"); addFileTab("meta/gameplay.ini");
     auto* close = new QPushButton(QString::fromUtf8("Закрыть")); close->setMinimumWidth(120); close->setStyleSheet("min-height: 40px; max-height: 40px;"); layout->addWidget(close, 0, Qt::AlignRight);
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
     dialog.exec(); return changed;

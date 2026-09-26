@@ -582,9 +582,12 @@ static bool TestCloudConflictResolver() {
     const QByteArray remoteProjects = "[{\"id\":\"cloud-project\",\"name\":\"Cloud project\"}]";
     const QByteArray localBanner = "{\"items\":[\"Local phrase\"]}";
     const QByteArray remoteBanner = "{\"items\":[\"Cloud phrase\"]}";
+    const QByteArray localGameplay = "[leveling]\nbase=1500\nlinear=250\n";
+    const QByteArray remoteGameplay = "[leveling]\nbase=1800\nquadratic=75\n";
     if (!write(workspace / "meta/tasks.json", local) || !write(cloud / "meta/tasks.json", remote) ||
         !write(workspace / "meta/projects.json", localProjects) || !write(cloud / "meta/projects.json", remoteProjects) ||
         !write(workspace / "meta/banner.json", localBanner) || !write(cloud / "meta/banner.json", remoteBanner) ||
+        !write(workspace / "meta/gameplay.ini", localGameplay) || !write(cloud / "meta/gameplay.ini", remoteGameplay) ||
         !write(workspace / "meta/pipeline.json", "{\"steps\":[]}") || !write(cloud / "meta/pipeline.json", "{\"steps\":[]}")) return false;
     CloudSyncConfig config; config.enabled = true; config.root = cloud;
     if (!SaveCloudSyncConfig(workspace, config)) return false;
@@ -619,6 +622,12 @@ static bool TestCloudConflictResolver() {
         read(cloud / "meta/banner.json") != localBanner || read(pushedBanner.backupPath) != remoteBanner ||
         ListCloudWorkspaceBackups(workspace, "meta/banner.json").empty())
         return fail("push banner with cloud backup");
+    const auto pushedGameplay = PushQtCloudWorkspaceFile(workspace, "meta/gameplay.ini");
+    if (!pushedGameplay.ok || !pushedGameplay.changed || pushedGameplay.backupPath.empty() ||
+        read(cloud / "meta/gameplay.ini") != localGameplay || read(pushedGameplay.backupPath) != remoteGameplay ||
+        ListCloudWorkspaceBackups(workspace, "meta/gameplay.ini").empty() ||
+        pushedGameplay.backupPath.extension() != ".ini")
+        return fail("push gameplay config with cloud backup");
     CloudSyncConfig overlapConfig = config; overlapConfig.root = workspace;
     if (!SaveCloudSyncConfig(workspace, overlapConfig) || PushQtCloudWorkspaceFile(workspace, "meta/tasks.json").ok ||
         !SaveCloudSyncConfig(workspace, config)) return fail("push overlap guard");
@@ -635,6 +644,10 @@ static bool TestCloudConflictResolver() {
         PushQtCloudWorkspaceFile(workspace, "meta/banner.json").ok ||
         read(cloud / "meta/banner.json") != localBanner) return fail("malformed banner push");
     if (!write(workspace / "meta/banner.json", localBanner)) return false;
+    if (!write(workspace / "meta/gameplay.ini", "[leveling]\nbase=not-a-number\n") ||
+        PushQtCloudWorkspaceFile(workspace, "meta/gameplay.ini").ok ||
+        read(cloud / "meta/gameplay.ini") != localGameplay) return fail("malformed gameplay push");
+    if (!write(workspace / "meta/gameplay.ini", localGameplay)) return false;
     if (!write(cloud / "meta/tasks.json", "{broken")) return false;
     const auto malformed = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
     if (malformed.ok || read(workspace / "meta/tasks.json") != local) return fail("malformed source");
@@ -665,14 +678,20 @@ static bool TestCloudConflictResolver() {
         auto* projectsPush = dialog ? dialog->findChild<QPushButton*>("pushCloudProjects") : nullptr;
         auto* banner = dialog ? dialog->findChild<QTableWidget*>("bannerComparison") : nullptr;
         auto* bannerPush = dialog ? dialog->findChild<QPushButton*>("pushCloudBanner") : nullptr;
+        auto* gameplay = dialog ? dialog->findChild<QTableWidget*>("gameplayComparison") : nullptr;
+        auto* gameplayPush = dialog ? dialog->findChild<QPushButton*>("pushCloudGameplay") : nullptr;
         inspected = dialog && dialog->objectName() == "cloudConflictResolver" && table && table->rowCount() == 2 &&
             apply && apply->height() >= 40 && push && push->height() >= 40 && projects &&
             projects->rowCount() == 2 && projectsPush && projectsPush->isEnabled() && banner &&
-            banner->rowCount() == 2 && bannerPush && bannerPush->isEnabled();
+            banner->rowCount() == 2 && bannerPush && bannerPush->isEnabled() && gameplay &&
+            gameplay->rowCount() == 2 && gameplayPush && gameplayPush->isEnabled();
         if (!inspected) std::cerr << "cloudConflict inspect dialog=" << bool(dialog)
             << " name=" << (dialog ? dialog->objectName().toStdString() : "") << " table=" << bool(table)
             << " rows=" << (table ? table->rowCount() : -1) << " apply=" << bool(apply)
-            << " height=" << (apply ? apply->height() : -1) << '\n';
+            << " height=" << (apply ? apply->height() : -1) << " projects=" << bool(projects)
+            << " projectsPush=" << bool(projectsPush) << " banner=" << bool(banner)
+            << " bannerPush=" << bool(bannerPush) << " gameplay=" << bool(gameplay)
+            << " gameplayPush=" << bool(gameplayPush) << '\n';
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/cloud-conflict.png"); }
         QTimer::singleShot(0, [] {
@@ -744,6 +763,24 @@ static bool TestCloudConflictResolver() {
     const bool bannerChanged = ShowCloudConflictResolver(nullptr, workspace);
     if (!bannerChanged || !bannerPushConfirmed || read(cloud / "meta/banner.json") != bannerUpload)
         return fail("dialog banner push");
+    const QByteArray gameplayUpload = "[leveling]\nbase=2100\nlinear=300\n";
+    if (!write(workspace / "meta/gameplay.ini", gameplayUpload)) return false;
+    bool gameplayPushConfirmed = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudGameplay") : nullptr;
+        QTimer::singleShot(0, [&] {
+            if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                gameplayPushConfirmed = box->defaultButton() == box->button(QMessageBox::Cancel) &&
+                    box->text().contains(QString::fromUtf8("meta/gameplay.ini"));
+                box->button(QMessageBox::Yes)->click();
+            }
+        });
+        if (push) push->click();
+    });
+    const bool gameplayChanged = ShowCloudConflictResolver(nullptr, workspace);
+    if (!gameplayChanged || !gameplayPushConfirmed || read(cloud / "meta/gameplay.ini") != gameplayUpload)
+        return fail("dialog gameplay push");
     QtWorkspace uiWorkspace(workspace); QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
     auto* nav = window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(13);
     auto* route = window.findChild<QPushButton*>("cloudResolve");
