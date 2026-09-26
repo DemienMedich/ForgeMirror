@@ -143,7 +143,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
           (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && count >= 4 && count <= 30004) ||
           (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && (count == 2 || count == 3)) ||
-          (version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" && count == 2) ||
+          (version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
           (version == "FORGEMIRROR_QT_DIRECT_XP_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
@@ -154,6 +154,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         const bool professionFile = name == "meta/professions.txt" || name == "skills.txt";
         const bool profileFile = name.size() > 4 && name.substr(name.size() - 4) == ".ini";
         const bool rootProfileFile = profileFile && name.find('/') == std::string::npos;
+        const bool archivedProfileFile = name.rfind("archive/", 0) == 0 && name.size() > 12 &&
+            name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(8, name.size() - 12));
         const bool profileDeleteFile = profileFile || name.rfind("achievements/", 0) == 0;
         const bool skillMergeFile = name == "skills.txt" || name == "meta/tasks.json" ||
             name == "meta/task-audit.log" || name == "meta/updates/tasks.last-good.json" ||
@@ -169,7 +171,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             (walletMetadataFile && version != "FORGEMIRROR_QT_PROFILE_WALLET_1" &&
              !(name == "meta/profile-audit.log" && (version == "FORGEMIRROR_QT_DIRECT_XP_1" ||
                                                        version == "FORGEMIRROR_QT_PROFILE_AUDIT_1"))) ||
-            (version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" && name != "meta/profile-audit.log" && !rootProfileFile) ||
+            (version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" && name != "meta/profile-audit.log" &&
+             !rootProfileFile && !archivedProfileFile) ||
             (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         if (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && !profileFile)
@@ -222,8 +225,22 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     const bool profileWalletComplete = profileWalletTransaction && walletProfileFiles == 1 &&
         seen.count("meta/profile-audit.log") &&
         (seen.size() == 2 || (seen.size() == 3 && seen.count("meta/storage.json")));
-    const bool profileAuditComplete = profileAuditTransaction && walletProfileFiles == 1 && seen.size() == 2 &&
-        seen.count("meta/profile-audit.log");
+    std::string auditProfileId, archivedAuditProfileId;
+    size_t archivedAuditFiles = 0;
+    if (profileAuditTransaction) for (const auto& item : seen) {
+        if (item.size() > 4 && item.substr(item.size() - 4) == ".ini") {
+            if (item.rfind("archive/", 0) == 0) {
+                archivedAuditProfileId = item.substr(8, item.size() - 12);
+                ++archivedAuditFiles;
+            } else if (item.find('/') == std::string::npos) {
+                auditProfileId = item.substr(0, item.size() - 4);
+            }
+        }
+    }
+    const bool profileAuditComplete = profileAuditTransaction && walletProfileFiles == 1 &&
+        seen.count("meta/profile-audit.log") &&
+        ((seen.size() == 2 && archivedAuditFiles == 0) ||
+         (seen.size() == 3 && archivedAuditFiles == 1 && auditProfileId == archivedAuditProfileId));
     const bool commonComplete = directXpTransaction ? directXpComplete : profileAuditTransaction ? profileAuditComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : profileWalletTransaction ? profileWalletComplete : skillMergeTransaction ? skillMergeComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
@@ -301,6 +318,12 @@ void PrepareProfileAuditRecovery(const std::filesystem::path& directory, const s
     if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для журнала аудита.");
     prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_AUDIT_1",
         {profileId + ".ini", "meta/profile-audit.log"});
+}
+
+void PrepareProfileArchiveAuditRecovery(const std::filesystem::path& directory, const std::string& profileId) {
+    if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для журнала архива.");
+    prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_AUDIT_1",
+        {profileId + ".ini", "archive/" + profileId + ".ini", "meta/profile-audit.log"});
 }
 
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
@@ -413,6 +436,61 @@ AppProfileMutationResult SaveProfileSnapshotWithAuditRecovery(AppContext& app,
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
         }
         if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
+    }
+    return result;
+}
+
+AppProfileMutationResult ChangeProfilePasswordWithAuditRecovery(AppContext& app,
+    const std::string& restoreProfileId, const std::string& profileId,
+    const std::string& currentPassword, const std::string& newPassword,
+    bool requireCurrentPassword, const std::string& action) {
+    AppProfileMutationResult result;
+    try {
+        PrepareProfileAuditRecovery(app.storageDir, profileId);
+        result = AppChangeProfilePassword(app.storage, restoreProfileId, profileId,
+            currentPassword, newPassword, requireCurrentPassword);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось изменить пароль." : result.errorMessage);
+        if (result.changed && !AppendProfileAudit(app.storageDir, profileId, action))
+            throw std::runtime_error(u8"Не удалось записать аудит пароля; изменение отменено.");
+        CommitQtRecoveryTransaction(app.storageDir);
+    } catch (const std::exception& error) {
+        result.ok = false; result.changed = false; result.affectedProfiles = 0;
+        result.profile.reset(); result.errorMessage = error.what();
+        try {
+            if (std::filesystem::exists(journalPath(app.storageDir))) {
+                RecoverTaskCompletion(app.storageDir);
+                result.errorMessage += u8" Изменения полностью отменены.";
+            }
+        } catch (const std::exception&) {
+            result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
+        }
+        if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
+    }
+    return result;
+}
+
+AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
+    const std::filesystem::path& directory, const std::string& restoreProfileId,
+    const std::string& profileId, bool archived) {
+    AppProfileActionResult result;
+    try {
+        PrepareProfileArchiveAuditRecovery(directory, profileId);
+        result = AppSetProfileArchived(storage, profileId, archived);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось изменить состояние архива." : result.errorMessage);
+        if (result.changed && !AppendProfileAudit(directory, profileId, archived ? "archive" : "restore"))
+            throw std::runtime_error(u8"Не удалось записать аудит архива; изменение отменено.");
+        CommitQtRecoveryTransaction(directory);
+    } catch (const std::exception& error) {
+        result.ok = false; result.changed = false; result.errorMessage = error.what();
+        try {
+            if (std::filesystem::exists(journalPath(directory))) {
+                RecoverTaskCompletion(directory);
+                result.errorMessage += u8" Изменения полностью отменены.";
+            }
+        } catch (const std::exception&) {
+            result.errorMessage += u8" Восстановление не завершено; журнал сохранён для восстановления при запуске.";
+        }
+        if (!restoreProfileId.empty()) storage.set_active_profile(restoreProfileId);
     }
     return result;
 }

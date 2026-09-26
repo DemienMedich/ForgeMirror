@@ -51,6 +51,8 @@ void PrepareProfileWalletRecovery(const std::filesystem::path& directory,
                                  const std::string& profileId, bool includeStorageVault = false);
 void PrepareProfileAuditRecovery(const std::filesystem::path& directory,
                                  const std::string& profileId);
+void PrepareProfileArchiveAuditRecovery(const std::filesystem::path& directory,
+                                       const std::string& profileId);
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
                                  const std::vector<std::pair<std::string, bool>>& profiles);
 void PrepareDirectXpRecovery(const std::filesystem::path& directory,
@@ -64,6 +66,13 @@ AppProfileMutationResult GrantDirectSkillXpWithRecovery(AppContext& app,
 AppProfileMutationResult SaveProfileSnapshotWithAuditRecovery(AppContext& app,
     const std::string& restoreProfileId, const std::string& profileId,
     const Profile& profile, const std::string& action, const std::string& details);
+AppProfileMutationResult ChangeProfilePasswordWithAuditRecovery(AppContext& app,
+    const std::string& restoreProfileId, const std::string& profileId,
+    const std::string& currentPassword, const std::string& newPassword,
+    bool requireCurrentPassword, const std::string& action);
+AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
+    const std::filesystem::path& directory, const std::string& restoreProfileId,
+    const std::string& profileId, bool archived);
 
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,

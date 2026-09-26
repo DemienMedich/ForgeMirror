@@ -167,6 +167,7 @@ QString profileAuditActionLabel(const std::string& action) {
         {"create", QString::fromUtf8("Создание профиля")}, {"unlock", QString::fromUtf8("Вход в профиль")},
         {"trusted_unlock", QString::fromUtf8("Вход по доверенному устройству")}, {"lock", QString::fromUtf8("Выход из профиля")},
         {"password_change", QString::fromUtf8("Смена пароля")}, {"password_reset", QString::fromUtf8("Сброс пароля")},
+        {"archive", QString::fromUtf8("Архивация профиля")}, {"restore", QString::fromUtf8("Восстановление профиля")},
         {"block", QString::fromUtf8("Блокировка профиля")}, {"unblock", QString::fromUtf8("Снятие блокировки")},
         {"wallet_adjustment", QString::fromUtf8("Изменение кошелька")},
         {"direct_xp", QString::fromUtf8("Ручное начисление XP")},
@@ -256,7 +257,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         }
         if (ShowProfilePasswordDialog(this, workspace_, id, id, false)) {
             const bool forgotten = profileSession_.lock(true);
-            AppendProfileAudit(workspace_.directory, u(id), "password_change");
             if (!forgotten) message(u8"Пароль изменён, но запись доверия удалить не удалось. Она может восстановить доступ после обновления.");
         }
         render();

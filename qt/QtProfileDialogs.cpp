@@ -65,7 +65,9 @@ bool ShowProfilePasswordDialog(QWidget* parent, QtWorkspace& workspace, const QS
             error->setText(QString::fromUtf8("Профиль заблокирован или не имеет пароля. Обратитесь к администратору."));
             return;
         }
-        auto result = AppChangeProfilePassword(storage, u(activeId), u(profileId), u(current->text()), u(next->text()), !adminReset);
+        AppContext context{workspace.directory, storage, workspace.catalog};
+        auto result = ChangeProfilePasswordWithAuditRecovery(context, u(activeId), u(profileId),
+            u(current->text()), u(next->text()), !adminReset, adminReset ? "password_reset" : "password_change");
         if (!result.ok) { error->setText(q(result.errorMessage)); return; }
         dialog.accept();
     });
@@ -215,7 +217,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
                 QString::fromUtf8("Активных задач: %1. Профиль и история сохранятся, но начисление XP будет недоступно до восстановления.").arg(activeTasks),
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
         }
-        const auto result = AppSetProfileArchived(*workspace.storage, info->id, !info->archived);
+        const auto result = ArchiveProfileWithAuditRecovery(*workspace.storage, workspace.directory,
+            u(activeId), info->id, !info->archived);
         status->setText(result.ok ? QString::fromUtf8("Состояние архива сохранено.") : q(result.errorMessage));
         refresh();
     });

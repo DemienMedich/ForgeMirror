@@ -986,6 +986,12 @@ static bool TestProfileDialogs() {
     workspace.reload();
     if (readProfileFile(id + ".ini") != originalProfileBytes || readProfileFile("meta/profile-audit.log") != originalAuditBytes)
         return false;
+    PrepareProfileArchiveAuditRecovery(workspace.directory, created->id);
+    if (!workspace.storage->set_archived(created->id, true) ||
+        !AppendProfileAudit(workspace.directory, created->id, "archive")) return false;
+    workspace.reload();
+    if (readProfileFile(id + ".ini") != originalProfileBytes || readProfileFile("meta/profile-audit.log") != originalAuditBytes ||
+        std::filesystem::exists(workspace.directory / "archive" / (created->id + ".ini"))) return false;
     workspace.data.professions.push_back({"artist", "Artist", "3D"});
     auto delegate = std::move(workspace.storage);
     auto wrapper = std::make_unique<FailingProfileStorage>(*delegate);
@@ -1054,6 +1060,17 @@ static bool TestProfileDialogs() {
             edited->password_encoded() == original.password_encoded() && edited->list_skills().size() == 1;
         checks &= readProfileFile("meta/profile-audit.log").contains("|profile_edit|name,profession,spirit,blocked");
         auto* archive = manager->findChild<QPushButton*>("archiveProfile");
+        const auto beforeArchiveProfile = readProfileFile(id + ".ini");
+        const auto beforeArchiveAudit = readProfileFile("meta/profile-audit.log");
+        AppSetProfileAuditFailureHookForTests(true);
+        QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+        archive->click();
+        AppSetProfileAuditFailureHookForTests(false);
+        delegate->set_active_profile(created->id);
+        checks &= readProfileFile(id + ".ini") == beforeArchiveProfile &&
+            !std::filesystem::exists(workspace.directory / "archive" / (created->id + ".ini")) &&
+            readProfileFile("meta/profile-audit.log") == beforeArchiveAudit &&
+            !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
         QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::No)->click(); });
         archive->click();
         checks &= delegate->set_active_profile(created->id);
@@ -1069,12 +1086,22 @@ static bool TestProfileDialogs() {
         QTimer::singleShot(0, [&] {
             auto* password = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!password) { checks = false; return; }
+            const auto oldPassword = DecodePassword(delegate->load_profile()->password_encoded());
+            const auto oldProfileBytes = readProfileFile(id + ".ini");
+            const auto oldAuditBytes = readProfileFile("meta/profile-audit.log");
             password->findChild<QLineEdit*>("newPassword")->setText("reset-password");
             password->findChild<QLineEdit*>("confirmPassword")->setText("different");
             auto* save = password->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
             save->click();
             checks &= !password->findChild<QLabel*>("profileNotice")->text().isEmpty();
             password->findChild<QLineEdit*>("confirmPassword")->setText("reset-password");
+            AppSetProfileAuditFailureHookForTests(true);
+            save->click();
+            AppSetProfileAuditFailureHookForTests(false);
+            checks &= DecodePassword(delegate->load_profile()->password_encoded()) == oldPassword &&
+                readProfileFile(id + ".ini") == oldProfileBytes &&
+                readProfileFile("meta/profile-audit.log") == oldAuditBytes &&
+                !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
             save->click();
         });
         manager->findChild<QPushButton*>("resetProfilePassword")->click();
