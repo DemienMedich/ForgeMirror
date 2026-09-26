@@ -2833,6 +2833,59 @@ static bool TestQtTaskAssigneeProfileFilter() {
     return restored && restored->currentData().toString() == QString::fromStdString(participant->id);
 }
 
+static bool TestQtVisibleTaskExports() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    TaskEntry visible; visible.id = "visible-task"; visible.title = "Visible, \"quoted\" task";
+    visible.description = "first line\nsecond line"; visible.createdAt = QDateTime::currentSecsSinceEpoch(); visible.score = 8;
+    TaskEntry hidden; hidden.id = "hidden-task"; hidden.title = "Hidden unrelated task";
+    workspace.data.tasks = {visible, hidden};
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* search = window.findChild<QLineEdit*>("search");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* exportButton = window.findChild<QToolButton*>("exportTasks");
+    auto* csvAction = window.findChild<QAction*>("exportTasksCsv");
+    auto* txtAction = window.findChild<QAction*>("exportTasksTxt");
+    if (!navigation || !search || !table || !exportButton || !csvAction || !txtAction) return false;
+    navigation->setCurrentRow(1);
+    if (!exportButton->isVisible() || table->rowCount() != 2) return false;
+    search->setText(QString::fromUtf8("visible"));
+    if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != "visible-task") return false;
+    const auto csvPath = temp.path() + "/visible-tasks.csv";
+    QTimer::singleShot(0, [csvPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(csvPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    csvAction->trigger();
+    QFile csv(csvPath);
+    if (!csv.open(QIODevice::ReadOnly)) return false;
+    const auto csvBytes = csv.readAll();
+    const auto csvText = QString::fromUtf8(csvBytes.mid(3));
+    if (!csvBytes.startsWith("\xEF\xBB\xBF") || !csvText.contains("\"Visible, \"\"quoted\"\" task\"") ||
+        !csvText.contains("\"first line\nsecond line\"") || csvText.contains("Hidden unrelated task") ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Экспортировано видимых задач: 1"))) return false;
+    const auto txtPath = temp.path() + "/visible-tasks.txt";
+    QTimer::singleShot(0, [txtPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(txtPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    txtAction->trigger();
+    QFile txt(txtPath);
+    if (!txt.open(QIODevice::ReadOnly)) return false;
+    const auto txtBytes = txt.readAll();
+    return txtBytes.startsWith("\xEF\xBB\xBF") && txtBytes.contains("Visible, \"quoted\" task") &&
+        txtBytes.contains("first line second line") && !txtBytes.contains("Hidden unrelated task");
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3252,6 +3305,7 @@ int main(int argc, char** argv) {
     if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }
     if (!TestQtTaskCreationRangeAndSorting()) { std::cerr << "Qt task creation range and sorting failed\n"; return 1; }
     if (!TestQtTaskAssigneeProfileFilter()) { std::cerr << "Qt task assignee profile filter failed\n"; return 1; }
+    if (!TestQtVisibleTaskExports()) { std::cerr << "Qt visible task export failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }

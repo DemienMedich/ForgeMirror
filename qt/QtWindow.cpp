@@ -731,6 +731,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     exportReport_->setObjectName("exportReport");
     exportReport_->setToolTip(QString::fromUtf8("Сохранить текущий локальный управленческий отчёт в UTF-8 CSV"));
     bottom->addWidget(exportReport_);
+    exportTasks_ = new QToolButton;
+    exportTasks_->setObjectName("exportTasks");
+    exportTasks_->setText(QString::fromUtf8("Экспорт задач"));
+    exportTasks_->setToolTip(QString::fromUtf8("Сохранить строки задач, видимые с текущими фильтрами и поиском"));
+    exportTasks_->setPopupMode(QToolButton::InstantPopup);
+    auto* taskExportMenu = new QMenu(exportTasks_);
+    auto* taskCsvAction = taskExportMenu->addAction(QString::fromUtf8("В CSV…"));
+    taskCsvAction->setObjectName("exportTasksCsv");
+    auto* taskTxtAction = taskExportMenu->addAction(QString::fromUtf8("В TXT…"));
+    taskTxtAction->setObjectName("exportTasksTxt");
+    exportTasks_->setMenu(taskExportMenu);
+    bottom->addWidget(exportTasks_);
     exportAudit_ = new QPushButton(QString::fromUtf8("Экспорт аудита"));
     exportAudit_->setObjectName("exportAudit");
     exportAudit_->setToolTip(QString::fromUtf8("Сохранить видимые после поиска события аудита в UTF-8 CSV"));
@@ -964,6 +976,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(bulkEdit_, &QPushButton::clicked, this, [this] { bulkEditTasks(); });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
+    connect(taskCsvAction, &QAction::triggered, this, [this] { exportTasks(false); });
+    connect(taskTxtAction, &QAction::triggered, this, [this] { exportTasks(true); });
     connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
     connect(exportLogs_, &QPushButton::clicked, this, [this] { exportLogs(); });
     connect(clearLogs_, &QPushButton::clicked, this, [this] {
@@ -1481,6 +1495,7 @@ void QtWindow::render() {
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && page == Statistics);
+    exportTasks_->setVisible(page == Tasks);
     exportAudit_->setVisible(page == Audit);
     exportLogs_->setVisible(page == Logs);
     clearLogs_->setVisible(page == Logs);
@@ -2427,6 +2442,101 @@ void QtWindow::exportAudit() {
     }
     statusBar()->showMessage(QString::fromUtf8("Экспортировано событий: %1 · %2")
         .arg(rows.size()).arg(QDir::toNativeSeparators(path)), 7000);
+}
+
+void QtWindow::exportTasks(bool textFormat) {
+    if (navigation_->currentRow() != Tasks) return;
+    QVector<const TaskEntry*> visibleTasks;
+    visibleTasks.reserve(table_->rowCount());
+    for (int index = 0; index < table_->rowCount(); ++index) {
+        const auto id = u(table_->item(index, 0)->data(Qt::UserRole).toString());
+        const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+            [&id](const auto& candidate) { return candidate.id == id; });
+        if (task != workspace_.data.tasks.end()) visibleTasks.push_back(&*task);
+    }
+    if (visibleTasks.isEmpty()) {
+        statusBar()->showMessage(QString::fromUtf8("Нет видимых задач для экспорта."), 5000);
+        return;
+    }
+    const auto reportsDirectory = workspace_.directory / "meta" / "reports";
+    std::error_code ec;
+    std::filesystem::create_directories(reportsDirectory, ec);
+    if (ec) { message("Не удалось создать каталог экспорта задач: " + ec.message()); return; }
+    const QString suffix = textFormat ? QStringLiteral("txt") : QStringLiteral("csv");
+    const auto filename = std::filesystem::u8path("tasks-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss").toStdString() + "." + suffix.toStdString());
+    const auto suggestedPath = reportsDirectory / filename;
+    const auto suggestedUtf8 = suggestedPath.u8string();
+    const QString suggested = QString::fromUtf8(reinterpret_cast<const char*>(suggestedUtf8.data()), int(suggestedUtf8.size()));
+    QFileDialog dialog(this, QString::fromUtf8("Экспорт видимых задач"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter(textFormat ? QString::fromUtf8("Текстовые файлы (*.txt)") : QString::fromUtf8("CSV-файлы (*.csv)"));
+    dialog.setDefaultSuffix(suffix);
+    dialog.selectFile(suggested);
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    auto path = dialog.selectedFiles().front();
+    if (!path.endsWith(QLatin1Char('.') + suffix, Qt::CaseInsensitive)) path += QLatin1Char('.') + suffix;
+
+    auto csvCell = [](QString value) {
+        value.replace(QLatin1Char('"'), QStringLiteral("\"\""));
+        if (value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r'))
+            value = QLatin1Char('"') + value + QLatin1Char('"');
+        return value;
+    };
+    auto timestamp = [](std::int64_t value) {
+        return value > 0 ? QDateTime::fromSecsSinceEpoch(value).toString("yyyy-MM-dd HH:mm") : QStringLiteral("-");
+    };
+    auto participantLabels = [this](const TaskEntry& task) {
+        QStringList labels;
+        for (const auto& participant : task.participants) {
+            const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(), [&](const auto& item) { return item.id == participant.profileId; });
+            QString label = profile == workspace_.profiles.end() ? q(participant.profileId) : q(profile->name);
+            if (participant.percent > 0) label += QStringLiteral(" %1%").arg(participant.percent);
+            labels << label;
+        }
+        if (labels.isEmpty()) for (const auto& id : task.assignees) {
+            const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(), [&](const auto& item) { return item.id == id; });
+            labels << (profile == workspace_.profiles.end() ? q(id) : q(profile->name));
+        }
+        return labels.join(QStringLiteral(", "));
+    };
+    QByteArray bytes("\xEF\xBB\xBF", 3);
+    if (!textFormat) bytes += "Date,Deadline,Project,PipelineStep,Task,Description,Status,Priority,Category,Score,Participants,BaseXP,BasePool\n";
+    else bytes += QString::fromUtf8("Выполненные задачи\n").toUtf8();
+    for (const auto* task : visibleTasks) {
+        const auto project = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(), [&](const auto& item) { return !task->projectId.empty() && item.id == task->projectId; });
+        const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(), [&](const auto& item) { return !task->pipelineStepId.empty() && item.id == task->pipelineStepId; });
+        const QString projectName = project == workspace_.data.projects.end() ? q(task->project) : q(project->name);
+        const QString stageName = step == workspace_.data.pipelineSteps.end() ? q(task->pipelineStep) : q(step->title);
+        const QString created = timestamp(task->createdAt);
+        const QString deadline = task->deadlineAt > 0 ? timestamp(task->deadlineAt) : QString::fromUtf8("без дедлайна");
+        const QString participants = participantLabels(*task);
+        const QString category = QString::fromUtf8(Profile::kCategoryLabels[std::clamp(task->category, 0, 4)]);
+        if (!textFormat) {
+            const QStringList fields{created, task->deadlineAt > 0 ? timestamp(task->deadlineAt) : QString(), projectName,
+                stageName, q(task->title), q(task->description), q(AppTaskStatusLabel(task->status)),
+                q(AppTaskPriorityLabel(task->priority)), category, QString::number(task->score), participants,
+                QString::number(task->baseXp), QString::number(task->basePool)};
+            QStringList escaped;
+            for (const auto& field : fields) escaped << csvCell(field);
+            bytes += (escaped.join(',') + QLatin1Char('\n')).toUtf8();
+        } else {
+            auto clean = [](QString value) { return value.replace('\r', ' ').replace('\n', ' ').replace('|', '/'); };
+            const QStringList fields{created, deadline, projectName, stageName, q(task->title),
+                q(AppTaskStatusLabel(task->status)), q(AppTaskPriorityLabel(task->priority)), category,
+                QString::number(task->score) + QStringLiteral("/10"), participants};
+            bytes += (QStringLiteral("- ") + fields.join(QStringLiteral(" | ")).replace('\r', ' ').replace('\n', ' ') + QLatin1Char('\n')).toUtf8();
+            if (!task->description.empty()) bytes += (QStringLiteral("  ") + clean(q(task->description)) + QLatin1Char('\n')).toUtf8();
+        }
+    }
+    QSaveFile output(path);
+    if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+        message("Не удалось атомарно сохранить экспорт задач: " + output.errorString().toStdString());
+        return;
+    }
+    statusBar()->showMessage(QString::fromUtf8("Экспортировано видимых задач: %1 · %2")
+        .arg(visibleTasks.size()).arg(QDir::toNativeSeparators(path)), 7000);
 }
 
 void QtWindow::exportLogs() {

@@ -43,6 +43,7 @@ private:
     void changeStatus();
     void bulkEditTasks();
     void exportReport();
+    void exportTasks(bool textFormat);
     void exportAudit();
     void exportLogs();
     void reapplyRules();
@@ -142,6 +143,7 @@ private:
     QPushButton* achievements_;
     QPushButton* removeSpirit_;
     QPushButton* exportReport_;
+    QToolButton* exportTasks_;
     QPushButton* exportAudit_;
     QPushButton* exportLogs_;
     QPushButton* clearLogs_;

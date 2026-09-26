@@ -185,6 +185,10 @@ The Qt Tasks page now filters by creation age (`all`, 7, 30, 90 or 365 days) and
 
 The Qt Tasks page can now filter by any profile, matching the legacy profile filter. A task matches when the selected profile appears among its assignees or XP participants. The stable profile ID is stored as `taskAssigneeProfileId`; if that profile no longer exists, the filter returns to **Все профили**. `smoke_qt` covers assignee and participant matching, exclusion of unrelated tasks, and persisted selection. The stable ImGui implementation is unchanged.
 
+### Visible task export (stage 111, implementation checkpoint)
+
+The Tasks page now exports visible rows to UTF-8 CSV or TXT. Export reads the rendered table, so status, priority, profile, project, pipeline, age, quick filters and search all apply; hidden rows are not included. CSV quotes commas, quotes and multiline values and includes task, deadline, project, stage, XP participant and scoring fields. Both formats have a UTF-8 BOM and use `QSaveFile` for atomic replacement. `smoke_qt` drives both real save dialogs, checks escaping and confirms search-hidden rows are excluded. The stable ImGui implementation is unchanged.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.
