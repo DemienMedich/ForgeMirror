@@ -2047,7 +2047,15 @@ static bool TestPersonalWallet() {
     workspace.data.vault.pomodoroMinMinutes = 20;
     workspace.data.vault.pomodoroCoinsPerCycle = 1;
     if (!SaveStorageVault(workspace.directory, workspace.data.vault)) return false;
-    workspace.data.vault = LoadStorageVault(workspace.directory);
+    TaskEntry awardedHistory; awardedHistory.id = "history-awarded"; awardedHistory.title = "Awarded task";
+    awardedHistory.project = "History project"; awardedHistory.createdAt = QDateTime::currentSecsSinceEpoch() - 3600;
+    awardedHistory.status = 2; awardedHistory.assignees = {created->id};
+    awardedHistory.participants.push_back({created->id, 40, 17, 8, {}});
+    TaskEntry pendingHistory; pendingHistory.id = "history-pending"; pendingHistory.title = "Pending task";
+    pendingHistory.createdAt = QDateTime::currentSecsSinceEpoch() - 1800; pendingHistory.status = 2;
+    pendingHistory.assignees = {created->id};
+    if (!AppSaveTasks(workspace.directory, {awardedHistory, pendingHistory})) return false;
+    workspace.reload();
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     auto* remove = window.findChild<QPushButton*>("removeEvilSpirit");
     auto* history = window.findChild<QPushButton*>("profileWalletHistory");
@@ -2119,7 +2127,28 @@ static bool TestPersonalWallet() {
         }
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/profile-activity-history.png"); }
-        if (foundWallet && foundPassword && foundUnknown && foundSpirit) dialog->accept();
+        auto* tabs = dialog ? dialog->findChild<QTabWidget*>("profileHistoryTabs") : nullptr;
+        auto* taskTable = dialog ? dialog->findChild<QTableWidget*>("profileTaskXpHistoryTable") : nullptr;
+        auto* taskFilter = dialog ? dialog->findChild<QLineEdit*>("profileTaskXpHistoryFilter") : nullptr;
+        auto* taskSummary = dialog ? dialog->findChild<QLabel*>("profileTaskXpHistorySummary") : nullptr;
+        bool foundAwarded = false, foundPending = false;
+        if (tabs && taskTable && taskFilter && taskSummary) {
+            tabs->setCurrentIndex(1);
+            if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/profile-task-xp-history.png");
+            for (int row = 0; row < taskTable->rowCount(); ++row) {
+                if (taskTable->item(row, 2)->text().contains(QString::fromUtf8("Awarded task")))
+                    foundAwarded = taskTable->item(row, 5)->text() == "17" && taskTable->item(row, 6)->text() == "8";
+                if (taskTable->item(row, 2)->text().contains(QString::fromUtf8("Pending task")))
+                    foundPending = taskTable->item(row, 3)->text().contains(QString::fromUtf8("ждёт XP")) &&
+                        taskTable->item(row, 5)->text() == QString::fromUtf8("—");
+            }
+            taskFilter->setText(QString::fromUtf8("Awarded"));
+            const bool filters = taskTable->rowCount() == 1;
+            taskFilter->clear();
+            foundAwarded = foundAwarded && filters && taskTable->rowCount() == 2;
+            foundAwarded = foundAwarded && taskSummary->text().contains("17") && taskSummary->text().contains("8");
+        }
+        if (foundWallet && foundPassword && foundUnknown && foundSpirit && foundAwarded && foundPending) dialog->accept();
     });
     profileHistory->click();
     return true;
@@ -3572,5 +3601,3 @@ int main(int argc, char** argv) {
     std::cout << "smoke_qt: OK\n";
     return 0;
 }
-
-\n

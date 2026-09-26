@@ -1900,14 +1900,20 @@ void QtWindow::showProfileHistory() {
 
     QDialog dialog(this);
     dialog.setObjectName("profileActivityHistoryDialog");
-    dialog.setWindowTitle(QString::fromUtf8("История событий профиля"));
+    dialog.setWindowTitle(QString::fromUtf8("История профиля"));
     dialog.resize(820, 460);
     auto* layout = new QVBoxLayout(&dialog);
+    auto* tabs = new QTabWidget(&dialog);
+    tabs->setObjectName("profileHistoryTabs");
+    layout->addWidget(tabs, 1);
+
+    auto* eventsPage = new QWidget(tabs);
+    auto* eventsLayout = new QVBoxLayout(eventsPage);
     auto* summary = new QLabel(QString::fromUtf8("Локальные события входа, управления профилем и кошельком · читаются последние 500 событий аудита по рабочему пространству. История задач и XP ведётся отдельно."));
     summary->setObjectName("profileActivityHistorySummary");
     summary->setWordWrap(true);
-    layout->addWidget(summary);
-    auto* table = new QTableWidget(&dialog);
+    eventsLayout->addWidget(summary);
+    auto* table = new QTableWidget(eventsPage);
     table->setObjectName("profileActivityHistoryTable");
     table->setColumnCount(3);
     table->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Событие"), QString::fromUtf8("Детали")});
@@ -1937,7 +1943,89 @@ void QtWindow::showProfileHistory() {
     table->setColumnWidth(0, 142);
     table->setColumnWidth(1, 210);
     table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    layout->addWidget(table, 1);
+    eventsLayout->addWidget(table, 1);
+    tabs->addTab(eventsPage, QString::fromUtf8("События профиля"));
+
+    auto* tasksPage = new QWidget(tabs);
+    auto* tasksLayout = new QVBoxLayout(tasksPage);
+    auto* taskSummary = new QLabel(tasksPage);
+    taskSummary->setObjectName("profileTaskXpHistorySummary");
+    taskSummary->setWordWrap(true);
+    tasksLayout->addWidget(taskSummary);
+    auto* taskFilter = new QLineEdit(tasksPage);
+    taskFilter->setObjectName("profileTaskXpHistoryFilter");
+    taskFilter->setClearButtonEnabled(true);
+    taskFilter->setPlaceholderText(QString::fromUtf8("Фильтр по задаче или проекту"));
+    tasksLayout->addWidget(taskFilter);
+    auto* taskTable = new QTableWidget(tasksPage);
+    taskTable->setObjectName("profileTaskXpHistoryTable");
+    taskTable->setColumnCount(7);
+    taskTable->setHorizontalHeaderLabels({QString::fromUtf8("Дата задачи"), QString::fromUtf8("Проект"),
+        QString::fromUtf8("Задача"), QString::fromUtf8("Статус"), QString::fromUtf8("Участие"),
+        QString::fromUtf8("Общий XP"), QString::fromUtf8("XP навыков")});
+    taskTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    taskTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    taskTable->setAlternatingRowColors(true);
+    taskTable->setShowGrid(false);
+    taskTable->setWordWrap(false);
+    taskTable->verticalHeader()->hide();
+    taskTable->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    taskTable->horizontalHeader()->setStretchLastSection(false);
+    struct ProfileTaskRow { std::int64_t createdAt; QStringList values; bool pending; };
+    std::vector<ProfileTaskRow> taskRows;
+    for (const auto& task : workspace_.data.tasks) {
+        const auto participant = std::find_if(task.participants.begin(), task.participants.end(),
+            [&](const auto& item) { return item.profileId == profileId; });
+        const bool assigned = std::find(task.assignees.begin(), task.assignees.end(), profileId) != task.assignees.end();
+        const bool hasRecordedXp = std::any_of(task.participants.begin(), task.participants.end(),
+            [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
+        const bool awaitingXp = AppNormalizeTaskStatus(task.status) == 2 && !hasRecordedXp && assigned;
+        if (participant == task.participants.end() && !awaitingXp) continue;
+        const auto project = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+            [&](const auto& item) { return !task.projectId.empty() && item.id == task.projectId; });
+        const QString projectName = project == workspace_.data.projects.end() ? q(task.project) : q(project->name);
+        const QString taskTitle = q(AppTaskDisplayTitle(task));
+        const QString status = awaitingXp ? QString::fromUtf8("Выполнена · ждёт XP") : q(AppTaskStatusLabel(task.status));
+        taskRows.push_back({task.createdAt, {timeText(task.createdAt), projectName.isEmpty() ? QString::fromUtf8("—") : projectName,
+            taskTitle.isEmpty() ? QString::fromUtf8("Без названия") : taskTitle, status,
+            participant == task.participants.end() ? QString::fromUtf8("Ожидает") : QString::fromUtf8("%1%").arg(participant->percent),
+            participant == task.participants.end() ? QString::fromUtf8("—") : QString::number(participant->globalXp),
+            participant == task.participants.end() ? QString::fromUtf8("—") : QString::number(participant->skillXp)}, awaitingXp});
+    }
+    std::stable_sort(taskRows.begin(), taskRows.end(), [](const auto& left, const auto& right) {
+        return left.createdAt > right.createdAt;
+    });
+    auto renderTaskHistory = [taskRows, taskTable, taskFilter, taskSummary] {
+        taskTable->setRowCount(0);
+        int totalGlobalXp = 0, totalSkillXp = 0, pendingCount = 0;
+        for (const auto& entry : taskRows) {
+            if (!taskFilter->text().trimmed().isEmpty() &&
+                !(entry.values[1] + QLatin1Char(' ') + entry.values[2]).contains(taskFilter->text().trimmed(), Qt::CaseInsensitive)) continue;
+            const int row = taskTable->rowCount();
+            taskTable->insertRow(row);
+            for (int column = 0; column < entry.values.size(); ++column) {
+                auto* item = new QTableWidgetItem(entry.values[column]);
+                item->setToolTip(entry.values[column]);
+                taskTable->setItem(row, column, item);
+            }
+            if (entry.pending) { ++pendingCount; continue; }
+            totalGlobalXp += entry.values[5].toInt();
+            totalSkillXp += entry.values[6].toInt();
+        }
+        taskSummary->setText(QString::fromUtf8("Записей задач: %1 · начислено XP: %2 общий / %3 навыков · ждут начисления: %4. Показываются задачи, сохранённые в текущем журнале.")
+            .arg(taskTable->rowCount()).arg(totalGlobalXp).arg(totalSkillXp).arg(pendingCount));
+    };
+    connect(taskFilter, &QLineEdit::textChanged, &dialog, renderTaskHistory);
+    renderTaskHistory();
+    taskTable->setColumnWidth(0, 135);
+    taskTable->setColumnWidth(1, 145);
+    taskTable->setColumnWidth(3, 135);
+    taskTable->setColumnWidth(4, 80);
+    taskTable->setColumnWidth(5, 80);
+    taskTable->setColumnWidth(6, 90);
+    taskTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    tasksLayout->addWidget(taskTable, 1);
+    tabs->addTab(tasksPage, QString::fromUtf8("Задачи и XP"));
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
     buttons->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
