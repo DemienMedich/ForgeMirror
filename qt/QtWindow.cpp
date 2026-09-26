@@ -534,6 +534,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskSort_->addItems({QString::fromUtf8("Сначала новые"), QString::fromUtf8("Ближайший дедлайн"), QString::fromUtf8("Высокий приоритет")});
     taskSort_->setCurrentIndex(displaySettings_.taskSortMode);
     filters->addWidget(taskSort_);
+    taskAssigneeFilter_ = new QComboBox;
+    taskAssigneeFilter_->setObjectName("taskAssigneeFilter");
+    taskAssigneeFilter_->setMaximumWidth(190);
+    filters->addWidget(taskAssigneeFilter_);
     taskProjectFilter_ = new QComboBox;
     taskProjectFilter_->setObjectName("taskProjectFilter");
     taskProjectFilter_->setMaximumWidth(170);
@@ -818,6 +822,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(quickTaskFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskCreatedRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskAssigneeFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(catalogProfessionFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
@@ -1260,6 +1265,7 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.taskQuickFilter = quickTaskFilter_->currentIndex();
     displaySettings_.taskCreatedRange = taskCreatedRange_->currentIndex();
     displaySettings_.taskSortMode = taskSort_->currentIndex();
+    displaySettings_.taskAssigneeProfileId = taskAssigneeFilter_->currentData().toString();
     displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
     displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
     displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
@@ -1282,6 +1288,18 @@ void QtWindow::refreshTaskFilterChoices() {
         ? displaySettings_.taskProjectId : taskProjectFilter_->currentData().toString();
     const auto selectedPipeline = taskPipelineFilter_->currentData().toString().isEmpty()
         ? displaySettings_.taskPipelineStepId : taskPipelineFilter_->currentData().toString();
+    const auto selectedAssignee = taskAssigneeFilter_->currentData().toString().isEmpty()
+        ? displaySettings_.taskAssigneeProfileId : taskAssigneeFilter_->currentData().toString();
+    {
+        QSignalBlocker blocker(taskAssigneeFilter_);
+        taskAssigneeFilter_->clear();
+        taskAssigneeFilter_->addItem(QString::fromUtf8("Все профили"), QString());
+        for (const auto& profile : workspace_.profiles)
+            taskAssigneeFilter_->addItem(QString::fromUtf8("[%1] %2").arg(q(profile.id), q(profile.name)), q(profile.id));
+        const int index = taskAssigneeFilter_->findData(selectedAssignee);
+        taskAssigneeFilter_->setCurrentIndex(index >= 0 ? index : 0);
+        displaySettings_.taskAssigneeProfileId = taskAssigneeFilter_->currentData().toString();
+    }
     {
         QSignalBlocker blocker(taskProjectFilter_);
         taskProjectFilter_->clear();
@@ -1423,6 +1441,7 @@ void QtWindow::render() {
     quickTaskFilter_->setVisible(page == Tasks);
     taskCreatedRange_->setVisible(page == Tasks);
     taskSort_->setVisible(page == Tasks);
+    taskAssigneeFilter_->setVisible(page == Tasks);
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
     catalogProfessionFilter_->setVisible(page == Catalog);
@@ -1542,6 +1561,7 @@ void QtWindow::render() {
         const int quickFilter = quickTaskFilter_->currentIndex();
         const int createdRange = taskCreatedRange_->currentIndex();
         const int sortMode = taskSort_->currentIndex();
+        const auto selectedAssignee = u(taskAssigneeFilter_->currentData().toString());
         const auto now = QDateTime::currentDateTime();
         const auto todayStart = now.date().startOfDay(now.timeZone()).toSecsSinceEpoch();
         const auto tomorrowStart = now.date().addDays(1).startOfDay(now.timeZone()).toSecsSinceEpoch();
@@ -1574,6 +1594,11 @@ void QtWindow::render() {
                     resolvedPipelineName != selected->title && task.pipelineStep != selectedLabel)) continue;
             }
             if (createdRange > 0 && task.createdAt < createdMin) continue;
+            if (!selectedAssignee.empty() &&
+                std::find(task.assignees.begin(), task.assignees.end(), selectedAssignee) == task.assignees.end() &&
+                std::none_of(task.participants.begin(), task.participants.end(), [&selectedAssignee](const auto& participant) {
+                    return participant.profileId == selectedAssignee;
+                })) continue;
             const auto taskStatus = AppNormalizeTaskStatus(task.status);
             const bool assignedToProfile = !activeProfileId.empty() &&
                 (std::find(task.assignees.begin(), task.assignees.end(), activeProfileId) != task.assignees.end() ||

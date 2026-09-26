@@ -181,6 +181,10 @@ The Qt Tasks quick-filter menu now includes **Требуют внимания**,
 
 The Qt Tasks page now filters by creation age (`all`, 7, 30, 90 or 365 days) and sorts by newest, nearest deadline or highest priority, matching the legacy choices. Missing creation timestamps are excluded from bounded periods. Ties use creation time and then stable task ID. Both choices persist in the Qt `[qt]` section as `taskCreatedRange` and `taskSortMode`. `smoke_qt` checks the 7-day boundary, missing timestamps, priority ordering, persistence, and clamping of invalid settings. The stable ImGui implementation is unchanged.
 
+### Task assignee profile filter (stage 110, implementation checkpoint)
+
+The Qt Tasks page can now filter by any profile, matching the legacy profile filter. A task matches when the selected profile appears among its assignees or XP participants. The stable profile ID is stored as `taskAssigneeProfileId`; if that profile no longer exists, the filter returns to **Все профили**. `smoke_qt` covers assignee and participant matching, exclusion of unrelated tasks, and persisted selection. The stable ImGui implementation is unchanged.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.

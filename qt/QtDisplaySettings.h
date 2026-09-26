@@ -17,6 +17,7 @@ struct QtDisplaySettings {
     int taskQuickFilter = 0;
     int taskCreatedRange = 0;
     int taskSortMode = 0;
+    QString taskAssigneeProfileId;
     QString taskProjectId;
     QString taskPipelineStepId;
     QString catalogProfessionId;

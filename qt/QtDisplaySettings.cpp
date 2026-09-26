@@ -29,6 +29,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "taskQuickFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskQuickFilter = ok ? std::clamp(index, 0, 8) : 0; }
             else if (key == "taskCreatedRange") { bool ok = false; const int index = value.toInt(&ok); out.taskCreatedRange = ok ? std::clamp(index, 0, 4) : 0; }
             else if (key == "taskSortMode") { bool ok = false; const int index = value.toInt(&ok); out.taskSortMode = ok ? std::clamp(index, 0, 2) : 0; }
+            else if (key == "taskAssigneeProfileId") out.taskAssigneeProfileId = value;
             else if (key == "taskProjectId") out.taskProjectId = value;
             else if (key == "taskPipelineStepId") out.taskPipelineStepId = value;
             else if (key == "catalogProfessionId") out.catalogProfessionId = value;
@@ -67,6 +68,8 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("taskQuickFilter", QString::number(std::clamp(settings.taskQuickFilter, 0, 8)));
     set("taskCreatedRange", QString::number(std::clamp(settings.taskCreatedRange, 0, 4)));
     set("taskSortMode", QString::number(std::clamp(settings.taskSortMode, 0, 2)));
+    auto taskAssigneeProfileId = settings.taskAssigneeProfileId; taskAssigneeProfileId.remove('\r'); taskAssigneeProfileId.remove('\n');
+    set("taskAssigneeProfileId", taskAssigneeProfileId);
     auto projectId = settings.taskProjectId; projectId.remove('\r'); projectId.remove('\n');
     auto pipelineId = settings.taskPipelineStepId; pipelineId.remove('\r'); pipelineId.remove('\n');
     set("taskProjectId", projectId); set("taskPipelineStepId", pipelineId);

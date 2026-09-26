@@ -2802,6 +2802,37 @@ static bool TestQtTaskCreationRangeAndSorting() {
         LoadQtDisplaySettings(directory).taskSortMode == 0;
 }
 
+static bool TestQtTaskAssigneeProfileFilter() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    const auto assigned = workspace.storage->create_profile(Profile("Assigned profile"));
+    const auto participant = workspace.storage->create_profile(Profile("Participant profile"));
+    if (!assigned || !participant) return false;
+    TaskEntry assignedTask; assignedTask.id = "assigned"; assignedTask.title = "Assigned"; assignedTask.assignees = {assigned->id};
+    TaskEntry participantTask; participantTask.id = "participant"; participantTask.title = "Participant";
+    participantTask.participants.push_back({participant->id, 0, 0, 0, {}});
+    TaskEntry unrelated; unrelated.id = "unrelated"; unrelated.title = "Unrelated";
+    workspace.data.tasks = {assignedTask, participantTask, unrelated};
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* filter = window.findChild<QComboBox*>("taskAssigneeFilter");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !filter || !table || filter->count() != 3) return false;
+    navigation->setCurrentRow(1);
+    if (table->rowCount() != 3 || filter->itemText(0) != QString::fromUtf8("Все профили")) return false;
+    filter->setCurrentIndex(filter->findData(QString::fromStdString(participant->id)));
+    if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != "participant" ||
+        LoadQtDisplaySettings(directory).taskAssigneeProfileId != QString::fromStdString(participant->id)) return false;
+    QtWorkspace reopenedWorkspace(directory);
+    QtWindow reopened(reopenedWorkspace);
+    auto* restored = reopened.findChild<QComboBox*>("taskAssigneeFilter");
+    return restored && restored->currentData().toString() == QString::fromStdString(participant->id);
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3220,6 +3251,7 @@ int main(int argc, char** argv) {
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
     if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }
     if (!TestQtTaskCreationRangeAndSorting()) { std::cerr << "Qt task creation range and sorting failed\n"; return 1; }
+    if (!TestQtTaskAssigneeProfileFilter()) { std::cerr << "Qt task assignee profile filter failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
