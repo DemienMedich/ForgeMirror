@@ -50,6 +50,7 @@ private:
     void showWalletHistory();
     void showProfileHistory();
     void checkDeadlineReminders();
+    void checkMissedDeadlineReminders();
     void updateBanner();
     void pullCloud();
     void previewCloudPush();
@@ -163,6 +164,8 @@ private:
     int bannerIndex_ = 0;
     std::vector<AppLogEntry> appLogs_;
     bool appLogPersistenceWarning_ = false;
+    std::int64_t lastReminderCheckAt_ = 0;
+    bool reminderStatePersistenceWarning_ = false;
     QSystemTrayIcon* trayIcon_ = nullptr;
     std::unordered_set<std::string> remindedDeadlineTaskIds_;
 };

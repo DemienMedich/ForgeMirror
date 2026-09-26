@@ -101,6 +101,33 @@ bool archivedProfileUsesSkill(const std::filesystem::path& directory, const std:
     for (const auto& value : document.array()) if (value.toObject().value("skill").toString() == q(skillId)) return true;
     return false;
 }
+std::optional<std::int64_t> loadReminderCheckAt(const std::filesystem::path& directory) {
+    const auto path = directory / "meta/qt-reminder-state.json";
+    const QFileInfo info(QString::fromUtf8(path.u8string()));
+    if (!info.exists()) return std::nullopt;
+    if (info.isSymLink() || info.size() > 4096) return std::nullopt;
+    QFile file(info.filePath());
+    if (!file.open(QIODevice::ReadOnly)) return std::nullopt;
+    QJsonParseError error;
+    const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+    if (error.error != QJsonParseError::NoError || !document.isObject()) return std::nullopt;
+    const auto value = document.object().value("lastCheckAt");
+    if (document.object().value("version").toInt() != 1 || !value.isDouble()) return std::nullopt;
+    const auto timestamp = value.toVariant().toLongLong();
+    if (timestamp <= 0 || timestamp > QDateTime::currentSecsSinceEpoch() + 300) return std::nullopt;
+    return timestamp;
+}
+bool saveReminderCheckAt(const std::filesystem::path& directory, std::int64_t timestamp) {
+    const auto meta = QString::fromUtf8((directory / "meta").u8string());
+    const auto path = QString::fromUtf8((directory / "meta/qt-reminder-state.json").u8string());
+    if (QFileInfo(meta).isSymLink() || QFileInfo(path).isSymLink()) return false;
+    if (!QDir().mkpath(meta)) return false;
+    QSaveFile file(path);
+    file.setDirectWriteFallback(false);
+    const auto bytes = QJsonDocument(QJsonObject{{"version", 1}, {"lastCheckAt", qlonglong(timestamp)}})
+        .toJson(QJsonDocument::Compact);
+    return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
+}
 bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt) {
     const auto local = QDateTime::fromSecsSinceEpoch(startedAt).toLocalTime();
     const int weekday = local.date().dayOfWeek() % 7; // Sunday is 0 in vault format.
@@ -219,6 +246,7 @@ std::vector<TaskEntry> reportTasksForRange(const std::vector<TaskEntry>& tasks, 
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
     loadAppLogs();
+    lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
     ApplyQtDisplaySettings(*qApp, displaySettings_);
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
@@ -320,9 +348,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* deadlineReminderTimer = new QTimer(this);
     deadlineReminderTimer->setObjectName("deadlineReminderTimer");
     deadlineReminderTimer->setInterval(60000);
-    connect(deadlineReminderTimer, &QTimer::timeout, this, [this] { checkDeadlineReminders(); });
+    connect(deadlineReminderTimer, &QTimer::timeout, this, [this] { checkDeadlineReminders(); checkMissedDeadlineReminders(); });
     deadlineReminderTimer->start();
-    QTimer::singleShot(2500, this, [this] { checkDeadlineReminders(); });
+    QTimer::singleShot(2500, this, [this] { checkDeadlineReminders(); checkMissedDeadlineReminders(); });
 
     auto* body = new QHBoxLayout;
     body->setSpacing(16);
@@ -2196,6 +2224,50 @@ void QtWindow::checkDeadlineReminders() {
             QSystemTrayIcon::Information, 10000);
         appendLog(AppLogLevel::Info, "Reminder", u(text));
     } else statusBar()->showMessage(text, 10000);
+}
+
+void QtWindow::checkMissedDeadlineReminders() {
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    if (now <= lastReminderCheckAt_) return;
+    std::vector<const TaskEntry*> missed;
+    for (const auto& task : workspace_.data.tasks) {
+        if (task.deadlineAt > lastReminderCheckAt_ && task.deadlineAt <= now &&
+            AppNormalizeTaskStatus(task.status) != 2) missed.push_back(&task);
+    }
+    std::sort(missed.begin(), missed.end(), [](const auto* left, const auto* right) {
+        if (left->deadlineAt != right->deadlineAt) return left->deadlineAt < right->deadlineAt;
+        return left->id < right->id;
+    });
+    if (missed.empty()) {
+        lastReminderCheckAt_ = now;
+        if (!saveReminderCheckAt(workspace_.directory, now) && !reminderStatePersistenceWarning_) {
+            reminderStatePersistenceWarning_ = true;
+            appendLog(AppLogLevel::Warning, "Reminder", "Не удалось сохранить время проверки пропущенных сроков; при следующем запуске возможен повтор.");
+        }
+        return;
+    }
+    constexpr size_t visibleLimit = 3;
+    QStringList titles;
+    for (size_t index = 0; index < std::min(missed.size(), visibleLimit); ++index)
+        titles.push_back(q(AppTaskDisplayTitle(*missed[index])));
+    if (missed.size() > visibleLimit)
+        titles.push_back(QString::fromUtf8("и ещё %1").arg(missed.size() - visibleLimit));
+    auto text = QString::fromUtf8("С прошлого запуска срок прошёл у %1 активных задач: %2")
+        .arg(missed.size()).arg(titles.join(QString::fromUtf8(" · ")));
+    const bool background = !isVisible() && displaySettings_.minimizeToTray && trayIcon_ && trayIcon_->isVisible();
+    if (background) trayIcon_->showMessage(QString::fromUtf8("ForgeMirror · пропущенные сроки"), text,
+        QSystemTrayIcon::Warning, 15000);
+    else {
+        const auto upcoming = statusBar()->currentMessage();
+        if (upcoming.contains(QString::fromUtf8("Срок задачи"))) text = upcoming + QString::fromUtf8(" | ") + text;
+        statusBar()->showMessage(text, 20000);
+    }
+    appendLog(AppLogLevel::Warning, "Reminder", u(text));
+    lastReminderCheckAt_ = now;
+    if (!saveReminderCheckAt(workspace_.directory, now) && !reminderStatePersistenceWarning_) {
+        reminderStatePersistenceWarning_ = true;
+        appendLog(AppLogLevel::Warning, "Reminder", "Не удалось сохранить время проверки пропущенных сроков; при следующем запуске возможен повтор.");
+    }
 }
 
 void QtWindow::exportReport() {

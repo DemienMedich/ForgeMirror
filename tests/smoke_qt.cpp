@@ -2621,6 +2621,12 @@ static bool TestDeadlineReminders() {
     displaySettings.minimizeToTray = trayAvailable;
     if (!SaveQtDisplaySettings(workspace.directory, displaySettings)) return false;
     const auto now = QDateTime::currentSecsSinceEpoch();
+    if (!QDir().mkpath(temp.path() + "/meta")) return false;
+    QFile reminderState(temp.path() + "/meta/qt-reminder-state.json");
+    const auto reminderStateBytes = QJsonDocument(QJsonObject{{"version", 1}, {"lastCheckAt", qlonglong(now - 3600)}})
+        .toJson(QJsonDocument::Compact);
+    if (!reminderState.open(QIODevice::WriteOnly) || reminderState.write(reminderStateBytes) != reminderStateBytes.size()) { std::cerr << "deadline reminder state setup failed\n"; return false; }
+    reminderState.close();
     TaskEntry upcoming;
     upcoming.id = "deadline-upcoming";
     upcoming.title = u8"Проверить сборку";
@@ -2633,12 +2639,16 @@ static bool TestDeadlineReminders() {
     overdue.id = "deadline-overdue";
     overdue.title = "Old deadline";
     overdue.deadlineAt = now - 60;
+    TaskEntry missedWhileClosed;
+    missedWhileClosed.id = "deadline-missed-while-closed";
+    missedWhileClosed.title = u8"Срок прошёл во время перерыва";
+    missedWhileClosed.deadlineAt = now - 1800;
     TaskEntry completed;
     completed.id = "deadline-completed";
     completed.title = "Already done";
-    completed.deadlineAt = now + 60;
+    completed.deadlineAt = now - 30;
     completed.status = 2;
-    workspace.data.tasks = {upcoming, overdue, completed};
+    workspace.data.tasks = {upcoming, overdue, missedWhileClosed, completed};
     if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
     QtWindow window(workspace);
     window.show();
@@ -2647,9 +2657,33 @@ static bool TestDeadlineReminders() {
     if (!timer || !QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
     const auto first = window.statusBar()->currentMessage();
     if (!first.contains(QString::fromUtf8("Проверить сборку")) || !first.contains(QString::fromUtf8("Срок задачи"))) return false;
+    QFile reminderLog(temp.path() + "/meta/qt-application-log.json");
+    if (!reminderLog.open(QIODevice::ReadOnly)) return false;
+    const auto reminderEntries = QJsonDocument::fromJson(reminderLog.readAll()).array();
+    int missedNoticeCount = 0;
+    bool missedTaskIncluded = false;
+    bool completedTaskIncluded = false;
+    for (const auto& entry : reminderEntries) {
+        const auto text = entry.toObject().value("message").toString();
+        if (text.contains(QString::fromUtf8("С прошлого запуска срок прошёл"))) ++missedNoticeCount;
+        missedTaskIncluded |= text.contains(QString::fromUtf8("Срок прошёл во время перерыва"));
+        completedTaskIncluded |= text.contains(QString::fromUtf8("Already done"));
+    }
+    if (missedNoticeCount < 1 || !missedTaskIncluded || completedTaskIncluded) { std::cerr << "missed notice count=" << missedNoticeCount << " task=" << missedTaskIncluded << " completed=" << completedTaskIncluded << "\n"; return false; }
+    const auto noticesAfterFirstCheck = missedNoticeCount;
+    QFile updatedReminderState(temp.path() + "/meta/qt-reminder-state.json");
+    if (!updatedReminderState.open(QIODevice::ReadOnly)) return false;
+    const auto updatedWatermark = QJsonDocument::fromJson(updatedReminderState.readAll()).object().value("lastCheckAt").toVariant().toLongLong();
+    if (updatedWatermark < now) return false;
     window.statusBar()->clearMessage();
     if (!QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
     if (!window.statusBar()->currentMessage().isEmpty()) return false;
+    reminderLog.seek(0);
+    const auto repeatedReminderEntries = QJsonDocument::fromJson(reminderLog.readAll()).array();
+    missedNoticeCount = 0;
+    for (const auto& entry : repeatedReminderEntries)
+        missedNoticeCount += entry.toObject().value("message").toString().contains(QString::fromUtf8("С прошлого запуска срок прошёл"));
+    if (missedNoticeCount != noticesAfterFirstCheck) { std::cerr << "missed notice count changed from " << noticesAfterFirstCheck << " to " << missedNoticeCount << "\n"; return false; }
     if (trayAvailable) {
         auto* tray = window.findChild<QSystemTrayIcon*>();
         if (!tray || !tray->isVisible()) return false;
