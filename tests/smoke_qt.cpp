@@ -2283,12 +2283,16 @@ static bool TestPersonalWallet() {
     });
     history->click();
     if (!AppendProfileAudit(workspace.directory, created->id, "password_reset") ||
+        !AppendProfileAudit(workspace.directory, created->id, "trust_expired") ||
+        !AppendProfileAudit(workspace.directory, created->id, "trust_revoked", "profile_unavailable") ||
+        !AppendProfileAudit(workspace.directory, created->id, "trust_revoke_failed", "local_session_closed") ||
         !AppendProfileAudit(workspace.directory, created->id, "test_profile_event", "profile history marker")) return false;
     QTimer::singleShot(0, [] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* table = dialog ? dialog->findChild<QTableWidget*>("profileActivityHistoryTable") : nullptr;
         if (!table || table->rowCount() < 6 || table->columnCount() != 3) return;
         bool foundWallet = false, foundPassword = false, foundUnknown = false, foundSpirit = false;
+        bool foundTrustExpired = false, foundTrustRevoked = false, foundTrustFailure = false;
         for (int row = 0; row < table->rowCount(); ++row) {
             foundWallet |= table->item(row, 1)->text().contains(QString::fromUtf8("Изменение кошелька")) &&
                 table->item(row, 2)->text().contains(QString::fromUtf8("проверка истории"));
@@ -2296,6 +2300,9 @@ static bool TestPersonalWallet() {
             foundUnknown |= table->item(row, 1)->text() == "test_profile_event" &&
                 table->item(row, 2)->text() == "profile history marker";
             foundSpirit |= table->item(row, 1)->text().contains(QString::fromUtf8("Злого духа"));
+            foundTrustExpired |= table->item(row, 1)->text() == QString::fromUtf8("Срок доверенного входа истёк");
+            foundTrustRevoked |= table->item(row, 1)->text() == QString::fromUtf8("Доверенный вход отозван");
+            foundTrustFailure |= table->item(row, 1)->text() == QString::fromUtf8("Не удалось отозвать доверенный вход");
         }
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/profile-activity-history.png"); }
@@ -2320,7 +2327,8 @@ static bool TestPersonalWallet() {
             foundAwarded = foundAwarded && filters && taskTable->rowCount() == 2;
             foundAwarded = foundAwarded && taskSummary->text().contains("17") && taskSummary->text().contains("8");
         }
-        if (foundWallet && foundPassword && foundUnknown && foundSpirit && foundAwarded && foundPending) dialog->accept();
+        if (foundWallet && foundPassword && foundUnknown && foundSpirit && foundTrustExpired && foundTrustRevoked &&
+            foundTrustFailure && foundAwarded && foundPending) dialog->accept();
     });
     profileHistory->click();
     QAction* adminAction = nullptr;

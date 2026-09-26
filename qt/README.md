@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 100**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 83%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–100 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 101**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 83%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–101 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 100 | Remaining |
+| Area | Qt coverage through stage 101 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant paired with profile audit, transactional admin edit of name/profession/spirit/block state paired with profile audit, archive/restore and password reset/change paired with audit in recovery journals, guarded permanent deletion of empty archived profiles, rename with stable ID, session or 30/90-day local trust with transactional login/logout, expiry and stale-access revocation audits, achievement viewing/granting/editing/revocation and local icons; wallet balance and admin adjustment, Pomodoro reward, personal evil-spirit removal, all paired with wallet audit in a recovery journal; wallet history, read-only profile audit and task/XP history including awarded and pending tasks | Remaining cross-process and external profile-state audit edge cases |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines, including optional notification while the window is hidden in the system tray; administrator multi-select status, priority, project, pipeline stage, deadline and assignee edits | Reminders after the process exits, legacy/stale awarded-task cleanup review |
@@ -226,6 +226,10 @@ Session login and trusted login now require a successful `unlock` or `trusted_un
 ### Trust expiry and stale-session revocation audit (stages 99–100, implementation checkpoints)
 
 Expired trusted entries now get removed only together with a `trust_expired` audit event in a profile-session recovery journal; an audit failure restores the local settings. A trusted entry whose profile is blocked, archived, or otherwise unavailable is revoked together with a `trust_revoked` event in one transaction. An already-open session whose profile fingerprint or availability changes is closed and its remembered trust removed; if that removal fails, a local session-close/failure event is attempted. Tests cover audit failure without partial expiry cleanup or partial revocation, successful retry, profile password changes, blocking, archive transitions, trusted restoration, and logout. These remain implementation checkpoints on 0.6.11, not an installer release.
+
+### Profile trust audit labels (stage 101, implementation checkpoint)
+
+The profile activity history now renders localized labels for trust expiry, successful trust revocation, and failed revocation instead of exposing internal event IDs. Its UI test verifies all three labels while retaining an unknown-event row as a raw value for forward compatibility. No data migration or audit-log format changed.
 
 ### Application log level presets (stage 79, implementation checkpoint)
 

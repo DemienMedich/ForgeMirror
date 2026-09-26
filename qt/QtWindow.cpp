@@ -166,6 +166,9 @@ QString profileAuditActionLabel(const std::string& action) {
     static const std::unordered_map<std::string, QString> labels{
         {"create", QString::fromUtf8("Создание профиля")}, {"unlock", QString::fromUtf8("Вход в профиль")},
         {"trusted_unlock", QString::fromUtf8("Вход по доверенному устройству")}, {"lock", QString::fromUtf8("Выход из профиля")},
+        {"trust_expired", QString::fromUtf8("Срок доверенного входа истёк")},
+        {"trust_revoked", QString::fromUtf8("Доверенный вход отозван")},
+        {"trust_revoke_failed", QString::fromUtf8("Не удалось отозвать доверенный вход")},
         {"password_change", QString::fromUtf8("Смена пароля")}, {"password_reset", QString::fromUtf8("Сброс пароля")},
         {"archive", QString::fromUtf8("Архивация профиля")}, {"restore", QString::fromUtf8("Восстановление профиля")},
         {"block", QString::fromUtf8("Блокировка профиля")}, {"unblock", QString::fromUtf8("Снятие блокировки")},
