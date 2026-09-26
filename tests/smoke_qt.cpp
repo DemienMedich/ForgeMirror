@@ -37,6 +37,7 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+#include <set>
 #include <fstream>
 #include <iomanip>
 #ifdef _WIN32
@@ -2723,6 +2724,45 @@ static bool TestDeadlineReminders() {
     return true;
 }
 
+static bool TestTaskActionNeededQuickFilter() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    PipelineStep active; active.id = "active"; active.stageCode = "01"; active.title = "In progress"; active.nextIds = {"final"};
+    PipelineStep final; final.id = "final"; final.stageCode = "02"; final.title = "Handoff";
+    workspace.data.pipelineSteps = {active, final};
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    TaskEntry pendingXp; pendingXp.id = "pending-xp"; pendingXp.title = "Pending XP"; pendingXp.status = 2; pendingXp.pipelineStepId = "active";
+    TaskEntry overdue; overdue.id = "overdue"; overdue.title = "Overdue"; overdue.deadlineAt = now - 3600; overdue.pipelineStepId = "active";
+    TaskEntry missingStage; missingStage.id = "missing-stage"; missingStage.title = "Missing stage";
+    TaskEntry unknownStage; unknownStage.id = "unknown-stage"; unknownStage.title = "Unknown stage"; unknownStage.pipelineStepId = "deleted-stage";
+    TaskEntry openHandoff; openHandoff.id = "open-handoff"; openHandoff.title = "Open handoff"; openHandoff.pipelineStepId = "final";
+    TaskEntry normal; normal.id = "normal"; normal.title = "Normal"; normal.deadlineAt = now + 3600; normal.pipelineStepId = "active";
+    TaskEntry awarded; awarded.id = "awarded"; awarded.title = "XP already awarded"; awarded.status = 2;
+    awarded.pipelineStepId = "active"; awarded.participants.push_back({"someone", 100, 10, 0, {}});
+    workspace.data.tasks = {pendingXp, overdue, missingStage, unknownStage, openHandoff, normal, awarded};
+    if (!AppSavePipelineData(directory, workspace.data.pipelineSteps) || !AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* filter = window.findChild<QComboBox*>("quickTaskFilter");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !filter || !table || filter->count() != 9 ||
+        filter->itemText(8) != QString::fromUtf8("Требуют внимания")) return false;
+    navigation->setCurrentRow(1);
+    filter->setCurrentIndex(8);
+    const std::set<std::string> expected{"pending-xp", "overdue", "missing-stage", "unknown-stage", "open-handoff"};
+    std::set<std::string> actual;
+    for (int row = 0; row < table->rowCount(); ++row)
+        actual.insert(table->item(row, 0)->data(Qt::UserRole).toString().toUtf8().toStdString());
+    if (actual != expected || LoadQtDisplaySettings(directory).taskQuickFilter != 8) return false;
+    QtWorkspace reopenedWorkspace(directory);
+    QtWindow reopened(reopenedWorkspace);
+    auto* reopenedFilter = reopened.findChild<QComboBox*>("quickTaskFilter");
+    return reopenedFilter && reopenedFilter->currentIndex() == 8;
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3020,7 +3060,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16; settings.taskQuickFilter = 8;
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -3037,7 +3077,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.taskQuickFilter != 8 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -3139,6 +3179,7 @@ int main(int argc, char** argv) {
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
+    if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }

@@ -516,7 +516,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     quickTaskFilter_->setMaximumWidth(155);
     quickTaskFilter_->addItems({QString::fromUtf8("Все задачи"), QString::fromUtf8("Мне назначено"),
         QString::fromUtf8("На сегодня"), QString::fromUtf8("Просрочено"), QString::fromUtf8("7 дней"),
-        QString::fromUtf8("Без проекта"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Активные")});
+        QString::fromUtf8("Без проекта"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Активные"),
+        QString::fromUtf8("Требуют внимания")});
     quickTaskFilter_->setCurrentIndex(displaySettings_.taskQuickFilter);
     filters->addWidget(quickTaskFilter_);
     taskProjectFilter_ = new QComboBox;
@@ -1553,6 +1554,24 @@ void QtWindow::render() {
                  std::any_of(task.participants.begin(), task.participants.end(), [&activeProfileId](const auto& item) { return item.profileId == activeProfileId; }));
             const bool needsXp = taskStatus == 2 && std::none_of(task.participants.begin(), task.participants.end(),
                 [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
+            bool needsAdminAction = needsXp || (task.deadlineAt > 0 && task.deadlineAt < nowSeconds && taskStatus != 2);
+            if (!data.pipelineSteps.empty()) {
+                int pipelineIndex = -1;
+                if (!task.pipelineStepId.empty()) {
+                    for (int index = 0; index < int(data.pipelineSteps.size()); ++index)
+                        if (data.pipelineSteps[size_t(index)].id == task.pipelineStepId) { pipelineIndex = index; break; }
+                }
+                if (pipelineIndex < 0 && !task.pipelineStep.empty()) {
+                    for (int index = 0; index < int(data.pipelineSteps.size()); ++index) {
+                        const auto& candidate = data.pipelineSteps[size_t(index)];
+                        const auto code = candidate.stageCode.empty() ? std::to_string(index + 1) : candidate.stageCode;
+                        if (task.pipelineStep == candidate.title ||
+                            task.pipelineStep == code + "  " + candidate.title) { pipelineIndex = index; break; }
+                    }
+                }
+                if (pipelineIndex < 0 || (data.pipelineSteps[size_t(pipelineIndex)].nextIds.empty() && taskStatus != 2))
+                    needsAdminAction = true;
+            }
             if (quickFilter == 1 && !assignedToProfile) continue;
             if (quickFilter == 2 && (task.deadlineAt < todayStart || task.deadlineAt >= tomorrowStart)) continue;
             if (quickFilter == 3 && (task.deadlineAt <= 0 || task.deadlineAt >= nowSeconds || taskStatus == 2)) continue;
@@ -1560,6 +1579,7 @@ void QtWindow::render() {
             if (quickFilter == 5 && !resolvedProjectName.empty()) continue;
             if (quickFilter == 6 && !needsXp) continue;
             if (quickFilter == 7 && taskStatus == 2) continue;
+            if (quickFilter == 8 && !needsAdminAction) continue;
             row(task.id, {q(AppTaskDisplayTitle(task)), q(project == data.projects.end() ? task.project : project->name), q(AppTaskStatusLabel(task.status)),
                 q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(stage == data.pipelineSteps.end() ? task.pipelineStep : stage->title)});
         }
