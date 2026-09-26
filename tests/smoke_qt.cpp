@@ -586,11 +586,14 @@ static bool TestCloudConflictResolver() {
     const QByteArray remoteGameplay = "[leveling]\nbase=1800\nquadratic=75\n";
     const QByteArray localProfessions = "\xEF\xBB\xBF" "pr_local|Local profession|Local description\n";
     const QByteArray remoteProfessions = "\xEF\xBB\xBF" "pr_cloud|Cloud profession|Cloud description\n";
+    const QByteArray localSkills = "\xEF\xBB\xBF" "sk_local|Local skill|1|prof=pr_local|local desc\n";
+    const QByteArray remoteSkills = "\xEF\xBB\xBF" "sk_cloud|Cloud skill|1|prof=pr_cloud|cloud desc\n";
     if (!write(workspace / "meta/tasks.json", local) || !write(cloud / "meta/tasks.json", remote) ||
         !write(workspace / "meta/projects.json", localProjects) || !write(cloud / "meta/projects.json", remoteProjects) ||
         !write(workspace / "meta/banner.json", localBanner) || !write(cloud / "meta/banner.json", remoteBanner) ||
         !write(workspace / "meta/gameplay.ini", localGameplay) || !write(cloud / "meta/gameplay.ini", remoteGameplay) ||
         !write(workspace / "meta/professions.txt", localProfessions) || !write(cloud / "meta/professions.txt", remoteProfessions) ||
+        !write(workspace / "skills.txt", localSkills) || !write(cloud / "skills.txt", remoteSkills) ||
         !write(workspace / "meta/pipeline.json", "{\"steps\":[]}") || !write(cloud / "meta/pipeline.json", "{\"steps\":[]}")) return false;
     CloudSyncConfig config; config.enabled = true; config.root = cloud;
     if (!SaveCloudSyncConfig(workspace, config)) return false;
@@ -635,7 +638,8 @@ static bool TestCloudConflictResolver() {
     if (!pushedProfessions.ok || !pushedProfessions.changed || pushedProfessions.backupPath.empty() ||
         read(cloud / "meta/professions.txt") != localProfessions || read(pushedProfessions.backupPath) != remoteProfessions ||
         ListCloudWorkspaceBackups(workspace, "meta/professions.txt").empty() ||
-        pushedProfessions.backupPath.extension() != ".txt") {
+        pushedProfessions.backupPath.extension() != ".txt" || read(cloud / "skills.txt") != localSkills ||
+        pushedProfessions.backupPaths.size() != 4 || ListCloudWorkspaceBackups(workspace, "skills.txt").empty()) {
         std::cerr << "profession push ok=" << pushedProfessions.ok << " changed=" << pushedProfessions.changed
                   << " backup=" << pushedProfessions.backupPath.u8string() << " listed="
                   << ListCloudWorkspaceBackups(workspace, "meta/professions.txt").size()
@@ -643,6 +647,27 @@ static bool TestCloudConflictResolver() {
                   << " message=" << pushedProfessions.message << '\n';
         return fail("push professions with cloud backup");
     }
+    const auto skillsBackups = ListCloudWorkspaceBackups(workspace, "skills.txt");
+    const auto professionBackups = ListCloudWorkspaceBackups(workspace, "meta/professions.txt");
+    const auto localSkillsBackup = std::find_if(skillsBackups.begin(), skillsBackups.end(), [](const auto& item) { return item.sourceKind == "local"; });
+    const auto localProfessionsBackup = std::find_if(professionBackups.begin(), professionBackups.end(), [](const auto& item) { return item.sourceKind == "local"; });
+    if (localSkillsBackup == skillsBackups.end() || localProfessionsBackup == professionBackups.end() ||
+        localSkillsBackup->createdAt != localProfessionsBackup->createdAt) return fail("catalog source backup pair");
+    if (ApplyQtCloudWorkspaceFile(workspace, localSkillsBackup->path, "skills.txt", "restore").ok)
+        return fail("single catalog restore blocked");
+    if (!write(workspace / "skills.txt", remoteSkills) || !write(workspace / "meta/professions.txt", remoteProfessions)) return false;
+    const auto restoredPair = RestoreQtCloudCatalogPair(workspace, localSkillsBackup->path, localProfessionsBackup->path);
+    if (!restoredPair.ok || !restoredPair.changed || read(workspace / "skills.txt") != localSkills ||
+        read(workspace / "meta/professions.txt") != localProfessions) return fail("restore catalog pair");
+    if (!write(cloud / "skills.txt", remoteSkills) || !write(cloud / "meta/professions.txt", remoteProfessions)) return false;
+    const auto appliedPair = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/professions.txt", "meta/professions.txt", "cloud");
+    if (!appliedPair.ok || !appliedPair.changed || read(workspace / "skills.txt") != remoteSkills ||
+        read(workspace / "meta/professions.txt") != remoteProfessions || appliedPair.backupPaths.size() < 4)
+        return fail("apply cloud catalog pair");
+    if (!write(workspace / "skills.txt", "sk_bad||1|not a name\n") ||
+        PushQtCloudWorkspaceFile(workspace, "skills.txt").ok || read(cloud / "skills.txt") != remoteSkills ||
+        read(cloud / "meta/professions.txt") != remoteProfessions) return fail("malformed catalog pair blocks both");
+    if (!write(workspace / "skills.txt", localSkills) || !write(workspace / "meta/professions.txt", localProfessions)) return false;
     CloudSyncConfig overlapConfig = config; overlapConfig.root = workspace;
     if (!SaveCloudSyncConfig(workspace, overlapConfig) || PushQtCloudWorkspaceFile(workspace, "meta/tasks.json").ok ||
         !SaveCloudSyncConfig(workspace, config)) return fail("push overlap guard");
@@ -665,7 +690,8 @@ static bool TestCloudConflictResolver() {
     if (!write(workspace / "meta/gameplay.ini", localGameplay)) return false;
     if (!write(workspace / "meta/professions.txt", "missing-name\n") ||
         PushQtCloudWorkspaceFile(workspace, "meta/professions.txt").ok ||
-        read(cloud / "meta/professions.txt") != localProfessions) return fail("malformed professions push");
+        read(cloud / "meta/professions.txt") != remoteProfessions ||
+        read(cloud / "skills.txt") != remoteSkills) return fail("malformed professions push");
     if (!write(workspace / "meta/professions.txt", localProfessions)) return false;
     if (!write(cloud / "meta/tasks.json", "{broken")) return false;
     const auto malformed = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
@@ -674,6 +700,20 @@ static bool TestCloudConflictResolver() {
     if (!write(foreign, remote) || ApplyQtCloudWorkspaceFile(workspace, foreign, "meta/tasks.json", "cloud").ok ||
         ApplyQtCloudWorkspaceFile(workspace, foreign, "meta/tasks.json", "restore").ok) return fail("foreign source");
 #ifdef _WIN32
+    if (!write(cloud / "skills.txt", remoteSkills) || !write(cloud / "meta/professions.txt", remoteProfessions) ||
+        !write(workspace / "skills.txt", localSkills) || !write(workspace / "meta/professions.txt", localProfessions)) return false;
+    const HANDLE localProfessionLock = CreateFileW((workspace / "meta/professions.txt").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (localProfessionLock == INVALID_HANDLE_VALUE) return false;
+    const auto lockedPairApply = ApplyQtCloudWorkspaceFile(workspace, cloud / "skills.txt", "skills.txt", "cloud");
+    CloseHandle(localProfessionLock);
+    if (lockedPairApply.ok || read(workspace / "skills.txt") != localSkills ||
+        read(workspace / "meta/professions.txt") != localProfessions) return fail("catalog pair apply rollback");
+    const HANDLE cloudProfessionLock = CreateFileW((cloud / "meta/professions.txt").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (cloudProfessionLock == INVALID_HANDLE_VALUE) return false;
+    const auto lockedPairPush = PushQtCloudWorkspaceFile(workspace, "skills.txt");
+    CloseHandle(cloudProfessionLock);
+    if (lockedPairPush.ok || read(cloud / "skills.txt") != remoteSkills ||
+        read(cloud / "meta/professions.txt") != remoteProfessions) return fail("catalog pair push rollback");
     if (!write(cloud / "meta/tasks.json", remote)) return false;
     const HANDLE lock = CreateFileW((workspace / "meta/tasks.json").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
     if (lock == INVALID_HANDLE_VALUE) return false;
@@ -701,12 +741,15 @@ static bool TestCloudConflictResolver() {
         auto* gameplayPush = dialog ? dialog->findChild<QPushButton*>("pushCloudGameplay") : nullptr;
         auto* professions = dialog ? dialog->findChild<QTableWidget*>("professionsComparison") : nullptr;
         auto* professionsPush = dialog ? dialog->findChild<QPushButton*>("pushCloudProfessions") : nullptr;
+        auto* skills = dialog ? dialog->findChild<QTableWidget*>("skillsComparison") : nullptr;
+        auto* skillsPush = dialog ? dialog->findChild<QPushButton*>("pushCloudSkills") : nullptr;
         inspected = dialog && dialog->objectName() == "cloudConflictResolver" && table && table->rowCount() == 2 &&
             apply && apply->height() >= 40 && push && push->height() >= 40 && projects &&
             projects->rowCount() == 2 && projectsPush && projectsPush->isEnabled() && banner &&
             banner->rowCount() == 2 && bannerPush && bannerPush->isEnabled() && gameplay &&
             gameplay->rowCount() == 2 && gameplayPush && gameplayPush->isEnabled() && professions &&
-            professions->rowCount() == 2 && professionsPush && professionsPush->isEnabled();
+            professions->rowCount() == 2 && professionsPush && professionsPush->isEnabled() && skills &&
+            skills->rowCount() == 2 && skillsPush && skillsPush->isEnabled();
         if (!inspected) std::cerr << "cloudConflict inspect dialog=" << bool(dialog)
             << " name=" << (dialog ? dialog->objectName().toStdString() : "") << " table=" << bool(table)
             << " rows=" << (table ? table->rowCount() : -1) << " apply=" << bool(apply)
@@ -805,7 +848,8 @@ static bool TestCloudConflictResolver() {
     if (!gameplayChanged || !gameplayPushConfirmed || read(cloud / "meta/gameplay.ini") != gameplayUpload)
         return fail("dialog gameplay push");
     const QByteArray professionsUpload = "\xEF\xBB\xBF" "pr_ui|UI profession|UI description\n";
-    if (!write(workspace / "meta/professions.txt", professionsUpload)) return false;
+    const QByteArray skillsUpload = "\xEF\xBB\xBF" "sk_ui|UI skill|1|prof=pr_ui|UI description\n";
+    if (!write(workspace / "meta/professions.txt", professionsUpload) || !write(workspace / "skills.txt", skillsUpload)) return false;
     bool professionsPushConfirmed = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -813,14 +857,16 @@ static bool TestCloudConflictResolver() {
         QTimer::singleShot(0, [&] {
             if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
                 professionsPushConfirmed = box->defaultButton() == box->button(QMessageBox::Cancel) &&
-                    box->text().contains(QString::fromUtf8("meta/professions.txt"));
+                    box->text().contains(QString::fromUtf8("meta/professions.txt")) &&
+                    box->text().contains(QString::fromUtf8("skills.txt"));
                 box->button(QMessageBox::Yes)->click();
             }
         });
         if (push) push->click();
     });
     const bool professionsChanged = ShowCloudConflictResolver(nullptr, workspace);
-    if (!professionsChanged || !professionsPushConfirmed || read(cloud / "meta/professions.txt") != professionsUpload)
+    if (!professionsChanged || !professionsPushConfirmed || read(cloud / "meta/professions.txt") != professionsUpload ||
+        read(cloud / "skills.txt") != skillsUpload)
         return fail("dialog professions push");
     QtWorkspace uiWorkspace(workspace); QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
     auto* nav = window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(13);

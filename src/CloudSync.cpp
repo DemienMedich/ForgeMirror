@@ -326,7 +326,10 @@ bool IsPathInsideDirectory(const std::filesystem::path& path, const std::filesys
 
 bool ParseCloudWorkspaceBackupFilename(const std::string& fileName,
                                        CloudWorkspaceBackupEntry& outEntry) {
-    for (const auto& relativePath : CloudTrackedWorkspaceFiles()) {
+    auto trackedFiles = CloudTrackedWorkspaceFiles();
+    std::vector<std::string> backupFiles(trackedFiles.begin(), trackedFiles.end());
+    backupFiles.emplace_back("skills.txt");
+    for (const auto& relativePath : backupFiles) {
         const std::filesystem::path relPath = std::filesystem::u8path(relativePath);
         const std::string extension = relPath.extension().string();
         const std::string stem = SanitizeRelativePathForFilename(relativePath);
@@ -1284,7 +1287,7 @@ std::vector<CloudWorkspaceBackupEntry> ListCloudWorkspaceBackups(const std::file
     const auto trackedFiles = CloudTrackedWorkspaceFiles();
     const bool filterByPath = !relativePath.empty();
     if (filterByPath &&
-        std::find(trackedFiles.begin(), trackedFiles.end(), relativePath) == trackedFiles.end()) {
+        std::find(trackedFiles.begin(), trackedFiles.end(), relativePath) == trackedFiles.end() && relativePath != "skills.txt") {
         return backups;
     }
 
