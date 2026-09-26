@@ -16,13 +16,14 @@ QString q(const std::filesystem::path& path) { return QString::fromStdWString(pa
 QString q(const std::string& text) { return QString::fromUtf8(text); }
 bool supported(const std::string& path) {
     return path == "meta/tasks.json" || path == "meta/pipeline.json" || path == "meta/projects.json" ||
-        path == "meta/banner.json" || path == "meta/gameplay.ini";
+        path == "meta/banner.json" || path == "meta/gameplay.ini" || path == "meta/professions.txt";
 }
 QString objectName(const std::string& relative, const char* kind) {
     const auto stem = relative == "meta/tasks.json" ? QStringLiteral("tasks")
         : relative == "meta/pipeline.json" ? QStringLiteral("pipeline")
         : relative == "meta/projects.json" ? QStringLiteral("projects")
-        : relative == "meta/banner.json" ? QStringLiteral("banner") : QStringLiteral("gameplay");
+        : relative == "meta/banner.json" ? QStringLiteral("banner")
+        : relative == "meta/gameplay.ini" ? QStringLiteral("gameplay") : QStringLiteral("professions");
     auto title = stem;
     title[0] = title[0].toUpper();
     const auto operation = QString::fromLatin1(kind);
@@ -82,12 +83,21 @@ bool validDocument(const QByteArray& bytes, QString& error) {
     return true;
 }
 
-bool validGameplayConfig(const QByteArray& bytes, QString& error) {
-    const auto text = QString::fromUtf8(bytes);
-    if (text.toUtf8() != bytes) {
-        error = QString::fromUtf8("Файл правил содержит некорректный UTF-8.");
+bool decodeUtf8(const QByteArray& bytes, QString& text, QString& error, const QString& label) {
+    text = QString::fromUtf8(bytes);
+    auto encoded = text.toUtf8();
+    auto comparable = bytes;
+    if (bytes.startsWith("\xEF\xBB\xBF") && !encoded.startsWith("\xEF\xBB\xBF")) comparable = bytes.mid(3);
+    if (encoded != comparable) {
+        error = label + QString::fromUtf8(" содержит некорректный UTF-8.");
         return false;
     }
+    return true;
+}
+
+bool validGameplayConfig(const QByteArray& bytes, QString& error) {
+    QString text;
+    if (!decodeUtf8(bytes, text, error, QString::fromUtf8("Файл правил"))) return false;
     const QSet<QString> levelingKeys{"base", "linear", "quadratic"};
     const QSet<QString> categoryKeys{"e", "d", "c", "b", "a"};
     const QSet<QString> floatKeys{"focus_base", "focus_bonus", "repeat_factor", "recovery_factor"};
@@ -131,8 +141,41 @@ bool validGameplayConfig(const QByteArray& bytes, QString& error) {
     return true;
 }
 
+bool validProfessionCatalog(const QByteArray& bytes, qsizetype* count, QString& error) {
+    QString text;
+    if (!decodeUtf8(bytes, text, error, QString::fromUtf8("Каталог профессий"))) return false;
+    qsizetype entries = 0;
+    bool firstLine = true;
+    for (auto line : text.split('\n')) {
+        if (firstLine) {
+            firstLine = false;
+            if (line.startsWith(QChar(0xFEFF))) line.remove(0, 1);
+        }
+        line = line.trimmed();
+        if (line.isEmpty() || line.startsWith('#')) continue;
+        const auto fields = line.split('|');
+        if (fields.size() < 2 || fields[0].trimmed().isEmpty() || fields[1].trimmed().isEmpty()) {
+            error = QString::fromUtf8("Строка каталога профессий должна содержать ID и название через |.");
+            return false;
+        }
+        for (const auto& field : fields) {
+            for (const auto ch : field) {
+                if (ch.category() == QChar::Other_Control || ch == QChar::LineSeparator || ch == QChar::ParagraphSeparator) {
+                    error = QString::fromUtf8("Каталог профессий содержит управляющий символ.");
+                    return false;
+                }
+            }
+        }
+        ++entries;
+    }
+    if (count) *count = entries;
+    return true;
+}
+
 bool validSource(const QByteArray& bytes, const std::string& relative, QString& error) {
-    return relative == "meta/gameplay.ini" ? validGameplayConfig(bytes, error) : validDocument(bytes, error);
+    if (relative == "meta/gameplay.ini") return validGameplayConfig(bytes, error);
+    if (relative == "meta/professions.txt") return validProfessionCatalog(bytes, nullptr, error);
+    return validDocument(bytes, error);
 }
 
 bool atomicWrite(const std::filesystem::path& path, const QByteArray& bytes, QString& error) {
@@ -153,7 +196,8 @@ std::filesystem::path backupPath(const std::filesystem::path& workspace, const s
     const std::string stem = relative == "meta/tasks.json" ? "meta_tasks_json"
         : relative == "meta/pipeline.json" ? "meta_pipeline_json"
         : relative == "meta/projects.json" ? "meta_projects_json"
-        : relative == "meta/banner.json" ? "meta_banner_json" : "meta_gameplay_ini";
+        : relative == "meta/banner.json" ? "meta_banner_json"
+        : relative == "meta/gameplay.ini" ? "meta_gameplay_ini" : "meta_professions_txt";
     const auto extension = std::filesystem::u8path(relative).extension().string();
     auto stamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     std::filesystem::path candidate;
@@ -172,6 +216,14 @@ QString preview(const std::filesystem::path& path, const std::string& relative) 
             if (!error.isEmpty() || !validGameplayConfig(bytes, error))
                 return QString::fromUtf8("некорректный файл · %1 байт").arg(std::filesystem::file_size(path, ec));
             return QString::fromUtf8("правила XP · %1 байт").arg(bytes.size());
+        }
+        if (relative == "meta/professions.txt") {
+            QString error;
+            qsizetype count = 0;
+            const auto bytes = readFile(path, error);
+            if (!error.isEmpty() || !validProfessionCatalog(bytes, &count, error))
+                return QString::fromUtf8("некорректный каталог · %1 байт").arg(std::filesystem::file_size(path, ec));
+            return QString::fromUtf8("%1 профессий · %2 байт").arg(count).arg(bytes.size());
         }
         qsizetype count = 0;
         QString unit;
@@ -200,7 +252,8 @@ QString label(const std::string& relative) {
     return QString::fromUtf8(relative == "meta/tasks.json" ? "Задачи"
         : relative == "meta/pipeline.json" ? "Пайплайн"
         : relative == "meta/projects.json" ? "Проекты"
-        : relative == "meta/banner.json" ? "Баннер" : "Правила XP");
+        : relative == "meta/banner.json" ? "Баннер"
+        : relative == "meta/gameplay.ini" ? "Правила XP" : "Профессии");
 }
 
 bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target, const QString& action) {
@@ -372,7 +425,8 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         tabs->addTab(page, label(relative));
     };
     addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json");
-    addFileTab("meta/projects.json"); addFileTab("meta/banner.json"); addFileTab("meta/gameplay.ini");
+    addFileTab("meta/projects.json"); addFileTab("meta/banner.json");
+    addFileTab("meta/gameplay.ini"); addFileTab("meta/professions.txt");
     auto* close = new QPushButton(QString::fromUtf8("Закрыть")); close->setMinimumWidth(120); close->setStyleSheet("min-height: 40px; max-height: 40px;"); layout->addWidget(close, 0, Qt::AlignRight);
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
     dialog.exec(); return changed;
