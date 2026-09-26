@@ -1719,6 +1719,30 @@ void QtWindow::render() {
             if (a->createdAt != b->createdAt) return a->createdAt > b->createdAt;
             return a->id < b->id;
         });
+        const TaskEntry* focusTask = nullptr;
+        const auto promotesFocus = [nowSeconds](const TaskEntry* candidate, const TaskEntry* current) {
+            if (!candidate) return false;
+            if (!current) return true;
+            const bool candidateOverdue = candidate->deadlineAt > 0 && candidate->deadlineAt < nowSeconds &&
+                AppNormalizeTaskStatus(candidate->status) != 2;
+            const bool currentOverdue = current->deadlineAt > 0 && current->deadlineAt < nowSeconds &&
+                AppNormalizeTaskStatus(current->status) != 2;
+            if (candidateOverdue != currentOverdue) return candidateOverdue;
+            const int candidatePriority = AppNormalizeTaskPriority(candidate->priority);
+            const int currentPriority = AppNormalizeTaskPriority(current->priority);
+            if (candidatePriority != currentPriority) return candidatePriority > currentPriority;
+            const auto candidateDeadline = candidate->deadlineAt > 0 ? candidate->deadlineAt : std::numeric_limits<std::int64_t>::max();
+            const auto currentDeadline = current->deadlineAt > 0 ? current->deadlineAt : std::numeric_limits<std::int64_t>::max();
+            if (candidateDeadline != currentDeadline) return candidateDeadline < currentDeadline;
+            const int candidateStatus = AppNormalizeTaskStatus(candidate->status);
+            const int currentStatus = AppNormalizeTaskStatus(current->status);
+            if (candidateStatus != currentStatus) return candidateStatus > currentStatus;
+            return candidate->createdAt > current->createdAt;
+        };
+        for (const auto& view : visibleTasks) {
+            if (AppNormalizeTaskStatus(view.task->status) != 2 && promotesFocus(view.task, focusTask))
+                focusTask = view.task;
+        }
         for (const auto& view : visibleTasks) {
             const auto* task = view.task;
             const auto project = std::find_if(data.projects.begin(), data.projects.end(), [&](const auto& entry) { return !task->projectId.empty() && entry.id == task->projectId; });
@@ -1741,9 +1765,21 @@ void QtWindow::render() {
                 q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
             if (table_->rowCount() > previousRowCount) {
                 auto* titleItem = table_->item(previousRowCount, 0);
+                const bool isFocus = focusTask && focusTask->id == task->id;
+                if (isFocus || view.overdue) {
+                    const QColor base = palette().color(QPalette::Base);
+                    const QColor accent = palette().color(QPalette::Highlight);
+                    const QColor tint = isFocus ? base.lighter(112) : QColor::fromRgb(
+                        (base.red() * 5 + accent.red()) / 6,
+                        (base.green() * 5 + accent.green()) / 6,
+                        (base.blue() * 5 + accent.blue()) / 6);
+                    for (int column = 0; column < table_->columnCount(); ++column)
+                        if (auto* item = table_->item(previousRowCount, column)) item->setBackground(tint);
+                }
                 QStringList badges;
                 if (view.xpPending) badges << QStringLiteral("XP");
                 if (!view.alerts.isEmpty()) badges << QStringLiteral("!");
+                if (isFocus) badges << QString::fromUtf8("Фокус");
                 if (!badges.isEmpty()) titleItem->setText(titleItem->text() + QStringLiteral("  [%1]").arg(badges.join(' ')));
                 if (!view.alerts.isEmpty()) {
                     const auto explanation = view.alerts.join('\n');

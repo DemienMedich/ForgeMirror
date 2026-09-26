@@ -3042,6 +3042,47 @@ static bool TestQtTaskAttentionBadges() {
         awardedCell && !awardedCell->text().contains("XP");
 }
 
+static bool TestQtTaskFocusAndOverdueTint() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    TaskEntry overdueLow; overdueLow.id = "focus-overdue-low"; overdueLow.title = "Overdue low";
+    overdueLow.deadlineAt = now - 7200; overdueLow.priority = 0;
+    TaskEntry overdueCritical; overdueCritical.id = "focus-overdue-critical"; overdueCritical.title = "Overdue critical";
+    overdueCritical.deadlineAt = now - 3600; overdueCritical.priority = 3;
+    TaskEntry futureCritical; futureCritical.id = "focus-future-critical"; futureCritical.title = "Future critical";
+    futureCritical.deadlineAt = now + 3600; futureCritical.priority = 3;
+    workspace.data.tasks = {overdueLow, overdueCritical, futureCritical};
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !table) return false;
+    navigation->setCurrentRow(1);
+    auto rowFor = [table](const QString& id) {
+        for (int row = 0; row < table->rowCount(); ++row)
+            if (table->item(row, 0)->data(Qt::UserRole).toString() == id) return row;
+        return -1;
+    };
+    const int focusRow = rowFor("focus-overdue-critical");
+    const int overdueRow = rowFor("focus-overdue-low");
+    const int futureRow = rowFor("focus-future-critical");
+    if (focusRow < 0 || overdueRow < 0 || futureRow < 0) return false;
+    const auto focusTint = table->item(focusRow, 0)->background().color();
+    const auto overdueTint = table->item(overdueRow, 0)->background().color();
+    const bool hasFocusBadge = table->item(focusRow, 0)->text().contains(QString::fromUtf8("Фокус"));
+    const bool colorsMatch = focusTint.isValid() && focusTint != overdueTint && overdueTint.isValid() &&
+        table->item(futureRow, 0)->background().style() == Qt::NoBrush;
+    if (!hasFocusBadge || !colorsMatch)
+        std::cerr << "focus badge=" << hasFocusBadge << " colors=" << colorsMatch
+                  << " focus=" << focusTint.name().toStdString() << " overdue=" << overdueTint.name().toStdString()
+                  << "\n";
+    return hasFocusBadge && colorsMatch;
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3466,6 +3507,7 @@ int main(int argc, char** argv) {
     if (!TestQtVisibleTaskSelectionTools()) { std::cerr << "Qt visible task selection tools failed\n"; return 1; }
     if (!TestQtTaskTableDateAndAssignees()) { std::cerr << "Qt task table date and assignees failed\n"; return 1; }
     if (!TestQtTaskAttentionBadges()) { std::cerr << "Qt task attention badges failed\n"; return 1; }
+    if (!TestQtTaskFocusAndOverdueTint()) { std::cerr << "Qt task focus and overdue tint failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
