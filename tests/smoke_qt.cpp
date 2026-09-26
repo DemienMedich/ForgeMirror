@@ -580,8 +580,11 @@ static bool TestCloudConflictResolver() {
     const QByteArray remote = "[{\"id\":\"remote\",\"title\":\"Cloud\"}]";
     const QByteArray localProjects = "[{\"id\":\"local-project\",\"name\":\"Local project\"}]";
     const QByteArray remoteProjects = "[{\"id\":\"cloud-project\",\"name\":\"Cloud project\"}]";
+    const QByteArray localBanner = "{\"items\":[\"Local phrase\"]}";
+    const QByteArray remoteBanner = "{\"items\":[\"Cloud phrase\"]}";
     if (!write(workspace / "meta/tasks.json", local) || !write(cloud / "meta/tasks.json", remote) ||
         !write(workspace / "meta/projects.json", localProjects) || !write(cloud / "meta/projects.json", remoteProjects) ||
+        !write(workspace / "meta/banner.json", localBanner) || !write(cloud / "meta/banner.json", remoteBanner) ||
         !write(workspace / "meta/pipeline.json", "{\"steps\":[]}") || !write(cloud / "meta/pipeline.json", "{\"steps\":[]}")) return false;
     CloudSyncConfig config; config.enabled = true; config.root = cloud;
     if (!SaveCloudSyncConfig(workspace, config)) return false;
@@ -611,6 +614,11 @@ static bool TestCloudConflictResolver() {
         read(cloud / "meta/projects.json") != localProjects || read(pushedProjects.backupPath) != remoteProjects ||
         ListCloudWorkspaceBackups(workspace, "meta/projects.json").empty())
         return fail("push projects with cloud backup");
+    const auto pushedBanner = PushQtCloudWorkspaceFile(workspace, "meta/banner.json");
+    if (!pushedBanner.ok || !pushedBanner.changed || pushedBanner.backupPath.empty() ||
+        read(cloud / "meta/banner.json") != localBanner || read(pushedBanner.backupPath) != remoteBanner ||
+        ListCloudWorkspaceBackups(workspace, "meta/banner.json").empty())
+        return fail("push banner with cloud backup");
     CloudSyncConfig overlapConfig = config; overlapConfig.root = workspace;
     if (!SaveCloudSyncConfig(workspace, overlapConfig) || PushQtCloudWorkspaceFile(workspace, "meta/tasks.json").ok ||
         !SaveCloudSyncConfig(workspace, config)) return fail("push overlap guard");
@@ -623,6 +631,10 @@ static bool TestCloudConflictResolver() {
         PushQtCloudWorkspaceFile(workspace, "meta/projects.json").ok ||
         read(cloud / "meta/projects.json") != localProjects) return fail("malformed projects push");
     if (!write(workspace / "meta/projects.json", localProjects)) return false;
+    if (!write(workspace / "meta/banner.json", "{broken") ||
+        PushQtCloudWorkspaceFile(workspace, "meta/banner.json").ok ||
+        read(cloud / "meta/banner.json") != localBanner) return fail("malformed banner push");
+    if (!write(workspace / "meta/banner.json", localBanner)) return false;
     if (!write(cloud / "meta/tasks.json", "{broken")) return false;
     const auto malformed = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
     if (malformed.ok || read(workspace / "meta/tasks.json") != local) return fail("malformed source");
@@ -651,9 +663,12 @@ static bool TestCloudConflictResolver() {
         auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudTasks") : nullptr;
         auto* projects = dialog ? dialog->findChild<QTableWidget*>("projectsComparison") : nullptr;
         auto* projectsPush = dialog ? dialog->findChild<QPushButton*>("pushCloudProjects") : nullptr;
+        auto* banner = dialog ? dialog->findChild<QTableWidget*>("bannerComparison") : nullptr;
+        auto* bannerPush = dialog ? dialog->findChild<QPushButton*>("pushCloudBanner") : nullptr;
         inspected = dialog && dialog->objectName() == "cloudConflictResolver" && table && table->rowCount() == 2 &&
             apply && apply->height() >= 40 && push && push->height() >= 40 && projects &&
-            projects->rowCount() == 2 && projectsPush && projectsPush->isEnabled();
+            projects->rowCount() == 2 && projectsPush && projectsPush->isEnabled() && banner &&
+            banner->rowCount() == 2 && bannerPush && bannerPush->isEnabled();
         if (!inspected) std::cerr << "cloudConflict inspect dialog=" << bool(dialog)
             << " name=" << (dialog ? dialog->objectName().toStdString() : "") << " table=" << bool(table)
             << " rows=" << (table ? table->rowCount() : -1) << " apply=" << bool(apply)
@@ -711,6 +726,24 @@ static bool TestCloudConflictResolver() {
     const bool projectsChanged = ShowCloudConflictResolver(nullptr, workspace);
     if (!projectsChanged || !projectPushConfirmed || read(cloud / "meta/projects.json") != projectUpload)
         return fail("dialog projects push");
+    const QByteArray bannerUpload = "{\"items\":[\"UI phrase\"]}";
+    if (!write(workspace / "meta/banner.json", bannerUpload)) return false;
+    bool bannerPushConfirmed = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudBanner") : nullptr;
+        QTimer::singleShot(0, [&] {
+            if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                bannerPushConfirmed = box->defaultButton() == box->button(QMessageBox::Cancel) &&
+                    box->text().contains(QString::fromUtf8("meta/banner.json"));
+                box->button(QMessageBox::Yes)->click();
+            }
+        });
+        if (push) push->click();
+    });
+    const bool bannerChanged = ShowCloudConflictResolver(nullptr, workspace);
+    if (!bannerChanged || !bannerPushConfirmed || read(cloud / "meta/banner.json") != bannerUpload)
+        return fail("dialog banner push");
     QtWorkspace uiWorkspace(workspace); QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
     auto* nav = window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(13);
     auto* route = window.findChild<QPushButton*>("cloudResolve");

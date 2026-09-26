@@ -14,11 +14,12 @@ namespace {
 QString q(const std::filesystem::path& path) { return QString::fromStdWString(path.wstring()); }
 QString q(const std::string& text) { return QString::fromUtf8(text); }
 bool supported(const std::string& path) {
-    return path == "meta/tasks.json" || path == "meta/pipeline.json" || path == "meta/projects.json";
+    return path == "meta/tasks.json" || path == "meta/pipeline.json" || path == "meta/projects.json" || path == "meta/banner.json";
 }
 QString objectName(const std::string& relative, const char* kind) {
     const auto stem = relative == "meta/tasks.json" ? QStringLiteral("tasks")
-        : relative == "meta/pipeline.json" ? QStringLiteral("pipeline") : QStringLiteral("projects");
+        : relative == "meta/pipeline.json" ? QStringLiteral("pipeline")
+        : relative == "meta/projects.json" ? QStringLiteral("projects") : QStringLiteral("banner");
     auto title = stem;
     title[0] = title[0].toUpper();
     const auto operation = QString::fromLatin1(kind);
@@ -94,7 +95,8 @@ std::filesystem::path backupPath(const std::filesystem::path& workspace, const s
     const auto dir = workspace / "meta/updates";
     // Match CloudSync's public backup parser: punctuation is replaced before the extension is appended.
     const std::string stem = relative == "meta/tasks.json" ? "meta_tasks_json"
-        : relative == "meta/pipeline.json" ? "meta_pipeline_json" : "meta_projects_json";
+        : relative == "meta/pipeline.json" ? "meta_pipeline_json"
+        : relative == "meta/projects.json" ? "meta_projects_json" : "meta_banner_json";
     auto stamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     std::filesystem::path candidate;
     do candidate = dir / (stem + "." + kind + "." + std::to_string(stamp++) + ".json");
@@ -116,9 +118,14 @@ QString preview(const std::filesystem::path& path, const std::string& relative) 
             const auto document = QJsonDocument::fromJson(readFile(path, readError), &parse);
             if (!readError.isEmpty()) throw std::runtime_error(readError.toUtf8().constData());
             if (parse.error != QJsonParseError::NoError) throw std::runtime_error("Malformed projects JSON.");
-            if (document.isArray()) count = document.array().size();
-            else if (document.isObject() && document.object().value("projects").isArray()) count = document.object().value("projects").toArray().size();
-            unit = QString::fromUtf8("проектов");
+            if (relative == "meta/projects.json") {
+                if (document.isArray()) count = document.array().size();
+                else if (document.isObject() && document.object().value("projects").isArray()) count = document.object().value("projects").toArray().size();
+                unit = QString::fromUtf8("проектов");
+            } else {
+                if (document.isObject() && document.object().value("items").isArray()) count = document.object().value("items").toArray().size();
+                unit = QString::fromUtf8("фраз");
+            }
         }
         return QString::fromUtf8("%1 %2 · %3 байт").arg(count).arg(unit).arg(std::filesystem::file_size(path, ec));
     } catch (...) { return QString::fromUtf8("не удалось разобрать · %1 байт").arg(std::filesystem::file_size(path, ec)); }
@@ -126,7 +133,8 @@ QString preview(const std::filesystem::path& path, const std::string& relative) 
 
 QString label(const std::string& relative) {
     return QString::fromUtf8(relative == "meta/tasks.json" ? "Задачи"
-        : relative == "meta/pipeline.json" ? "Пайплайн" : "Проекты");
+        : relative == "meta/pipeline.json" ? "Пайплайн"
+        : relative == "meta/projects.json" ? "Проекты" : "Баннер");
 }
 
 bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target, const QString& action) {
@@ -297,7 +305,8 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         });
         tabs->addTab(page, label(relative));
     };
-    addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json"); addFileTab("meta/projects.json");
+    addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json");
+    addFileTab("meta/projects.json"); addFileTab("meta/banner.json");
     auto* close = new QPushButton(QString::fromUtf8("Закрыть")); close->setMinimumWidth(120); close->setStyleSheet("min-height: 40px; max-height: 40px;"); layout->addWidget(close, 0, Qt::AlignRight);
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
     dialog.exec(); return changed;
