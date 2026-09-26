@@ -1635,7 +1635,8 @@ void QtWindow::render() {
         constexpr std::int64_t createdDays[] = {0, 7, 30, 90, 365};
         const std::int64_t createdMin = nowSeconds - createdDays[createdRange] * 86400;
         const auto activeProfileId = u(profiles_->currentData().toString());
-        std::vector<const TaskEntry*> visibleTasks;
+        struct TaskTableRow { const TaskEntry* task; bool xpPending; bool overdue; QStringList alerts; };
+        std::vector<TaskTableRow> visibleTasks;
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
             if (priorityFilter_->currentIndex() && AppNormalizeTaskPriority(task.priority) != priorityFilter_->currentIndex() - 1) continue;
@@ -1670,7 +1671,10 @@ void QtWindow::render() {
                  std::any_of(task.participants.begin(), task.participants.end(), [&activeProfileId](const auto& item) { return item.profileId == activeProfileId; }));
             const bool needsXp = taskStatus == 2 && std::none_of(task.participants.begin(), task.participants.end(),
                 [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
-            bool needsAdminAction = needsXp || (task.deadlineAt > 0 && task.deadlineAt < nowSeconds && taskStatus != 2);
+            const bool overdue = task.deadlineAt > 0 && task.deadlineAt < nowSeconds && taskStatus != 2;
+            QStringList attentionReasons;
+            if (needsXp) attentionReasons << QString::fromUtf8("Ожидает выдачи XP");
+            if (overdue) attentionReasons << QString::fromUtf8("Просрочен срок");
             if (!data.pipelineSteps.empty()) {
                 int pipelineIndex = -1;
                 if (!task.pipelineStepId.empty()) {
@@ -1685,8 +1689,11 @@ void QtWindow::render() {
                             task.pipelineStep == code + "  " + candidate.title) { pipelineIndex = index; break; }
                     }
                 }
-                if (pipelineIndex < 0 || (data.pipelineSteps[size_t(pipelineIndex)].nextIds.empty() && taskStatus != 2))
-                    needsAdminAction = true;
+                if (pipelineIndex < 0)
+                    attentionReasons << (task.pipelineStepId.empty() && task.pipelineStep.empty()
+                        ? QString::fromUtf8("Не указан этап процесса") : QString::fromUtf8("Этап процесса не найден"));
+                else if (data.pipelineSteps[size_t(pipelineIndex)].nextIds.empty() && taskStatus != 2)
+                    attentionReasons << QString::fromUtf8("Открытый handoff конечного этапа");
             }
             if (quickFilter == 1 && !assignedToProfile) continue;
             if (quickFilter == 2 && (task.deadlineAt < todayStart || task.deadlineAt >= tomorrowStart)) continue;
@@ -1695,10 +1702,12 @@ void QtWindow::render() {
             if (quickFilter == 5 && !resolvedProjectName.empty()) continue;
             if (quickFilter == 6 && !needsXp) continue;
             if (quickFilter == 7 && taskStatus == 2) continue;
-            if (quickFilter == 8 && !needsAdminAction) continue;
-            visibleTasks.push_back(&task);
+            if (quickFilter == 8 && attentionReasons.isEmpty()) continue;
+            visibleTasks.push_back({&task, needsXp, overdue, attentionReasons});
         }
-        std::sort(visibleTasks.begin(), visibleTasks.end(), [sortMode](const TaskEntry* a, const TaskEntry* b) {
+        std::sort(visibleTasks.begin(), visibleTasks.end(), [sortMode](const TaskTableRow& left, const TaskTableRow& right) {
+            const auto* a = left.task;
+            const auto* b = right.task;
             if (sortMode == 1) {
                 const auto ad = a->deadlineAt > 0 ? a->deadlineAt : std::numeric_limits<std::int64_t>::max();
                 const auto bd = b->deadlineAt > 0 ? b->deadlineAt : std::numeric_limits<std::int64_t>::max();
@@ -1710,7 +1719,8 @@ void QtWindow::render() {
             if (a->createdAt != b->createdAt) return a->createdAt > b->createdAt;
             return a->id < b->id;
         });
-        for (const auto* task : visibleTasks) {
+        for (const auto& view : visibleTasks) {
+            const auto* task = view.task;
             const auto project = std::find_if(data.projects.begin(), data.projects.end(), [&](const auto& entry) { return !task->projectId.empty() && entry.id == task->projectId; });
             const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(), [&](const auto& entry) { return !task->pipelineStepId.empty() && entry.id == task->pipelineStepId; });
             std::vector<std::string> assigneeIds = task->assignees;
@@ -1724,10 +1734,23 @@ void QtWindow::render() {
             QString assigneeSummary = assigneeNames.isEmpty() ? QString::fromUtf8("Не назначена")
                 : assigneeNames.mid(0, 2).join(QStringLiteral(", "));
             if (assigneeNames.size() > 2) assigneeSummary += QStringLiteral(" +%1").arg(assigneeNames.size() - 2);
+            const int previousRowCount = table_->rowCount();
             row(task->id, {q(AppTaskDisplayTitle(*task)), timeText(task->createdAt),
                 q(project == data.projects.end() ? task->project : project->name), assigneeSummary,
                 q(AppTaskStatusLabel(task->status)), q(AppTaskPriorityLabel(task->priority)), timeText(task->deadlineAt),
                 q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
+            if (table_->rowCount() > previousRowCount) {
+                auto* titleItem = table_->item(previousRowCount, 0);
+                QStringList badges;
+                if (view.xpPending) badges << QStringLiteral("XP");
+                if (!view.alerts.isEmpty()) badges << QStringLiteral("!");
+                if (!badges.isEmpty()) titleItem->setText(titleItem->text() + QStringLiteral("  [%1]").arg(badges.join(' ')));
+                if (!view.alerts.isEmpty()) {
+                    const auto explanation = view.alerts.join('\n');
+                    titleItem->setToolTip(titleItem->toolTip() + QStringLiteral("\n\n%1").arg(explanation));
+                    titleItem->setData(Qt::AccessibleDescriptionRole, explanation);
+                }
+            }
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
         summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4")

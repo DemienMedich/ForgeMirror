@@ -201,6 +201,10 @@ Administrators now have **Выбор задач → Выбрать все вид
 
 The Qt Tasks table now shows task creation time and a compact assignee summary (up to two names plus a remaining count), falling back to XP participants when no assignee is explicitly set. These values participate in the existing search, so a profile name can find its tasks without opening details. `smoke_qt` checks column layout, timestamp, resolved profile name and assignee search. The stable ImGui implementation is unchanged.
 
+### Task attention badges (stage 115, implementation checkpoint)
+
+The Qt Tasks table now marks tasks awaiting XP with **XP** and tasks needing action with **!**. Hovering the task title explains the reason: pending XP, overdue deadline, missing/unknown pipeline stage or an open final-stage handoff. The same computed conditions drive the existing **Требуют внимания** quick filter. `smoke_qt` checks each reason, a normal task and a task whose XP is already awarded. The stable ImGui implementation is unchanged.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.

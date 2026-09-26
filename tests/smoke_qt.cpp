@@ -2996,6 +2996,52 @@ static bool TestQtTaskTableDateAndAssignees() {
     return table->rowCount() == 1 && table->item(0, 0)->data(Qt::UserRole).toString() == "table-metadata";
 }
 
+static bool TestQtTaskAttentionBadges() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    PipelineStep active; active.id = "active"; active.title = "Active"; active.nextIds = {"final"};
+    PipelineStep final; final.id = "final"; final.title = "Final";
+    workspace.data.pipelineSteps = {active, final};
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    TaskEntry xp; xp.id = "xp-pending"; xp.title = "XP pending"; xp.status = 2; xp.pipelineStepId = active.id;
+    TaskEntry overdue; overdue.id = "overdue-task"; overdue.title = "Overdue task"; overdue.deadlineAt = now - 60; overdue.pipelineStepId = active.id;
+    TaskEntry missing; missing.id = "missing-stage"; missing.title = "Missing stage";
+    TaskEntry unknown; unknown.id = "unknown-stage"; unknown.title = "Unknown stage"; unknown.pipelineStepId = "deleted";
+    TaskEntry handoff; handoff.id = "open-handoff"; handoff.title = "Open handoff"; handoff.pipelineStepId = final.id;
+    TaskEntry normal; normal.id = "normal-task"; normal.title = "Normal task"; normal.deadlineAt = now + 3600; normal.pipelineStepId = active.id;
+    TaskEntry awarded; awarded.id = "awarded-task"; awarded.title = "Awarded task"; awarded.status = 2;
+    awarded.pipelineStepId = active.id; awarded.participants.push_back({"done", 100, 20, 0, {}});
+    workspace.data.tasks = {xp, overdue, missing, unknown, handoff, normal, awarded};
+    if (!AppSavePipelineData(directory, workspace.data.pipelineSteps) || !AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !table) return false;
+    navigation->setCurrentRow(1);
+    auto cellFor = [table](const QString& id) -> QTableWidgetItem* {
+        for (int row = 0; row < table->rowCount(); ++row)
+            if (table->item(row, 0)->data(Qt::UserRole).toString() == id) return table->item(row, 0);
+        return nullptr;
+    };
+    const auto* xpCell = cellFor("xp-pending");
+    const auto* overdueCell = cellFor("overdue-task");
+    const auto* missingCell = cellFor("missing-stage");
+    const auto* unknownCell = cellFor("unknown-stage");
+    const auto* handoffCell = cellFor("open-handoff");
+    const auto* normalCell = cellFor("normal-task");
+    const auto* awardedCell = cellFor("awarded-task");
+    return xpCell && xpCell->text().contains("XP") && xpCell->text().contains('!') && xpCell->toolTip().contains(QString::fromUtf8("Ожидает выдачи XP")) &&
+        overdueCell && overdueCell->text().contains('!') && overdueCell->toolTip().contains(QString::fromUtf8("Просрочен срок")) &&
+        missingCell && missingCell->toolTip().contains(QString::fromUtf8("Не указан этап")) &&
+        unknownCell && unknownCell->toolTip().contains(QString::fromUtf8("не найден")) &&
+        handoffCell && handoffCell->toolTip().contains(QString::fromUtf8("handoff")) &&
+        normalCell && !normalCell->text().contains('!') && !normalCell->text().contains("XP") &&
+        awardedCell && !awardedCell->text().contains("XP");
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3419,6 +3465,7 @@ int main(int argc, char** argv) {
     if (!TestQtTaskFilterReset()) { std::cerr << "Qt task filter reset failed\n"; return 1; }
     if (!TestQtVisibleTaskSelectionTools()) { std::cerr << "Qt visible task selection tools failed\n"; return 1; }
     if (!TestQtTaskTableDateAndAssignees()) { std::cerr << "Qt task table date and assignees failed\n"; return 1; }
+    if (!TestQtTaskAttentionBadges()) { std::cerr << "Qt task attention badges failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
