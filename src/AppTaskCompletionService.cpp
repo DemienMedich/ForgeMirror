@@ -33,7 +33,8 @@ std::filesystem::path journalPath(const std::filesystem::path& root) { return ro
 bool safeBackupName(const std::string& name) {
     if (name == "meta/tasks.json" || name == "meta/projects.json" || name == "meta/task-audit.log" ||
         name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json" ||
-        name == "meta/professions.txt" || name == "skills.txt") return true;
+        name == "meta/professions.txt" || name == "meta/profile-audit.log" ||
+        name == "meta/storage.json" || name == "skills.txt") return true;
     if (name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4))) return true;
     if (name.rfind("archive/", 0) == 0 && name.size() > 12 && name.substr(name.size() - 4) == ".ini")
         return safeProfileId(name.substr(8, name.size() - 12));
@@ -141,6 +142,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002) ||
           (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
           (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && count >= 4 && count <= 30004) ||
+          (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
           (version == "FORGEMIRROR_QT_DIRECT_XP_1" && count == 2) ||
           (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
@@ -150,15 +152,20 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         const bool projectFile = name == "meta/projects.json" || name == "meta/updates/projects.last-good.json";
         const bool professionFile = name == "meta/professions.txt" || name == "skills.txt";
         const bool profileFile = name.size() > 4 && name.substr(name.size() - 4) == ".ini";
+        const bool rootProfileFile = profileFile && name.find('/') == std::string::npos;
         const bool profileDeleteFile = profileFile || name.rfind("achievements/", 0) == 0;
         const bool skillMergeFile = name == "skills.txt" || name == "meta/tasks.json" ||
             name == "meta/task-audit.log" || name == "meta/updates/tasks.last-good.json" ||
             profileFile || name.rfind("achievements/", 0) == 0;
+        const bool walletFile = rootProfileFile || name == "meta/profile-audit.log" || name == "meta/storage.json";
+        const bool walletMetadataFile = name == "meta/profile-audit.log" || name == "meta/storage.json";
         if (!safeBackupName(name) || (projectFile && version != "FORGEMIRROR_QT_PROJECT_DELETE_1") ||
             (professionFile && version != "FORGEMIRROR_QT_PROFESSION_DELETE_1" &&
              !(name == "skills.txt" && (version == "FORGEMIRROR_QT_SKILL_DELETE_1" || skillMergeFile))) ||
             (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) ||
             (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && !skillMergeFile) ||
+            (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && !walletFile) ||
+            (walletMetadataFile && version != "FORGEMIRROR_QT_PROFILE_WALLET_1") ||
             (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         if (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && !profileFile)
@@ -174,6 +181,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     const bool professionTransaction = version == "FORGEMIRROR_QT_PROFESSION_DELETE_1";
     const bool skillTransaction = version == "FORGEMIRROR_QT_SKILL_DELETE_1";
     const bool skillMergeTransaction = version == "FORGEMIRROR_QT_SKILL_MERGE_1";
+    const bool profileWalletTransaction = version == "FORGEMIRROR_QT_PROFILE_WALLET_1";
     const bool profileDeleteTransaction = version == "FORGEMIRROR_QT_PROFILE_DELETE_1";
     const bool rulesReapplyTransaction = version == "FORGEMIRROR_QT_RULES_REAPPLY_1";
     const bool directXpTransaction = version == "FORGEMIRROR_QT_DIRECT_XP_1";
@@ -202,7 +210,13 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             }
         }
     }
-    const bool commonComplete = directXpTransaction ? directXpComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : skillMergeTransaction ? skillMergeComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
+    size_t walletProfileFiles = 0;
+    if (profileWalletTransaction) for (const auto& item : seen)
+        if (item.size() > 4 && item.substr(item.size() - 4) == ".ini" && item.find('/') == std::string::npos) ++walletProfileFiles;
+    const bool profileWalletComplete = profileWalletTransaction && walletProfileFiles == 1 &&
+        seen.count("meta/profile-audit.log") &&
+        (seen.size() == 2 || (seen.size() == 3 && seen.count("meta/storage.json")));
+    const bool commonComplete = directXpTransaction ? directXpComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : profileWalletTransaction ? profileWalletComplete : skillMergeTransaction ? skillMergeComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
@@ -265,6 +279,14 @@ void PrepareProfileDeletionRecovery(const std::filesystem::path& directory, cons
     if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для журнала удаления.");
     prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_DELETE_1",
         {profileId + ".ini", "archive/" + profileId + ".ini", "achievements/" + profileId + ".json"});
+}
+
+void PrepareProfileWalletRecovery(const std::filesystem::path& directory,
+                                  const std::string& profileId, bool includeStorageVault) {
+    if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для журнала кошелька.");
+    std::vector<std::string> files = {profileId + ".ini", "meta/profile-audit.log"};
+    if (includeStorageVault) files.push_back("meta/storage.json");
+    prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_WALLET_1", files);
 }
 
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,

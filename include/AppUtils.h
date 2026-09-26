@@ -75,6 +75,7 @@ bool ProfileMatchesTaskRollbackPostcondition(const std::string& snapshot, const 
 bool ApplyProfileTaskRollbackSnapshot(const std::string& snapshot, Profile& profile);
 bool AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
                         const std::string& action, const std::string& details = {});
+void AppSetProfileAuditFailureHookForTests(bool enabled);
 
 // Load module toggles from environment (FORGEMIRROR_DISABLE_MODULES=tasks,pipeline,...).
 ModuleToggles LoadModuleToggles();

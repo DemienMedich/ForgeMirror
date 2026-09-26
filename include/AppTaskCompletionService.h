@@ -47,6 +47,8 @@ void PrepareSkillMergeRecovery(const std::filesystem::path& directory,
                                const std::vector<std::string>& profileIds);
 void PrepareProfileDeletionRecovery(const std::filesystem::path& directory,
                                     const std::string& profileId);
+void PrepareProfileWalletRecovery(const std::filesystem::path& directory,
+                                 const std::string& profileId, bool includeStorageVault = false);
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
                                  const std::vector<std::pair<std::string, bool>>& profiles);
 void PrepareDirectXpRecovery(const std::filesystem::path& directory,

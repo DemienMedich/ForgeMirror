@@ -35,6 +35,8 @@
 #include <QJsonObject>
 #include <QtWidgets>
 #include <algorithm>
+#include <functional>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace {
@@ -106,6 +108,45 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     const int start = vault.pomodoroStartMinutes, end = vault.pomodoroEndMinutes;
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+}
+AppProfileMutationResult runWalletMutationWithAudit(
+    QtWorkspace& workspace, const std::string& restoreProfileId, const std::string& profileId,
+    bool includeStorageVault, const std::string& action, const std::string& details,
+    const std::function<AppProfileMutationResult()>& mutation) {
+    AppProfileMutationResult result;
+    if (std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) {
+        result.errorMessage = u8"Сначала завершите восстановление данных.";
+        return result;
+    }
+    bool prepared = false;
+    try {
+        PrepareProfileWalletRecovery(workspace.directory, profileId, includeStorageVault);
+        prepared = true;
+        result = mutation();
+        if (!result.ok || !result.profile)
+            throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось сохранить изменение кошелька." : result.errorMessage);
+        if (!AppendProfileAudit(workspace.directory, profileId, action, details))
+            throw std::runtime_error(u8"Не удалось записать аудит кошелька; изменение отменено.");
+        CommitQtRecoveryTransaction(workspace.directory);
+        return result;
+    } catch (const std::exception& error) {
+        result.ok = false;
+        result.changed = false;
+        result.affectedProfiles = 0;
+        result.profile.reset();
+        result.errorMessage = error.what();
+        if (prepared) {
+            try {
+                RecoverTaskCompletion(workspace.directory);
+                if (!restoreProfileId.empty()) workspace.storage->set_active_profile(restoreProfileId);
+                workspace.reload();
+                result.errorMessage += u8" Все изменения отменены.";
+            } catch (const std::exception&) {
+                result.errorMessage += u8" Откат не завершён; журнал сохранён для восстановления при запуске.";
+            }
+        }
+        return result;
+    }
 }
 enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud, ModelViewerPage, ModelSettingsPage, Logs };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
@@ -399,14 +440,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (workspace_.data.vault.pomodoroCoinsPerCycle <= 0) return QString::fromUtf8("Фокус завершён. Награды отключены.");
         if (workMinutes < workspace_.data.vault.pomodoroMinMinutes) return QString::fromUtf8("Фокус завершён, но короче минимального времени награды.");
         if (!pomodoroWithinWindow(workspace_.data.vault, startedAt)) return QString::fromUtf8("Фокус завершён вне расписания наград.");
-        auto result = AppAdjustProfileWallet(*workspace_.storage, id, id, double(workspace_.data.vault.pomodoroCoinsPerCycle));
-        if (!result.ok || !result.profile) return QString::fromUtf8("Не удалось сохранить награду.");
         const int amount = workspace_.data.vault.pomodoroCoinsPerCycle;
-        const bool auditRecorded = AppendProfileAudit(workspace_.directory, id, "pomodoro_reward",
-            "credit " + std::to_string(amount) + " pomodoro_focus");
+        auto result = runWalletMutationWithAudit(workspace_, id, id, false, "pomodoro_reward",
+            "credit " + std::to_string(amount) + " pomodoro_focus", [&] {
+                return AppAdjustProfileWallet(*workspace_.storage, id, id, double(amount));
+            });
+        if (!result.ok || !result.profile)
+            return QString::fromUtf8("Награда не начислена: %1").arg(q(result.errorMessage));
         reload();
-        return auditRecorded ? QString::fromUtf8("Начислено Кукоинов: +%1").arg(amount)
-            : QString::fromUtf8("Начислено Кукоинов: +%1; запись в историю не сохранена.").arg(amount);
+        return QString::fromUtf8("Начислено Кукоинов: +%1").arg(amount);
     });
     content->addWidget(pomodoro_, 1);
     auto* filters = new QHBoxLayout;
@@ -844,11 +886,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             QMessageBox::Yes | QMessageBox::No, this);
         confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
-        auto result = AppRemoveEvilSpiritForCoins(*workspace_.storage, id, id,
-            workspace_.directory, workspace_.data.vault, 200.0);
+        auto result = runWalletMutationWithAudit(workspace_, id, id, true, "spirit_purchase",
+            "evil->none cost=200", [&] {
+                return AppRemoveEvilSpiritForCoins(*workspace_.storage, id, id,
+                    workspace_.directory, workspace_.data.vault, 200.0);
+            });
         if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось снять Злого духа." : result.errorMessage); return; }
-        if (!AppendProfileAudit(workspace_.directory, id, "spirit_purchase", "evil->none cost=200"))
-            statusBar()->showMessage(QString::fromUtf8("Дух снят, но запись в историю кошелька не сохранена."), 7000);
         reload();
     });
     connect(advanceStage_, &QPushButton::clicked, this, [this] {
@@ -1873,24 +1916,23 @@ void QtWindow::adjustWallet() {
         confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
         confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
-        const auto result = AppAdjustProfileWallet(*workspace_.storage, profileId, profileId, debit ? -value : value);
-        if (!result.ok || !result.profile) {
-            notice->setText(result.errorMessage.empty() ? QString::fromUtf8("Не удалось сохранить кошелёк.") : q(result.errorMessage));
-            return;
-        }
         const QString audit = QStringLiteral("%1|%2|%3")
             .arg(debit ? QStringLiteral("debit") : QStringLiteral("credit"))
             .arg(value, 0, 'f', 2).arg(memo);
-        const bool auditRecorded = AppendProfileAudit(workspace_.directory, profileId, "wallet_adjustment", u(audit));
-        dialog.setProperty("walletAuditRecorded", auditRecorded);
+        const auto result = runWalletMutationWithAudit(workspace_, profileId, profileId, false,
+            "wallet_adjustment", u(audit), [&] {
+                return AppAdjustProfileWallet(*workspace_.storage, profileId, profileId, debit ? -value : value);
+            });
+        if (!result.ok || !result.profile) {
+            notice->setText(result.errorMessage.empty() ? QString::fromUtf8("Не удалось сохранить кошелёк.") : q(result.errorMessage));
+            updatePreview();
+            return;
+        }
         dialog.accept();
     });
     if (dialog.exec() != QDialog::Accepted) return;
-    const bool auditRecorded = dialog.property("walletAuditRecorded").toBool();
     reload();
-    statusBar()->showMessage(auditRecorded
-        ? QString::fromUtf8("Кошелёк профиля обновлён, запись добавлена в аудит.")
-        : QString::fromUtf8("Баланс обновлён, но запись в аудит не удалось сохранить."), 7000);
+    statusBar()->showMessage(QString::fromUtf8("Кошелёк профиля обновлён, запись добавлена в аудит."), 7000);
 }
 
 void QtWindow::showProfileHistory() {

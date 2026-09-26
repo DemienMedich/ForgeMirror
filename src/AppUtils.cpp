@@ -598,6 +598,8 @@ std::string SerializeProfileTaskRollbackSnapshot(const Profile& profile) {
 }
 
 namespace {
+
+bool g_forceProfileAuditFailureForTests = false;
 constexpr const char* kTaskRollbackV2 = "FORGEMIRROR_TASK_ROLLBACK_2\n";
 bool ParseTaskRollbackEnvelope(const std::string& value, std::string& before, std::string& after) {
     if (value.rfind(kTaskRollbackV2, 0) != 0) return false;
@@ -816,6 +818,7 @@ bool SetAdminStayLoggedIn(const std::filesystem::path& storageDir, bool enabled)
 
 bool AppendProfileAudit(const std::filesystem::path& storageDir, const std::string& profileId,
                         const std::string& action, const std::string& details) {
+    if (g_forceProfileAuditFailureForTests) return false;
     if (storageDir.empty() || profileId.empty() || action.empty()) return false;
     std::error_code ec;
     const auto path = storageDir / "meta" / "profile-audit.log";
@@ -839,6 +842,11 @@ bool AppendProfileAudit(const std::filesystem::path& storageDir, const std::stri
     out.flush();
     return out.good();
 }
+
+void AppSetProfileAuditFailureHookForTests(bool enabled) {
+    g_forceProfileAuditFailureForTests = enabled;
+}
+
 std::filesystem::path BannerTextPath(const std::filesystem::path& storageDir) {
     return storageDir / "meta" / "banner.json";
 }

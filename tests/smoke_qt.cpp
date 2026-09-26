@@ -230,6 +230,19 @@ static bool TestTaskCompletion() {
     catch (const std::exception&) { rejectedJournal = true; }
     if (!rejectedJournal || bytes(a->id + ".ini") != beforeBadJournal || !std::filesystem::exists(journal))
         return fail("invalid recovery journal was not rejected safely");
+    for (const auto* unexpected : {"meta/profile-audit.log", "meta/storage.json"}) {
+        std::filesystem::remove_all(journal);
+        std::filesystem::create_directories(journal);
+        {
+            std::ofstream manifest(journal / "manifest", std::ios::binary);
+            manifest << "FORGEMIRROR_QT_XP_1 1\n" << std::quoted(unexpected) << " 1\n";
+        }
+        rejectedJournal = false;
+        try { RecoverTaskCompletion(workspace.directory); }
+        catch (const std::exception&) { rejectedJournal = true; }
+        if (!rejectedJournal || bytes(a->id + ".ini") != beforeBadJournal || !std::filesystem::exists(journal))
+            return fail("wallet file escaped recovery journal allowlist");
+    }
     return true;
 }
 
@@ -2087,6 +2100,22 @@ static bool TestPersonalWallet() {
     workspace.storage->set_active_profile(created->id);
     auto unchanged = workspace.storage->load_profile();
     if (!unchanged || unchanged->spirit() != ProfileSpirit::Evil || unchanged->wallet_balance() != 251.0 || workspace.data.vault.balance != 0.0) return false;
+    AppSetProfileAuditFailureHookForTests(true);
+    QTimer::singleShot(0, [] {
+        if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))
+            confirm->button(QMessageBox::Yes)->click();
+        QTimer::singleShot(0, [] {
+            if (auto* warning = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) warning->accept();
+        });
+    });
+    remove->click();
+    AppSetProfileAuditFailureHookForTests(false);
+    workspace.storage->set_active_profile(created->id);
+    const auto spiritAuditRollback = workspace.storage->load_profile();
+    const auto vaultAuditRollback = LoadStorageVault(workspace.directory);
+    if (!spiritAuditRollback || spiritAuditRollback->spirit() != ProfileSpirit::Evil ||
+        spiritAuditRollback->wallet_balance() != 251.0 || vaultAuditRollback.balance != 0.0 ||
+        !vaultAuditRollback.log.empty() || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); window.grab().save(artifacts + "/profile-wallet.png"); }
     QTimer::singleShot(0, [] { qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::Yes)->click(); });
@@ -2151,6 +2180,62 @@ static bool TestPersonalWallet() {
         if (foundWallet && foundPassword && foundUnknown && foundSpirit && foundAwarded && foundPending) dialog->accept();
     });
     profileHistory->click();
+    QAction* adminAction = nullptr;
+    for (auto* menu : window.findChildren<QMenu*>())
+        for (auto* action : menu->actions())
+            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return false;
+    QTimer::singleShot(0, [] {
+        auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+        if (input) { input->setTextValue(QString::fromUtf8("admin123")); input->accept(); }
+    });
+    adminAction->trigger();
+    auto* adjust = window.findChild<QPushButton*>("adjustProfileWallet");
+    if (!adjust || !adjust->isVisible()) return false;
+    QFile auditFile(QString::fromStdWString((workspace.directory / "meta/profile-audit.log").wstring()));
+    if (!auditFile.open(QIODevice::ReadOnly)) return false;
+    const auto auditBefore = auditFile.readAll();
+    auditFile.close();
+    AppSetProfileAuditFailureHookForTests(true);
+    bool auditFailureShown = false;
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    QObject::connect(&watchdog, &QTimer::timeout, [&] {
+        if (auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget())) modal->reject();
+    });
+    watchdog.start(8000);
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* amount = dialog ? dialog->findChild<QDoubleSpinBox*>("walletAmount") : nullptr;
+        auto* reason = dialog ? dialog->findChild<QLineEdit*>("walletReason") : nullptr;
+        auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
+        if (!dialog || !amount || !reason || !buttons) return;
+        amount->setValue(12.5);
+        reason->setText(QString::fromUtf8("Тест отката аудита"));
+        QTimer::singleShot(0, [] {
+            if (auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))
+                confirm->button(QMessageBox::Yes)->click();
+        });
+        buttons->button(QDialogButtonBox::Save)->click();
+        QTimer::singleShot(0, [&] {
+            auto* current = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            auto* notice = current ? current->findChild<QLabel*>("walletNotice") : nullptr;
+            auditFailureShown = current && current->objectName() == "walletAdjustmentDialog" && notice &&
+                notice->text().contains(QString::fromUtf8("Все изменения отменены"));
+            if (current) current->reject();
+        });
+    });
+    adjust->click();
+    watchdog.stop();
+    AppSetProfileAuditFailureHookForTests(false);
+    if (!auditFailureShown || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+    if (!workspace.storage->set_active_profile(created->id)) return false;
+    const auto afterAuditFailure = workspace.storage->load_profile();
+    QFile auditAfterFile(QString::fromStdWString((workspace.directory / "meta/profile-audit.log").wstring()));
+    if (!auditAfterFile.open(QIODevice::ReadOnly)) return false;
+    const auto auditAfter = auditAfterFile.readAll();
+    auditAfterFile.close();
+    if (!afterAuditFailure || std::abs(afterAuditFailure->wallet_balance() - 51.0) > 0.001 || auditAfter != auditBefore) return false;
     return true;
 }
 
