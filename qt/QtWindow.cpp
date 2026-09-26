@@ -257,7 +257,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         }
         if (ShowProfilePasswordDialog(this, workspace_, id, id, false)) {
             const bool forgotten = profileSession_.lock(true);
-            if (!forgotten) message(u8"Пароль изменён, но запись доверия удалить не удалось. Она может восстановить доступ после обновления.");
+            if (!forgotten) message(u8"Пароль изменён и сеанс закрыт, но не удалось сохранить выход или удалить доверенный вход.");
         }
         render();
     });
@@ -1084,7 +1084,7 @@ bool QtWindow::requireAdmin() {
 void QtWindow::authenticateProfile() {
     const auto id = u(profiles_->currentData().toString());
     if (profileSession_.isUnlocked(*workspace_.storage, id)) {
-        if (!profileSession_.lock(true)) message(u8"Не удалось удалить доверенный вход. Он может восстановиться после обновления.");
+        if (!profileSession_.lock(true)) message(u8"Сеанс закрыт, но не удалось сохранить выход или удалить доверенный вход.");
         render(); return;
     }
     if (id.empty()) return;
@@ -1122,7 +1122,7 @@ void QtWindow::authenticateProfile() {
         const bool accepted = profileSession_.unlock(*workspace_.storage, id, u(password->text()), trust->currentData().toInt());
         password->clear();
         if (accepted) dialog.accept();
-        else { notice->setText(QString::fromUtf8("Неверный пароль или профиль недоступен. Для восстановления обратитесь к администратору.")); password->setFocus(); }
+        else { notice->setText(QString::fromUtf8("Вход не выполнен: проверьте пароль, состояние профиля и доступность локальной записи.")); password->setFocus(); }
     });
     dialog.exec();
     render();

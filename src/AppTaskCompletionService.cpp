@@ -34,7 +34,7 @@ bool safeBackupName(const std::string& name) {
     if (name == "meta/tasks.json" || name == "meta/projects.json" || name == "meta/task-audit.log" ||
         name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json" ||
         name == "meta/professions.txt" || name == "meta/profile-audit.log" ||
-        name == "meta/storage.json" || name == "skills.txt") return true;
+        name == "meta/storage.json" || name == "meta/ui.ini" || name == "skills.txt") return true;
     if (name.size() > 4 && name.substr(name.size() - 4) == ".ini" && safeProfileId(name.substr(0, name.size() - 4))) return true;
     if (name.rfind("archive/", 0) == 0 && name.size() > 12 && name.substr(name.size() - 4) == ".ini")
         return safeProfileId(name.substr(8, name.size() - 12));
@@ -144,6 +144,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && count >= 4 && count <= 30004) ||
           (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" && (count == 2 || count == 3)) ||
+          (version == "FORGEMIRROR_QT_PROFILE_SESSION_1" && (count == 1 || count == 2)) ||
           (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
           (version == "FORGEMIRROR_QT_DIRECT_XP_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
@@ -170,7 +171,10 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && !walletFile) ||
             (walletMetadataFile && version != "FORGEMIRROR_QT_PROFILE_WALLET_1" &&
              !(name == "meta/profile-audit.log" && (version == "FORGEMIRROR_QT_DIRECT_XP_1" ||
-                                                       version == "FORGEMIRROR_QT_PROFILE_AUDIT_1"))) ||
+                                                       version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" ||
+                                                       version == "FORGEMIRROR_QT_PROFILE_SESSION_1"))) ||
+            (name == "meta/ui.ini" && version != "FORGEMIRROR_QT_PROFILE_SESSION_1") ||
+            (version == "FORGEMIRROR_QT_PROFILE_SESSION_1" && name != "meta/profile-audit.log" && name != "meta/ui.ini") ||
             (version == "FORGEMIRROR_QT_PROFILE_AUDIT_1" && name != "meta/profile-audit.log" &&
              !rootProfileFile && !archivedProfileFile) ||
             (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
@@ -190,6 +194,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     const bool skillMergeTransaction = version == "FORGEMIRROR_QT_SKILL_MERGE_1";
     const bool profileWalletTransaction = version == "FORGEMIRROR_QT_PROFILE_WALLET_1";
     const bool profileAuditTransaction = version == "FORGEMIRROR_QT_PROFILE_AUDIT_1";
+    const bool profileSessionTransaction = version == "FORGEMIRROR_QT_PROFILE_SESSION_1";
     const bool profileDeleteTransaction = version == "FORGEMIRROR_QT_PROFILE_DELETE_1";
     const bool rulesReapplyTransaction = version == "FORGEMIRROR_QT_RULES_REAPPLY_1";
     const bool directXpTransaction = version == "FORGEMIRROR_QT_DIRECT_XP_1";
@@ -241,7 +246,9 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         seen.count("meta/profile-audit.log") &&
         ((seen.size() == 2 && archivedAuditFiles == 0) ||
          (seen.size() == 3 && archivedAuditFiles == 1 && auditProfileId == archivedAuditProfileId));
-    const bool commonComplete = directXpTransaction ? directXpComplete : profileAuditTransaction ? profileAuditComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : profileWalletTransaction ? profileWalletComplete : skillMergeTransaction ? skillMergeComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
+    const bool profileSessionComplete = profileSessionTransaction && seen.count("meta/profile-audit.log") &&
+        (seen.size() == 1 || (seen.size() == 2 && seen.count("meta/ui.ini")));
+    const bool commonComplete = directXpTransaction ? directXpComplete : profileSessionTransaction ? profileSessionComplete : profileAuditTransaction ? profileAuditComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : profileWalletTransaction ? profileWalletComplete : skillMergeTransaction ? skillMergeComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
@@ -324,6 +331,12 @@ void PrepareProfileArchiveAuditRecovery(const std::filesystem::path& directory, 
     if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для журнала архива.");
     prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_AUDIT_1",
         {profileId + ".ini", "archive/" + profileId + ".ini", "meta/profile-audit.log"});
+}
+
+void PrepareProfileSessionAuditRecovery(const std::filesystem::path& directory, bool includeUiSettings) {
+    std::vector<std::string> files = {"meta/profile-audit.log"};
+    if (includeUiSettings) files.push_back("meta/ui.ini");
+    prepareFileJournal(directory, "FORGEMIRROR_QT_PROFILE_SESSION_1", files);
 }
 
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,

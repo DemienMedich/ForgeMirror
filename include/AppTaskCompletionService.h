@@ -53,6 +53,8 @@ void PrepareProfileAuditRecovery(const std::filesystem::path& directory,
                                  const std::string& profileId);
 void PrepareProfileArchiveAuditRecovery(const std::filesystem::path& directory,
                                        const std::string& profileId);
+void PrepareProfileSessionAuditRecovery(const std::filesystem::path& directory,
+                                       bool includeUiSettings);
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
                                  const std::vector<std::pair<std::string, bool>>& profiles);
 void PrepareDirectXpRecovery(const std::filesystem::path& directory,

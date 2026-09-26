@@ -1324,17 +1324,51 @@ static bool TestProfileSession() {
     const auto created = workspace.storage->create_profile(profile);
     if (!created) return false;
     QtProfileSession session(workspace.directory);
+    AppSetProfileAuditFailureHookForTests(true);
+    const bool auditBlockedUnlock = session.unlock(*workspace.storage, created->id, "secret");
+    AppSetProfileAuditFailureHookForTests(false);
+    if (auditBlockedUnlock || session.isUnlocked(*workspace.storage, created->id)) { std::cerr << "session: auditBlockedUnlock\n"; return false; }
     if (session.unlock(*workspace.storage, created->id, "wrong") ||
         !session.unlock(*workspace.storage, created->id, "secret") ||
-        !session.isUnlocked(*workspace.storage, created->id)) return false;
+        !session.isUnlocked(*workspace.storage, created->id)) { std::cerr << "session: basic unlock\n"; return false; }
     QtProfileSession fresh(workspace.directory);
     if (fresh.isUnlocked(*workspace.storage, created->id)) return false;
+    QFile ui(temp.path() + "/meta/ui.ini");
+    if (!ui.open(QIODevice::ReadOnly) && !ui.open(QIODevice::WriteOnly)) { std::cerr << "session: ui before trusted\n"; return false; }
+    if (ui.isOpen() && ui.size() == 0 && (ui.openMode() & QIODevice::WriteOnly)) ui.close();
+    if (!ui.open(QIODevice::ReadOnly)) { std::cerr << "session: ui read before trusted\n"; return false; }
+    const auto beforeTrustedUnlock = ui.readAll(); ui.close();
+    QFile audit(temp.path() + "/meta/profile-audit.log"); if (!audit.open(QIODevice::ReadOnly)) { std::cerr << "session: audit before trusted\n"; return false; }
+    const auto beforeTrustedAudit = audit.readAll(); audit.close();
+    AppSetProfileAuditFailureHookForTests(true);
+    const bool auditBlockedTrustedUnlock = session.unlock(*workspace.storage, created->id, "secret", 30);
+    AppSetProfileAuditFailureHookForTests(false);
+    if (auditBlockedTrustedUnlock || session.isUnlocked(*workspace.storage, created->id)) { std::cerr << "session: trusted unlock failure\n"; return false; }
+    if (!ui.open(QIODevice::ReadOnly)) { std::cerr << "session: ui after trusted fail\n"; return false; }
+    const auto afterTrustedUnlock = ui.readAll(); ui.close();
+    if (afterTrustedUnlock != beforeTrustedUnlock || !audit.open(QIODevice::ReadOnly)) return false;
+    const auto afterTrustedAudit = audit.readAll(); audit.close();
+    if (afterTrustedAudit != beforeTrustedAudit || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) { std::cerr << "session: trusted rollback equal=" << (afterTrustedAudit == beforeTrustedAudit) << " journal=" << std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") << "\n"; return false; }
     if (!session.unlock(*workspace.storage, created->id, "secret", 30) || !session.isTrusted() || session.trustedUntil() <= QDateTime::currentSecsSinceEpoch()) return false;
-    QFile ui(temp.path() + "/meta/ui.ini"); if (!ui.open(QIODevice::ReadOnly)) return false;
+    if (!ui.open(QIODevice::ReadOnly)) return false;
     const auto trustBytes = ui.readAll(); ui.close();
     if (!trustBytes.contains("trusted=" + QByteArray::fromStdString(created->id) + ":")) return false;
     QtProfileSession restored(workspace.directory);
-    if (!restored.isUnlocked(*workspace.storage, created->id) || !restored.isTrusted() || !restored.lock(true)) return false;
+    AppSetProfileAuditFailureHookForTests(true);
+    const bool auditBlockedTrustedRestore = restored.isUnlocked(*workspace.storage, created->id);
+    AppSetProfileAuditFailureHookForTests(false);
+    if (auditBlockedTrustedRestore || restored.isTrusted()) return false;
+    if (!restored.isUnlocked(*workspace.storage, created->id) || !restored.isTrusted()) return false;
+    AppSetProfileAuditFailureHookForTests(true);
+    const bool auditedLogout = restored.lock(true);
+    AppSetProfileAuditFailureHookForTests(false);
+    if (auditedLogout || restored.isTrusted() || restored.isUnlocked(*workspace.storage, created->id)) return false;
+    if (!ui.open(QIODevice::ReadOnly)) return false;
+    const auto loggedOutBytes = ui.readAll(); ui.close();
+    if (loggedOutBytes.contains("trusted=" + QByteArray::fromStdString(created->id) + ":")) return false;
+    if (!session.unlock(*workspace.storage, created->id, "secret", 30)) return false;
+    QtProfileSession restoredNormally(workspace.directory);
+    if (!restoredNormally.isUnlocked(*workspace.storage, created->id) || !restoredNormally.isTrusted() || !restoredNormally.lock(true)) return false;
     QtProfileSession forgotten(workspace.directory);
     if (forgotten.isUnlocked(*workspace.storage, created->id)) return false;
     if (!ui.open(QIODevice::ReadWrite)) return false;
@@ -1359,7 +1393,7 @@ static bool TestProfileSession() {
     const auto afterBlockedBytes = ui.readAll(); ui.close();
     if (afterBlockedBytes != prunedBytes) return false;
 #endif
-    QFile audit(temp.path() + "/meta/profile-audit.log"); if (!audit.open(QIODevice::ReadOnly)) return false;
+    if (!audit.open(QIODevice::ReadOnly)) return false;
     const auto auditBytes = audit.readAll();
     if (!auditBytes.contains("|unlock|trust_days=30") || !auditBytes.contains("|trusted_unlock") || !auditBytes.contains("|lock")) return false;
     if (session.isUnlocked(*workspace.storage, "other") || session.isUnlocked(*workspace.storage, created->id)) return false;

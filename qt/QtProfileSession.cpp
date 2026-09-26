@@ -1,10 +1,12 @@
 #include "QtProfileSession.h"
+#include "AppTaskCompletionService.h"
 #include "AppUtils.h"
 #include "Profile.h"
 #include <QtCore>
 #include <algorithm>
 #include <iterator>
 #include <map>
+#include <stdexcept>
 
 namespace {
 std::optional<Profile> available(IJobStorage& storage, const std::string& id) {
@@ -71,28 +73,64 @@ bool changeTrusted(const std::filesystem::path& directory, const std::string& id
     QDir().mkpath(QFileInfo(path).absolutePath()); QSaveFile output(path); output.setDirectWriteFallback(false);
     return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
 }
+bool appendSessionAudit(const std::filesystem::path& directory, const std::string& id,
+                        const std::string& action, const std::string& details, bool includeUiSettings) {
+    bool prepared = false;
+    try {
+        PrepareProfileSessionAuditRecovery(directory, includeUiSettings);
+        prepared = true;
+        if (!AppendProfileAudit(directory, id, action, details))
+            throw std::runtime_error("profile audit write failed");
+        CommitQtRecoveryTransaction(directory);
+        return true;
+    } catch (...) {
+        if (prepared) {
+            try { RecoverTaskCompletion(directory); } catch (...) {}
+        }
+        return false;
+    }
+}
 }
 
 bool QtProfileSession::updateTrust(const std::string& id, std::int64_t expiresAt) { return !directory_.empty() && changeTrusted(directory_, id, expiresAt); }
 bool QtProfileSession::unlock(IJobStorage& storage, const std::string& id, const std::string& password, int trustDays) {
     lock();
+    bool prepared = false;
     try {
         const auto profile = available(storage, id);
         if (!profile || password.empty() || DecodePassword(profile->password_encoded()) != password) return false;
         const int days = trustDays >= 90 ? 90 : trustDays >= 30 ? 30 : 0;
         const auto expiry = days ? QDateTime::currentSecsSinceEpoch() + std::int64_t(days) * 86400 : 0;
-        if (days && !updateTrust(id, expiry)) return false;
+        if (days) {
+            PrepareProfileSessionAuditRecovery(directory_, true);
+            prepared = true;
+            if (!updateTrust(id, expiry)) {
+                CommitQtRecoveryTransaction(directory_);
+                prepared = false;
+                return false;
+            }
+            if (!AppendProfileAudit(directory_, id, "unlock", "trust_days=" + std::to_string(days)))
+                throw std::runtime_error("profile audit write failed");
+            CommitQtRecoveryTransaction(directory_);
+            prepared = false;
+        } else if (!appendSessionAudit(directory_, id, "unlock", "trust_days=0", false)) {
+            return false;
+        }
         id_ = id; fingerprint_ = fingerprint(*profile); trusted_ = days > 0; trustedUntil_ = expiry;
-        AppendProfileAudit(directory_, id, "unlock", "trust_days=" + std::to_string(days)); return true;
-    } catch (...) { return false; }
+        return true;
+    } catch (...) {
+        if (prepared) { try { RecoverTaskCompletion(directory_); } catch (...) {} }
+        return false;
+    }
 }
 bool QtProfileSession::restoreTrusted(IJobStorage& storage, const std::string& id) {
     const auto trusted = loadTrusted(directory_); const auto found = trusted.find(id); const auto now = QDateTime::currentSecsSinceEpoch();
     if (found == trusted.end() || found->second <= now) { if (found != trusted.end()) updateTrust(id, 0); return false; }
     try {
         const auto profile = available(storage, id); if (!profile) { updateTrust(id, 0); return false; }
+        if (!appendSessionAudit(directory_, id, "trusted_unlock", {}, false)) return false;
         id_ = id; fingerprint_ = fingerprint(*profile); trusted_ = true; trustedUntil_ = found->second;
-        AppendProfileAudit(directory_, id, "trusted_unlock"); return true;
+        return true;
     } catch (...) { updateTrust(id, 0); return false; }
 }
 bool QtProfileSession::isUnlocked(IJobStorage& storage, const std::string& id) {
@@ -102,7 +140,27 @@ bool QtProfileSession::isUnlocked(IJobStorage& storage, const std::string& id) {
 }
 bool QtProfileSession::lock(bool forgetTrust) {
     const auto old = id_; bool saved = true;
-    if (forgetTrust && !old.empty()) saved = updateTrust(old, 0);
-    if (forgetTrust && !old.empty() && saved) AppendProfileAudit(directory_, old, "lock");
+    if (forgetTrust && !old.empty()) {
+        bool prepared = false;
+        try {
+            PrepareProfileSessionAuditRecovery(directory_, true);
+            prepared = true;
+            if (!updateTrust(old, 0)) {
+                CommitQtRecoveryTransaction(directory_);
+                prepared = false;
+                saved = false;
+            } else {
+                const bool audited = AppendProfileAudit(directory_, old, "lock");
+                CommitQtRecoveryTransaction(directory_);
+                prepared = false;
+                saved = audited;
+            }
+        } catch (...) {
+            saved = false;
+            if (prepared) {
+                try { RecoverTaskCompletion(directory_); } catch (...) {}
+            }
+        }
+    }
     id_.clear(); fingerprint_.clear(); trusted_ = false; trustedUntil_ = 0; return saved;
 }
