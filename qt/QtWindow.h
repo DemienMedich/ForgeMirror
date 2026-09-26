@@ -52,6 +52,7 @@ private:
     void checkDeadlineReminders();
     void updateBanner();
     void pullCloud();
+    void previewCloudPush();
     void resolveCloudConflict();
     void resolveStorageConflict();
     void loadSelectedModel();
@@ -156,6 +157,7 @@ private:
     QPushButton* projectFocus_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
+    QPushButton* cloudPushPreview_;
     QPushButton* cloudResolve_;
     QPushButton* storageResolve_;
     int bannerIndex_ = 0;

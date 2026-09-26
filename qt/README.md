@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 101**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 83%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–101 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 102**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 83%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include applying a whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–102 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 101 | Remaining |
+| Area | Qt coverage through stage 102 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant paired with profile audit, transactional admin edit of name/profession/spirit/block state paired with profile audit, archive/restore and password reset/change paired with audit in recovery journals, guarded permanent deletion of empty archived profiles, rename with stable ID, session or 30/90-day local trust with transactional login/logout, expiry and stale-access revocation audits, achievement viewing/granting/editing/revocation and local icons; wallet balance and admin adjustment, Pomodoro reward, personal evil-spirit removal, all paired with wallet audit in a recovery journal; wallet history, read-only profile audit and task/XP history including awarded and pending tasks | Remaining cross-process and external profile-state audit edge cases |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines, including optional notification while the window is hidden in the system tray; administrator multi-select status, priority, project, pipeline stage, deadline and assignee edits | Reminders after the process exits, legacy/stale awarded-task cleanup review |
@@ -45,7 +45,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Application logs | Qt messages and status notifications persist locally across restarts, newest first, 16-bin time-activity chart, global search and source filter, per-level totals, individual level toggles plus quick all/warnings-and-errors/errors-only presets, persistent compact view and autoscroll options, UTF-8 TXT export of visible entries and clear action; capped at 200 entries and stored outside cloud file lists | Full source-module parity and log rotation policy |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale, compact-table density, persistent fullscreen toggle with F11, legacy frameless mode with native drag handle, opt-in close-to-tray mode; fixed migration palette | Additional accessibility options |
-| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline/project/banner/rules/profession/skill comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore (profession and skill catalogs move and restore as a validated pair), explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Whole-workspace push, automatic sync and remaining settings parity |
+| Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, administrator-only isolated whole-workspace push preview with added/replaced/removed counts, task/pipeline/project/banner/rules/profession/skill comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore (profession and skill catalogs move and restore as a validated pair), explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Applying a whole-workspace push, automatic sync and remaining settings parity |
 
 ### Skill merge (stage 92, implementation checkpoint)
 
@@ -230,6 +230,10 @@ Expired trusted entries now get removed only together with a `trust_expired` aud
 ### Profile trust audit labels (stage 101, implementation checkpoint)
 
 The profile activity history now renders localized labels for trust expiry, successful trust revocation, and failed revocation instead of exposing internal event IDs. Its UI test verifies all three labels while retaining an unknown-event row as a raw value for forward compatibility. No data migration or audit-log format changed.
+
+### Isolated whole-workspace cloud push preview (stage 102, implementation checkpoint)
+
+The Cloud page adds an administrator-only preview that runs the existing full-push rules against a temporary copy of the configured cloud folder, then reports added, replaced and removed file counts. It never applies those changes. Custom absolute manifest paths are remapped only when they are inside the configured cloud root; paths outside the root are rejected before the legacy pusher runs. Tests compare every cloud file before and after preview, cover a proposed deletion and replacement, and verify an external manifest remains untouched. The actual full push remains disabled until atomic apply, backup and interruption recovery are implemented.
 
 ### Application log level presets (stage 79, implementation checkpoint)
 

@@ -14,6 +14,7 @@
 #include "QtBannerEditor.h"
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
+#include "QtCloudPushPreview.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtDisplaySettings.h"
@@ -585,6 +586,56 @@ static bool TestCloudPullTransaction() {
     window.close();
     CloudSyncConfig disabled = config; disabled.enabled = false;
     return !RunQtCloudPullTransaction(disabled, workspace, CloudRole::Viewer).sync.ok;
+}
+
+static bool TestCloudPushPreview() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + "/cloud").toUtf8().toStdString());
+    std::filesystem::create_directories(workspace / "meta");
+    std::filesystem::create_directories(cloud / "meta");
+    auto write = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QDir().mkpath(QFileInfo(QString::fromUtf8(path.u8string())).absolutePath());
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    auto inventory = [](const std::filesystem::path& root) {
+        std::map<std::string, QByteArray> files;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
+            if (!entry.is_regular_file()) continue;
+            QFile file(QString::fromUtf8(entry.path().u8string()));
+            if (!file.open(QIODevice::ReadOnly)) return std::map<std::string, QByteArray>{};
+            files.emplace(entry.path().lexically_relative(root).generic_string(), file.readAll());
+        }
+        return files;
+    };
+    if (!SaveCloudSyncConfig(workspace, CloudSyncConfig{})) return false;
+    CloudSyncConfig config; config.enabled = true; config.root = cloud;
+    config.manifest = cloud / "meta/manifest.ini"; config.updateManifestOnPush = true;
+    if (!SaveCloudSyncConfig(workspace, config) || !write(workspace / "meta/tasks.json", "[{\"id\":\"local\"}]") ||
+        !write(workspace / "skills.txt", "local skill\n") ||
+        !write(cloud / "meta/tasks.json", "[{\"id\":\"remote\"}]") ||
+        !write(cloud / "meta/manifest.ini", "appVersion=remote\nreleaseFile=keep.exe\nnotes=preserve\n") ||
+        !write(cloud / "orphan.tmp", "must remain only in real cloud\n")) return false;
+    QtWorkspace qtWorkspace(workspace);
+    const auto profile = qtWorkspace.storage->create_profile(Profile("Preview profile"));
+    if (!profile) return false;
+    const auto before = inventory(cloud);
+    const auto preview = PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
+    if (!preview.sync.ok || !preview.sync.changed || !preview.filesAdded || !preview.filesReplaced || !preview.filesRemoved ||
+        preview.message.find("не изменялись") == std::string::npos || inventory(cloud) != before) return false;
+    auto outside = config;
+    const auto externalManifest = std::filesystem::u8path((temp.path() + "/outside-manifest.ini").toUtf8().toStdString());
+    if (!write(externalManifest, "leave this untouched\n")) return false;
+    outside.manifest = externalManifest;
+    const auto outsideResult = PreviewQtCloudWorkspacePush(outside, workspace, CloudRole::Admin);
+    QFile outsideFile(QString::fromUtf8(externalManifest.u8string()));
+    if (outsideResult.sync.ok || inventory(cloud) != before || !outsideFile.open(QIODevice::ReadOnly) ||
+        outsideFile.readAll() != "leave this untouched\n") return false;
+    if (PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Viewer).sync.ok || inventory(cloud) != before) return false;
+    auto overlap = config; overlap.root = workspace;
+    if (PreviewQtCloudWorkspacePush(overlap, workspace, CloudRole::Admin).sync.ok || inventory(cloud) != before) return false;
+    return true;
 }
 
 static bool TestCloudConflictResolver() {
@@ -2925,6 +2976,7 @@ int main(int argc, char** argv) {
     if (!TestBannerEditor()) { std::cerr << "Banner editor failed\n"; return 1; }
     if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
     if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
+    if (!TestCloudPushPreview()) { std::cerr << "Cloud push preview failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }

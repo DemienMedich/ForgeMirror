@@ -7,6 +7,7 @@
 #include "QtBannerEditor.h"
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
+#include "QtCloudPushPreview.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtModelViewer.h"
@@ -726,6 +727,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     cloudPull_->setStyleSheet("min-height: 40px; max-height: 40px;");
     cloudPull_->setToolTip(QString::fromUtf8("Ручной pull после подтверждения; перед копированием создаётся полный снимок рабочей папки"));
     bottom->addWidget(cloudPull_);
+    cloudPushPreview_ = new QPushButton(QString::fromUtf8("Предпросмотр выгрузки"));
+    cloudPushPreview_->setObjectName("cloudPushPreview");
+    cloudPushPreview_->setStyleSheet("min-height: 40px; max-height: 40px;");
+    cloudPushPreview_->setToolTip(QString::fromUtf8("Смоделировать полную выгрузку; облачные файлы останутся без изменений"));
+    bottom->addWidget(cloudPushPreview_);
     cloudResolve_ = new QPushButton(QString::fromUtf8("Сравнить версии"));
     cloudResolve_->setObjectName("cloudResolve"); cloudResolve_->setStyleSheet("min-height: 40px; max-height: 40px;");
     cloudResolve_->setToolTip(QString::fromUtf8("Сравнить задачи и пайплайн, принять облачную версию или восстановить локальный снимок"));
@@ -872,6 +878,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (!exists || !QDesktopServices::openUrl(QUrl::fromLocalFile(q(found->path)))) message(u8"Не удалось открыть ярлык.");
     });
     connect(cloudPull_, &QPushButton::clicked, this, [this] { pullCloud(); });
+    connect(cloudPushPreview_, &QPushButton::clicked, this, [this] { previewCloudPush(); });
     connect(cloudResolve_, &QPushButton::clicked, this, [this] { resolveCloudConflict(); });
     connect(storageResolve_, &QPushButton::clicked, this, [this] { resolveStorageConflict(); });
     connect(achievements_, &QPushButton::clicked, this, [this] {
@@ -1392,6 +1399,7 @@ void QtWindow::render() {
     pipelineMap_->setVisible(page == Pipeline && !workspace_.data.pipelineSteps.empty());
     openShortcut_->setVisible(page == Shortcuts);
     cloudPull_->setVisible(page == Cloud);
+    cloudPushPreview_->setVisible(page == Cloud);
     cloudResolve_->setVisible(page == Cloud);
     storageResolve_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
@@ -1738,10 +1746,11 @@ void QtWindow::render() {
         const auto manifest = LoadCloudManifest(config, workspace_.directory);
         row("manifest", {QString::fromUtf8("Версия в manifest"), manifest.appVersion.empty() ? QString::fromUtf8("—") : q(manifest.appVersion)});
         cloudPull_->setEnabled(config.enabled && rootExists);
+        cloudPushPreview_->setEnabled(admin_ && config.enabled && rootExists);
         const bool hasBackups = !ListCloudWorkspaceBackups(workspace_.directory).empty();
         cloudResolve_->setEnabled((config.enabled && rootExists && driftCount > 0) || hasBackups);
         storageResolve_->setEnabled(admin_ && config.enabled && rootExists && HasQtStorageConflict(workspace_.directory));
-        summary_->setText(QString::fromUtf8("Ручные pull и отправка отдельных tasks/pipeline требуют подтверждения и резервной копии · автоматическая синхронизация заблокирована"));
+        summary_->setText(QString::fromUtf8("Ручные pull и отправка отдельных файлов требуют подтверждения · полный push пока доступен только как предпросмотр · автоматическая синхронизация заблокирована"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -2645,6 +2654,18 @@ void QtWindow::createEntry(bool edit) {
         dialog.accept();
     });
     if (dialog.exec() == QDialog::Accepted) reload();
+}
+
+void QtWindow::previewCloudPush() {
+    if (!requireAdmin() || navigation_->currentRow() != Cloud) return;
+    const auto config = LoadCloudSyncConfig(workspace_.directory);
+    const auto result = PreviewQtCloudWorkspacePush(config, workspace_.directory, CloudRole::Admin);
+    if (!result.sync.ok) {
+        QMessageBox::warning(this, QString::fromUtf8("Предпросмотр выгрузки"), q(result.message));
+        return;
+    }
+    QMessageBox::information(this, QString::fromUtf8("Предпросмотр выгрузки"), q(result.message) +
+        QString::fromUtf8("\n\nОблачная папка и manifest не изменялись. Полный push пока не включён."));
 }
 
 void QtWindow::pullCloud() {
