@@ -2763,6 +2763,45 @@ static bool TestTaskActionNeededQuickFilter() {
     return reopenedFilter && reopenedFilter->currentIndex() == 8;
 }
 
+static bool TestQtTaskCreationRangeAndSorting() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    TaskEntry old; old.id = "old"; old.title = "Old"; old.createdAt = now - 8 * 86400; old.priority = 3;
+    TaskEntry recentLow; recentLow.id = "recent-low"; recentLow.title = "Recent low"; recentLow.createdAt = now - 6 * 86400; recentLow.priority = 0; recentLow.deadlineAt = now + 3600;
+    TaskEntry recentHigh; recentHigh.id = "recent-high"; recentHigh.title = "Recent high"; recentHigh.createdAt = now - 86400; recentHigh.priority = 3; recentHigh.deadlineAt = now + 7200;
+    TaskEntry noTimestamp; noTimestamp.id = "no-timestamp"; noTimestamp.title = "No timestamp"; noTimestamp.createdAt = 0; noTimestamp.priority = 2;
+    workspace.data.tasks = {old, recentLow, recentHigh, noTimestamp};
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* range = window.findChild<QComboBox*>("taskCreatedRange");
+    auto* sort = window.findChild<QComboBox*>("taskSortMode");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !range || !sort || !table || range->count() != 5 || sort->count() != 3) return false;
+    navigation->setCurrentRow(1);
+    range->setCurrentIndex(1);
+    if (table->rowCount() != 2) return false;
+    sort->setCurrentIndex(1);
+    if (table->rowCount() != 2 || table->item(0, 0)->data(Qt::UserRole).toString() != "recent-low") return false;
+    sort->setCurrentIndex(2);
+    if (table->rowCount() != 2 || table->item(0, 0)->data(Qt::UserRole).toString() != "recent-high" ||
+        table->item(1, 0)->data(Qt::UserRole).toString() != "recent-low") return false;
+    const auto saved = LoadQtDisplaySettings(directory);
+    if (saved.taskCreatedRange != 1 || saved.taskSortMode != 2) return false;
+    QtWorkspace reopenedWorkspace(directory);
+    QtWindow reopened(reopenedWorkspace);
+    auto* restoredRange = reopened.findChild<QComboBox*>("taskCreatedRange");
+    auto* restoredSort = reopened.findChild<QComboBox*>("taskSortMode");
+    if (!restoredRange || !restoredSort || restoredRange->currentIndex() != 1 || restoredSort->currentIndex() != 2) return false;
+    auto clamped = saved; clamped.taskCreatedRange = 99; clamped.taskSortMode = -1;
+    return SaveQtDisplaySettings(directory, clamped) && LoadQtDisplaySettings(directory).taskCreatedRange == 4 &&
+        LoadQtDisplaySettings(directory).taskSortMode == 0;
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3180,6 +3219,7 @@ int main(int argc, char** argv) {
     if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
     if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }
+    if (!TestQtTaskCreationRangeAndSorting()) { std::cerr << "Qt task creation range and sorting failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }

@@ -177,6 +177,10 @@ Qt stores a small `lastCheckAt` watermark in `meta/qt-reminder-state.json`. At s
 
 The Qt Tasks quick-filter menu now includes **Требуют внимания**, matching the legacy filter. It includes tasks awaiting XP, active overdue tasks, tasks with a missing or unknown pipeline stage, and active tasks at a final stage whose handoff is not closed. When no pipeline is configured, pipeline checks are omitted. The filter is stored as value 8 in `[qt] taskQuickFilter` and survives restart. Tests cover each included reason, an unaffected task and persistence. The stable ImGui implementation is unchanged.
 
+### Task age filter and sorting (stage 109, implementation checkpoint)
+
+The Qt Tasks page now filters by creation age (`all`, 7, 30, 90 or 365 days) and sorts by newest, nearest deadline or highest priority, matching the legacy choices. Missing creation timestamps are excluded from bounded periods. Ties use creation time and then stable task ID. Both choices persist in the Qt `[qt]` section as `taskCreatedRange` and `taskSortMode`. `smoke_qt` checks the 7-day boundary, missing timestamps, priority ordering, persistence, and clamping of invalid settings. The stable ImGui implementation is unchanged.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.

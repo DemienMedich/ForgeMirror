@@ -36,6 +36,7 @@
 #include <QJsonObject>
 #include <QtWidgets>
 #include <algorithm>
+#include <limits>
 #include <functional>
 #include <stdexcept>
 #include <unordered_map>
@@ -520,6 +521,19 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Требуют внимания")});
     quickTaskFilter_->setCurrentIndex(displaySettings_.taskQuickFilter);
     filters->addWidget(quickTaskFilter_);
+    taskCreatedRange_ = new QComboBox;
+    taskCreatedRange_->setObjectName("taskCreatedRange");
+    taskCreatedRange_->setMaximumWidth(115);
+    taskCreatedRange_->addItems({QString::fromUtf8("Созданы: всё"), QString::fromUtf8("Созданы: 7 дн."),
+        QString::fromUtf8("Созданы: 30 дн."), QString::fromUtf8("Созданы: 90 дн."), QString::fromUtf8("Созданы: 365 дн.")});
+    taskCreatedRange_->setCurrentIndex(displaySettings_.taskCreatedRange);
+    filters->addWidget(taskCreatedRange_);
+    taskSort_ = new QComboBox;
+    taskSort_->setObjectName("taskSortMode");
+    taskSort_->setMaximumWidth(165);
+    taskSort_->addItems({QString::fromUtf8("Сначала новые"), QString::fromUtf8("Ближайший дедлайн"), QString::fromUtf8("Высокий приоритет")});
+    taskSort_->setCurrentIndex(displaySettings_.taskSortMode);
+    filters->addWidget(taskSort_);
     taskProjectFilter_ = new QComboBox;
     taskProjectFilter_->setObjectName("taskProjectFilter");
     taskProjectFilter_->setMaximumWidth(170);
@@ -802,6 +816,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(priorityFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(quickTaskFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskCreatedRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(catalogProfessionFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
@@ -1242,6 +1258,8 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.taskStatusFilter = statusFilter_->currentIndex();
     displaySettings_.taskPriorityFilter = priorityFilter_->currentIndex();
     displaySettings_.taskQuickFilter = quickTaskFilter_->currentIndex();
+    displaySettings_.taskCreatedRange = taskCreatedRange_->currentIndex();
+    displaySettings_.taskSortMode = taskSort_->currentIndex();
     displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
     displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
     displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
@@ -1403,6 +1421,8 @@ void QtWindow::render() {
     statusFilter_->setVisible(page == Tasks);
     priorityFilter_->setVisible(page == Tasks);
     quickTaskFilter_->setVisible(page == Tasks);
+    taskCreatedRange_->setVisible(page == Tasks);
+    taskSort_->setVisible(page == Tasks);
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
     catalogProfessionFilter_->setVisible(page == Catalog);
@@ -1520,12 +1540,17 @@ void QtWindow::render() {
         const auto selectedProject = u(taskProjectFilter_->currentData().toString());
         const auto selectedPipeline = u(taskPipelineFilter_->currentData().toString());
         const int quickFilter = quickTaskFilter_->currentIndex();
+        const int createdRange = taskCreatedRange_->currentIndex();
+        const int sortMode = taskSort_->currentIndex();
         const auto now = QDateTime::currentDateTime();
         const auto todayStart = now.date().startOfDay(now.timeZone()).toSecsSinceEpoch();
         const auto tomorrowStart = now.date().addDays(1).startOfDay(now.timeZone()).toSecsSinceEpoch();
         const auto nextWeekStart = now.date().addDays(7).startOfDay(now.timeZone()).toSecsSinceEpoch();
         const auto nowSeconds = now.toSecsSinceEpoch();
+        constexpr std::int64_t createdDays[] = {0, 7, 30, 90, 365};
+        const std::int64_t createdMin = nowSeconds - createdDays[createdRange] * 86400;
         const auto activeProfileId = u(profiles_->currentData().toString());
+        std::vector<const TaskEntry*> visibleTasks;
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
             if (priorityFilter_->currentIndex() && AppNormalizeTaskPriority(task.priority) != priorityFilter_->currentIndex() - 1) continue;
@@ -1548,6 +1573,7 @@ void QtWindow::render() {
                 if (selected == data.pipelineSteps.end() || (task.pipelineStepId != selectedPipeline &&
                     resolvedPipelineName != selected->title && task.pipelineStep != selectedLabel)) continue;
             }
+            if (createdRange > 0 && task.createdAt < createdMin) continue;
             const auto taskStatus = AppNormalizeTaskStatus(task.status);
             const bool assignedToProfile = !activeProfileId.empty() &&
                 (std::find(task.assignees.begin(), task.assignees.end(), activeProfileId) != task.assignees.end() ||
@@ -1580,8 +1606,25 @@ void QtWindow::render() {
             if (quickFilter == 6 && !needsXp) continue;
             if (quickFilter == 7 && taskStatus == 2) continue;
             if (quickFilter == 8 && !needsAdminAction) continue;
-            row(task.id, {q(AppTaskDisplayTitle(task)), q(project == data.projects.end() ? task.project : project->name), q(AppTaskStatusLabel(task.status)),
-                q(AppTaskPriorityLabel(task.priority)), timeText(task.deadlineAt), q(stage == data.pipelineSteps.end() ? task.pipelineStep : stage->title)});
+            visibleTasks.push_back(&task);
+        }
+        std::sort(visibleTasks.begin(), visibleTasks.end(), [sortMode](const TaskEntry* a, const TaskEntry* b) {
+            if (sortMode == 1) {
+                const auto ad = a->deadlineAt > 0 ? a->deadlineAt : std::numeric_limits<std::int64_t>::max();
+                const auto bd = b->deadlineAt > 0 ? b->deadlineAt : std::numeric_limits<std::int64_t>::max();
+                if (ad != bd) return ad < bd;
+            } else if (sortMode == 2) {
+                const int ap = AppNormalizeTaskPriority(a->priority), bp = AppNormalizeTaskPriority(b->priority);
+                if (ap != bp) return ap > bp;
+            }
+            if (a->createdAt != b->createdAt) return a->createdAt > b->createdAt;
+            return a->id < b->id;
+        });
+        for (const auto* task : visibleTasks) {
+            const auto project = std::find_if(data.projects.begin(), data.projects.end(), [&](const auto& entry) { return !task->projectId.empty() && entry.id == task->projectId; });
+            const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(), [&](const auto& entry) { return !task->pipelineStepId.empty() && entry.id == task->pipelineStepId; });
+            row(task->id, {q(AppTaskDisplayTitle(*task)), q(project == data.projects.end() ? task->project : project->name), q(AppTaskStatusLabel(task->status)),
+                q(AppTaskPriorityLabel(task->priority)), timeText(task->deadlineAt), q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
         summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4")
