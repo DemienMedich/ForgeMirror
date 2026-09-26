@@ -1618,8 +1618,9 @@ void QtWindow::render() {
                     QString::number(skill.xp), QString::number(skill.weight)});
         } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Администратор может создать его через «Управление профилями»."));
     } else if (page == Tasks) {
-        headers({QString::fromUtf8("Задача"), QString::fromUtf8("Проект"), QString::fromUtf8("Статус"),
-                 QString::fromUtf8("Приоритет"), QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
+        headers({QString::fromUtf8("Задача"), QString::fromUtf8("Дата"), QString::fromUtf8("Проект"),
+                 QString::fromUtf8("Исполнители"), QString::fromUtf8("Статус"), QString::fromUtf8("Приоритет"),
+                 QString::fromUtf8("Срок"), QString::fromUtf8("Пайплайн")});
         const auto selectedProject = u(taskProjectFilter_->currentData().toString());
         const auto selectedPipeline = u(taskPipelineFilter_->currentData().toString());
         const int quickFilter = quickTaskFilter_->currentIndex();
@@ -1712,8 +1713,21 @@ void QtWindow::render() {
         for (const auto* task : visibleTasks) {
             const auto project = std::find_if(data.projects.begin(), data.projects.end(), [&](const auto& entry) { return !task->projectId.empty() && entry.id == task->projectId; });
             const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(), [&](const auto& entry) { return !task->pipelineStepId.empty() && entry.id == task->pipelineStepId; });
-            row(task->id, {q(AppTaskDisplayTitle(*task)), q(project == data.projects.end() ? task->project : project->name), q(AppTaskStatusLabel(task->status)),
-                q(AppTaskPriorityLabel(task->priority)), timeText(task->deadlineAt), q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
+            std::vector<std::string> assigneeIds = task->assignees;
+            if (assigneeIds.empty()) for (const auto& participant : task->participants)
+                if (!participant.profileId.empty()) assigneeIds.push_back(participant.profileId);
+            QStringList assigneeNames;
+            for (const auto& id : assigneeIds) {
+                const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(), [&](const auto& item) { return item.id == id; });
+                assigneeNames << (profile == workspace_.profiles.end() ? q(id) : q(profile->name));
+            }
+            QString assigneeSummary = assigneeNames.isEmpty() ? QString::fromUtf8("Не назначена")
+                : assigneeNames.mid(0, 2).join(QStringLiteral(", "));
+            if (assigneeNames.size() > 2) assigneeSummary += QStringLiteral(" +%1").arg(assigneeNames.size() - 2);
+            row(task->id, {q(AppTaskDisplayTitle(*task)), timeText(task->createdAt),
+                q(project == data.projects.end() ? task->project : project->name), assigneeSummary,
+                q(AppTaskStatusLabel(task->status)), q(AppTaskPriorityLabel(task->priority)), timeText(task->deadlineAt),
+                q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
         summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4")

@@ -2970,6 +2970,32 @@ static bool TestQtVisibleTaskSelectionTools() {
     return table->selectionModel()->selectedRows().empty() && !bulkEdit->isEnabled();
 }
 
+static bool TestQtTaskTableDateAndAssignees() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    const auto profile = workspace.storage->create_profile(Profile("Visible assignee"));
+    if (!profile) return false;
+    TaskEntry task; task.id = "table-metadata"; task.title = "Table metadata"; task.createdAt = 1700000000;
+    task.assignees = {profile->id};
+    workspace.data.tasks = {task};
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* search = window.findChild<QLineEdit*>("search");
+    if (!navigation || !table || !search) return false;
+    navigation->setCurrentRow(1);
+    if (table->columnCount() != 8 || table->horizontalHeaderItem(1)->text() != QString::fromUtf8("Дата") ||
+        table->horizontalHeaderItem(3)->text() != QString::fromUtf8("Исполнители") || table->rowCount() != 1 ||
+        table->item(0, 1)->text() != QDateTime::fromSecsSinceEpoch(task.createdAt).toString("dd.MM.yyyy HH:mm") ||
+        table->item(0, 3)->text() != QString::fromUtf8("Visible assignee")) return false;
+    search->setText(QString::fromUtf8("Visible assignee"));
+    return table->rowCount() == 1 && table->item(0, 0)->data(Qt::UserRole).toString() == "table-metadata";
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3392,6 +3418,7 @@ int main(int argc, char** argv) {
     if (!TestQtVisibleTaskExports()) { std::cerr << "Qt visible task export failed\n"; return 1; }
     if (!TestQtTaskFilterReset()) { std::cerr << "Qt task filter reset failed\n"; return 1; }
     if (!TestQtVisibleTaskSelectionTools()) { std::cerr << "Qt visible task selection tools failed\n"; return 1; }
+    if (!TestQtTaskTableDateAndAssignees()) { std::cerr << "Qt task table date and assignees failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
@@ -3955,7 +3982,7 @@ int main(int argc, char** argv) {
     });
     window.findChild<QPushButton*>("editEntry")->click();
     nav->setCurrentRow(1);
-    if (table->item(0, 5)->text() != "Updated stage" || LoadTasksData(workspace.directory).front().pipelineStepId != stage.id)
+    if (table->item(0, 7)->text() != "Updated stage" || LoadTasksData(workspace.directory).front().pipelineStepId != stage.id)
         return fail("Pipeline rename broke linked task display");
     table->selectRow(0);
     bool terminalChecked = false;
@@ -4048,7 +4075,7 @@ int main(int argc, char** argv) {
     if (!focusProject || !focusProject->isVisible() || !focusProject->isEnabled()) return fail("Project task focus action unavailable");
     focusProject->click();
     if (nav->currentRow() != 1 || window.findChild<QComboBox*>("taskProjectFilter")->currentData().toString() != QString::fromStdString(originalProject.id) ||
-        table->rowCount() != 1 || table->item(0, 1)->text() != QString::fromUtf8("Проект Qt"))
+        table->rowCount() != 1 || table->item(0, 2)->text() != QString::fromUtf8("Проект Qt"))
         return fail("Project task focus did not open the filtered task list");
     nav->setCurrentRow(2);
     table->setCurrentCell(0, 0);
@@ -4060,7 +4087,7 @@ int main(int argc, char** argv) {
         editedProjects.front().createdAt != originalProject.createdAt ||
         editedProjects.front().name != u8"Проект после правки") return fail("Project editing lost identity");
     nav->setCurrentRow(1);
-    if (table->rowCount() != 1 || table->item(0, 1)->text() != QString::fromUtf8("Проект после правки"))
+    if (table->rowCount() != 1 || table->item(0, 2)->text() != QString::fromUtf8("Проект после правки"))
         return fail("Task retained stale project name after rename");
     nav->setCurrentRow(2);
     for (int i = 0; i < table->rowCount(); ++i)
@@ -4085,7 +4112,7 @@ int main(int argc, char** argv) {
     if (!detachedTask.projectId.empty() || !detachedTask.project.empty()) return fail("Project delete left task reference");
     if (workspace.data.taskAudit.empty() || workspace.data.taskAudit.back().field != "project") return fail("Project delete audit missing");
     nav->setCurrentRow(1);
-    if (table->rowCount() != 1 || !table->item(0, 1)->text().isEmpty()) return fail("Task retained deleted project");
+    if (table->rowCount() != 1 || !table->item(0, 2)->text().isEmpty()) return fail("Task retained deleted project");
     saveForm(QString::fromUtf8("Создано через Qt"));
     primary->click();
     if (LoadTasksData(workspace.directory).size() != 2) return fail("Task form did not persist");

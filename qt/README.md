@@ -197,6 +197,10 @@ The Qt Tasks toolbar now has **Сбросить фильтры**, matching the l
 
 Administrators now have **Выбор задач → Выбрать все видимые / Снять выбор** on the Tasks page, matching the legacy bulk-selection controls. “Visible” means rows remaining after all filters and search; hidden rows are not selected. Selection continues to feed the existing bulk-edit dialog, which stays disabled until at least two valid rows are selected. `smoke_qt` logs in as administrator and verifies filtered selection, hidden-row exclusion, enablement and clearing. Multi-task deletion remains deferred because XP rollback across multiple profiles needs a single recovery transaction.
 
+### Task table creation date and assignees (stage 114, implementation checkpoint)
+
+The Qt Tasks table now shows task creation time and a compact assignee summary (up to two names plus a remaining count), falling back to XP participants when no assignee is explicitly set. These values participate in the existing search, so a profile name can find its tasks without opening details. `smoke_qt` checks column layout, timestamp, resolved profile name and assignee search. The stable ImGui implementation is unchanged.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.
