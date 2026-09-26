@@ -4,6 +4,7 @@
 #include <QtWidgets>
 #include <algorithm>
 #include <chrono>
+#include <stdexcept>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -12,7 +13,19 @@
 namespace {
 QString q(const std::filesystem::path& path) { return QString::fromStdWString(path.wstring()); }
 QString q(const std::string& text) { return QString::fromUtf8(text); }
-bool supported(const std::string& path) { return path == "meta/tasks.json" || path == "meta/pipeline.json"; }
+bool supported(const std::string& path) {
+    return path == "meta/tasks.json" || path == "meta/pipeline.json" || path == "meta/projects.json";
+}
+QString objectName(const std::string& relative, const char* kind) {
+    const auto stem = relative == "meta/tasks.json" ? QStringLiteral("tasks")
+        : relative == "meta/pipeline.json" ? QStringLiteral("pipeline") : QStringLiteral("projects");
+    auto title = stem;
+    title[0] = title[0].toUpper();
+    const auto operation = QString::fromLatin1(kind);
+    if (operation == QStringLiteral("ApplyCloud")) return QStringLiteral("applyCloud") + title;
+    if (operation == QStringLiteral("PushCloud")) return QStringLiteral("pushCloud") + title;
+    return stem + operation;
+}
 bool samePath(const std::filesystem::path& first, const std::filesystem::path& second) {
     std::error_code ec; auto a = std::filesystem::weakly_canonical(first, ec); if (ec) return false;
     auto b = std::filesystem::weakly_canonical(second, ec); if (ec) return false;
@@ -80,7 +93,8 @@ std::filesystem::path backupPath(const std::filesystem::path& workspace, const s
                                  const std::string& kind) {
     const auto dir = workspace / "meta/updates";
     // Match CloudSync's public backup parser: punctuation is replaced before the extension is appended.
-    const std::string stem = relative == "meta/tasks.json" ? "meta_tasks_json" : "meta_pipeline_json";
+    const std::string stem = relative == "meta/tasks.json" ? "meta_tasks_json"
+        : relative == "meta/pipeline.json" ? "meta_pipeline_json" : "meta_projects_json";
     auto stamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     std::filesystem::path candidate;
     do candidate = dir / (stem + "." + kind + "." + std::to_string(stamp++) + ".json");
@@ -92,14 +106,27 @@ QString preview(const std::filesystem::path& path, const std::string& relative) 
     std::error_code ec;
     if (!std::filesystem::is_regular_file(path, ec) || ec) return QString::fromUtf8("нет файла");
     try {
-        const auto count = relative == "meta/tasks.json" ? LoadTasksDataFromFile(path).size() : LoadPipelineDataFromFile(path).size();
-        return QString::fromUtf8(relative == "meta/tasks.json" ? "%1 задач · %2 байт" : "%1 этапов · %2 байт")
-            .arg(count).arg(std::filesystem::file_size(path, ec));
+        qsizetype count = 0;
+        QString unit;
+        if (relative == "meta/tasks.json") { count = qsizetype(LoadTasksDataFromFile(path).size()); unit = QString::fromUtf8("задач"); }
+        else if (relative == "meta/pipeline.json") { count = qsizetype(LoadPipelineDataFromFile(path).size()); unit = QString::fromUtf8("этапов"); }
+        else {
+            QJsonParseError parse;
+            QString readError;
+            const auto document = QJsonDocument::fromJson(readFile(path, readError), &parse);
+            if (!readError.isEmpty()) throw std::runtime_error(readError.toUtf8().constData());
+            if (parse.error != QJsonParseError::NoError) throw std::runtime_error("Malformed projects JSON.");
+            if (document.isArray()) count = document.array().size();
+            else if (document.isObject() && document.object().value("projects").isArray()) count = document.object().value("projects").toArray().size();
+            unit = QString::fromUtf8("проектов");
+        }
+        return QString::fromUtf8("%1 %2 · %3 байт").arg(count).arg(unit).arg(std::filesystem::file_size(path, ec));
     } catch (...) { return QString::fromUtf8("не удалось разобрать · %1 байт").arg(std::filesystem::file_size(path, ec)); }
 }
 
 QString label(const std::string& relative) {
-    return QString::fromUtf8(relative == "meta/tasks.json" ? "Задачи" : "Пайплайн");
+    return QString::fromUtf8(relative == "meta/tasks.json" ? "Задачи"
+        : relative == "meta/pipeline.json" ? "Пайплайн" : "Проекты");
 }
 
 bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target, const QString& action) {
@@ -215,7 +242,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
     auto addFileTab = [&](const std::string& relative) {
         auto* page = new QWidget; auto* box = new QVBoxLayout(page); box->setContentsMargins(12, 12, 12, 12); box->setSpacing(10);
         const auto local = workspace / std::filesystem::u8path(relative); const auto cloud = root / std::filesystem::u8path(relative);
-        auto* comparison = new QTableWidget(2, 3); comparison->setObjectName(relative == "meta/tasks.json" ? "tasksComparison" : "pipelineComparison");
+        auto* comparison = new QTableWidget(2, 3); comparison->setObjectName(objectName(relative, "Comparison"));
         comparison->setHorizontalHeaderLabels({QString::fromUtf8("Версия"), QString::fromUtf8("Сводка"), QString::fromUtf8("Путь")});
         comparison->verticalHeader()->hide(); comparison->setEditTriggers(QAbstractItemView::NoEditTriggers);
         comparison->setSelectionMode(QAbstractItemView::NoSelection); comparison->setShowGrid(false); comparison->setAlternatingRowColors(true);
@@ -230,11 +257,11 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         comparison->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
         comparison->setTextElideMode(Qt::ElideMiddle); comparison->setMaximumHeight(118); box->addWidget(comparison);
         auto* actions = new QHBoxLayout; actions->setSpacing(8);
-        auto* apply = new QPushButton(QString::fromUtf8("Принять из облака")); apply->setObjectName(relative == "meta/tasks.json" ? "applyCloudTasks" : "applyCloudPipeline");
+        auto* apply = new QPushButton(QString::fromUtf8("Принять из облака")); apply->setObjectName(objectName(relative, "ApplyCloud"));
         apply->setProperty("primary", true); apply->setStyleSheet("min-height: 40px; max-height: 40px;"); apply->setEnabled(std::filesystem::is_regular_file(cloud)); actions->addWidget(apply);
-        auto* push = new QPushButton(QString::fromUtf8("Отправить локальную")); push->setObjectName(relative == "meta/tasks.json" ? "pushCloudTasks" : "pushCloudPipeline");
+        auto* push = new QPushButton(QString::fromUtf8("Отправить локальную")); push->setObjectName(objectName(relative, "PushCloud"));
         push->setStyleSheet("min-height: 40px; max-height: 40px;"); push->setEnabled(config.enabled && std::filesystem::is_regular_file(local)); actions->addWidget(push); actions->addStretch(); box->addLayout(actions);
-        auto* backups = new QTableWidget; backups->setObjectName(relative == "meta/tasks.json" ? "tasksBackups" : "pipelineBackups");
+        auto* backups = new QTableWidget; backups->setObjectName(objectName(relative, "Backups"));
         backups->setColumnCount(4); backups->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Источник"), QString::fromUtf8("Сводка"), QString::fromUtf8("Действие")});
         backups->verticalHeader()->hide(); backups->setEditTriggers(QAbstractItemView::NoEditTriggers); backups->setSelectionMode(QAbstractItemView::NoSelection); backups->setShowGrid(false);
         const auto snapshots = ListCloudWorkspaceBackups(workspace, relative); const int shown = int(std::min<size_t>(5, snapshots.size())); backups->setRowCount(shown);
@@ -270,7 +297,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         });
         tabs->addTab(page, label(relative));
     };
-    addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json");
+    addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json"); addFileTab("meta/projects.json");
     auto* close = new QPushButton(QString::fromUtf8("Закрыть")); close->setMinimumWidth(120); close->setStyleSheet("min-height: 40px; max-height: 40px;"); layout->addWidget(close, 0, Qt::AlignRight);
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
     dialog.exec(); return changed;

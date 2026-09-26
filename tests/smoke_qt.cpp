@@ -578,7 +578,10 @@ static bool TestCloudConflictResolver() {
     };
     const QByteArray local = "[{\"id\":\"local\",\"title\":\"Local\"}]";
     const QByteArray remote = "[{\"id\":\"remote\",\"title\":\"Cloud\"}]";
+    const QByteArray localProjects = "[{\"id\":\"local-project\",\"name\":\"Local project\"}]";
+    const QByteArray remoteProjects = "[{\"id\":\"cloud-project\",\"name\":\"Cloud project\"}]";
     if (!write(workspace / "meta/tasks.json", local) || !write(cloud / "meta/tasks.json", remote) ||
+        !write(workspace / "meta/projects.json", localProjects) || !write(cloud / "meta/projects.json", remoteProjects) ||
         !write(workspace / "meta/pipeline.json", "{\"steps\":[]}") || !write(cloud / "meta/pipeline.json", "{\"steps\":[]}")) return false;
     CloudSyncConfig config; config.enabled = true; config.root = cloud;
     if (!SaveCloudSyncConfig(workspace, config)) return false;
@@ -603,14 +606,23 @@ static bool TestCloudConflictResolver() {
     const auto createdPush = PushQtCloudWorkspaceFile(workspace, "meta/pipeline.json");
     if (!createdPush.ok || !createdPush.changed || !std::filesystem::is_regular_file(cloud / "meta/pipeline.json"))
         return fail("push new cloud file");
+    const auto pushedProjects = PushQtCloudWorkspaceFile(workspace, "meta/projects.json");
+    if (!pushedProjects.ok || !pushedProjects.changed || pushedProjects.backupPath.empty() ||
+        read(cloud / "meta/projects.json") != localProjects || read(pushedProjects.backupPath) != remoteProjects ||
+        ListCloudWorkspaceBackups(workspace, "meta/projects.json").empty())
+        return fail("push projects with cloud backup");
     CloudSyncConfig overlapConfig = config; overlapConfig.root = workspace;
     if (!SaveCloudSyncConfig(workspace, overlapConfig) || PushQtCloudWorkspaceFile(workspace, "meta/tasks.json").ok ||
         !SaveCloudSyncConfig(workspace, config)) return fail("push overlap guard");
     if (!write(workspace / "meta/tasks.json", "{broken")) return false;
     const auto malformedPush = PushQtCloudWorkspaceFile(workspace, "meta/tasks.json");
     if (malformedPush.ok || read(cloud / "meta/tasks.json") != local) return fail("malformed local push");
-    if (!write(workspace / "meta/tasks.json", local) || PushQtCloudWorkspaceFile(workspace, "meta/projects.json").ok)
+    if (!write(workspace / "meta/tasks.json", local) || PushQtCloudWorkspaceFile(workspace, "meta/unknown.json").ok)
         return fail("unsupported push");
+    if (!write(workspace / "meta/projects.json", "{broken") ||
+        PushQtCloudWorkspaceFile(workspace, "meta/projects.json").ok ||
+        read(cloud / "meta/projects.json") != localProjects) return fail("malformed projects push");
+    if (!write(workspace / "meta/projects.json", localProjects)) return false;
     if (!write(cloud / "meta/tasks.json", "{broken")) return false;
     const auto malformed = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
     if (malformed.ok || read(workspace / "meta/tasks.json") != local) return fail("malformed source");
@@ -637,8 +649,11 @@ static bool TestCloudConflictResolver() {
         auto* table = dialog ? dialog->findChild<QTableWidget*>("tasksComparison") : nullptr;
         auto* apply = dialog ? dialog->findChild<QPushButton*>("applyCloudTasks") : nullptr;
         auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudTasks") : nullptr;
+        auto* projects = dialog ? dialog->findChild<QTableWidget*>("projectsComparison") : nullptr;
+        auto* projectsPush = dialog ? dialog->findChild<QPushButton*>("pushCloudProjects") : nullptr;
         inspected = dialog && dialog->objectName() == "cloudConflictResolver" && table && table->rowCount() == 2 &&
-            apply && apply->height() >= 40 && push && push->height() >= 40;
+            apply && apply->height() >= 40 && push && push->height() >= 40 && projects &&
+            projects->rowCount() == 2 && projectsPush && projectsPush->isEnabled();
         if (!inspected) std::cerr << "cloudConflict inspect dialog=" << bool(dialog)
             << " name=" << (dialog ? dialog->objectName().toStdString() : "") << " table=" << bool(table)
             << " rows=" << (table ? table->rowCount() : -1) << " apply=" << bool(apply)
@@ -678,6 +693,24 @@ static bool TestCloudConflictResolver() {
     });
     const bool pushChanged = ShowCloudConflictResolver(nullptr, workspace);
     if (!pushChanged || !pushConfirmed || read(cloud / "meta/tasks.json") != upload) return fail("dialog push");
+    const QByteArray projectUpload = "[{\"id\":\"ui-project\",\"name\":\"UI project\"}]";
+    if (!write(workspace / "meta/projects.json", projectUpload)) return false;
+    bool projectPushConfirmed = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* push = dialog ? dialog->findChild<QPushButton*>("pushCloudProjects") : nullptr;
+        QTimer::singleShot(0, [&] {
+            if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                projectPushConfirmed = box->defaultButton() == box->button(QMessageBox::Cancel) &&
+                    box->text().contains(QString::fromUtf8("meta/projects.json"));
+                box->button(QMessageBox::Yes)->click();
+            }
+        });
+        if (push) push->click();
+    });
+    const bool projectsChanged = ShowCloudConflictResolver(nullptr, workspace);
+    if (!projectsChanged || !projectPushConfirmed || read(cloud / "meta/projects.json") != projectUpload)
+        return fail("dialog projects push");
     QtWorkspace uiWorkspace(workspace); QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
     auto* nav = window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(13);
     auto* route = window.findChild<QPushButton*>("cloudResolve");

@@ -297,10 +297,11 @@ std::string SanitizeRelativePathForFilename(const std::string& relativePath) {
     return value;
 }
 
-std::array<std::string, 2> CloudTrackedWorkspaceFiles() {
+std::array<std::string, 3> CloudTrackedWorkspaceFiles() {
     return {
         "meta/tasks.json",
-        "meta/pipeline.json"
+        "meta/pipeline.json",
+        "meta/projects.json"
     };
 }
 
