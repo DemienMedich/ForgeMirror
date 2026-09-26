@@ -1692,8 +1692,16 @@ void QtWindow::render() {
                 if (pipelineIndex < 0)
                     attentionReasons << (task.pipelineStepId.empty() && task.pipelineStep.empty()
                         ? QString::fromUtf8("Не указан этап процесса") : QString::fromUtf8("Этап процесса не найден"));
-                else if (data.pipelineSteps[size_t(pipelineIndex)].nextIds.empty() && taskStatus != 2)
-                    attentionReasons << QString::fromUtf8("Открытый handoff конечного этапа");
+                else {
+                    const auto& currentStage = data.pipelineSteps[size_t(pipelineIndex)];
+                    if (currentStage.nextIds.empty() && taskStatus != 2)
+                        attentionReasons << QString::fromUtf8("Открытый handoff конечного этапа");
+                    else if (currentStage.nextIds.size() > 1)
+                        attentionReasons << QString::fromUtf8("Ветвящийся этап пайплайна (%1 направления)").arg(currentStage.nextIds.size());
+                    else if (currentStage.nextIds.size() == 1 && std::none_of(data.pipelineSteps.begin(), data.pipelineSteps.end(),
+                        [&](const auto& candidate) { return candidate.id == currentStage.nextIds.front(); }))
+                        attentionReasons << QString::fromUtf8("Следующий этап пайплайна не найден");
+                }
             }
             if (quickFilter == 1 && !assignedToProfile) continue;
             if (quickFilter == 2 && (task.deadlineAt < todayStart || task.deadlineAt >= tomorrowStart)) continue;

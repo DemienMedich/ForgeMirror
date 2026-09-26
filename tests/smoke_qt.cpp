@@ -3003,7 +3003,10 @@ static bool TestQtTaskAttentionBadges() {
     QtWorkspace workspace(directory);
     PipelineStep active; active.id = "active"; active.title = "Active"; active.nextIds = {"final"};
     PipelineStep final; final.id = "final"; final.title = "Final";
-    workspace.data.pipelineSteps = {active, final};
+    PipelineStep branch; branch.id = "branch"; branch.title = "Branch"; branch.nextIds = {"final", "other"};
+    PipelineStep other; other.id = "other"; other.title = "Other";
+    PipelineStep brokenEdge; brokenEdge.id = "broken-edge"; brokenEdge.title = "Broken edge"; brokenEdge.nextIds = {"deleted-next"};
+    workspace.data.pipelineSteps = {active, final, branch, other, brokenEdge};
     const auto now = QDateTime::currentSecsSinceEpoch();
     TaskEntry xp; xp.id = "xp-pending"; xp.title = "XP pending"; xp.status = 2; xp.pipelineStepId = active.id;
     TaskEntry overdue; overdue.id = "overdue-task"; overdue.title = "Overdue task"; overdue.deadlineAt = now - 60; overdue.pipelineStepId = active.id;
@@ -3013,7 +3016,9 @@ static bool TestQtTaskAttentionBadges() {
     TaskEntry normal; normal.id = "normal-task"; normal.title = "Normal task"; normal.deadlineAt = now + 3600; normal.pipelineStepId = active.id;
     TaskEntry awarded; awarded.id = "awarded-task"; awarded.title = "Awarded task"; awarded.status = 2;
     awarded.pipelineStepId = active.id; awarded.participants.push_back({"done", 100, 20, 0, {}});
-    workspace.data.tasks = {xp, overdue, missing, unknown, handoff, normal, awarded};
+    TaskEntry branching; branching.id = "branching-task"; branching.title = "Branching task"; branching.pipelineStepId = branch.id;
+    TaskEntry brokenNext; brokenNext.id = "broken-next-task"; brokenNext.title = "Broken next task"; brokenNext.pipelineStepId = brokenEdge.id;
+    workspace.data.tasks = {xp, overdue, missing, unknown, handoff, normal, awarded, branching, brokenNext};
     if (!AppSavePipelineData(directory, workspace.data.pipelineSteps) || !AppSaveTasks(directory, workspace.data.tasks)) return false;
     workspace.reload();
     QtWindow window(workspace); window.show(); QApplication::processEvents();
@@ -3033,11 +3038,15 @@ static bool TestQtTaskAttentionBadges() {
     const auto* handoffCell = cellFor("open-handoff");
     const auto* normalCell = cellFor("normal-task");
     const auto* awardedCell = cellFor("awarded-task");
+    const auto* branchingCell = cellFor("branching-task");
+    const auto* brokenNextCell = cellFor("broken-next-task");
     return xpCell && xpCell->text().contains("XP") && xpCell->text().contains('!') && xpCell->toolTip().contains(QString::fromUtf8("Ожидает выдачи XP")) &&
         overdueCell && overdueCell->text().contains('!') && overdueCell->toolTip().contains(QString::fromUtf8("Просрочен срок")) &&
         missingCell && missingCell->toolTip().contains(QString::fromUtf8("Не указан этап")) &&
         unknownCell && unknownCell->toolTip().contains(QString::fromUtf8("не найден")) &&
         handoffCell && handoffCell->toolTip().contains(QString::fromUtf8("handoff")) &&
+        branchingCell && branchingCell->text().contains('!') && branchingCell->toolTip().contains(QString::fromUtf8("Ветвящийся этап")) &&
+        brokenNextCell && brokenNextCell->text().contains('!') && brokenNextCell->toolTip().contains(QString::fromUtf8("Следующий этап пайплайна не найден")) &&
         normalCell && !normalCell->text().contains('!') && !normalCell->text().contains("XP") &&
         awardedCell && !awardedCell->text().contains("XP");
 }
