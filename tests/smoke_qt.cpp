@@ -1317,6 +1317,7 @@ static bool TestAchievements() {
 }
 
 static bool TestProfileSession() {
+    const char* phase = "setup";
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
     Profile profile("Session profile");
@@ -1349,7 +1350,8 @@ static bool TestProfileSession() {
     if (afterTrustedUnlock != beforeTrustedUnlock || !audit.open(QIODevice::ReadOnly)) return false;
     const auto afterTrustedAudit = audit.readAll(); audit.close();
     if (afterTrustedAudit != beforeTrustedAudit || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) { std::cerr << "session: trusted rollback equal=" << (afterTrustedAudit == beforeTrustedAudit) << " journal=" << std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") << "\n"; return false; }
-    if (!session.unlock(*workspace.storage, created->id, "secret", 30) || !session.isTrusted() || session.trustedUntil() <= QDateTime::currentSecsSinceEpoch()) return false;
+    phase = "trusted login";
+    if (!session.unlock(*workspace.storage, created->id, "secret", 30) || !session.isTrusted() || session.trustedUntil() <= QDateTime::currentSecsSinceEpoch()) { std::cerr << "session phase: " << phase << "\n"; return false; }
     if (!ui.open(QIODevice::ReadOnly)) return false;
     const auto trustBytes = ui.readAll(); ui.close();
     if (!trustBytes.contains("trusted=" + QByteArray::fromStdString(created->id) + ":")) return false;
@@ -1357,18 +1359,23 @@ static bool TestProfileSession() {
     AppSetProfileAuditFailureHookForTests(true);
     const bool auditBlockedTrustedRestore = restored.isUnlocked(*workspace.storage, created->id);
     AppSetProfileAuditFailureHookForTests(false);
-    if (auditBlockedTrustedRestore || restored.isTrusted()) return false;
-    if (!restored.isUnlocked(*workspace.storage, created->id) || !restored.isTrusted()) return false;
+    phase = "audit failed trusted restore";
+    if (auditBlockedTrustedRestore || restored.isTrusted()) { std::cerr << "session phase: " << phase << "\n"; return false; }
+    phase = "trusted restore";
+    if (!restored.isUnlocked(*workspace.storage, created->id) || !restored.isTrusted()) { std::cerr << "session phase: " << phase << "\n"; return false; }
     AppSetProfileAuditFailureHookForTests(true);
     const bool auditedLogout = restored.lock(true);
     AppSetProfileAuditFailureHookForTests(false);
-    if (auditedLogout || restored.isTrusted() || restored.isUnlocked(*workspace.storage, created->id)) return false;
+    phase = "audited logout";
+    if (auditedLogout || restored.isTrusted() || restored.isUnlocked(*workspace.storage, created->id)) { std::cerr << "session phase: " << phase << "\n"; return false; }
     if (!ui.open(QIODevice::ReadOnly)) return false;
     const auto loggedOutBytes = ui.readAll(); ui.close();
     if (loggedOutBytes.contains("trusted=" + QByteArray::fromStdString(created->id) + ":")) return false;
-    if (!session.unlock(*workspace.storage, created->id, "secret", 30)) return false;
+    phase = "second trusted login";
+    if (!session.unlock(*workspace.storage, created->id, "secret", 30)) { std::cerr << "session phase: " << phase << "\n"; return false; }
     QtProfileSession restoredNormally(workspace.directory);
-    if (!restoredNormally.isUnlocked(*workspace.storage, created->id) || !restoredNormally.isTrusted() || !restoredNormally.lock(true)) return false;
+    phase = "normal trusted logout";
+    if (!restoredNormally.isUnlocked(*workspace.storage, created->id) || !restoredNormally.isTrusted() || !restoredNormally.lock(true)) { std::cerr << "session phase: " << phase << "\n"; return false; }
     QtProfileSession forgotten(workspace.directory);
     if (forgotten.isUnlocked(*workspace.storage, created->id)) return false;
     if (!ui.open(QIODevice::ReadWrite)) return false;
@@ -1377,7 +1384,17 @@ static bool TestProfileSession() {
     if (!ui.resize(0) || !ui.seek(0) || ui.write(expiredBytes) != expiredBytes.size()) return false;
     ui.close();
     QtProfileSession expired(workspace.directory);
-    if (expired.isUnlocked(*workspace.storage, created->id)) return false;
+    const auto expiryBeforeFailure = expiredBytes;
+    phase = "expiry restore";
+    AppSetProfileAuditFailureHookForTests(true);
+    const bool blockedExpiryRestore = expired.isUnlocked(*workspace.storage, created->id);
+    AppSetProfileAuditFailureHookForTests(false);
+    if (blockedExpiryRestore) { std::cerr << "session phase: " << phase << "\n"; return false; }
+    if (!ui.open(QIODevice::ReadOnly)) return false;
+    const auto unchangedExpiryBytes = ui.readAll(); ui.close();
+    if (unchangedExpiryBytes != expiryBeforeFailure) return false;
+    QtProfileSession expiredRetry(workspace.directory);
+    if (expiredRetry.isUnlocked(*workspace.storage, created->id)) return false;
     if (!ui.open(QIODevice::ReadOnly)) return false;
     const auto prunedBytes = ui.readAll(); ui.close();
     if (prunedBytes.contains(QByteArray::fromStdString(created->id) + ":1")) return false;
@@ -1397,17 +1414,17 @@ static bool TestProfileSession() {
     const auto auditBytes = audit.readAll();
     if (!auditBytes.contains("|unlock|trust_days=30") || !auditBytes.contains("|trusted_unlock") || !auditBytes.contains("|lock")) return false;
     if (session.isUnlocked(*workspace.storage, "other") || session.isUnlocked(*workspace.storage, created->id)) return false;
-    if (!session.unlock(*workspace.storage, created->id, "secret")) return false;
+    if (!session.unlock(*workspace.storage, created->id, "secret")) { std::cerr << "session: relogin before password change\n"; return false; }
     profile.set_password_encoded(EncodePassword("changed"));
-    if (!workspace.storage->save_profile(profile) || session.isUnlocked(*workspace.storage, created->id)) return false;
-    if (!session.unlock(*workspace.storage, created->id, "changed")) return false;
+    if (!workspace.storage->save_profile(profile) || session.isUnlocked(*workspace.storage, created->id)) { std::cerr << "session: password invalidation\n"; return false; }
+    if (!session.unlock(*workspace.storage, created->id, "changed")) { std::cerr << "session: relogin after password change\n"; return false; }
     profile.set_blocked(true);
     if (!workspace.storage->save_profile(profile) || session.isUnlocked(*workspace.storage, created->id) ||
-        session.unlock(*workspace.storage, created->id, "changed")) return false;
+        session.unlock(*workspace.storage, created->id, "changed")) { std::cerr << "session: blocked invalidation\n"; return false; }
     profile.set_blocked(false);
-    if (!workspace.storage->save_profile(profile) || !session.unlock(*workspace.storage, created->id, "changed")) return false;
+    if (!workspace.storage->save_profile(profile) || !session.unlock(*workspace.storage, created->id, "changed")) { std::cerr << "session: unblock login\n"; return false; }
     if (!workspace.storage->set_archived(created->id, true) || session.isUnlocked(*workspace.storage, created->id) ||
-        session.unlock(*workspace.storage, created->id, "changed")) return false;
+        session.unlock(*workspace.storage, created->id, "changed")) { std::cerr << "session: archived invalidation\n"; return false; }
     if (!workspace.storage->set_archived(created->id, false) || !workspace.storage->set_active_profile(created->id)) return false;
     profile.set_password_encoded("");
     if (!workspace.storage->save_profile(profile) || session.unlock(*workspace.storage, created->id, "")) return false;

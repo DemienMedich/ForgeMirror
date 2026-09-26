@@ -125,18 +125,49 @@ bool QtProfileSession::unlock(IJobStorage& storage, const std::string& id, const
 }
 bool QtProfileSession::restoreTrusted(IJobStorage& storage, const std::string& id) {
     const auto trusted = loadTrusted(directory_); const auto found = trusted.find(id); const auto now = QDateTime::currentSecsSinceEpoch();
-    if (found == trusted.end() || found->second <= now) { if (found != trusted.end()) updateTrust(id, 0); return false; }
+    if (found == trusted.end()) return false;
+    if (found->second <= now) {
+        bool prepared = false;
+        try {
+            PrepareProfileSessionAuditRecovery(directory_, true);
+            prepared = true;
+            if (!updateTrust(id, 0) || !AppendProfileAudit(directory_, id, "trust_expired", {})) {
+                RecoverTaskCompletion(directory_);
+                prepared = false;
+                return false;
+            }
+            CommitQtRecoveryTransaction(directory_);
+            prepared = false;
+        } catch (...) {
+            if (prepared) { try { RecoverTaskCompletion(directory_); } catch (...) {} }
+        }
+        return false;
+    }
     try {
-        const auto profile = available(storage, id); if (!profile) { updateTrust(id, 0); return false; }
+        const auto profile = available(storage, id);
+        if (!profile) {
+            if (appendSessionAudit(directory_, id, "trust_revoked", "profile_unavailable", true)) updateTrust(id, 0);
+            return false;
+        }
         if (!appendSessionAudit(directory_, id, "trusted_unlock", {}, false)) return false;
         id_ = id; fingerprint_ = fingerprint(*profile); trusted_ = true; trustedUntil_ = found->second;
         return true;
-    } catch (...) { updateTrust(id, 0); return false; }
+    } catch (...) {
+        if (appendSessionAudit(directory_, id, "trust_revoked", "profile_unavailable", true)) updateTrust(id, 0);
+        return false;
+    }
 }
 bool QtProfileSession::isUnlocked(IJobStorage& storage, const std::string& id) {
     if (id_ != id || id_.empty()) { lock(); if (!restoreTrusted(storage, id)) return false; }
-    try { const auto profile = available(storage, id); if (profile && fingerprint(*profile) == fingerprint_) return true; } catch (...) {}
-    lock(true); return false;
+    bool valid = false;
+    try {
+        const auto profile = available(storage, id);
+        valid = profile && fingerprint(*profile) == fingerprint_;
+    } catch (...) {}
+    if (valid) return true;
+    const bool saved = lock(true);
+    if (!saved) appendSessionAudit(directory_, id, "trust_revoke_failed", "local_session_closed", false);
+    return false;
 }
 bool QtProfileSession::lock(bool forgetTrust) {
     const auto old = id_; bool saved = true;
