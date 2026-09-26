@@ -314,7 +314,8 @@ static bool TestDirectXpRecovery() {
     };
     const auto profilePath = created->id + ".ini";
     const auto achievementPath = "achievements/" + created->id + ".json";
-    const auto beforeProfile = read(profilePath), beforeAchievements = read(achievementPath);
+    const std::string profileAuditPath = "meta/profile-audit.log";
+    const auto beforeProfile = read(profilePath), beforeAchievements = read(achievementPath), beforeProfileAudit = read(profileAuditPath);
     FailingProfileStorage failing(*workspace.storage);
     AppContext context{workspace.directory, failing, workspace.catalog};
     failing.failAt = 1;
@@ -322,16 +323,27 @@ static bool TestDirectXpRecovery() {
     if (rejected.ok || read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("write rollback");
 
+    AppSetProfileAuditFailureHookForTests(true);
+    const auto auditRejected = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
+    AppSetProfileAuditFailureHookForTests(false);
+    if (auditRejected.ok || read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements ||
+        read(profileAuditPath) != beforeProfileAudit ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("audit rollback");
+
     PrepareDirectXpRecovery(workspace.directory, created->id);
     { std::ofstream changed(workspace.directory / profilePath, std::ios::binary | std::ios::trunc); changed << "interrupted"; }
     { std::ofstream changed(workspace.directory / achievementPath, std::ios::binary | std::ios::trunc); changed << "[]"; }
+    { std::ofstream changed(workspace.directory / profileAuditPath, std::ios::binary | std::ios::app); changed << "interrupted\n"; }
     workspace.reload();
-    if (read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements) return fail("restart recovery");
+    if (read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements ||
+        read(profileAuditPath) != beforeProfileAudit) return fail("restart recovery");
 
     failing.writes = 0; failing.failAt = 0;
     const auto applied = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
     if (!applied.ok || applied.awardedGlobalXp != 100 || applied.awardedSkillXp != 150 ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("commit");
+    if (!read(profileAuditPath).contains("|direct_xp|" + QByteArray::fromStdString(skillId) + " base=100 skill=150"))
+        return fail("audit commit");
     failing.set_active_profile(created->id);
     const auto after = failing.load_profile();
     if (!after || after->total_xp() != 100 || after->list_skills().size() != 1 || after->list_skills()[0].xp != 150)

@@ -144,7 +144,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && count >= 4 && count <= 30004) ||
           (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
-          (version == "FORGEMIRROR_QT_DIRECT_XP_1" && count == 2) ||
+          (version == "FORGEMIRROR_QT_DIRECT_XP_1" && (count == 2 || count == 3)) ||
           (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
         throw std::runtime_error(u8"Неизвестный формат журнала XP.");
     for (size_t i = 0; i < count; ++i) {
@@ -165,12 +165,13 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
             (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) ||
             (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && !skillMergeFile) ||
             (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && !walletFile) ||
-            (walletMetadataFile && version != "FORGEMIRROR_QT_PROFILE_WALLET_1") ||
+            (walletMetadataFile && version != "FORGEMIRROR_QT_PROFILE_WALLET_1" &&
+             !(name == "meta/profile-audit.log" && version == "FORGEMIRROR_QT_DIRECT_XP_1")) ||
             (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         if (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && !profileFile)
             throw std::runtime_error(u8"Журнал пересчёта правил содержит посторонний файл.");
-        if (version == "FORGEMIRROR_QT_DIRECT_XP_1" && !profileDeleteFile)
+        if (version == "FORGEMIRROR_QT_DIRECT_XP_1" && !profileDeleteFile && name != "meta/profile-audit.log")
             throw std::runtime_error(u8"Журнал ручного XP содержит посторонний файл.");
         checkPath(root, name);
         checkPath(pending, name);
@@ -195,7 +196,8 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     bool directXpComplete = false;
     if (directXpTransaction) for (const auto& item : seen) if (item.size() > 4 && item.substr(item.size() - 4) == ".ini") {
         const auto id = item.substr(0, item.size() - 4);
-        directXpComplete = item.rfind("archive/", 0) != 0 && seen.count("achievements/" + id + ".json");
+        directXpComplete = item.rfind("archive/", 0) != 0 && seen.count("achievements/" + id + ".json") &&
+            (seen.size() == 2 || (seen.size() == 3 && seen.count("meta/profile-audit.log")));
     }
     bool skillMergeComplete = false;
     if (skillMergeTransaction) {
@@ -307,7 +309,7 @@ void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,
 void PrepareDirectXpRecovery(const std::filesystem::path& directory, const std::string& profileId) {
     if (!safeProfileId(profileId)) throw std::runtime_error(u8"Некорректный ID профиля для ручного XP.");
     prepareFileJournal(directory, "FORGEMIRROR_QT_DIRECT_XP_1",
-        {profileId + ".ini", "achievements/" + profileId + ".json"});
+        {profileId + ".ini", "achievements/" + profileId + ".json", "meta/profile-audit.log"});
 }
 
 void CommitQtRecoveryTransaction(const std::filesystem::path& directory) {
@@ -355,6 +357,10 @@ AppProfileMutationResult GrantDirectSkillXpWithRecovery(AppContext& app,
         PrepareDirectXpRecovery(app.storageDir, profileId);
         result = AppGrantDirectSkillXp(app.storage, app.catalog, restoreProfileId, profileId, skillId, amount, nowSec);
         if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось начислить XP." : result.errorMessage);
+        if (!AppendProfileAudit(app.storageDir, profileId, "direct_xp",
+                skillId + " base=" + std::to_string(result.awardedGlobalXp) +
+                "|skill=" + std::to_string(result.awardedSkillXp)))
+            throw std::runtime_error(u8"Не удалось записать аудит начисления XP; изменение отменено.");
         CommitQtRecoveryTransaction(app.storageDir);
     } catch (const std::exception& error) {
         result.ok = false; result.changed = false; result.affectedProfiles = 0;
