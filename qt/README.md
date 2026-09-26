@@ -189,6 +189,10 @@ The Qt Tasks page can now filter by any profile, matching the legacy profile fil
 
 The Tasks page now exports visible rows to UTF-8 CSV or TXT. Export reads the rendered table, so status, priority, profile, project, pipeline, age, quick filters and search all apply; hidden rows are not included. CSV quotes commas, quotes and multiline values and includes task, deadline, project, stage, XP participant and scoring fields. Both formats have a UTF-8 BOM and use `QSaveFile` for atomic replacement. `smoke_qt` drives both real save dialogs, checks escaping and confirms search-hidden rows are excluded. The stable ImGui implementation is unchanged.
 
+### Reset task filters (stage 112, implementation checkpoint)
+
+The Qt Tasks toolbar now has **Сбросить фильтры**, matching the legacy reset action. It clears the shared search field and resets status, priority, quick, creation-age, assignee, project and pipeline filters plus sort order. The selection is saved once and the table refreshes once. `smoke_qt` checks the visible result and persisted defaults. The stable ImGui implementation is unchanged.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.

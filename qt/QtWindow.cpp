@@ -546,6 +546,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskPipelineFilter_->setObjectName("taskPipelineFilter");
     taskPipelineFilter_->setMaximumWidth(180);
     filters->addWidget(taskPipelineFilter_);
+    taskFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
+    taskFilterReset_->setObjectName("taskFilterReset");
+    taskFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск и вернуть фильтры задач к значениям по умолчанию"));
+    filters->addWidget(taskFilterReset_);
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
     reportView_->setMaximumWidth(145);
@@ -837,6 +841,28 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(taskAssigneeFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskProjectFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskPipelineFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskFilterReset_, &QPushButton::clicked, this, [this] {
+        const QSignalBlocker searchBlock(search_);
+        const QSignalBlocker statusBlock(statusFilter_);
+        const QSignalBlocker priorityBlock(priorityFilter_);
+        const QSignalBlocker quickBlock(quickTaskFilter_);
+        const QSignalBlocker ageBlock(taskCreatedRange_);
+        const QSignalBlocker sortBlock(taskSort_);
+        const QSignalBlocker assigneeBlock(taskAssigneeFilter_);
+        const QSignalBlocker projectBlock(taskProjectFilter_);
+        const QSignalBlocker pipelineBlock(taskPipelineFilter_);
+        search_->clear();
+        statusFilter_->setCurrentIndex(0);
+        priorityFilter_->setCurrentIndex(0);
+        quickTaskFilter_->setCurrentIndex(0);
+        taskCreatedRange_->setCurrentIndex(0);
+        taskSort_->setCurrentIndex(0);
+        taskAssigneeFilter_->setCurrentIndex(0);
+        taskProjectFilter_->setCurrentIndex(0);
+        taskPipelineFilter_->setCurrentIndex(0);
+        saveDisplayContext();
+        render();
+    });
     connect(catalogProfessionFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportDateRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
@@ -1458,6 +1484,7 @@ void QtWindow::render() {
     taskAssigneeFilter_->setVisible(page == Tasks);
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
+    taskFilterReset_->setVisible(page == Tasks);
     catalogProfessionFilter_->setVisible(page == Catalog);
     reportView_->setVisible(page == Statistics);
     reportDateRange_->setVisible(page == Statistics);

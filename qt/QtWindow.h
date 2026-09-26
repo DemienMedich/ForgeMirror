@@ -85,6 +85,7 @@ private:
     QComboBox* taskCreatedRange_;
     QComboBox* taskSort_;
     QComboBox* taskAssigneeFilter_;
+    QPushButton* taskFilterReset_;
     QComboBox* taskProjectFilter_;
     QComboBox* taskPipelineFilter_;
     QComboBox* catalogProfessionFilter_;

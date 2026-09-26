@@ -2886,6 +2886,48 @@ static bool TestQtVisibleTaskExports() {
         txtBytes.contains("first line second line") && !txtBytes.contains("Hidden unrelated task");
 }
 
+static bool TestQtTaskFilterReset() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    ProjectEntry project; project.id = "reset-project"; project.name = "Reset project";
+    PipelineStep step; step.id = "reset-step"; step.title = "Reset step";
+    workspace.data.projects = {project}; workspace.data.pipelineSteps = {step};
+    TaskEntry task; task.id = "reset-task"; task.title = "Visible after reset"; task.projectId = project.id;
+    task.pipelineStepId = step.id; task.createdAt = QDateTime::currentSecsSinceEpoch();
+    workspace.data.tasks = {task};
+    if (!AppSaveProjects(directory, workspace.data.projects) || !AppSavePipelineData(directory, workspace.data.pipelineSteps) ||
+        !AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* search = window.findChild<QLineEdit*>("search");
+    auto* reset = window.findChild<QPushButton*>("taskFilterReset");
+    auto* status = window.findChild<QComboBox*>("statusFilter");
+    auto* priority = window.findChild<QComboBox*>("priorityFilter");
+    auto* quick = window.findChild<QComboBox*>("quickTaskFilter");
+    auto* age = window.findChild<QComboBox*>("taskCreatedRange");
+    auto* sort = window.findChild<QComboBox*>("taskSortMode");
+    auto* projectFilter = window.findChild<QComboBox*>("taskProjectFilter");
+    auto* pipelineFilter = window.findChild<QComboBox*>("taskPipelineFilter");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!navigation || !search || !reset || !status || !priority || !quick || !age || !sort || !projectFilter || !pipelineFilter || !table) return false;
+    navigation->setCurrentRow(1);
+    status->setCurrentIndex(1); priority->setCurrentIndex(1); quick->setCurrentIndex(6);
+    age->setCurrentIndex(1); sort->setCurrentIndex(2); projectFilter->setCurrentIndex(1); pipelineFilter->setCurrentIndex(1);
+    search->setText(QString::fromUtf8("no match"));
+    if (table->rowCount() != 0 || !reset->isVisible()) return false;
+    reset->click();
+    const auto settings = LoadQtDisplaySettings(directory);
+    return search->text().isEmpty() && table->rowCount() == 1 && status->currentIndex() == 0 &&
+        priority->currentIndex() == 0 && quick->currentIndex() == 0 && age->currentIndex() == 0 &&
+        sort->currentIndex() == 0 && projectFilter->currentIndex() == 0 && pipelineFilter->currentIndex() == 0 &&
+        settings.taskStatusFilter == 0 && settings.taskPriorityFilter == 0 && settings.taskQuickFilter == 0 &&
+        settings.taskCreatedRange == 0 && settings.taskSortMode == 0 && settings.taskProjectId.isEmpty() &&
+        settings.taskPipelineStepId.isEmpty() && settings.taskAssigneeProfileId.isEmpty();
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3306,6 +3348,7 @@ int main(int argc, char** argv) {
     if (!TestQtTaskCreationRangeAndSorting()) { std::cerr << "Qt task creation range and sorting failed\n"; return 1; }
     if (!TestQtTaskAssigneeProfileFilter()) { std::cerr << "Qt task assignee profile filter failed\n"; return 1; }
     if (!TestQtVisibleTaskExports()) { std::cerr << "Qt visible task export failed\n"; return 1; }
+    if (!TestQtTaskFilterReset()) { std::cerr << "Qt task filter reset failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
