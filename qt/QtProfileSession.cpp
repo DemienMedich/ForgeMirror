@@ -90,6 +90,21 @@ bool appendSessionAudit(const std::filesystem::path& directory, const std::strin
         return false;
     }
 }
+bool revokeTrustedSession(const std::filesystem::path& directory, const std::string& id,
+                          const std::string& reason) {
+    bool prepared = false;
+    try {
+        PrepareProfileSessionAuditRecovery(directory, true);
+        prepared = true;
+        if (!changeTrusted(directory, id, 0) || !AppendProfileAudit(directory, id, "trust_revoked", reason))
+            throw std::runtime_error("trusted session revocation failed");
+        CommitQtRecoveryTransaction(directory);
+        return true;
+    } catch (...) {
+        if (prepared) { try { RecoverTaskCompletion(directory); } catch (...) {} }
+        return false;
+    }
+}
 }
 
 bool QtProfileSession::updateTrust(const std::string& id, std::int64_t expiresAt) { return !directory_.empty() && changeTrusted(directory_, id, expiresAt); }
@@ -146,14 +161,14 @@ bool QtProfileSession::restoreTrusted(IJobStorage& storage, const std::string& i
     try {
         const auto profile = available(storage, id);
         if (!profile) {
-            if (appendSessionAudit(directory_, id, "trust_revoked", "profile_unavailable", true)) updateTrust(id, 0);
+            revokeTrustedSession(directory_, id, "profile_unavailable");
             return false;
         }
         if (!appendSessionAudit(directory_, id, "trusted_unlock", {}, false)) return false;
         id_ = id; fingerprint_ = fingerprint(*profile); trusted_ = true; trustedUntil_ = found->second;
         return true;
     } catch (...) {
-        if (appendSessionAudit(directory_, id, "trust_revoked", "profile_unavailable", true)) updateTrust(id, 0);
+        revokeTrustedSession(directory_, id, "profile_unavailable");
         return false;
     }
 }
