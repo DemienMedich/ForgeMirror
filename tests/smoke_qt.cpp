@@ -2674,6 +2674,99 @@ int main(int argc, char** argv) {
         !uiAuditBytes.contains(QString::fromUtf8("Источник,Время,Автор,Объект,Поле,Было,Стало").toUtf8()) ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Экспортировано событий: %1").arg(auditRowsBeforeExport)))
         return fail("Audit export UI content or visible row count failed");
+    nav->setCurrentRow(16);
+    auto* logInfo = window.findChild<QCheckBox*>("logInfo");
+    auto* logWarnings = window.findChild<QCheckBox*>("logWarnings");
+    auto* logErrors = window.findChild<QCheckBox*>("logErrors");
+    auto* logSourceFilter = window.findChild<QComboBox*>("logSourceFilter");
+    auto* logPresetAll = window.findChild<QPushButton*>("logPresetAll");
+    auto* logPresetWarningsErrors = window.findChild<QPushButton*>("logPresetWarningsErrors");
+    auto* logPresetErrors = window.findChild<QPushButton*>("logPresetErrors");
+    auto* exportLogs = window.findChild<QPushButton*>("exportLogs");
+    auto* clearLogs = window.findChild<QPushButton*>("clearLogs");
+    if (!logInfo || !logWarnings || !logErrors || !logSourceFilter || !logPresetAll || !logPresetWarningsErrors || !logPresetErrors ||
+        !exportLogs || !clearLogs || !logInfo->isVisible() || !logPresetAll->isVisible() || !logPresetWarningsErrors->isVisible() ||
+        !logPresetErrors->isVisible() || !logSourceFilter->isVisible() || !exportLogs->isVisible() || !clearLogs->isVisible())
+        return fail("Qt application log controls unavailable");
+    auto* logSummary = window.findChild<QLabel*>("summary");
+    QFile appLogFile(temp.path() + "/meta/qt-application-log.json");
+    if (!logSummary || !appLogFile.open(QIODevice::ReadOnly)) return fail("Qt application log summary unavailable");
+    const auto appLogBytes = appLogFile.readAll();
+    appLogFile.close();
+    const auto appLogEntries = QJsonDocument::fromJson(appLogBytes).array();
+    std::array<int, 3> appLogCounts{};
+    for (const auto& value : appLogEntries) {
+        const int level = value.toObject().value("level").toInt(-1);
+        if (level >= 0 && level < int(appLogCounts.size())) ++appLogCounts[size_t(level)];
+    }
+    if (!logSummary->text().contains(QString::fromUtf8("Инфо: %1 · Предупреждения: %2 · Ошибки: %3")
+            .arg(appLogCounts[0]).arg(appLogCounts[1]).arg(appLogCounts[2])))
+        return fail("Qt application log level summary does not match persisted entries");
+    logPresetWarningsErrors->click();
+    if (logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
+        return fail("Qt log warning/error preset did not select the expected levels");
+    logPresetErrors->click();
+    if (logInfo->isChecked() || logWarnings->isChecked() || !logErrors->isChecked())
+        return fail("Qt log errors-only preset did not select the expected level");
+    logPresetAll->click();
+    if (!logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
+        return fail("Qt log all-levels preset did not restore all levels");
+    const int qtSourceIndex = logSourceFilter->findData(QStringLiteral("Qt"));
+    if (qtSourceIndex < 0) return fail("Qt application log source filter did not list the Qt source");
+    logSourceFilter->setCurrentIndex(qtSourceIndex);
+    if (table->rowCount() == 0) return fail("Qt application log source filter returned no Qt entries");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (table->item(index, 3)->text() != QStringLiteral("Qt")) return fail("Qt application log source filter leaked another source");
+    logSourceFilter->setCurrentIndex(0);
+    auto* logAutoScroll = window.findChild<QCheckBox*>("logAutoScroll");
+    auto* logCompactView = window.findChild<QCheckBox*>("logCompactView");
+    if (!logAutoScroll || !logCompactView || !logAutoScroll->isVisible() || !logCompactView->isVisible())
+        return fail("Qt log display options unavailable");
+    logAutoScroll->setChecked(true);
+    logCompactView->setChecked(true);
+    if (!table->isColumnHidden(1) || !table->isColumnHidden(3))
+        return fail("Qt compact log view did not hide timestamp and source columns");
+    const int logRowsBeforeAutoscroll = table->rowCount();
+    for (int index = 0; index < 20; ++index)
+        window.statusBar()->showMessage(QString::fromUtf8("Проверка автопрокрутки Qt-журнала %1").arg(index));
+    QApplication::processEvents();
+    const int expectedLogRows = std::min(logRowsBeforeAutoscroll + 20, 200);
+    if (table->rowCount() != expectedLogRows || table->verticalScrollBar()->maximum() == 0 ||
+        table->verticalScrollBar()->value() != table->verticalScrollBar()->minimum() ||
+        !table->item(0, 4)->text().contains(QString::fromUtf8("автопрокрутки Qt-журнала 19")))
+        return fail("Qt application log did not append and autoscroll to a new entry");
+    logAutoScroll->setChecked(false);
+    const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");
+    search->setText(startupLogToken);
+    if (table->rowCount() == 0 || !table->item(0, 4)->text().contains(startupLogToken, Qt::CaseInsensitive))
+        return fail("Qt startup event was not captured in the application log");
+    logInfo->setChecked(false);
+    if (table->rowCount() != 0) return fail("Qt log level filter did not hide info entries");
+    logInfo->setChecked(true);
+    if (table->rowCount() == 0) return fail("Qt log level filter did not restore info entries");
+    const auto uiLogPath = temp.path() + "/ui-app-log.txt";
+    QTimer::singleShot(0, [uiLogPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(uiLogPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportLogs->click();
+    QFile uiLogs(uiLogPath);
+    if (!uiLogs.open(QIODevice::ReadOnly)) return fail("Qt application log export did not create a file");
+    const auto uiLogBytes = uiLogs.readAll();
+    if (!uiLogBytes.startsWith("\xEF\xBB\xBF") || !uiLogBytes.contains(startupLogToken.toUtf8()))
+        return fail("Qt application log export content or encoding failed");
+    clearLogs->click();
+    if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||
+        !table->item(0, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive))
+        return fail("Qt application log clear failed");
+    QFile persistedLog(temp.path() + "/meta/qt-application-log.json");
+    if (!persistedLog.open(QIODevice::ReadOnly)) return fail("Qt application log persistence file could not be opened");
+    const auto persistedLogBytes = persistedLog.readAll();
+    persistedLog.close();
+    if (!persistedLogBytes.contains("Журнал Qt-сессии очищен"))
+        return fail("Qt application log was not persisted locally");
     QtWindow viewerWindow(workspace);
     viewerWindow.show();
     QApplication::processEvents();
@@ -2704,81 +2797,6 @@ int main(int argc, char** argv) {
         !viewerAuditBytes.contains(QString::fromUtf8("Задача").toUtf8()) ||
         viewerAuditBytes.contains(QString::fromUtf8("Профиль").toUtf8()))
         return fail("Non-administrator task audit export contained wrong sources or encoding");
-    nav->setCurrentRow(16);
-    auto* logInfo = window.findChild<QCheckBox*>("logInfo");
-    auto* logWarnings = window.findChild<QCheckBox*>("logWarnings");
-    auto* logErrors = window.findChild<QCheckBox*>("logErrors");
-    auto* logSourceFilter = window.findChild<QComboBox*>("logSourceFilter");
-    auto* logPresetAll = window.findChild<QPushButton*>("logPresetAll");
-    auto* logPresetWarningsErrors = window.findChild<QPushButton*>("logPresetWarningsErrors");
-    auto* logPresetErrors = window.findChild<QPushButton*>("logPresetErrors");
-    auto* exportLogs = window.findChild<QPushButton*>("exportLogs");
-    auto* clearLogs = window.findChild<QPushButton*>("clearLogs");
-    if (!logInfo || !logWarnings || !logErrors || !logSourceFilter || !logPresetAll || !logPresetWarningsErrors || !logPresetErrors ||
-        !exportLogs || !clearLogs || !logInfo->isVisible() || !logPresetAll->isVisible() || !logPresetWarningsErrors->isVisible() ||
-        !logPresetErrors->isVisible() || !logSourceFilter->isVisible() || !exportLogs->isVisible() || !clearLogs->isVisible())
-        return fail("Qt application log controls unavailable");
-    logPresetWarningsErrors->click();
-    if (logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
-        return fail("Qt log warning/error preset did not select the expected levels");
-    logPresetErrors->click();
-    if (logInfo->isChecked() || logWarnings->isChecked() || !logErrors->isChecked())
-        return fail("Qt log errors-only preset did not select the expected level");
-    logPresetAll->click();
-    if (!logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
-        return fail("Qt log all-levels preset did not restore all levels");
-    const int qtSourceIndex = logSourceFilter->findData(QStringLiteral("Qt"));
-    if (qtSourceIndex < 0) return fail("Qt application log source filter did not list the Qt source");
-    logSourceFilter->setCurrentIndex(qtSourceIndex);
-    if (table->rowCount() == 0) return fail("Qt application log source filter returned no Qt entries");
-    for (int index = 0; index < table->rowCount(); ++index)
-        if (table->item(index, 3)->text() != QStringLiteral("Qt")) return fail("Qt application log source filter leaked another source");
-    logSourceFilter->setCurrentIndex(0);
-    auto* logAutoScroll = window.findChild<QCheckBox*>("logAutoScroll");
-    auto* logCompactView = window.findChild<QCheckBox*>("logCompactView");
-    if (!logAutoScroll || !logCompactView || !logAutoScroll->isVisible() || !logCompactView->isVisible())
-        return fail("Qt log display options unavailable");
-    logAutoScroll->setChecked(true);
-    logCompactView->setChecked(true);
-    if (!table->isColumnHidden(1) || !table->isColumnHidden(3))
-        return fail("Qt compact log view did not hide timestamp and source columns");
-    const int logRowsBeforeAutoscroll = table->rowCount();
-    for (int index = 0; index < 20; ++index)
-        window.statusBar()->showMessage(QString::fromUtf8("Проверка автопрокрутки Qt-журнала %1").arg(index));
-    QApplication::processEvents();
-    if (table->rowCount() != logRowsBeforeAutoscroll + 20 || table->verticalScrollBar()->maximum() == 0 ||
-        table->verticalScrollBar()->value() != table->verticalScrollBar()->maximum())
-        return fail("Qt application log did not append and autoscroll to a new entry");
-    logAutoScroll->setChecked(false);
-    const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");
-    search->setText(startupLogToken);
-    if (table->rowCount() == 0 || !table->item(0, 4)->text().contains(startupLogToken, Qt::CaseInsensitive))
-        return fail("Qt startup event was not captured in the application log");
-    logInfo->setChecked(false);
-    if (table->rowCount() != 0) return fail("Qt log level filter did not hide info entries");
-    logInfo->setChecked(true);
-    if (table->rowCount() == 0) return fail("Qt log level filter did not restore info entries");
-    const auto uiLogPath = temp.path() + "/ui-app-log.txt";
-    QTimer::singleShot(0, [uiLogPath] {
-        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
-            dialog->selectFile(uiLogPath);
-            static_cast<QDialog*>(dialog)->accept();
-        }
-    });
-    exportLogs->click();
-    QFile uiLogs(uiLogPath);
-    if (!uiLogs.open(QIODevice::ReadOnly)) return fail("Qt application log export did not create a file");
-    const auto uiLogBytes = uiLogs.readAll();
-    if (!uiLogBytes.startsWith("\xEF\xBB\xBF") || !uiLogBytes.contains(startupLogToken.toUtf8()))
-        return fail("Qt application log export content or encoding failed");
-    clearLogs->click();
-    auto* logSummary = window.findChild<QLabel*>("summary");
-    if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||
-        !table->item(0, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive))
-        return fail("Qt application log clear failed");
-    QFile persistedLog(temp.path() + "/meta/qt-application-log.json");
-    if (!persistedLog.open(QIODevice::ReadOnly) || !persistedLog.readAll().contains("Журнал Qt-сессии очищен"))
-        return fail("Qt application log was not persisted locally");
     QtWindow restartedWindow(workspace);
     restartedWindow.show();
     QApplication::processEvents();

@@ -1605,8 +1605,14 @@ void QtWindow::render() {
         const auto sourceFilter = logSourceFilter_->currentData().toString();
         int total = 0;
         int visible = 0;
+        int infoCount = 0;
+        int warningCount = 0;
+        int errorCount = 0;
         for (auto it = appLogs_.rbegin(); it != appLogs_.rend(); ++it) {
             ++total;
+            if (it->level == AppLogLevel::Info) ++infoCount;
+            else if (it->level == AppLogLevel::Warning) ++warningCount;
+            else ++errorCount;
             const bool enabled = it->level == AppLogLevel::Info ? logInfo_->isChecked()
                 : it->level == AppLogLevel::Warning ? logWarnings_->isChecked() : logErrors_->isChecked();
             if (!enabled) continue;
@@ -1618,9 +1624,10 @@ void QtWindow::render() {
             ++visible;
             row(std::to_string(total), values);
         }
-        summary_->setText(QString::fromUtf8("Показано: %1 из %2 · история между запусками · %3")
-            .arg(visible).arg(total).arg(appLogPersistenceWarning_ ? QString::fromUtf8("ошибка сохранения") : QString::fromUtf8("сохранено локально")));
-        if (logAutoScroll_->isChecked()) table_->scrollToBottom();
+        summary_->setText(QString::fromUtf8("Показано: %1 из %2 · Инфо: %3 · Предупреждения: %4 · Ошибки: %5 · %6")
+            .arg(visible).arg(total).arg(infoCount).arg(warningCount).arg(errorCount)
+            .arg(appLogPersistenceWarning_ ? QString::fromUtf8("ошибка сохранения") : QString::fromUtf8("сохранено локально")));
+        if (logAutoScroll_->isChecked()) table_->scrollToTop();
     } else if (page == Rules) {
         headers({QString::fromUtf8("Параметр"), QString::fromUtf8("Значение")});
         const auto& rules = data.rulesConfig;
