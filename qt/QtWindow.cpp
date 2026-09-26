@@ -727,10 +727,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     cloudPull_->setStyleSheet("min-height: 40px; max-height: 40px;");
     cloudPull_->setToolTip(QString::fromUtf8("Ручной pull после подтверждения; перед копированием создаётся полный снимок рабочей папки"));
     bottom->addWidget(cloudPull_);
-    cloudPushPreview_ = new QPushButton(QString::fromUtf8("Предпросмотр выгрузки"));
+    cloudPushPreview_ = new QPushButton(QString::fromUtf8("Выгрузить всё…"));
     cloudPushPreview_->setObjectName("cloudPushPreview");
     cloudPushPreview_->setStyleSheet("min-height: 40px; max-height: 40px;");
-    cloudPushPreview_->setToolTip(QString::fromUtf8("Смоделировать полную выгрузку; облачные файлы останутся без изменений"));
+    cloudPushPreview_->setToolTip(QString::fromUtf8("Предпросмотр, подтверждение и транзакционная выгрузка всей Qt-копии в облако"));
     bottom->addWidget(cloudPushPreview_);
     cloudResolve_ = new QPushButton(QString::fromUtf8("Сравнить версии"));
     cloudResolve_->setObjectName("cloudResolve"); cloudResolve_->setStyleSheet("min-height: 40px; max-height: 40px;");
@@ -1750,7 +1750,7 @@ void QtWindow::render() {
         const bool hasBackups = !ListCloudWorkspaceBackups(workspace_.directory).empty();
         cloudResolve_->setEnabled((config.enabled && rootExists && driftCount > 0) || hasBackups);
         storageResolve_->setEnabled(admin_ && config.enabled && rootExists && HasQtStorageConflict(workspace_.directory));
-        summary_->setText(QString::fromUtf8("Ручные pull и отправка отдельных файлов требуют подтверждения · полный push пока доступен только как предпросмотр · автоматическая синхронизация заблокирована"));
+        summary_->setText(QString::fromUtf8("Ручные pull и полный push требуют подтверждения и снимка облачных данных · автоматическая синхронизация заблокирована"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->resizeColumnsToContents();
@@ -2659,13 +2659,27 @@ void QtWindow::createEntry(bool edit) {
 void QtWindow::previewCloudPush() {
     if (!requireAdmin() || navigation_->currentRow() != Cloud) return;
     const auto config = LoadCloudSyncConfig(workspace_.directory);
-    const auto result = PreviewQtCloudWorkspacePush(config, workspace_.directory, CloudRole::Admin);
-    if (!result.sync.ok) {
-        QMessageBox::warning(this, QString::fromUtf8("Предпросмотр выгрузки"), q(result.message));
+    const auto preview = PreviewQtCloudWorkspacePush(config, workspace_.directory, CloudRole::Admin);
+    if (!preview.sync.ok) {
+        QMessageBox::warning(this, QString::fromUtf8("Предпросмотр выгрузки"), q(preview.message));
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("Предпросмотр выгрузки"), q(result.message) +
-        QString::fromUtf8("\n\nОблачная папка и manifest не изменялись. Полный push пока не включён."));
+    if (!preview.sync.changed) {
+        QMessageBox::information(this, QString::fromUtf8("Предпросмотр выгрузки"), q(preview.message));
+        return;
+    }
+    QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Выгрузить всё рабочее пространство?"),
+        q(preview.message) + QString::fromUtf8("\n\nБудет создан локальный снимок старых облачных файлов. "
+        "Лишние файлы в облаке будут удалены; конфликт storage.json запрещает операцию."),
+        QMessageBox::Yes | QMessageBox::Cancel, this);
+    confirm.setDefaultButton(QMessageBox::Cancel);
+    confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Выгрузить"));
+    confirm.button(QMessageBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    if (confirm.exec() != QMessageBox::Yes) return;
+    const auto result = RunQtCloudWorkspacePush(config, workspace_.directory, CloudRole::Admin, &preview);
+    if (!result.sync.ok) QMessageBox::warning(this, QString::fromUtf8("Выгрузка не выполнена"), q(result.message));
+    else QMessageBox::information(this, QString::fromUtf8("Выгрузка завершена"), q(result.message));
+    render();
 }
 
 void QtWindow::pullCloud() {

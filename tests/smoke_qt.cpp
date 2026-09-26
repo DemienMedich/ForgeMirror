@@ -635,6 +635,90 @@ static bool TestCloudPushPreview() {
     if (PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Viewer).sync.ok || inventory(cloud) != before) return false;
     auto overlap = config; overlap.root = workspace;
     if (PreviewQtCloudWorkspacePush(overlap, workspace, CloudRole::Admin).sync.ok || inventory(cloud) != before) return false;
+    auto read = [](const std::filesystem::path& path) {
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+    };
+    if (!write(cloud / "meta/tasks.json", "[{\"id\":\"external-change\"}]")) return false;
+    const auto staleApproval = RunQtCloudWorkspacePush(config, workspace, CloudRole::Admin, &preview);
+    if (staleApproval.sync.ok || read(cloud / "meta/tasks.json") != "[{\"id\":\"external-change\"}]" ||
+        !write(cloud / "meta/tasks.json", before.at("meta/tasks.json"))) return false;
+    const auto pushed = RunQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
+    if (!pushed.sync.ok || !pushed.sync.changed || pushed.backupPath.empty() ||
+        !std::filesystem::is_directory(pushed.backupPath) ||
+        read(cloud / "meta/tasks.json") != "[{\"id\":\"local\"}]" ||
+        std::filesystem::exists(cloud / "orphan.tmp") ||
+        !read(cloud / "meta/manifest.ini").contains("notes=preserve") ||
+        !read(pushed.backupPath / "meta/tasks.json").contains("remote")) { std::cerr << "push commit: " << pushed.message << " ok=" << pushed.sync.ok << " changed=" << pushed.sync.changed << " added=" << pushed.filesAdded << " replaced=" << pushed.filesReplaced << " removed=" << pushed.filesRemoved << " tasks=" << read(cloud / "meta/tasks.json").toStdString() << " orphan=" << std::filesystem::exists(cloud / "orphan.tmp") << " manifest=" << read(cloud / "meta/manifest.ini").toStdString() << " backupTasks=" << read(pushed.backupPath / "meta/tasks.json").toStdString() << "\n"; return false; }
+    if (!write(workspace / "meta/tasks.json", "[{\"id\":\"next-local\"}]") ||
+        !write(workspace / "spirits/temporary.png", "created directory rollback\n") ||
+        !write(cloud / "zz-orphan.tmp", "restore me\n")) return false;
+    const auto beforeInterruptedPush = inventory(cloud);
+    const auto interruptedPlan = PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
+    if (!interruptedPlan.sync.ok || std::none_of(interruptedPlan.changes.begin(), interruptedPlan.changes.end(),
+        [](const auto& change) { return change.relativePath == "spirits/temporary.png"; })) return false;
+    QtSetCloudPushFailureAfterFileWritesForTests(static_cast<int>(interruptedPlan.changes.size()));
+    QtSetCloudPushLeaveJournalForTests(true);
+    const auto interrupted = RunQtCloudWorkspacePush(config, workspace, CloudRole::Admin, &interruptedPlan);
+    QtSetCloudPushLeaveJournalForTests(false);
+    QtSetCloudPushFailureAfterFileWritesForTests(-1);
+    if (interrupted.sync.ok || !std::filesystem::exists(workspace / "meta/qt-cloud-push.json") ||
+        inventory(cloud) == beforeInterruptedPush) { std::cerr << "push interrupted: " << interrupted.message << " ok=" << interrupted.sync.ok << " journal=" << std::filesystem::exists(workspace / "meta/qt-cloud-push.json") << "\n"; return false; }
+    const auto pushJournal = workspace / "meta/qt-cloud-push.json";
+    const auto validJournal = read(pushJournal);
+    auto tampered = QJsonDocument::fromJson(validJournal).object();
+    auto entries = tampered["files"].toArray();
+    auto firstEntry = entries.at(0).toObject(); firstEntry["path"] = QString::fromLatin1("../outside.ini"); entries[0] = firstEntry;
+    tampered["files"] = entries;
+    if (!write(pushJournal, QJsonDocument(tampered).toJson())) return false;
+    bool rejected = false;
+    try { RecoverQtCloudPush(workspace); } catch (const std::exception&) { rejected = true; }
+    if (!rejected || inventory(cloud) == beforeInterruptedPush || !write(pushJournal, validJournal)) return false;
+    { QtWorkspace recovered(workspace); }
+    if (inventory(cloud) != beforeInterruptedPush || std::filesystem::exists(pushJournal) ||
+        std::filesystem::exists(cloud / "spirits")) return false;
+    QtWindow window(qtWorkspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* pushButton = window.findChild<QPushButton*>("cloudPushPreview");
+    if (!navigation || !pushButton) return false;
+    navigation->setCurrentRow(13);
+    if (!pushButton->isVisible() || pushButton->isEnabled()) return false;
+    QAction* adminAction = nullptr;
+    for (auto* menu : window.findChildren<QMenu*>())
+        for (auto* action : menu->actions())
+            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return false;
+    QTimer::singleShot(0, [] {
+        if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+            input->setTextValue(QString::fromUtf8("admin123")); input->accept();
+        }
+    });
+    adminAction->trigger();
+    if (!pushButton->isEnabled()) return false;
+    const auto beforeCancelledUiPush = inventory(cloud);
+    bool cancelWasDefault = false;
+    QTimer::singleShot(0, [&] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            cancelWasDefault = box->defaultButton() == box->button(QMessageBox::Cancel);
+            box->button(QMessageBox::Cancel)->click();
+        }
+    });
+    pushButton->click();
+    if (!cancelWasDefault || inventory(cloud) != beforeCancelledUiPush) return false;
+    bool confirmed = false;
+    QTimer::singleShot(0, [&] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            confirmed = box->defaultButton() == box->button(QMessageBox::Cancel);
+            box->button(QMessageBox::Yes)->click();
+            QTimer::singleShot(0, [] {
+                if (auto* info = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) info->accept();
+            });
+        }
+    });
+    pushButton->click();
+    if (!confirmed || inventory(cloud) == beforeCancelledUiPush ||
+        read(cloud / "meta/tasks.json") != read(workspace / "meta/tasks.json")) return false;
+    window.close();
     return true;
 }
 
