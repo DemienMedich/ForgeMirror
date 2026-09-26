@@ -3497,9 +3497,55 @@ static bool TestLogActivityHistogram() {
     return std::accumulate(withMissingTime.begin(), withMissingTime.end(), 0) == int(missingTimes.size());
 }
 
+static bool TestQtLogSourceSanitizationAndRetention() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    if (!navigation) return false;
+    navigation->setCurrentRow(1);
+    window.statusBar()->showMessage(QStringLiteral("Task event password=leak token=other https://user:secret@example.test"));
+    QFile file(temp.path() + "/meta/qt-application-log.json");
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    auto entries = QJsonDocument::fromJson(file.readAll()).array();
+    file.close();
+    bool sanitizedTaskEvent = false;
+    for (const auto& value : entries) {
+        const auto item = value.toObject();
+        const auto message = item.value("message").toString();
+        if (!message.startsWith("Task event")) continue;
+        sanitizedTaskEvent = item.value("source").toString() == QString::fromUtf8("Задачи") &&
+            message.contains("[REDACTED]") && !message.contains("leak") && !message.contains("other") &&
+            !message.contains("user:secret");
+    }
+    if (!sanitizedTaskEvent) return false;
+    window.statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить тестовую задачу"));
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    entries = QJsonDocument::fromJson(file.readAll()).array();
+    file.close();
+    bool errorClassified = false;
+    for (const auto& value : entries) {
+        const auto item = value.toObject();
+        if (item.value("message").toString().contains(QString::fromUtf8("Не удалось сохранить тестовую задачу")))
+            errorClassified = item.value("level").toInt(-1) == int(AppLogLevel::Error);
+    }
+    if (!errorClassified) return false;
+    for (int index = 0; index < 205; ++index)
+        window.statusBar()->showMessage(QStringLiteral("retention-%1").arg(index));
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    entries = QJsonDocument::fromJson(file.readAll()).array();
+    if (entries.size() != 200 || entries.first().toObject().value("message").toString() != "retention-5" ||
+        entries.last().toObject().value("message").toString() != "retention-204") return false;
+    return true;
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
+    if (!TestQtLogSourceSanitizationAndRetention()) { std::cerr << "Qt log source, sanitization, or retention failed\n"; return 1; }
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;

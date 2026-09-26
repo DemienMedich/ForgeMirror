@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtLogSanitization.h"
 #include "QtAchievements.h"
 #include "QtPomodoro.h"
 #include "QtProfessionEditor.h"
@@ -838,10 +839,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     setCentralWidget(root);
     statusBar()->showMessage(QString::fromUtf8("Локальная копия · без облака · ") + q(workspace_.directory.u8string()));
     connect(statusBar(), &QStatusBar::messageChanged, this, [this](const QString& text) {
-        if (text.isEmpty()) return;
+        if (text.isEmpty() || text.startsWith(QString::fromUtf8("Локальная копия · без облака ·"))) return;
         const bool failed = text.contains(QString::fromUtf8("не удалось"), Qt::CaseInsensitive) ||
             text.contains(QString::fromUtf8("ошибка"), Qt::CaseInsensitive);
-        appendLog(failed ? AppLogLevel::Error : AppLogLevel::Info, "Qt", u(text));
+        const bool warning = !failed && (text.contains(QString::fromUtf8("не найден"), Qt::CaseInsensitive) ||
+            text.contains(QString::fromUtf8("не выбрана"), Qt::CaseInsensitive) ||
+            text.contains(QString::fromUtf8("нет доступ"), Qt::CaseInsensitive));
+        QString source = navigation_ && navigation_->currentItem() ? navigation_->currentItem()->text() : QString();
+        source.remove(QRegularExpression(QStringLiteral("\\s+F\\d+$")));
+        source = source.simplified();
+        if (source.isEmpty()) source = QStringLiteral("Qt");
+        appendLog(failed ? AppLogLevel::Error : warning ? AppLogLevel::Warning : AppLogLevel::Info,
+            u(source), u(SanitizeQtLogMessage(text)));
         if (navigation_->currentRow() == Logs) render();
     });
 
@@ -1150,7 +1159,9 @@ void QtWindow::message(const std::string& error) {
 
 void QtWindow::appendLog(AppLogLevel level, const std::string& source, const std::string& text) {
     if (text.empty()) return;
-    appLogs_.push_back({QDateTime::currentSecsSinceEpoch(), level, source, text});
+    const auto safeText = u(SanitizeQtLogMessage(q(text)));
+    if (safeText.empty()) return;
+    appLogs_.push_back({QDateTime::currentSecsSinceEpoch(), level, source, safeText});
     constexpr size_t maxEntries = 200;
     if (appLogs_.size() > maxEntries) appLogs_.erase(appLogs_.begin());
     appLogPersistenceWarning_ = !saveAppLogs();
@@ -1186,7 +1197,7 @@ void QtWindow::loadAppLogs() {
         const auto level = entry.value("level").toInt(-1);
         if (timestamp <= 0 || level < 0 || level > 2) continue;
         appLogs_.push_back({timestamp, static_cast<AppLogLevel>(level),
-            u(entry.value("source").toString()), u(entry.value("message").toString())});
+            u(entry.value("source").toString()), u(SanitizeQtLogMessage(entry.value("message").toString()))});
     }
     constexpr size_t maxEntries = 200;
     if (appLogs_.size() > maxEntries)

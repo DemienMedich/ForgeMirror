@@ -1,5 +1,6 @@
 #include "QtWindow.h"
 #include "QtTheme.h"
+#include "QtLogSanitization.h"
 #include <QtWidgets>
 #include <QLockFile>
 #include <filesystem>
@@ -10,21 +11,12 @@ std::filesystem::path path(const QString& value) { return std::filesystem::u8pat
 QPointer<QtWindow> runtimeLogWindow;
 QtMessageHandler previousQtMessageHandler = nullptr;
 thread_local bool forwardingQtMessage = false;
-QString sanitizedRuntimeMessage(QString text) {
-    text.truncate(2048);
-    text.replace(QRegularExpression("(password|passwd|token|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s&]+",
-        QRegularExpression::CaseInsensitiveOption), QStringLiteral("\\1=[REDACTED]"));
-    text.replace(QRegularExpression("\\bBearer\\s+[^\\s&]+", QRegularExpression::CaseInsensitiveOption),
-        QStringLiteral("Bearer [REDACTED]"));
-    text.replace(QRegularExpression("(://)[^/@\\s:]+:[^/@\\s]+@"), QStringLiteral("\\1[REDACTED]@"));
-    return text;
-}
 void qtRuntimeMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& text) {
     if (previousQtMessageHandler) previousQtMessageHandler(type, context, text);
     if (type < QtWarningMsg || type == QtFatalMsg || forwardingQtMessage || !qApp) return;
     forwardingQtMessage = true;
     const auto level = type >= QtCriticalMsg ? AppLogLevel::Error : AppLogLevel::Warning;
-    const auto safeText = sanitizedRuntimeMessage(text);
+    const auto safeText = SanitizeQtLogMessage(text);
     QMetaObject::invokeMethod(qApp, [level, safeText] {
         if (runtimeLogWindow) runtimeLogWindow->recordRuntimeMessage(level, safeText);
     }, Qt::QueuedConnection);
