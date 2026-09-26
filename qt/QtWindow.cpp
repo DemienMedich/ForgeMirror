@@ -13,6 +13,7 @@
 #include "QtReportExport.h"
 #include "QtAuditExport.h"
 #include "QtReportChart.h"
+#include "QtLogActivityChart.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineMap.h"
 #include "QtPipelineEditor.h"
@@ -548,6 +549,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     logOptionsLayout->addWidget(logCompactView_);
     logOptionsLayout->addStretch();
     content->addWidget(logOptions);
+    logActivityChart_ = new QtLogActivityChart;
+    content->addWidget(logActivityChart_);
     auditFilters_ = new QWidget;
     auditFilters_->setObjectName("auditFilters");
     auto* auditFilterLayout = new QHBoxLayout(auditFilters_);
@@ -1326,6 +1329,7 @@ void QtWindow::render() {
     logErrors_->setVisible(page == Logs);
     logSourceFilter_->setVisible(page == Logs);
     logAutoScroll_->parentWidget()->setVisible(page == Logs);
+    logActivityChart_->setVisible(page == Logs);
     logPresetAll_->setVisible(page == Logs);
     logPresetWarningsErrors_->setVisible(page == Logs);
     logPresetErrors_->setVisible(page == Logs);
@@ -1583,6 +1587,7 @@ void QtWindow::render() {
         summary_->setText(QString::fromUtf8("Событий: %1 · источник: %2 · показано: %3 · сначала новые")
             .arg(entries.size()).arg(sourceCount).arg(table_->rowCount()));
     } else if (page == Logs) {
+        logActivityChart_->setEntries(appLogs_);
         headers({QString::fromUtf8("#"), QString::fromUtf8("Время"), QString::fromUtf8("Уровень"),
             QString::fromUtf8("Источник"), QString::fromUtf8("Сообщение")});
         table_->setColumnHidden(1, logCompactView_->isChecked());

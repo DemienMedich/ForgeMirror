@@ -1,5 +1,6 @@
 #include "QtWindow.h"
 #include "QtReportChart.h"
+#include "QtLogActivityChart.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskCompletionService.h"
 #include "AppRecoveryStorage.h"
@@ -2291,6 +2292,33 @@ static bool TestShortcutPersistence() {
     return before == after;
 }
 
+static bool TestLogActivityHistogram() {
+    const std::vector<AppLogEntry> entries{
+        {100, AppLogLevel::Info, "Qt", "first"},
+        {100, AppLogLevel::Error, "Qt", "same time"},
+        {150, AppLogLevel::Warning, "Qt", "middle"},
+        {200, AppLogLevel::Info, "Qt", "last"}
+    };
+    const auto histogram = QtLogActivityChart::BuildHistogram(entries);
+    if (histogram[0] != 2 || histogram[7] != 1 || histogram[15] != 1 ||
+        std::accumulate(histogram.begin(), histogram.end(), 0) != int(entries.size())) return false;
+    const std::vector<AppLogEntry> identicalTimes{
+        {500, AppLogLevel::Info, "Qt", "one"},
+        {500, AppLogLevel::Info, "Qt", "two"},
+        {500, AppLogLevel::Info, "Qt", "three"}
+    };
+    const auto fallback = QtLogActivityChart::BuildHistogram(identicalTimes);
+    if (fallback[0] != 1 || fallback[5] != 1 || fallback[10] != 1 ||
+        std::accumulate(fallback.begin(), fallback.end(), 0) != int(identicalTimes.size())) return false;
+    const std::vector<AppLogEntry> missingTimes{
+        {100, AppLogLevel::Info, "Qt", "first"},
+        {0, AppLogLevel::Warning, "Qt", "unknown time"},
+        {200, AppLogLevel::Error, "Qt", "last"}
+    };
+    const auto withMissingTime = QtLogActivityChart::BuildHistogram(missingTimes);
+    return std::accumulate(withMissingTime.begin(), withMissingTime.end(), 0) == int(missingTimes.size());
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -2329,6 +2357,7 @@ int main(int argc, char** argv) {
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }
+    if (!TestLogActivityHistogram()) { std::cerr << "Log activity histogram failed\n"; return 1; }
     QTemporaryDir temp;
     auto fail = [](const char* message) { std::cerr << message << '\n'; return 1; };
     if (!temp.isValid()) return fail("Temporary directory unavailable");
@@ -2691,9 +2720,16 @@ int main(int argc, char** argv) {
     auto* logSummary = window.findChild<QLabel*>("summary");
     QFile appLogFile(temp.path() + "/meta/qt-application-log.json");
     if (!logSummary || !appLogFile.open(QIODevice::ReadOnly)) return fail("Qt application log summary unavailable");
+    auto* logActivityChartWidget = window.findChild<QWidget*>("logActivityChart");
+    auto* logActivityChart = static_cast<QtLogActivityChart*>(logActivityChartWidget);
+    if (!logActivityChart || !logActivityChart->isVisible() ||
+        !logActivityChart->accessibleDescription().contains(QString::fromUtf8("по 16 временным интервалам")))
+        return fail("Qt application log activity chart unavailable");
     const auto appLogBytes = appLogFile.readAll();
     appLogFile.close();
     const auto appLogEntries = QJsonDocument::fromJson(appLogBytes).array();
+    if (std::accumulate(logActivityChart->values().begin(), logActivityChart->values().end(), 0) != appLogEntries.size())
+        return fail("Qt application log activity chart omitted entries or followed active filters");
     std::array<int, 3> appLogCounts{};
     for (const auto& value : appLogEntries) {
         const int level = value.toObject().value("level").toInt(-1);
@@ -2702,6 +2738,8 @@ int main(int argc, char** argv) {
     if (!logSummary->text().contains(QString::fromUtf8("Инфо: %1 · Предупреждения: %2 · Ошибки: %3")
             .arg(appLogCounts[0]).arg(appLogCounts[1]).arg(appLogCounts[2])))
         return fail("Qt application log level summary does not match persisted entries");
+    const auto logArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!logArtifacts.isEmpty()) logActivityChart->grab().save(logArtifacts + "/log-activity.png");
     logPresetWarningsErrors->click();
     if (logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
         return fail("Qt log warning/error preset did not select the expected levels");

@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 84**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–84 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 85**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–85 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -32,7 +32,7 @@ Admin mutations require the existing admin password from the copied settings (th
 
 ## Coverage
 
-| Area | Qt coverage through stage 84 | Remaining |
+| Area | Qt coverage through stage 85 | Remaining |
 | --- | --- | --- |
 | Profiles | Selector, compact level/XP/task metrics, skills, transactional direct skill/global XP grant, admin creation/archive/restore, guarded permanent deletion of empty archived profiles, rename with stable ID, profession/spirit/block editing, password reset/change, session or 30/90-day local trust, achievement viewing/granting/editing/revocation and local icons; wallet balance, personal evil-spirit removal, administrator wallet credit/debit, Pomodoro reward, wallet history and read-only profile activity history | Task/XP history and audit-write transactionality |
 | Tasks | List, search, status, priority, project, pipeline-stage and quick deadline/assignment/XP filters with persisted selections, details and awarded XP, restart-safe admin creation/status/edit/completion; confirmed deletion before XP; guarded transactional deletion of current Qt-v2 awards with profile rollback; in-app reminders for upcoming deadlines, including optional notification while the window is hidden in the system tray; administrator multi-select status, priority, project, pipeline stage, deadline and assignee edits | Reminders after the process exits, legacy/stale awarded-task cleanup review |
@@ -42,7 +42,7 @@ Admin mutations require the existing admin password from the copied settings (th
 | Professions | Admin list, creation/editing and guarded deletion; assignment through profile manager and skill editor | Merge and archived-profile reassignment workflow |
 | Reports | Admin project/employee metrics with resolved profile names, search, persisted all-time/rolling/year/custom creation-date periods, current-status distribution chart, monthly completion trend from retained status audit events, aggregate-to-task detail view by selection plus **Подробности** or double-click, and atomic UTF-8 CSV export using the selected period | Richer drill-down; trends beyond retained audit events |
 | Audit | Read-only task audit for all users; administrators also see profile-access events merged by timestamp, persisted source plus actor/object/field/search filters, visible/total counts, and atomic UTF-8 CSV export of visible events; non-admin export is restricted to visible task events | Other application logs |
-| Application logs | Qt messages and status notifications persist locally across restarts, newest first, global search and source filter, per-level totals, individual level toggles plus quick all/warnings-and-errors/errors-only presets, persistent compact view and autoscroll options, UTF-8 TXT export of visible entries and clear action; capped at 200 entries and stored outside cloud file lists | Full source-module parity and log rotation policy |
+| Application logs | Qt messages and status notifications persist locally across restarts, newest first, 16-bin time-activity chart, global search and source filter, per-level totals, individual level toggles plus quick all/warnings-and-errors/errors-only presets, persistent compact view and autoscroll options, UTF-8 TXT export of visible entries and clear action; capped at 200 entries and stored outside cloud file lists | Full source-module parity and log rotation policy |
 | Rules | Administrator F4 summary, checked editor and confirmed transactional level recalculation for active and archived profiles while preserving total XP | Rule presets and change history |
 | Display | Local 90/100/110/125% text scale, compact-table density, persistent fullscreen toggle with F11, legacy frameless mode with native drag handle, opt-in close-to-tray mode; fixed migration palette | Additional accessibility options |
 | Other | Separate workspace, rotating banner with administrator phrase management, guarded manual cloud pull, task/pipeline comparison, per-file cloud-to-local/local-to-cloud apply and local snapshot restore, explicit administrator storage conflict resolution, refresh, contextual keyboard shortcuts, local program shortcuts with add/open/reorder/delete, F1–F6 navigation, shortcut help, Pomodoro timer/settings/sounds, guarded rewards, administrator vault settings/log, OBJ/FBX wireframe viewer and persisted 3D controls | Whole-workspace push, automatic sync and remaining settings parity |
@@ -218,6 +218,10 @@ The read-only task audit export is now available to all users, matching the lega
 ### Application log level summary (stage 84, implementation checkpoint)
 
 The Qt Logs summary now reports total info, warning and error entries alongside the filtered visible count. Level totals describe the complete locally retained log and do not change with source, text or level filters. Tests compare the displayed totals with the persisted log entries. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Application log activity chart (stage 85, implementation checkpoint)
+
+The Qt Logs page now plots the retained messages across 16 time intervals, using the full local log regardless of active filters. Entries spread across their timestamp range; if timestamps are identical, the chart falls back to record order. The chart uses the existing Qt palette and exposes its bin counts accessibly. Tests cover timestamp endpoints, identical-time fallback, chart visibility and inclusion of all persisted entries. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Guarded manual cloud pull (stage 43)
 

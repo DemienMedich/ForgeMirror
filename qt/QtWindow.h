@@ -21,6 +21,7 @@ class QSlider;
 class QCheckBox;
 class QToolButton;
 class QtReportChart;
+class QtLogActivityChart;
 class QSystemTrayIcon;
 class QCloseEvent;
 
@@ -96,6 +97,7 @@ private:
     QCheckBox* projectsXpPending_;
     QLabel* summary_;
     QtReportChart* statisticsChart_;
+    QtLogActivityChart* logActivityChart_;
     QLabel* title_;
     QLabel* mode_;
     QLabel* banner_;
