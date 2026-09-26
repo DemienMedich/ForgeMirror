@@ -26,7 +26,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 16) : 0; }
             else if (key == "taskStatusFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskStatusFilter = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "taskPriorityFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskPriorityFilter = ok ? std::clamp(index, 0, 4) : 0; }
-            else if (key == "taskQuickFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskQuickFilter = ok ? std::clamp(index, 0, 8) : 0; }
+            else if (key == "taskQuickFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskQuickFilter = ok ? std::clamp(index, 0, 9) : 0; }
             else if (key == "taskCreatedRange") { bool ok = false; const int index = value.toInt(&ok); out.taskCreatedRange = ok ? std::clamp(index, 0, 4) : 0; }
             else if (key == "taskSortMode") { bool ok = false; const int index = value.toInt(&ok); out.taskSortMode = ok ? std::clamp(index, 0, 2) : 0; }
             else if (key == "taskAssigneeProfileId") out.taskAssigneeProfileId = value;
@@ -65,7 +65,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 16)));
     set("taskStatusFilter", QString::number(std::clamp(settings.taskStatusFilter, 0, 3)));
     set("taskPriorityFilter", QString::number(std::clamp(settings.taskPriorityFilter, 0, 4)));
-    set("taskQuickFilter", QString::number(std::clamp(settings.taskQuickFilter, 0, 8)));
+    set("taskQuickFilter", QString::number(std::clamp(settings.taskQuickFilter, 0, 9)));
     set("taskCreatedRange", QString::number(std::clamp(settings.taskCreatedRange, 0, 4)));
     set("taskSortMode", QString::number(std::clamp(settings.taskSortMode, 0, 2)));
     auto taskAssigneeProfileId = settings.taskAssigneeProfileId; taskAssigneeProfileId.remove('\r'); taskAssigneeProfileId.remove('\n');

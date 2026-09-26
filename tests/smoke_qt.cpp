@@ -2748,8 +2748,9 @@ static bool TestTaskActionNeededQuickFilter() {
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* filter = window.findChild<QComboBox*>("quickTaskFilter");
     auto* table = window.findChild<QTableWidget*>("records");
-    if (!navigation || !filter || !table || filter->count() != 9 ||
-        filter->itemText(8) != QString::fromUtf8("Требуют внимания")) return false;
+    if (!navigation || !filter || !table || filter->count() != 10 ||
+        filter->itemText(8) != QString::fromUtf8("Требуют внимания") ||
+        filter->itemText(9) != QString::fromUtf8("Сигналы пайплайна")) return false;
     navigation->setCurrentRow(1);
     filter->setCurrentIndex(8);
     const std::set<std::string> expected{"pending-xp", "overdue", "missing-stage", "unknown-stage", "open-handoff"};
@@ -3040,7 +3041,7 @@ static bool TestQtTaskAttentionBadges() {
     const auto* awardedCell = cellFor("awarded-task");
     const auto* branchingCell = cellFor("branching-task");
     const auto* brokenNextCell = cellFor("broken-next-task");
-    return xpCell && xpCell->text().contains("XP") && xpCell->text().contains('!') && xpCell->toolTip().contains(QString::fromUtf8("Ожидает выдачи XP")) &&
+    const bool badgesPass = xpCell && xpCell->text().contains("XP") && xpCell->text().contains('!') && xpCell->toolTip().contains(QString::fromUtf8("Ожидает выдачи XP")) &&
         overdueCell && overdueCell->text().contains('!') && overdueCell->toolTip().contains(QString::fromUtf8("Просрочен срок")) &&
         missingCell && missingCell->toolTip().contains(QString::fromUtf8("Не указан этап")) &&
         unknownCell && unknownCell->toolTip().contains(QString::fromUtf8("не найден")) &&
@@ -3049,6 +3050,11 @@ static bool TestQtTaskAttentionBadges() {
         brokenNextCell && brokenNextCell->text().contains('!') && brokenNextCell->toolTip().contains(QString::fromUtf8("Следующий этап пайплайна не найден")) &&
         normalCell && !normalCell->text().contains('!') && !normalCell->text().contains("XP") &&
         awardedCell && !awardedCell->text().contains("XP");
+    auto* quick = window.findChild<QComboBox*>("quickTaskFilter");
+    if (!badgesPass || !quick) return false;
+    quick->setCurrentIndex(9);
+    const auto savedSettings = LoadQtDisplaySettings(directory);
+    return table->rowCount() == 5 && savedSettings.taskQuickFilter == 9;
 }
 
 static bool TestQtTaskFocusAndOverdueTint() {
@@ -3389,7 +3395,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16; settings.taskQuickFilter = 8;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16; settings.taskQuickFilter = 9;
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -3406,7 +3412,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.taskQuickFilter != 8 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.taskQuickFilter != 9 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);

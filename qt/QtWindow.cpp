@@ -518,7 +518,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     quickTaskFilter_->addItems({QString::fromUtf8("Все задачи"), QString::fromUtf8("Мне назначено"),
         QString::fromUtf8("На сегодня"), QString::fromUtf8("Просрочено"), QString::fromUtf8("7 дней"),
         QString::fromUtf8("Без проекта"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Активные"),
-        QString::fromUtf8("Требуют внимания")});
+        QString::fromUtf8("Требуют внимания"), QString::fromUtf8("Сигналы пайплайна")});
     quickTaskFilter_->setCurrentIndex(displaySettings_.taskQuickFilter);
     filters->addWidget(quickTaskFilter_);
     taskCreatedRange_ = new QComboBox;
@@ -1635,7 +1635,7 @@ void QtWindow::render() {
         constexpr std::int64_t createdDays[] = {0, 7, 30, 90, 365};
         const std::int64_t createdMin = nowSeconds - createdDays[createdRange] * 86400;
         const auto activeProfileId = u(profiles_->currentData().toString());
-        struct TaskTableRow { const TaskEntry* task; bool xpPending; bool overdue; QStringList alerts; };
+        struct TaskTableRow { const TaskEntry* task; bool xpPending; bool overdue; bool pipelineSignal; QStringList alerts; };
         std::vector<TaskTableRow> visibleTasks;
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
@@ -1672,6 +1672,7 @@ void QtWindow::render() {
             const bool needsXp = taskStatus == 2 && std::none_of(task.participants.begin(), task.participants.end(),
                 [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
             const bool overdue = task.deadlineAt > 0 && task.deadlineAt < nowSeconds && taskStatus != 2;
+            bool pipelineSignal = false;
             QStringList attentionReasons;
             if (needsXp) attentionReasons << QString::fromUtf8("Ожидает выдачи XP");
             if (overdue) attentionReasons << QString::fromUtf8("Просрочен срок");
@@ -1689,18 +1690,23 @@ void QtWindow::render() {
                             task.pipelineStep == code + "  " + candidate.title) { pipelineIndex = index; break; }
                     }
                 }
-                if (pipelineIndex < 0)
+                if (pipelineIndex < 0) {
+                    pipelineSignal = true;
                     attentionReasons << (task.pipelineStepId.empty() && task.pipelineStep.empty()
                         ? QString::fromUtf8("Не указан этап процесса") : QString::fromUtf8("Этап процесса не найден"));
-                else {
+                } else {
                     const auto& currentStage = data.pipelineSteps[size_t(pipelineIndex)];
-                    if (currentStage.nextIds.empty() && taskStatus != 2)
+                    if (currentStage.nextIds.empty() && taskStatus != 2) {
+                        pipelineSignal = true;
                         attentionReasons << QString::fromUtf8("Открытый handoff конечного этапа");
-                    else if (currentStage.nextIds.size() > 1)
+                    } else if (currentStage.nextIds.size() > 1) {
+                        pipelineSignal = true;
                         attentionReasons << QString::fromUtf8("Ветвящийся этап пайплайна (%1 направления)").arg(currentStage.nextIds.size());
-                    else if (currentStage.nextIds.size() == 1 && std::none_of(data.pipelineSteps.begin(), data.pipelineSteps.end(),
-                        [&](const auto& candidate) { return candidate.id == currentStage.nextIds.front(); }))
+                    } else if (currentStage.nextIds.size() == 1 && std::none_of(data.pipelineSteps.begin(), data.pipelineSteps.end(),
+                        [&](const auto& candidate) { return candidate.id == currentStage.nextIds.front(); })) {
+                        pipelineSignal = true;
                         attentionReasons << QString::fromUtf8("Следующий этап пайплайна не найден");
+                    }
                 }
             }
             if (quickFilter == 1 && !assignedToProfile) continue;
@@ -1711,7 +1717,8 @@ void QtWindow::render() {
             if (quickFilter == 6 && !needsXp) continue;
             if (quickFilter == 7 && taskStatus == 2) continue;
             if (quickFilter == 8 && attentionReasons.isEmpty()) continue;
-            visibleTasks.push_back({&task, needsXp, overdue, attentionReasons});
+            if (quickFilter == 9 && !pipelineSignal) continue;
+            visibleTasks.push_back({&task, needsXp, overdue, pipelineSignal, attentionReasons});
         }
         std::sort(visibleTasks.begin(), visibleTasks.end(), [sortMode](const TaskTableRow& left, const TaskTableRow& right) {
             const auto* a = left.task;
