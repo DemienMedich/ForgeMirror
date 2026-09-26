@@ -973,6 +973,19 @@ static bool TestProfileDialogs() {
     auto created = workspace.storage->create_profile(original);
     if (!created) return false;
     const QString id = QString::fromStdString(created->id);
+    auto readProfileFile = [&](const QString& path) {
+        QFile file(temp.path() + "/" + path);
+        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+    };
+    const auto originalProfileBytes = readProfileFile(id + ".ini");
+    const auto originalAuditBytes = readProfileFile("meta/profile-audit.log");
+    PrepareProfileAuditRecovery(workspace.directory, created->id);
+    const std::filesystem::path profileRoot(temp.path().toStdWString());
+    { std::ofstream interrupted(profileRoot / std::filesystem::u8path(id.toStdString() + ".ini"), std::ios::binary | std::ios::trunc); interrupted << "interrupted"; }
+    { std::ofstream interrupted(profileRoot / L"meta/profile-audit.log", std::ios::binary | std::ios::app); interrupted << "interrupted\n"; }
+    workspace.reload();
+    if (readProfileFile(id + ".ini") != originalProfileBytes || readProfileFile("meta/profile-audit.log") != originalAuditBytes)
+        return false;
     workspace.data.professions.push_back({"artist", "Artist", "3D"});
     auto delegate = std::move(workspace.storage);
     auto wrapper = std::make_unique<FailingProfileStorage>(*delegate);
@@ -1012,6 +1025,19 @@ static bool TestProfileDialogs() {
             profileName->setText(QString::fromUtf8("Переименованный профиль"));
             const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
             if (!artifacts.isEmpty()) editor->grab().save(artifacts + "/profile-rename.png");
+            const auto profileBytes = readProfileFile(id + ".ini");
+            const auto auditBytes = readProfileFile("meta/profile-audit.log");
+            AppSetProfileAuditFailureHookForTests(true);
+            save->click();
+            AppSetProfileAuditFailureHookForTests(false);
+            delegate->set_active_profile(created->id);
+            const auto auditRollbackProfile = delegate->load_profile();
+            checks &= auditRollbackProfile && auditRollbackProfile->name() == original.name() &&
+                auditRollbackProfile->profession_id().empty() && auditRollbackProfile->spirit() == ProfileSpirit::None &&
+                !auditRollbackProfile->is_blocked() && readProfileFile(id + ".ini") == profileBytes &&
+                readProfileFile("meta/profile-audit.log") == auditBytes &&
+                !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
+            profileName->setText(QString::fromUtf8("Переименованный профиль"));
             failures->writes = 0;
             failures->failAt = 1;
             save->click();
@@ -1026,6 +1052,7 @@ static bool TestProfileDialogs() {
         checks &= edited && edited->name() == u8"Переименованный профиль" && edited->profession_id() == "artist" && edited->spirit() == ProfileSpirit::Good && edited->is_blocked();
         checks &= edited && edited->total_xp() == 777 && edited->wallet_balance() == 42 && edited->login() == original.login() &&
             edited->password_encoded() == original.password_encoded() && edited->list_skills().size() == 1;
+        checks &= readProfileFile("meta/profile-audit.log").contains("|profile_edit|name,profession,spirit,blocked");
         auto* archive = manager->findChild<QPushButton*>("archiveProfile");
         QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::No)->click(); });
         archive->click();

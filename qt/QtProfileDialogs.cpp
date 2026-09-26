@@ -300,12 +300,21 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
             draft.set_profession_id(u(profession->currentData().toString()));
             draft.set_spirit(ProfileSpirit(spirit->currentData().toInt()));
             draft.set_blocked(blocked->isChecked());
-            const auto result = AppSaveProfileSnapshot(*workspace.storage, u(activeId), info->id, draft);
-            if (!result.ok) { error->setText(q(result.errorMessage)); return; }
+            QStringList changedFields;
+            if (draft.name() != loaded->name()) changedFields << "name";
+            if (draft.profession_id() != loaded->profession_id()) changedFields << "profession";
+            if (draft.spirit() != loaded->spirit()) changedFields << "spirit";
+            if (draft.is_blocked() != loaded->is_blocked()) changedFields << "blocked";
+            AppContext context{workspace.directory, *workspace.storage, workspace.catalog};
+            const auto result = SaveProfileSnapshotWithAuditRecovery(context, u(activeId), info->id, draft,
+                "profile_edit", u(changedFields.join(',')));
+            if (!result.ok) {
+                error->setText(q(result.errorMessage)); return;
+            }
             editor.accept();
         });
         if (editor.exec() == QDialog::Accepted) {
-            status->setText(QString::fromUtf8("Параметры сохранены; XP и история не изменены."));
+            status->setText(QString::fromUtf8("Параметры сохранены и записаны в аудит; XP не изменён."));
             refresh();
         }
     });

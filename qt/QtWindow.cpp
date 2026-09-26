@@ -170,6 +170,7 @@ QString profileAuditActionLabel(const std::string& action) {
         {"block", QString::fromUtf8("Блокировка профиля")}, {"unblock", QString::fromUtf8("Снятие блокировки")},
         {"wallet_adjustment", QString::fromUtf8("Изменение кошелька")},
         {"direct_xp", QString::fromUtf8("Ручное начисление XP")},
+        {"profile_edit", QString::fromUtf8("Изменение профиля")},
         {"pomodoro_reward", QString::fromUtf8("Награда Pomodoro")}, {"spirit_purchase", QString::fromUtf8("Снятие Злого духа")},
         {"spirit", QString::fromUtf8("Изменение духа")}
     };
