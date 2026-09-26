@@ -1635,7 +1635,8 @@ void QtWindow::render() {
         constexpr std::int64_t createdDays[] = {0, 7, 30, 90, 365};
         const std::int64_t createdMin = nowSeconds - createdDays[createdRange] * 86400;
         const auto activeProfileId = u(profiles_->currentData().toString());
-        struct TaskTableRow { const TaskEntry* task; bool xpPending; bool overdue; bool pipelineSignal; QStringList alerts; };
+        enum class PipelineRisk { None, Missing, Unknown, Branching, Final };
+        struct TaskTableRow { const TaskEntry* task; bool xpPending; bool overdue; bool pipelineSignal; PipelineRisk pipelineRisk; QStringList alerts; };
         std::vector<TaskTableRow> visibleTasks;
         for (const auto& task : data.tasks) {
             if (statusFilter_->currentIndex() && task.status != statusFilter_->currentIndex() - 1) continue;
@@ -1673,6 +1674,7 @@ void QtWindow::render() {
                 [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
             const bool overdue = task.deadlineAt > 0 && task.deadlineAt < nowSeconds && taskStatus != 2;
             bool pipelineSignal = false;
+            auto pipelineRisk = PipelineRisk::None;
             QStringList attentionReasons;
             if (needsXp) attentionReasons << QString::fromUtf8("Ожидает выдачи XP");
             if (overdue) attentionReasons << QString::fromUtf8("Просрочен срок");
@@ -1692,19 +1694,23 @@ void QtWindow::render() {
                 }
                 if (pipelineIndex < 0) {
                     pipelineSignal = true;
+                    pipelineRisk = task.pipelineStepId.empty() && task.pipelineStep.empty() ? PipelineRisk::Missing : PipelineRisk::Unknown;
                     attentionReasons << (task.pipelineStepId.empty() && task.pipelineStep.empty()
                         ? QString::fromUtf8("Не указан этап процесса") : QString::fromUtf8("Этап процесса не найден"));
                 } else {
                     const auto& currentStage = data.pipelineSteps[size_t(pipelineIndex)];
                     if (currentStage.nextIds.empty() && taskStatus != 2) {
                         pipelineSignal = true;
+                        pipelineRisk = PipelineRisk::Final;
                         attentionReasons << QString::fromUtf8("Открытый handoff конечного этапа");
                     } else if (currentStage.nextIds.size() > 1) {
                         pipelineSignal = true;
+                        pipelineRisk = PipelineRisk::Branching;
                         attentionReasons << QString::fromUtf8("Ветвящийся этап пайплайна (%1 направления)").arg(currentStage.nextIds.size());
                     } else if (currentStage.nextIds.size() == 1 && std::none_of(data.pipelineSteps.begin(), data.pipelineSteps.end(),
                         [&](const auto& candidate) { return candidate.id == currentStage.nextIds.front(); })) {
                         pipelineSignal = true;
+                        pipelineRisk = PipelineRisk::Unknown;
                         attentionReasons << QString::fromUtf8("Следующий этап пайплайна не найден");
                     }
                 }
@@ -1718,7 +1724,7 @@ void QtWindow::render() {
             if (quickFilter == 7 && taskStatus == 2) continue;
             if (quickFilter == 8 && attentionReasons.isEmpty()) continue;
             if (quickFilter == 9 && !pipelineSignal) continue;
-            visibleTasks.push_back({&task, needsXp, overdue, pipelineSignal, attentionReasons});
+            visibleTasks.push_back({&task, needsXp, overdue, pipelineSignal, pipelineRisk, attentionReasons});
         }
         std::sort(visibleTasks.begin(), visibleTasks.end(), [sortMode](const TaskTableRow& left, const TaskTableRow& right) {
             const auto* a = left.task;
@@ -1754,6 +1760,7 @@ void QtWindow::render() {
             if (candidateStatus != currentStatus) return candidateStatus > currentStatus;
             return candidate->createdAt > current->createdAt;
         };
+        int pipelineMissingCount = 0, pipelineUnknownCount = 0, pipelineBranchingCount = 0, pipelineFinalCount = 0;
         for (const auto& view : visibleTasks) {
             if (AppNormalizeTaskStatus(view.task->status) != 2 && promotesFocus(view.task, focusTask))
                 focusTask = view.task;
@@ -1779,6 +1786,15 @@ void QtWindow::render() {
                 q(AppTaskStatusLabel(task->status)), q(AppTaskPriorityLabel(task->priority)), timeText(task->deadlineAt),
                 q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
             if (table_->rowCount() > previousRowCount) {
+                if (AppNormalizeTaskStatus(task->status) != 2) {
+                    switch (view.pipelineRisk) {
+                    case PipelineRisk::Missing: ++pipelineMissingCount; break;
+                    case PipelineRisk::Unknown: ++pipelineUnknownCount; break;
+                    case PipelineRisk::Branching: ++pipelineBranchingCount; break;
+                    case PipelineRisk::Final: ++pipelineFinalCount; break;
+                    case PipelineRisk::None: break;
+                    }
+                }
                 auto* titleItem = table_->item(previousRowCount, 0);
                 const bool isFocus = focusTask && focusTask->id == task->id;
                 if (isFocus || view.overdue) {
@@ -1804,8 +1820,10 @@ void QtWindow::render() {
             }
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
-        summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4")
-            .arg(report.activeTasks).arg(report.overdueTasks).arg(report.xpPendingTasks).arg(table_->rowCount()));
+        summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4\n"
+            "Пайплайн: без этапа %5  ·  вне схемы %6  ·  ветвление %7  ·  финал открыт %8")
+            .arg(report.activeTasks).arg(report.overdueTasks).arg(report.xpPendingTasks).arg(table_->rowCount())
+            .arg(pipelineMissingCount).arg(pipelineUnknownCount).arg(pipelineBranchingCount).arg(pipelineFinalCount));
     } else if (page == Projects) {
         headers({QString::fromUtf8("Проект"), QString::fromUtf8("Описание"), QString::fromUtf8("Создан")});
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());

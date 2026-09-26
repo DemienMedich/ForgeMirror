@@ -3054,7 +3054,12 @@ static bool TestQtTaskAttentionBadges() {
     if (!badgesPass || !quick) return false;
     quick->setCurrentIndex(9);
     const auto savedSettings = LoadQtDisplaySettings(directory);
-    return table->rowCount() == 5 && savedSettings.taskQuickFilter == 9;
+    auto* summary = window.findChild<QLabel*>("summary");
+    auto* search = window.findChild<QLineEdit*>("search");
+    if (table->rowCount() != 5 || savedSettings.taskQuickFilter != 9 || !summary || !search ||
+        !summary->text().contains(QString::fromUtf8("Пайплайн: без этапа 1  ·  вне схемы 2  ·  ветвление 1  ·  финал открыт 1"))) return false;
+    search->setText(QString::fromUtf8("Branching task"));
+    return table->rowCount() == 1 && summary->text().contains(QString::fromUtf8("Пайплайн: без этапа 0  ·  вне схемы 0  ·  ветвление 1  ·  финал открыт 0"));
 }
 
 static bool TestQtTaskFocusAndOverdueTint() {
