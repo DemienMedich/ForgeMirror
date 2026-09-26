@@ -2323,7 +2323,8 @@ void QtWindow::createEntry(bool edit) {
         return;
     }
     if (navigation_->currentRow() == Catalog) {
-        if (ShowSkillEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
+        if (ShowSkillEditor(this, workspace_, edit ? u(selectedId()) : std::string(),
+                            u(profiles_->currentData().toString()))) reload();
         return;
     }
     if (navigation_->currentRow() == ProfilePage) {

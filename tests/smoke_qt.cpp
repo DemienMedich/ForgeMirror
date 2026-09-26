@@ -1861,6 +1861,145 @@ static bool TestSkillDeletionRecovery() {
         !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
 }
 
+static bool TestSkillMergeRecovery() {
+    auto fail = [](const char* text) { std::cerr << "skillMerge: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return fail("temporary directory");
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    if (!workspace.catalog.add_skill("Source", 0.8, "Old source", "Legacy") ||
+        !workspace.catalog.add_skill("Target", 1.0, "Old target", "Current")) return fail("catalog fixture");
+    workspace.catalog.reload();
+    const auto sourceId = workspace.catalog.id_for_name("Source");
+    const auto targetId = workspace.catalog.id_for_name("Target");
+    if (!sourceId || !targetId) return fail("catalog ids");
+
+    auto active = workspace.storage->create_profile(Profile("Active"));
+    if (!active || !workspace.storage->set_active_profile(active->id)) return fail("active profile fixture");
+    Skill source(*sourceId); source.xp = 200; source.xpToNext = Skill::required_xp_for(2);
+    Skill target(*targetId); target.xp = 100; target.xpToNext = Skill::required_xp_for(2);
+    auto profile = workspace.storage->load_profile();
+    if (!profile) return fail("active profile load");
+    profile->set_skills({source, target});
+    Achievement activeAchievement; activeAchievement.title = "Source badge"; activeAchievement.skill = *sourceId;
+    profile->add_achievement(activeAchievement);
+    if (!workspace.storage->save_profile(*profile)) return fail("active profile save");
+
+    auto archived = workspace.storage->create_profile(Profile("Archived"));
+    if (!archived || !workspace.storage->set_active_profile(archived->id)) return fail("archived profile fixture");
+    Skill archivedSource(*sourceId, 2); archivedSource.xp = 25;
+    profile = workspace.storage->load_profile();
+    if (!profile) return fail("archived profile load");
+    profile->set_skills({archivedSource});
+    Achievement archivedAchievement; archivedAchievement.title = "Archived badge"; archivedAchievement.skill = *sourceId;
+    profile->add_achievement(archivedAchievement);
+    if (!workspace.storage->save_profile(*profile) || !workspace.storage->set_archived(archived->id, true) ||
+        !workspace.storage->set_active_profile(active->id)) return fail("archive profile setup");
+
+    TaskEntry task; task.id = "skill-merge-task"; task.title = "Skill merge"; task.skillIds = {*sourceId, *targetId};
+    if (!AppSaveTasks(workspace.directory, {task})) return fail("task fixture");
+    workspace.reload();
+    bool confirmed = false;
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    QObject::connect(&watchdog, &QTimer::timeout, [&] {
+        if (auto* modal = QApplication::activeModalWidget()) {
+            if (auto* dialog = qobject_cast<QDialog*>(modal)) dialog->reject();
+            else if (auto* box = qobject_cast<QMessageBox*>(modal)) box->button(QMessageBox::Cancel)->click();
+        }
+    });
+    watchdog.start(8000);
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* name = dialog ? dialog->findChild<QLineEdit*>("skillName") : nullptr;
+        auto* description = dialog ? dialog->findChild<QLineEdit*>("skillDescription") : nullptr;
+        auto* category = dialog ? dialog->findChild<QLineEdit*>("skillCategory") : nullptr;
+        auto* weight = dialog ? dialog->findChild<QDoubleSpinBox*>("skillWeight") : nullptr;
+        auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
+        if (!dialog || !name || !description || !category || !weight || !buttons) {
+            std::cerr << "skillMerge: editor controls missing active="
+                      << (QApplication::activeModalWidget() ? QApplication::activeModalWidget()->objectName().toStdString() : "none") << '\n';
+            return;
+        }
+        name->setText(QString::fromUtf8("Target"));
+        description->setText(QString::fromUtf8("Merged description"));
+        category->setText(QString::fromUtf8("Merged category"));
+        weight->setValue(1.25);
+        QTimer::singleShot(0, [&] {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            confirmed = box && box->objectName() == "skillMergeConfirm" &&
+                box->defaultButton() == box->button(QMessageBox::Cancel) &&
+                box->text().contains(QString::fromUtf8("архивные")) && box->text().contains(QString::fromUtf8("задач"));
+            if (box) box->button(QMessageBox::Yes)->click();
+            else std::cerr << "skillMerge: confirmation widget missing\n";
+        });
+        buttons->button(QDialogButtonBox::Save)->click();
+    });
+    const bool editorAccepted = ShowSkillEditor(nullptr, workspace, *sourceId, active->id);
+    watchdog.stop();
+    if (!editorAccepted || !confirmed)
+        return fail("explicit merge confirmation");
+    if (workspace.catalog.contains_id(*sourceId) || !workspace.catalog.contains_id(*targetId) ||
+        workspace.catalog.description(*targetId) != "Merged description" ||
+        workspace.catalog.category(*targetId) != "Merged category" ||
+        std::abs(workspace.catalog.weight(*targetId) - 1.25) > 0.001) return fail("catalog result");
+    if (!workspace.storage->set_active_profile(active->id)) return fail("active profile select");
+    profile = workspace.storage->load_profile();
+    if (!profile) return fail("merged active profile load");
+    auto activeSkills = profile->list_skills();
+    if (activeSkills.size() != 1 || activeSkills.front().name != *targetId || activeSkills.front().level != 2 ||
+        activeSkills.front().xp != 54 || profile->achievements().size() != 1 ||
+        profile->achievements().front().skill != *targetId) return fail("active XP and achievement");
+    const auto profiles = workspace.storage->list_profiles();
+    const auto archivedInfo = std::find_if(profiles.begin(), profiles.end(), [&](const auto& p) { return p.id == archived->id; });
+    if (archivedInfo == profiles.end() || !archivedInfo->archived ||
+        !workspace.storage->set_archived(archived->id, false) ||
+        !workspace.storage->set_active_profile(archived->id)) {
+        return fail("archive state");
+    }
+    profile = workspace.storage->load_profile();
+    if (!profile || profile->list_skills().size() != 1 || profile->list_skills().front().name != *targetId ||
+        profile->list_skills().front().level != 2 || profile->list_skills().front().xp != 25 ||
+        profile->achievements().size() != 1 || profile->achievements().front().skill != *targetId ||
+        !workspace.storage->set_archived(archived->id, true) ||
+        !workspace.storage->set_active_profile(active->id))
+        return fail("archived XP and achievement");
+    const auto mergedTasks = LoadTasksData(workspace.directory);
+    const auto mergedTask = std::find_if(mergedTasks.begin(), mergedTasks.end(), [](const auto& item) { return item.id == "skill-merge-task"; });
+    if (mergedTask == mergedTasks.end() || mergedTask->skillIds != std::vector<std::string>{*targetId} ||
+        LoadTaskAuditData(workspace.directory).empty()) return fail("task binding and audit");
+
+    auto readBytes = [&](const std::filesystem::path& path) {
+        QFile file(QString::fromStdWString(path.wstring()));
+        if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+        return file.readAll();
+    };
+    auto writeBytes = [&](const std::filesystem::path& path, const QByteArray& bytes) {
+        QDir().mkpath(QFileInfo(QString::fromStdWString(path.wstring())).absolutePath());
+        QFile file(QString::fromStdWString(path.wstring()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    const auto skillBytes = readBytes(workspace.directory / "skills.txt");
+    const auto taskBytes = readBytes(workspace.directory / "meta/tasks.json");
+    const auto auditBytes = readBytes(workspace.directory / "meta/task-audit.log");
+    const auto profileBytes = readBytes(workspace.directory / (active->id + ".ini"));
+    const auto archivedBytes = readBytes(workspace.directory / "archive" / (archived->id + ".ini"));
+    const auto achievementBytes = readBytes(workspace.directory / "achievements" / (archived->id + ".json"));
+    PrepareSkillMergeRecovery(workspace.directory, {active->id, archived->id});
+    if (!writeBytes(workspace.directory / "skills.txt", "broken\n") ||
+        !writeBytes(workspace.directory / "meta/tasks.json", "[]") ||
+        !writeBytes(workspace.directory / (active->id + ".ini"), "broken\n")) return fail("recovery interruption fixture");
+    if (!RecoverTaskCompletion(workspace.directory)) return fail("recovery did not run");
+    workspace.reload();
+    if (readBytes(workspace.directory / "skills.txt") != skillBytes ||
+        readBytes(workspace.directory / "meta/tasks.json") != taskBytes ||
+        readBytes(workspace.directory / "meta/task-audit.log") != auditBytes ||
+        readBytes(workspace.directory / (active->id + ".ini")) != profileBytes ||
+        readBytes(workspace.directory / "archive" / (archived->id + ".ini")) != archivedBytes ||
+        readBytes(workspace.directory / "achievements" / (archived->id + ".json")) != achievementBytes)
+        return fail("journal rollback");
+    return true;
+}
+
 static bool TestProfileDeletionRecovery() {
     auto fail = [](const char* text) { std::cerr << "profileDelete: " << text << '\n'; return false; };
     QTemporaryDir temp;
@@ -2534,6 +2673,7 @@ int main(int argc, char** argv) {
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     if (!TestProfessionDeletionRecovery()) { std::cerr << "Profession deletion recovery failed\n"; return 1; }
     if (!TestSkillDeletionRecovery()) { std::cerr << "Skill deletion recovery failed\n"; return 1; }
+    if (!TestSkillMergeRecovery()) { std::cerr << "Skill merge recovery failed\n"; return 1; }
     if (!TestProfileDeletionRecovery()) { std::cerr << "Profile deletion recovery failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
@@ -3432,3 +3572,5 @@ int main(int argc, char** argv) {
     std::cout << "smoke_qt: OK\n";
     return 0;
 }
+
+\n

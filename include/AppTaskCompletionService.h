@@ -3,6 +3,7 @@
 #include "AppTaskProjectService.h"
 #include "AppProfileMutationService.h"
 #include "Profile.h"
+#include <utility>
 
 struct TaskXpShare { std::string profileId; int percent = 0; };
 struct TaskSkillRating { std::string skillId; int rating = 0; };
@@ -42,6 +43,8 @@ void PrepareProjectDeletionRecovery(const std::filesystem::path& directory);
 void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
                                        const std::vector<std::string>& profileIds);
 void PrepareSkillDeletionRecovery(const std::filesystem::path& directory);
+void PrepareSkillMergeRecovery(const std::filesystem::path& directory,
+                               const std::vector<std::string>& profileIds);
 void PrepareProfileDeletionRecovery(const std::filesystem::path& directory,
                                     const std::string& profileId);
 void PrepareRulesReapplyRecovery(const std::filesystem::path& directory,

@@ -88,7 +88,9 @@ if(BUILD_QT_GUI)
     add_executable(smoke_qt tests/smoke_qt.cpp)
     target_link_libraries(smoke_qt PRIVATE ForgeMirrorQtUi Qt6::Test)
     add_test(NAME smoke_qt COMMAND smoke_qt)
-    set_tests_properties(smoke_qt PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
+    set_tests_properties(smoke_qt PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>"
+        TIMEOUT 30)
 endif()
 
 if(BUILD_IMGUI_GUI)

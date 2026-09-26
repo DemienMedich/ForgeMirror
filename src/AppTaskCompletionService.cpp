@@ -140,6 +140,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
           (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5) ||
           (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002) ||
           (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
+          (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && count >= 4 && count <= 30004) ||
           (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && count == 3) ||
           (version == "FORGEMIRROR_QT_DIRECT_XP_1" && count == 2) ||
           (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && count >= 1 && count <= 20000)))
@@ -150,10 +151,14 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         const bool professionFile = name == "meta/professions.txt" || name == "skills.txt";
         const bool profileFile = name.size() > 4 && name.substr(name.size() - 4) == ".ini";
         const bool profileDeleteFile = profileFile || name.rfind("achievements/", 0) == 0;
+        const bool skillMergeFile = name == "skills.txt" || name == "meta/tasks.json" ||
+            name == "meta/task-audit.log" || name == "meta/updates/tasks.last-good.json" ||
+            profileFile || name.rfind("achievements/", 0) == 0;
         if (!safeBackupName(name) || (projectFile && version != "FORGEMIRROR_QT_PROJECT_DELETE_1") ||
             (professionFile && version != "FORGEMIRROR_QT_PROFESSION_DELETE_1" &&
-             !(name == "skills.txt" && version == "FORGEMIRROR_QT_SKILL_DELETE_1")) ||
+             !(name == "skills.txt" && (version == "FORGEMIRROR_QT_SKILL_DELETE_1" || skillMergeFile))) ||
             (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && !professionFile && !profileFile) ||
+            (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && !skillMergeFile) ||
             (version == "FORGEMIRROR_QT_PROFILE_DELETE_1" && !profileDeleteFile) || !seen.insert(name).second)
             throw std::runtime_error(u8"Некорректный путь в журнале XP.");
         if (version == "FORGEMIRROR_QT_RULES_REAPPLY_1" && !profileFile)
@@ -168,6 +173,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     manifest >> std::ws;
     const bool professionTransaction = version == "FORGEMIRROR_QT_PROFESSION_DELETE_1";
     const bool skillTransaction = version == "FORGEMIRROR_QT_SKILL_DELETE_1";
+    const bool skillMergeTransaction = version == "FORGEMIRROR_QT_SKILL_MERGE_1";
     const bool profileDeleteTransaction = version == "FORGEMIRROR_QT_PROFILE_DELETE_1";
     const bool rulesReapplyTransaction = version == "FORGEMIRROR_QT_RULES_REAPPLY_1";
     const bool directXpTransaction = version == "FORGEMIRROR_QT_DIRECT_XP_1";
@@ -183,7 +189,20 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         const auto id = item.substr(0, item.size() - 4);
         directXpComplete = item.rfind("archive/", 0) != 0 && seen.count("achievements/" + id + ".json");
     }
-    const bool commonComplete = directXpTransaction ? directXpComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
+    bool skillMergeComplete = false;
+    if (skillMergeTransaction) {
+        skillMergeComplete = seen.count("skills.txt") && seen.count("meta/tasks.json") &&
+            seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
+        for (const auto& item : seen) {
+            if (item.rfind("archive/", 0) == 0 || item.rfind("achievements/", 0) == 0) continue;
+            if (item.size() > 4 && item.substr(item.size() - 4) == ".ini") {
+                const auto id = item.substr(0, item.size() - 4);
+                skillMergeComplete = skillMergeComplete && seen.count("archive/" + id + ".ini") &&
+                    seen.count("achievements/" + id + ".json");
+            }
+        }
+    }
+    const bool commonComplete = directXpTransaction ? directXpComplete : rulesReapplyTransaction ? !seen.empty() : profileDeleteTransaction ? profileDeleteComplete : skillMergeTransaction ? skillMergeComplete : skillTransaction ? seen.count("skills.txt") : professionTransaction
         ? seen.count("meta/professions.txt") && seen.count("skills.txt")
         : seen.count("meta/tasks.json") && seen.count("meta/task-audit.log") && seen.count("meta/updates/tasks.last-good.json");
     const bool projectComplete = version != "FORGEMIRROR_QT_PROJECT_DELETE_1" ||
@@ -225,6 +244,21 @@ void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
 
 void PrepareSkillDeletionRecovery(const std::filesystem::path& directory) {
     prepareFileJournal(directory, "FORGEMIRROR_QT_SKILL_DELETE_1", {"skills.txt"});
+}
+
+void PrepareSkillMergeRecovery(const std::filesystem::path& directory,
+                               const std::vector<std::string>& profileIds) {
+    std::vector<std::string> files = {"skills.txt", "meta/tasks.json", "meta/task-audit.log",
+                                      "meta/updates/tasks.last-good.json"};
+    std::set<std::string> uniqueIds;
+    for (const auto& id : profileIds) {
+        if (!safeProfileId(id) || !uniqueIds.insert(id).second)
+            throw std::runtime_error(u8"Некорректный или повторяющийся профиль для слияния навыков.");
+        files.push_back(id + ".ini");
+        files.push_back("archive/" + id + ".ini");
+        files.push_back("achievements/" + id + ".json");
+    }
+    prepareFileJournal(directory, "FORGEMIRROR_QT_SKILL_MERGE_1", files);
 }
 
 void PrepareProfileDeletionRecovery(const std::filesystem::path& directory, const std::string& profileId) {
