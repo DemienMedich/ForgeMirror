@@ -2748,9 +2748,10 @@ static bool TestTaskActionNeededQuickFilter() {
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* filter = window.findChild<QComboBox*>("quickTaskFilter");
     auto* table = window.findChild<QTableWidget*>("records");
-    if (!navigation || !filter || !table || filter->count() != 10 ||
+    if (!navigation || !filter || !table || filter->count() != 14 ||
         filter->itemText(8) != QString::fromUtf8("Требуют внимания") ||
-        filter->itemText(9) != QString::fromUtf8("Сигналы пайплайна")) return false;
+        filter->itemText(9) != QString::fromUtf8("Сигналы пайплайна") ||
+        filter->itemText(13) != QString::fromUtf8("Пайплайн: финал открыт")) return false;
     navigation->setCurrentRow(1);
     filter->setCurrentIndex(8);
     const std::set<std::string> expected{"pending-xp", "overdue", "missing-stage", "unknown-stage", "open-handoff"};
@@ -3055,11 +3056,25 @@ static bool TestQtTaskAttentionBadges() {
     quick->setCurrentIndex(9);
     const auto savedSettings = LoadQtDisplaySettings(directory);
     auto* summary = window.findChild<QLabel*>("summary");
+    auto* pipelineSummary = window.findChild<QLabel*>("taskPipelineSummary");
     auto* search = window.findChild<QLineEdit*>("search");
-    if (table->rowCount() != 5 || savedSettings.taskQuickFilter != 9 || !summary || !search ||
-        !summary->text().contains(QString::fromUtf8("Пайплайн: без этапа 1  ·  вне схемы 2  ·  ветвление 1  ·  финал открыт 1"))) return false;
+    if (table->rowCount() != 5 || savedSettings.taskQuickFilter != 9 || !summary || !pipelineSummary || !search ||
+        !pipelineSummary->text().contains(QString::fromUtf8("href=\"risk:branching\""))) return false;
+    const std::vector<std::pair<int, std::set<std::string>>> riskFilters{
+        {10, {"missing-stage"}}, {11, {"unknown-stage", "broken-next-task"}},
+        {12, {"branching-task"}}, {13, {"open-handoff"}}};
+    for (const auto& [index, expectedIds] : riskFilters) {
+        quick->setCurrentIndex(index);
+        std::set<std::string> actualIds;
+        for (int row = 0; row < table->rowCount(); ++row)
+            actualIds.insert(table->item(row, 0)->data(Qt::UserRole).toString().toStdString());
+        if (actualIds != expectedIds) return false;
+    }
+    if (!QMetaObject::invokeMethod(pipelineSummary, "linkActivated", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("risk:branching"))) || quick->currentIndex() != 12 || table->rowCount() != 1 ||
+        LoadQtDisplaySettings(directory).taskQuickFilter != 12) return false;
     search->setText(QString::fromUtf8("Branching task"));
-    return table->rowCount() == 1 && summary->text().contains(QString::fromUtf8("Пайплайн: без этапа 0  ·  вне схемы 0  ·  ветвление 1  ·  финал открыт 0"));
+    return table->rowCount() == 1 && pipelineSummary->text().contains(QString::fromUtf8("ветвление 1"));
 }
 
 static bool TestQtTaskFocusAndOverdueTint() {
@@ -3400,7 +3415,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16; settings.taskQuickFilter = 9;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16; settings.taskQuickFilter = 13;
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -3417,7 +3432,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.taskQuickFilter != 9 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);

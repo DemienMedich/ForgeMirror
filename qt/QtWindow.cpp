@@ -381,6 +381,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     summary_->setTextFormat(Qt::PlainText);
     summary_->setWordWrap(true);
     content->addWidget(summary_);
+    taskPipelineSummary_ = new QLabel;
+    taskPipelineSummary_->setObjectName("taskPipelineSummary");
+    taskPipelineSummary_->setTextFormat(Qt::RichText);
+    taskPipelineSummary_->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    taskPipelineSummary_->setOpenExternalLinks(false);
+    taskPipelineSummary_->setWordWrap(true);
+    content->addWidget(taskPipelineSummary_);
     statisticsChart_ = new QtReportChart;
     content->addWidget(statisticsChart_);
     modelSettings_ = LoadQtModelSettings(workspace_.directory);
@@ -518,7 +525,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     quickTaskFilter_->addItems({QString::fromUtf8("Все задачи"), QString::fromUtf8("Мне назначено"),
         QString::fromUtf8("На сегодня"), QString::fromUtf8("Просрочено"), QString::fromUtf8("7 дней"),
         QString::fromUtf8("Без проекта"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Активные"),
-        QString::fromUtf8("Требуют внимания"), QString::fromUtf8("Сигналы пайплайна")});
+        QString::fromUtf8("Требуют внимания"), QString::fromUtf8("Сигналы пайплайна"),
+        QString::fromUtf8("Пайплайн: без этапа"), QString::fromUtf8("Пайплайн: вне схемы"),
+        QString::fromUtf8("Пайплайн: ветвление"), QString::fromUtf8("Пайплайн: финал открыт")});
     quickTaskFilter_->setCurrentIndex(displaySettings_.taskQuickFilter);
     filters->addWidget(quickTaskFilter_);
     taskCreatedRange_ = new QComboBox;
@@ -848,6 +857,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(priorityFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(quickTaskFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(taskPipelineSummary_, &QLabel::linkActivated, this, [this](const QString& link) {
+        const int filter = link == "risk:all" ? 9 : link == "risk:missing" ? 10 : link == "risk:unknown" ? 11 :
+            link == "risk:branching" ? 12 : link == "risk:final" ? 13 : 0;
+        quickTaskFilter_->setCurrentIndex(filter);
+    });
     connect(taskCreatedRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(taskAssigneeFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
@@ -1488,6 +1502,7 @@ void QtWindow::render() {
     const bool timerPage = page == Pomodoro;
     const bool modelPage = page == ModelViewerPage || page == ModelSettingsPage;
     summary_->setVisible(!timerPage && !modelPage);
+    taskPipelineSummary_->setVisible(page == Tasks);
     statisticsChart_->setVisible(page == Statistics);
     search_->setVisible(!timerPage && !modelPage);
     table_->setVisible(!timerPage && !modelPage);
@@ -1724,6 +1739,10 @@ void QtWindow::render() {
             if (quickFilter == 7 && taskStatus == 2) continue;
             if (quickFilter == 8 && attentionReasons.isEmpty()) continue;
             if (quickFilter == 9 && !pipelineSignal) continue;
+            if (quickFilter == 10 && pipelineRisk != PipelineRisk::Missing) continue;
+            if (quickFilter == 11 && pipelineRisk != PipelineRisk::Unknown) continue;
+            if (quickFilter == 12 && pipelineRisk != PipelineRisk::Branching) continue;
+            if (quickFilter == 13 && pipelineRisk != PipelineRisk::Final) continue;
             visibleTasks.push_back({&task, needsXp, overdue, pipelineSignal, pipelineRisk, attentionReasons});
         }
         std::sort(visibleTasks.begin(), visibleTasks.end(), [sortMode](const TaskTableRow& left, const TaskTableRow& right) {
@@ -1820,9 +1839,17 @@ void QtWindow::render() {
             }
         }
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
-        summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4\n"
-            "Пайплайн: без этапа %5  ·  вне схемы %6  ·  ветвление %7  ·  финал открыт %8")
-            .arg(report.activeTasks).arg(report.overdueTasks).arg(report.xpPendingTasks).arg(table_->rowCount())
+        summary_->setText(QString::fromUtf8("Активных: %1  ·  просрочено: %2  ·  ждут XP: %3  ·  показано: %4")
+            .arg(report.activeTasks).arg(report.overdueTasks).arg(report.xpPendingTasks).arg(table_->rowCount()));
+        const auto linkColor = palette().color(QPalette::Highlight).name();
+        taskPipelineSummary_->setText(QString::fromUtf8(
+            "<span style=\"color:%1\">Пайплайн-сигналы:</span> "
+            "<a style=\"color:%1\" href=\"risk:all\">все %2</a> · "
+            "<a style=\"color:%1\" href=\"risk:missing\">без этапа %3</a> · "
+            "<a style=\"color:%1\" href=\"risk:unknown\">вне схемы %4</a> · "
+            "<a style=\"color:%1\" href=\"risk:branching\">ветвление %5</a> · "
+            "<a style=\"color:%1\" href=\"risk:final\">финал открыт %6</a>")
+            .arg(linkColor).arg(pipelineMissingCount + pipelineUnknownCount + pipelineBranchingCount + pipelineFinalCount)
             .arg(pipelineMissingCount).arg(pipelineUnknownCount).arg(pipelineBranchingCount).arg(pipelineFinalCount));
     } else if (page == Projects) {
         headers({QString::fromUtf8("Проект"), QString::fromUtf8("Описание"), QString::fromUtf8("Создан")});

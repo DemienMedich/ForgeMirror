@@ -104,6 +104,7 @@ private:
     QCheckBox* projectsOverdue_;
     QCheckBox* projectsXpPending_;
     QLabel* summary_;
+    QLabel* taskPipelineSummary_;
     QtReportChart* statisticsChart_;
     QtLogActivityChart* logActivityChart_;
     QLabel* title_;
