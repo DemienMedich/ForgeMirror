@@ -135,6 +135,7 @@ private:
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
     QPushButton* bulkEdit_;
+    QToolButton* taskSelectionTools_;
     QPushButton* editEntry_;
     QPushButton* deleteEntry_;
     QPushButton* moveUp_;

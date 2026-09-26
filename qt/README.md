@@ -193,6 +193,10 @@ The Tasks page now exports visible rows to UTF-8 CSV or TXT. Export reads the re
 
 The Qt Tasks toolbar now has **Сбросить фильтры**, matching the legacy reset action. It clears the shared search field and resets status, priority, quick, creation-age, assignee, project and pipeline filters plus sort order. The selection is saved once and the table refreshes once. `smoke_qt` checks the visible result and persisted defaults. The stable ImGui implementation is unchanged.
 
+### Visible task selection tools (stage 113, implementation checkpoint)
+
+Administrators now have **Выбор задач → Выбрать все видимые / Снять выбор** on the Tasks page, matching the legacy bulk-selection controls. “Visible” means rows remaining after all filters and search; hidden rows are not selected. Selection continues to feed the existing bulk-edit dialog, which stays disabled until at least two valid rows are selected. `smoke_qt` logs in as administrator and verifies filtered selection, hidden-row exclusion, enablement and clearing. Multi-task deletion remains deferred because XP rollback across multiple profiles needs a single recovery transaction.
+
 ### Bulk task status change (stage 70, implementation checkpoint)
 
 Stage 70 introduced administrator multi-select status changes between **Новая** and **В работе**; completed tasks remained outside that XP-sensitive workflow. The migration information dialog also stopped claiming that the already-ported 3D viewer was missing. Stage 71 consolidates these controls into the dialog described below.

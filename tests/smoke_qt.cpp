@@ -2928,6 +2928,48 @@ static bool TestQtTaskFilterReset() {
         settings.taskPipelineStepId.isEmpty() && settings.taskAssigneeProfileId.isEmpty();
 }
 
+static bool TestQtVisibleTaskSelectionTools() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    TaskEntry first; first.id = "visible-first"; first.title = "Visible first";
+    TaskEntry second; second.id = "visible-second"; second.title = "Visible second";
+    TaskEntry hidden; hidden.id = "hidden-third"; hidden.title = "Hidden third";
+    workspace.data.tasks = {first, second, hidden};
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* search = window.findChild<QLineEdit*>("search");
+    auto* selectionTools = window.findChild<QToolButton*>("taskSelectionTools");
+    auto* selectVisible = window.findChild<QAction*>("selectVisibleTasks");
+    auto* clearSelection = window.findChild<QAction*>("clearTaskSelection");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* bulkEdit = window.findChild<QPushButton*>("bulkTaskEdit");
+    if (!navigation || !search || !selectionTools || !selectVisible || !clearSelection || !table || !bulkEdit) return false;
+    navigation->setCurrentRow(1);
+    if (selectionTools->isVisible()) return false;
+    QAction* adminAction = nullptr;
+    for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
+        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return false;
+    QTimer::singleShot(0, [] {
+        auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+        if (input) { input->setTextValue(QString::fromUtf8("admin123")); input->accept(); }
+    });
+    adminAction->trigger();
+    if (!selectionTools->isVisible()) return false;
+    search->setText(QString::fromUtf8("Visible"));
+    if (table->rowCount() != 2) return false;
+    selectVisible->trigger();
+    if (table->selectionModel()->selectedRows().size() != 2 || !bulkEdit->isEnabled()) return false;
+    for (const auto& index : table->selectionModel()->selectedRows())
+        if (table->item(index.row(), 0)->data(Qt::UserRole).toString() == "hidden-third") return false;
+    clearSelection->trigger();
+    return table->selectionModel()->selectedRows().empty() && !bulkEdit->isEnabled();
+}
+
 static bool TestBulkTaskEditsUi() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -3349,6 +3391,7 @@ int main(int argc, char** argv) {
     if (!TestQtTaskAssigneeProfileFilter()) { std::cerr << "Qt task assignee profile filter failed\n"; return 1; }
     if (!TestQtVisibleTaskExports()) { std::cerr << "Qt visible task export failed\n"; return 1; }
     if (!TestQtTaskFilterReset()) { std::cerr << "Qt task filter reset failed\n"; return 1; }
+    if (!TestQtVisibleTaskSelectionTools()) { std::cerr << "Qt visible task selection tools failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }
     if (!TestBulkTaskEditsUi()) { std::cerr << "Bulk task edits UI failed\n"; return 1; }
     if (!TestAuditExport()) { std::cerr << "Audit export failed\n"; return 1; }

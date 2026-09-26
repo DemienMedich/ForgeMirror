@@ -702,6 +702,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bulkEdit_->setObjectName("bulkTaskEdit");
     bulkEdit_->setToolTip(QString::fromUtf8("Изменить статус или приоритет нескольких выбранных задач"));
     bottom->addWidget(bulkEdit_);
+    taskSelectionTools_ = new QToolButton;
+    taskSelectionTools_->setObjectName("taskSelectionTools");
+    taskSelectionTools_->setText(QString::fromUtf8("Выбор задач"));
+    taskSelectionTools_->setToolTip(QString::fromUtf8("Выбрать видимые задачи или снять текущий выбор"));
+    taskSelectionTools_->setPopupMode(QToolButton::InstantPopup);
+    auto* taskSelectionMenu = new QMenu(taskSelectionTools_);
+    auto* selectVisibleTasks = taskSelectionMenu->addAction(QString::fromUtf8("Выбрать все видимые"));
+    selectVisibleTasks->setObjectName("selectVisibleTasks");
+    auto* clearTaskSelection = taskSelectionMenu->addAction(QString::fromUtf8("Снять выбор"));
+    clearTaskSelection->setObjectName("clearTaskSelection");
+    taskSelectionTools_->setMenu(taskSelectionMenu);
+    bottom->addWidget(taskSelectionTools_);
     editEntry_ = new QPushButton(QString::fromUtf8("Редактировать"));
     editEntry_->setObjectName("editEntry");
     bottom->addWidget(editEntry_);
@@ -1001,6 +1013,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(bulkEdit_, &QPushButton::clicked, this, [this] { bulkEditTasks(); });
+    connect(selectVisibleTasks, &QAction::triggered, this, [this] {
+        if (!requireAdmin() || navigation_->currentRow() != Tasks) return;
+        for (int row = 0; row < table_->rowCount(); ++row)
+            table_->selectionModel()->select(table_->model()->index(row, 0), QItemSelectionModel::Select | QItemSelectionModel::Rows);
+    });
+    connect(clearTaskSelection, &QAction::triggered, this, [this] {
+        if (!requireAdmin() || navigation_->currentRow() != Tasks) return;
+        table_->clearSelection();
+    });
     connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
     connect(taskCsvAction, &QAction::triggered, this, [this] { exportTasks(false); });
     connect(taskTxtAction, &QAction::triggered, this, [this] { exportTasks(true); });
@@ -1545,6 +1566,7 @@ void QtWindow::render() {
     changeStatus_->setVisible(page == Tasks && admin_);
     bulkEdit_->setVisible(page == Tasks && admin_);
     bulkEdit_->setEnabled(false);
+    taskSelectionTools_->setVisible(page == Tasks && admin_);
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
     summary_->clear();
 
