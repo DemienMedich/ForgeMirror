@@ -1347,7 +1347,7 @@ void QtWindow::render() {
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && page == Statistics);
-    exportAudit_->setVisible(admin_ && page == Audit);
+    exportAudit_->setVisible(page == Audit);
     exportLogs_->setVisible(page == Logs);
     clearLogs_->setVisible(page == Logs);
     reapplyRules_->setVisible(admin_ && page == Rules);
@@ -2065,7 +2065,7 @@ void QtWindow::exportReport() {
 }
 
 void QtWindow::exportAudit() {
-    if (!requireAdmin() || navigation_->currentRow() != Audit) return;
+    if (navigation_->currentRow() != Audit || (!admin_ && auditSourceFilter_->currentIndex() != 1)) return;
     QStringList headers;
     headers.reserve(table_->columnCount());
     for (int column = 0; column < table_->columnCount(); ++column)
@@ -2077,6 +2077,10 @@ void QtWindow::exportAudit() {
         values.reserve(table_->columnCount());
         for (int column = 0; column < table_->columnCount(); ++column)
             values << table_->item(index, column)->text();
+        if (!admin_ && values.value(0) != QString::fromUtf8("Задача")) {
+            message(u8"Экспорт для пользователя может содержать только аудит задач.");
+            return;
+        }
         rows.push_back(std::move(values));
     }
     if (rows.isEmpty()) {

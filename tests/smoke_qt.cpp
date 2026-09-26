@@ -2684,11 +2684,26 @@ int main(int argc, char** argv) {
     if (!viewerNavigation || !viewerTable || !viewerAuditExport || !viewerAuditSource || viewerNavigation->item(7)->isHidden())
         return fail("Task audit page was not exposed to a non-administrator");
     viewerNavigation->setCurrentRow(7);
-    if (viewerTable->rowCount() == 0 || viewerAuditSource->isVisible() || viewerAuditExport->isVisible())
+    if (viewerTable->rowCount() == 0 || viewerAuditSource->isVisible() || !viewerAuditExport->isVisible())
         return fail("Non-administrator task audit controls or rows are incorrect");
     for (int index = 0; index < viewerTable->rowCount(); ++index)
         if (viewerTable->item(index, 0)->text() != QString::fromUtf8("Задача"))
             return fail("Non-administrator task audit leaked profile activity");
+    const auto viewerAuditPath = temp.path() + "/viewer-task-audit.csv";
+    QTimer::singleShot(0, [viewerAuditPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(viewerAuditPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    viewerAuditExport->click();
+    QFile viewerAuditFile(viewerAuditPath);
+    if (!viewerAuditFile.open(QIODevice::ReadOnly)) return fail("Non-administrator task audit export did not create a file");
+    const auto viewerAuditBytes = viewerAuditFile.readAll();
+    if (!viewerAuditBytes.startsWith("\xEF\xBB\xBF") ||
+        !viewerAuditBytes.contains(QString::fromUtf8("Задача").toUtf8()) ||
+        viewerAuditBytes.contains(QString::fromUtf8("Профиль").toUtf8()))
+        return fail("Non-administrator task audit export contained wrong sources or encoding");
     nav->setCurrentRow(16);
     auto* logInfo = window.findChild<QCheckBox*>("logInfo");
     auto* logWarnings = window.findChild<QCheckBox*>("logWarnings");
