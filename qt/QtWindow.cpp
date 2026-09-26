@@ -1059,6 +1059,11 @@ void QtWindow::appendLog(AppLogLevel level, const std::string& source, const std
     appLogPersistenceWarning_ = !saveAppLogs();
 }
 
+void QtWindow::recordRuntimeMessage(AppLogLevel level, const QString& text) {
+    appendLog(level, "QtRuntime", u(text));
+    if (navigation_->currentRow() == Logs) render();
+}
+
 void QtWindow::loadAppLogs() {
     const auto metaPath = q((workspace_.directory / "meta").u8string());
     const auto path = q((workspace_.directory / "meta/qt-application-log.json").u8string());

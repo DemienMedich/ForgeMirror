@@ -28,6 +28,7 @@ class QCloseEvent;
 class QtWindow : public QMainWindow {
 public:
     explicit QtWindow(QtWorkspace& workspace);
+    void recordRuntimeMessage(AppLogLevel level, const QString& text);
 private:
     void closeEvent(QCloseEvent* event) override;
     bool reload();

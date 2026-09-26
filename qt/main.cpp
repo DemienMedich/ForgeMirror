@@ -7,6 +7,29 @@
 
 namespace {
 std::filesystem::path path(const QString& value) { return std::filesystem::u8path(value.toUtf8().constData()); }
+QPointer<QtWindow> runtimeLogWindow;
+QtMessageHandler previousQtMessageHandler = nullptr;
+thread_local bool forwardingQtMessage = false;
+QString sanitizedRuntimeMessage(QString text) {
+    text.truncate(2048);
+    text.replace(QRegularExpression("(password|passwd|token|secret|authorization|api[_-]?key)\\s*[:=]\\s*[^\\s&]+",
+        QRegularExpression::CaseInsensitiveOption), QStringLiteral("\\1=[REDACTED]"));
+    text.replace(QRegularExpression("\\bBearer\\s+[^\\s&]+", QRegularExpression::CaseInsensitiveOption),
+        QStringLiteral("Bearer [REDACTED]"));
+    text.replace(QRegularExpression("(://)[^/@\\s:]+:[^/@\\s]+@"), QStringLiteral("\\1[REDACTED]@"));
+    return text;
+}
+void qtRuntimeMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& text) {
+    if (previousQtMessageHandler) previousQtMessageHandler(type, context, text);
+    if (type < QtWarningMsg || type == QtFatalMsg || forwardingQtMessage || !qApp) return;
+    forwardingQtMessage = true;
+    const auto level = type >= QtCriticalMsg ? AppLogLevel::Error : AppLogLevel::Warning;
+    const auto safeText = sanitizedRuntimeMessage(text);
+    QMetaObject::invokeMethod(qApp, [level, safeText] {
+        if (runtimeLogWindow) runtimeLogWindow->recordRuntimeMessage(level, safeText);
+    }, Qt::QueuedConnection);
+    forwardingQtMessage = false;
+}
 }
 
 int main(int argc, char** argv) {
@@ -68,15 +91,23 @@ int main(int argc, char** argv) {
         std::filesystem::create_directories(directory);
         QtWorkspace workspace(directory);
         QtWindow window(workspace);
+        runtimeLogWindow = &window;
+        previousQtMessageHandler = qInstallMessageHandler(qtRuntimeMessageHandler);
         window.show();
         if (parser.isSet("smoke-test")) {
+            qWarning("ForgeMirror Qt runtime warning smoke probe: token=SMOKE_TOKEN password=SMOKE_PASSWORD https://smoke-user:smoke-pass@example.com");
+            qCritical("ForgeMirror Qt runtime critical smoke probe");
             QTimer::singleShot(1000, &app, [&] {
                 bool success = window.isVisible();
                 if (parser.isSet("screenshot")) success &= window.grab().save(parser.value("screenshot"));
                 app.exit(success ? 0 : 2);
             });
         }
-        return app.exec();
+        const int exitCode = app.exec();
+        qInstallMessageHandler(previousQtMessageHandler);
+        previousQtMessageHandler = nullptr;
+        runtimeLogWindow.clear();
+        return exitCode;
     } catch (const std::exception& error) {
         if (parser.isSet("smoke-test")) std::cerr << error.what() << '\n';
         else QMessageBox::critical(nullptr, "ForgeMirror Qt", QString::fromUtf8(error.what()));
