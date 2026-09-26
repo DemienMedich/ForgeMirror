@@ -285,7 +285,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
-            "Qt работает с отдельной копией данных. Доступен только подтверждаемый ручной pull с полной резервной копией.\n"
+            "Qt работает с отдельной копией данных. Доступны подтверждаемые ручной pull и полный cloud push с резервной копией и восстановлением.\n"
+            "Автоматическая синхронизация пока не поддерживается.\n"
             "Список перенесённых функций и ограничений находится в qt/README.md."));
     });
     menuButton->setMenu(menu);

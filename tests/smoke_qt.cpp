@@ -2670,6 +2670,22 @@ static bool TestDeadlineReminders() {
         QApplication::processEvents();
         if (!window.isVisible()) return false;
     }
+    QAction* about = nullptr;
+    for (auto* action : window.findChildren<QAction*>())
+        if (action->text() == QString::fromUtf8("О переносе")) { about = action; break; }
+    if (!about) return false;
+    QString aboutText;
+    QTimer::singleShot(0, [&aboutText] {
+        for (auto* widget : QApplication::topLevelWidgets()) {
+            auto* box = qobject_cast<QMessageBox*>(widget);
+            if (!box || box->windowTitle() != QString::fromUtf8("Перенос на Qt")) continue;
+            aboutText = box->text();
+            box->accept();
+        }
+    });
+    about->trigger();
+    if (!aboutText.contains(QString::fromUtf8("полный cloud push")) ||
+        !aboutText.contains(QString::fromUtf8("Автоматическая синхронизация пока не поддерживается"))) return false;
     return true;
 }
 
