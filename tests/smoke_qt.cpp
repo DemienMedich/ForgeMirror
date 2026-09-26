@@ -2747,6 +2747,7 @@ int main(int argc, char** argv) {
     if (logInfo->isChecked() || logWarnings->isChecked() || !logErrors->isChecked())
         return fail("Qt log errors-only preset did not select the expected level");
     logPresetAll->click();
+    search->clear();
     if (!logInfo->isChecked() || !logWarnings->isChecked() || !logErrors->isChecked())
         return fail("Qt log all-levels preset did not restore all levels");
     const int qtSourceIndex = logSourceFilter->findData(QStringLiteral("Qt"));
@@ -2783,6 +2784,11 @@ int main(int argc, char** argv) {
     logInfo->setChecked(true);
     if (table->rowCount() == 0) return fail("Qt log level filter did not restore info entries");
     const auto uiLogPath = temp.path() + "/ui-app-log.txt";
+    search->setText(QStringLiteral("1"));
+    QStringList expectedExportMessages;
+    for (int index = 0; index < table->rowCount(); ++index)
+        expectedExportMessages.push_back(table->item(index, 4)->text().replace('\r', ' ').replace('\n', ' ').replace('|', '/'));
+    if (expectedExportMessages.isEmpty()) return fail("Qt numeric log search unexpectedly returned no visible rows");
     QTimer::singleShot(0, [uiLogPath] {
         if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
             dialog->selectFile(uiLogPath);
@@ -2793,8 +2799,13 @@ int main(int argc, char** argv) {
     QFile uiLogs(uiLogPath);
     if (!uiLogs.open(QIODevice::ReadOnly)) return fail("Qt application log export did not create a file");
     const auto uiLogBytes = uiLogs.readAll();
-    if (!uiLogBytes.startsWith("\xEF\xBB\xBF") || !uiLogBytes.contains(startupLogToken.toUtf8()))
-        return fail("Qt application log export content or encoding failed");
+    const auto exportedLines = QString::fromUtf8(uiLogBytes.mid(3)).trimmed().split('\n');
+    bool exportMatchesTable = uiLogBytes.startsWith("\xEF\xBB\xBF") && exportedLines.size() == expectedExportMessages.size();
+    for (int index = 0; exportMatchesTable && index < expectedExportMessages.size(); ++index)
+        exportMatchesTable = exportedLines[index].endsWith(" | " + expectedExportMessages[index]);
+    if (!exportMatchesTable)
+        return fail("Qt application log export did not match visible search results or encoding");
+    search->clear();
     clearLogs->click();
     if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||
         !table->item(0, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive))

@@ -641,7 +641,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bottom->addWidget(exportAudit_);
     exportLogs_ = new QPushButton(QString::fromUtf8("Экспорт логов"));
     exportLogs_->setObjectName("exportLogs");
-    exportLogs_->setToolTip(QString::fromUtf8("Сохранить найденные сообщения текущей Qt-сессии в UTF-8 TXT"));
+    exportLogs_->setToolTip(QString::fromUtf8("Сохранить сообщения журнала с учётом текущих фильтров в UTF-8 TXT"));
     bottom->addWidget(exportLogs_);
     clearLogs_ = new QPushButton(QString::fromUtf8("Очистить логи"));
     clearLogs_->setObjectName("clearLogs");
@@ -2123,7 +2123,7 @@ void QtWindow::exportLogs() {
     if (navigation_->currentRow() != Logs) return;
     const auto suggested = QString::fromUtf8("ForgeMirror-app-log-%1.txt")
         .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
-    QFileDialog dialog(this, QString::fromUtf8("Экспорт логов Qt-сессии"));
+    QFileDialog dialog(this, QString::fromUtf8("Экспорт журнала Qt"));
     dialog.setOption(QFileDialog::DontUseNativeDialog);
     dialog.setAcceptMode(QFileDialog::AcceptSave);
     dialog.setFileMode(QFileDialog::AnyFile);
@@ -2142,8 +2142,9 @@ void QtWindow::exportLogs() {
         if (!sourceFilter.isEmpty() && q(it->source) != sourceFilter) continue;
         const QString level = it->level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
             : it->level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
-        const QStringList values{QString::number(count + 1), timeText(it->timestamp), level, q(it->source), q(it->message)};
-        if (!enabled || !values.join(' ').contains(search_->text(), Qt::CaseInsensitive)) continue;
+        const QStringList searchableValues{timeText(it->timestamp), level, q(it->source), q(it->message)};
+        if (!enabled || !searchableValues.join(' ').contains(search_->text(), Qt::CaseInsensitive)) continue;
+        const QStringList values{QString::number(count + 1), searchableValues[0], searchableValues[1], searchableValues[2], searchableValues[3]};
         auto clean = [](QString value) {
             return value.replace('\r', ' ').replace('\n', ' ').replace('|', '/');
         };
@@ -2157,7 +2158,7 @@ void QtWindow::exportLogs() {
     }
     QSaveFile output(path);
     if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
-        message(u8"Не удалось сохранить журнал Qt-сессии.");
+        message(u8"Не удалось сохранить журнал Qt.");
         return;
     }
     statusBar()->showMessage(QString::fromUtf8("Экспортировано записей: %1 · %2")

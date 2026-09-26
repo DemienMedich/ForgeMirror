@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 85**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–85 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 86**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 80%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include whole-workspace cloud push and automatic sync, reminders after full process exit, broader application-log parity, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–86 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -218,6 +218,10 @@ The read-only task audit export is now available to all users, matching the lega
 ### Application log level summary (stage 84, implementation checkpoint)
 
 The Qt Logs summary now reports total info, warning and error entries alongside the filtered visible count. Level totals describe the complete locally retained log and do not change with source, text or level filters. Tests compare the displayed totals with the persisted log entries. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+### Filter-consistent log export (stage 86, implementation checkpoint)
+
+The Qt application log export now searches the same timestamp, level, source and message fields as the visible table; row numbers are output labels and do not affect filtering. Dialog and button text describe export of the local journal with current filters, including entries restored from earlier launches. `smoke_qt` opens the actual save dialog and verifies UTF-8 BOM plus exact filtered content when the search term also appears in row numbers. Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
 
 ### Application log activity chart (stage 85, implementation checkpoint)
 
