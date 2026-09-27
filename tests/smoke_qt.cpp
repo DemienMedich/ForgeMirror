@@ -4534,6 +4534,11 @@ int main(int argc, char** argv) {
         !exportLogs || !clearLogs || !logInfo->isVisible() || !logPresetAll->isVisible() || !logPresetWarningsErrors->isVisible() ||
         !logPresetErrors->isVisible() || !logSourceFilter->isVisible() || !exportLogs->isVisible() || !clearLogs->isVisible())
         return fail("Qt application log controls unavailable");
+    if (logInfo->accessibleName().isEmpty() || logWarnings->accessibleName().isEmpty() || logErrors->accessibleName().isEmpty() ||
+        logSourceFilter->accessibleName().isEmpty() || logPresetAll->accessibleName().isEmpty() ||
+        logPresetWarningsErrors->accessibleName().isEmpty() || logPresetErrors->accessibleName().isEmpty() ||
+        exportLogs->accessibleName().isEmpty() || clearLogs->accessibleName().isEmpty() || clearLogs->accessibleDescription().isEmpty())
+        return fail("Qt application log controls are missing accessible names or clear confirmation description");
     auto* logSummary = window.findChild<QLabel*>("summary");
     QFile appLogFile(temp.path() + "/meta/qt-application-log.json");
     if (!logSummary || !appLogFile.open(QIODevice::ReadOnly)) return fail("Qt application log summary unavailable");
@@ -4576,7 +4581,8 @@ int main(int argc, char** argv) {
     logSourceFilter->setCurrentIndex(0);
     auto* logAutoScroll = window.findChild<QCheckBox*>("logAutoScroll");
     auto* logCompactView = window.findChild<QCheckBox*>("logCompactView");
-    if (!logAutoScroll || !logCompactView || !logAutoScroll->isVisible() || !logCompactView->isVisible())
+    if (!logAutoScroll || !logCompactView || !logAutoScroll->isVisible() || !logCompactView->isVisible() ||
+        logAutoScroll->accessibleName().isEmpty() || logCompactView->accessibleName().isEmpty())
         return fail("Qt log display options unavailable");
     logAutoScroll->setChecked(true);
     logCompactView->setChecked(true);
