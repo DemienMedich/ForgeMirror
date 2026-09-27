@@ -3473,7 +3473,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 2; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 3; settings.lastPage = 16; settings.taskQuickFilter = 13;
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -3490,7 +3490,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 2 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 3 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -3920,6 +3920,7 @@ int main(int argc, char** argv) {
         return fail("Rules reapply UI failed");
     const auto rulesArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!rulesArtifacts.isEmpty()) window.grab().save(rulesArtifacts + "/rules-page.png");
+    window.statusBar()->showMessage(QString::fromUtf8("audit-app-log-unique-token"));
     nav->setCurrentRow(7);
     bool profileAuditVisible = false;
     QDateTime previousAuditTime;
@@ -3937,7 +3938,7 @@ int main(int argc, char** argv) {
     auto* exportAudit = window.findChild<QPushButton*>("exportAudit");
     if (!exportAudit || !exportAudit->isVisible() || table->rowCount() == 0) return fail("Audit export action unavailable");
     auto* auditSourceFilter = window.findChild<QComboBox*>("auditSourceFilter");
-    if (!auditSourceFilter || !auditSourceFilter->isVisible() || auditSourceFilter->count() != 3 || auditSourceFilter->currentIndex() != 0)
+    if (!auditSourceFilter || !auditSourceFilter->isVisible() || auditSourceFilter->count() != 4 || auditSourceFilter->currentIndex() != 0)
         return fail("Audit source filter unavailable");
     bool taskAuditVisible = false;
     for (int index = 0; index < table->rowCount(); ++index)
@@ -3980,6 +3981,16 @@ int main(int argc, char** argv) {
     if (table->rowCount() == 0) return fail("Profile audit filter returned no rows");
     for (int index = 0; index < table->rowCount(); ++index)
         if (table->item(index, 0)->text() != QString::fromUtf8("Профиль")) return fail("Profile audit filter leaked another source");
+    auditSourceFilter->setCurrentIndex(3);
+    if (table->rowCount() == 0) return fail("Application audit filter returned no rows");
+    bool applicationEventVisible = false;
+    for (int index = 0; index < table->rowCount(); ++index) {
+        if (table->item(index, 0)->text() != QString::fromUtf8("Приложение") ||
+            table->item(index, 3)->text() != QString::fromUtf8("Журнал Qt")) return fail("Application audit filter leaked another source");
+        applicationEventVisible |= table->item(index, 6)->text().contains(QString::fromUtf8("audit-app-log-unique-token"));
+    }
+    if (!applicationEventVisible) return fail("Application audit did not expose the Qt activity log entry");
+    auditSourceFilter->setCurrentIndex(2);
     const int auditRowsBeforeExport = table->rowCount();
     const auto uiAuditPath = temp.path() + "/ui-audit.csv";
     QTimer::singleShot(0, [uiAuditPath] {

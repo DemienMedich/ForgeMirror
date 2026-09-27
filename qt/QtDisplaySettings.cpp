@@ -40,7 +40,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "projectSortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
             else if (key == "projectsXpPendingOnly") out.projectsXpPendingOnly = value == "1";
-            else if (key == "auditSourceFilter") { bool ok = false; const int index = value.toInt(&ok); out.auditSourceFilter = ok ? std::clamp(index, 0, 2) : 0; }
+            else if (key == "auditSourceFilter") { bool ok = false; const int index = value.toInt(&ok); out.auditSourceFilter = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "logAutoScroll") out.logAutoScroll = value != "0";
             else if (key == "logCompactView") out.logCompactView = value == "1";
         }
@@ -85,7 +85,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("projectSortMode", QString::number(std::clamp(settings.projectSortMode, 0, 3)));
     set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");
     set("projectsXpPendingOnly", settings.projectsXpPendingOnly ? "1" : "0");
-    set("auditSourceFilter", QString::number(std::clamp(settings.auditSourceFilter, 0, 2)));
+    set("auditSourceFilter", QString::number(std::clamp(settings.auditSourceFilter, 0, 3)));
     set("logAutoScroll", settings.logAutoScroll ? "1" : "0");
     set("logCompactView", settings.logCompactView ? "1" : "0");
     const auto bytes = (bom ? QByteArray("\xEF\xBB\xBF") : QByteArray()) + lines.join('\n').toUtf8();

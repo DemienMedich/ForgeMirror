@@ -614,8 +614,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditSourceFilter_ = new QComboBox;
     auditSourceFilter_->setObjectName("auditSourceFilter");
     auditSourceFilter_->setMaximumWidth(145);
-    auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили")});
-    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 2));
+    auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"), QString::fromUtf8("Приложение")});
+    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 3));
     auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
     filters->addWidget(auditSourceFilter_);
     logInfo_ = new QCheckBox(QString::fromUtf8("Инфо"));
@@ -1952,6 +1952,15 @@ void QtWindow::render() {
             entries.reserve(entries.size() + profileEntries.size());
             for (const auto& entry : profileEntries) entries.push_back({entry.timestamp, 2, entry.profile,
                 {QString::fromUtf8("Профиль"), timeText(entry.timestamp), QString::fromUtf8("локально"), q(entry.profile), q(entry.action), QString(), q(entry.details)}});
+            entries.reserve(entries.size() + appLogs_.size());
+            for (size_t index = 0; index < appLogs_.size(); ++index) {
+                const auto& entry = appLogs_[index];
+                const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
+                    : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
+                entries.push_back({entry.timestamp, 3, std::to_string(index),
+                    {QString::fromUtf8("Приложение"), timeText(entry.timestamp), q(entry.source),
+                        QString::fromUtf8("Журнал Qt"), level, QString(), q(entry.message)}});
+            }
         }
         std::stable_sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
             return left.timestamp > right.timestamp;
