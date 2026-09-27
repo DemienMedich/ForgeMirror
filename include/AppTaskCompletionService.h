@@ -97,6 +97,10 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const std::string& taskId, const std::string& restoreProfileId, const std::string& actor);
 
+AppMutationResult DeleteAwardedTasksWithRecovery(AppContext& app,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::vector<std::string>& taskIds, const std::string& restoreProfileId, const std::string& actor);
+
 // Safely removes a legacy/stale awarded task record without changing profile XP or progress.
 AppMutationResult DeleteAwardedTaskRecordKeepXpWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,

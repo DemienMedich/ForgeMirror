@@ -949,6 +949,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bulkEdit_->setObjectName("bulkTaskEdit");
     bulkEdit_->setToolTip(QString::fromUtf8("Изменить статус или приоритет нескольких выбранных задач"));
     bottom->addWidget(bulkEdit_);
+    bulkDelete_ = new QPushButton(QString::fromUtf8("Удалить выбранные"));
+    bulkDelete_->setObjectName("bulkTaskDelete");
+    bulkDelete_->setToolTip(QString::fromUtf8("Атомарно удалить несколько задач и откатить их начисленный XP, если профили не изменились после выбранных задач"));
+    bottom->addWidget(bulkDelete_);
     taskSelectionTools_ = new QToolButton;
     taskSelectionTools_->setObjectName("taskSelectionTools");
     taskSelectionTools_->setText(QString::fromUtf8("Выбор задач"));
@@ -1198,14 +1202,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         details();
         const auto id = table_->currentItem() ? table_->currentItem()->data(Qt::UserRole).toString() : QString();
         projectFocus_->setEnabled(navigation_->currentRow() == Projects && !id.isEmpty() && id != QStringLiteral("__no_project"));
-        bool allowed = table_->selectionModel()->selectedRows().size() >= 2;
-        for (const auto& index : table_->selectionModel()->selectedRows()) {
+        const auto selectedRows = table_->selectionModel()->selectedRows();
+        bool allowed = selectedRows.size() >= 2;
+        bool deletable = selectedRows.size() >= 2;
+        for (const auto& index : selectedRows) {
             const auto selectedId = u(table_->item(index.row(), 0)->data(Qt::UserRole).toString());
             const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
                 [&](const auto& item) { return item.id == selectedId; });
             if (task == workspace_.data.tasks.end()) allowed = false;
+            if (task == workspace_.data.tasks.end()) deletable = false;
         }
         bulkEdit_->setEnabled(navigation_->currentRow() == Tasks && admin_ && allowed);
+        bulkDelete_->setEnabled(navigation_->currentRow() == Tasks && admin_ && deletable);
     });
     connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
         if (navigation_->currentRow() == AdminProfileStats) {
@@ -1303,6 +1311,33 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
     connect(bulkEdit_, &QPushButton::clicked, this, [this] { bulkEditTasks(); });
+    connect(bulkDelete_, &QPushButton::clicked, this, [this] {
+        const auto selectedRows = table_->selectionModel()->selectedRows();
+        std::vector<std::string> ids;
+        for (const auto& index : selectedRows)
+            if (auto* cell = table_->item(index.row(), 0)) ids.push_back(u(cell->data(Qt::UserRole).toString()));
+        if (ids.size() < 2) return;
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить выбранные задачи"),
+            QString::fromUtf8("Удалить задач: %1. Начисленный ими XP будет откачен атомарно, только если все профили соответствуют цепочке выбранных задач. Если проверка не пройдёт, ничего не удалится.").arg(ids.size()),
+            QMessageBox::Yes | QMessageBox::No, this);
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить и откатить XP"));
+        confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::No);
+        if (confirm.exec() != QMessageBox::Yes) return;
+        const bool includesAwardedTask = std::any_of(ids.begin(), ids.end(), [&](const auto& id) {
+            const auto task = std::find_if(workspace_.data.tasks.begin(), workspace_.data.tasks.end(),
+                [&](const auto& item) { return item.id == id; });
+            return task != workspace_.data.tasks.end() && !task->participants.empty();
+        });
+        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+        const auto result = DeleteAwardedTasksWithRecovery(context, workspace_.data.tasks,
+            workspace_.data.taskAudit, ids, u(profiles_->currentData().toString()), "admin/qt");
+        if (!result.ok) { message(result.errorMessage); return; }
+        reload();
+        statusBar()->showMessage(includesAwardedTask
+            ? QString::fromUtf8("Удалено выбранных задач: %1 · XP профилей откатан транзакционно").arg(result.changedCount)
+            : QString::fromUtf8("Удалено выбранных задач: %1").arg(result.changedCount), 6000);
+    });
     connect(selectVisibleTasks, &QAction::triggered, this, [this] {
         if (!requireAdmin() || navigation_->currentRow() != Tasks) return;
         for (int row = 0; row < table_->rowCount(); ++row)
@@ -1944,6 +1979,8 @@ void QtWindow::render() {
     changeStatus_->setVisible(page == Tasks && admin_);
     bulkEdit_->setVisible(page == Tasks && admin_);
     bulkEdit_->setEnabled(false);
+    bulkDelete_->setVisible(page == Tasks && admin_);
+    bulkDelete_->setEnabled(false);
     taskSelectionTools_->setVisible(page == Tasks && admin_);
     advanceStage_->setVisible(page == Tasks && admin_ && workspace_.modules.pipeline);
     summary_->clear();

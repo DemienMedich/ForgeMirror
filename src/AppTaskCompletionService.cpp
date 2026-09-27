@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <set>
 #include <stdexcept>
@@ -730,6 +731,111 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
         }
         result = AppDeleteTasksByIds(app.storageDir, tasks, {taskId}, actor, &audit);
         if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить задачу." : result.errorMessage);
+        finishJournal(app.storageDir);
+    } catch (const std::exception& error) {
+        result = {};
+        result.errorMessage = error.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { RecoverTaskCompletion(app.storageDir); result.errorMessage += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
+        }
+    }
+    return result;
+}
+
+AppMutationResult DeleteAwardedTasksWithRecovery(AppContext& app,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::vector<std::string>& taskIds, const std::string& restoreProfileId, const std::string& actor) {
+    AppMutationResult result;
+    RestoreSelection restore{app.storage, restoreProfileId};
+    if (taskIds.empty()) { result.errorMessage = u8"Выберите задачи для удаления."; return result; }
+
+    std::set<std::string> requested;
+    std::vector<const TaskEntry*> selectedTasks;
+    selectedTasks.reserve(taskIds.size());
+    for (const auto& id : taskIds) {
+        if (id.empty() || !requested.insert(id).second) { result.errorMessage = u8"Список задач содержит пустой или повторный ID."; return result; }
+        const auto count = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == id; });
+        if (count != 1) { result.errorMessage = u8"Одна из задач не найдена или её ID неоднозначен."; return result; }
+        selectedTasks.push_back(&*std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == id; }));
+    }
+
+    std::map<std::string, std::vector<const TaskParticipant*>> snapshotsByProfile;
+    for (const auto* task : selectedTasks) {
+        std::set<std::string> taskProfiles;
+        for (const auto& participant : task->participants) {
+            if (!safeProfileId(participant.profileId) || participant.rollbackSnapshot.empty() ||
+                !taskProfiles.insert(participant.profileId).second) {
+                result.awardRollbackUnavailable = true;
+                result.errorMessage = u8"Один из снимков XP повреждён или повторяет профиль; пакетное удаление отменено.";
+                return result;
+            }
+            snapshotsByProfile[participant.profileId].push_back(&participant);
+        }
+    }
+
+    std::map<std::string, Profile> rollbackProfiles;
+    for (auto& [profileId, snapshots] : snapshotsByProfile) {
+        if (!app.storage.set_active_profile(profileId)) {
+            result.awardRollbackUnavailable = true;
+            result.errorMessage = u8"Профиль участника недоступен. Пакетное удаление отменено.";
+            return result;
+        }
+        const auto loaded = app.storage.load_profile();
+        if (!loaded) {
+            result.awardRollbackUnavailable = true;
+            result.errorMessage = u8"Не удалось загрузить профиль участника для отката XP.";
+            return result;
+        }
+        Profile current = *loaded;
+        while (!snapshots.empty()) {
+            size_t matchingIndex = snapshots.size();
+            Profile rolledBack;
+            std::string rolledBackBytes;
+            for (size_t i = 0; i < snapshots.size(); ++i) {
+                Profile candidate = current;
+                if (!ProfileMatchesTaskRollbackPostcondition(snapshots[i]->rollbackSnapshot, current) ||
+                    !ApplyProfileTaskRollbackSnapshot(snapshots[i]->rollbackSnapshot, candidate)) continue;
+                const auto bytes = SerializeProfileTaskRollbackSnapshot(candidate);
+                if (matchingIndex != snapshots.size() && bytes != rolledBackBytes) {
+                    matchingIndex = snapshots.size();
+                    break;
+                }
+                matchingIndex = i;
+                rolledBack = std::move(candidate);
+                rolledBackBytes = bytes;
+            }
+            if (matchingIndex == snapshots.size()) {
+                result.awardRollbackUnavailable = true;
+                result.errorMessage = u8"Текущий прогресс профиля не соответствует цепочке выбранных задач; ничего не удалено.";
+                return result;
+            }
+            current = std::move(rolledBack);
+            snapshots.erase(snapshots.begin() + static_cast<std::ptrdiff_t>(matchingIndex));
+        }
+        rollbackProfiles.emplace(profileId, std::move(current));
+    }
+
+    TaskCompletionPreview journal;
+    std::set<std::string> journalProfiles;
+    for (const auto& [profileId, unused] : rollbackProfiles) {
+        (void)unused;
+        if (journalProfiles.insert(profileId).second) journal.finalize.participants.push_back({profileId});
+    }
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(app.storageDir, journal);
+        prepared = true;
+        for (const auto& [profileId, profile] : rollbackProfiles) {
+            if (!app.storage.set_active_profile(profileId) || !app.storage.save_profile(profile))
+                throw std::runtime_error(u8"Не удалось сохранить пакетный откат профиля.");
+        }
+        result = AppDeleteTasksByIds(app.storageDir, tasks, taskIds, actor, &audit);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить выбранные задачи." : result.errorMessage);
         finishJournal(app.storageDir);
     } catch (const std::exception& error) {
         result = {};

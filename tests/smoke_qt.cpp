@@ -271,6 +271,65 @@ static bool TestTaskCompletion() {
     return true;
 }
 
+static bool TestBulkAwardedTaskDeletion() {
+    auto fail = [](const char* text) { std::cerr << "bulkTaskDelete: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.catalog.add_skill("Bulk fixture", 1.0, "Bulk delete test");
+    const auto bulkSkill = *workspace.catalog.id_for_name("Bulk fixture");
+    Profile bulkProfile("Bulk delete");
+    bulkProfile.add_skill(bulkSkill);
+    auto profile = workspace.storage->create_profile(bulkProfile);
+    if (!profile) return fail("profile fixture");
+    AppContext context{workspace.directory, *workspace.storage, workspace.catalog};
+    const std::vector<std::string> ids{"bulk-award-a", "bulk-award-b"};
+    for (size_t i = 0; i < ids.size(); ++i) {
+        TaskEntry task; task.id = ids[i]; task.title = ids[i]; task.createdAt = 1700000000 + std::int64_t(i);
+        if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test", &workspace.data.taskAudit).ok)
+            return fail("task fixture");
+        TaskCompletionInput input; input.taskId = ids[i]; input.category = int(i); input.score = 10;
+        input.shares = {{profile->id, 100}}; input.skills = {{bulkSkill, 5}}; input.now = 1700000100 + std::int64_t(i);
+        input.restoreProfileId = profile->id; input.actor = "test";
+        const auto awarded = CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input);
+        if (!awarded.ok) { std::cerr << "bulkTaskDelete award error: " << awarded.errorMessage << '\n'; return fail("award fixture"); }
+    }
+    const auto profilePath = workspace.directory / (profile->id + ".ini");
+    auto bytes = [](const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto profileAfterAwards = bytes(profilePath);
+    const auto tasksAfterAwards = bytes(workspace.directory / "meta/tasks.json");
+    const auto auditAfterAwards = bytes(workspace.directory / "meta/task-audit.log");
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failed = DeleteAwardedTasksWithRecovery(context, workspace.data.tasks,
+        workspace.data.taskAudit, ids, profile->id, "test");
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failed.ok || workspace.data.tasks.size() != 2 || bytes(profilePath) != profileAfterAwards ||
+        bytes(workspace.directory / "meta/tasks.json") != tasksAfterAwards ||
+        bytes(workspace.directory / "meta/task-audit.log") != auditAfterAwards ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("failed batch did not restore exact bytes");
+    if (!workspace.storage->set_active_profile(profile->id)) return fail("reload active profile");
+    auto changed = workspace.storage->load_profile();
+    if (!changed) return fail("load profile");
+    changed->grant_global_xp(1);
+    if (!workspace.storage->save_profile(*changed)) return fail("stale profile fixture");
+    const auto stale = DeleteAwardedTasksWithRecovery(context, workspace.data.tasks,
+        workspace.data.taskAudit, ids, profile->id, "test");
+    if (stale.ok || !stale.awardRollbackUnavailable || workspace.data.tasks.size() != 2)
+        return fail("later progress did not block batch deletion");
+    { std::ofstream restore(profilePath, std::ios::binary | std::ios::trunc); restore.write(profileAfterAwards.data(), std::streamsize(profileAfterAwards.size())); }
+    workspace.reload();
+    if (!DeleteAwardedTasksWithRecovery(context, workspace.data.tasks, workspace.data.taskAudit,
+            ids, profile->id, "test").ok || !workspace.data.tasks.empty())
+        return fail("valid rollback chain did not delete batch");
+    if (!workspace.storage->set_active_profile(profile->id)) return fail("final active profile");
+    const auto restored = workspace.storage->load_profile();
+    return restored && restored->total_xp() == 0 && restored->tasks_completed() == 0 &&
+        !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
+}
+
 static bool TestRulesReapplyRecovery() {
     auto fail = [](const char* text) { std::cerr << "rulesReapply: " << text << '\n'; return false; };
     QTemporaryDir temp;
@@ -3887,7 +3946,27 @@ static bool TestBulkTaskEditsUi() {
         if (dialog) dialog->reject();
     });
     bulk->click();
-    return completedStatusUnavailable;
+    auto* bulkDelete = window.findChild<QPushButton*>("bulkTaskDelete");
+    table->clearSelection();
+    select(rowFor("bulk-second")); select(rowFor("bulk-completed"));
+    if (!completedStatusUnavailable || !bulkDelete || !bulkDelete->isVisible() || !bulkDelete->isEnabled()) return false;
+    QTimer::singleShot(0, [] {
+        auto* modal = QApplication::activeModalWidget();
+        if (auto* confirm = qobject_cast<QMessageBox*>(modal)) {
+            QTimer::singleShot(0, [] {
+                if (auto* notice = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                    notice->accept();
+                }
+            });
+            confirm->button(QMessageBox::Yes)->click();
+        }
+    });
+    bulkDelete->click();
+    const auto afterDelete = LoadTasksData(workspace.directory);
+    return afterDelete.size() == 1 && afterDelete.front().id == "bulk-first" &&
+        std::count_if(workspace.data.taskAudit.begin(), workspace.data.taskAudit.end(), [](const auto& entry) {
+            return entry.field == "delete";
+        }) == 2;
 }
 
 static bool TestPomodoro() {
@@ -4279,6 +4358,7 @@ int main(int argc, char** argv) {
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
+    if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }
     if (!TestProjectDeletionRecovery()) { std::cerr << "Project deletion recovery failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }

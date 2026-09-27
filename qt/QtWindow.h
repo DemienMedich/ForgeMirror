@@ -162,6 +162,7 @@ private:
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
     QPushButton* bulkEdit_;
+    QPushButton* bulkDelete_;
     QToolButton* taskSelectionTools_;
     QPushButton* editEntry_;
     QPushButton* deleteEntry_;
