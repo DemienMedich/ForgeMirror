@@ -9,6 +9,7 @@
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
 #include "QtCloudPushPreview.h"
+#include "QtCloudAutoSync.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtModelViewer.h"
@@ -370,6 +371,7 @@ std::vector<QtReportCategoryGroup> buildReportCategoryGroups(const std::vector<T
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
     loadAppLogs();
+    lastCloudAutoSyncAt_ = QDateTime::currentSecsSinceEpoch();
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
     ApplyQtDisplaySettings(*qApp, displaySettings_);
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
@@ -447,8 +449,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
-            "Qt работает с отдельной копией данных. Доступны подтверждаемые ручной pull и полный cloud push с резервной копией и восстановлением.\n"
-            "Автоматическая синхронизация пока не поддерживается.\n"
+            "Qt работает с отдельной копией данных. Доступны подтверждаемый ручной pull, полный cloud push и настраиваемая автосинхронизация с резервным копированием и восстановлением.\n"
             "Список перенесённых функций и ограничений находится в qt/README.md."));
     });
     menuButton->setMenu(menu);
@@ -484,6 +485,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     deadlineReminderTimer->setInterval(60000);
     connect(deadlineReminderTimer, &QTimer::timeout, this, [this] { checkDeadlineReminders(); checkMissedDeadlineReminders(); });
     deadlineReminderTimer->start();
+    cloudAutoSyncTimer_ = new QTimer(this);
+    cloudAutoSyncTimer_->setObjectName("cloudAutoSyncTimer");
+    cloudAutoSyncTimer_->setInterval(60000);
+    connect(cloudAutoSyncTimer_, &QTimer::timeout, this, [this] { runAutomaticCloudSync(); });
+    cloudAutoSyncTimer_->start();
     QTimer::singleShot(2500, this, [this] { checkDeadlineReminders(); checkMissedDeadlineReminders(); });
 
     auto* body = new QHBoxLayout;
@@ -4662,6 +4668,54 @@ void QtWindow::pullCloud() {
     statusBar()->showMessage(q(result.message), 15000);
     if (result.sync.storageConflict) {
         QMessageBox::warning(this, QString::fromUtf8("Конфликт storage.json"), q(result.message));
+    }
+}
+
+void QtWindow::runAutomaticCloudSync() {
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    const auto config = LoadCloudSyncConfig(workspace_.directory);
+    if (!config.enabled || !config.autoSyncEnabled) {
+        lastCloudAutoSyncAt_ = now;
+        return;
+    }
+    if (lastCloudAutoSyncAt_ <= 0) lastCloudAutoSyncAt_ = now;
+    if (!QtCloudAutoSyncDue(config, now, lastCloudAutoSyncAt_)) return;
+    // Never replace the workspace beneath an editor or confirmation dialog.
+    if (QApplication::activeModalWidget()) return;
+
+    lastCloudAutoSyncAt_ = now;
+    std::string walletProfile;
+    const auto profileId = u(profiles_->currentData().toString());
+    const auto role = admin_ ? CloudRole::Admin : CloudRole::Viewer;
+    if (!admin_ && !profileId.empty() && profileSession_.isUnlocked(*workspace_.storage, profileId))
+        walletProfile = profileId;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto result = RunQtCloudAutoSync(config, workspace_.directory, role, walletProfile);
+    QApplication::restoreOverrideCursor();
+    if (!result.attempted) {
+        if (!result.ok) statusBar()->showMessage(q(result.message), 8000);
+        return;
+    }
+    if (!result.ok) {
+        appendLog(result.recoveryPending ? AppLogLevel::Error : AppLogLevel::Warning,
+            "CoreCloudTransaction", result.recoveryPending
+                ? "Automatic cloud sync recovery pending" : "Automatic cloud sync failed");
+        statusBar()->showMessage(q(result.message), 15000);
+        if (result.recoveryPending) {
+            setEnabled(false);
+            for (auto* timer : findChildren<QTimer*>()) timer->stop();
+            QCoreApplication::exit(1);
+        }
+        return;
+    }
+    if (result.pullChanged) {
+        profileSession_.lock();
+        if (!reload()) return;
+    }
+    if (result.changed) {
+        appendLog(AppLogLevel::Info, "CoreCloudTransaction", "Automatic cloud sync committed");
+        statusBar()->showMessage(q(result.message), 10000);
     }
 }
 

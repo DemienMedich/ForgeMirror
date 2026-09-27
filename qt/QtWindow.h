@@ -44,6 +44,7 @@ class QtLogActivityChart;
 class QtProfileAnalytics;
 class QSystemTrayIcon;
 class QCloseEvent;
+class QTimer;
 
 class QtWindow : public QMainWindow {
 public:
@@ -80,6 +81,7 @@ private:
     void checkMissedDeadlineReminders();
     void updateBanner();
     void pullCloud();
+    void runAutomaticCloudSync();
     void previewCloudPush();
     void resolveCloudConflict();
     void resolveStorageConflict();
@@ -229,6 +231,8 @@ private:
     std::vector<AppLogEntry> appLogs_;
     bool appLogPersistenceWarning_ = false;
     std::int64_t lastReminderCheckAt_ = 0;
+    std::int64_t lastCloudAutoSyncAt_ = 0;
+    QTimer* cloudAutoSyncTimer_ = nullptr;
     bool reminderStatePersistenceWarning_ = false;
     QSystemTrayIcon* trayIcon_ = nullptr;
     std::unordered_set<std::string> remindedDeadlineTaskIds_;

@@ -16,6 +16,7 @@
 #include "QtCloudSettings.h"
 #include "QtCloudPull.h"
 #include "QtCloudPushPreview.h"
+#include "QtCloudAutoSync.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtDisplaySettings.h"
@@ -692,6 +693,58 @@ static bool TestCloudPullTransaction() {
     window.close();
     CloudSyncConfig disabled = config; disabled.enabled = false;
     return !RunQtCloudPullTransaction(disabled, workspace, CloudRole::Viewer).sync.ok;
+}
+
+static bool TestCloudAutoSync() {
+    CloudSyncConfig schedule; schedule.enabled = true; schedule.autoSyncEnabled = true;
+    schedule.autoSyncMinutes = 15;
+    if (QtCloudAutoSyncDue(schedule, 1000 + 899, 1000) ||
+        !QtCloudAutoSyncDue(schedule, 1000 + 900, 1000)) { std::cerr << "auto schedule 15m first=" << QtCloudAutoSyncDue(schedule, 1000 + 899, 1000) << " second=" << QtCloudAutoSyncDue(schedule, 1000 + 900, 1000) << "\n"; return false; }
+    schedule.autoSyncMinutes = 0;
+    if (!QtCloudAutoSyncDue(schedule, 1060, 1000)) { std::cerr << "auto schedule clamp\n"; return false; }
+    schedule.autoSyncMinutes = 120;
+    if (QtCloudAutoSyncDue(schedule, 1000 + 7199, 1000)) { std::cerr << "auto schedule 120m\n"; return false; }
+    schedule.enabled = false;
+    if (QtCloudAutoSyncDue(schedule, 1000 + 7200, 1000)) { std::cerr << "auto schedule disabled\n"; return false; }
+
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + "/cloud").toUtf8().toStdString());
+    std::filesystem::create_directories(workspace / "meta");
+    std::filesystem::create_directories(cloud / "meta");
+    auto write = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QDir().mkpath(QFileInfo(QString::fromUtf8(path.u8string())).absolutePath());
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    auto read = [](const std::filesystem::path& path) {
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+    };
+    if (!write(workspace / "meta/tasks.json", "[{\"id\":\"local\"}]") ||
+        !write(cloud / "meta/tasks.json", "[{\"id\":\"remote\"}]")) return false;
+    CloudSyncConfig config; config.enabled = true; config.autoSyncEnabled = true;
+    config.autoSyncMinutes = 1; config.root = cloud; config.autoPull = true; config.autoPush = false;
+    const auto pulled = RunQtCloudAutoSync(config, workspace, CloudRole::Viewer);
+    bool backupFound = false;
+    for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::u8path(temp.path().toUtf8().toStdString())))
+        if (entry.is_directory() && entry.path().filename().string().rfind("qt-cloud-backup-", 0) == 0) backupFound = true;
+    if (!pulled.ok || !pulled.attempted || !pulled.pullAttempted || pulled.pushAttempted ||
+        !pulled.pullChanged || !pulled.changed || !backupFound ||
+        read(workspace / "meta/tasks.json") != "[{\"id\":\"remote\"}]") { std::cerr << "auto pull: " << pulled.message << " ok=" << pulled.ok << " attempted=" << pulled.attempted << " pull=" << pulled.pullAttempted << " changed=" << pulled.pullChanged << " backup=" << backupFound << " data=" << read(workspace / "meta/tasks.json").toStdString() << '\n'; return false; }
+    auto disabled = config; disabled.autoSyncEnabled = false;
+    const auto noOp = RunQtCloudAutoSync(disabled, workspace, CloudRole::Viewer);
+    if (noOp.ok || noOp.attempted) { std::cerr << "auto disabled not no-op\n"; return false; }
+    auto viewerPush = config; viewerPush.autoPull = false; viewerPush.autoPush = true;
+    if (RunQtCloudAutoSync(viewerPush, workspace, CloudRole::Viewer).attempted) { std::cerr << "auto viewer push\n"; return false; }
+
+    if (!write(workspace / "meta/tasks.json", "[{\"id\":\"admin-local\"}]")) return false;
+    auto adminPush = config; adminPush.autoPull = false; adminPush.autoPush = true;
+    const auto pushed = RunQtCloudAutoSync(adminPush, workspace, CloudRole::Admin);
+    const bool success = pushed.ok && pushed.attempted && pushed.pushAttempted && !pushed.pullAttempted && pushed.changed &&
+        read(cloud / "meta/tasks.json") == "[{\"id\":\"admin-local\"}]";
+    if (!success) std::cerr << "auto push: " << pushed.message << " ok=" << pushed.ok << " push=" << pushed.pushAttempted << " changed=" << pushed.changed << " remote=" << read(cloud / "meta/tasks.json").toStdString() << '\n';
+    return success;
 }
 
 static bool TestCloudPushPreview() {
@@ -3380,6 +3433,8 @@ static bool TestDeadlineReminders() {
     window.show();
     QApplication::processEvents();
     auto* timer = window.findChild<QTimer*>("deadlineReminderTimer");
+    auto* autoSyncTimer = window.findChild<QTimer*>("cloudAutoSyncTimer");
+    if (!autoSyncTimer || !autoSyncTimer->isActive() || autoSyncTimer->interval() != 60000) return false;
     if (!timer || !QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection)) return false;
     const auto first = window.statusBar()->currentMessage();
     if (!first.contains(QString::fromUtf8("Проверить сборку")) || !first.contains(QString::fromUtf8("Срок задачи"))) return false;
@@ -3445,7 +3500,7 @@ static bool TestDeadlineReminders() {
     });
     about->trigger();
     if (!aboutText.contains(QString::fromUtf8("полный cloud push")) ||
-        !aboutText.contains(QString::fromUtf8("Автоматическая синхронизация пока не поддерживается"))) return false;
+        !aboutText.contains(QString::fromUtf8("настраиваемая автосинхронизация"))) return false;
     return true;
 }
 
@@ -4443,6 +4498,7 @@ int main(int argc, char** argv) {
     if (!TestBannerEditor()) { std::cerr << "Banner editor failed\n"; return 1; }
     if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
     if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
+    if (!TestCloudAutoSync()) { std::cerr << "Cloud automatic sync failed\n"; return 1; }
     if (!TestCloudPushPreview()) { std::cerr << "Cloud push preview failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }
