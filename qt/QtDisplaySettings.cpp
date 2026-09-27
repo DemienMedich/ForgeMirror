@@ -3,6 +3,7 @@
 #include <QtWidgets>
 #include <QSaveFile>
 #include <algorithm>
+#include <cmath>
 
 namespace {
 QString pathFor(const std::filesystem::path& directory) { return QString::fromUtf8((directory / "meta/ui.ini").u8string()); }
@@ -26,6 +27,10 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "lastProfileId") out.lastProfileId = value;
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 17) : 0; }
             else if (key == "profileViewMode") { bool ok = false; const int index = value.toInt(&ok); out.profileViewMode = ok ? std::clamp(index, 0, 2) : 1; }
+            else if (key == "profileSkillSort") { bool ok = false; const int index = value.toInt(&ok); out.profileSkillSort = ok ? std::clamp(index, 0, 3) : 0; }
+            else if (key == "profileSkillWeightCategory") { bool ok = false; const int index = value.toInt(&ok); out.profileSkillWeightCategory = ok ? std::clamp(index, 0, 5) : 0; }
+            else if (key == "profileSkillWeightMin") { bool ok = false; const double weight = value.toDouble(&ok); if (ok && std::isfinite(weight)) out.profileSkillWeightMin = std::clamp(weight, 0.0, 2.0); }
+            else if (key == "profileSkillWeightMax") { bool ok = false; const double weight = value.toDouble(&ok); if (ok && std::isfinite(weight)) out.profileSkillWeightMax = std::clamp(weight, 0.0, 2.0); }
             else if (key == "taskStatusFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskStatusFilter = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "taskPriorityFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskPriorityFilter = ok ? std::clamp(index, 0, 4) : 0; }
             else if (key == "taskQuickFilter") { bool ok = false; const int index = value.toInt(&ok); out.taskQuickFilter = ok ? std::clamp(index, 0, 13) : 0; }
@@ -56,6 +61,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         }
     }
     const auto today = QDate::currentDate();
+    out.profileSkillWeightMax = std::max(out.profileSkillWeightMin, out.profileSkillWeightMax);
     if (!out.reportDateFrom.isValid()) out.reportDateFrom = today.addDays(-29);
     if (!out.reportDateTo.isValid()) out.reportDateTo = today;
     if (out.reportDateFrom > out.reportDateTo) out.reportDateFrom = out.reportDateTo;
@@ -74,6 +80,14 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 17)));
     set("profileViewMode", QString::number(std::clamp(settings.profileViewMode, 0, 2)));
+    set("profileSkillSort", QString::number(std::clamp(settings.profileSkillSort, 0, 3)));
+    set("profileSkillWeightCategory", QString::number(std::clamp(settings.profileSkillWeightCategory, 0, 5)));
+    const double profileSkillWeightMin = std::isfinite(settings.profileSkillWeightMin)
+        ? std::clamp(settings.profileSkillWeightMin, 0.0, 2.0) : 0.0;
+    const double profileSkillWeightMax = std::isfinite(settings.profileSkillWeightMax)
+        ? std::clamp(settings.profileSkillWeightMax, profileSkillWeightMin, 2.0) : 2.0;
+    set("profileSkillWeightMin", QString::number(profileSkillWeightMin, 'f', 2));
+    set("profileSkillWeightMax", QString::number(profileSkillWeightMax, 'f', 2));
     set("taskStatusFilter", QString::number(std::clamp(settings.taskStatusFilter, 0, 3)));
     set("taskPriorityFilter", QString::number(std::clamp(settings.taskPriorityFilter, 0, 4)));
     set("taskQuickFilter", QString::number(std::clamp(settings.taskQuickFilter, 0, 13)));

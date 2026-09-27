@@ -14,6 +14,10 @@ struct QtDisplaySettings {
     QString lastProfileId;
     int lastPage = 0;
     int profileViewMode = 1;
+    int profileSkillSort = 0;
+    int profileSkillWeightCategory = 0;
+    double profileSkillWeightMin = 0.0;
+    double profileSkillWeightMax = 2.0;
     int taskStatusFilter = 0;
     int taskPriorityFilter = 0;
     int taskQuickFilter = 0;

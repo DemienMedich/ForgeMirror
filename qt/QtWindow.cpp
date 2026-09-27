@@ -633,6 +633,55 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     }
     profileModesLayout->addStretch();
     content->addWidget(profileViewModes_);
+    profileSkillFilters_ = new QWidget;
+    profileSkillFilters_->setObjectName("profileSkillFilters");
+    auto* skillFilterGrid = new QGridLayout(profileSkillFilters_);
+    skillFilterGrid->setContentsMargins(0, 0, 0, 0);
+    skillFilterGrid->setHorizontalSpacing(8);
+    skillFilterGrid->setVerticalSpacing(4);
+    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("Сортировка")), 0, 0);
+    profileSkillSort_ = new QComboBox;
+    profileSkillSort_->setObjectName("profileSkillSort");
+    profileSkillSort_->addItems({QString::fromUtf8("По имени"), QString::fromUtf8("По уровню"),
+        QString::fromUtf8("По XP"), QString::fromUtf8("По весу")});
+    profileSkillSort_->setCurrentIndex(std::clamp(displaySettings_.profileSkillSort, 0, 3));
+    labelForAccessibility(profileSkillSort_, QString::fromUtf8("Сортировка навыков"));
+    skillFilterGrid->addWidget(profileSkillSort_, 0, 1);
+    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("Категория веса")), 0, 2);
+    profileSkillWeightCategory_ = new QComboBox;
+    profileSkillWeightCategory_->setObjectName("profileSkillWeightCategory");
+    profileSkillWeightCategory_->addItems({QString::fromUtf8("Все"), QString::fromUtf8("A (>=1,30)"),
+        QString::fromUtf8("B (1,10-1,29)"), QString::fromUtf8("C (0,90-1,09)"),
+        QString::fromUtf8("D (0,70-0,89)"), QString::fromUtf8("E (<0,70)")});
+    profileSkillWeightCategory_->setCurrentIndex(std::clamp(displaySettings_.profileSkillWeightCategory, 0, 5));
+    labelForAccessibility(profileSkillWeightCategory_, QString::fromUtf8("Фильтр навыков по категории веса"));
+    skillFilterGrid->addWidget(profileSkillWeightCategory_, 0, 3);
+    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("Вес от")), 1, 0);
+    profileSkillWeightMin_ = new QDoubleSpinBox;
+    profileSkillWeightMin_->setObjectName("profileSkillWeightMin");
+    profileSkillWeightMin_->setRange(0.0, 2.0);
+    profileSkillWeightMin_->setSingleStep(0.05);
+    profileSkillWeightMin_->setDecimals(2);
+    profileSkillWeightMin_->setFixedWidth(82);
+    profileSkillWeightMin_->setValue(displaySettings_.profileSkillWeightMin);
+    labelForAccessibility(profileSkillWeightMin_, QString::fromUtf8("Минимальный вес навыка"));
+    skillFilterGrid->addWidget(profileSkillWeightMin_, 1, 1, Qt::AlignLeft);
+    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("до")), 1, 2);
+    profileSkillWeightMax_ = new QDoubleSpinBox;
+    profileSkillWeightMax_->setObjectName("profileSkillWeightMax");
+    profileSkillWeightMax_->setRange(profileSkillWeightMin_->value(), 2.0);
+    profileSkillWeightMax_->setSingleStep(0.05);
+    profileSkillWeightMax_->setDecimals(2);
+    profileSkillWeightMax_->setFixedWidth(82);
+    profileSkillWeightMax_->setValue(std::max(profileSkillWeightMin_->value(), displaySettings_.profileSkillWeightMax));
+    labelForAccessibility(profileSkillWeightMax_, QString::fromUtf8("Максимальный вес навыка"));
+    skillFilterGrid->addWidget(profileSkillWeightMax_, 1, 3, Qt::AlignLeft);
+    profileSkillFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
+    profileSkillFilterReset_->setObjectName("profileSkillFilterReset");
+    profileSkillFilterReset_->setToolTip(QString::fromUtf8("Вернуть поиск, сортировку, категорию и диапазон веса к значениям по умолчанию"));
+    labelForAccessibility(profileSkillFilterReset_, QString::fromUtf8("Сбросить фильтры навыков"));
+    skillFilterGrid->addWidget(profileSkillFilterReset_, 2, 0, 1, 4, Qt::AlignLeft);
+    content->addWidget(profileSkillFilters_);
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;
     pomodoro->setRewardHandler([this](int workMinutes, std::int64_t startedAt) -> QString {
@@ -1144,6 +1193,30 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
+    connect(profileSkillSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(profileSkillWeightCategory_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(profileSkillWeightMin_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (value > profileSkillWeightMax_->value()) profileSkillWeightMax_->setValue(value);
+        saveDisplayContext(); render();
+    });
+    connect(profileSkillWeightMax_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (value < profileSkillWeightMin_->value()) profileSkillWeightMin_->setValue(value);
+        saveDisplayContext(); render();
+    });
+    connect(profileSkillFilterReset_, &QPushButton::clicked, this, [this] {
+        const QSignalBlocker searchBlock(search_);
+        const QSignalBlocker sortBlock(profileSkillSort_);
+        const QSignalBlocker categoryBlock(profileSkillWeightCategory_);
+        const QSignalBlocker minBlock(profileSkillWeightMin_);
+        const QSignalBlocker maxBlock(profileSkillWeightMax_);
+        search_->clear();
+        profileSkillSort_->setCurrentIndex(0);
+        profileSkillWeightCategory_->setCurrentIndex(0);
+        profileSkillWeightMin_->setValue(0.0);
+        profileSkillWeightMax_->setValue(2.0);
+        saveDisplayContext();
+        render();
+    });
     connect(statusFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(priorityFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(quickTaskFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
@@ -1737,6 +1810,10 @@ void QtWindow::saveDisplayContext() {
     if (!profileId.isEmpty()) displaySettings_.lastProfileId = profileId;
     const int page = navigation_->currentRow();
     if (page >= 0) displaySettings_.lastPage = page;
+    displaySettings_.profileSkillSort = profileSkillSort_->currentIndex();
+    displaySettings_.profileSkillWeightCategory = profileSkillWeightCategory_->currentIndex();
+    displaySettings_.profileSkillWeightMin = profileSkillWeightMin_->value();
+    displaySettings_.profileSkillWeightMax = profileSkillWeightMax_->value();
     displaySettings_.taskStatusFilter = statusFilter_->currentIndex();
     displaySettings_.taskPriorityFilter = priorityFilter_->currentIndex();
     displaySettings_.taskQuickFilter = quickTaskFilter_->currentIndex();
@@ -1982,6 +2059,7 @@ void QtWindow::render() {
         profileViewModeButtons_[i]->setChecked(i == profileMode);
     }
     table_->setVisible(!timerPage && !modelPage && (page != ProfilePage || profileMode != 2));
+    profileSkillFilters_->setVisible(page == ProfilePage && profileMode == 1);
     achievements_->setVisible(page == ProfilePage && profileMode != 2);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
@@ -2045,7 +2123,7 @@ void QtWindow::render() {
     if (page == Pomodoro) {
         summary_->clear();
     } else if (page == ProfilePage) {
-        headers({QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Вес")});
+        headers({QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Всего XP"), QString::fromUtf8("Вес")});
         const auto id = u(profiles_->currentData().toString());
         std::optional<Profile> profile;
         // Viewing a profile must not invoke LoadActiveProfile: that legacy helper saves on read.
@@ -2067,14 +2145,31 @@ void QtWindow::render() {
                 for (int level = 2; level <= skill.level; ++level) total += Skill::required_xp_for(level);
                 return total;
             };
+            const int skillSort = profileMode == 1 ? profileSkillSort_->currentIndex() : 2;
+            auto compareDisplayName = [&](const Skill& left, const Skill& right) {
+                return QString::localeAwareCompare(q(workspace_.catalog.display_name(left.name)),
+                    q(workspace_.catalog.display_name(right.name))) < 0;
+            };
             std::sort(profileSkills.begin(), profileSkills.end(), [&](const Skill& left, const Skill& right) {
                 const int leftXp = totalSkillXp(left), rightXp = totalSkillXp(right);
+                if (skillSort == 0) return compareDisplayName(left, right);
+                if (skillSort == 1 && left.level != right.level) return left.level > right.level;
+                if (skillSort == 2 && leftXp != rightXp) return leftXp > rightXp;
+                if (skillSort == 3 && left.weight != right.weight) return left.weight > right.weight;
                 if (leftXp != rightXp) return leftXp > rightXp;
-                return left.name < right.name;
+                return compareDisplayName(left, right);
             });
-            for (const auto& skill : profileSkills)
+            for (const auto& skill : profileSkills) {
+                const int weightCategory = skill.weight >= 1.3 ? 1 : skill.weight >= 1.1 ? 2 :
+                    skill.weight >= 0.9 ? 3 : skill.weight >= 0.7 ? 4 : 5;
+                if (profileMode == 1 && (skill.weight < profileSkillWeightMin_->value() ||
+                    skill.weight > profileSkillWeightMax_->value() ||
+                    (profileSkillWeightCategory_->currentIndex() > 0 &&
+                     profileSkillWeightCategory_->currentIndex() != weightCategory))) continue;
                 row(skill.name, {q(workspace_.catalog.display_name(skill.name)), QString::number(skill.level),
-                    QString::number(skill.xp), QString::number(skill.weight)});
+                    QString::number(skill.xp), QString::number(totalSkillXp(skill)),
+                    QString::number(skill.weight, 'f', 2)});
+            }
         } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Администратор может создать его через «Управление профилями»."));
         for (int rowIndex = 0; rowIndex < table_->rowCount(); ++rowIndex)
             table_->setRowHidden(rowIndex, profileMode == 2 || (profileMode == 0 && rowIndex >= 3));

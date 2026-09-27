@@ -4141,6 +4141,8 @@ static bool TestDisplaySettings(QApplication& app) {
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
     settings.profileViewMode = 2;
+    settings.profileSkillSort = 3; settings.profileSkillWeightCategory = 4;
+    settings.profileSkillWeightMin = 0.7; settings.profileSkillWeightMax = 1.4;
     settings.reportComparePrevious = true; settings.reportView = 3;
     settings.deadlineNotificationsWhenClosed = true;
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
@@ -4163,7 +4165,9 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.profileViewMode != 2 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.profileViewMode != 2 || loaded.profileSkillSort != 3 ||
+        loaded.profileSkillWeightCategory != 4 || qAbs(loaded.profileSkillWeightMin - 0.7) > 0.001 ||
+        qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -4412,13 +4416,14 @@ int main(int argc, char** argv) {
     Profile profile(u8"Тестовый профиль");
     profile.set_password_encoded(EncodePassword("profile-test-password"));
     profile.set_last_task_timestamp(QDateTime::currentSecsSinceEpoch() - 5 * 86400);
-    workspace.catalog.add_skill(u8"Моделирование", 1.0, u8"Создание геометрии");
-    workspace.catalog.add_skill(u8"Текстурирование", 1.0, u8"Подготовка материалов");
-    workspace.catalog.add_skill(u8"Анимация", 1.0, u8"Движение персонажа");
-    profile.add_skill(*workspace.catalog.id_for_name(u8"Моделирование"));
-    profile.add_skill(*workspace.catalog.id_for_name(u8"Текстурирование"));
-    profile.add_skill(*workspace.catalog.id_for_name(u8"Анимация"));
-    profile.add_skill(u8"Концепт-арт-тестовый");
+    workspace.catalog.add_skill(u8"Моделирование", 1.5, u8"Создание геометрии");
+    workspace.catalog.add_skill(u8"Текстурирование", 1.2, u8"Подготовка материалов");
+    workspace.catalog.add_skill(u8"Анимация", 0.95, u8"Движение персонажа");
+    workspace.catalog.add_skill(u8"Концепт-арт", 0.6, u8"Визуальные идеи");
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Моделирование"), 1, 1.5);
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Текстурирование"), 1, 1.2);
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Анимация"), 1, 0.95);
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Концепт-арт"), 1, 0.6);
     auto createdProfile = workspace.storage->create_profile(profile);
     if (!createdProfile) return fail("Profile creation failed");
     Profile archivedProfile(u8"Архивный профиль статистики");
@@ -4484,6 +4489,27 @@ int main(int argc, char** argv) {
     if (!modeOverview || !modeAnalytics || !modeFocus || !showAchievements || table->rowCount() != 4 ||
         !modeAnalytics->isChecked() || table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3))
         return fail("Profile analytics mode did not show full skill list");
+    auto* sortSkills = window.findChild<QComboBox*>("profileSkillSort");
+    auto* categorySkills = window.findChild<QComboBox*>("profileSkillWeightCategory");
+    auto* minWeight = window.findChild<QDoubleSpinBox*>("profileSkillWeightMin");
+    auto* maxWeight = window.findChild<QDoubleSpinBox*>("profileSkillWeightMax");
+    auto* resetSkillFilters = window.findChild<QPushButton*>("profileSkillFilterReset");
+    if (!sortSkills || !categorySkills || !minWeight || !maxWeight || !resetSkillFilters)
+        return fail("Profile skill filters missing");
+    sortSkills->setCurrentIndex(3); QApplication::processEvents();
+    if (table->item(0, 0)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Моделирование").c_str()))
+        return fail("Profile skills weight sorting failed");
+    categorySkills->setCurrentIndex(5); QApplication::processEvents();
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Концепт-арт").c_str()))
+        return fail("Profile skill weight category filter failed");
+    categorySkills->setCurrentIndex(0);
+    minWeight->setValue(1.3); QApplication::processEvents();
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Моделирование").c_str()))
+        return fail("Profile skill weight range filter failed");
+    resetSkillFilters->click(); QApplication::processEvents();
+    if (table->rowCount() != 4 || sortSkills->currentIndex() != 0 || categorySkills->currentIndex() != 0 ||
+        minWeight->value() != 0.0 || maxWeight->value() != 2.0)
+        return fail("Profile skill filter reset failed");
     modeOverview->click(); QApplication::processEvents();
     if (table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || !table->isRowHidden(3) || showAchievements->isHidden())
         return fail("Profile overview mode did not keep only leading skills and achievement action");
