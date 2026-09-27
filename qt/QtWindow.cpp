@@ -1557,7 +1557,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
         const auto result = DeleteAwardedTasksWithRecovery(context, workspace_.data.tasks,
             workspace_.data.taskAudit, ids, u(profiles_->currentData().toString()), "admin/qt");
-        if (!result.ok) { message(result.errorMessage); return; }
+        if (!result.ok) {
+            appendLog(AppLogLevel::Warning, "CoreTaskMutation", "Bulk task deletion failed or rolled back");
+            message(result.errorMessage); return;
+        }
+        appendLog(AppLogLevel::Info, "CoreTaskMutation",
+            "Bulk task deletion committed: " + std::to_string(result.changedCount));
         reload();
         statusBar()->showMessage(includesAwardedTask
             ? QString::fromUtf8("Удалено выбранных задач: %1 · XP профилей откатан транзакционно").arg(result.changedCount)
@@ -4808,7 +4813,12 @@ void QtWindow::createEntry(bool edit) {
             auto result = edit
                 ? EditTaskDetails(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt")
                 : CreateTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt");
-            if (!result.ok) { message(result.errorMessage); return; }
+            if (!result.ok) {
+                appendLog(AppLogLevel::Warning, "CoreTaskMutation", edit
+                    ? "Task edit failed or rolled back" : "Task creation failed or rolled back");
+                message(result.errorMessage); return;
+            }
+            appendLog(AppLogLevel::Info, "CoreTaskMutation", edit ? "Task edit committed" : "Task creation committed");
         }
         dialog.accept();
     });
@@ -5175,6 +5185,8 @@ void QtWindow::deleteEntry() {
             }
         }
         if (!deleteResult.ok) { message(deleteResult.errorMessage); return; }
+        appendLog(AppLogLevel::Info, "CoreTaskMutation", keptAwardedXp
+            ? "Task record deleted; awarded XP preserved" : awarded ? "Task and awarded XP deletion committed" : "Task deletion committed");
         reload();
         statusBar()->showMessage(keptAwardedXp
             ? QString::fromUtf8("Запись задачи удалена · начисленный XP сохранён без изменений")
@@ -5477,10 +5489,13 @@ void QtWindow::bulkEditTasks() {
         : AppBulkUpdateTaskAssignees(workspace_.directory, workspace_.data.tasks, taskIds,
             assignees, "admin", &workspace_.data.taskAudit);
     if (!result.ok) {
+        appendLog(AppLogLevel::Warning, "CoreTaskMutation", "Bulk task update failed or rolled back");
         reload();
         message(result.errorMessage.empty() ? std::string(u8"Не удалось применить массовое изменение.") : result.errorMessage);
         return;
     }
+    appendLog(AppLogLevel::Info, "CoreTaskMutation", "Bulk task update committed: changed=" +
+        std::to_string(result.changedCount) + " skipped=" + std::to_string(result.skippedCount));
     reload();
     statusBar()->showMessage(QString::fromUtf8("Обновлено: %1 · пропущено: %2")
         .arg(result.changedCount).arg(result.skippedCount), 7000);
@@ -5524,6 +5539,11 @@ void QtWindow::changeStatus() {
     }
     const auto result = UpdateTaskStatusWithRecovery(workspace_.directory, workspace_.data.tasks,
         workspace_.data.taskAudit, id, next, "admin/qt");
-    if (!result.ok) message(result.errorMessage);
-    else reload();
+    if (!result.ok) {
+        appendLog(AppLogLevel::Warning, "CoreTaskMutation", "Task status update failed or rolled back");
+        message(result.errorMessage);
+    } else {
+        appendLog(AppLogLevel::Info, "CoreTaskMutation", "Task status update committed");
+        reload();
+    }
 }

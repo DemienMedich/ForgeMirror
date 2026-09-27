@@ -4156,6 +4156,20 @@ static bool TestBulkTaskEditsUi() {
     if (firstSaved == saved.end() || secondSaved == saved.end() || completedSaved == saved.end() ||
         firstSaved->status != 1 || secondSaved->status != 1 || completedSaved->status != 2 || workspace.data.taskAudit.size() != 2)
         return false;
+    QFile bulkTelemetry(temp.path() + "/meta/qt-application-log.json");
+    if (!bulkTelemetry.open(QIODevice::ReadOnly)) return false;
+    const auto bulkEvents = QJsonDocument::fromJson(bulkTelemetry.readAll()).array();
+    const auto bulkCommitted = std::find_if(bulkEvents.begin(), bulkEvents.end(), [](const auto& value) {
+        const auto entry = value.toObject();
+        return entry.value("source").toString() == QStringLiteral("CoreTaskMutation") &&
+            entry.value("message").toString() == QStringLiteral("Bulk task update committed: changed=2 skipped=0");
+    });
+    if (bulkCommitted == bulkEvents.end()) return false;
+    for (const auto& value : bulkEvents) if (value.toObject().value("source").toString() == QStringLiteral("CoreTaskMutation")) {
+        const auto text = value.toObject().value("message").toString();
+        if (text.contains(QStringLiteral("First bulk task")) || text.contains(QStringLiteral("bulk-first")) ||
+            text.contains(QString::fromStdString(executor->id))) return false;
+    }
     table->clearSelection();
     select(rowFor("bulk-first")); select(rowFor("bulk-second"));
     QTimer::singleShot(0, [] {
@@ -5488,7 +5502,8 @@ int main(int argc, char** argv) {
         return fail("Qt application log activity chart omitted entries or followed active filters");
     std::array<int, 3> appLogCounts{};
     for (const auto& value : appLogEntries) {
-        const int level = value.toObject().value("level").toInt(-1);
+        const auto entry = value.toObject();
+        const int level = entry.value("level").toInt(-1);
         if (level >= 0 && level < int(appLogCounts.size())) ++appLogCounts[size_t(level)];
     }
     if (!logSummary->text().contains(QString::fromUtf8("Инфо: %1 · Предупреждения: %2 · Ошибки: %3")
@@ -5840,6 +5855,24 @@ int main(int argc, char** argv) {
     const auto persisted = LoadTasksData(workspace.directory);
     auto changed = std::find_if(persisted.begin(), persisted.end(), [](const auto& t) { return t.id == "qt-smoke-task"; });
     if (changed == persisted.end() || changed->status != 1) return fail("Status form did not persist");
+    QFile taskTelemetry(QString::fromUtf8((workspace.directory / "meta/qt-application-log.json").u8string()));
+    if (!taskTelemetry.open(QIODevice::ReadOnly)) return fail("Task mutation telemetry file unavailable");
+    const auto taskEvents = QJsonDocument::fromJson(taskTelemetry.readAll()).array();
+    bool taskCreateLogged = false, taskEditLogged = false, taskStatusLogged = false;
+    for (const auto& value : taskEvents) {
+        const auto entry = value.toObject();
+        if (entry.value("source").toString() != QStringLiteral("CoreTaskMutation")) continue;
+        const auto text = entry.value("message").toString();
+        taskCreateLogged |= text == QStringLiteral("Task creation committed");
+        taskEditLogged |= text == QStringLiteral("Task edit committed");
+        taskStatusLogged |= text == QStringLiteral("Task status update committed");
+        if (text.contains(QStringLiteral("qt-smoke-task")) ||
+            text.contains(QString::fromUtf8("Отредактировано через Qt")) ||
+            text.contains(QString::fromStdString(createdProfile->id)))
+            return fail("Core task telemetry leaked task or profile data");
+    }
+    if (!taskCreateLogged || !taskEditLogged || !taskStatusLogged)
+        return fail("Qt task create, edit, or status core telemetry is missing");
     QString deletableTaskId;
     for (int i = 0; i < table->rowCount(); ++i) {
         const auto candidate = table->item(i, 0)->data(Qt::UserRole).toString();
