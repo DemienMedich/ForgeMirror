@@ -7,6 +7,7 @@
 namespace {
 QString q(const std::string& value) { return QString::fromUtf8(value.data(), int(value.size())); }
 QString date(std::int64_t value) { return value ? QDateTime::fromSecsSinceEpoch(value).toString("dd.MM.yyyy HH:mm") : QString::fromUtf8("Без срока"); }
+void nameForAccessibility(QWidget* widget, const QString& name) { if (widget) widget->setAccessibleName(name); }
 QPixmap achievementIcon(const QtWorkspace& workspace, const QString& relative) {
     const QString prefix = "achievements/icons/";
     if (!relative.startsWith(prefix)) return {};
@@ -139,6 +140,31 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
     grant->setProperty("primary", true);
     grant->setVisible(admin);
     layout->addWidget(grant, 0, Qt::AlignRight);
+    auto* filters = new QWidget;
+    filters->setObjectName("achievementFilters");
+    auto* filterLayout = new QHBoxLayout(filters);
+    filterLayout->setContentsMargins(0, 0, 0, 0);
+    auto* search = new QLineEdit;
+    search->setObjectName("achievementSearch");
+    search->setPlaceholderText(QString::fromUtf8("Поиск по названию или навыку…"));
+    search->setClearButtonEnabled(true);
+    nameForAccessibility(search, QString::fromUtf8("Поиск достижений по названию или навыку"));
+    filterLayout->addWidget(search, 1);
+    auto* showExpired = new QCheckBox(QString::fromUtf8("Показывать истёкшие"));
+    showExpired->setObjectName("showExpiredAchievements");
+    showExpired->setChecked(true);
+    nameForAccessibility(showExpired, QString::fromUtf8("Показывать истёкшие достижения"));
+    filterLayout->addWidget(showExpired);
+    auto* resetFilters = new QPushButton(QString::fromUtf8("Сбросить"));
+    resetFilters->setObjectName("resetAchievementFilters");
+    nameForAccessibility(resetFilters, QString::fromUtf8("Сбросить фильтры достижений"));
+    filterLayout->addWidget(resetFilters);
+    layout->addWidget(filters);
+    auto* expiringSoon = new QLabel;
+    expiringSoon->setObjectName("achievementsExpiringSoon");
+    expiringSoon->setWordWrap(true);
+    expiringSoon->hide();
+    layout->addWidget(expiringSoon);
     auto* table = new QTableWidget(0, 5);
     table->setObjectName("achievementRecords");
     table->setHorizontalHeaderLabels({QString::fromUtf8("Название"), QString::fromUtf8("Навык"), QString::fromUtf8("Бонус XP"), QString::fromUtf8("Действует до"), QString::fromUtf8("Состояние")});
@@ -150,6 +176,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
     table->setShowGrid(false);
     layout->addWidget(table, 1);
     auto* notice = new QLabel;
+    notice->setObjectName("achievementsNotice");
     notice->setWordWrap(true);
     layout->addWidget(notice);
     auto* actions = new QHBoxLayout;
@@ -169,22 +196,70 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         if (!profile) { notice->setText(QString::fromUtf8("Профиль недоступен.")); return; }
         const auto now = QDateTime::currentSecsSinceEpoch();
         displayed = profile->achievements();
+        int activeCount = 0;
+        int expiredCount = 0;
+        std::vector<std::pair<std::int64_t, QString>> expiring;
         for (const auto& item : profile->achievements()) {
+            const bool active = item.is_active(now);
+            active ? ++activeCount : ++expiredCount;
             const auto row = table->rowCount(); table->insertRow(row);
             const QStringList values = {q(item.title), q(workspace.catalog.display_name(item.skill)),
                 QString::number(item.bonusPercent) + "%", date(item.expiresAt),
-                QString::fromUtf8(item.is_active(now) ? "Активно" : "Истекло")};
+                QString::fromUtf8(active ? "Активно" : "Истекло")};
             for (int col = 0; col < values.size(); ++col) {
                 auto* cell = new QTableWidgetItem(values[col]); cell->setToolTip(values[col]); table->setItem(row, col, cell);
             }
             table->item(row, 0)->setIcon(QIcon(achievementIcon(workspace, q(item.icon))));
+            if (active && item.expiresAt > now && item.expiresAt - now <= 7LL * 24 * 3600) {
+                const auto remaining = item.expiresAt - now;
+                const auto remainingText = remaining >= 86400 ? QString::fromUtf8("%1 д.").arg(remaining / 86400)
+                    : remaining >= 3600 ? QString::fromUtf8("%1 ч.").arg(remaining / 3600)
+                                         : QString::fromUtf8("%1 мин.").arg(std::max<std::int64_t>(1, remaining / 60));
+                expiring.emplace_back(remaining, QString::fromUtf8("%1 — %2").arg(q(item.title), remainingText));
+            }
         }
+        std::sort(expiring.begin(), expiring.end(), [](const auto& left, const auto& right) { return left.first < right.first; });
+        QStringList expiringLabels;
+        for (size_t i = 0; i < std::min<size_t>(3, expiring.size()); ++i) expiringLabels << expiring[i].second;
+        expiringSoon->setVisible(!expiringLabels.isEmpty());
+        expiringSoon->setText(expiringLabels.isEmpty() ? QString() : QString::fromUtf8("Скоро истекают: ") + expiringLabels.join(" · "));
         table->resizeColumnsToContents();
         table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-        notice->setText(QString::fromUtf8("Достижений: %1").arg(table->rowCount()));
+        notice->setText(QString::fromUtf8("Показано: %1 · активных: %2 · истекло: %3")
+            .arg(table->rowCount()).arg(activeCount).arg(expiredCount));
     };
+    auto applyFilters = [&] {
+        if (notice->text().contains(QString::fromUtf8("Профиль недоступен"))) return;
+        int visible = 0;
+        for (int row = 0; row < table->rowCount() && row < int(displayed.size()); ++row) {
+            const auto& item = displayed[size_t(row)];
+            const QString searchText = q(item.title) + " " + q(workspace.catalog.display_name(item.skill));
+            const bool matches = (showExpired->isChecked() || item.is_active(QDateTime::currentSecsSinceEpoch())) &&
+                searchText.contains(search->text().trimmed(), Qt::CaseInsensitive);
+            table->setRowHidden(row, !matches);
+            if (matches) ++visible;
+        }
+        int active = 0, expired = 0;
+        const auto now = QDateTime::currentSecsSinceEpoch();
+        for (const auto& item : displayed) item.is_active(now) ? ++active : ++expired;
+        notice->setText(QString::fromUtf8("Показано: %1 · активных: %2 · истекло: %3")
+            .arg(visible).arg(active).arg(expired));
+        if (table->currentRow() >= 0 && table->isRowHidden(table->currentRow())) table->setCurrentCell(-1, -1);
+        const bool selectedVisibleRow = table->currentRow() >= 0 && !table->isRowHidden(table->currentRow());
+        edit->setEnabled(admin && selectedVisibleRow);
+        revoke->setEnabled(admin && selectedVisibleRow);
+    };
+    QObject::connect(search, &QLineEdit::textChanged, &dialog, applyFilters);
+    QObject::connect(showExpired, &QCheckBox::toggled, &dialog, applyFilters);
+    QObject::connect(resetFilters, &QPushButton::clicked, &dialog, [&] {
+        search->clear();
+        showExpired->setChecked(true);
+        applyFilters();
+    });
     QObject::connect(table, &QTableWidget::itemSelectionChanged, &dialog, [&] {
-        edit->setEnabled(table->currentRow() >= 0); revoke->setEnabled(table->currentRow() >= 0);
+        const int row = table->currentRow();
+        const bool selectedVisibleRow = row >= 0 && !table->isRowHidden(row);
+        edit->setEnabled(admin && selectedVisibleRow); revoke->setEnabled(admin && selectedVisibleRow);
     });
     edit->setEnabled(false); revoke->setEnabled(false);
     QObject::connect(edit, &QPushButton::clicked, &dialog, [&] {
@@ -222,7 +297,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
             if (!result.isEmpty()) { error->setText(result); return; }
             editor.accept();
         });
-        if (editor.exec() == QDialog::Accepted) refresh();
+        if (editor.exec() == QDialog::Accepted) { refresh(); applyFilters(); }
     });
     QObject::connect(revoke, &QPushButton::clicked, &dialog, [&] {
         const auto index = table->currentRow();
@@ -235,7 +310,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         if (confirm.exec() != QMessageBox::Yes) return;
         const auto result = UpdateQtAchievement(workspace, profileId, index, expected, {}, 0, std::nullopt, true);
         if (!result.isEmpty()) { notice->setText(result); return; }
-        refresh();
+        refresh(); applyFilters();
     });
     QObject::connect(grant, &QPushButton::clicked, &dialog, [&] {
         if (!admin) return;
@@ -266,11 +341,12 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
             if (!result.isEmpty()) { error->setText(result); return; }
             editor.accept();
         });
-        if (editor.exec() == QDialog::Accepted) refresh();
+        if (editor.exec() == QDialog::Accepted) { refresh(); applyFilters(); }
     });
     auto* close = new QDialogButtonBox(QDialogButtonBox::Close);
     close->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
     QObject::connect(close, &QDialogButtonBox::rejected, &dialog, &QDialog::reject); layout->addWidget(close);
     refresh();
+    applyFilters();
     dialog.exec();
 }

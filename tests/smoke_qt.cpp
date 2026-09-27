@@ -36,6 +36,10 @@
 #include "CloudSync.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
 #include <chrono>
 #include <thread>
 #include <QtTest/QTest>
@@ -1574,6 +1578,80 @@ static bool TestAchievements() {
     loaded->set_blocked(true);
     if (!workspace.storage->save_profile(*loaded) || GrantQtAchievement(workspace, id, "Blocked", skill, 10, 0).isEmpty()) return false;
     return true;
+}
+
+static bool TestAchievementFiltersUi() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    workspace.catalog.add_skill("Modeling", 1.0, "Geometry");
+    const auto skill = *workspace.catalog.id_for_name("Modeling");
+    Profile profile("Achievement filters");
+    const auto created = workspace.storage->create_profile(profile);
+    if (!created) return false;
+    const auto profilePath = temp.path() + "/" + QString::fromStdString(created->id) + ".ini";
+    const auto achievementPath = temp.path() + "/achievements/" + QString::fromStdString(created->id) + ".json";
+    QFile profileFile(profilePath);
+    if (!profileFile.open(QIODevice::ReadOnly)) return false;
+    const auto profileBytes = profileFile.readAll(); profileFile.close();
+    for (const auto& title : {QStringLiteral("Soon Badge"), QStringLiteral("Permanent Badge"), QStringLiteral("Expired Badge")})
+        if (!GrantQtAchievement(workspace, created->id, title, skill, 10, title == "Soon Badge" ? 2 : 0).isEmpty()) return false;
+    QFile achievements(achievementPath);
+    if (!achievements.open(QIODevice::ReadOnly)) return false;
+    const auto originalBytes = achievements.readAll(); achievements.close();
+    const auto json = QJsonDocument::fromJson(originalBytes.startsWith("\xEF\xBB\xBF") ? originalBytes.mid(3) : originalBytes);
+    if (!json.isArray() || json.array().size() != 3) return false;
+    auto records = json.array();
+    auto expired = records[2].toObject();
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    expired["awarded"] = qint64(now - 2 * 86400);
+    expired["expires"] = qint64(now - 60);
+    expired["durationDays"] = 1;
+    records[2] = expired;
+    QSaveFile corrected(achievementPath);
+    const auto correctedBytes = QByteArray("\xEF\xBB\xBF") + QJsonDocument(records).toJson();
+    if (!corrected.open(QIODevice::WriteOnly) || corrected.write(correctedBytes) != correctedBytes.size() || !corrected.commit()) return false;
+    QFile saved(achievementPath);
+    if (!saved.open(QIODevice::ReadOnly)) return false;
+    const auto storedAchievements = saved.readAll(); saved.close();
+    bool checks = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* table = dialog ? dialog->findChild<QTableWidget*>("achievementRecords") : nullptr;
+        auto* search = dialog ? dialog->findChild<QLineEdit*>("achievementSearch") : nullptr;
+        auto* showExpired = dialog ? dialog->findChild<QCheckBox*>("showExpiredAchievements") : nullptr;
+        auto* reset = dialog ? dialog->findChild<QPushButton*>("resetAchievementFilters") : nullptr;
+        auto* notice = dialog ? dialog->findChild<QLabel*>("achievementsNotice") : nullptr;
+        auto* expiring = dialog ? dialog->findChild<QLabel*>("achievementsExpiringSoon") : nullptr;
+        checks = dialog && table && search && showExpired && reset && notice && expiring && table->rowCount() == 3 &&
+            showExpired->isChecked() && !table->isRowHidden(0) && !table->isRowHidden(1) && !table->isRowHidden(2) &&
+            notice->text().contains(QString::fromUtf8("активных: 2")) && notice->text().contains(QString::fromUtf8("истекло: 1")) &&
+            expiring->isVisible() && expiring->text().contains(QString::fromUtf8("Soon Badge")) &&
+            !search->accessibleName().isEmpty() && !showExpired->accessibleName().isEmpty() && !reset->accessibleName().isEmpty();
+        if (!dialog) return;
+        auto* edit = dialog->findChild<QPushButton*>("editAchievement");
+        auto* revoke = dialog->findChild<QPushButton*>("revokeAchievement");
+        table->selectRow(2); QApplication::processEvents();
+        checks &= edit && revoke && edit->isEnabled() && revoke->isEnabled();
+        search->setText("Expired"); QApplication::processEvents();
+        checks &= table->isRowHidden(0) && table->isRowHidden(1) && !table->isRowHidden(2) && notice->text().contains("Показано: 1");
+        showExpired->setChecked(false); QApplication::processEvents();
+        checks &= table->isRowHidden(0) && table->isRowHidden(1) && table->isRowHidden(2) && notice->text().contains("Показано: 0") &&
+            table->currentRow() == -1 && !edit->isEnabled() && !revoke->isEnabled();
+        search->clear(); QApplication::processEvents();
+        checks &= !table->isRowHidden(0) && !table->isRowHidden(1) && table->isRowHidden(2);
+        reset->click(); QApplication::processEvents();
+        checks &= showExpired->isChecked() && search->text().isEmpty() &&
+            !table->isRowHidden(0) && !table->isRowHidden(1) && !table->isRowHidden(2);
+        search->setText("no matching achievement"); QApplication::processEvents();
+        checks &= table->isRowHidden(0) && table->isRowHidden(1) && table->isRowHidden(2) && notice->text().contains("Показано: 0");
+        reset->click(); QApplication::processEvents();
+        dialog->reject();
+    });
+    ShowAchievements(nullptr, workspace, created->id, true);
+    QFile afterProfile(profilePath); if (!afterProfile.open(QIODevice::ReadOnly)) return false;
+    QFile afterAchievements(achievementPath); if (!afterAchievements.open(QIODevice::ReadOnly)) return false;
+    return checks && afterProfile.readAll() == profileBytes && afterAchievements.readAll() == storedAchievements;
 }
 
 static bool TestProfileSession() {
@@ -4368,6 +4446,7 @@ int main(int argc, char** argv) {
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }
     if (!TestAchievements()) { std::cerr << "Achievements failed\n"; return 1; }
+    if (!TestAchievementFiltersUi()) { std::cerr << "Achievement filters UI failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
