@@ -614,8 +614,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditSourceFilter_ = new QComboBox;
     auditSourceFilter_->setObjectName("auditSourceFilter");
     auditSourceFilter_->setMaximumWidth(145);
-    auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"), QString::fromUtf8("Приложение")});
-    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 3));
+    auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"),
+        QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище")});
+    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 4));
     auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
     filters->addWidget(auditSourceFilter_);
     logInfo_ = new QCheckBox(QString::fromUtf8("Инфо"));
@@ -1960,6 +1961,15 @@ void QtWindow::render() {
                 entries.push_back({entry.timestamp, 3, std::to_string(index),
                     {QString::fromUtf8("Приложение"), timeText(entry.timestamp), q(entry.source),
                         QString::fromUtf8("Журнал Qt"), level, QString(), q(entry.message)}});
+            }
+            entries.reserve(entries.size() + data.vault.log.size());
+            for (size_t index = 0; index < data.vault.log.size(); ++index) {
+                const auto& entry = data.vault.log[index];
+                const auto amount = QString::number(entry.amount, 'f', 2) + QLatin1Char(' ') +
+                    q(data.vault.currencyCode.empty() ? std::string(u8"Кукоин") : data.vault.currencyCode);
+                entries.push_back({entry.timestamp, 4, std::to_string(index),
+                    {QString::fromUtf8("Хранилище"), timeText(entry.timestamp), QString::fromUtf8("локально"),
+                        q(entry.action), QString::fromUtf8("Сумма"), QString(), amount + QStringLiteral(" · ") + q(entry.note)}});
             }
         }
         std::stable_sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
