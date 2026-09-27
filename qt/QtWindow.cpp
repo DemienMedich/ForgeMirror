@@ -424,6 +424,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     storageHealthReportAction_->setObjectName("storageHealthReport");
     storageHealthReportAction_->setToolTip(QString::fromUtf8("Проверить sync-файлы, расхождения облачной копии и лишние элементы без изменений данных"));
     connect(storageHealthReportAction_, &QAction::triggered, this, [this] { exportStorageHealthReport(); });
+    storageCleanupAction_ = menu->addAction(QString::fromUtf8("Очистить лишние файлы…"));
+    storageCleanupAction_->setObjectName("storageCleanup");
+    storageCleanupAction_->setToolTip(QString::fromUtf8("Показать точный список Qt-копии; удалить можно только отмеченные элементы после подтверждения"));
+    connect(storageCleanupAction_, &QAction::triggered, this, [this] { cleanupStrayStorage(); });
     menu->addAction(QString::fromUtf8("Открыть папку данных Qt"), this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(q(workspace_.directory.u8string())));
     });
@@ -1803,6 +1807,7 @@ void QtWindow::render() {
     profileAccessAction_->setEnabled(!profileId.empty());
     ownPasswordAction_->setEnabled(unlocked);
     storageHealthReportAction_->setVisible(admin_);
+    storageCleanupAction_->setVisible(admin_);
     navigation_->item(ModelViewerPage)->setHidden(!workspace_.modules.view3d);
     navigation_->item(ModelSettingsPage)->setHidden(!workspace_.modules.view3d || !admin_);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
@@ -3258,6 +3263,109 @@ void QtWindow::exportStorageHealthReport() {
     }
     appendLog(AppLogLevel::Info, "StorageHealthReport", "Read-only storage health report exported");
     statusBar()->showMessage(QString::fromUtf8("Отчёт хранилища сохранён: %1").arg(QDir::toNativeSeparators(path)), 7000);
+}
+
+void QtWindow::cleanupStrayStorage() {
+    if (!requireAdmin()) return;
+    std::vector<QtStorageStrayEntry> inventory;
+    QString error;
+    if (!BuildQtStorageStrayInventory(workspace_.directory, &inventory, &error)) {
+        message(error.toUtf8().toStdString());
+        return;
+    }
+    if (inventory.empty()) {
+        statusBar()->showMessage(QString::fromUtf8("Лишние элементы в локальной Qt-копии не найдены."), 5000);
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setObjectName("storageCleanupDialog");
+    dialog.setWindowTitle(QString::fromUtf8("Очистка локальной Qt-копии"));
+    dialog.resize(720, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* warning = new QLabel(QString::fromUtf8(
+        "Будут удалены только отмеченные элементы из изолированной локальной Qt-копии. "
+        "Содержимое каждой папки показано отдельными строками; папка удаляется только когда отмечено всё её содержимое. "
+        "Операция необратима. Если данные изменятся после сканирования, удаление будет отменено."), &dialog);
+    warning->setObjectName("storageCleanupWarning");
+    warning->setWordWrap(true);
+    layout->addWidget(warning);
+    int fileCount = 0, directoryCount = 0;
+    std::uint64_t totalBytes = 0;
+    for (const auto& entry : inventory) {
+        if (entry.directory) ++directoryCount;
+        else { ++fileCount; totalBytes += entry.size; }
+    }
+    auto* summary = new QLabel(QString::fromUtf8("Элементов: %1 · файлов: %2 · папок/ссылок: %3 · размер файлов: %4 байт")
+        .arg(qulonglong(inventory.size())).arg(fileCount).arg(directoryCount).arg(qulonglong(totalBytes)), &dialog);
+    summary->setObjectName("storageCleanupSummary");
+    layout->addWidget(summary);
+    auto* selectionTools = new QHBoxLayout;
+    auto* selectAll = new QPushButton(QString::fromUtf8("Выбрать всё"), &dialog);
+    selectAll->setObjectName("storageCleanupSelectAll");
+    auto* selectNone = new QPushButton(QString::fromUtf8("Снять выбор"), &dialog);
+    selectNone->setObjectName("storageCleanupSelectNone");
+    selectionTools->addWidget(selectAll);
+    selectionTools->addWidget(selectNone);
+    selectionTools->addStretch();
+    layout->addLayout(selectionTools);
+    auto* list = new QListWidget(&dialog);
+    list->setObjectName("storageCleanupInventory");
+    labelForAccessibility(list, QString::fromUtf8("Точный список лишних элементов локальной Qt-копии"),
+        QString::fromUtf8("Снятие отметки сохраняет элемент. Отмеченные папки удаляются только при отметке всех вложенных элементов."));
+    for (const auto& entry : inventory) {
+        const QString relative = QString::fromUtf8(entry.relativePath.data(), int(entry.relativePath.size()));
+        const QString kind = entry.reparsePoint ? QString::fromUtf8("ссылка")
+            : entry.directory ? QString::fromUtf8("папка") : QString::fromUtf8("файл · %1 байт").arg(qulonglong(entry.size));
+        auto* item = new QListWidgetItem(QStringLiteral("[%1] %2").arg(kind, relative), list);
+        item->setData(Qt::UserRole, QString::fromUtf8(entry.relativePath.data(), int(entry.relativePath.size())));
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
+        item->setToolTip(relative);
+    }
+    layout->addWidget(list, 1);
+    auto* buttons = new QDialogButtonBox(&dialog);
+    auto* removeButton = buttons->addButton(QString::fromUtf8("Удалить отмеченные ( %1 )").arg(inventory.size()), QDialogButtonBox::AcceptRole);
+    removeButton->setObjectName("storageCleanupConfirm");
+    removeButton->setAutoDefault(false);
+    removeButton->setDefault(false);
+    auto* cancelButton = buttons->addButton(QDialogButtonBox::Cancel);
+    cancelButton->setText(QString::fromUtf8("Отмена"));
+    cancelButton->setObjectName("storageCleanupCancel");
+    cancelButton->setDefault(true);
+    labelForAccessibility(removeButton, QString::fromUtf8("Удалить отмеченные элементы"),
+        QString::fromUtf8("Начинает необратимое удаление только выбранных путей после проверки, что список не изменился."));
+    connect(selectAll, &QPushButton::clicked, &dialog, [list] {
+        for (int row = 0; row < list->count(); ++row) list->item(row)->setCheckState(Qt::Checked);
+    });
+    connect(selectNone, &QPushButton::clicked, &dialog, [list] {
+        for (int row = 0; row < list->count(); ++row) list->item(row)->setCheckState(Qt::Unchecked);
+    });
+    connect(list, &QListWidget::itemChanged, &dialog, [list, removeButton] {
+        int selected = 0;
+        for (int row = 0; row < list->count(); ++row) selected += list->item(row)->checkState() == Qt::Checked;
+        removeButton->setText(QString::fromUtf8("Удалить отмеченные ( %1 )").arg(selected));
+        removeButton->setEnabled(selected > 0);
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    std::vector<std::string> approved;
+    for (int row = 0; row < list->count(); ++row) {
+        const auto* item = list->item(row);
+        if (item->checkState() != Qt::Checked) continue;
+        approved.push_back(item->data(Qt::UserRole).toString().toUtf8().toStdString());
+    }
+    int removed = 0;
+    if (!RemoveQtStorageStrayEntries(workspace_.directory, inventory, approved, &removed, &error)) {
+        if (removed > 0) appendLog(AppLogLevel::Warning, "StorageCleanup", "Approved stray cleanup stopped after a partial removal");
+        message(error.toUtf8().toStdString());
+        return;
+    }
+    appendLog(AppLogLevel::Info, "StorageCleanup", "Administrator removed explicitly approved stray workspace entries");
+    statusBar()->showMessage(QString::fromUtf8("Удалено элементов локальной Qt-копии: %1").arg(removed), 7000);
 }
 
 void QtWindow::showWalletHistory() {

@@ -20,6 +20,7 @@ if ($Package) {
     $output = "$repo\package-qt"
     New-Item -ItemType Directory -Force -Path $output | Out-Null
     Copy-Item -LiteralPath "$repo\build-qt\Release\ForgeMirrorQt.exe" -Destination $output -Force
+    Set-Content -LiteralPath "$output\qt.conf" -Encoding Ascii -Value "[Paths]`nPlugins=.`n"
     & "$QtRoot\bin\windeployqt.exe" --release --no-translations --no-opengl-sw --no-system-d3d-compiler "$output\ForgeMirrorQt.exe"
     if ($LASTEXITCODE) { throw 'Qt deployment failed' }
     # App-local runtime for this host's custom MSVC installation (windeployqt may not discover it).

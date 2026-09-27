@@ -73,6 +73,7 @@ private:
     void showProfileHistory();
     void exportProfileReport(bool csv);
     void exportStorageHealthReport();
+    void cleanupStrayStorage();
     void checkDeadlineReminders();
     void checkMissedDeadlineReminders();
     void updateBanner();
@@ -99,6 +100,7 @@ private:
     QAction* profileAccessAction_;
     QAction* ownPasswordAction_;
     QAction* storageHealthReportAction_;
+    QAction* storageCleanupAction_;
     QComboBox* profiles_;
     QListWidget* navigation_;
     QLineEdit* search_;

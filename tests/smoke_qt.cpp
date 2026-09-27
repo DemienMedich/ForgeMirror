@@ -1981,7 +1981,8 @@ static bool TestQtStorageHealthReport() {
     window.show();
     QApplication::processEvents();
     auto* reportAction = window.findChild<QAction*>("storageHealthReport");
-    if (!reportAction || reportAction->isVisible()) return fail("action missing or visible without admin");
+    auto* cleanupAction = window.findChild<QAction*>("storageCleanup");
+    if (!reportAction || !cleanupAction || reportAction->isVisible() || cleanupAction->isVisible()) return fail("admin-only actions missing or visible without admin");
     QAction* adminAction = nullptr;
     for (auto* action : window.findChildren<QAction*>())
         if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
@@ -1993,19 +1994,25 @@ static bool TestQtStorageHealthReport() {
         }
     });
     adminAction->trigger();
-    if (!reportAction->isVisible()) return fail("admin authentication");
+    if (!reportAction->isVisible() || !cleanupAction->isVisible()) return fail("admin authentication");
     std::filesystem::create_directories(workspacePath / "meta");
     std::filesystem::create_directories(cloudPath / "meta");
     const auto localTasks = workspacePath / "meta" / "tasks.json";
     const std::string invalidLocal = "not-json-private-content";
+    QString report, error;
     { std::ofstream out(localTasks, std::ios::binary | std::ios::trunc); out << invalidLocal; }
     { std::ofstream out(cloudPath / "meta" / "tasks.json", std::ios::binary | std::ios::trunc); out << "[]"; }
     { std::ofstream out(workspacePath / "stray-report-test.bin", std::ios::binary | std::ios::trunc); out << "not included"; }
+    std::vector<QtStorageStrayEntry> staleInventory;
+    if (!BuildQtStorageStrayInventory(workspacePath, &staleInventory, &error) || staleInventory.empty()) return fail("stray inventory");
+    { std::ofstream out(workspacePath / "appeared-after-preview.bin", std::ios::binary | std::ios::trunc); out << "keep"; }
+    int removed = -1;
+    if (RemoveQtStorageStrayEntries(workspacePath, staleInventory, {"stray-report-test.bin"}, &removed, &error) ||
+        removed != 0 || !std::filesystem::exists(workspacePath / "stray-report-test.bin")) return fail("stale inventory guard");
     CloudSyncConfig config;
     config.enabled = true;
     config.root = cloudPath;
     if (!SaveCloudSyncConfig(workspacePath, config)) return fail("save cloud config");
-    QString report, error;
     if (!BuildQtStorageHealthReport(workspacePath, workspace.modules, 1700000000, &report, &error) || !error.isEmpty()) return fail("build: ");
     if (!report.contains(QString::fromUtf8("РАСХОЖДЕНИЯ ЛОКАЛЬНОЙ И ОБЛАЧНОЙ КОПИИ")) ||
         !report.contains(QString::fromUtf8("meta/tasks.json")) || !report.contains(QString::fromUtf8("JSON не распознан")) ||
@@ -2035,6 +2042,63 @@ static bool TestQtStorageHealthReport() {
     reportAction->trigger();
     QFile uiOutput(uiOutputPath);
     if (!uiOutput.open(QIODevice::ReadOnly) || !uiOutput.readAll().contains("stray-report-test.bin")) return fail("UI export");
+
+    std::cerr << "storageHealth: before cancel preview" << std::endl;
+    bool cancelWasSafeDefault = false;
+    QTimer::singleShot(0, [&cancelWasSafeDefault] {
+        auto* preview = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        std::cerr << "storageHealth: cancel timer modal=" << (preview ? preview->objectName().toUtf8().constData() : "none") << std::endl;
+        if (!preview || preview->objectName() != "storageCleanupDialog") return;
+        auto* cancel = preview->findChild<QPushButton*>("storageCleanupCancel");
+        auto* removeButton = preview->findChild<QPushButton*>("storageCleanupConfirm");
+        cancelWasSafeDefault = cancel && cancel->isDefault() && removeButton && !removeButton->isDefault();
+        preview->reject();
+    });
+    cleanupAction->trigger();
+    std::cerr << "storageHealth: after cancel preview" << std::endl;
+    if (!cancelWasSafeDefault || !std::filesystem::exists(workspacePath / "stray-report-test.bin")) return fail("cleanup cancel did not preserve files");
+
+    const auto targetStray = std::string("stray-report-test.bin");
+    QTimer::singleShot(0, [targetStray] {
+        auto* preview = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        std::cerr << "storageHealth: delete timer modal=" << (preview ? preview->objectName().toUtf8().constData() : "none") << std::endl;
+        auto* list = preview ? preview->findChild<QListWidget*>("storageCleanupInventory") : nullptr;
+        auto* removeButton = preview ? preview->findChild<QPushButton*>("storageCleanupConfirm") : nullptr;
+        if (!list || !removeButton) return;
+        if (auto* none = preview->findChild<QPushButton*>("storageCleanupSelectNone")) none->click();
+        for (int row = 0; row < list->count(); ++row) {
+            auto* item = list->item(row);
+            if (item->data(Qt::UserRole).toString().toUtf8().toStdString() == targetStray)
+                item->setCheckState(Qt::Checked);
+        }
+        if (removeButton->isEnabled()) {
+            QTimer::singleShot(0, [] {
+                if (auto* notice = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                    std::cerr << "storageHealth: cleanup notice: " << notice->text().toUtf8().constData() << std::endl;
+                    notice->accept();
+                }
+            });
+            removeButton->click();
+        }
+    });
+    std::cerr << "storageHealth: before delete preview" << std::endl;
+    cleanupAction->trigger();
+    std::cerr << "storageHealth: after delete preview" << std::endl;
+    if (std::filesystem::exists(workspacePath / "stray-report-test.bin") ||
+        !std::filesystem::exists(workspacePath / "appeared-after-preview.bin")) return fail("selected cleanup scope");
+
+    const auto treeRoot = root / "tree-cleanup";
+    std::filesystem::create_directories(treeRoot / "unknown-dir" / "nested");
+    { std::ofstream out(treeRoot / "unknown-dir" / "nested" / "payload.bin", std::ios::binary); out << "payload"; }
+    std::vector<QtStorageStrayEntry> treeInventory;
+    if (!BuildQtStorageStrayInventory(treeRoot, &treeInventory, &error) || treeInventory.size() != 3) return fail("recursive directory inventory");
+    removed = 0;
+    if (RemoveQtStorageStrayEntries(treeRoot, treeInventory, {"unknown-dir"}, &removed, &error) || removed != 0 ||
+        !std::filesystem::exists(treeRoot / "unknown-dir" / "nested" / "payload.bin")) return fail("partial directory approval guard");
+    std::vector<std::string> allTreePaths;
+    for (const auto& entry : treeInventory) allTreePaths.push_back(entry.relativePath);
+    if (!RemoveQtStorageStrayEntries(treeRoot, treeInventory, allTreePaths, &removed, &error) || removed != 3 ||
+        std::filesystem::exists(treeRoot / "unknown-dir")) return fail("approved recursive directory cleanup");
     if (ExportQtStorageHealthReport(QString(), report, &error) || error.isEmpty() ||
         ExportQtStorageHealthReport(temp.path(), report, &error)) return fail("invalid destination");
     return true;
