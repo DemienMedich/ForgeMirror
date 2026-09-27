@@ -3516,7 +3516,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 4; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -3533,7 +3533,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 4 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -3983,7 +3983,7 @@ int main(int argc, char** argv) {
     auto* exportAudit = window.findChild<QPushButton*>("exportAudit");
     if (!exportAudit || !exportAudit->isVisible() || table->rowCount() == 0) return fail("Audit export action unavailable");
     auto* auditSourceFilter = window.findChild<QComboBox*>("auditSourceFilter");
-    if (!auditSourceFilter || !auditSourceFilter->isVisible() || auditSourceFilter->count() != 5 || auditSourceFilter->currentIndex() != 0)
+    if (!auditSourceFilter || !auditSourceFilter->isVisible() || auditSourceFilter->count() != 6 || auditSourceFilter->currentIndex() != 0)
         return fail("Audit source filter unavailable");
     bool taskAuditVisible = false;
     for (int index = 0; index < table->rowCount(); ++index)
@@ -4536,12 +4536,26 @@ int main(int argc, char** argv) {
     auto finished = std::find_if(finishedTasks.begin(), finishedTasks.end(), [](const auto& t) { return t.id == "qt-smoke-task"; });
     if (finished == finishedTasks.end() || finished->status != 2 || finished->participants.size() != 1)
         return fail("XP form did not complete task");
+    nav->setCurrentRow(7);
+    auditSourceFilter->setCurrentIndex(5);
+    QApplication::processEvents();
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8("Транзакция XP") ||
+        table->item(0, 6)->text() != QString::fromUtf8("Task XP transaction committed"))
+        return fail("Core task XP transaction outcome missing from its admin audit source");
+    auditSourceFilter->setCurrentIndex(1);
+    QApplication::processEvents();
+    if (table->rowCount() == 0 || table->item(0, 0)->text() != QString::fromUtf8("Задача"))
+        return fail("Core task XP audit source leaked into task-only audit filter");
+    auditSourceFilter->setCurrentIndex(0);
+    nav->setCurrentRow(1);
     workspace.storage->set_active_profile(createdProfile->id);
     const auto earned = workspace.storage->load_profile();
     if (!earned || earned->total_xp() != finished->participants[0].globalXp || earned->tasks_completed() != 1)
         return fail("XP form did not persist profile");
     if (!ProfileMatchesTaskRollbackPostcondition(finished->participants[0].rollbackSnapshot, *earned))
         return fail("XP form rollback postcondition mismatch immediately after completion");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (table->item(index, 0)->data(Qt::UserRole).toString() == QString::fromStdString(task.id)) table->selectRow(index);
     bool lockedXpFields = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -4560,6 +4574,8 @@ int main(int argc, char** argv) {
     const auto cancelledTask = std::find_if(afterCancel.begin(), afterCancel.end(), [&](const auto& t) { return t.id == task.id; });
     if (cancelledTask == afterCancel.end() || cancelledTask->title == "Cancelled correction")
         return fail("Cancelled editor persisted changes");
+    for (int index = 0; index < table->rowCount(); ++index)
+        if (table->item(index, 0)->data(Qt::UserRole).toString() == QString::fromStdString(task.id)) table->selectRow(index);
     workspace.storage->set_active_profile(createdProfile->id);
     const auto beforeUiDelete = workspace.storage->load_profile();
     if (!beforeUiDelete || !ProfileMatchesTaskRollbackPostcondition(cancelledTask->participants[0].rollbackSnapshot, *beforeUiDelete))

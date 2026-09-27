@@ -21,7 +21,8 @@ void setupTable(QTableWidget* table, const QStringList& headers) {
 }
 
 bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
-                              const QString& taskId, const QString& activeProfileId) {
+                              const QString& taskId, const QString& activeProfileId,
+                              std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     const auto it = std::find_if(workspace.data.tasks.begin(), workspace.data.tasks.end(),
         [&](const auto& task) { return task.id == u(taskId); });
     if (it == workspace.data.tasks.end() || !it->participants.empty()) return false;
@@ -168,11 +169,13 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
         save->setEnabled(false);
         const auto result = CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input());
         if (!result.ok) {
+            if (eventLogger) eventLogger(AppLogLevel::Error, "Task XP transaction failed or was rolled back");
             summary->setText(q(result.errorMessage));
             // A pending rollback must be resolved before any further mutations.
             save->setEnabled(!std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"));
             return;
         }
+        if (eventLogger) eventLogger(AppLogLevel::Info, "Task XP transaction committed");
         dialog.accept();
     });
     refresh();

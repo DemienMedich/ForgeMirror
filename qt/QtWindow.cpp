@@ -615,8 +615,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditSourceFilter_->setObjectName("auditSourceFilter");
     auditSourceFilter_->setMaximumWidth(145);
     auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"),
-        QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище")});
-    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 4));
+        QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Транзакции XP")});
+    auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 5));
     auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
     filters->addWidget(auditSourceFilter_);
     logInfo_ = new QCheckBox(QString::fromUtf8("Инфо"));
@@ -1960,11 +1960,14 @@ void QtWindow::render() {
             entries.reserve(entries.size() + appLogs_.size());
             for (size_t index = 0; index < appLogs_.size(); ++index) {
                 const auto& entry = appLogs_[index];
+                const bool coreXp = entry.source == "CoreTaskCompletion";
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
-                entries.push_back({entry.timestamp, 3, std::to_string(index),
-                    {QString::fromUtf8("Приложение"), timeText(entry.timestamp), q(entry.source),
-                        QString::fromUtf8("Журнал Qt"), level, QString(), q(entry.message)}});
+                entries.push_back({entry.timestamp, coreXp ? 5 : 3, std::to_string(index),
+                    {coreXp ? QString::fromUtf8("Транзакция XP") : QString::fromUtf8("Приложение"),
+                        timeText(entry.timestamp), q(entry.source),
+                        coreXp ? QString::fromUtf8("Операция начисления XP") : QString::fromUtf8("Журнал Qt"),
+                        level, QString(), q(entry.message)}});
             }
             entries.reserve(entries.size() + data.vault.log.size());
             for (size_t index = 0; index < data.vault.log.size(); ++index) {
@@ -3721,7 +3724,8 @@ void QtWindow::changeStatus() {
     if (labels.indexOf(selected) < 0) return;
     const int next = states[size_t(labels.indexOf(selected))];
     if (next == 2 && found->participants.empty()) {
-        ShowTaskCompletionDialog(this, workspace_, q(id), profiles_->currentData().toString());
+        ShowTaskCompletionDialog(this, workspace_, q(id), profiles_->currentData().toString(),
+            [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreTaskCompletion", event); });
         reload();
         return;
     }
