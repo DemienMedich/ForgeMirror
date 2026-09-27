@@ -139,7 +139,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         !((version == "FORGEMIRROR_QT_XP_1" && count >= 4 && count <= 10003) ||
           (version == "FORGEMIRROR_QT_TASK_EDIT_1" && count == 3) ||
           (version == "FORGEMIRROR_QT_PROJECT_DELETE_1" && count == 5) ||
-          (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 10002) ||
+          (version == "FORGEMIRROR_QT_PROFESSION_DELETE_1" && count >= 2 && count <= 20002) ||
           (version == "FORGEMIRROR_QT_SKILL_DELETE_1" && count == 1) ||
           (version == "FORGEMIRROR_QT_SKILL_MERGE_1" && count >= 4 && count <= 30004) ||
           (version == "FORGEMIRROR_QT_PROFILE_WALLET_1" && (count == 2 || count == 3)) ||
@@ -278,12 +278,16 @@ void PrepareProjectDeletionRecovery(const std::filesystem::path& directory) {
 
 void PrepareProfessionDeletionRecovery(const std::filesystem::path& directory,
                                        const std::vector<std::string>& profileIds) {
+    if (profileIds.size() > 10000) throw std::runtime_error(u8"Слишком много профилей для безопасного удаления профессии.");
     std::vector<std::string> files = {"meta/professions.txt", "skills.txt"};
     std::set<std::string> uniqueIds;
     for (const auto& id : profileIds) {
-        if (!safeProfileId(id) || !uniqueIds.insert(id).second)
+        const bool archived = id.rfind("archive/", 0) == 0;
+        const auto profileId = archived ? id.substr(8) : id;
+        if (!safeProfileId(profileId) || !uniqueIds.insert(profileId).second)
             throw std::runtime_error(u8"Некорректный или повторяющийся профиль для журнала профессии.");
-        files.push_back(id + ".ini");
+        files.push_back(profileId + ".ini");
+        if (archived) files.push_back(id + ".ini");
     }
     prepareFileJournal(directory, "FORGEMIRROR_QT_PROFESSION_DELETE_1", files);
 }

@@ -39,4 +39,5 @@ AppProfessionMutationResult AppDeleteProfessionEntry(const std::filesystem::path
                                                      const std::vector<IJobStorage::ProfileInfo>& profiles,
                                                      SkillCatalog& catalog,
                                                      const std::string& restoreProfileId,
-                                                     const std::string& professionId);
+                                                     const std::string& professionId,
+                                                     bool includeArchivedProfiles = false);

@@ -2104,6 +2104,13 @@ static bool TestProfessionDeletionRecovery() {
     auto profile = workspace.storage->load_profile();
     profile->set_profession_id("artist");
     if (!workspace.storage->save_profile(*profile)) return fail("profile binding");
+    auto archivedCreated = workspace.storage->create_profile(Profile("Archived Alice"));
+    if (!archivedCreated || !workspace.storage->set_active_profile(archivedCreated->id)) return fail("archived profile fixture");
+    auto archivedProfile = workspace.storage->load_profile();
+    if (!archivedProfile) return fail("archived profile load");
+    archivedProfile->set_profession_id("artist");
+    if (!workspace.storage->save_profile(*archivedProfile) ||
+        !workspace.storage->set_archived(archivedCreated->id, true)) return fail("archived profession binding");
     workspace.reload();
 
     auto bytes = [&](const QString& relative) {
@@ -2114,27 +2121,41 @@ static bool TestProfessionDeletionRecovery() {
     const auto professionBytes = bytes("meta/professions.txt");
     const auto skillBytes = bytes("skills.txt");
     const auto profileBytes = bytes(QString::fromStdString(created->id) + ".ini");
-    const std::vector<std::string> profileIds = {created->id};
+    const auto archivedProfileBytes = bytes("archive/" + QString::fromStdString(archivedCreated->id) + ".ini");
+    const std::vector<std::string> profilePaths = {created->id, "archive/" + archivedCreated->id};
 
-    PrepareProfessionDeletionRecovery(workspace.directory, profileIds);
+    PrepareProfessionDeletionRecovery(workspace.directory, profilePaths);
+    if (!workspace.storage->set_archived(archivedCreated->id, false)) return fail("archived move interruption fixture");
+    workspace.reload();
+    if (bytes("archive/" + QString::fromStdString(archivedCreated->id) + ".ini") != archivedProfileBytes ||
+        std::filesystem::exists(workspace.directory / (archivedCreated->id + ".ini")))
+        return fail("archive move recovery left a duplicate active profile");
+
+    PrepareProfessionDeletionRecovery(workspace.directory, profilePaths);
     const auto interrupted = AppDeleteProfessionEntry(workspace.directory, workspace.data.professions, *workspace.storage,
-        workspace.profiles, workspace.catalog, created->id, "artist");
+        workspace.profiles, workspace.catalog, created->id, "artist", true);
     if (!interrupted.ok || !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
         return fail("interrupted transaction fixture");
     workspace.reload();
     if (bytes("meta/professions.txt") != professionBytes || bytes("skills.txt") != skillBytes ||
         bytes(QString::fromStdString(created->id) + ".ini") != profileBytes ||
+        bytes("archive/" + QString::fromStdString(archivedCreated->id) + ".ini") != archivedProfileBytes ||
         workspace.data.professions.size() != 1 || !workspace.catalog.has_profession(*skillId, "artist"))
         return fail("restart recovery");
 
-    PrepareProfessionDeletionRecovery(workspace.directory, profileIds);
+    PrepareProfessionDeletionRecovery(workspace.directory, profilePaths);
     const auto removed = AppDeleteProfessionEntry(workspace.directory, workspace.data.professions, *workspace.storage,
-        workspace.profiles, workspace.catalog, created->id, "artist");
-    if (!removed.ok || removed.affectedProfiles != 1 || removed.affectedSkills != 1) return fail("delete result");
+        workspace.profiles, workspace.catalog, created->id, "artist", true);
+    if (!removed.ok || removed.affectedProfiles != 2 || removed.affectedSkills != 1) return fail("delete result");
     CommitQtRecoveryTransaction(workspace.directory);
     workspace.reload();
     if (!workspace.data.professions.empty() || workspace.catalog.has_profession(*skillId, "artist") ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("commit state");
+    if (!workspace.storage->set_archived(archivedCreated->id, false) ||
+        !workspace.storage->set_active_profile(archivedCreated->id)) return fail("archived profile restore");
+    const auto clearedArchived = workspace.storage->load_profile();
+    if (!clearedArchived || !clearedArchived->profession_id().empty() ||
+        !workspace.storage->set_archived(archivedCreated->id, true)) return fail("archived profile was not cleared");
     if (!workspace.storage->set_active_profile(created->id)) return fail("profile reload");
     const auto cleared = workspace.storage->load_profile();
     return cleared && cleared->profession_id().empty();

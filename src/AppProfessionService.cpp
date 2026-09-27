@@ -70,12 +70,17 @@ bool RollbackSkillBindings(SkillCatalog& catalog, const std::vector<SkillRollbac
 struct ProfileRollbackEntry {
     std::string id;
     std::string professionId;
+    bool archived = false;
 };
 
 bool RollbackProfileBindings(IJobStorage& storage,
                              const std::string& restoreProfileId,
                              const std::vector<ProfileRollbackEntry>& rollback) {
     for (auto it = rollback.rbegin(); it != rollback.rend(); ++it) {
+        if (it->archived && !storage.set_archived(it->id, false)) {
+            RestoreActiveProfile(storage, restoreProfileId);
+            return false;
+        }
         if (!storage.set_active_profile(it->id)) {
             RestoreActiveProfile(storage, restoreProfileId);
             return false;
@@ -87,6 +92,10 @@ bool RollbackProfileBindings(IJobStorage& storage,
         }
         profile->set_profession_id(it->professionId);
         if (!storage.save_profile(*profile)) {
+            RestoreActiveProfile(storage, restoreProfileId);
+            return false;
+        }
+        if (it->archived && !storage.set_archived(it->id, true)) {
             RestoreActiveProfile(storage, restoreProfileId);
             return false;
         }
@@ -196,7 +205,8 @@ AppProfessionMutationResult AppDeleteProfessionEntry(const std::filesystem::path
                                                      const std::vector<IJobStorage::ProfileInfo>& profiles,
                                                      SkillCatalog& catalog,
                                                      const std::string& restoreProfileId,
-                                                     const std::string& professionId) {
+                                                     const std::string& professionId,
+                                                     bool includeArchivedProfiles) {
     AppProfessionMutationResult result;
     if (professionId.empty()) {
         result.errorMessage = u8"Профессия не выбрана.";
@@ -231,8 +241,15 @@ AppProfessionMutationResult AppDeleteProfessionEntry(const std::filesystem::path
 
     std::vector<ProfileRollbackEntry> profileRollback;
     for (const auto& info : profiles) {
-        if (info.archived) continue;
+        if (info.archived && !includeArchivedProfiles) continue;
+        if (info.archived && !storage.set_archived(info.id, false)) {
+            RollbackProfileBindings(storage, restoreProfileId, profileRollback);
+            RollbackSkillBindings(catalog, skillRollback);
+            result.errorMessage = u8"Не удалось временно восстановить архивный профиль.";
+            return result;
+        }
         if (!storage.set_active_profile(info.id)) {
+            if (info.archived) storage.set_archived(info.id, true);
             RollbackProfileBindings(storage, restoreProfileId, profileRollback);
             RollbackSkillBindings(catalog, skillRollback);
             result.errorMessage = u8"Не удалось открыть профиль для очистки профессии.";
@@ -240,20 +257,33 @@ AppProfessionMutationResult AppDeleteProfessionEntry(const std::filesystem::path
         }
         auto profile = storage.load_profile();
         if (!profile) {
+            if (info.archived) storage.set_archived(info.id, true);
             RollbackProfileBindings(storage, restoreProfileId, profileRollback);
             RollbackSkillBindings(catalog, skillRollback);
             result.errorMessage = u8"Не удалось загрузить профиль для очистки профессии.";
             return result;
         }
         if (profile->profession_id() != professionId) {
+            if (info.archived && !storage.set_archived(info.id, true)) {
+                RollbackProfileBindings(storage, restoreProfileId, profileRollback);
+                RollbackSkillBindings(catalog, skillRollback);
+                result.errorMessage = u8"Не удалось вернуть архивный профиль в архив.";
+                return result;
+            }
             continue;
         }
-        profileRollback.push_back({info.id, professionId});
+        profileRollback.push_back({info.id, professionId, info.archived});
         profile->set_profession_id("");
         if (!storage.save_profile(*profile)) {
             RollbackProfileBindings(storage, restoreProfileId, profileRollback);
             RollbackSkillBindings(catalog, skillRollback);
             result.errorMessage = u8"Не удалось снять профессию с профиля.";
+            return result;
+        }
+        if (info.archived && !storage.set_archived(info.id, true)) {
+            RollbackProfileBindings(storage, restoreProfileId, profileRollback);
+            RollbackSkillBindings(catalog, skillRollback);
+            result.errorMessage = u8"Не удалось вернуть архивный профиль в архив.";
             return result;
         }
     }

@@ -3410,16 +3410,19 @@ void QtWindow::deleteEntry() {
         if (id.empty() || matches != 1 || profession == workspace_.data.professions.end()) {
             message(u8"Профессию с неоднозначным ID нельзя удалить автоматически."); return;
         }
-        int linkedProfiles = 0;
-        std::vector<std::string> activeProfileIds;
+        int linkedProfiles = 0, linkedArchivedProfiles = 0;
+        std::vector<std::string> profileJournalPaths;
+        std::vector<IJobStorage::ProfileInfo> professionProfiles;
         for (const auto& info : workspace_.profiles) {
+            profileJournalPaths.push_back((info.archived ? std::string("archive/") : std::string()) + info.id);
             if (info.archived) {
                 if (archivedProfileUsesProfession(workspace_.directory, info.id, id)) {
-                    message(u8"Профессия назначена архивному профилю. Сначала восстановите профиль и снимите профессию."); return;
+                    ++linkedArchivedProfiles;
+                    professionProfiles.push_back(info);
                 }
                 continue;
             }
-            activeProfileIds.push_back(info.id);
+            professionProfiles.push_back(info);
             if (workspace_.storage->set_active_profile(info.id)) {
                 const auto profile = workspace_.storage->load_profile();
                 if (profile && profile->profession_id() == id) ++linkedProfiles;
@@ -3429,8 +3432,9 @@ void QtWindow::deleteEntry() {
         int linkedSkills = 0;
         for (const auto& skillId : workspace_.catalog.skills()) if (workspace_.catalog.has_profession(skillId, id)) ++linkedSkills;
         QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Удалить профессию"),
-            QString::fromUtf8("Удалить профессию «%1»?\nСвязи будут сняты: профили — %2, навыки — %3.")
-                .arg(q(profession->name)).arg(linkedProfiles).arg(linkedSkills), QMessageBox::Yes | QMessageBox::No, this);
+            QString::fromUtf8("Удалить профессию «%1»?\nНазначение будет снято с профилей: активных — %2, архивных — %3.\nСвязи с навыками будут удалены: %4.")
+                .arg(q(profession->name)).arg(linkedProfiles).arg(linkedArchivedProfiles).arg(linkedSkills),
+            QMessageBox::Yes | QMessageBox::No, this);
         confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить"));
         confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
         confirm.setDefaultButton(QMessageBox::No);
@@ -3438,10 +3442,10 @@ void QtWindow::deleteEntry() {
         bool prepared = false;
         AppProfessionMutationResult result;
         try {
-            PrepareProfessionDeletionRecovery(workspace_.directory, activeProfileIds);
+            PrepareProfessionDeletionRecovery(workspace_.directory, profileJournalPaths);
             prepared = true;
             result = AppDeleteProfessionEntry(workspace_.directory, workspace_.data.professions, *workspace_.storage,
-                workspace_.profiles, workspace_.catalog, u(profiles_->currentData().toString()), id);
+                professionProfiles, workspace_.catalog, u(profiles_->currentData().toString()), id, true);
             if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить профессию." : result.errorMessage);
             CommitQtRecoveryTransaction(workspace_.directory);
         } catch (const std::exception& error) {
