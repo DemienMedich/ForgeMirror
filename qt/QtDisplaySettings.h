@@ -13,6 +13,7 @@ struct QtDisplaySettings {
     bool deadlineNotificationsWhenClosed = false;
     QString lastProfileId;
     int lastPage = 0;
+    int profileViewMode = 1;
     int taskStatusFilter = 0;
     int taskPriorityFilter = 0;
     int taskQuickFilter = 0;

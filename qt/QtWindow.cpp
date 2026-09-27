@@ -609,6 +609,30 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         metricsLayout->addWidget(metric, 1);
     }
     content->addWidget(profileMetrics_);
+    profileViewModes_ = new QWidget;
+    profileViewModes_->setObjectName("profileViewModes");
+    auto* profileModesLayout = new QHBoxLayout(profileViewModes_);
+    profileModesLayout->setContentsMargins(0, 0, 0, 0);
+    profileModesLayout->setSpacing(6);
+    profileModesLayout->addWidget(new QLabel(QString::fromUtf8("Режим:")));
+    const QStringList profileModeNames = {QString::fromUtf8("Обзор"), QString::fromUtf8("Аналитика"), QString::fromUtf8("Фокус")};
+    const QStringList profileModeTips = {QString::fromUtf8("Краткая сводка и три ведущих навыка."),
+        QString::fromUtf8("Полная таблица навыков и достижения."), QString::fromUtf8("Ключевые показатели без таблицы деталей.")};
+    for (int i = 0; i < 3; ++i) {
+        profileViewModeButtons_[i] = new QPushButton(profileModeNames[i]);
+        profileViewModeButtons_[i]->setObjectName(QStringLiteral("profileViewMode%1").arg(i));
+        profileViewModeButtons_[i]->setCheckable(true);
+        profileViewModeButtons_[i]->setToolTip(profileModeTips[i]);
+        labelForAccessibility(profileViewModeButtons_[i], QString::fromUtf8("Режим профиля: %1").arg(profileModeNames[i]), profileModeTips[i]);
+        profileModesLayout->addWidget(profileViewModeButtons_[i]);
+        connect(profileViewModeButtons_[i], &QPushButton::clicked, this, [this, i] {
+            displaySettings_.profileViewMode = i;
+            saveDisplayContext();
+            render();
+        });
+    }
+    profileModesLayout->addStretch();
+    content->addWidget(profileViewModes_);
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;
     pomodoro->setRewardHandler([this](int workMinutes, std::int64_t startedAt) -> QString {
@@ -1951,7 +1975,14 @@ void QtWindow::render() {
     cloudResolve_->setVisible(page == Cloud);
     storageResolve_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
-    achievements_->setVisible(page == ProfilePage);
+    profileViewModes_->setVisible(page == ProfilePage);
+    const int profileMode = std::clamp(displaySettings_.profileViewMode, 0, 2);
+    for (int i = 0; i < 3; ++i) {
+        const QSignalBlocker blocker(profileViewModeButtons_[i]);
+        profileViewModeButtons_[i]->setChecked(i == profileMode);
+    }
+    table_->setVisible(!timerPage && !modelPage && (page != ProfilePage || profileMode != 2));
+    achievements_->setVisible(page == ProfilePage && profileMode != 2);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && (page == Statistics || page == AdminProfileStats));
@@ -2030,10 +2061,23 @@ void QtWindow::render() {
             profileValues_[3]->setText(QString::number(profile->xp_to_next_level()));
             profileValues_[4]->setText(QString::number(profile->wallet_balance(), 'f', 0));
             removeSpirit_->setEnabled(unlocked && profile->spirit() == ProfileSpirit::Evil && profile->wallet_balance() + 0.000001 >= 200.0);
-            for (const auto& skill : profile->list_skills())
+            auto profileSkills = profile->list_skills();
+            auto totalSkillXp = [](const Skill& skill) {
+                int total = skill.xp;
+                for (int level = 2; level <= skill.level; ++level) total += Skill::required_xp_for(level);
+                return total;
+            };
+            std::sort(profileSkills.begin(), profileSkills.end(), [&](const Skill& left, const Skill& right) {
+                const int leftXp = totalSkillXp(left), rightXp = totalSkillXp(right);
+                if (leftXp != rightXp) return leftXp > rightXp;
+                return left.name < right.name;
+            });
+            for (const auto& skill : profileSkills)
                 row(skill.name, {q(workspace_.catalog.display_name(skill.name)), QString::number(skill.level),
                     QString::number(skill.xp), QString::number(skill.weight)});
         } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Администратор может создать его через «Управление профилями»."));
+        for (int rowIndex = 0; rowIndex < table_->rowCount(); ++rowIndex)
+            table_->setRowHidden(rowIndex, profileMode == 2 || (profileMode == 0 && rowIndex >= 3));
     } else if (page == Tasks) {
         headers({QString::fromUtf8("Задача"), QString::fromUtf8("Дата"), QString::fromUtf8("Проект"),
                  QString::fromUtf8("Исполнители"), QString::fromUtf8("Статус"), QString::fromUtf8("Приоритет"),

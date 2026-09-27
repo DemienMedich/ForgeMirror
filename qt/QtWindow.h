@@ -137,6 +137,8 @@ private:
     QLabel* mode_;
     QLabel* banner_;
     QWidget* profileMetrics_;
+    QWidget* profileViewModes_;
+    QPushButton* profileViewModeButtons_[3];
     QWidget* pomodoro_;
     QWidget* bottomActions_;
     QWidget* modelPage_;

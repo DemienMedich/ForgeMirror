@@ -4140,6 +4140,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    settings.profileViewMode = 2;
     settings.reportComparePrevious = true; settings.reportView = 3;
     settings.deadlineNotificationsWhenClosed = true;
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
@@ -4162,7 +4163,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.profileViewMode != 2 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -4179,6 +4180,15 @@ static bool TestDisplaySettings(QApplication& app) {
         return widget && !widget->accessibleName().trimmed().isEmpty();
     };
     if (!hasAccessibleName("profiles")) return false;
+    restoredNavigation->setCurrentRow(0); QApplication::processEvents();
+    auto* profileFocusMode = restoredWindow.findChild<QPushButton*>("profileViewMode2");
+    auto* profileTable = restoredWindow.findChild<QTableWidget*>("records");
+    auto* profileAchievements = restoredWindow.findChild<QPushButton*>("showAchievements");
+    if (!profileFocusMode || !profileFocusMode->isChecked() || !profileTable || !profileTable->isHidden() || !profileAchievements || !profileAchievements->isHidden()) return false;
+    auto* profileOverviewMode = restoredWindow.findChild<QPushButton*>("profileViewMode0");
+    if (!profileOverviewMode) return false;
+    profileOverviewMode->click(); QApplication::processEvents();
+    if (profileTable->isHidden() || LoadQtDisplaySettings(directory).profileViewMode != 0) return false;
     restoredNavigation->setCurrentRow(2); QApplication::processEvents();
     if (!hasAccessibleName("projectSort")) return false;
     restoredNavigation->setCurrentRow(3); QApplication::processEvents();
@@ -4406,6 +4416,9 @@ int main(int argc, char** argv) {
     workspace.catalog.add_skill(u8"Текстурирование", 1.0, u8"Подготовка материалов");
     workspace.catalog.add_skill(u8"Анимация", 1.0, u8"Движение персонажа");
     profile.add_skill(*workspace.catalog.id_for_name(u8"Моделирование"));
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Текстурирование"));
+    profile.add_skill(*workspace.catalog.id_for_name(u8"Анимация"));
+    profile.add_skill(u8"Концепт-арт-тестовый");
     auto createdProfile = workspace.storage->create_profile(profile);
     if (!createdProfile) return fail("Profile creation failed");
     Profile archivedProfile(u8"Архивный профиль статистики");
@@ -4463,6 +4476,22 @@ int main(int argc, char** argv) {
     auto* primary = window.findChild<QPushButton*>("primary");
     auto* status = window.findChild<QComboBox*>("statusFilter");
     if (!nav || !table || !search || !primary || !status) return fail("Missing UI controls");
+    nav->setCurrentRow(0); QApplication::processEvents();
+    auto* modeOverview = window.findChild<QPushButton*>("profileViewMode0");
+    auto* modeAnalytics = window.findChild<QPushButton*>("profileViewMode1");
+    auto* modeFocus = window.findChild<QPushButton*>("profileViewMode2");
+    auto* showAchievements = window.findChild<QPushButton*>("showAchievements");
+    if (!modeOverview || !modeAnalytics || !modeFocus || !showAchievements || table->rowCount() != 4 ||
+        !modeAnalytics->isChecked() || table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3))
+        return fail("Profile analytics mode did not show full skill list");
+    modeOverview->click(); QApplication::processEvents();
+    if (table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || !table->isRowHidden(3) || showAchievements->isHidden())
+        return fail("Profile overview mode did not keep only leading skills and achievement action");
+    modeFocus->click(); QApplication::processEvents();
+    if (!table->isHidden() || !showAchievements->isHidden()) return fail("Profile focus mode did not hide details");
+    modeAnalytics->click(); QApplication::processEvents();
+    if (table->isHidden() || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3)) return fail("Profile analytics mode did not restore details");
+    nav->setCurrentRow(0);
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
     auto* shortcutHelpAction = window.findChild<QAction*>("shortcutHelpAction");
