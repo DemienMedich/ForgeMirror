@@ -3378,8 +3378,16 @@ static bool TestRulesEditor() {
         auto* base = dialog ? dialog->findChild<QSpinBox*>("rulesLevelBase") : nullptr;
         auto* repeat = dialog ? dialog->findChild<QDoubleSpinBox*>("rulesRepeat") : nullptr;
         auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
-        if (!base || !repeat || !buttons) { if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject(); return; }
+        auto* savePreset = dialog ? dialog->findChild<QPushButton*>("rulesSavePreset") : nullptr;
+        if (!base || !repeat || !buttons || !savePreset) { if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject(); return; }
         base->setValue(2345); repeat->setValue(0.55);
+        QTimer::singleShot(0, [] {
+            auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+            if (!input) return;
+            input->findChild<QLineEdit*>()->setText(QStringLiteral("Migration baseline"));
+            input->accept();
+        });
+        savePreset->click();
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/rules-editor.png"); }
         buttons->button(QDialogButtonBox::Save)->click(); saved = true;
@@ -3389,6 +3397,56 @@ static bool TestRulesEditor() {
     if (loaded.levelBaseXp != 2345 || std::abs(loaded.repeatRewardFactor - 0.55f) > 0.0001f || GetGameplayConfig().levelBaseXp != 2345) return false;
     QFile file(temp.path() + "/meta/gameplay.ini"); if (!file.open(QIODevice::ReadOnly)) return false;
     const auto before = file.readAll(); file.close(); if (!before.startsWith("\xEF\xBB\xBF")) return false;
+    QFile presetFile(temp.path() + "/meta/qt-rules-presets.json");
+    if (!presetFile.open(QIODevice::ReadOnly)) return false;
+    const auto presets = QJsonDocument::fromJson(presetFile.readAll()).array(); presetFile.close();
+    if (presets.size() != 1 || presets.first().toObject().value("name").toString() != QStringLiteral("Migration baseline") ||
+        presets.first().toObject().value("rules").toObject().value("levelBaseXp").toInt() != 2345) return false;
+    QFile historyFile(temp.path() + "/meta/qt-rules-history.json");
+    if (!historyFile.open(QIODevice::ReadOnly)) return false;
+    const auto history = QJsonDocument::fromJson(historyFile.readAll()).array(); historyFile.close();
+    if (history.size() != 1 || !history.first().toObject().value("changes").toString().contains(QString::fromUtf8("База уровня")) ||
+        history.first().toObject().value("before").toObject().value("levelBaseXp").toInt() != 1500 ||
+        history.first().toObject().value("after").toObject().value("levelBaseXp").toInt() != 2345) return false;
+    bool restoredPreset = false, historyViewed = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* combo = dialog ? dialog->findChild<QComboBox*>("rulesPresetCombo") : nullptr;
+        auto* base = dialog ? dialog->findChild<QSpinBox*>("rulesLevelBase") : nullptr;
+        auto* apply = dialog ? dialog->findChild<QPushButton*>("rulesApplyPreset") : nullptr;
+        auto* historyButton = dialog ? dialog->findChild<QPushButton*>("rulesHistory") : nullptr;
+        if (!combo || !base || !apply || !historyButton || combo->findData(QStringLiteral("Migration baseline")) < 0) {
+            if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject(); return;
+        }
+        combo->setCurrentIndex(combo->findData(QStringLiteral("Migration baseline")));
+        base->setValue(1234); apply->click(); restoredPreset = base->value() == 2345;
+        QTimer::singleShot(0, [&] {
+            auto* historyDialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            auto* table = historyDialog ? historyDialog->findChild<QTableWidget*>("rulesHistoryTable") : nullptr;
+            historyViewed = table && table->rowCount() == 1 && table->item(0, 1)->text().contains(QString::fromUtf8("База уровня"));
+            if (historyDialog) historyDialog->accept();
+        });
+        historyButton->click();
+        qobject_cast<QDialog*>(dialog)->reject();
+    });
+    if (ShowRulesEditor(nullptr, workspace) || !restoredPreset || !historyViewed || LoadGameplayConfig(workspace.directory).levelBaseXp != 2345) return false;
+    QTemporaryDir corruptTemp; if (!corruptTemp.isValid()) return false;
+    QtWorkspace corruptWorkspace(std::filesystem::u8path(corruptTemp.path().toUtf8().constData()));
+    const QByteArray corruptPresetBytes("{broken preset data");
+    QFile corruptPreset(corruptTemp.path() + "/meta/qt-rules-presets.json");
+    if (!corruptPreset.open(QIODevice::WriteOnly) || corruptPreset.write(corruptPresetBytes) != corruptPresetBytes.size()) return false;
+    corruptPreset.close();
+    bool corruptRejected = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = QApplication::activeModalWidget();
+        auto* save = dialog ? dialog->findChild<QPushButton*>("rulesSavePreset") : nullptr;
+        auto* apply = dialog ? dialog->findChild<QPushButton*>("rulesApplyPreset") : nullptr;
+        auto* notice = dialog ? dialog->findChild<QLabel*>("rulesNotice") : nullptr;
+        corruptRejected = save && apply && !save->isEnabled() && !apply->isEnabled() && notice && !notice->text().isEmpty();
+        if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject();
+    });
+    if (ShowRulesEditor(nullptr, corruptWorkspace) || !corruptRejected || !corruptPreset.open(QIODevice::ReadOnly) ||
+        corruptPreset.readAll() != corruptPresetBytes) return false;
 #ifdef _WIN32
     const auto path = (workspace.directory / "meta/gameplay.ini").wstring();
     const auto lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
