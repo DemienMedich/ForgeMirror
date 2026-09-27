@@ -273,6 +273,47 @@ bool reportPreviousRange(int range, const QDate& customFrom, const QDate& custom
     }
     return from->isValid() && to->isValid() && *from <= *to;
 }
+std::string reportStageKey(const TaskEntry& task) {
+    if (!task.pipelineStepId.empty()) return task.pipelineStepId;
+    return task.pipelineStep.empty() ? "__no_pipeline" : "legacy:" + task.pipelineStep;
+}
+QString reportStageName(const std::string& id, const TaskEntry& task, const std::vector<PipelineStep>& steps) {
+    if (id == "__no_pipeline") return QString::fromUtf8("Без этапа");
+    const auto found = std::find_if(steps.begin(), steps.end(), [&](const auto& step) {
+        return step.id == id || (id.rfind("legacy:", 0) == 0 &&
+            (step.title == task.pipelineStep || step.stageCode == task.pipelineStep));
+    });
+    if (found != steps.end()) return q(found->stageCode + " · " + found->title);
+    const auto label = task.pipelineStep.empty() ? id : task.pipelineStep;
+    return QString::fromUtf8("Неизвестный этап · %1").arg(q(label));
+}
+struct QtReportStageGroup { std::string id; QString name; TeamValueReport report; };
+std::vector<QtReportStageGroup> buildReportStageGroups(const std::vector<TaskEntry>& tasks,
+    const std::vector<PipelineStep>& steps, const std::vector<ProjectEntry>& projects, std::int64_t now) {
+    std::unordered_map<std::string, std::vector<TaskEntry>> grouped;
+    std::unordered_map<std::string, QString> names;
+    for (const auto& task : tasks) {
+        const auto id = reportStageKey(task);
+        grouped[id].push_back(task);
+        names.emplace(id, reportStageName(id, task, steps));
+    }
+    std::vector<QtReportStageGroup> result;
+    result.reserve(grouped.size());
+    for (auto& [id, entries] : grouped)
+        result.push_back({id, names.at(id), BuildTeamValueReport(entries, projects, now)});
+    auto order = [&](const std::string& id) {
+        const auto found = std::find_if(steps.begin(), steps.end(), [&](const auto& step) {
+            return step.id == id || (id.rfind("legacy:", 0) == 0 && id.substr(7) == step.title);
+        });
+        return found == steps.end() ? std::ptrdiff_t(steps.size()) : std::distance(steps.begin(), found);
+    };
+    std::sort(result.begin(), result.end(), [&](const auto& a, const auto& b) {
+        const auto ai = order(a.id), bi = order(b.id);
+        if (ai != bi) return ai < bi;
+        return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+    });
+    return result;
+}
 }
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
@@ -609,7 +650,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportView_->setObjectName("reportView");
     labelForAccessibility(reportView_, QString::fromUtf8("Группировка отчёта"));
     reportView_->setMaximumWidth(145);
-    reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
+    reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам"), QString::fromUtf8("По этапам")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
     reportDateRange_ = new QComboBox;
@@ -2052,7 +2093,7 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · задач: %2 · проектов в каталоге: %3 · XP: %4 · состояние на сейчас%5%6")
                 .arg(periodLabel).arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
-        } else {
+        } else if (reportView_->currentIndex() == 1) {
             auto displayed = report.assignees;
             if (comparePrevious) for (const auto& old : previousReport.assignees) {
                 const auto found = std::find_if(displayed.begin(), displayed.end(), [&](const auto& item) { return item.profileId == old.profileId; });
@@ -2091,6 +2132,45 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · сотрудников в задачах: %2 · без исполнителя: %3 · XP: %4 · состояние на сейчас%5%6")
                 .arg(periodLabel).arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
+        } else {
+            const auto now = QDateTime::currentSecsSinceEpoch();
+            auto displayed = buildReportStageGroups(reportTasks, data.pipelineSteps, data.projects, now);
+            const auto previous = comparePrevious
+                ? buildReportStageGroups(previousTasks, data.pipelineSteps, data.projects, now) : std::vector<QtReportStageGroup>{};
+            if (comparePrevious) for (const auto& old : previous) {
+                if (std::none_of(displayed.begin(), displayed.end(), [&](const auto& item) { return item.id == old.id; })) {
+                    auto empty = old;
+                    empty.report = TeamValueReport{};
+                    displayed.push_back(std::move(empty));
+                }
+            }
+            if (comparePrevious) std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+            });
+            QStringList columns{QString::fromUtf8("Этап"), QString::fromUtf8("Задач"), QString::fromUtf8("Активно"),
+                QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"),
+                QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")};
+            if (comparePrevious) columns << QString::fromUtf8("Задач · пред.") << QString::fromUtf8("Активно · пред.")
+                << QString::fromUtf8("Выполнено · пред.") << QString::fromUtf8("Просрочено · пред.")
+                << QString::fromUtf8("Ждут XP · пред.") << QString::fromUtf8("Глобальный XP · пред.")
+                << QString::fromUtf8("XP навыков · пред.");
+            headers(columns);
+            for (const auto& item : displayed) {
+                const auto& m = item.report;
+                QStringList values{item.name, QString::number(m.totalTasks), QString::number(m.activeTasks),
+                    QString::number(m.doneTasks), QString::number(m.overdueTasks), QString::number(m.xpPendingTasks),
+                    QString::number(m.totalGlobalXp), QString::number(m.totalSkillXp)};
+                if (comparePrevious) {
+                    const auto old = std::find_if(previous.begin(), previous.end(), [&](const auto& candidate) { return candidate.id == item.id; });
+                    const auto& p = old == previous.end() ? TeamValueReport{} : old->report;
+                    values << QString::number(p.totalTasks) << QString::number(p.activeTasks) << QString::number(p.doneTasks)
+                        << QString::number(p.overdueTasks) << QString::number(p.xpPendingTasks)
+                        << QString::number(p.totalGlobalXp) << QString::number(p.totalSkillXp);
+                }
+                row(item.id, values);
+            }
+            summary_->setText(QString::fromUtf8("%1 · этапов в задачах: %2 · задач: %3 · XP: %4 · состояние на сейчас%5%6")
+                .arg(periodLabel).arg(displayed.size()).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
         }
     } else if (page == Audit) {
         if (!admin_ && auditSourceFilter_->currentIndex() != 1) {
@@ -2791,6 +2871,27 @@ void QtWindow::exportReport() {
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
     auto path = dialog.selectedFiles().front();
     if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
+    if (reportView_->currentIndex() == 2) {
+        QStringList columns;
+        for (int column = 0; column < table_->columnCount(); ++column) {
+            const auto* item = table_->horizontalHeaderItem(column);
+            columns << (item ? item->text() : QString::fromUtf8("Колонка %1").arg(column + 1));
+        }
+        QVector<QStringList> rows;
+        rows.reserve(table_->rowCount());
+        for (int rowIndex = 0; rowIndex < table_->rowCount(); ++rowIndex) {
+            QStringList values;
+            for (int column = 0; column < table_->columnCount(); ++column) {
+                const auto* item = table_->item(rowIndex, column);
+                values << (item ? item->text() : QString());
+            }
+            rows.push_back(std::move(values));
+        }
+        QString error;
+        if (!ExportQtTableCsv(path, columns, rows, &error)) { message(error.toUtf8().toStdString()); return; }
+        statusBar()->showMessage(QString::fromUtf8("Отчёт по этапам сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);
+        return;
+    }
     const auto tasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
         reportFrom_->date(), reportTo_->date());
     const auto report = BuildTeamValueReport(tasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
@@ -3045,6 +3146,7 @@ void QtWindow::details() {
         const auto targetId = selectedId();
         const auto targetKey = u(targetId);
         const bool employeeView = reportView_->currentIndex() == 1;
+        const bool stageView = reportView_->currentIndex() == 2;
         const auto targetName = table_->item(table_->currentRow(), 0)->text();
         const auto currentTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
             reportFrom_->date(), reportTo_->date());
@@ -3057,7 +3159,9 @@ void QtWindow::details() {
         for (const auto& task : currentTasks) currentTaskIds.insert(task.id);
         auto reportTasks = currentTasks;
         reportTasks.insert(reportTasks.end(), previousTasks.begin(), previousTasks.end());
-        QString html = field(employeeView ? QString::fromUtf8("Сотрудник") : QString::fromUtf8("Проект"), u(targetName));
+        const QString groupLabel = employeeView ? QString::fromUtf8("Сотрудник")
+            : stageView ? QString::fromUtf8("Этап пайплайна") : QString::fromUtf8("Проект");
+        QString html = field(groupLabel, u(targetName));
         std::vector<TaskEntry> matchedTasks;
         std::vector<TaskEntry> matchedCurrent, matchedPrevious;
         for (const auto& task : reportTasks) {
@@ -3067,6 +3171,8 @@ void QtWindow::details() {
                     std::any_of(task.participants.begin(), task.participants.end(), [&](const auto& participant) {
                         return participant.profileId == targetKey;
                     });
+            } else if (stageView) {
+                belongs = reportStageKey(task) == targetKey;
             } else {
                 const std::string projectKey = !task.projectId.empty() ? task.projectId :
                     (task.project.empty() ? "__no_project" : "name:" + task.project);

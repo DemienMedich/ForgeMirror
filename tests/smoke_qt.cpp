@@ -1922,15 +1922,21 @@ static bool TestReportPeriodComparison() {
     ProjectEntry currentProject; currentProject.id = "current-project"; currentProject.name = "Current project";
     ProjectEntry previousProject; previousProject.id = "previous-project"; previousProject.name = "Previous project";
     workspace.data.projects = {currentProject, previousProject};
+    PipelineStep currentStage; currentStage.id = "current-stage"; currentStage.stageCode = "A"; currentStage.title = "Current stage";
+    PipelineStep previousStage; previousStage.id = "previous-stage"; previousStage.stageCode = "B"; previousStage.title = "Previous stage";
+    workspace.data.pipelineSteps = {currentStage, previousStage};
     TaskEntry current; current.id = "comparison-current"; current.title = "Current task";
     current.createdAt = QDateTime::currentSecsSinceEpoch(); current.assignees = {profile->id};
-    current.projectId = currentProject.id; current.project = currentProject.name;
+    current.projectId = currentProject.id; current.project = currentProject.name; current.pipelineStepId = currentStage.id;
     TaskEntry previous; previous.id = "comparison-previous"; previous.title = "Previous task"; previous.status = 2;
     previous.createdAt = QDateTime(QDate::currentDate().addDays(-40), QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch();
     previous.assignees = {profile->id}; previous.projectId = previousProject.id; previous.project = previousProject.name;
+    previous.pipelineStepId = previousStage.id; previous.pipelineStep = previousStage.title;
     previous.participants.push_back({profile->id, 100, 45, 15, "comparison"});
     workspace.data.tasks = {current, previous};
-    if (!AppSaveProjects(workspace.directory, workspace.data.projects) || !AppSaveTasks(workspace.directory, workspace.data.tasks)) return fail("save fixtures");
+    if (!AppSaveProjects(workspace.directory, workspace.data.projects) ||
+        !AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps) ||
+        !AppSaveTasks(workspace.directory, workspace.data.tasks)) return fail("save fixtures");
     QtWindow window(workspace);
     auto* nav = window.findChild<QListWidget*>("navigation");
     auto* table = window.findChild<QTableWidget*>("records");
@@ -1965,9 +1971,35 @@ static bool TestReportPeriodComparison() {
     view->setCurrentIndex(1);
     if (table->rowCount() != 1 || table->columnCount() != 14 ||
         table->item(0, 9)->text() != "1" || table->item(0, 12)->text() != "45" || table->item(0, 13)->text() != "15") return fail("employee previous metrics");
+    view->setCurrentIndex(2);
+    if (view->count() != 3 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
+    int previousStageRow = -1;
+    for (int row = 0; row < table->rowCount(); ++row)
+        if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("previous-stage")) previousStageRow = row;
+    if (previousStageRow < 0 || table->item(previousStageRow, 1)->text() != "0" ||
+        table->item(previousStageRow, 8)->text() != "1") return fail("previous-only stage metrics");
+    table->selectRow(previousStageRow);
+    if (!details->toPlainText().contains("Previous task") ||
+        !details->toPlainText().contains(QString::fromUtf8("Этап пайплайна"))) return fail("stage drill-down");
+    auto* exportButton = window.findChild<QPushButton*>("exportReport");
+    const auto stageCsvPath = temp.path() + "/stage-report.csv";
+    if (!exportButton || !exportButton->isEnabled()) return fail("stage report export action");
+    QTimer::singleShot(0, [stageCsvPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(stageCsvPath); static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportButton->click();
+    QFile stageCsv(stageCsvPath);
+    if (!stageCsv.open(QIODevice::ReadOnly)) return fail("stage report CSV missing");
+    const auto stageCsvBytes = stageCsv.readAll();
+    if (!stageCsvBytes.startsWith("\xEF\xBB\xBF") || !stageCsvBytes.contains(QString::fromUtf8("Этап").toUtf8()) ||
+        !stageCsvBytes.contains(QString::fromUtf8("Previous stage").toUtf8()) ||
+        !stageCsvBytes.contains(QString::fromUtf8("Задач · пред.").toUtf8())) return fail("stage report CSV content");
     range->setCurrentIndex(0);
     if (compare->isEnabled() || table->columnCount() != 8 || !compare->isChecked()) return fail("all-time guard");
-    return LoadQtDisplaySettings(workspace.directory).reportComparePrevious || fail("setting persistence");
+    const auto settings = LoadQtDisplaySettings(workspace.directory);
+    return (settings.reportComparePrevious && settings.reportView == 2) || fail("setting persistence");
 }
 
 static bool TestAuditExport() {
@@ -3779,7 +3811,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
-    settings.reportComparePrevious = true;
+    settings.reportComparePrevious = true; settings.reportView = 2;
     settings.deadlineNotificationsWhenClosed = true;
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
     settings.deadlineNotificationsWhenClosed = false;
@@ -3801,7 +3833,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 2 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -4280,7 +4312,7 @@ int main(int argc, char** argv) {
     if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
         return fail("Report export UI failed");
     auto* reportView = window.findChild<QComboBox*>("reportView");
-    if (!reportView || reportView->count() != 2) return fail("Report view selector unavailable");
+    if (!reportView || reportView->count() != 3) return fail("Report view selector unavailable");
     reportView->setCurrentIndex(1);
     auto* reportRange = window.findChild<QComboBox*>("reportDateRange");
     auto* reportCompare = window.findChild<QCheckBox*>("reportComparePrevious");

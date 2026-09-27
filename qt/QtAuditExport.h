@@ -6,3 +6,5 @@
 
 bool ExportQtAuditCsv(const QString& path, const QStringList& headers,
                       const QVector<QStringList>& rows, QString* error = nullptr);
+bool ExportQtTableCsv(const QString& path, const QStringList& headers,
+                      const QVector<QStringList>& rows, QString* error = nullptr);

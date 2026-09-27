@@ -22,7 +22,7 @@ QByteArray csvRecord(const QStringList& values) {
 }
 }
 
-bool ExportQtAuditCsv(const QString& path, const QStringList& headers,
+bool ExportQtTableCsv(const QString& path, const QStringList& headers,
                       const QVector<QStringList>& rows, QString* error) {
     if (error) error->clear();
     if (path.trimmed().isEmpty() || QFileInfo(path).isDir() || headers.isEmpty()) {
@@ -36,19 +36,24 @@ bool ExportQtAuditCsv(const QString& path, const QStringList& headers,
         return file.write(bytes) == bytes.size();
     };
     if (!file.open(QIODevice::WriteOnly) || !write(QByteArray("\xEF\xBB\xBF", 3)) || !write(csvRecord(headers))) {
-        if (error) *error = QString::fromUtf8("Не удалось начать атомарный экспорт аудита.");
+        if (error) *error = QString::fromUtf8("Не удалось начать атомарный экспорт CSV.");
         return false;
     }
     for (const auto& row : rows) {
         if (row.size() != headers.size() || !write(csvRecord(row))) {
             file.cancelWriting();
-            if (error) *error = QString::fromUtf8("Не удалось сформировать CSV аудита.");
+            if (error) *error = QString::fromUtf8("Не удалось сформировать CSV таблицы.");
             return false;
         }
     }
     if (!file.commit()) {
-        if (error) *error = QString::fromUtf8("Не удалось атомарно сохранить CSV аудита.");
+        if (error) *error = QString::fromUtf8("Не удалось атомарно сохранить CSV.");
         return false;
     }
     return true;
+}
+
+bool ExportQtAuditCsv(const QString& path, const QStringList& headers,
+                      const QVector<QStringList>& rows, QString* error) {
+    return ExportQtTableCsv(path, headers, rows, error);
 }
