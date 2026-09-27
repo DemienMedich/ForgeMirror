@@ -2161,6 +2161,108 @@ static bool TestProfessionDeletionRecovery() {
     return cleared && cleared->profession_id().empty();
 }
 
+static bool TestProfessionMergeRecovery() {
+    auto fail = [](const char* text) { std::cerr << "professionMerge: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.data.professions = {{"source", "Source", "Old"}, {"target", "Target", "Keep"}};
+    if (!AppSaveProfessionsData(workspace.directory, workspace.data.professions)) return fail("profession fixture");
+    if (!workspace.catalog.add_skill("Source skill", 1.0, "Source", "", {"source"}) ||
+        !workspace.catalog.add_skill("Target skill", 1.0, "Target", "", {"target"}) ||
+        !workspace.catalog.add_skill("Shared skill", 1.0, "Shared", "", {"source", "target"}))
+        return fail("skill fixtures");
+    auto active = workspace.storage->create_profile(Profile("Active"));
+    if (!active || !workspace.storage->set_active_profile(active->id)) return fail("active profile fixture");
+    auto profile = workspace.storage->load_profile();
+    if (!profile) return fail("active profile load");
+    profile->set_profession_id("source");
+    if (!workspace.storage->save_profile(*profile)) return fail("active profession binding");
+    auto archived = workspace.storage->create_profile(Profile("Archived"));
+    if (!archived || !workspace.storage->set_active_profile(archived->id)) return fail("archived profile fixture");
+    profile = workspace.storage->load_profile();
+    if (!profile) return fail("archived profile load");
+    profile->set_profession_id("source");
+    if (!workspace.storage->save_profile(*profile) || !workspace.storage->set_archived(archived->id, true) ||
+        !workspace.storage->set_active_profile(active->id)) return fail("archive profile binding");
+    workspace.reload();
+
+    bool confirmed = false;
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    QObject::connect(&watchdog, &QTimer::timeout, [&] {
+        if (auto* modal = QApplication::activeModalWidget()) {
+            if (auto* box = qobject_cast<QMessageBox*>(modal)) box->button(QMessageBox::Cancel)->click();
+            else if (auto* dialog = qobject_cast<QDialog*>(modal)) dialog->reject();
+        }
+    });
+    watchdog.start(8000);
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* name = dialog ? dialog->findChild<QLineEdit*>("professionName") : nullptr;
+        auto* description = dialog ? dialog->findChild<QLineEdit*>("professionDescription") : nullptr;
+        auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
+        if (!dialog || !name || !description || !buttons) {
+            std::cerr << "professionMerge editor controls missing modal=" << (QApplication::activeModalWidget() ? QApplication::activeModalWidget()->objectName().toStdString() : "none") << '\n';
+            return;
+        }
+        name->setText(QString::fromUtf8("Target"));
+        description->setText(QString::fromUtf8("Merged"));
+        QTimer::singleShot(50, [&] {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            if (!box) for (auto* widget : QApplication::topLevelWidgets())
+                if (widget->isVisible() && (box = qobject_cast<QMessageBox*>(widget))) break;
+            confirmed = box && box->objectName() == "professionMergeConfirm" &&
+                box->defaultButton() == box->button(QMessageBox::Cancel) && box->text().contains(QString::fromUtf8("архивных"));
+            if (box) box->button(QMessageBox::Yes)->click();
+            else {
+                auto* owner = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+                auto* notice = owner ? owner->findChild<QLabel*>("professionNotice") : nullptr;
+                std::cerr << "professionMerge confirmation missing modal=" << (owner ? owner->objectName().toStdString() : "none")
+                          << " notice=" << (notice ? notice->text().toStdString() : "none") << '\n';
+            }
+        });
+        buttons->button(QDialogButtonBox::Save)->click();
+    });
+    const bool accepted = ShowProfessionEditor(nullptr, workspace, "source", active->id);
+    watchdog.stop();
+    if (!accepted || !confirmed) {
+        std::cerr << "accepted=" << accepted << " confirmed=" << confirmed << " professions=" << workspace.data.professions.size() << '\n';
+        return fail("explicit merge confirmation");
+    }
+    if (workspace.data.professions.size() != 1 || workspace.data.professions.front().id != "target" ||
+        workspace.data.professions.front().description != "Merged") return fail("catalog merge");
+    if (workspace.catalog.professions("Shared skill") != std::vector<std::string>{"target"} ||
+        workspace.catalog.professions("Source skill") != std::vector<std::string>{"target"} ||
+        workspace.catalog.professions("Target skill") != std::vector<std::string>{"target"}) return fail("skill binding merge");
+    if (!workspace.storage->set_active_profile(active->id)) return fail("active profile select");
+    profile = workspace.storage->load_profile();
+    if (!profile || profile->profession_id() != "target") return fail("active profile reassignment");
+    const auto info = workspace.storage->list_profiles();
+    const auto archivedInfo = std::find_if(info.begin(), info.end(), [&](const auto& item) { return item.id == archived->id; });
+    if (archivedInfo == info.end() || !archivedInfo->archived || !workspace.storage->set_archived(archived->id, false) ||
+        !workspace.storage->set_active_profile(archived->id)) return fail("archived state");
+    profile = workspace.storage->load_profile();
+    if (!profile || profile->profession_id() != "target" || !workspace.storage->set_archived(archived->id, true) ||
+        !workspace.storage->set_active_profile(active->id)) return fail("archived profile reassignment");
+
+    auto readBytes = [](const QString& path) { QFile f(path); return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray(); };
+    const auto originalProfessions = readBytes(temp.path() + "/meta/professions.txt");
+    const auto originalSkills = readBytes(temp.path() + "/skills.txt");
+    const auto originalArchive = readBytes(temp.path() + "/archive/" + QString::fromStdString(archived->id) + ".ini");
+    if (originalProfessions.isEmpty() || originalSkills.isEmpty() || originalArchive.isEmpty()) return fail("original recovery bytes");
+    PrepareProfessionDeletionRecovery(workspace.directory, {active->id, "archive/" + archived->id});
+    QFile pf(temp.path() + "/meta/professions.txt"); if (!pf.open(QIODevice::WriteOnly | QIODevice::Truncate) || pf.write("broken") < 0) return fail("journal mutation professions");
+    QFile sf(temp.path() + "/skills.txt"); if (!sf.open(QIODevice::WriteOnly | QIODevice::Truncate) || sf.write("broken") < 0) return fail("journal mutation skills");
+    QFile af(temp.path() + "/archive/" + QString::fromStdString(archived->id) + ".ini");
+    if (!af.open(QIODevice::WriteOnly | QIODevice::Truncate) || af.write("broken") < 0) return fail("journal mutation archive");
+    pf.close(); sf.close(); af.close();
+    if (!RecoverTaskCompletion(workspace.directory)) return fail("journal recovery");
+    QFile restoredProfessions(temp.path() + "/meta/professions.txt"), restoredSkills(temp.path() + "/skills.txt"), restoredArchive(temp.path() + "/archive/" + QString::fromStdString(archived->id) + ".ini");
+    return restoredProfessions.open(QIODevice::ReadOnly) && restoredProfessions.readAll() == originalProfessions &&
+        restoredSkills.open(QIODevice::ReadOnly) && restoredSkills.readAll() == originalSkills &&
+        restoredArchive.open(QIODevice::ReadOnly) && restoredArchive.readAll() == originalArchive;
+}
+
 static bool TestSkillDeletionRecovery() {
     auto fail = [](const char* text) { std::cerr << "skillDelete: " << text << '\n'; return false; };
     QTemporaryDir temp;
@@ -3828,6 +3930,7 @@ int main(int argc, char** argv) {
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }
     if (!TestProfessionDeletionRecovery()) { std::cerr << "Profession deletion recovery failed\n"; return 1; }
+    if (!TestProfessionMergeRecovery()) { std::cerr << "Profession merge recovery failed\n"; return 1; }
     if (!TestSkillDeletionRecovery()) { std::cerr << "Skill deletion recovery failed\n"; return 1; }
     if (!TestSkillMergeRecovery()) { std::cerr << "Skill merge recovery failed\n"; return 1; }
     if (!TestProfileDeletionRecovery()) { std::cerr << "Profile deletion recovery failed\n"; return 1; }

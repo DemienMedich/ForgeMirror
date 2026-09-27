@@ -3042,7 +3042,8 @@ void QtWindow::createEntry(bool edit) {
         return;
     }
     if (navigation_->currentRow() == Professions) {
-        if (ShowProfessionEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
+        if (ShowProfessionEditor(this, workspace_, edit ? u(selectedId()) : std::string(),
+                                 u(profiles_->currentData().toString()))) reload();
         return;
     }
     if (navigation_->currentRow() == Pipeline) {
