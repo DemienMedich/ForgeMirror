@@ -17,6 +17,7 @@
 #include "QtCloudPull.h"
 #include "QtCloudPushPreview.h"
 #include "QtCloudAutoSync.h"
+#include "QtCloudRelease.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtDisplaySettings.h"
@@ -745,6 +746,68 @@ static bool TestCloudAutoSync() {
         read(cloud / "meta/tasks.json") == "[{\"id\":\"admin-local\"}]";
     if (!success) std::cerr << "auto push: " << pushed.message << " ok=" << pushed.ok << " push=" << pushed.pushAttempted << " changed=" << pushed.changed << " remote=" << read(cloud / "meta/tasks.json").toStdString() << '\n';
     return success;
+}
+
+static bool TestCloudReleaseUpdate() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
+    const auto cloud = std::filesystem::u8path((temp.path() + "/cloud").toUtf8().toStdString());
+    std::filesystem::create_directories(workspace / "meta");
+    std::filesystem::create_directories(cloud / "releases");
+    auto write = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QDir().mkpath(QFileInfo(QString::fromUtf8(path.u8string())).absolutePath());
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    auto read = [](const std::filesystem::path& path) {
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+    };
+    const QByteArray installerBytes("release fixture\0payload", 24);
+    CloudSyncConfig config; config.enabled = true; config.root = cloud;
+    CloudManifest manifest; manifest.appVersion = "0.6.12"; manifest.releaseFile = "ForgeMirrorSetup_0.6.12.exe";
+    if (!write(cloud / "releases" / manifest.releaseFile, installerBytes)) return false;
+    const auto target = QtCloudReleaseTargetPath(workspace, manifest);
+    if (!target || *target != workspace / "meta/updates" / manifest.releaseFile) return false;
+    const auto downloaded = DownloadQtCloudRelease(config, workspace, manifest);
+    const auto expectedHash = QCryptographicHash::hash(installerBytes, QCryptographicHash::Sha256).toHex().toStdString();
+    if (!downloaded.ok || !downloaded.changed || downloaded.path != *target || downloaded.sha256 != expectedHash ||
+        read(*target) != installerBytes) return false;
+    if (!write(*target, "previous file")) return false;
+    const auto replaced = DownloadQtCloudRelease(config, workspace, manifest);
+    if (!replaced.ok || read(*target) != installerBytes) return false;
+    for (const auto& invalid : {"../escape.exe", "folder/update.exe", "NUL.exe", "bad.zip"}) {
+        auto invalidManifest = manifest; invalidManifest.releaseFile = invalid;
+        if (QtCloudReleaseTargetPath(workspace, invalidManifest) ||
+            DownloadQtCloudRelease(config, workspace, invalidManifest).ok) return false;
+    }
+    auto overlapping = config; overlapping.root = workspace;
+    if (DownloadQtCloudRelease(overlapping, workspace, manifest).ok ||
+        !write(workspace / "meta/cloud.ini", "leave me unchanged")) return false;
+
+    if (!SaveCloudSyncConfig(workspace, config) || !SaveCloudManifest(config, workspace, manifest)) return false;
+    QtWorkspace uiWorkspace(workspace);
+    QtWindow window(uiWorkspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* updateButton = window.findChild<QToolButton*>("cloudReleaseActions");
+    auto* downloadAction = window.findChild<QAction*>("cloudReleaseDownload");
+    auto* launchAction = window.findChild<QAction*>("cloudReleaseLaunch");
+    if (!navigation || !updateButton || !downloadAction || !launchAction) return false;
+    navigation->setCurrentRow(13); QApplication::processEvents();
+    if (!updateButton->isVisible() || !downloadAction->isEnabled() || !launchAction->isEnabled()) return false;
+    if (!write(*target, "previous file")) return false;
+    downloadAction->trigger();
+    if (read(*target) != installerBytes || !window.statusBar()->currentMessage().contains(QString::fromUtf8("SHA-256"))) return false;
+    bool canceled = false;
+    QTimer::singleShot(0, [&] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            canceled = box->defaultButton() == box->button(QMessageBox::Cancel);
+            box->button(QMessageBox::Cancel)->click();
+        }
+    });
+    launchAction->trigger();
+    window.close();
+    return canceled;
 }
 
 static bool TestCloudPushPreview() {
@@ -3499,8 +3562,8 @@ static bool TestDeadlineReminders() {
         }
     });
     about->trigger();
-    if (!aboutText.contains(QString::fromUtf8("полный cloud push")) ||
-        !aboutText.contains(QString::fromUtf8("настраиваемая автосинхронизация"))) return false;
+    if (!aboutText.contains(QString::fromUtf8("облачные операции")) ||
+        !aboutText.contains(QString::fromUtf8("загрузка установщика новой версии"))) return false;
     return true;
 }
 
@@ -4499,6 +4562,7 @@ int main(int argc, char** argv) {
     if (!TestCloudSettings()) { std::cerr << "Cloud settings failed\n"; return 1; }
     if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
     if (!TestCloudAutoSync()) { std::cerr << "Cloud automatic sync failed\n"; return 1; }
+    if (!TestCloudReleaseUpdate()) { std::cerr << "Cloud release update failed\n"; return 1; }
     if (!TestCloudPushPreview()) { std::cerr << "Cloud push preview failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }

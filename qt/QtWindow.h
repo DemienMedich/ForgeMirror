@@ -36,6 +36,7 @@ class QAction;
 class QSlider;
 class QCheckBox;
 class QToolButton;
+class QAction;
 class QSpinBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -82,6 +83,8 @@ private:
     void updateBanner();
     void pullCloud();
     void runAutomaticCloudSync();
+    void downloadCloudRelease();
+    void launchCloudRelease();
     void previewCloudPush();
     void resolveCloudConflict();
     void resolveStorageConflict();
@@ -227,6 +230,9 @@ private:
     QPushButton* cloudPushPreview_;
     QPushButton* cloudResolve_;
     QPushButton* storageResolve_;
+    QToolButton* cloudReleaseButton_;
+    QAction* cloudReleaseDownload_;
+    QAction* cloudReleaseLaunch_;
     int bannerIndex_ = 0;
     std::vector<AppLogEntry> appLogs_;
     bool appLogPersistenceWarning_ = false;

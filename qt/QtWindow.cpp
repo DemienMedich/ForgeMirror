@@ -10,6 +10,7 @@
 #include "QtCloudPull.h"
 #include "QtCloudPushPreview.h"
 #include "QtCloudAutoSync.h"
+#include "QtCloudRelease.h"
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtModelViewer.h"
@@ -449,7 +450,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
         QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
             "Перенос ещё не завершён; это не замена стабильной версии.\n"
-            "Qt работает с отдельной копией данных. Доступны подтверждаемый ручной pull, полный cloud push и настраиваемая автосинхронизация с резервным копированием и восстановлением.\n"
+            "Qt работает с отдельной копией данных. Доступны подтверждаемые облачные операции, настраиваемая автосинхронизация и загрузка установщика новой версии.\n"
             "Список перенесённых функций и ограничений находится в qt/README.md."));
     });
     menuButton->setMenu(menu);
@@ -1208,6 +1209,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     storageResolve_->setObjectName("storageResolve"); storageResolve_->setStyleSheet("min-height: 40px; max-height: 40px;");
     storageResolve_->setToolTip(QString::fromUtf8("Сравнить баланс, журнал и ревизию кошелька и выбрать целую версию"));
     bottom->addWidget(storageResolve_);
+    cloudReleaseButton_ = new QToolButton;
+    cloudReleaseButton_->setObjectName("cloudReleaseActions");
+    cloudReleaseButton_->setText(QString::fromUtf8("Обновление клиента"));
+    cloudReleaseButton_->setPopupMode(QToolButton::InstantPopup);
+    auto* cloudReleaseMenu = new QMenu(cloudReleaseButton_);
+    cloudReleaseDownload_ = cloudReleaseMenu->addAction(QString::fromUtf8("Скачать установщик"));
+    cloudReleaseDownload_->setObjectName("cloudReleaseDownload");
+    cloudReleaseLaunch_ = cloudReleaseMenu->addAction(QString::fromUtf8("Запустить установщик"));
+    cloudReleaseLaunch_->setObjectName("cloudReleaseLaunch");
+    cloudReleaseButton_->setMenu(cloudReleaseMenu);
+    cloudReleaseButton_->setToolTip(QString::fromUtf8("Загрузить или запустить установщик более новой версии из manifest"));
+    bottom->addWidget(cloudReleaseButton_);
     bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
@@ -1441,6 +1454,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(cloudPushPreview_, &QPushButton::clicked, this, [this] { previewCloudPush(); });
     connect(cloudResolve_, &QPushButton::clicked, this, [this] { resolveCloudConflict(); });
     connect(storageResolve_, &QPushButton::clicked, this, [this] { resolveStorageConflict(); });
+    connect(cloudReleaseDownload_, &QAction::triggered, this, [this] { downloadCloudRelease(); });
+    connect(cloudReleaseLaunch_, &QAction::triggered, this, [this] { launchCloudRelease(); });
     connect(achievements_, &QPushButton::clicked, this, [this] {
         ShowAchievements(this, workspace_, u(profiles_->currentData().toString()), admin_);
         render();
@@ -2113,6 +2128,7 @@ void QtWindow::render() {
     cloudPushPreview_->setVisible(page == Cloud);
     cloudResolve_->setVisible(page == Cloud);
     storageResolve_->setVisible(page == Cloud);
+    cloudReleaseButton_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
     profileViewModes_->setVisible(page == ProfilePage);
     if (!workspace_.modules.tasks && displaySettings_.profileViewMode == 3) displaySettings_.profileViewMode = 1;
@@ -3057,9 +3073,11 @@ void QtWindow::render() {
         row("enabled", {QString::fromUtf8("Конфигурация"), QString::fromUtf8(config.enabled ? "Включена" : "Выключена")});
         row("root", {QString::fromUtf8("Папка"), q(root.u8string())});
         row("ready", {QString::fromUtf8("Доступность папки"), QString::fromUtf8(rootExists ? "Готова" : "Не найдена")});
-        row("auto", {QString::fromUtf8("Автоматизация стабильной версии"), QString::fromUtf8("pull: %1 · push: %2 · каждые %3 мин")
+        row("auto", {QString::fromUtf8("Автосинхронизация"), QString::fromUtf8("pull: %1 · admin push: %2 · %3 · каждые %4 мин")
             .arg(config.autoPull ? QString::fromUtf8("да") : QString::fromUtf8("нет"))
-            .arg(config.autoPush ? QString::fromUtf8("да") : QString::fromUtf8("нет")).arg(config.autoSyncMinutes)});
+            .arg(config.autoPush ? QString::fromUtf8("да") : QString::fromUtf8("нет"))
+            .arg(config.enabled && config.autoSyncEnabled ? QString::fromUtf8("включена") : QString::fromUtf8("выключена"))
+            .arg(std::clamp(config.autoSyncMinutes, 1, 120))});
         int driftCount = 0;
         if (config.enabled && rootExists) {
             const auto drift = InspectCloudWorkspaceDrift(config, workspace_.directory, 0); driftCount = drift.issueCount;
@@ -3067,12 +3085,25 @@ void QtWindow::render() {
         }
         const auto manifest = LoadCloudManifest(config, workspace_.directory);
         row("manifest", {QString::fromUtf8("Версия в manifest"), manifest.appVersion.empty() ? QString::fromUtf8("—") : q(manifest.appVersion)});
+        row("clientVersion", {QString::fromUtf8("Версия Qt"), QString::fromUtf8(APP_VERSION)});
+        const bool updateAvailable = IsUpdateAvailable(manifest, APP_VERSION);
+        row("update", {QString::fromUtf8("Обновление клиента"), QString::fromUtf8(updateAvailable ? "Доступно" : "Нет новой версии")});
+        row("release", {QString::fromUtf8("Установщик в manifest"), manifest.releaseFile.empty() ? QString::fromUtf8("—") : q(manifest.releaseFile)});
+        if (!manifest.notes.empty()) row("releaseNotes", {QString::fromUtf8("Примечание к выпуску"), q(manifest.notes)});
+        const auto releaseTarget = QtCloudReleaseTargetPath(workspace_.directory, manifest);
+        std::error_code releaseError;
+        const bool installerReady = releaseTarget && std::filesystem::is_regular_file(*releaseTarget, releaseError) && !releaseError &&
+            !QFileInfo(QString::fromUtf8(releaseTarget->u8string())).isSymLink();
+        cloudReleaseDownload_->setEnabled(config.enabled && rootExists && updateAvailable && bool(releaseTarget));
+        cloudReleaseLaunch_->setEnabled(updateAvailable && installerReady);
         cloudPull_->setEnabled(config.enabled && rootExists);
         cloudPushPreview_->setEnabled(admin_ && config.enabled && rootExists);
         const bool hasBackups = !ListCloudWorkspaceBackups(workspace_.directory).empty();
         cloudResolve_->setEnabled((config.enabled && rootExists && driftCount > 0) || hasBackups);
         storageResolve_->setEnabled(admin_ && config.enabled && rootExists && HasQtStorageConflict(workspace_.directory));
-        summary_->setText(QString::fromUtf8("Ручные pull и полный push требуют подтверждения и снимка облачных данных · автоматическая синхронизация заблокирована"));
+        summary_->setText(QString::fromUtf8("Ручные pull и полный push требуют подтверждения и снимка облачных данных · автосинхронизация: %1 · интервал: %2 мин")
+            .arg(config.enabled && config.autoSyncEnabled ? QString::fromUtf8("включена") : QString::fromUtf8("выключена"))
+            .arg(std::clamp(config.autoSyncMinutes, 1, 120)));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->horizontalHeader()->setStretchLastSection(false);
@@ -4717,6 +4748,54 @@ void QtWindow::runAutomaticCloudSync() {
         appendLog(AppLogLevel::Info, "CoreCloudTransaction", "Automatic cloud sync committed");
         statusBar()->showMessage(q(result.message), 10000);
     }
+}
+
+void QtWindow::downloadCloudRelease() {
+    const auto config = LoadCloudSyncConfig(workspace_.directory);
+    const auto manifest = LoadCloudManifest(config, workspace_.directory);
+    if (!IsUpdateAvailable(manifest, APP_VERSION)) {
+        message(u8"В облачном manifest нет более новой версии.");
+        return;
+    }
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto result = DownloadQtCloudRelease(config, workspace_.directory, manifest);
+    QApplication::restoreOverrideCursor();
+    if (!result.ok) {
+        appendLog(AppLogLevel::Warning, "CloudRelease", "Cloud release download failed");
+        message(result.message);
+        return;
+    }
+    appendLog(AppLogLevel::Info, "CloudRelease", "Cloud release installer downloaded and local copy hashed");
+    statusBar()->showMessage(q(result.message), 20000);
+    render();
+}
+
+void QtWindow::launchCloudRelease() {
+    const auto config = LoadCloudSyncConfig(workspace_.directory);
+    const auto manifest = LoadCloudManifest(config, workspace_.directory);
+    const auto target = QtCloudReleaseTargetPath(workspace_.directory, manifest);
+    if (!IsUpdateAvailable(manifest, APP_VERSION) || !target) {
+        message(u8"В manifest нет доступного установщика новой версии.");
+        return;
+    }
+    const QFileInfo installer(QString::fromUtf8(target->u8string()));
+    if (!installer.isFile() || installer.isSymLink()) {
+        message(u8"Сначала скачайте установщик новой версии.");
+        return;
+    }
+    QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Запустить установщик ForgeMirror?"),
+        QString::fromUtf8("Версия %1 будет установлена поверх текущей программы. Закройте ForgeMirror, если установщик попросит об этом. Пользовательские данные хранятся отдельно от файлов программы.")
+            .arg(q(manifest.appVersion)), QMessageBox::Yes | QMessageBox::Cancel, this);
+    confirm.setDefaultButton(QMessageBox::Cancel);
+    confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Запустить"));
+    confirm.button(QMessageBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    if (confirm.exec() != QMessageBox::Yes) return;
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(installer.absoluteFilePath()))) {
+        message(u8"Не удалось запустить установщик.");
+        return;
+    }
+    appendLog(AppLogLevel::Info, "CloudRelease", "Cloud release installer launched");
+    statusBar()->showMessage(QString::fromUtf8("Установщик запущен."), 15000);
 }
 
 void QtWindow::resolveCloudConflict() {
