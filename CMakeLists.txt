@@ -86,6 +86,7 @@ if(BUILD_QT_GUI)
     target_link_libraries(ForgeMirrorQt PRIVATE ForgeMirrorQtUi)
     enable_testing()
     add_executable(smoke_qt tests/smoke_qt.cpp)
+    target_compile_definitions(smoke_qt PRIVATE APP_VERSION="${APP_VERSION}")
     target_link_libraries(smoke_qt PRIVATE ForgeMirrorQtUi Qt6::Test)
     add_test(NAME smoke_qt COMMAND smoke_qt)
     set_tests_properties(smoke_qt PROPERTIES

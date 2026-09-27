@@ -765,7 +765,15 @@ static bool TestCloudReleaseUpdate() {
     };
     const QByteArray installerBytes("release fixture\0payload", 24);
     CloudSyncConfig config; config.enabled = true; config.root = cloud;
-    CloudManifest manifest; manifest.appVersion = "0.6.12"; manifest.releaseFile = "ForgeMirrorSetup_0.6.12.exe";
+    auto newerVersion = std::string(APP_VERSION);
+    const auto patchSeparator = newerVersion.rfind('.');
+    if (patchSeparator == std::string::npos) return false;
+    try {
+        newerVersion.replace(patchSeparator + 1, std::string::npos,
+            std::to_string(std::stoul(newerVersion.substr(patchSeparator + 1)) + 1));
+    } catch (const std::exception&) { return false; }
+    CloudManifest manifest; manifest.appVersion = newerVersion;
+    manifest.releaseFile = "ForgeMirrorSetup_" + newerVersion + ".exe";
     if (!write(cloud / "releases" / manifest.releaseFile, installerBytes)) return false;
     const auto target = QtCloudReleaseTargetPath(workspace, manifest);
     if (!target || *target != workspace / "meta/updates" / manifest.releaseFile) return false;

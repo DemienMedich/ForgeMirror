@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 166**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 89%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include core telemetry outside instrumented Qt workflows, additional accessibility work, and smaller items. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–166 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 166**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 89%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include core telemetry outside instrumented Qt workflows, additional accessibility work, and smaller items. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.12` is the current Qt per-user installer; stages 47–166 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.11.exe`. Version `0.6.11` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.11.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.12.exe`. Version `0.6.12` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.12.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -869,3 +869,8 @@ Verification: `build-qt.ps1 -Package` succeeded; `smoke_qt` passed 1/1 and `smok
 Administrator project create/edit/delete and skill, profession and pipeline-stage create/edit/delete/reorder operations now append fixed, privacy-safe outcomes to the bounded Qt log. Create/edit operations record successful saves; deletion and pipeline reordering also record generic failed/rolled-back outcomes. The administrator Audit page classifies them with the existing core-event source as **Изменение справочников**. Messages exclude project/catalog names, IDs, free-form descriptions and service errors; project deletion records only the count of detached tasks. The UI smoke creates a project through the real editor, verifies its generic log outcome does not contain its title, and confirms the event is visible through the core audit filter. Qt admin-session troubleshooting remains workspace-specific: the login dialog displays the exact local path, and no password values are needed for diagnosis.
 
 Verification: `build-qt.ps1 -Package` succeeded; `smoke_qt` passed 1/1 and `smoke_core` reported OK. The packaged executable reported `ForgeMirrorQt 0.6.11` and completed the real-window `--smoke-test` with `PATH=C:\Windows\System32;C:\Windows`, Qt plugin environment overrides removed, exit code 0 and empty stderr; screenshot: `build-qt/stage166-package-smoke-e3a97418bcd5436d9c0c5445c87398b2/window2.png` (40,855 bytes). Installer lifecycle verification was not run; `0.6.11` remains the latest verified installer.
+
+
+### Release 0.6.12 verification
+
+The stage 166 Qt build was rebuilt with canonical version `0.6.12`, tested (`smoke_qt` 1/1, `smoke_core: OK`) and packaged. The installer was tested in isolation: 0.6.11 install, 0.6.12 in-place update, version/uninstall-registry checks, real-window startup without Qt on `PATH`, and uninstall. Separate user data survived both update and uninstall. Exact paths and SHA-256 are in `docs/releases/ForgeMirror-0.6.12.md`.
