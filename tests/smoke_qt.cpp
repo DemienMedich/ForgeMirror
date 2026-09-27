@@ -4214,6 +4214,14 @@ int main(int argc, char** argv) {
         assigneeVisible = assigneeVisible && table->item(i, 0)->text() == QString::fromUtf8("Тестовый профиль") &&
             table->item(i, 1)->text() == QString::fromStdString(createdProfile->id);
     if (!assigneeVisible || table->rowCount() != 1) return fail("Assignee report view failed");
+    table->selectRow(0);
+    auto* reportDetails = window.findChild<QTextBrowser*>("details");
+    const auto reportDetailText = reportDetails ? reportDetails->toPlainText() : QString();
+    if (!reportDetails || !reportDetailText.contains(QString::fromUtf8("Статусы: новые / в работе / завершены")) ||
+        !reportDetailText.contains(QString::fromUtf8("Просрочено / ожидают XP")) ||
+        !reportDetailText.contains(QString::fromUtf8("Проверка Qt <без HTML>")) ||
+        !reportDetailText.contains(QString::fromUtf8("Old stage")) ||
+        !reportDetailText.contains(QString::fromUtf8("Исполнители и участники"))) return fail("Report group drill-down incomplete");
     const auto reportArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!reportArtifacts.isEmpty()) window.grab().save(reportArtifacts + "/statistics-export.png");
     nav->setCurrentRow(9);

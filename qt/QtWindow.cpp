@@ -2949,7 +2949,7 @@ void QtWindow::details() {
         const auto reportTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
             reportFrom_->date(), reportTo_->date());
         QString html = field(employeeView ? QString::fromUtf8("Сотрудник") : QString::fromUtf8("Проект"), u(targetName));
-        int matched = 0;
+        std::vector<TaskEntry> matchedTasks;
         for (const auto& task : reportTasks) {
             bool belongs = false;
             if (employeeView) {
@@ -2963,20 +2963,62 @@ void QtWindow::details() {
                 belongs = projectKey == targetKey;
             }
             if (!belongs) continue;
-            ++matched;
+            matchedTasks.push_back(task);
+        }
+        const auto groupReport = BuildTeamValueReport(matchedTasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
+        int groupGlobalXp = groupReport.totalGlobalXp, groupSkillXp = groupReport.totalSkillXp;
+        if (employeeView) {
+            const auto metric = std::find_if(groupReport.assignees.begin(), groupReport.assignees.end(),
+                [&](const auto& item) { return item.profileId == targetKey; });
+            groupGlobalXp = metric == groupReport.assignees.end() ? 0 : metric->totalGlobalXp;
+            groupSkillXp = metric == groupReport.assignees.end() ? 0 : metric->totalSkillXp;
+        }
+        html += QString::fromUtf8("<h3>Показатели выбранной группы</h3>");
+        html += field(QString::fromUtf8("Задач"), std::to_string(groupReport.totalTasks));
+        html += field(QString::fromUtf8("Статусы: новые / в работе / завершены"),
+            std::to_string(groupReport.newTasks) + " / " + std::to_string(groupReport.inProgressTasks) + " / " + std::to_string(groupReport.doneTasks));
+        html += field(QString::fromUtf8("Просрочено / ожидают XP"),
+            std::to_string(groupReport.overdueTasks) + " / " + std::to_string(groupReport.xpPendingTasks));
+        html += field(QString::fromUtf8("Глобальный XP / XP навыков"),
+            std::to_string(groupGlobalXp) + " / " + std::to_string(groupSkillXp));
+        if (matchedTasks.empty()) {
+            html += QString::fromUtf8("<p>В выбранном периоде связанных задач нет.</p>");
+        } else {
+            html += QString::fromUtf8("<h3>Задачи в выбранном периоде</h3>");
+        }
+        for (const auto& task : matchedTasks) {
             int globalXp = 0, skillXp = 0;
             for (const auto& participant : task.participants) {
                 if (employeeView && participant.profileId != targetKey) continue;
                 globalXp += std::max(0, participant.globalXp);
                 skillXp += std::max(0, participant.skillXp);
             }
-            const QString taskTitle = QString::fromUtf8("%1 · %2")
-                .arg(q(AppTaskDisplayTitle(task)), q(AppTaskStatusLabel(task.status)));
-            html += field(taskTitle, u(timeText(task.createdAt))) + field(QString::fromUtf8("Срок"), u(timeText(task.deadlineAt)))
-                + field(QString::fromUtf8("XP"), std::to_string(globalXp) + " / " + std::to_string(skillXp) + u8" (глобальный / навыки)");
+            const auto project = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+                [&](const auto& item) { return !task.projectId.empty() && item.id == task.projectId; });
+            const auto stage = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+                [&](const auto& item) { return !task.pipelineStepId.empty() && item.id == task.pipelineStepId; });
+            QStringList involved;
+            auto addProfile = [&](const std::string& profileId) {
+                if (profileId.empty()) return;
+                const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
+                    [&](const auto& item) { return item.id == profileId; });
+                const auto label = profile == workspace_.profiles.end() ? q(profileId) : q(profile->name);
+                if (!involved.contains(label)) involved.push_back(label);
+            };
+            for (const auto& profileId : task.assignees) addProfile(profileId);
+            for (const auto& participant : task.participants) addProfile(participant.profileId);
+            const auto projectName = project != workspace_.data.projects.end() ? project->name
+                : !task.project.empty() ? task.project
+                : !task.projectId.empty() ? task.projectId : u8"Без проекта";
+            const auto stageName = stage != workspace_.data.pipelineSteps.end() ? stage->title
+                : !task.pipelineStep.empty() ? task.pipelineStep : u8"Без этапа";
+            const QString taskTitle = QString::fromUtf8("%1 · %2 · %3")
+                .arg(q(AppTaskDisplayTitle(task)), q(AppTaskStatusLabel(task.status)), q(AppTaskPriorityLabel(task.priority)));
+            html += field(taskTitle, u(timeText(task.createdAt)) + u8" · срок: " + timeText(task.deadlineAt).toUtf8().toStdString())
+                + field(QString::fromUtf8("Проект / этап"), projectName + u8" / " + stageName)
+                + field(QString::fromUtf8("Исполнители и участники"), u(involved.join(QString::fromUtf8(", "))))
+                + field(QString::fromUtf8("XP: глобальный / навыки"), std::to_string(globalXp) + " / " + std::to_string(skillXp));
         }
-        if (!matched) html += QString::fromUtf8("<p>В выбранном периоде связанных задач нет.</p>");
-        else html.prepend(QString::fromUtf8("<p>Задач в выбранном периоде: %1</p>").arg(matched));
         details_->setHtml(html);
     } else if (page == Pipeline) {
         for (const auto& step : workspace_.data.pipelineSteps) if (step.id == id)
