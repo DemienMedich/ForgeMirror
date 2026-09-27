@@ -13,6 +13,7 @@
 #include "QtStorageConflict.h"
 #include "QtModelViewer.h"
 #include "QtReportExport.h"
+#include "QtProfileReportExport.h"
 #include "QtAuditExport.h"
 #include "QtReportChart.h"
 #include "QtLogActivityChart.h"
@@ -1031,6 +1032,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileHistory_->setObjectName("profileActivityHistory");
     profileHistory_->setToolTip(QString::fromUtf8("События из локального аудита профилей; без истории задач и XP"));
     bottom->addWidget(profileHistory_);
+    profileExport_ = new QToolButton;
+    profileExport_->setObjectName("profileReportExport");
+    profileExport_->setText(QString::fromUtf8("Отчёт профиля"));
+    profileExport_->setToolTip(QString::fromUtf8("Экспортировать уровень, XP, активность, категории и навыки выбранного профиля"));
+    profileExport_->setPopupMode(QToolButton::InstantPopup);
+    auto* profileExportMenu = new QMenu(profileExport_);
+    auto* profileTxtAction = profileExportMenu->addAction(QString::fromUtf8("В TXT…"));
+    profileTxtAction->setObjectName("profileReportTxt");
+    auto* profileCsvAction = profileExportMenu->addAction(QString::fromUtf8("В CSV…"));
+    profileCsvAction->setObjectName("profileReportCsv");
+    profileExport_->setMenu(profileExportMenu);
+    bottom->addWidget(profileExport_);
     projectFocus_ = new QPushButton(QString::fromUtf8("Задачи проекта"));
     projectFocus_->setObjectName("focusProjectTasks");
     projectFocus_->setToolTip(QString::fromUtf8("Открыть задачи выбранного проекта с проектным фильтром"));
@@ -1343,6 +1356,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(walletAdjust_, &QPushButton::clicked, this, [this] { adjustWallet(); });
     connect(walletHistory_, &QPushButton::clicked, this, [this] { showWalletHistory(); });
     connect(profileHistory_, &QPushButton::clicked, this, [this] { showProfileHistory(); });
+    connect(profileTxtAction, &QAction::triggered, this, [this] { exportProfileReport(false); });
+    connect(profileCsvAction, &QAction::triggered, this, [this] { exportProfileReport(true); });
     connect(projectFocus_, &QPushButton::clicked, this, [this] {
         if (navigation_->currentRow() != Projects || !table_->currentItem()) return;
         const auto projectId = table_->currentItem()->data(Qt::UserRole).toString();
@@ -1906,6 +1921,8 @@ void QtWindow::render() {
     walletHistory_->setEnabled(!profiles_->currentData().toString().isEmpty());
     profileHistory_->setVisible(page == ProfilePage && (admin_ || unlocked));
     profileHistory_->setEnabled(!profiles_->currentData().toString().isEmpty());
+    profileExport_->setVisible(page == ProfilePage && admin_);
+    profileExport_->setEnabled(!profiles_->currentData().toString().isEmpty());
     projectFocus_->setVisible(page == Projects);
     const bool projectSelected = page == Projects && table_->currentItem() &&
         !table_->currentItem()->data(Qt::UserRole).toString().isEmpty() &&
@@ -3104,6 +3121,43 @@ void QtWindow::showProfileHistory() {
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
     dialog.exec();
+}
+
+void QtWindow::exportProfileReport(bool asCsv) {
+    if (!requireAdmin() || navigation_->currentRow() != ProfilePage) return;
+    const auto profileId = u(profiles_->currentData().toString());
+    if (profileId.empty() || !workspace_.storage->set_active_profile(profileId)) {
+        message(u8"Не удалось выбрать профиль для отчёта.");
+        return;
+    }
+    const auto profile = workspace_.storage->load_profile();
+    if (!profile) {
+        message(u8"Не удалось загрузить профиль для отчёта.");
+        return;
+    }
+    const auto reportDirectory = QString::fromStdWString((workspace_.directory / "meta" / "reports").wstring());
+    if (!QDir().mkpath(reportDirectory)) {
+        message(u8"Не удалось создать папку отчётов.");
+        return;
+    }
+    const QString suffix = asCsv ? QStringLiteral("csv") : QStringLiteral("txt");
+    const QString safeId = QString::fromUtf8(profileId.c_str()).replace(QRegularExpression("[^A-Za-z0-9_-]"), "_");
+    const QString defaultPath = QDir(reportDirectory).filePath(QStringLiteral("profile-%1-%2.%3")
+        .arg(safeId, QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"), suffix));
+    const QString filter = asCsv ? QString::fromUtf8("CSV (*.csv)") : QString::fromUtf8("Текстовый файл (*.txt)");
+    const QString path = QFileDialog::getSaveFileName(this,
+        asCsv ? QString::fromUtf8("Экспорт отчёта профиля в CSV") : QString::fromUtf8("Экспорт отчёта профиля в TXT"),
+        defaultPath, filter);
+    if (path.isEmpty()) return;
+    QString outputPath = path;
+    if (QFileInfo(outputPath).suffix().isEmpty()) outputPath += QStringLiteral(".") + suffix;
+    QString error;
+    if (!ExportProfileReport(outputPath, *profile, workspace_.catalog,
+            QString::fromUtf8(profileId.c_str()), asCsv, QDateTime::currentSecsSinceEpoch(), &error)) {
+        message(error.toUtf8().toStdString());
+        return;
+    }
+    statusBar()->showMessage(QString::fromUtf8("Отчёт профиля сохранён: %1").arg(QDir::toNativeSeparators(outputPath)), 7000);
 }
 
 void QtWindow::showWalletHistory() {

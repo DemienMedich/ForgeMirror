@@ -20,6 +20,7 @@
 #include "QtDisplaySettings.h"
 #include "QtDeadlineAgent.h"
 #include "QtReportExport.h"
+#include "QtProfileReportExport.h"
 #include "QtAuditExport.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
@@ -1926,6 +1927,42 @@ static bool TestReportExport() {
     CloseHandle(lock);
     if (replaced) return false;
 #endif
+    return true;
+}
+
+static bool TestProfileReportExport() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    SkillCatalog catalog(std::filesystem::path(temp.path().toStdWString()));
+    Profile profile;
+    profile.set_name(u8"Анна, тест");
+    profile.grant_global_xp(1250);
+    profile.set_last_task_timestamp(1700000000);
+    profile.start_penalty_recovery(3);
+    profile.set_category_best_scores({1, 2, 3, 4, 5});
+    Skill skill("cpp", 3);
+    skill.xp = 17;
+    skill.xpToNext = 83;
+    skill.weight = 1.25;
+    profile.set_skills({skill});
+    QString error;
+    const auto csvPath = temp.path() + "/profile.csv";
+    if (!ExportProfileReport(csvPath, profile, catalog, QStringLiteral("profile-1"), true, 1700001000, &error) || !error.isEmpty()) return false;
+    QFile csvFile(csvPath);
+    if (!csvFile.open(QIODevice::ReadOnly)) return false;
+    const QByteArray csvBytes = csvFile.readAll();
+    if (!csvBytes.startsWith("\xEF\xBB\xBF") || !csvBytes.contains(QString::fromUtf8("\"Анна, тест\"").toUtf8()) ||
+        !csvBytes.contains("Summary,TotalXP,") || !csvBytes.contains("Categories,") ||
+        !csvBytes.contains("cpp,cpp,3,17,83,") || !csvBytes.contains("1.25")) return false;
+    const auto txtPath = temp.path() + "/profile.txt";
+    if (!ExportProfileReport(txtPath, profile, catalog, QStringLiteral("profile-1"), false, 1700001000, &error) || !error.isEmpty()) return false;
+    QFile txtFile(txtPath);
+    if (!txtFile.open(QIODevice::ReadOnly)) return false;
+    const QByteArray txtBytes = txtFile.readAll();
+    if (!txtBytes.startsWith("\xEF\xBB\xBF") || !txtBytes.contains(QString::fromUtf8("Отчёт профиля").toUtf8()) ||
+        !txtBytes.contains(QString::fromUtf8("Имя: Анна, тест").toUtf8()) || !txtBytes.contains("Прогрев:") ||
+        !txtBytes.contains("cpp\tcpp\t3\t17/83")) return false;
+    if (ExportProfileReport(QString(), profile, catalog, QStringLiteral("profile-1"), true, 1700001000, &error) || error.isEmpty()) return false;
     return true;
 }
 
@@ -4087,6 +4124,7 @@ int main(int argc, char** argv) {
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
+    if (!TestProfileReportExport()) { std::cerr << "Profile report export failed\n"; return 1; }
     if (!TestReportPeriodComparison()) { std::cerr << "Report period comparison failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestStatisticsTrendBeyondAuditPageLimit()) { std::cerr << "Statistics trend audit history failed\n"; return 1; }
@@ -4378,6 +4416,9 @@ int main(int argc, char** argv) {
         !savedStatsSettings.adminStatsSearch.isEmpty())
         return fail("Profile statistics filters were not persisted");
     nav->setCurrentRow(0);
+    auto* profileReportMenu = window.findChild<QToolButton*>("profileReportExport");
+    if (!profileReportMenu || !profileReportMenu->isVisible() || !window.findChild<QAction*>("profileReportTxt") ||
+        !window.findChild<QAction*>("profileReportCsv")) return fail("Personal profile report export actions unavailable");
     auto* directXp = window.findChild<QPushButton*>("directXp");
     if (!directXp || !directXp->isVisible() || !directXp->isEnabled()) return fail("Direct XP action unavailable");
     workspace.storage->set_active_profile(createdProfile->id);

@@ -71,6 +71,7 @@ private:
     void adjustWallet();
     void showWalletHistory();
     void showProfileHistory();
+    void exportProfileReport(bool csv);
     void checkDeadlineReminders();
     void checkMissedDeadlineReminders();
     void updateBanner();
@@ -199,6 +200,7 @@ private:
     QPushButton* walletAdjust_;
     QPushButton* walletHistory_;
     QPushButton* profileHistory_;
+    QToolButton* profileExport_;
     QPushButton* projectFocus_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
