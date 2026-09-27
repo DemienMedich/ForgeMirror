@@ -585,6 +585,16 @@ static bool TestCloudPullTransaction() {
     pull->click();
     if (!confirmed || !bytes(workspace / "meta/tasks.json").contains("next") ||
         uiWorkspace.data.bannerTexts != std::vector<std::string>{"remote"}) return false;
+    QTimer::singleShot(0, [] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))
+            box->button(QMessageBox::Yes)->click();
+    });
+    pull->click();
+    QFile telemetry(QString::fromUtf8((workspace / "meta/qt-application-log.json").u8string()));
+    if (!telemetry.open(QIODevice::ReadOnly)) return false;
+    const auto telemetryBytes = telemetry.readAll();
+    if (!telemetryBytes.contains("CoreCloudTransaction") || !telemetryBytes.contains("Manual cloud pull committed") ||
+        telemetryBytes.contains(cloud.u8string().c_str())) return false;
     window.close();
     CloudSyncConfig disabled = config; disabled.enabled = false;
     return !RunQtCloudPullTransaction(disabled, workspace, CloudRole::Viewer).sync.ok;
@@ -720,6 +730,11 @@ static bool TestCloudPushPreview() {
     pushButton->click();
     if (!confirmed || inventory(cloud) == beforeCancelledUiPush ||
         read(cloud / "meta/tasks.json") != read(workspace / "meta/tasks.json")) return false;
+    QFile telemetry(QString::fromUtf8((workspace / "meta/qt-application-log.json").u8string()));
+    if (!telemetry.open(QIODevice::ReadOnly)) return false;
+    const auto telemetryBytes = telemetry.readAll();
+    if (!telemetryBytes.contains("CoreCloudTransaction") || !telemetryBytes.contains("Manual cloud push committed") ||
+        telemetryBytes.contains(cloud.u8string().c_str())) return false;
     window.close();
     return true;
 }

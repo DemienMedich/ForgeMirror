@@ -1987,8 +1987,10 @@ void QtWindow::render() {
             for (size_t index = 0; index < appLogs_.size(); ++index) {
                 const auto& entry = appLogs_[index];
                 const bool coreWalletEvent = entry.source == "CoreWalletMutation";
-                const bool coreEvent = coreWalletEvent || entry.source == "CoreTaskCompletion" || entry.source == "CoreTaskRecovery";
+                const bool coreCloudEvent = entry.source == "CoreCloudTransaction";
+                const bool coreEvent = coreWalletEvent || coreCloudEvent || entry.source == "CoreTaskCompletion" || entry.source == "CoreTaskRecovery";
                 const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
+                    : coreCloudEvent ? QString::fromUtf8("Облачный перенос")
                     : entry.source == "CoreTaskRecovery" ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
@@ -3207,8 +3209,15 @@ void QtWindow::previewCloudPush() {
     confirm.button(QMessageBox::Cancel)->setText(QString::fromUtf8("Отмена"));
     if (confirm.exec() != QMessageBox::Yes) return;
     const auto result = RunQtCloudWorkspacePush(config, workspace_.directory, CloudRole::Admin, &preview);
-    if (!result.sync.ok) QMessageBox::warning(this, QString::fromUtf8("Выгрузка не выполнена"), q(result.message));
-    else QMessageBox::information(this, QString::fromUtf8("Выгрузка завершена"), q(result.message));
+    if (!result.sync.ok) {
+        const bool pending = std::filesystem::exists(workspace_.directory / "meta/qt-cloud-push.json");
+        appendLog(pending ? AppLogLevel::Error : AppLogLevel::Warning, "CoreCloudTransaction",
+            pending ? "Manual cloud push recovery pending" : "Manual cloud push failed");
+        QMessageBox::warning(this, QString::fromUtf8("Выгрузка не выполнена"), q(result.message));
+    } else {
+        appendLog(AppLogLevel::Info, "CoreCloudTransaction", "Manual cloud push committed");
+        QMessageBox::information(this, QString::fromUtf8("Выгрузка завершена"), q(result.message));
+    }
     render();
 }
 
@@ -3235,6 +3244,9 @@ void QtWindow::pullCloud() {
     QApplication::restoreOverrideCursor();
     if (!result.sync.ok) {
         const bool pending = std::filesystem::exists(workspace_.directory / "meta/qt-cloud-pull.json");
+        appendLog(pending || !result.rolledBack ? AppLogLevel::Error : AppLogLevel::Warning,
+            "CoreCloudTransaction", pending ? "Manual cloud pull recovery pending"
+                : result.rolledBack ? "Manual cloud pull rolled back" : "Manual cloud pull failed");
         if (pending) {
             setEnabled(false);
             for (auto* timer : findChildren<QTimer*>()) timer->stop();
@@ -3243,6 +3255,8 @@ void QtWindow::pullCloud() {
         if (pending) QCoreApplication::exit(1);
         return;
     }
+    appendLog(AppLogLevel::Info, "CoreCloudTransaction",
+        result.sync.changed ? "Manual cloud pull committed" : "Manual cloud pull unchanged");
     profileSession_.lock();
     if (!reload()) return;
     statusBar()->showMessage(q(result.message), 15000);
