@@ -371,6 +371,8 @@ std::vector<QtReportCategoryGroup> buildReportCategoryGroups(const std::vector<T
 }
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
+    const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
+    admin_ = (!adminPasswordOverride || !*adminPasswordOverride) && LoadAdminStayLoggedIn(workspace_.directory);
     loadAppLogs();
     lastCloudAutoSyncAt_ = QDateTime::currentSecsSinceEpoch();
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
@@ -408,7 +410,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menuButton->setText(QString::fromUtf8("⋯"));
     menuButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(menuButton);
-    menu->addAction(QString::fromUtf8("Вход / выход администратора"), this, [this] { authenticate(); });
+    auto* adminLoginAction = menu->addAction(QString::fromUtf8("Вход / выход администратора"), this, [this] { authenticate(); });
+    adminLoginAction->setObjectName("adminLoginAction");
+    adminPasswordAction_ = menu->addAction(QString::fromUtf8("Сменить пароль администратора…"), this, [this] { changeAdminPassword(); });
+    adminPasswordAction_->setObjectName("changeAdminPasswordAction");
     profileAccessAction_ = menu->addAction(QString::fromUtf8("Войти в выбранный профиль"), this, [this] { authenticateProfile(); });
     profileAccessAction_->setObjectName("profileAccess");
     auto* passwordAction = menu->addAction(QString::fromUtf8("Сменить пароль выбранного профиля"), this, [this] {
@@ -1808,20 +1813,110 @@ void QtWindow::authenticateProfile() {
 }
 
 void QtWindow::authenticate() {
+    const char* overrideValue = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
+    const bool envOverride = overrideValue && *overrideValue;
     if (admin_) {
-        admin_ = false;
-    } else {
-        bool ok = false;
-        const auto password = QInputDialog::getText(this, QString::fromUtf8("Администратор"),
-            QString::fromUtf8("Пароль администратора:"), QLineEdit::Password, {}, &ok);
-        if (!ok) return;
-        if (u(password) != LoadAdminPassword(workspace_.directory)) {
-            message(u8"Неверный пароль.");
+        if (!envOverride && !SetAdminStayLoggedIn(workspace_.directory, false)) {
+            message(u8"Не удалось сохранить выход администратора; повторите попытку.");
             return;
         }
-        admin_ = true;
+        admin_ = false;
+    } else {
+        QDialog dialog(this);
+        dialog.setObjectName("adminLoginDialog");
+        dialog.setWindowTitle(QString::fromUtf8("Вход администратора"));
+        auto* layout = new QFormLayout(&dialog);
+        auto* password = new QLineEdit;
+        password->setObjectName("adminLoginPassword");
+        password->setEchoMode(QLineEdit::Password);
+        password->setMaxLength(512);
+        layout->addRow(QString::fromUtf8("Пароль"), password);
+        auto* remember = new QCheckBox(QString::fromUtf8("Не выходить после перезапуска на этом рабочем месте"));
+        remember->setObjectName("adminRememberSession");
+        remember->setChecked(!envOverride && LoadAdminStayLoggedIn(workspace_.directory));
+        remember->setEnabled(!envOverride);
+        remember->setToolTip(envOverride ? QString::fromUtf8("При заданном FORGEMIRROR_ADMIN_PASSWORD пароль из среды не записывается в настройки.")
+                                         : QString::fromUtf8("Сохраняет локальный режим администратора до выхода вручную."));
+        layout->addRow(remember);
+        auto* notice = new QLabel;
+        notice->setObjectName("adminLoginNotice"); notice->setWordWrap(true); layout->addRow(notice);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        buttons->button(QDialogButtonBox::Ok)->setText(QString::fromUtf8("Войти"));
+        buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+        layout->addRow(buttons);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+            const auto entered = password->text();
+            if (u(entered) != LoadAdminPassword(workspace_.directory)) {
+                password->clear();
+                notice->setText(QString::fromUtf8("Неверный пароль администратора."));
+                password->setFocus();
+                return;
+            }
+            if (!envOverride && !SetAdminStayLoggedIn(workspace_.directory, remember->isChecked())) {
+                notice->setText(QString::fromUtf8("Не удалось сохранить настройку режима администратора."));
+                return;
+            }
+            password->clear();
+            admin_ = true;
+            dialog.accept();
+        });
+        if (dialog.exec() != QDialog::Accepted) return;
     }
     render();
+}
+
+void QtWindow::changeAdminPassword() {
+    if (!requireAdmin()) return;
+    const char* overrideValue = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
+    if (overrideValue && *overrideValue) {
+        message(u8"Пароль задан через FORGEMIRROR_ADMIN_PASSWORD; изменение через приложение недоступно.");
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setObjectName("adminPasswordDialog");
+    dialog.setWindowTitle(QString::fromUtf8("Смена пароля администратора"));
+    auto* layout = new QFormLayout(&dialog);
+    auto makePassword = [](const char* name) {
+        auto* edit = new QLineEdit;
+        edit->setObjectName(QString::fromLatin1(name));
+        edit->setEchoMode(QLineEdit::Password);
+        edit->setMaxLength(512);
+        return edit;
+    };
+    auto* current = makePassword("adminCurrentPassword");
+    auto* next = makePassword("adminNewPassword");
+    auto* confirm = makePassword("adminConfirmPassword");
+    layout->addRow(QString::fromUtf8("Текущий пароль"), current);
+    layout->addRow(QString::fromUtf8("Новый пароль"), next);
+    layout->addRow(QString::fromUtf8("Повторите пароль"), confirm);
+    auto* notice = new QLabel;
+    notice->setObjectName("adminPasswordNotice"); notice->setWordWrap(true); layout->addRow(notice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
+    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    layout->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        const auto oldPassword = u(current->text());
+        const auto newPassword = next->text();
+        const auto repeatedPassword = confirm->text();
+        if (oldPassword != LoadAdminPassword(workspace_.directory))
+            notice->setText(QString::fromUtf8("Неверный текущий пароль."));
+        else if (newPassword.trimmed().isEmpty())
+            notice->setText(QString::fromUtf8("Новый пароль не может быть пустым."));
+        else if (newPassword != repeatedPassword)
+            notice->setText(QString::fromUtf8("Пароли не совпадают."));
+        else if (!SetAdminPassword(workspace_.directory, u(newPassword.trimmed())))
+            notice->setText(QString::fromUtf8("Не удалось сохранить пароль."));
+        else {
+            appendLog(AppLogLevel::Info, "Admin", "Administrator password changed");
+            dialog.accept();
+        }
+        current->clear(); next->clear(); confirm->clear();
+        if (dialog.result() != QDialog::Accepted) current->setFocus();
+    });
+    dialog.exec();
 }
 
 void QtWindow::updateBanner() {
@@ -2020,6 +2115,9 @@ void QtWindow::render() {
     const bool unlocked = profileSession_.isUnlocked(*workspace_.storage, profileId);
     profileAccessAction_->setText(QString::fromUtf8(unlocked ? "Выйти из профиля" : "Войти в выбранный профиль"));
     profileAccessAction_->setEnabled(!profileId.empty());
+    adminPasswordAction_->setVisible(admin_);
+    const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
+    adminPasswordAction_->setEnabled(!(adminPasswordOverride && *adminPasswordOverride));
     ownPasswordAction_->setEnabled(unlocked);
     storageHealthReportAction_->setVisible(admin_);
     storageCleanupAction_->setVisible(admin_);

@@ -810,6 +810,106 @@ static bool TestCloudReleaseUpdate() {
     return canceled;
 }
 
+static bool TestQtAdminAuthParity() {
+    const char* overrideValue = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
+    if (overrideValue && *overrideValue) return true; // Host override intentionally disables persistence and rotation.
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+    QtWorkspace workspace(directory);
+    if (!SetAdminPassword(directory, "old-admin-password") || !SetAdminStayLoggedIn(directory, false)) return false;
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* login = window.findChild<QAction*>("adminLoginAction");
+    auto* passwordAction = window.findChild<QAction*>("changeAdminPasswordAction");
+    if (!login || !passwordAction || passwordAction->isVisible()) return false;
+    bool rememberControlSeen = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "adminLoginDialog") {
+            std::cerr << "admin remember login dialog missing; modal=" << (QApplication::activeModalWidget() ? QApplication::activeModalWidget()->metaObject()->className() : "none") << '\n';
+            if (QApplication::activeModalWidget()) QApplication::activeModalWidget()->close();
+            return;
+        }
+        auto* password = dialog->findChild<QLineEdit*>("adminLoginPassword");
+        auto* remember = dialog->findChild<QCheckBox*>("adminRememberSession");
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        if (!password || !remember || !buttons) return;
+        rememberControlSeen = true;
+        password->setText(QString::fromUtf8("old-admin-password"));
+        remember->setChecked(true);
+        buttons->button(QDialogButtonBox::Ok)->click();
+    });
+    login->trigger();
+    if (!rememberControlSeen || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible()) return false;
+    window.close();
+    QtWindow restarted(workspace); restarted.show(); QApplication::processEvents();
+    passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
+    login = restarted.findChild<QAction*>("adminLoginAction");
+    if (!passwordAction || !passwordAction->isVisible() || !login) return false;
+    login->trigger(); // Logged-in admin action logs out and clears the opt-in flag.
+    if (LoadAdminStayLoggedIn(directory) || passwordAction->isVisible()) return false;
+
+    bool loginWithoutRemember = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "adminLoginDialog") {
+            std::cerr << "admin nonremember login dialog missing\n";
+            if (QApplication::activeModalWidget()) QApplication::activeModalWidget()->close();
+            return;
+        }
+        auto* password = dialog->findChild<QLineEdit*>("adminLoginPassword");
+        auto* remember = dialog->findChild<QCheckBox*>("adminRememberSession");
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        if (!password || !remember || !buttons) return;
+        password->setText(QString::fromUtf8("old-admin-password"));
+        remember->setChecked(false);
+        buttons->button(QDialogButtonBox::Ok)->click();
+        loginWithoutRemember = true;
+    });
+    login->trigger();
+    if (!loginWithoutRemember || LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() || !passwordAction->isEnabled()) return false;
+
+    bool wrongPasswordRejected = false, mismatchRejected = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "adminPasswordDialog") {
+            std::cerr << "admin password dialog missing; modal=" << (QApplication::activeModalWidget() ? QApplication::activeModalWidget()->metaObject()->className() : "none") << '\n';
+            if (QApplication::activeModalWidget()) QApplication::activeModalWidget()->close();
+            return;
+        }
+        auto* current = dialog->findChild<QLineEdit*>("adminCurrentPassword");
+        auto* next = dialog->findChild<QLineEdit*>("adminNewPassword");
+        auto* confirm = dialog->findChild<QLineEdit*>("adminConfirmPassword");
+        auto* notice = dialog->findChild<QLabel*>("adminPasswordNotice");
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        if (!current || !next || !confirm || !notice || !buttons) return;
+        auto* save = buttons->button(QDialogButtonBox::Save);
+        current->setText(QString::fromUtf8("wrong")); next->setText(QString::fromUtf8("new-admin-password"));
+        confirm->setText(QString::fromUtf8("new-admin-password")); save->click();
+        wrongPasswordRejected = notice->text().contains(QString::fromUtf8("Неверный текущий пароль"));
+        current->setText(QString::fromUtf8("old-admin-password")); next->setText(QString::fromUtf8("new-admin-password"));
+        confirm->setText(QString::fromUtf8("mismatch")); save->click();
+        mismatchRejected = notice->text().contains(QString::fromUtf8("не совпадают"));
+        current->setText(QString::fromUtf8("old-admin-password")); next->setText(QString::fromUtf8("new-admin-password"));
+        confirm->setText(QString::fromUtf8("new-admin-password")); save->click();
+    });
+    passwordAction->trigger();
+    const bool success = wrongPasswordRejected && mismatchRejected &&
+        LoadAdminPassword(directory) == "new-admin-password" && restarted.findChild<QAction*>("adminLoginAction");
+    restarted.close();
+    return success;
+}
+
+static bool SubmitAdminLoginForTest(const QString& password, bool remember = false) {
+    auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+    if (!dialog || dialog->objectName() != "adminLoginDialog") return false;
+    auto* input = dialog->findChild<QLineEdit*>("adminLoginPassword");
+    auto* stay = dialog->findChild<QCheckBox*>("adminRememberSession");
+    auto* buttons = dialog->findChild<QDialogButtonBox*>();
+    if (!input || !stay || !buttons) return false;
+    input->setText(password); stay->setChecked(remember);
+    buttons->button(QDialogButtonBox::Ok)->click();
+    return dialog->result() == QDialog::Accepted;
+}
 static bool TestCloudPushPreview() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
@@ -929,11 +1029,7 @@ static bool TestCloudPushPreview() {
         for (auto* action : menu->actions())
             if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!adminAction) return false;
-    QTimer::singleShot(0, [] {
-        if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-            input->setTextValue(QString::fromUtf8("admin123")); input->accept();
-        }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     if (!pushButton->isEnabled()) return false;
     const auto beforeCancelledUiPush = inventory(cloud);
@@ -2242,10 +2338,15 @@ static bool TestQtStorageHealthReport() {
         if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!adminAction) return fail("admin action missing");
     QTimer::singleShot(0, [] {
-        if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-            input->setTextValue("report-password");
-            input->accept();
-        }
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "adminLoginDialog") return;
+        auto* input = dialog->findChild<QLineEdit*>("adminLoginPassword");
+        auto* remember = dialog->findChild<QCheckBox*>("adminRememberSession");
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        if (!input || !remember || !buttons) return;
+        input->setText(QString::fromUtf8("report-password"));
+        remember->setChecked(false);
+        buttons->button(QDialogButtonBox::Ok)->click();
     });
     adminAction->trigger();
     if (!reportAction->isVisible() || !cleanupAction->isVisible()) return fail("admin authentication");
@@ -2396,11 +2497,7 @@ static bool TestReportPeriodComparison() {
     for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
         if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!adminAction) return fail("admin action");
-    QTimer::singleShot(0, [] {
-        if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-            dialog->setTextValue("admin123"); dialog->accept();
-        }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     nav->setCurrentRow(6);
     range->setCurrentIndex(1);
@@ -3253,10 +3350,7 @@ static bool TestPersonalWallet() {
         for (auto* action : menu->actions())
             if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!adminAction) return false;
-    QTimer::singleShot(0, [] {
-        auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
-        if (input) { input->setTextValue(QString::fromUtf8("admin123")); input->accept(); }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     auto* adjust = window.findChild<QPushButton*>("adjustProfileWallet");
     if (!adjust || !adjust->isVisible()) return false;
@@ -3373,11 +3467,7 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
         for (auto* action : menu->actions())
             if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!navigation || !adminAction) return false;
-    QTimer::singleShot(0, [] {
-        if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-            input->setTextValue(QStringLiteral("admin123")); input->accept();
-        }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     navigation->setCurrentRow(6);
     auto* chart = static_cast<QtReportChart*>(window.findChild<QWidget*>("statisticsStatusChart"));
@@ -3799,10 +3889,7 @@ static bool TestQtVisibleTaskSelectionTools() {
     for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
         if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!adminAction) return false;
-    QTimer::singleShot(0, [] {
-        auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
-        if (input) { input->setTextValue(QString::fromUtf8("admin123")); input->accept(); }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     if (!selectionTools->isVisible()) return false;
     search->setText(QString::fromUtf8("Visible"));
@@ -4007,10 +4094,7 @@ static bool TestBulkTaskEditsUi() {
         for (auto* action : menu->actions())
             if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
     if (!adminAction) return false;
-    QTimer::singleShot(0, [] {
-        auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
-        if (input) { input->setTextValue(QString::fromUtf8("admin123")); input->accept(); }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     if (!bulk->isVisible()) return false;
     auto select = [table](int row) {
@@ -4563,6 +4647,7 @@ int main(int argc, char** argv) {
     if (!TestCloudPullTransaction()) { std::cerr << "Cloud pull transaction failed\n"; return 1; }
     if (!TestCloudAutoSync()) { std::cerr << "Cloud automatic sync failed\n"; return 1; }
     if (!TestCloudReleaseUpdate()) { std::cerr << "Cloud release update failed\n"; return 1; }
+    if (!TestQtAdminAuthParity()) { std::cerr << "Administrator authentication parity failed\n"; return 1; }
     if (!TestCloudPushPreview()) { std::cerr << "Cloud push preview failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }
@@ -4861,12 +4946,7 @@ int main(int argc, char** argv) {
     for (auto* action : window.findChildren<QAction*>())
         if (action->text().contains(QString::fromUtf8("Вход / выход"))) login = action;
     if (!login) return fail("Admin action missing");
-    QTimer::singleShot(0, [] {
-        if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-            dialog->setTextValue("qt-test-password");
-            dialog->accept();
-        }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("qt-test-password"); });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
     nav->setCurrentRow(17);
@@ -5642,12 +5722,7 @@ int main(int argc, char** argv) {
     });
     if (ShowTaskCompletionDialog(&window, workspace, "qt-smoke-task", QString::fromStdString(createdProfile->id)))
         return fail("Cancelled completion succeeded");
-    QTimer::singleShot(0, [] {
-        if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-            dialog->setTextValue("qt-test-password");
-            dialog->accept();
-        }
-    });
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest("qt-test-password"); });
     login->trigger();
     nav->setCurrentRow(1);
     for (int i = 0; i < table->rowCount(); ++i)

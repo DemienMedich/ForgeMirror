@@ -57,6 +57,7 @@ private:
     void render();
     void details();
     void authenticate();
+    void changeAdminPassword();
     void authenticateProfile();
     void showShortcutHelp();
     void createEntry(bool edit = false);
@@ -105,6 +106,7 @@ private:
     QtProfileSession profileSession_;
     QtDisplaySettings displaySettings_;
     QAction* profileAccessAction_;
+    QAction* adminPasswordAction_;
     QAction* ownPasswordAction_;
     QAction* storageHealthReportAction_;
     QAction* storageCleanupAction_;
