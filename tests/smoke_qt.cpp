@@ -1797,6 +1797,11 @@ static bool TestTaskEditorTransaction() {
     }
     workspace.reload();
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    if (!workspace.taskRecoveryNotice) return false;
+    QtWindow recoveryWindow(workspace);
+    QFile recoveryLog(temp.path() + "/meta/qt-application-log.json");
+    if (workspace.taskRecoveryNotice || !recoveryLog.open(QIODevice::ReadOnly) ||
+        !recoveryLog.readAll().contains("CoreTaskRecovery")) return false;
     auto& awarded = workspace.data.tasks.front();
     awarded.participants.push_back({"legacy-profile", 100, 77, 22, "snapshot"});
     awarded.status = 2;
@@ -4539,7 +4544,7 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(7);
     auditSourceFilter->setCurrentIndex(5);
     QApplication::processEvents();
-    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8("Транзакция XP") ||
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8("Core-событие XP") ||
         table->item(0, 6)->text() != QString::fromUtf8("Task XP transaction committed"))
         return fail("Core task XP transaction outcome missing from its admin audit source");
     auditSourceFilter->setCurrentIndex(1);

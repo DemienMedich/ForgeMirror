@@ -5,10 +5,10 @@
 #include "AppTaskCompletionService.h"
 
 namespace {
-std::filesystem::path prepare(std::filesystem::path directory) {
+std::filesystem::path prepare(std::filesystem::path directory, bool& taskRecoveryNotice) {
     RecoverQtCloudPull(directory);
     RecoverQtCloudPush(directory);
-    RecoverTaskCompletion(directory);
+    taskRecoveryNotice |= RecoverTaskCompletion(directory);
     return directory;
 }
 }
@@ -16,7 +16,7 @@ std::filesystem::path prepare(std::filesystem::path directory) {
 IJobStorage* CreateFileStorage(const std::filesystem::path& dir);
 
 QtWorkspace::QtWorkspace(std::filesystem::path path)
-    : directory(prepare(std::move(path))), storage(CreateFileStorage(directory)),
+    : directory(prepare(std::move(path), taskRecoveryNotice)), storage(CreateFileStorage(directory)),
       catalog(directory), modules(LoadModuleToggles()) {
     reload();
 }
@@ -24,7 +24,7 @@ QtWorkspace::QtWorkspace(std::filesystem::path path)
 void QtWorkspace::reload() {
     RecoverQtCloudPull(directory);
     RecoverQtCloudPush(directory);
-    RecoverTaskCompletion(directory);
+    taskRecoveryNotice |= RecoverTaskCompletion(directory);
     catalog.reload();
     data = LoadWorkspaceDataSnapshot(directory, modules);
     SetGameplayConfig(data.rulesConfig);

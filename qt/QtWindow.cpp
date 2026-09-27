@@ -1313,6 +1313,10 @@ bool QtWindow::reload() {
         message(error.what());
         return false;
     }
+    if (workspace_.taskRecoveryNotice) {
+        appendLog(AppLogLevel::Warning, "CoreTaskRecovery", "An interrupted Qt transaction was rolled back from its recovery journal");
+        workspace_.taskRecoveryNotice = false;
+    }
     {
         QSignalBlocker blocker(profiles_);
         profiles_->clear();
@@ -1960,13 +1964,15 @@ void QtWindow::render() {
             entries.reserve(entries.size() + appLogs_.size());
             for (size_t index = 0; index < appLogs_.size(); ++index) {
                 const auto& entry = appLogs_[index];
-                const bool coreXp = entry.source == "CoreTaskCompletion";
+                const bool coreEvent = entry.source == "CoreTaskCompletion" || entry.source == "CoreTaskRecovery";
+                const QString sourceLabel = entry.source == "CoreTaskRecovery"
+                    ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
-                entries.push_back({entry.timestamp, coreXp ? 5 : 3, std::to_string(index),
-                    {coreXp ? QString::fromUtf8("Транзакция XP") : QString::fromUtf8("Приложение"),
+                entries.push_back({entry.timestamp, coreEvent ? 5 : 3, std::to_string(index),
+                    {coreEvent ? QString::fromUtf8("Core-событие XP") : QString::fromUtf8("Приложение"),
                         timeText(entry.timestamp), q(entry.source),
-                        coreXp ? QString::fromUtf8("Операция начисления XP") : QString::fromUtf8("Журнал Qt"),
+                        coreEvent ? sourceLabel : QString::fromUtf8("Журнал Qt"),
                         level, QString(), q(entry.message)}});
             }
             entries.reserve(entries.size() + data.vault.log.size());
