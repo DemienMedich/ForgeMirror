@@ -41,6 +41,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QtReportChart;
 class QtLogActivityChart;
+class QtProfileAnalytics;
 class QSystemTrayIcon;
 class QCloseEvent;
 
@@ -143,6 +144,7 @@ private:
     QWidget* profileTaskActions_;
     QPushButton* profileTaskFilterButtons_[4];
     QWidget* profileSkillFilters_;
+    QtProfileAnalytics* profileAnalytics_;
     QComboBox* profileSkillSort_;
     QComboBox* profileSkillWeightCategory_;
     QDoubleSpinBox* profileSkillWeightMin_;

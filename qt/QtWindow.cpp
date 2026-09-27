@@ -14,6 +14,7 @@
 #include "QtModelViewer.h"
 #include "QtReportExport.h"
 #include "QtProfileReportExport.h"
+#include "QtProfileAnalytics.h"
 #include "QtStorageHealthReport.h"
 #include "QtAuditExport.h"
 #include "QtReportChart.h"
@@ -725,6 +726,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     labelForAccessibility(profileSkillFilterReset_, QString::fromUtf8("Сбросить фильтры навыков"));
     skillFilterGrid->addWidget(profileSkillFilterReset_, 2, 0, 1, 4, Qt::AlignLeft);
     content->addWidget(profileSkillFilters_);
+    profileAnalytics_ = new QtProfileAnalytics;
+    content->addWidget(profileAnalytics_);
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;
     pomodoro->setRewardHandler([this](int workMinutes, std::int64_t startedAt) -> QString {
@@ -2119,6 +2122,7 @@ void QtWindow::render() {
     }
     table_->setVisible(!timerPage && !modelPage && (page != ProfilePage || profileMode != 2));
     profileSkillFilters_->setVisible(page == ProfilePage && profileMode == 1);
+    profileAnalytics_->setVisible(page == ProfilePage && profileMode == 1);
     profileTaskActions_->setVisible(page == ProfilePage && profileMode == 3 && workspace_.modules.tasks);
     achievements_->setVisible(page == ProfilePage && profileMode != 2 && profileMode != 3);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
@@ -2253,6 +2257,16 @@ void QtWindow::render() {
                 for (int level = 2; level <= skill.level; ++level) total += Skill::required_xp_for(level);
                 return total;
             };
+            QStringList categoryLabels;
+            for (int index = 0; index < Profile::kCategoryCount; ++index)
+                categoryLabels << QString::fromUtf8(Profile::kCategoryLabels[size_t(index)]);
+            std::vector<QtProfileSkillMetric> analyticsSkills;
+            analyticsSkills.reserve(profileSkills.size());
+            for (const auto& skill : profileSkills) {
+                analyticsSkills.push_back({q(workspace_.catalog.display_name(skill.name)), skill.level, skill.xp,
+                    skill.xpToNext, totalSkillXp(skill), skill.weight});
+            }
+            profileAnalytics_->setData(profile->category_best_scores(), categoryLabels, std::move(analyticsSkills));
             const int skillSort = profileMode == 1 ? profileSkillSort_->currentIndex() : 2;
             auto compareDisplayName = [&](const Skill& left, const Skill& right) {
                 return QString::localeAwareCompare(q(workspace_.catalog.display_name(left.name)),

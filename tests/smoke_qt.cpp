@@ -1,5 +1,6 @@
 #include "QtWindow.h"
 #include "QtReportChart.h"
+#include "QtProfileAnalytics.h"
 #include "QtLogActivityChart.h"
 #include "AppTaskProjectService.h"
 #include "AppTaskCompletionService.h"
@@ -4569,6 +4570,17 @@ int main(int argc, char** argv) {
     if (!modeOverview || !modeAnalytics || !modeFocus || !modeTasks || !showAchievements || table->rowCount() != 4 ||
         !modeAnalytics->isChecked() || table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3))
         return fail("Profile analytics mode did not show full skill list");
+    auto* profileCharts = static_cast<QtProfileAnalytics*>(window.findChild<QWidget*>("profileAnalyticsCharts"));
+    if (!profileCharts || !profileCharts->isVisible() || !profileCharts->axisControl()->isEnabled() ||
+        profileCharts->axisControl()->maximum() != 4 ||
+        !profileCharts->accessibleDescription().contains(QString::fromUtf8(Profile::kCategoryLabels[0])) ||
+        !profileCharts->accessibleDescription().contains(QString::fromUtf8("всего XP")))
+        return fail("Profile analytics category, skill chart, or accessible radar controls missing");
+    const auto rankedCharts = QtProfileAnalytics::TopSkills({
+        {"Низкий", 1, 0, 100, 12, 1.0}, {"Высокий", 2, 0, 100, 240, 1.0},
+        {"Средний", 1, 0, 100, 81, 1.0}}, 2);
+    if (rankedCharts.size() != 2 || rankedCharts[0].name != "Высокий" || rankedCharts[1].name != "Средний")
+        return fail("Profile analytics top-skill ranking failed");
     auto* sortSkills = window.findChild<QComboBox*>("profileSkillSort");
     auto* categorySkills = window.findChild<QComboBox*>("profileSkillWeightCategory");
     auto* minWeight = window.findChild<QDoubleSpinBox*>("profileSkillWeightMin");
