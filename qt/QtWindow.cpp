@@ -256,6 +256,23 @@ std::vector<TaskEntry> reportTasksForRange(const std::vector<TaskEntry>& tasks, 
     }
     return filtered;
 }
+bool reportPreviousRange(int range, const QDate& customFrom, const QDate& customTo,
+                         QDate* from, QDate* to) {
+    if (range <= 0) return false;
+    const auto today = QDate::currentDate();
+    if (range == 1) { *from = today.addDays(-29); *to = today; }
+    else if (range == 2) { *from = today.addDays(-89); *to = today; }
+    else if (range == 3) { *from = QDate(today.year(), 1, 1); *to = today; }
+    else { *from = customFrom; *to = customTo; }
+    if (!from->isValid() || !to->isValid() || *from > *to) return false;
+    if (range == 3) { *from = from->addYears(-1); *to = to->addYears(-1); }
+    else {
+        const int days = int(from->daysTo(*to)) + 1;
+        *to = from->addDays(-1);
+        *from = to->addDays(-days + 1);
+    }
+    return from->isValid() && to->isValid() && *from <= *to;
+}
 }
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
@@ -604,6 +621,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportDateRange_->setCurrentIndex(displaySettings_.reportDateRange);
     reportDateRange_->setToolTip(QString::fromUtf8("Фильтр по дате создания задач; статусы и XP показываются текущие"));
     filters->addWidget(reportDateRange_);
+    reportCompare_ = new QCheckBox(QString::fromUtf8("Сравнить"));
+    reportCompare_->setObjectName("reportComparePrevious");
+    labelForAccessibility(reportCompare_, QString::fromUtf8("Сравнить отчёт с предыдущим периодом"));
+    reportCompare_->setToolTip(QString::fromUtf8("Сопоставить с равным предшествующим периодом; доступно для 30/90 дней, начала года и ручного периода"));
+    reportCompare_->setMaximumWidth(105);
+    reportCompare_->setChecked(displaySettings_.reportComparePrevious);
+    filters->addWidget(reportCompare_);
     reportFrom_ = new QDateEdit(displaySettings_.reportDateFrom);
     reportFrom_->setObjectName("reportDateFrom");
     reportFrom_->setCalendarPopup(true);
@@ -940,6 +964,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(catalogProfessionFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportDateRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(reportCompare_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(reportFrom_, &QDateEdit::dateChanged, this, [this](const QDate& date) {
         if (date > reportTo_->date()) { QSignalBlocker blocker(reportTo_); reportTo_->setDate(date); }
         saveDisplayContext(); render();
@@ -1418,6 +1443,7 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
     displaySettings_.reportView = reportView_->currentIndex();
     displaySettings_.reportDateRange = reportDateRange_->currentIndex();
+    displaySettings_.reportComparePrevious = reportCompare_->isChecked();
     displaySettings_.reportDateFrom = reportFrom_->date();
     displaySettings_.reportDateTo = reportTo_->date();
     displaySettings_.projectSortMode = projectSort_->currentIndex();
@@ -1597,6 +1623,8 @@ void QtWindow::render() {
     catalogProfessionFilter_->setVisible(page == Catalog);
     reportView_->setVisible(page == Statistics);
     reportDateRange_->setVisible(page == Statistics);
+    reportCompare_->setVisible(page == Statistics);
+    reportCompare_->setEnabled(reportDateRange_->currentIndex() != 0);
     reportCustomRange_->setVisible(page == Statistics && reportDateRange_->currentIndex() == 4);
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
@@ -1974,6 +2002,15 @@ void QtWindow::render() {
             reportFrom_->date(), reportTo_->date(), &missingCreationDates);
         const auto report = BuildTeamValueReport(reportTasks, data.projects, QDateTime::currentSecsSinceEpoch());
         const auto periodLabel = reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date());
+        QDate previousFrom, previousTo;
+        const bool comparePrevious = reportCompare_->isChecked() && reportPreviousRange(reportDateRange_->currentIndex(),
+            reportFrom_->date(), reportTo_->date(), &previousFrom, &previousTo);
+        const auto previousTasks = comparePrevious
+            ? reportTasksForRange(data.tasks, 4, previousFrom, previousTo) : std::vector<TaskEntry>{};
+        const auto previousReport = BuildTeamValueReport(previousTasks, data.projects, QDateTime::currentSecsSinceEpoch());
+        const auto comparisonLabel = comparePrevious
+            ? QString::fromUtf8(" · сравнение с %1–%2").arg(previousFrom.toString("dd.MM.yyyy"), previousTo.toString("dd.MM.yyyy"))
+            : QString();
         statisticsChart_->setValues(report.newTasks, report.inProgressTasks, report.doneTasks, periodLabel);
         const auto today = QDate::currentDate();
         const auto firstTrendMonth = QDate(today.year(), today.month(), 1).addMonths(-11);
@@ -1983,23 +2020,77 @@ void QtWindow::render() {
         const auto missingNote = missingCreationDates
             ? QString::fromUtf8(" · без даты создания исключено: %1").arg(missingCreationDates) : QString();
         if (reportView_->currentIndex() == 0) {
-            headers({QString::fromUtf8("Проект"), QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")});
-            for (const auto& item : report.projects) row(item.id.empty() ? "__no_project" : item.id, {q(item.name), QString::number(item.activeTasks),
-                QString::number(item.doneTasks), QString::number(item.overdueTasks), QString::number(item.xpPendingTasks)});
-            summary_->setText(QString::fromUtf8("%1 · задач: %2 · проектов в каталоге: %3 · XP: %4 · состояние на сейчас%5")
-                .arg(periodLabel).arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp).arg(missingNote));
+            auto displayed = report.projects;
+            if (comparePrevious) for (const auto& old : previousReport.projects) {
+                const auto found = std::find_if(displayed.begin(), displayed.end(), [&](const auto& item) { return item.id == old.id; });
+                if (found == displayed.end()) {
+                    auto empty = old; empty.totalTasks = empty.activeTasks = empty.doneTasks = empty.overdueTasks =
+                        empty.xpPendingTasks = empty.withoutPipelineTasks = empty.totalGlobalXp = empty.totalSkillXp = 0;
+                    displayed.push_back(std::move(empty));
+                }
+            }
+            if (comparePrevious) std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                return q(a.name).compare(q(b.name), Qt::CaseInsensitive) < 0;
+            });
+            QStringList columns{QString::fromUtf8("Проект"), QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"),
+                QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")};
+            if (comparePrevious) columns << QString::fromUtf8("Активно · пред." ) << QString::fromUtf8("Выполнено · пред.")
+                << QString::fromUtf8("Просрочено · пред.") << QString::fromUtf8("Ждут XP · пред.");
+            headers(columns);
+            for (const auto& item : displayed) {
+                QStringList values{q(item.name), QString::number(item.activeTasks), QString::number(item.doneTasks),
+                    QString::number(item.overdueTasks), QString::number(item.xpPendingTasks)};
+                if (comparePrevious) {
+                    const auto old = std::find_if(previousReport.projects.begin(), previousReport.projects.end(),
+                        [&](const auto& value) { return value.id == item.id; });
+                    values << QString::number(old == previousReport.projects.end() ? 0 : old->activeTasks)
+                        << QString::number(old == previousReport.projects.end() ? 0 : old->doneTasks)
+                        << QString::number(old == previousReport.projects.end() ? 0 : old->overdueTasks)
+                        << QString::number(old == previousReport.projects.end() ? 0 : old->xpPendingTasks);
+                }
+                row(item.id.empty() ? "__no_project" : item.id, values);
+            }
+            summary_->setText(QString::fromUtf8("%1 · задач: %2 · проектов в каталоге: %3 · XP: %4 · состояние на сейчас%5%6")
+                .arg(periodLabel).arg(report.totalTasks).arg(report.totalProjects).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
         } else {
-            headers({QString::fromUtf8("Сотрудник"), "ID", QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"),
-                QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")});
-            for (const auto& item : report.assignees) {
+            auto displayed = report.assignees;
+            if (comparePrevious) for (const auto& old : previousReport.assignees) {
+                const auto found = std::find_if(displayed.begin(), displayed.end(), [&](const auto& item) { return item.profileId == old.profileId; });
+                if (found == displayed.end()) {
+                    auto empty = old; empty.totalTasks = empty.activeTasks = empty.doneTasks = empty.overdueTasks =
+                        empty.xpPendingTasks = empty.totalGlobalXp = empty.totalSkillXp = 0;
+                    displayed.push_back(std::move(empty));
+                }
+            }
+            if (comparePrevious) std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                return a.profileId < b.profileId;
+            });
+            QStringList columns{QString::fromUtf8("Сотрудник"), "ID", QString::fromUtf8("Активно"), QString::fromUtf8("Выполнено"),
+                QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")};
+            if (comparePrevious) columns << QString::fromUtf8("Активно · пред.") << QString::fromUtf8("Выполнено · пред.")
+                << QString::fromUtf8("Просрочено · пред.") << QString::fromUtf8("Ждут XP · пред.")
+                << QString::fromUtf8("Глобальный XP · пред.") << QString::fromUtf8("XP навыков · пред.");
+            headers(columns);
+            for (const auto& item : displayed) {
                 const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
                     [&](const auto& value) { return value.id == item.profileId; });
-                row(item.profileId, {profile == workspace_.profiles.end() ? q(item.profileId) : q(profile->name), q(item.profileId),
+                QStringList values{profile == workspace_.profiles.end() ? q(item.profileId) : q(profile->name), q(item.profileId),
                     QString::number(item.activeTasks), QString::number(item.doneTasks), QString::number(item.overdueTasks),
-                    QString::number(item.xpPendingTasks), QString::number(item.totalGlobalXp), QString::number(item.totalSkillXp)});
+                    QString::number(item.xpPendingTasks), QString::number(item.totalGlobalXp), QString::number(item.totalSkillXp)};
+                if (comparePrevious) {
+                    const auto old = std::find_if(previousReport.assignees.begin(), previousReport.assignees.end(),
+                        [&](const auto& value) { return value.profileId == item.profileId; });
+                    values << QString::number(old == previousReport.assignees.end() ? 0 : old->activeTasks)
+                        << QString::number(old == previousReport.assignees.end() ? 0 : old->doneTasks)
+                        << QString::number(old == previousReport.assignees.end() ? 0 : old->overdueTasks)
+                        << QString::number(old == previousReport.assignees.end() ? 0 : old->xpPendingTasks)
+                        << QString::number(old == previousReport.assignees.end() ? 0 : old->totalGlobalXp)
+                        << QString::number(old == previousReport.assignees.end() ? 0 : old->totalSkillXp);
+                }
+                row(item.profileId, values);
             }
-            summary_->setText(QString::fromUtf8("%1 · сотрудников в задачах: %2 · без исполнителя: %3 · XP: %4 · состояние на сейчас%5")
-                .arg(periodLabel).arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp).arg(missingNote));
+            summary_->setText(QString::fromUtf8("%1 · сотрудников в задачах: %2 · без исполнителя: %3 · XP: %4 · состояние на сейчас%5%6")
+                .arg(periodLabel).arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
         }
     } else if (page == Audit) {
         if (!admin_ && auditSourceFilter_->currentIndex() != 1) {
@@ -2946,10 +3037,20 @@ void QtWindow::details() {
         const auto targetKey = u(targetId);
         const bool employeeView = reportView_->currentIndex() == 1;
         const auto targetName = table_->item(table_->currentRow(), 0)->text();
-        const auto reportTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
+        const auto currentTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
             reportFrom_->date(), reportTo_->date());
+        QDate previousFrom, previousTo;
+        const bool comparePrevious = reportCompare_->isChecked() && reportPreviousRange(reportDateRange_->currentIndex(),
+            reportFrom_->date(), reportTo_->date(), &previousFrom, &previousTo);
+        const auto previousTasks = comparePrevious ? reportTasksForRange(workspace_.data.tasks, 4, previousFrom, previousTo)
+                                                  : std::vector<TaskEntry>{};
+        std::unordered_set<std::string> currentTaskIds;
+        for (const auto& task : currentTasks) currentTaskIds.insert(task.id);
+        auto reportTasks = currentTasks;
+        reportTasks.insert(reportTasks.end(), previousTasks.begin(), previousTasks.end());
         QString html = field(employeeView ? QString::fromUtf8("Сотрудник") : QString::fromUtf8("Проект"), u(targetName));
         std::vector<TaskEntry> matchedTasks;
+        std::vector<TaskEntry> matchedCurrent, matchedPrevious;
         for (const auto& task : reportTasks) {
             bool belongs = false;
             if (employeeView) {
@@ -2964,8 +3065,11 @@ void QtWindow::details() {
             }
             if (!belongs) continue;
             matchedTasks.push_back(task);
+            if (currentTaskIds.count(task.id)) matchedCurrent.push_back(task);
+            else matchedPrevious.push_back(task);
         }
-        const auto groupReport = BuildTeamValueReport(matchedTasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
+        const auto groupReport = BuildTeamValueReport(matchedCurrent, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
+        const auto previousGroupReport = BuildTeamValueReport(matchedPrevious, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
         int groupGlobalXp = groupReport.totalGlobalXp, groupSkillXp = groupReport.totalSkillXp;
         if (employeeView) {
             const auto metric = std::find_if(groupReport.assignees.begin(), groupReport.assignees.end(),
@@ -2981,6 +3085,23 @@ void QtWindow::details() {
             std::to_string(groupReport.overdueTasks) + " / " + std::to_string(groupReport.xpPendingTasks));
         html += field(QString::fromUtf8("Глобальный XP / XP навыков"),
             std::to_string(groupGlobalXp) + " / " + std::to_string(groupSkillXp));
+        if (comparePrevious) {
+            int oldGlobalXp = previousGroupReport.totalGlobalXp, oldSkillXp = previousGroupReport.totalSkillXp;
+            if (employeeView) {
+                const auto metric = std::find_if(previousGroupReport.assignees.begin(), previousGroupReport.assignees.end(),
+                    [&](const auto& item) { return item.profileId == targetKey; });
+                oldGlobalXp = metric == previousGroupReport.assignees.end() ? 0 : metric->totalGlobalXp;
+                oldSkillXp = metric == previousGroupReport.assignees.end() ? 0 : metric->totalSkillXp;
+            }
+            html += QString::fromUtf8("<h3>Предыдущий период · %1–%2</h3>")
+                .arg(previousFrom.toString("dd.MM.yyyy"), previousTo.toString("dd.MM.yyyy"));
+            html += field(QString::fromUtf8("Задач"), std::to_string(previousGroupReport.totalTasks));
+            html += field(QString::fromUtf8("Статусы: новые / в работе / завершены"),
+                std::to_string(previousGroupReport.newTasks) + " / " + std::to_string(previousGroupReport.inProgressTasks) + " / " + std::to_string(previousGroupReport.doneTasks));
+            html += field(QString::fromUtf8("Просрочено / ожидают XP"),
+                std::to_string(previousGroupReport.overdueTasks) + " / " + std::to_string(previousGroupReport.xpPendingTasks));
+            html += field(QString::fromUtf8("Глобальный XP / XP навыков"), std::to_string(oldGlobalXp) + " / " + std::to_string(oldSkillXp));
+        }
         if (matchedTasks.empty()) {
             html += QString::fromUtf8("<p>В выбранном периоде связанных задач нет.</p>");
         } else {
@@ -3012,8 +3133,11 @@ void QtWindow::details() {
                 : !task.projectId.empty() ? task.projectId : u8"Без проекта";
             const auto stageName = stage != workspace_.data.pipelineSteps.end() ? stage->title
                 : !task.pipelineStep.empty() ? task.pipelineStep : u8"Без этапа";
-            const QString taskTitle = QString::fromUtf8("%1 · %2 · %3")
-                .arg(q(AppTaskDisplayTitle(task)), q(AppTaskStatusLabel(task.status)), q(AppTaskPriorityLabel(task.priority)));
+            const auto periodPrefix = comparePrevious
+                ? (currentTaskIds.count(task.id) ? QString::fromUtf8("Текущий · ") : QString::fromUtf8("Предыдущий · "))
+                : QString();
+            const QString taskTitle = QString::fromUtf8("%1%2 · %3 · %4")
+                .arg(periodPrefix, q(AppTaskDisplayTitle(task)), q(AppTaskStatusLabel(task.status)), q(AppTaskPriorityLabel(task.priority)));
             html += field(taskTitle, u(timeText(task.createdAt)) + u8" · срок: " + timeText(task.deadlineAt).toUtf8().toStdString())
                 + field(QString::fromUtf8("Проект / этап"), projectName + u8" / " + stageName)
                 + field(QString::fromUtf8("Исполнители и участники"), u(involved.join(QString::fromUtf8(", "))))

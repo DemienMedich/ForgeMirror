@@ -24,6 +24,7 @@ struct QtDisplaySettings {
     QString catalogProfessionId;
     int reportView = 0;
     int reportDateRange = 0;
+    bool reportComparePrevious = false;
     QDate reportDateFrom;
     QDate reportDateTo;
     int projectSortMode = 0;

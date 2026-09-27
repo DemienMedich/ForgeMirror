@@ -36,6 +36,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "catalogProfessionId") out.catalogProfessionId = value;
             else if (key == "reportView") { bool ok = false; const int index = value.toInt(&ok); out.reportView = ok ? std::clamp(index, 0, 1) : 0; }
             else if (key == "reportDateRange") { bool ok = false; const int index = value.toInt(&ok); out.reportDateRange = ok ? std::clamp(index, 0, 4) : 0; }
+            else if (key == "reportComparePrevious") out.reportComparePrevious = value == "1";
             else if (key == "reportDateFrom") out.reportDateFrom = QDate::fromString(value, Qt::ISODate);
             else if (key == "reportDateTo") out.reportDateTo = QDate::fromString(value, Qt::ISODate);
             else if (key == "projectSortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
@@ -78,6 +79,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("catalogProfessionId", catalogProfessionId);
     set("reportView", QString::number(std::clamp(settings.reportView, 0, 1)));
     set("reportDateRange", QString::number(std::clamp(settings.reportDateRange, 0, 4)));
+    set("reportComparePrevious", settings.reportComparePrevious ? "1" : "0");
     const auto today = QDate::currentDate();
     const auto reportFrom = settings.reportDateFrom.isValid() ? settings.reportDateFrom : today.addDays(-29);
     const auto reportTo = settings.reportDateTo.isValid() ? settings.reportDateTo : today;

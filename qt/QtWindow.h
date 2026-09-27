@@ -91,6 +91,7 @@ private:
     QComboBox* catalogProfessionFilter_;
     QComboBox* reportView_;
     QComboBox* reportDateRange_;
+    QCheckBox* reportCompare_;
     QDateEdit* reportFrom_;
     QDateEdit* reportTo_;
     QWidget* reportCustomRange_;

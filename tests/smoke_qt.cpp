@@ -1899,6 +1899,65 @@ static bool TestReportExport() {
     return true;
 }
 
+static bool TestReportPeriodComparison() {
+    auto fail = [](const char* why) { std::cerr << "reportCompare: " << why << '\n'; return false; };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return fail("temp");
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    auto profile = workspace.storage->create_profile(Profile("Comparison worker"));
+    if (!profile) return fail("profile");
+    workspace.reload();
+    ProjectEntry currentProject; currentProject.id = "current-project"; currentProject.name = "Current project";
+    ProjectEntry previousProject; previousProject.id = "previous-project"; previousProject.name = "Previous project";
+    workspace.data.projects = {currentProject, previousProject};
+    TaskEntry current; current.id = "comparison-current"; current.title = "Current task";
+    current.createdAt = QDateTime::currentSecsSinceEpoch(); current.assignees = {profile->id};
+    current.projectId = currentProject.id; current.project = currentProject.name;
+    TaskEntry previous; previous.id = "comparison-previous"; previous.title = "Previous task"; previous.status = 2;
+    previous.createdAt = QDateTime(QDate::currentDate().addDays(-40), QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch();
+    previous.assignees = {profile->id}; previous.projectId = previousProject.id; previous.project = previousProject.name;
+    previous.participants.push_back({profile->id, 100, 45, 15, "comparison"});
+    workspace.data.tasks = {current, previous};
+    if (!AppSaveProjects(workspace.directory, workspace.data.projects) || !AppSaveTasks(workspace.directory, workspace.data.tasks)) return fail("save fixtures");
+    QtWindow window(workspace);
+    auto* nav = window.findChild<QListWidget*>("navigation");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* range = window.findChild<QComboBox*>("reportDateRange");
+    auto* compare = window.findChild<QCheckBox*>("reportComparePrevious");
+    auto* view = window.findChild<QComboBox*>("reportView");
+    if (!nav || !table || !range || !compare || !view || compare->accessibleName().isEmpty()) return fail("controls");
+    QAction* adminAction = nullptr;
+    for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
+        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return fail("admin action");
+    QTimer::singleShot(0, [] {
+        if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+            dialog->setTextValue("admin123"); dialog->accept();
+        }
+    });
+    adminAction->trigger();
+    nav->setCurrentRow(6);
+    range->setCurrentIndex(1);
+    if (!compare->isEnabled()) return fail("comparison disabled");
+    compare->setChecked(true);
+    if (table->rowCount() != 2 || table->columnCount() != 9) { std::cerr << "rows=" << table->rowCount() << " cols=" << table->columnCount() << '\n'; return fail("project rows"); }
+    int oldProjectRow = -1;
+    for (int row = 0; row < table->rowCount(); ++row)
+        if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("previous-project")) oldProjectRow = row;
+    if (oldProjectRow < 0 || table->item(oldProjectRow, 1)->text() != "0" ||
+        table->item(oldProjectRow, 6)->text() != "1") return fail("previous-only project metrics");
+    table->selectRow(oldProjectRow);
+    auto* details = window.findChild<QTextBrowser*>("details");
+    if (!details || !details->toPlainText().contains("Previous task") ||
+        !details->toPlainText().contains(QString::fromUtf8("Предыдущий период"))) return fail("project drill-down");
+    view->setCurrentIndex(1);
+    if (table->rowCount() != 1 || table->columnCount() != 14 ||
+        table->item(0, 9)->text() != "1" || table->item(0, 12)->text() != "45" || table->item(0, 13)->text() != "15") return fail("employee previous metrics");
+    range->setCurrentIndex(0);
+    if (compare->isEnabled() || table->columnCount() != 8 || !compare->isChecked()) return fail("all-time guard");
+    return LoadQtDisplaySettings(workspace.directory).reportComparePrevious || fail("setting persistence");
+}
+
 static bool TestAuditExport() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -3708,6 +3767,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    settings.reportComparePrevious = true;
     settings.deadlineNotificationsWhenClosed = true;
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
     settings.deadlineNotificationsWhenClosed = false;
@@ -3729,7 +3789,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -3755,7 +3815,7 @@ static bool TestDisplaySettings(QApplication& app) {
             "taskSortMode", "taskAssigneeFilter", "taskProjectFilter", "taskPipelineFilter", "taskFilterReset"})
         if (!hasAccessibleName(name)) { std::cerr << "Missing task filter accessible name: " << name << '\n'; return false; }
     restoredNavigation->setCurrentRow(6); QApplication::processEvents();
-    if (!hasAccessibleName("reportView") || !hasAccessibleName("reportDateRange") ||
+    if (!hasAccessibleName("reportView") || !hasAccessibleName("reportDateRange") || !hasAccessibleName("reportComparePrevious") ||
         !hasAccessibleName("reportDateFrom") || !hasAccessibleName("reportDateTo")) { std::cerr << "Missing report filter accessible name\n"; return false; }
     restoredNavigation->setCurrentRow(7); QApplication::processEvents();
     if (!hasAccessibleName("auditSourceFilter") || !hasAccessibleName("auditActorFilter") ||
@@ -3941,6 +4001,7 @@ int main(int argc, char** argv) {
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
+    if (!TestReportPeriodComparison()) { std::cerr << "Report period comparison failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestStatisticsTrendBeyondAuditPageLimit()) { std::cerr << "Statistics trend audit history failed\n"; return 1; }
     if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
@@ -4209,11 +4270,21 @@ int main(int argc, char** argv) {
     auto* reportView = window.findChild<QComboBox*>("reportView");
     if (!reportView || reportView->count() != 2) return fail("Report view selector unavailable");
     reportView->setCurrentIndex(1);
-    bool assigneeVisible = table->columnCount() == 8;
+    auto* reportRange = window.findChild<QComboBox*>("reportDateRange");
+    auto* reportCompare = window.findChild<QCheckBox*>("reportComparePrevious");
+    if (!reportRange || !reportCompare) return fail("Report comparison controls unavailable");
+    reportRange->setCurrentIndex(1);
+    if (!reportCompare->isEnabled()) return fail("Report comparison not enabled for bounded period");
+    reportCompare->setChecked(true);
+    bool assigneeVisible = table->columnCount() == 14;
     for (int i = 0; i < table->rowCount(); ++i)
         assigneeVisible = assigneeVisible && table->item(i, 0)->text() == QString::fromUtf8("Тестовый профиль") &&
             table->item(i, 1)->text() == QString::fromStdString(createdProfile->id);
-    if (!assigneeVisible || table->rowCount() != 1) return fail("Assignee report view failed");
+    if (!assigneeVisible || table->columnCount() != 14 || table->rowCount() != 1 ||
+        table->horizontalHeaderItem(8)->text() != QString::fromUtf8("Активно · пред.") ||
+        table->item(0, 8)->text() != "0" || table->item(0, 13)->text() != "0" ||
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("сравнение с")))
+        return fail("Assignee report comparison failed");
     table->selectRow(0);
     auto* reportDetails = window.findChild<QTextBrowser*>("details");
     const auto reportDetailText = reportDetails ? reportDetails->toPlainText() : QString();
@@ -4221,7 +4292,12 @@ int main(int argc, char** argv) {
         !reportDetailText.contains(QString::fromUtf8("Просрочено / ожидают XP")) ||
         !reportDetailText.contains(QString::fromUtf8("Проверка Qt <без HTML>")) ||
         !reportDetailText.contains(QString::fromUtf8("Old stage")) ||
+        !reportDetailText.contains(QString::fromUtf8("Предыдущий период")) ||
         !reportDetailText.contains(QString::fromUtf8("Исполнители и участники"))) return fail("Report group drill-down incomplete");
+    reportRange->setCurrentIndex(0);
+    if (reportCompare->isEnabled() || table->columnCount() != 8 || !reportCompare->isChecked())
+        return fail("All-time comparison guard failed");
+    reportRange->setCurrentIndex(1);
     const auto reportArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!reportArtifacts.isEmpty()) window.grab().save(reportArtifacts + "/statistics-export.png");
     nav->setCurrentRow(9);
