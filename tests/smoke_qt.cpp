@@ -817,6 +817,12 @@ static bool TestQtAdminAuthParity() {
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
     QtWorkspace workspace(directory);
     if (!SetAdminPassword(directory, "old-admin-password") || !SetAdminStayLoggedIn(directory, false)) return false;
+    for (int iteration = 0; iteration < 20; ++iteration) {
+        if (!SetAdminStayLoggedIn(directory, (iteration % 2) == 0) ||
+            LoadAdminPassword(directory) != "old-admin-password" ||
+            LoadAdminStayLoggedIn(directory) != ((iteration % 2) == 0)) return false;
+    }
+    if (!SetAdminStayLoggedIn(directory, false)) return false;
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     auto* login = window.findChild<QAction*>("adminLoginAction");
     auto* passwordAction = window.findChild<QAction*>("changeAdminPasswordAction");

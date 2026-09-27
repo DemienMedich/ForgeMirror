@@ -23,6 +23,11 @@
 #include <random>
 #include <chrono>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace {
 
 std::string ToRoman(int value) {
@@ -506,7 +511,9 @@ bool LoadAdminStayLoggedInFlag(const std::filesystem::path& storageDir) {
 bool SaveAdminConfig(const std::filesystem::path& storageDir, const std::string& encodedPassword,
                      bool stayLoggedIn) {
     auto path = AdminPasswordPath(storageDir);
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    auto tempPath = path;
+    tempPath += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    std::ofstream out(tempPath, std::ios::binary | std::ios::trunc);
     if (!out) return false;
     // Write BOM for editors (Notepad) to recognize UTF-8
     const unsigned char bom[] = {0xEF, 0xBB, 0xBF};
@@ -514,7 +521,27 @@ bool SaveAdminConfig(const std::filesystem::path& storageDir, const std::string&
     out << "# ForgeMirror admin password\n";
     out << "password=" << encodedPassword << "\n";
     out << "stayLoggedIn=" << (stayLoggedIn ? 1 : 0) << "\n";
-    return out.good();
+    out.flush();
+    const bool written = out.good();
+    out.close();
+    if (!written) {
+        std::error_code ec;
+        std::filesystem::remove(tempPath, ec);
+        return false;
+    }
+#ifdef _WIN32
+    const bool replaced = MoveFileExW(tempPath.c_str(), path.c_str(),
+        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    std::error_code ec;
+    std::filesystem::rename(tempPath, path, ec);
+    const bool replaced = !ec;
+#endif
+    if (!replaced) {
+        std::error_code ec;
+        std::filesystem::remove(tempPath, ec);
+    }
+    return replaced;
 }
 
 bool SaveAdminPassword(const std::filesystem::path& storageDir, const std::string& password) {
