@@ -3985,6 +3985,26 @@ int main(int argc, char** argv) {
     const auto directXpProfile = workspace.storage->load_profile();
     if (!directXpProfile || directXpProfile->total_xp() != directXpBefore + 200 ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Начислено"))) return fail("Direct XP UI failed");
+    QFile coreLog(QString::fromUtf8((workspace.directory / "meta/qt-application-log.json").u8string()));
+    if (!coreLog.open(QIODevice::ReadOnly)) return fail("Direct XP telemetry file unavailable");
+    const auto directXpTelemetry = coreLog.readAll(); coreLog.close();
+    if (!directXpTelemetry.contains("Direct skill XP transaction committed") ||
+        directXpTelemetry.contains(createdProfile->id.c_str())) return fail("Direct XP telemetry privacy or outcome failed");
+    auto hasAdminCoreEvent = [&] (const QString& expected) {
+        const int priorPage = nav->currentRow();
+        auto* filter = window.findChild<QComboBox*>("auditSourceFilter");
+        if (!filter) return false;
+        const int priorSource = filter->currentIndex();
+        nav->setCurrentRow(7); filter->setCurrentIndex(5); QApplication::processEvents();
+        bool found = false;
+        for (int row = 0; row < table->rowCount(); ++row)
+            found |= table->item(row, 3)->text() == QString::fromUtf8("Операция профиля") &&
+                table->item(row, 6)->text() == expected;
+        nav->setCurrentRow(priorPage); filter->setCurrentIndex(priorSource); QApplication::processEvents();
+        return found;
+    };
+    if (!hasAdminCoreEvent(QString::fromUtf8("Direct skill XP transaction committed")))
+        return fail("Direct skill XP missing from admin core audit");
     if (!workspace.storage->save_profile(*directXpOriginal)) return fail("Direct XP fixture restore failed");
     nav->setCurrentRow(10);
     if (!primary->isVisible() || primary->text() != QString::fromUtf8("Настройки хранилища") ||
@@ -4065,6 +4085,12 @@ int main(int argc, char** argv) {
     if (std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Профили пересчитаны")))
         return fail("Rules reapply UI failed");
+    if (!coreLog.open(QIODevice::ReadOnly)) return fail("Rules telemetry file unavailable");
+    const auto rulesTelemetry = coreLog.readAll(); coreLog.close();
+    if (!rulesTelemetry.contains("Rules reapply transaction committed") ||
+        rulesTelemetry.contains(createdProfile->id.c_str())) return fail("Rules telemetry privacy or outcome failed");
+    if (!hasAdminCoreEvent(QString::fromUtf8("Rules reapply transaction committed")))
+        return fail("Rules transaction missing from admin core audit");
     const auto rulesArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!rulesArtifacts.isEmpty()) window.grab().save(rulesArtifacts + "/rules-page.png");
     window.statusBar()->showMessage(QString::fromUtf8("audit-app-log-unique-token"));
@@ -4642,8 +4668,15 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(7);
     auditSourceFilter->setCurrentIndex(5);
     QApplication::processEvents();
-    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8("Core-событие") ||
-        table->item(0, 6)->text() != QString::fromUtf8("Task XP transaction committed"))
+    bool taskCompletionCoreEvent = false;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (table->item(row, 0)->text() != QString::fromUtf8("Core-событие")) continue;
+        const auto event = table->item(row, 6)->text();
+        const auto category = table->item(row, 3)->text();
+        taskCompletionCoreEvent |= category == QString::fromUtf8("Завершение XP") &&
+            event == QString::fromUtf8("Task XP transaction committed");
+    }
+    if (table->rowCount() != 1 || !taskCompletionCoreEvent)
         return fail("Core task XP transaction outcome missing from its admin audit source");
     auditSourceFilter->setCurrentIndex(1);
     QApplication::processEvents();

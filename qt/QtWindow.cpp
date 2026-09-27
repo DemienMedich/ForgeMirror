@@ -1996,10 +1996,12 @@ void QtWindow::render() {
                 const auto& entry = appLogs_[index];
                 const bool coreWalletEvent = entry.source == "CoreWalletMutation";
                 const bool coreCloudEvent = entry.source == "CoreCloudTransaction";
+                const bool coreProfileEvent = entry.source == "CoreProfileMutation";
                 const bool coreRecoveryEvent = entry.source == "CoreTransactionRecovery";
-                const bool coreEvent = coreWalletEvent || coreCloudEvent || coreRecoveryEvent || entry.source == "CoreTaskCompletion";
+                const bool coreEvent = coreWalletEvent || coreCloudEvent || coreProfileEvent || coreRecoveryEvent || entry.source == "CoreTaskCompletion";
                 const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
                     : coreCloudEvent ? QString::fromUtf8("Облачный перенос")
+                    : coreProfileEvent ? QString::fromUtf8("Операция профиля")
                     : coreRecoveryEvent ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
@@ -2186,7 +2188,14 @@ void QtWindow::reapplyRules() {
     if (confirm.exec() != QMessageBox::Yes) return;
     AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
     const auto result = ReapplyRulesWithRecovery(context, u(profiles_->currentData().toString()));
-    if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось пересчитать профили." : result.errorMessage); return; }
+    if (!result.ok) {
+        const bool pending = std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction");
+        appendLog(pending ? AppLogLevel::Error : AppLogLevel::Warning, "CoreProfileMutation",
+            pending ? "Rules reapply recovery pending" : "Rules reapply failed or rolled back");
+        message(result.errorMessage.empty() ? u8"Не удалось пересчитать профили." : result.errorMessage);
+        return;
+    }
+    appendLog(AppLogLevel::Info, "CoreProfileMutation", "Rules reapply transaction committed");
     reload();
     statusBar()->showMessage(QString::fromUtf8("Профили пересчитаны: %1 · общий XP сохранён").arg(result.affectedProfiles), 5000);
 }
@@ -2237,7 +2246,13 @@ void QtWindow::grantDirectXp() {
         AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
         const auto result = GrantDirectSkillXpWithRecovery(context, profileId, profileId,
             u(skill->currentData().toString()), amount->value(), QDateTime::currentSecsSinceEpoch());
-        if (!result.ok) { notice->setText(q(result.errorMessage)); return; }
+        if (!result.ok) {
+            const bool pending = std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction");
+            appendLog(pending ? AppLogLevel::Error : AppLogLevel::Warning, "CoreProfileMutation",
+                pending ? "Direct skill XP recovery pending" : "Direct skill XP failed or rolled back");
+            notice->setText(q(result.errorMessage)); return;
+        }
+        appendLog(AppLogLevel::Info, "CoreProfileMutation", "Direct skill XP transaction committed");
         dialog.setProperty("awardedGlobalXp", result.awardedGlobalXp);
         dialog.setProperty("awardedSkillXp", result.awardedSkillXp);
         dialog.accept();
