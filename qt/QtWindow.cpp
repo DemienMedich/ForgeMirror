@@ -2795,7 +2795,16 @@ void QtWindow::exportReport() {
         reportFrom_->date(), reportTo_->date());
     const auto report = BuildTeamValueReport(tasks, workspace_.data.projects, QDateTime::currentSecsSinceEpoch());
     QString error;
-    if (!ExportTeamValueReportCsv(path, report, &error)) { message(error.toUtf8().toStdString()); return; }
+    QDate previousFrom, previousTo;
+    const bool comparePrevious = reportCompare_->isChecked() && reportPreviousRange(reportDateRange_->currentIndex(),
+        reportFrom_->date(), reportTo_->date(), &previousFrom, &previousTo);
+    const bool exported = comparePrevious
+        ? ExportTeamValueReportComparisonCsv(path, report, reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date()),
+            BuildTeamValueReport(reportTasksForRange(workspace_.data.tasks, 4, previousFrom, previousTo),
+                workspace_.data.projects, QDateTime::currentSecsSinceEpoch()),
+            QString::fromUtf8("%1–%2").arg(previousFrom.toString("dd.MM.yyyy"), previousTo.toString("dd.MM.yyyy")), &error)
+        : ExportTeamValueReportCsv(path, report, &error);
+    if (!exported) { message(error.toUtf8().toStdString()); return; }
     statusBar()->showMessage(QString::fromUtf8("Отчёт сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);
 }
 

@@ -1886,6 +1886,18 @@ static bool TestReportExport() {
     if (!file.open(QIODevice::ReadOnly)) return false;
     const auto bytes = file.readAll();
     if (!bytes.startsWith("\xEF\xBB\xBF") || !bytes.contains(QString::fromUtf8("Проект, «Фарос»").toUtf8())) return false;
+    TeamValueReport previous; previous.totalTasks = 7;
+    TeamValueProjectMetric previousProject; previousProject.id = "old"; previousProject.name = u8"Старый проект"; previousProject.totalTasks = 7;
+    previous.projects.push_back(previousProject);
+    const auto comparisonPath = temp.path() + "/comparison.csv";
+    if (!ExportTeamValueReportComparisonCsv(comparisonPath, report, QString::fromUtf8("Текущий диапазон"),
+        previous, QString::fromUtf8("Предыдущий диапазон"), &error) || !error.isEmpty()) return false;
+    QFile comparison(comparisonPath);
+    if (!comparison.open(QIODevice::ReadOnly)) return false;
+    const auto comparisonBytes = comparison.readAll();
+    if (!comparisonBytes.contains(QString::fromUtf8("ComparisonPeriod,Текущий период,Текущий диапазон").toUtf8()) ||
+        !comparisonBytes.contains(QString::fromUtf8("ComparisonPeriod,Предыдущий период,Предыдущий диапазон").toUtf8()) ||
+        !comparisonBytes.contains(QString::fromUtf8("Старый проект").toUtf8())) return false;
     if (ExportTeamValueReportCsv(QString(), report, &error) || error.isEmpty() ||
         ExportTeamValueReportCsv(temp.path(), report, &error)) return false;
 #ifdef _WIN32
