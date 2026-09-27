@@ -1914,7 +1914,11 @@ void QtWindow::render() {
         const auto report = BuildTeamValueReport(reportTasks, data.projects, QDateTime::currentSecsSinceEpoch());
         const auto periodLabel = reportPeriodLabel(reportDateRange_->currentIndex(), reportFrom_->date(), reportTo_->date());
         statisticsChart_->setValues(report.newTasks, report.inProgressTasks, report.doneTasks, periodLabel);
-        statisticsChart_->setCompletionTrend(QtReportChart::BuildMonthlyCompletionTrend(data.taskAudit));
+        const auto today = QDate::currentDate();
+        const auto firstTrendMonth = QDate(today.year(), today.month(), 1).addMonths(-11);
+        const auto firstTrendTimestamp = QDateTime(firstTrendMonth, QTime(0, 0), Qt::LocalTime).toSecsSinceEpoch();
+        const auto trendAudit = LoadTaskAuditData(workspace_.directory, 0, firstTrendTimestamp);
+        statisticsChart_->setCompletionTrend(QtReportChart::BuildMonthlyCompletionTrend(trendAudit, today));
         const auto missingNote = missingCreationDates
             ? QString::fromUtf8(" · без даты создания исключено: %1").arg(missingCreationDates) : QString();
         if (reportView_->currentIndex() == 0) {

@@ -907,7 +907,8 @@ std::vector<PipelineStep> MergeLoadedPipelineWithDefaults(const std::vector<Pipe
 
 } // namespace
 
-std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries) {
+std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries,
+                                               std::int64_t sinceTimestamp) {
     std::vector<TaskAuditEntry> out;
     std::ifstream in(TaskAuditStoragePath(storageDir), std::ios::binary);
     if (!in) return out;
@@ -939,7 +940,7 @@ std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& stora
         entry.field = parts[3];
         entry.oldValue = parts[4];
         entry.newValue = parts[5];
-        if (entry.taskId.empty() || entry.field.empty()) continue;
+        if (entry.taskId.empty() || entry.field.empty() || entry.timestamp < sinceTimestamp) continue;
         out.push_back(std::move(entry));
     }
     if (maxEntries > 0 && out.size() > maxEntries) {

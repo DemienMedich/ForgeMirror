@@ -39,7 +39,8 @@ struct WorkspaceSyncHealth {
 
 std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir);
 std::vector<TaskEntry> LoadTasksDataFromFile(const std::filesystem::path& filePath);
-std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries = 200);
+std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries = 200,
+                                              std::int64_t sinceTimestamp = 0);
 std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageDir);
 std::vector<ShortcutEntry> LoadShortcutsData(const std::filesystem::path& storageDir);
 std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir);

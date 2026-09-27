@@ -2548,6 +2548,49 @@ static bool TestMonthlyCompletionTrend() {
         std::accumulate(counts.begin(), counts.end(), 0) == 3;
 }
 
+static bool TestStatisticsTrendBeyondAuditPageLimit() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    const auto today = QDate::currentDate();
+    const auto firstMonth = QDate(today.year(), today.month(), 1).addMonths(-11);
+    const auto markerDate = firstMonth.addDays(3);
+    QFile audit(temp.path() + "/meta/task-audit.log");
+    if (!audit.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    QTextStream output(&audit); output.setEncoding(QStringConverter::Utf8);
+    auto addCompletion = [&](const QDate& date, int index) {
+        output << QDateTime(date, QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch()
+            << "|test|trend-" << index << "|status|В работе|Выполнена\n";
+    };
+    addCompletion(markerDate, 0);
+    for (int index = 1; index <= 205; ++index) addCompletion(today, index);
+    audit.close();
+    const auto recentPage = LoadTaskAuditData(directory);
+    if (recentPage.size() != 200 || std::any_of(recentPage.begin(), recentPage.end(), [](const auto& entry) { return entry.taskId == "trend-0"; }))
+        return false;
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    QListWidget* navigation = window.findChild<QListWidget*>("navigation");
+    QAction* adminAction = nullptr;
+    for (auto* menu : window.findChildren<QMenu*>())
+        for (auto* action : menu->actions())
+            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!navigation || !adminAction) return false;
+    QTimer::singleShot(0, [] {
+        if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+            input->setTextValue(QStringLiteral("admin123")); input->accept();
+        }
+    });
+    adminAction->trigger();
+    navigation->setCurrentRow(6);
+    auto* chart = static_cast<QtReportChart*>(window.findChild<QWidget*>("statisticsStatusChart"));
+    QApplication::processEvents();
+    if (!chart || !chart->isVisible()) return false;
+    const int markerIndex = (markerDate.year() - firstMonth.year()) * 12 + markerDate.month() - firstMonth.month();
+    return chart->completionTrend()[size_t(markerIndex)] == 1 &&
+        chart->completionTrend()[11] == 205 &&
+        chart->accessibleDescription().contains(QString::fromUtf8("последние 12 месяцев"));
+}
+
 static bool TestPipelineMap() {
     PipelineStep start; start.id = "start"; start.stageCode = "A"; start.title = "Start"; start.branch = "Main"; start.description = "Entry point"; start.nextIds = {"left", "right"};
     PipelineStep left; left.id = "left"; left.stageCode = "B1"; left.title = "Left branch"; left.branch = "Left"; left.owner = "Artist"; left.nextIds = {"removed-step"};
@@ -3636,6 +3679,7 @@ int main(int argc, char** argv) {
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
+    if (!TestStatisticsTrendBeyondAuditPageLimit()) { std::cerr << "Statistics trend audit history failed\n"; return 1; }
     if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
     if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }

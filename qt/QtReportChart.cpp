@@ -11,7 +11,7 @@ QtReportChart::QtReportChart(QWidget* parent) : QWidget(parent) {
     setFixedHeight(144);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     setAccessibleName(QString::fromUtf8("Распределение задач по текущим статусам"));
-    setToolTip(QString::fromUtf8("Сверху — текущие статусы задач выбранного периода. Снизу — переходы в «Выполнена» по дате из сохранённого аудита (до 200 событий)."));
+    setToolTip(QString::fromUtf8("Сверху — текущие статусы задач выбранного периода. Снизу — переходы в «Выполнена» по сохранённому аудиту за последние 12 месяцев."));
 }
 
 void QtReportChart::setCompletionTrend(const std::array<int, 12>& monthlyCompletions) {
@@ -19,7 +19,7 @@ void QtReportChart::setCompletionTrend(const std::array<int, 12>& monthlyComplet
     QStringList values;
     for (const int value : monthlyCompletions_) values << QString::number(value);
     setAccessibleDescription(accessibleDescription() + QString::fromUtf8(" Завершения по месяцам, последние 12 месяцев: ") + values.join(", ") +
-        QString::fromUtf8(". Учтены только переходы, оставшиеся в последних 200 событиях task-audit.log."));
+        QString::fromUtf8(". Учитываются все загруженные события task-audit.log за этот период."));
     update();
 }
 
@@ -99,7 +99,7 @@ void QtReportChart::paintEvent(QPaintEvent* event) {
 
     painter.setPen(mutedColor);
     painter.drawText(QRect(0, 70, width(), 16), Qt::AlignLeft | Qt::AlignVCenter,
-        QString::fromUtf8("Завершения по месяцу перехода · последние 12 месяцев · сохранённый аудит (до 200 событий)"));
+        QString::fromUtf8("Завершения по месяцу перехода · последние 12 месяцев · весь доступный аудит"));
     const QRectF plot(24, 91, std::max(0, width() - 36), 34);
     painter.setPen(QPen(trackColor, 1));
     painter.drawLine(QPointF(plot.left(), plot.bottom()), QPointF(plot.right(), plot.bottom()));
@@ -107,7 +107,7 @@ void QtReportChart::paintEvent(QPaintEvent* event) {
     if (trendMax == 0) {
         painter.setPen(mutedColor);
         painter.drawText(QRectF(plot.left(), plot.top(), plot.width(), plot.height()), Qt::AlignCenter,
-            QString::fromUtf8("Нет завершений в сохранённой части аудита"));
+            QString::fromUtf8("Нет завершений в сохранённой части аудита за этот период"));
     } else {
         QPolygonF line;
         for (int index = 0; index < int(monthlyCompletions_.size()); ++index) {

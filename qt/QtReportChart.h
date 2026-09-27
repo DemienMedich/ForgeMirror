@@ -12,6 +12,7 @@ public:
     explicit QtReportChart(QWidget* parent = nullptr);
     void setValues(int newTasks, int inProgressTasks, int doneTasks, const QString& periodLabel);
     void setCompletionTrend(const std::array<int, 12>& monthlyCompletions);
+    const std::array<int, 12>& completionTrend() const { return monthlyCompletions_; }
     static std::array<int, 12> BuildMonthlyCompletionTrend(const std::vector<TaskAuditEntry>& audit,
                                                             const QDate& currentDate = QDate::currentDate());
 
