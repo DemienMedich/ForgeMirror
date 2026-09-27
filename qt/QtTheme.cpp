@@ -15,7 +15,11 @@ void ApplyQtLayoutMetrics(QApplication& app, int spacingPercent, int cornerRadiu
         "QPushButton#primary:hover, QPushButton[primary=true]:hover { background: #8764bf; } QLabel#title { font-weight: 600; }"
         "QFrame[metric=true] { background: #26262c; border-radius: %4px; } QLabel[metricValue=true] { font-weight: 600; }"
         "QLabel[timerValue=true] { font-size: 30px; font-weight: 600; } QProgressBar { min-height: 8px; max-height: 8px; }"
-        "QProgressBar::chunk { background: #7554ad; }")
+        "QProgressBar::chunk { background: #7554ad; }"
+        "QListWidget#navigation { background: #202024; border: 0; outline: 0; padding: 6px 4px; }"
+        "QListWidget#navigation::item { border: 0; border-radius: 6px; color: #b9b9c4; padding: 6px 8px; margin: 1px 0; }"
+        "QListWidget#navigation::item:hover { background: #2c2c32; color: #eeeeef; }"
+        "QListWidget#navigation::item:selected { background: #33333b; color: #ffffff; border-left: 3px solid #7554ad; padding-left: 5px; }")
         .arg(controlHeight).arg(horizontalPadding).arg(listPadding).arg(radius));
 }
 

@@ -556,12 +556,104 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->setObjectName("navigation");
     navigation_->setAccessibleName(QString::fromUtf8("Разделы ForgeMirror"));
     navigation_->setAccessibleDescription(QString::fromUtf8("Переключение между модулями программы. Скрытые пункты недоступны в текущем режиме."));
-    navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
-        QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
-        QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
-        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако"),
+    navigation_->addItems({QString::fromUtf8("Профиль"), QString::fromUtf8("Задачи"),
+        QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки"), QString::fromUtf8("Пайплайн"),
+        QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика"), QString::fromUtf8("Аудит"),
+        QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако"),
         QString::fromUtf8("3D просмотр"), QString::fromUtf8("Настройки 3D"), QString::fromUtf8("Логи"),
         QString::fromUtf8("Статистика профилей")});
+    const std::array<QString, 18> navigationHotkeys = {
+        QStringLiteral("F1"), QString(), QString(), QStringLiteral("F2"), QStringLiteral("F3"), QString(),
+        QStringLiteral("F5"), QStringLiteral("F6"), QString(), QStringLiteral("F4"), QString(), QString(),
+        QString(), QString(), QString(), QString(), QString(), QString()
+    };
+    navigation_->setIconSize(QSize(18, 18));
+    const auto drawNavigationIcon = [](int index, const QColor& color) {
+        QPixmap pixmap(20, 20);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.setBrush(Qt::NoBrush);
+        QPainterPath path;
+        switch (index) {
+        case 0:
+            painter.drawEllipse(QRectF(8, 2.5, 4, 4));
+            path.moveTo(3, 17); path.cubicTo(3.5, 12.5, 6, 11, 10, 11); path.cubicTo(14, 11, 16.5, 12.5, 17, 17); painter.drawPath(path);
+            break;
+        case 1:
+            painter.drawRoundedRect(QRectF(3, 2.5, 14, 15), 2, 2);
+            painter.drawLine(6, 7, 7, 8); painter.drawLine(8.5, 7, 14.5, 7);
+            painter.drawLine(6, 11, 7, 12); painter.drawLine(8.5, 11, 14.5, 11);
+            painter.drawLine(6, 15, 7, 16); painter.drawLine(8.5, 15, 14.5, 15);
+            break;
+        case 2:
+            path.moveTo(2.5, 5); path.lineTo(8, 5); path.lineTo(10, 7); path.lineTo(17.5, 7); path.lineTo(17.5, 16); path.lineTo(2.5, 16); path.closeSubpath(); painter.drawPath(path);
+            break;
+        case 3:
+        case 6:
+            painter.drawLine(3, 17, 17, 17);
+            painter.drawRoundedRect(QRectF(4, index == 3 ? 10 : 8, 2.5, index == 3 ? 7 : 9), 1, 1);
+            painter.drawRoundedRect(QRectF(8.75, index == 3 ? 5 : 11, 2.5, index == 3 ? 12 : 6), 1, 1);
+            painter.drawRoundedRect(QRectF(13.5, index == 3 ? 8 : 4, 2.5, index == 3 ? 9 : 13), 1, 1);
+            break;
+        case 4:
+            painter.drawLine(5, 5, 14, 5); painter.drawLine(5, 5, 5, 15); painter.drawLine(5, 15, 14, 15); painter.drawLine(14, 5, 14, 15);
+            painter.drawEllipse(QRectF(3, 3, 4, 4)); painter.drawEllipse(QRectF(12, 3, 4, 4)); painter.drawEllipse(QRectF(3, 13, 4, 4)); painter.drawEllipse(QRectF(12, 13, 4, 4));
+            break;
+        case 5:
+            painter.drawRoundedRect(QRectF(3.5, 3, 13, 14), 1.5, 1.5); painter.drawLine(7, 3, 7, 17); painter.drawLine(9.5, 7, 14.5, 7); painter.drawLine(9.5, 10, 14.5, 10); painter.drawLine(9.5, 13, 13, 13);
+            break;
+        case 7:
+        case 16:
+            painter.drawRoundedRect(QRectF(4, 2.5, 12, 15), 1.5, 1.5);
+            painter.drawLine(7, 6, 13, 6); painter.drawLine(7, 9, 13, 9); painter.drawLine(7, 12, 13, 12);
+            if (index == 7) { painter.drawLine(7, 15, 9, 16); painter.drawLine(9, 16, 13, 14); }
+            else painter.drawLine(7, 15, 12, 15);
+            break;
+        case 8:
+            painter.drawEllipse(QRectF(2.5, 2.5, 15, 15)); painter.drawLine(10, 5, 10, 10); painter.drawLine(10, 10, 13.5, 12);
+            break;
+        case 9:
+            painter.drawEllipse(QRectF(7, 7, 6, 6));
+            for (int angle = 0; angle < 360; angle += 45) { const auto radians = qDegreesToRadians(double(angle)); painter.drawLine(QPointF(10 + 4.5 * qCos(radians), 10 + 4.5 * qSin(radians)), QPointF(10 + 7.5 * qCos(radians), 10 + 7.5 * qSin(radians))); }
+            break;
+        case 10:
+            path.moveTo(3, 6); path.cubicTo(3, 2, 17, 2, 17, 6); path.cubicTo(17, 10, 3, 10, 3, 6); path.moveTo(3, 6); path.lineTo(3, 14); path.cubicTo(3, 18, 17, 18, 17, 14); path.lineTo(17, 6); painter.drawPath(path); painter.drawArc(QRectF(3, 9, 14, 5), 0, -180 * 16);
+            break;
+        case 11:
+            path.moveTo(4, 15); path.lineTo(15.5, 3.5); path.moveTo(9, 3.5); path.lineTo(15.5, 3.5); path.lineTo(15.5, 10); painter.drawPath(path);
+            break;
+        case 12:
+            painter.drawLine(5, 17, 5, 3); path.moveTo(5, 4); path.lineTo(16, 4); path.lineTo(13, 8); path.lineTo(16, 12); path.lineTo(5, 12); painter.drawPath(path);
+            break;
+        case 13:
+            path.moveTo(5, 16); path.cubicTo(1, 16, 1, 10, 5, 9); path.cubicTo(5, 4, 12, 3, 14, 7); path.cubicTo(19, 7, 19, 15, 15, 16); path.closeSubpath(); painter.drawPath(path);
+            break;
+        case 14:
+            path.moveTo(10, 2.5); path.lineTo(17, 6.5); path.lineTo(17, 14); path.lineTo(10, 18); path.lineTo(3, 14); path.lineTo(3, 6.5); path.closeSubpath(); path.moveTo(3, 6.5); path.lineTo(10, 10.5); path.lineTo(17, 6.5); path.moveTo(10, 10.5); path.lineTo(10, 18); painter.drawPath(path);
+            break;
+        case 15:
+            painter.drawLine(4, 3, 4, 17); painter.drawLine(10, 3, 10, 17); painter.drawLine(16, 3, 16, 17);
+            painter.drawRoundedRect(QRectF(2, 6, 4, 3), 1.2, 1.2); painter.drawRoundedRect(QRectF(8, 12, 4, 3), 1.2, 1.2); painter.drawRoundedRect(QRectF(14, 5, 4, 3), 1.2, 1.2);
+            break;
+        case 17:
+            painter.drawEllipse(QRectF(8.5, 2.5, 3.5, 3.5)); painter.drawEllipse(QRectF(2.5, 5, 3, 3)); painter.drawEllipse(QRectF(14.5, 5, 3, 3));
+            path.moveTo(5, 17); path.cubicTo(5, 12.5, 7, 11, 10, 11); path.cubicTo(13, 11, 15, 12.5, 15, 17); path.moveTo(1, 16); path.cubicTo(1, 12, 2.5, 10, 5, 10); path.moveTo(19, 16); path.cubicTo(19, 12, 17.5, 10, 15, 10); painter.drawPath(path);
+            break;
+        }
+        return pixmap;
+    };
+    for (int index = 0; index < navigation_->count(); ++index) {
+        auto* item = navigation_->item(index);
+        QIcon icon;
+        icon.addPixmap(drawNavigationIcon(index, QColor("#b9b9c4")), QIcon::Normal);
+        icon.addPixmap(drawNavigationIcon(index, QColor("#eeeeef")), QIcon::Selected);
+        item->setIcon(icon);
+        item->setData(Qt::AccessibleTextRole, item->text());
+        const auto tooltip = navigationHotkeys[size_t(index)];
+        if (!tooltip.isEmpty()) item->setToolTip(item->text() + QStringLiteral(" · ") + tooltip);
+    }
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;

@@ -2593,6 +2593,10 @@ static bool TestReportPeriodComparison() {
     auto* compare = window.findChild<QCheckBox*>("reportComparePrevious");
     auto* view = window.findChild<QComboBox*>("reportView");
     if (!nav || !table || !range || !compare || !view || compare->accessibleName().isEmpty()) return fail("controls");
+    if (nav->count() != 18 || nav->item(0)->text() != QString::fromUtf8("Профиль") ||
+        nav->item(0)->icon().isNull() || nav->item(0)->data(Qt::AccessibleTextRole).toString() != nav->item(0)->text() ||
+        !nav->item(0)->toolTip().contains(QStringLiteral("F1")) || nav->item(9)->icon().isNull())
+        return fail("Reference-style navigation labels, icons, keyboard hint or accessible text missing");
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
         if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
