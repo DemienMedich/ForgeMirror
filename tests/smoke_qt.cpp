@@ -2779,7 +2779,8 @@ static bool TestPersonalWallet() {
         !AppendProfileAudit(workspace.directory, created->id, "trust_revoked", "profile_unavailable") ||
         !AppendProfileAudit(workspace.directory, created->id, "trust_revoke_failed", "local_session_closed") ||
         !AppendProfileAudit(workspace.directory, created->id, "test_profile_event", "profile history marker")) return false;
-    QTimer::singleShot(0, [] {
+    QTimer::singleShot(0, [eventsCsvPath = temp.path() + "/profile-events.csv",
+                           tasksCsvPath = temp.path() + "/profile-task-history.csv"] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* table = dialog ? dialog->findChild<QTableWidget*>("profileActivityHistoryTable") : nullptr;
         if (!table || table->rowCount() < 6 || table->columnCount() != 3) return;
@@ -2799,11 +2800,29 @@ static bool TestPersonalWallet() {
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/profile-activity-history.png"); }
         auto* tabs = dialog ? dialog->findChild<QTabWidget*>("profileHistoryTabs") : nullptr;
+        auto* exportEvents = dialog ? dialog->findChild<QPushButton*>("exportProfileEvents") : nullptr;
+        auto* exportTasks = dialog ? dialog->findChild<QPushButton*>("exportProfileTaskHistory") : nullptr;
         auto* taskTable = dialog ? dialog->findChild<QTableWidget*>("profileTaskXpHistoryTable") : nullptr;
         auto* taskFilter = dialog ? dialog->findChild<QLineEdit*>("profileTaskXpHistoryFilter") : nullptr;
         auto* taskSummary = dialog ? dialog->findChild<QLabel*>("profileTaskXpHistorySummary") : nullptr;
         bool foundAwarded = false, foundPending = false;
-        if (tabs && taskTable && taskFilter && taskSummary) {
+        bool eventExportPassed = false, taskExportPassed = false;
+        if (tabs && exportEvents && exportTasks && taskTable && taskFilter && taskSummary &&
+            !exportEvents->accessibleName().isEmpty() && !exportTasks->accessibleDescription().isEmpty()) {
+            QTimer::singleShot(0, [eventsCsvPath] {
+                if (auto* picker = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+                    picker->selectFile(eventsCsvPath);
+                    static_cast<QDialog*>(picker)->accept();
+                }
+            });
+            exportEvents->click();
+            QFile eventsFile(eventsCsvPath);
+            if (eventsFile.open(QIODevice::ReadOnly)) {
+                const auto bytes = eventsFile.readAll();
+                eventExportPassed = bytes.startsWith("\xEF\xBB\xBF") &&
+                    bytes.contains(QString::fromUtf8("profile history marker").toUtf8()) &&
+                    bytes.contains(QString::fromUtf8("Событие").toUtf8());
+            }
             tabs->setCurrentIndex(1);
             if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/profile-task-xp-history.png");
             for (int row = 0; row < taskTable->rowCount(); ++row) {
@@ -2815,12 +2834,26 @@ static bool TestPersonalWallet() {
             }
             taskFilter->setText(QString::fromUtf8("Awarded"));
             const bool filters = taskTable->rowCount() == 1;
+            QTimer::singleShot(0, [tasksCsvPath] {
+                if (auto* picker = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+                    picker->selectFile(tasksCsvPath);
+                    static_cast<QDialog*>(picker)->accept();
+                }
+            });
+            exportTasks->click();
+            QFile tasksFile(tasksCsvPath);
+            if (tasksFile.open(QIODevice::ReadOnly)) {
+                const auto bytes = tasksFile.readAll();
+                taskExportPassed = bytes.startsWith("\xEF\xBB\xBF") &&
+                    bytes.contains(QString::fromUtf8("Awarded task").toUtf8()) &&
+                    !bytes.contains(QString::fromUtf8("Pending task").toUtf8());
+            }
             taskFilter->clear();
             foundAwarded = foundAwarded && filters && taskTable->rowCount() == 2;
             foundAwarded = foundAwarded && taskSummary->text().contains("17") && taskSummary->text().contains("8");
         }
         if (foundWallet && foundPassword && foundUnknown && foundSpirit && foundTrustExpired && foundTrustRevoked &&
-            foundTrustFailure && foundAwarded && foundPending) dialog->accept();
+            foundTrustFailure && foundAwarded && foundPending && eventExportPassed && taskExportPassed) dialog->accept();
     });
     profileHistory->click();
     QAction* adminAction = nullptr;

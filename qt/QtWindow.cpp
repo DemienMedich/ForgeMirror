@@ -2993,6 +2993,54 @@ void QtWindow::showProfileHistory() {
     dialog.setWindowTitle(QString::fromUtf8("История профиля"));
     dialog.resize(820, 460);
     auto* layout = new QVBoxLayout(&dialog);
+    auto exportHistoryTable = [this, &dialog, profileId](QTableWidget* source, const QString& kind) {
+        if (!source) return;
+        const QString reportsPath = QString::fromStdWString((workspace_.directory / "meta" / "reports").wstring());
+        if (!QDir().mkpath(reportsPath)) { statusBar()->showMessage(QString::fromUtf8("Не удалось создать папку отчётов."), 5000); return; }
+        const QString safeId = QString::fromUtf8(profileId.c_str()).replace(QRegularExpression("[^A-Za-z0-9_-]"), "_");
+        QFileDialog picker(&dialog, QString::fromUtf8("Экспорт истории профиля"),
+            QDir(reportsPath).filePath(QStringLiteral("profile-%1-%2-%3.csv")
+                .arg(safeId, kind, QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"))));
+        picker.setAcceptMode(QFileDialog::AcceptSave);
+        picker.setFileMode(QFileDialog::AnyFile);
+        picker.setNameFilter(QString::fromUtf8("CSV-файлы (*.csv)"));
+        picker.setDefaultSuffix("csv");
+        if (picker.exec() != QDialog::Accepted || picker.selectedFiles().isEmpty()) return;
+        QString path = picker.selectedFiles().front();
+        if (QFileInfo(path).suffix().isEmpty()) path += QStringLiteral(".csv");
+        QByteArray payload("\xEF\xBB\xBF", 3);
+        auto appendRecord = [&payload](const QStringList& cells) {
+            QByteArray line;
+            for (int column = 0; column < cells.size(); ++column) {
+                if (column) line += ',';
+                QByteArray value = cells[column].toUtf8();
+                if (value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r')) {
+                    value.replace("\"", "\"\"");
+                    line += '"' + value + '"';
+                } else line += value;
+            }
+            line += "\r\n";
+            payload += line;
+        };
+        QStringList headers;
+        for (int column = 0; column < source->columnCount(); ++column)
+            headers << (source->horizontalHeaderItem(column) ? source->horizontalHeaderItem(column)->text() : QString());
+        appendRecord(headers);
+        for (int row = 0; row < source->rowCount(); ++row) {
+            if (source->isRowHidden(row)) continue;
+            QStringList values;
+            for (int column = 0; column < source->columnCount(); ++column)
+                values << (source->item(row, column) ? source->item(row, column)->text() : QString());
+            appendRecord(values);
+        }
+        QSaveFile file(path);
+        file.setDirectWriteFallback(false);
+        if (!file.open(QIODevice::WriteOnly) || file.write(payload) != payload.size() || !file.commit()) {
+            statusBar()->showMessage(QString::fromUtf8("Не удалось атомарно сохранить CSV истории."), 7000);
+            return;
+        }
+        statusBar()->showMessage(QString::fromUtf8("CSV истории сохранён: %1").arg(QDir::toNativeSeparators(path)), 7000);
+    };
     auto* tabs = new QTabWidget(&dialog);
     tabs->setObjectName("profileHistoryTabs");
     layout->addWidget(tabs, 1);
@@ -3003,6 +3051,11 @@ void QtWindow::showProfileHistory() {
     summary->setObjectName("profileActivityHistorySummary");
     summary->setWordWrap(true);
     eventsLayout->addWidget(summary);
+    auto* exportEvents = new QPushButton(QString::fromUtf8("Экспорт видимых событий в CSV"), eventsPage);
+    exportEvents->setObjectName("exportProfileEvents");
+    labelForAccessibility(exportEvents, QString::fromUtf8("Экспортировать события профиля в CSV"),
+        QString::fromUtf8("В файл попадут строки, показанные в таблице событий."));
+    eventsLayout->addWidget(exportEvents);
     auto* table = new QTableWidget(eventsPage);
     table->setObjectName("profileActivityHistoryTable");
     table->setColumnCount(3);
@@ -3034,6 +3087,9 @@ void QtWindow::showProfileHistory() {
     table->setColumnWidth(1, 210);
     table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     eventsLayout->addWidget(table, 1);
+    connect(exportEvents, &QPushButton::clicked, &dialog, [exportHistoryTable, table] {
+        exportHistoryTable(table, QStringLiteral("events"));
+    });
     tabs->addTab(eventsPage, QString::fromUtf8("События профиля"));
 
     auto* tasksPage = new QWidget(tabs);
@@ -3046,7 +3102,14 @@ void QtWindow::showProfileHistory() {
     taskFilter->setObjectName("profileTaskXpHistoryFilter");
     taskFilter->setClearButtonEnabled(true);
     taskFilter->setPlaceholderText(QString::fromUtf8("Фильтр по задаче или проекту"));
-    tasksLayout->addWidget(taskFilter);
+    auto* taskTools = new QHBoxLayout;
+    taskTools->addWidget(taskFilter, 1);
+    auto* exportTasks = new QPushButton(QString::fromUtf8("Экспорт CSV"), tasksPage);
+    exportTasks->setObjectName("exportProfileTaskHistory");
+    labelForAccessibility(exportTasks, QString::fromUtf8("Экспортировать видимую историю задач и XP в CSV"),
+        QString::fromUtf8("Учитывает текущий фильтр по задаче и проекту."));
+    taskTools->addWidget(exportTasks);
+    tasksLayout->addLayout(taskTools);
     auto* taskTable = new QTableWidget(tasksPage);
     taskTable->setObjectName("profileTaskXpHistoryTable");
     taskTable->setColumnCount(7);
@@ -3107,6 +3170,9 @@ void QtWindow::showProfileHistory() {
     };
     connect(taskFilter, &QLineEdit::textChanged, &dialog, renderTaskHistory);
     renderTaskHistory();
+    connect(exportTasks, &QPushButton::clicked, &dialog, [exportHistoryTable, taskTable] {
+        exportHistoryTable(taskTable, QStringLiteral("tasks-xp"));
+    });
     taskTable->setColumnWidth(0, 135);
     taskTable->setColumnWidth(1, 145);
     taskTable->setColumnWidth(3, 135);
