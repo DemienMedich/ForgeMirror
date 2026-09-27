@@ -884,9 +884,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
     labelForAccessibility(reportView_, QString::fromUtf8("Группировка отчёта"));
-    reportView_->setMaximumWidth(145);
+    reportView_->setMaximumWidth(170);
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам"),
-        QString::fromUtf8("По этапам"), QString::fromUtf8("По категориям")});
+        QString::fromUtf8("По этапам"), QString::fromUtf8("По категориям"), QString::fromUtf8("По статусам")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
     reportDateRange_ = new QComboBox;
@@ -1882,6 +1882,13 @@ void QtWindow::authenticate() {
         remember->setToolTip(envOverride ? QString::fromUtf8("При заданном FORGEMIRROR_ADMIN_PASSWORD пароль из среды не записывается в настройки.")
                                          : QString::fromUtf8("Сохраняет локальный режим администратора до выхода вручную."));
         layout->addRow(remember);
+        auto* workspaceHint = new QLabel(QString::fromUtf8("Рабочее место Qt: %1")
+            .arg(QDir::toNativeSeparators(QString::fromStdWString(workspace_.directory.wstring()))));
+        workspaceHint->setObjectName("adminLoginWorkspace");
+        workspaceHint->setWordWrap(true);
+        workspaceHint->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        workspaceHint->setStyleSheet(QString::fromUtf8("color: palette(mid); font-size: 9pt;"));
+        layout->addRow(workspaceHint);
         auto* notice = new QLabel;
         notice->setObjectName("adminLoginNotice"); notice->setWordWrap(true); layout->addRow(notice);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -3021,7 +3028,7 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · этапов в задачах: %2 · задач: %3 · XP: %4 · состояние на сейчас%5%6")
                 .arg(periodLabel).arg(displayed.size()).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
-        } else {
+        } else if (reportView_->currentIndex() == 3) {
             const auto now = QDateTime::currentSecsSinceEpoch();
             auto displayed = buildReportCategoryGroups(reportTasks, data.projects, now);
             const auto previous = comparePrevious
@@ -3057,6 +3064,39 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · категорий в задачах: %2 · задач: %3 · XP: %4 · состояние на сейчас%5%6")
                 .arg(periodLabel).arg(displayed.size()).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
+        } else {
+            std::array<std::vector<TaskEntry>, 3> currentByStatus, previousByStatus;
+            for (const auto& task : reportTasks) {
+                const int status = AppNormalizeTaskStatus(task.status);
+                currentByStatus[size_t(status)].push_back(task);
+            }
+            if (comparePrevious) for (const auto& task : previousTasks)
+                previousByStatus[size_t(AppNormalizeTaskStatus(task.status))].push_back(task);
+            const auto now = QDateTime::currentSecsSinceEpoch();
+            QStringList columns{QString::fromUtf8("Статус"), QString::fromUtf8("Задач"), QString::fromUtf8("Активно"),
+                QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"),
+                QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")};
+            if (comparePrevious) columns << QString::fromUtf8("Задач · пред.") << QString::fromUtf8("Активно · пред.")
+                << QString::fromUtf8("Выполнено · пред.") << QString::fromUtf8("Просрочено · пред.")
+                << QString::fromUtf8("Ждут XP · пред.") << QString::fromUtf8("Глобальный XP · пред.")
+                << QString::fromUtf8("XP навыков · пред.");
+            headers(columns);
+            for (int status = 0; status < 3; ++status) {
+                const auto current = BuildTeamValueReport(currentByStatus[size_t(status)], data.projects, now);
+                const auto previous = comparePrevious
+                    ? BuildTeamValueReport(previousByStatus[size_t(status)], data.projects, now) : TeamValueReport{};
+                QStringList values{q(AppTaskStatusLabel(status)), QString::number(current.totalTasks),
+                    QString::number(current.activeTasks), QString::number(current.doneTasks),
+                    QString::number(current.overdueTasks), QString::number(current.xpPendingTasks),
+                    QString::number(current.totalGlobalXp), QString::number(current.totalSkillXp)};
+                if (comparePrevious) values << QString::number(previous.totalTasks) << QString::number(previous.activeTasks)
+                    << QString::number(previous.doneTasks) << QString::number(previous.overdueTasks)
+                    << QString::number(previous.xpPendingTasks) << QString::number(previous.totalGlobalXp)
+                    << QString::number(previous.totalSkillXp);
+                row("__status_" + std::to_string(status), values);
+            }
+            summary_->setText(QString::fromUtf8("%1 · задач по текущему статусу · %2 задач · XP: %3 · состояние на сейчас%4%5")
+                .arg(periodLabel).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
         }
     } else if (page == Audit) {
         if (!admin_ && auditSourceFilter_->currentIndex() != 1) {
@@ -4131,7 +4171,7 @@ void QtWindow::exportReport() {
         }
         QString error;
         if (!ExportQtTableCsv(path, columns, rows, &error)) { message(error.toUtf8().toStdString()); return; }
-        statusBar()->showMessage(QString::fromUtf8("Отчёт по этапам сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);
+        statusBar()->showMessage(QString::fromUtf8("Сводный отчёт сохранён: %1").arg(QDir::toNativeSeparators(path)), 6000);
         return;
     }
     const auto tasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
@@ -4392,6 +4432,9 @@ void QtWindow::details() {
         const bool employeeView = reportView_->currentIndex() == 1;
         const bool stageView = reportView_->currentIndex() == 2;
         const bool categoryView = reportView_->currentIndex() == 3;
+        const bool statusView = reportView_->currentIndex() == 4;
+        const int statusKey = statusView && targetKey.rfind("__status_", 0) == 0
+            ? std::clamp(std::atoi(targetKey.c_str() + 9), 0, 2) : -1;
         const auto targetName = table_->item(table_->currentRow(), 0)->text();
         const auto currentTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
             reportFrom_->date(), reportTo_->date());
@@ -4406,7 +4449,8 @@ void QtWindow::details() {
         reportTasks.insert(reportTasks.end(), previousTasks.begin(), previousTasks.end());
         const QString groupLabel = employeeView ? QString::fromUtf8("Сотрудник")
             : stageView ? QString::fromUtf8("Этап пайплайна")
-            : categoryView ? QString::fromUtf8("Категория") : QString::fromUtf8("Проект");
+            : categoryView ? QString::fromUtf8("Категория")
+            : statusView ? QString::fromUtf8("Статус задачи") : QString::fromUtf8("Проект");
         QString html = field(groupLabel, u(targetName));
         std::vector<TaskEntry> matchedTasks;
         std::vector<TaskEntry> matchedCurrent, matchedPrevious;
@@ -4421,6 +4465,8 @@ void QtWindow::details() {
                 belongs = reportStageKey(task) == targetKey;
             } else if (categoryView) {
                 belongs = reportCategoryKey(task) == targetKey;
+            } else if (statusView) {
+                belongs = statusKey >= 0 && AppNormalizeTaskStatus(task.status) == statusKey;
             } else {
                 const std::string projectKey = !task.projectId.empty() ? task.projectId :
                     (task.project.empty() ? "__no_project" : "name:" + task.project);

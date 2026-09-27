@@ -837,8 +837,19 @@ static bool TestQtAdminAuthParity() {
         }
         auto* password = dialog->findChild<QLineEdit*>("adminLoginPassword");
         auto* remember = dialog->findChild<QCheckBox*>("adminRememberSession");
+        auto* workspaceHint = dialog->findChild<QLabel*>("adminLoginWorkspace");
         auto* buttons = dialog->findChild<QDialogButtonBox*>();
-        if (!password || !remember || !buttons) return;
+        if (!password || !remember || !workspaceHint || !buttons) {
+            std::cerr << "admin login workspace hint missing\n";
+            if (dialog) dialog->reject();
+            return;
+        }
+        if (!workspaceHint->text().contains(QDir::toNativeSeparators(temp.path()))) {
+            std::cerr << "admin login workspace hint has unexpected path: " << workspaceHint->text().toStdString()
+                      << " expected " << QDir::toNativeSeparators(temp.path()).toStdString() << '\n';
+            dialog->reject();
+            return;
+        }
         rememberControlSeen = true;
         password->setText(QString::fromUtf8("old-admin-password"));
         remember->setChecked(true);
@@ -848,6 +859,18 @@ static bool TestQtAdminAuthParity() {
     if (!rememberControlSeen || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible()) return false;
     window.close();
     QtWindow restarted(workspace); restarted.show(); QApplication::processEvents();
+    passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
+    login = restarted.findChild<QAction*>("adminLoginAction");
+    if (!passwordAction || !passwordAction->isVisible() || !login) return false;
+    restarted.close();
+    for (int launch = 0; launch < 3; ++launch) {
+        QtWindow repeatedLaunch(workspace); repeatedLaunch.show(); QApplication::processEvents();
+        const auto* repeatedPasswordAction = repeatedLaunch.findChild<QAction*>("changeAdminPasswordAction");
+        if (!repeatedPasswordAction || !repeatedPasswordAction->isVisible() ||
+            LoadAdminPassword(directory) != "old-admin-password" || !LoadAdminStayLoggedIn(directory)) return false;
+        repeatedLaunch.close();
+    }
+    restarted.show(); QApplication::processEvents();
     passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
     login = restarted.findChild<QAction*>("adminLoginAction");
     if (!passwordAction || !passwordAction->isVisible() || !login) return false;
@@ -2523,7 +2546,7 @@ static bool TestReportPeriodComparison() {
     if (table->rowCount() != 1 || table->columnCount() != 14 ||
         table->item(0, 9)->text() != "1" || table->item(0, 12)->text() != "45" || table->item(0, 13)->text() != "15") return fail("employee previous metrics");
     view->setCurrentIndex(2);
-    if (view->count() != 4 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
+    if (view->count() != 5 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
     int previousStageRow = -1;
     for (int row = 0; row < table->rowCount(); ++row)
         if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("previous-stage")) previousStageRow = row;
@@ -5246,7 +5269,7 @@ int main(int argc, char** argv) {
     if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
         return fail("Report export UI failed");
     auto* reportView = window.findChild<QComboBox*>("reportView");
-    if (!reportView || reportView->count() != 4) return fail("Report view selector unavailable");
+    if (!reportView || reportView->count() != 5) return fail("Report view selector unavailable");
     reportView->setCurrentIndex(1);
     auto* reportRange = window.findChild<QComboBox*>("reportDateRange");
     auto* reportCompare = window.findChild<QCheckBox*>("reportComparePrevious");
@@ -5272,6 +5295,24 @@ int main(int argc, char** argv) {
         !reportDetailText.contains(QString::fromUtf8("Old stage")) ||
         !reportDetailText.contains(QString::fromUtf8("Предыдущий период")) ||
         !reportDetailText.contains(QString::fromUtf8("Исполнители и участники"))) return fail("Report group drill-down incomplete");
+    reportView->setCurrentIndex(4);
+    if (table->rowCount() != 3 || table->columnCount() != 15 ||
+        table->horizontalHeaderItem(8)->text() != QString::fromUtf8("Задач · пред."))
+        return fail("Status report comparison layout failed");
+    int createdStatusRow = -1;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (table->item(row, 0)->text() == QString::fromUtf8(AppTaskStatusLabel(0))) createdStatusRow = row;
+    }
+    if (createdStatusRow < 0 || table->item(createdStatusRow, 1)->text() != "1")
+        return fail("Status report did not group the active task");
+    table->selectRow(createdStatusRow);
+    reportDetails = window.findChild<QTextBrowser*>("details");
+    if (!reportDetails || !reportDetails->toPlainText().contains(QString::fromUtf8("Статус задачи")) ||
+        !reportDetails->toPlainText().contains(QString::fromUtf8("Проверка Qt <без HTML>")))
+        return fail("Status report drill-down failed");
+    if (LoadQtDisplaySettings(workspace.directory).reportView != 4)
+        return fail("Status report grouping did not persist");
+    reportView->setCurrentIndex(1);
     reportRange->setCurrentIndex(0);
     if (reportCompare->isEnabled() || table->columnCount() != 8 || !reportCompare->isChecked())
         return fail("All-time comparison guard failed");
