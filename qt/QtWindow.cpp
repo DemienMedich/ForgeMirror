@@ -1215,19 +1215,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         bulkEdit_->setEnabled(navigation_->currentRow() == Tasks && admin_ && allowed);
         bulkDelete_->setEnabled(navigation_->currentRow() == Tasks && admin_ && deletable);
     });
-    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
-        if (navigation_->currentRow() == AdminProfileStats) {
-            const auto id = selectedId();
-            const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
-                [&id](const auto& item) { return item.id == u(id); });
-            if (profile != workspace_.profiles.end() && !profile->archived) {
-                const int index = profiles_->findData(id);
-                if (index >= 0) { profiles_->setCurrentIndex(index); navigation_->setCurrentRow(ProfilePage); }
-            } else if (profile != workspace_.profiles.end()) {
-                statusBar()->showMessage(QString::fromUtf8("Архивный профиль можно открыть через управление профилями."), 5000);
-            }
+    connect(table_, &QTableWidget::itemClicked, this, [this](QTableWidgetItem* item) {
+        if (navigation_->currentRow() != AdminProfileStats || !item) return;
+        const auto id = item->data(Qt::UserRole).toString();
+        if (id.isEmpty()) return;
+        const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
+            [&](const auto& value) { return value.id == u(id); });
+        if (profile == workspace_.profiles.end()) return;
+        if (profile->archived) {
+            statusBar()->showMessage(QString::fromUtf8("Архивный профиль можно открыть через управление профилями."), 5000);
             return;
         }
+        const int index = profiles_->findData(id);
+        if (index >= 0) { profiles_->setCurrentIndex(index); navigation_->setCurrentRow(ProfilePage); }
+    });
+    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
         if (navigation_->currentRow() == Statistics) {
             if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
             details();

@@ -4661,6 +4661,16 @@ int main(int argc, char** argv) {
     if (!statsCsvBytes.startsWith("\xEF\xBB\xBF") || !statsCsvBytes.contains("AchievementsActive") ||
         !statsCsvBytes.contains(QString::fromUtf8("Архивный профиль статистики").toUtf8()) ||
         !statsCsvBytes.contains("TeamValueReport")) return fail("Profile statistics export omitted filtered profile or team-value report data");
+    int activeStatsRow = -1;
+    for (int row = 0; row < table->rowCount(); ++row)
+        if (table->item(row, 0)->data(Qt::UserRole).toString() == QString::fromStdString(createdProfile->id)) activeStatsRow = row;
+    if (activeStatsRow < 0) return fail("Active profile missing from click-through statistics");
+    QTest::mouseClick(table->viewport(), Qt::LeftButton, Qt::NoModifier,
+        table->visualItemRect(table->item(activeStatsRow, 0)).center());
+    QApplication::processEvents();
+    auto* profileSelector = window.findChild<QComboBox*>("profiles");
+    if (nav->currentRow() != 0 || !profileSelector || profileSelector->currentData().toString() != QString::fromStdString(createdProfile->id))
+        return fail("Single click in profile statistics did not open the selected profile");
     const auto savedStatsSettings = LoadQtDisplaySettings(workspace.directory);
     if (savedStatsSettings.adminStatsView != 0 || !savedStatsSettings.adminStatsIncludeArchived ||
         savedStatsSettings.adminStatsRankFilter != 0 || savedStatsSettings.adminStatsInactivityDays != 30 ||
