@@ -1038,6 +1038,23 @@ std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
     return LoadTasksDataWithRecovery(storageDir, nullptr);
 }
 
+std::vector<TaskEntry> LoadTasksDataReadOnly(const std::filesystem::path& storageDir) {
+    const auto path = TasksStoragePath(storageDir);
+    std::error_code ec;
+    const auto status = std::filesystem::symlink_status(path, ec);
+    if (ec || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) return {};
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec || size > 16 * 1024 * 1024) return {};
+    const std::string content = ReadAllText(path);
+    std::vector<std::unordered_map<std::string, std::string>> objects;
+    if (!ParseJsonObjectArrayStrict(content, objects) ||
+        !std::all_of(objects.begin(), objects.end(), [](const auto& obj) {
+            const auto id = obj.find("id");
+            return id != obj.end() && !id->second.empty();
+        })) return {};
+    return LoadTasksDataFromFile(path);
+}
+
 static std::vector<ProjectEntry> LoadProjectsDataFromFile(const std::filesystem::path& filePath) {
     std::vector<ProjectEntry> out;
     const std::string content = ReadAllText(filePath);

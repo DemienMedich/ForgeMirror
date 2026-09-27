@@ -18,6 +18,7 @@
 #include "QtCloudConflict.h"
 #include "QtStorageConflict.h"
 #include "QtDisplaySettings.h"
+#include "QtDeadlineAgent.h"
 #include "QtReportExport.h"
 #include "QtAuditExport.h"
 #include "QtPipelineEditor.h"
@@ -3522,13 +3523,18 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    settings.deadlineNotificationsWhenClosed = true;
+    if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
+    settings.deadlineNotificationsWhenClosed = false;
+    if (!SaveQtDisplaySettings(directory, settings)) return false;
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
         auto* tray = dialog->findChild<QCheckBox*>("qtMinimizeToTray");
+        auto* background = dialog->findChild<QCheckBox*>("qtDeadlineNotificationsWhenClosed");
         const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
-        if (!tray || tray->isEnabled() != trayAvailable) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        if (!tray || tray->isEnabled() != trayAvailable || !background || background->isEnabled()) { qobject_cast<QDialog*>(dialog)->reject(); return; }
         tray->setChecked(trayAvailable);
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS"); if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/display-settings.png");
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click(); saved = true;
@@ -3539,7 +3545,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
         loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
-            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
+            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
     auto* restoredNavigation = restoredWindow.findChild<QListWidget*>("navigation");
@@ -3551,6 +3557,35 @@ static bool TestDisplaySettings(QApplication& app) {
     if (lock == INVALID_HANDLE_VALUE) return false; settings.scalePercent = 90; const bool blocked = SaveQtDisplaySettings(directory, settings); CloseHandle(lock);
     if (blocked || !file.open(QIODevice::ReadOnly)) return false; const auto after = file.readAll(); file.close(); if (after != before) return false;
 #endif
+    return true;
+}
+
+static bool TestQtDeadlineEvaluation() {
+    const std::int64_t now = 1800000000;
+    TaskEntry overdue; overdue.id = "private-overdue-id"; overdue.deadlineAt = now - 1;
+    TaskEntry upcoming; upcoming.id = "private-upcoming-id"; upcoming.deadlineAt = now + 3600;
+    TaskEntry later; later.id = "later"; later.deadlineAt = now + 2 * 86400;
+    TaskEntry done; done.id = "done"; done.deadlineAt = now - 60; done.status = 2;
+    TaskEntry noDeadline; noDeadline.id = "none";
+    const std::vector<TaskEntry> tasks{overdue, upcoming, later, done, noDeadline};
+    const auto summary = EvaluateQtDeadlines(tasks, now);
+    auto reversed = tasks; std::reverse(reversed.begin(), reversed.end());
+    if (summary.overdue != 1 || summary.upcoming != 1 || summary.signature.isEmpty() ||
+        summary.signature != EvaluateQtDeadlines(reversed, now).signature) return false;
+    upcoming.deadlineAt += 60;
+    if (summary.signature == EvaluateQtDeadlines({overdue, upcoming, later, done, noDeadline}, now).signature ||
+        summary.signature.contains("private")) return false;
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    QDir().mkpath(temp.path() + "/meta/updates");
+    QFile primary(temp.path() + "/meta/tasks.json");
+    if (!primary.open(QIODevice::WriteOnly) || primary.write("invalid primary") < 0) return false;
+    primary.close();
+    QFile backup(temp.path() + "/meta/updates/tasks.last-good.json");
+    if (!backup.open(QIODevice::WriteOnly) || backup.write("[{\"id\":\"backup-task\",\"title\":\"backup\"}]") < 0) return false;
+    backup.close();
+    if (!LoadTasksDataReadOnly(std::filesystem::u8path(temp.path().toUtf8().constData())).empty() ||
+        !primary.open(QIODevice::ReadOnly) || primary.readAll() != "invalid primary") return false;
     return true;
 }
 
@@ -3681,6 +3716,7 @@ int main(int argc, char** argv) {
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
+    if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }

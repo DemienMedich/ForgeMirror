@@ -1,6 +1,7 @@
 #include "QtWindow.h"
 #include "QtTheme.h"
 #include "QtLogSanitization.h"
+#include "QtDeadlineAgent.h"
 #include <QtWidgets>
 #include <QLockFile>
 #include <filesystem>
@@ -37,7 +38,11 @@ int main(int argc, char** argv) {
     parser.addOption({"storage-dir", "Explicit test workspace (never use the production directory).", "path"});
     parser.addOption({"smoke-test", "Open the real window and exit after one second."});
     parser.addOption({"screenshot", "Save the Qt window as PNG before smoke-test exit.", "path"});
+    parser.addOption({"deadline-agent", "One-shot deadline notifier used by the opt-in Windows schedule."});
+    parser.addOption({"remove-deadline-schedule", "Remove this installation's opt-in Windows deadline schedule."});
     parser.process(app);
+    if (parser.isSet("remove-deadline-schedule"))
+        return ConfigureQtDeadlineSchedule(false, nullptr) ? 0 : 1;
     try {
         const auto defaultPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/workspace";
         const auto directory = path(parser.isSet("storage-dir") ? parser.value("storage-dir") : defaultPath);
@@ -63,6 +68,7 @@ int main(int argc, char** argv) {
         const auto original = canonical(production);
         if (normalized == original || normalized.startsWith(original + '/') || original.startsWith(normalized + '/'))
             throw std::runtime_error("Qt migration must use a separate workspace outside the production directory.");
+        if (parser.isSet("deadline-agent")) return RunQtDeadlineAgent(directory);
         std::filesystem::create_directories(directory.parent_path());
         QLockFile lock(QString::fromStdWString(directory.wstring()) + ".qt.lock");
         if (!lock.tryLock(0)) throw std::runtime_error("This Qt workspace is already open in another process.");
