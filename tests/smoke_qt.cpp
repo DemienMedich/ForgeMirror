@@ -3549,7 +3549,20 @@ static bool TestDisplaySettings(QApplication& app) {
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
     auto* restoredNavigation = restoredWindow.findChild<QListWidget*>("navigation");
-    if (!restoredNavigation || restoredNavigation->currentRow() != 16) return false;
+    auto* accessibleSearch = restoredWindow.findChild<QLineEdit*>("search");
+    auto* accessibleTable = restoredWindow.findChild<QTableWidget*>();
+    auto* focusSearch = restoredWindow.findChild<QShortcut*>("shortcutFocusSearch");
+    auto* clearSearch = restoredWindow.findChild<QShortcut*>("shortcutClearSearch");
+    if (!restoredNavigation || restoredNavigation->currentRow() != 16 ||
+        restoredNavigation->accessibleName().isEmpty() || !accessibleSearch ||
+        accessibleSearch->accessibleName().isEmpty() || !accessibleTable || !focusSearch || !clearSearch) return false;
+    restoredWindow.show(); restoredWindow.activateWindow(); QApplication::processEvents();
+    QTest::keyClick(&restoredWindow, Qt::Key_K, Qt::ControlModifier); QApplication::processEvents();
+    if (QApplication::focusWidget() != accessibleSearch) return false;
+    accessibleSearch->setText(QString::fromUtf8("needle"));
+    QTest::keyClick(accessibleSearch, Qt::Key_Escape); QApplication::processEvents();
+    if (!accessibleSearch->text().isEmpty() || accessibleTable->accessibleName().isEmpty() ||
+        !accessibleTable->accessibleDescription().contains(QString::fromUtf8("Строк:"))) return false;
     ApplyQtDisplaySettings(app, loaded); if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble()) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});
 #ifdef _WIN32
@@ -3795,8 +3808,8 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* helpTable = dialog ? dialog->findChild<QTableWidget*>("shortcutHelpTable") : nullptr;
-        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 13 &&
-            helpTable->item(6, 0)->text() == "Ctrl+N" && helpTable->item(11, 0)->text() == "Ctrl+/";
+        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 15 &&
+            helpTable->item(8, 0)->text() == "Ctrl+N" && helpTable->item(13, 0)->text() == "Ctrl+/";
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcuts.png"); }
         if (dialog) dialog->accept();

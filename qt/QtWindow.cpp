@@ -358,6 +358,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     body->setSpacing(16);
     navigation_ = new QListWidget;
     navigation_->setObjectName("navigation");
+    navigation_->setAccessibleName(QString::fromUtf8("Разделы ForgeMirror"));
+    navigation_->setAccessibleDescription(QString::fromUtf8("Переключение между модулями программы. Скрытые пункты недоступны в текущем режиме."));
     navigation_->addItems({QString::fromUtf8("Профиль  F1"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
@@ -499,6 +501,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     search_ = new QLineEdit;
     search_->setObjectName("search");
     search_->setPlaceholderText(QString::fromUtf8("Поиск по текущему разделу…"));
+    search_->setAccessibleName(QString::fromUtf8("Поиск в текущем разделе"));
+    search_->setAccessibleDescription(QString::fromUtf8("Ctrl+K переводит сюда фокус. Esc очищает запрос."));
     search_->setClearButtonEnabled(true);
     filters->addWidget(search_);
     catalogProfessionFilter_ = new QComboBox;
@@ -1096,6 +1100,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         connect(shortcut, &QShortcut::activated, this, action);
     };
     bindShortcut("shortcutCreate", QKeySequence::New, [this] { createEntry(); });
+    bindShortcut("shortcutFocusSearch", QKeySequence(QStringLiteral("Ctrl+K")), [this] {
+        if (search_->isVisible() && search_->isEnabled()) { search_->setFocus(); search_->selectAll(); }
+    });
+    auto* clearSearchShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), search_);
+    clearSearchShortcut->setObjectName("shortcutClearSearch");
+    clearSearchShortcut->setContext(Qt::WidgetShortcut);
+    connect(clearSearchShortcut, &QShortcut::activated, this, [this] {
+        if (!search_->text().isEmpty()) search_->clear();
+    });
     bindShortcut("shortcutEdit", QKeySequence(QStringLiteral("Ctrl+E")), [this] { createEntry(true); });
     bindShortcut("shortcutDelete", QKeySequence::Delete, [this] { deleteEntry(); });
     bindShortcut("shortcutRefresh", QKeySequence::Refresh, [this] { reload(); });
@@ -1123,13 +1136,14 @@ void QtWindow::showShortcutHelp() {
         "Команды работают в текущем разделе. Защищённые операции требуют входа администратора; локальные ярлыки доступны всем пользователям."));
     intro->setWordWrap(true);
     layout->addWidget(intro);
-    auto* table = new QTableWidget(13, 2, &dialog);
+    auto* table = new QTableWidget(15, 2, &dialog);
     table->setObjectName("shortcutHelpTable");
     table->setHorizontalHeaderLabels({QString::fromUtf8("Клавиша"), QString::fromUtf8("Действие")});
     const std::vector<std::pair<QString, QString>> rows = {
         {"F1", QString::fromUtf8("Профиль")}, {"F2", QString::fromUtf8("Навыки")},
         {"F3", QString::fromUtf8("Пайплайн")}, {"F4", QString::fromUtf8("Правила")},
         {"F5", QString::fromUtf8("Статистика")}, {"F6", QString::fromUtf8("Аудит")},
+        {"Ctrl+K", QString::fromUtf8("Перейти к поиску текущего раздела")}, {"Esc", QString::fromUtf8("Очистить активный поиск")},
         {"Ctrl+N", QString::fromUtf8("Создать запись")}, {"Ctrl+E", QString::fromUtf8("Редактировать выбранную запись")},
         {"Delete", QString::fromUtf8("Удалить выбранный проект или этап")}, {"Ctrl+R", QString::fromUtf8("Перечитать локальные данные")},
         {"Ctrl+I", QString::fromUtf8("Показать или скрыть подробности")}, {"Ctrl+/", QString::fromUtf8("Открыть эту памятку")},
@@ -1513,6 +1527,7 @@ void QtWindow::render() {
         }
     };
     title_->setText(navigation_->item(page)->text());
+    table_->setAccessibleName(QString::fromUtf8("Данные раздела «%1»").arg(title_->text()));
     mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8(unlocked ?
         (profileSession_.isTrusted() ? "Доверенный доступ · Qt" : "Личный доступ · Qt") : "Просмотр · Qt"));
     const bool timerPage = page == Pomodoro;
@@ -2120,6 +2135,12 @@ void QtWindow::render() {
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     for (int col = 0; col < table_->columnCount(); ++col)
         table_->setColumnWidth(col, std::clamp(table_->columnWidth(col), 96, 280));
+    QStringList accessibleColumns;
+    for (int col = 0; col < table_->columnCount(); ++col)
+        if (!table_->isColumnHidden(col) && table_->horizontalHeaderItem(col))
+            accessibleColumns << table_->horizontalHeaderItem(col)->text();
+    table_->setAccessibleDescription(QString::fromUtf8("Строк: %1. Видимые столбцы: %2.")
+        .arg(table_->rowCount()).arg(accessibleColumns.join(QString::fromUtf8(", "))));
     // Give free width to readable content instead of stretching the final numeric column.
     int stretchColumn = 0;
     if (page == Catalog) stretchColumn = 2;
