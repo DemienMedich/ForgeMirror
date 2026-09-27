@@ -1,6 +1,8 @@
 #pragma once
 #include <filesystem>
+#include <array>
 #include <QDate>
+#include <QImage>
 #include <QStringList>
 #include <QString>
 class QApplication;
@@ -9,6 +11,10 @@ struct QtDisplaySettings {
     int scalePercent = 100;
     int spacingPercent = 100;
     int cornerRadius = 4;
+    std::array<QString, 18> windowBackgrounds{};
+    double backgroundAlpha = 0.25;
+    bool backgroundTiled = false;
+    double backgroundTileScale = 1.0;
     bool compactRows = false;
     bool fullscreen = false;
     bool decorated = true;
@@ -57,7 +63,15 @@ struct QtLayoutPreset {
     bool compactRows = false;
     bool fullscreen = false;
     bool decorated = true;
+    std::array<QString, 18> windowBackgrounds{};
+    double backgroundAlpha = 0.25;
+    bool backgroundTiled = false;
+    double backgroundTileScale = 1.0;
 };
+QStringList QtBackgroundPageNames();
+QStringList ListQtBackgroundImages(const std::filesystem::path& directory);
+QImage LoadQtBackgroundImage(const std::filesystem::path& directory, const QString& relativePath);
+bool ShowQtBackgroundSettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings);
 QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);
 QStringList ListQtLayoutPresets(const std::filesystem::path& directory);

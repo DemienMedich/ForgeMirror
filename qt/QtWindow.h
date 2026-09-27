@@ -46,6 +46,7 @@ class QtProfileAnalytics;
 class QSystemTrayIcon;
 class QCloseEvent;
 class QTimer;
+class QtBackgroundSurface;
 
 class QtWindow : public QMainWindow {
 public:
@@ -105,6 +106,7 @@ private:
     bool admin_ = false;
     QtProfileSession profileSession_;
     QtDisplaySettings displaySettings_;
+    QtBackgroundSurface* backgroundSurface_ = nullptr;
     QAction* profileAccessAction_;
     QAction* adminPasswordAction_;
     QAction* ownPasswordAction_;

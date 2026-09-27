@@ -12,6 +12,28 @@
 
 namespace {
 QString pathFor(const std::filesystem::path& directory) { return QString::fromUtf8((directory / "meta/ui.ini").u8string()); }
+const std::array<QString, 18>& legacyBackgroundNames() {
+    static const std::array<QString, 18> names = {
+        QString::fromUtf8("Главное меню"), QString::fromUtf8("Профиль"), QString::fromUtf8("Навыки"),
+        QString::fromUtf8("Профессии"), QString::fromUtf8("Пайплайн"), QString::fromUtf8("Правила"),
+        QString::fromUtf8("Настройки"), QString::fromUtf8("3D просмотр"), QString::fromUtf8("3D настройки"),
+        QString::fromUtf8("Статистика"), QString::fromUtf8("Логи"), QString::fromUtf8("Задачи"),
+        QString::fromUtf8("Проекты"), QString::fromUtf8("Помодоро"), QString::fromUtf8("Ярлыки"),
+        QString::fromUtf8("О программе"), QString::fromUtf8("Баннер"), QString::fromUtf8("Хранилище")};
+    return names;
+}
+const std::array<int, 18>& legacyBackgroundPageMap() {
+    static const std::array<int, 18> map = {1, 11, 12, 2, 4, 3, 9, -1, 13, 5, 17, 14, 16, 6, 7, 8, 10, 9};
+    return map;
+}
+QString normalizeBackgroundPath(QString value) {
+    value = QDir::fromNativeSeparators(value.trimmed());
+    if (!value.startsWith(QStringLiteral("ui/backgrounds/"), Qt::CaseSensitive) ||
+        value.contains("..") || value.contains(':') || value.contains('\\') || value.contains('\r') || value.contains('\n') ||
+        value.mid(QStringLiteral("ui/backgrounds/").size()).isEmpty() || value.mid(QStringLiteral("ui/backgrounds/").size()).contains('/') ||
+        QFileInfo(value).suffix().compare(QStringLiteral("png"), Qt::CaseInsensitive) != 0) return {};
+    return value;
+}
 int normalizedScale(int value) { for (int allowed : {90, 100, 110, 125}) if (value == allowed) return value; return 100; }
 int nearestValue(int value, std::initializer_list<int> values) {
     return *std::min_element(values.begin(), values.end(), [value](int a, int b) {
@@ -77,10 +99,14 @@ QString safePresetName(QString name) {
     return name.trimmed();
 }
 QJsonObject presetObject(const QtLayoutPreset& preset) {
+    QJsonArray backgrounds;
+    for (const auto& path : preset.windowBackgrounds) backgrounds.append(normalizeBackgroundPath(path));
     return {{"name", preset.name}, {"scalePercent", normalizedScale(preset.scalePercent)},
         {"spacingPercent", nearestValue(preset.spacingPercent, {80, 90, 100, 110, 120})},
         {"cornerRadius", nearestValue(preset.cornerRadius, {0, 4, 8, 12})},
-        {"compactRows", preset.compactRows}, {"fullscreen", preset.fullscreen}, {"decorated", preset.decorated}};
+        {"compactRows", preset.compactRows}, {"fullscreen", preset.fullscreen}, {"decorated", preset.decorated},
+        {"windowBackgrounds", backgrounds}, {"backgroundAlpha", std::clamp(preset.backgroundAlpha, 0.0, 1.0)},
+        {"backgroundTiled", preset.backgroundTiled}, {"backgroundTileScale", std::clamp(preset.backgroundTileScale, 0.25, 3.0)}};
 }
 QtLayoutPreset presetFromObject(const QJsonObject& object) {
     QtLayoutPreset preset;
@@ -91,6 +117,12 @@ QtLayoutPreset presetFromObject(const QJsonObject& object) {
     preset.compactRows = object.value("compactRows").toBool();
     preset.fullscreen = object.value("fullscreen").toBool();
     preset.decorated = object.value("decorated").toBool(true);
+    const auto backgrounds = object.value("windowBackgrounds").toArray();
+    for (int i = 0; i < int(preset.windowBackgrounds.size()) && i < backgrounds.size(); ++i)
+        preset.windowBackgrounds[size_t(i)] = normalizeBackgroundPath(backgrounds.at(i).toString());
+    preset.backgroundAlpha = std::clamp(object.value("backgroundAlpha").toDouble(0.25), 0.0, 1.0);
+    preset.backgroundTiled = object.value("backgroundTiled").toBool();
+    preset.backgroundTileScale = std::clamp(object.value("backgroundTileScale").toDouble(1.0), 0.25, 3.0);
     return preset;
 }
 bool saveQtPresets(const std::filesystem::path& directory, const QJsonArray& presets, QString* error) {
@@ -137,11 +169,66 @@ bool readLegacyLayoutPreset(const std::filesystem::path& directory, const QStrin
     if (ok && std::isfinite(rounding)) result.cornerRadius = nearestValue(int(std::lround(std::clamp(rounding, 0.0, 12.0))), {0, 4, 8, 12});
     result.fullscreen = source.value("windowFullscreen", false).toBool();
     result.decorated = source.value("windowDecorated", true).toBool();
+    result.backgroundAlpha = std::clamp(source.value("backgroundAlpha", 0.25).toDouble(), 0.0, 1.0);
+    result.backgroundTiled = source.value("backgroundTiled", false).toBool();
+    result.backgroundTileScale = std::clamp(source.value("backgroundTileScale", 1.0).toDouble(), 0.25, 3.0);
+    source.endGroup();
+    source.beginGroup("backgrounds");
+    const auto& legacyNames = legacyBackgroundNames();
+    const auto& pageMap = legacyBackgroundPageMap();
+    for (size_t page = 0; page < result.windowBackgrounds.size(); ++page)
+        if (pageMap[page] >= 0) result.windowBackgrounds[page] = normalizeBackgroundPath(source.value(legacyNames[size_t(pageMap[page])]).toString());
     source.endGroup();
     result.compactRows = result.spacingPercent <= 90;
     *preset = result;
     return true;
 }
+}
+QStringList QtBackgroundPageNames() {
+    return {QString::fromUtf8("Профиль"), QString::fromUtf8("Задачи"), QString::fromUtf8("Проекты"),
+        QString::fromUtf8("Навыки"), QString::fromUtf8("Пайплайн"), QString::fromUtf8("Профессии"),
+        QString::fromUtf8("Отчёты"), QString::fromUtf8("Аудит"), QString::fromUtf8("Pomodoro"),
+        QString::fromUtf8("Правила"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"),
+        QString::fromUtf8("Баннер"), QString::fromUtf8("Облако"), QString::fromUtf8("3D просмотр"),
+        QString::fromUtf8("Настройки 3D"), QString::fromUtf8("Логи"), QString::fromUtf8("Статистика профилей")};
+}
+QStringList ListQtBackgroundImages(const std::filesystem::path& directory) {
+    QStringList result;
+    const QString workspace = QDir::cleanPath(QString::fromStdWString(directory.wstring()));
+    const QString imageDirectory = QDir(workspace).filePath(QStringLiteral("ui/backgrounds"));
+    const QFileInfo dirInfo(imageDirectory);
+    if (dirInfo.isSymLink() || !dirInfo.isDir()) return result;
+    QDir dir(imageDirectory);
+    const auto entries = dir.entryInfoList({QStringLiteral("*.png")}, QDir::Files | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
+    for (const auto& entry : entries) {
+        if (entry.isSymLink() || !entry.isFile() || entry.size() <= 0 || entry.size() > 16 * 1024 * 1024) continue;
+        const auto relative = QStringLiteral("ui/backgrounds/") + entry.fileName();
+        if (LoadQtBackgroundImage(directory, relative).isNull()) continue;
+        result.push_back(relative);
+    }
+    return result;
+}
+QImage LoadQtBackgroundImage(const std::filesystem::path& directory, const QString& relativePath) {
+    const QString safe = normalizeBackgroundPath(relativePath);
+    if (safe.isEmpty()) return {};
+    const QString workspace = QDir::cleanPath(QString::fromStdWString(directory.wstring()));
+    const QString base = QDir(workspace).filePath(QStringLiteral("ui/backgrounds"));
+    if (QFileInfo(base).isSymLink()) return {};
+    const QString filePath = QDir(workspace).filePath(safe);
+    const QFileInfo info(filePath);
+    if (info.isSymLink() || !info.isFile() || info.size() <= 0 || info.size() > 16 * 1024 * 1024) return {};
+    const QString canonicalBase = QDir::fromNativeSeparators(QFileInfo(base).canonicalFilePath());
+    const QString canonicalFile = QDir::fromNativeSeparators(info.canonicalFilePath());
+    const QString canonicalWorkspace = QDir::fromNativeSeparators(QFileInfo(workspace).canonicalFilePath());
+    if (canonicalWorkspace.isEmpty() || canonicalBase.compare(canonicalWorkspace + QStringLiteral("/ui/backgrounds"), Qt::CaseInsensitive) != 0 ||
+        canonicalFile.isEmpty() ||
+        !canonicalFile.startsWith(canonicalBase + QLatin1Char('/'), Qt::CaseInsensitive)) return {};
+    QImageReader reader(canonicalFile, "png");
+    reader.setAutoTransform(true);
+    const QSize dimensions = reader.size();
+    if (!dimensions.isValid() || dimensions.width() > 8192 || dimensions.height() > 8192 ||
+        qint64(dimensions.width()) * dimensions.height() > 32ll * 1024 * 1024) return {};
+    return reader.read();
 }
 QStringList ListQtLayoutPresets(const std::filesystem::path& directory) {
     QStringList names;
@@ -158,6 +245,112 @@ QStringList ListQtLayoutPresets(const std::filesystem::path& directory) {
     }
     names.sort(Qt::CaseInsensitive);
     return names;
+}
+bool ShowQtBackgroundSettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings) {
+    QDialog dialog(parent);
+    dialog.setObjectName("qtBackgroundSettings");
+    dialog.setWindowTitle(QString::fromUtf8("Фоны разделов"));
+    dialog.setMinimumSize(560, 560);
+    QtDisplaySettings draft = settings;
+    auto* outer = new QVBoxLayout(&dialog);
+    auto* notice = new QLabel(QString::fromUtf8("Выберите PNG из папки ui/backgrounds. Цветовая палитра интерфейса не меняется."));
+    notice->setWordWrap(true);
+    outer->addWidget(notice);
+    auto* images = new QComboBox;
+    images->setObjectName("qtBackgroundBulkChoice");
+    images->setAccessibleName(QString::fromUtf8("Фон для назначения всем разделам"));
+    images->addItem(QString::fromUtf8("Без фона"), QString());
+    for (const auto& image : ListQtBackgroundImages(directory)) images->addItem(QFileInfo(image).fileName(), image);
+    auto* applyAll = new QPushButton(QString::fromUtf8("Назначить всем"));
+    applyAll->setObjectName("qtBackgroundApplyAll");
+    applyAll->setMinimumHeight(40);
+    auto* bulk = new QHBoxLayout;
+    bulk->addWidget(images, 1); bulk->addWidget(applyAll);
+    outer->addLayout(bulk);
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    auto* rowsWidget = new QWidget;
+    auto* rows = new QFormLayout(rowsWidget);
+    rows->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    rows->setContentsMargins(8, 8, 8, 8);
+    rows->setHorizontalSpacing(14);
+    rows->setVerticalSpacing(8);
+    const auto pageNames = QtBackgroundPageNames();
+    const auto available = ListQtBackgroundImages(directory);
+    std::array<QComboBox*, 18> choices{};
+    for (int i = 0; i < int(choices.size()); ++i) {
+        auto* choice = new QComboBox(rowsWidget);
+        choice->setObjectName(QStringLiteral("qtBackgroundPage%1").arg(i));
+        choice->setAccessibleName(QString::fromUtf8("Фон раздела «%1»").arg(pageNames.value(i)));
+        choice->addItem(QString::fromUtf8("Без фона"), QString());
+        for (const auto& image : available) choice->addItem(QFileInfo(image).fileName(), image);
+        const auto current = normalizeBackgroundPath(draft.windowBackgrounds[size_t(i)]);
+        int index = choice->findData(current);
+        if (!current.isEmpty() && index < 0) {
+            choice->addItem(QString::fromUtf8("Файл недоступен · %1").arg(QFileInfo(current).fileName()), current);
+            index = choice->count() - 1;
+        }
+        choice->setCurrentIndex(std::max(0, index));
+        choices[size_t(i)] = choice;
+        rows->addRow(pageNames.value(i), choice);
+    }
+    scroll->setWidget(rowsWidget);
+    outer->addWidget(scroll, 1);
+    auto* options = new QHBoxLayout;
+    auto* alpha = new QSlider(Qt::Horizontal);
+    alpha->setObjectName("qtBackgroundAlpha"); alpha->setRange(0, 100);
+    alpha->setValue(qRound(std::clamp(draft.backgroundAlpha, 0.0, 1.0) * 100.0));
+    alpha->setAccessibleName(QString::fromUtf8("Непрозрачность фонового изображения"));
+    auto* alphaLabel = new QLabel;
+    auto updateAlphaLabel = [alpha, alphaLabel] { alphaLabel->setText(QStringLiteral("%1%").arg(alpha->value())); };
+    updateAlphaLabel(); QObject::connect(alpha, &QSlider::valueChanged, &dialog, updateAlphaLabel);
+    options->addWidget(new QLabel(QString::fromUtf8("Непрозрачность")));
+    options->addWidget(alpha, 1); options->addWidget(alphaLabel);
+    outer->addLayout(options);
+    auto* tileRow = new QHBoxLayout;
+    auto* tiled = new QCheckBox(QString::fromUtf8("Замостить изображение"));
+    tiled->setObjectName("qtBackgroundTiled"); tiled->setChecked(draft.backgroundTiled);
+    auto* tileScale = new QComboBox;
+    tileScale->setObjectName("qtBackgroundTileScale");
+    for (double value : {0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0})
+        tileScale->addItem(QStringLiteral("%1×").arg(value, 0, 'f', 2).remove(QRegularExpression(QStringLiteral("0+$"))).remove(QRegularExpression(QStringLiteral("\\.$"))), value);
+    int scaleIndex = 0;
+    for (int i = 0; i < tileScale->count(); ++i)
+        if (std::abs(tileScale->itemData(i).toDouble() - std::clamp(draft.backgroundTileScale, 0.25, 3.0)) < 0.001) scaleIndex = i;
+    tileScale->setCurrentIndex(scaleIndex);
+    tileScale->setEnabled(tiled->isChecked());
+    QObject::connect(tiled, &QCheckBox::toggled, tileScale, &QWidget::setEnabled);
+    tileRow->addWidget(tiled); tileRow->addStretch(); tileRow->addWidget(new QLabel(QString::fromUtf8("Масштаб плитки"))); tileRow->addWidget(tileScale);
+    outer->addLayout(tileRow);
+    QObject::connect(applyAll, &QPushButton::clicked, &dialog, [&] {
+        const QString selected = images->currentData().toString();
+        for (auto* choice : choices) {
+            int index = choice->findData(selected);
+            if (!selected.isEmpty() && index < 0) {
+                choice->addItem(QFileInfo(selected).fileName(), selected);
+                index = choice->count() - 1;
+            }
+            choice->setCurrentIndex(std::max(0, index));
+        }
+    });
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Применить"));
+    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+    buttons->button(QDialogButtonBox::Save)->setMinimumSize(88, 40);
+    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+    buttons->button(QDialogButtonBox::Cancel)->setMinimumSize(88, 40);
+    outer->addWidget(buttons);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        for (size_t i = 0; i < choices.size(); ++i)
+            draft.windowBackgrounds[i] = normalizeBackgroundPath(choices[i]->currentData().toString());
+        draft.backgroundAlpha = alpha->value() / 100.0;
+        draft.backgroundTiled = tiled->isChecked();
+        draft.backgroundTileScale = tileScale->currentData().toDouble();
+        settings = draft;
+        dialog.accept();
+    });
+    return dialog.exec() == QDialog::Accepted;
 }
 bool LoadQtLayoutPreset(const std::filesystem::path& directory, const QString& name, QtLayoutPreset* preset) {
     if (!preset) return false;
@@ -212,6 +405,17 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         const auto key = line.section('=', 0, 0).trimmed(), value = line.section('=', 1).trimmed();
         if (section == "profile" && key == "lastProfileId") out.lastProfileId = value;
         if (section == "ui" && key == "windowDecorated") out.decorated = value != "0";
+        if (section == "style") {
+            if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
+            else if (key == "backgroundTiled") out.backgroundTiled = value == "1" || value.compare("true", Qt::CaseInsensitive) == 0;
+            else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
+        }
+        if (section == "backgrounds") {
+            const auto& names = legacyBackgroundNames();
+            const auto& pageMap = legacyBackgroundPageMap();
+            for (size_t page = 0; page < out.windowBackgrounds.size(); ++page)
+                if (pageMap[page] >= 0 && key == names[size_t(pageMap[page])]) out.windowBackgrounds[page] = normalizeBackgroundPath(value);
+        }
         if (section == "projects") {
             if (key == "sortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "overdueOnly") out.projectsOverdueOnly = value == "1";
@@ -219,6 +423,10 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         }
         if (section == "qt") {
             if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "spacingPercent") out.spacingPercent = nearestValue(value.toInt(), {80, 90, 100, 110, 120}); else if (key == "cornerRadius") out.cornerRadius = nearestValue(value.toInt(), {0, 4, 8, 12}); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
+            else if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
+            else if (key == "backgroundTiled") out.backgroundTiled = value == "1";
+            else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
+            else if (key.startsWith("windowBackground")) { bool ok = false; const int index = key.mid(QStringLiteral("windowBackground").size()).toInt(&ok); if (ok && index >= 0 && index < int(out.windowBackgrounds.size())) out.windowBackgrounds[size_t(index)] = normalizeBackgroundPath(value); }
             else if (key == "lastProfileId") out.lastProfileId = value;
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 17) : 0; }
             else if (key == "profileViewMode") { bool ok = false; const int index = value.toInt(&ok); out.profileViewMode = ok ? std::clamp(index, 0, 3) : 1; }
@@ -272,6 +480,11 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     if (begin < 0) { if (!lines.isEmpty() && !lines.back().isEmpty()) lines << ""; begin = lines.size(); lines << "[qt]"; end = lines.size(); }
     auto set = [&](const QString& key, const QString& value) { for (int i = begin + 1; i < end; ++i) if (lines[i].section('=', 0, 0).trimmed() == key) { lines[i] = key + '=' + value; return; } lines.insert(end++, key + '=' + value); };
     set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("spacingPercent", QString::number(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))); set("cornerRadius", QString::number(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
+    set("backgroundAlpha", QString::number(std::isfinite(settings.backgroundAlpha) ? std::clamp(settings.backgroundAlpha, 0.0, 1.0) : 0.25, 'f', 2));
+    set("backgroundTiled", settings.backgroundTiled ? "1" : "0");
+    set("backgroundTileScale", QString::number(std::isfinite(settings.backgroundTileScale) ? std::clamp(settings.backgroundTileScale, 0.25, 3.0) : 1.0, 'f', 2));
+    for (size_t i = 0; i < settings.windowBackgrounds.size(); ++i)
+        set(QStringLiteral("windowBackground%1").arg(i), normalizeBackgroundPath(settings.windowBackgrounds[i]));
     auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 17)));
     set("profileViewMode", QString::number(std::clamp(settings.profileViewMode, 0, 3)));
@@ -329,6 +542,7 @@ void ApplyQtDisplaySettings(QApplication& app, const QtDisplaySettings& settings
 }
 bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings) {
     QDialog dialog(parent); dialog.setObjectName("qtDisplaySettings"); dialog.setWindowTitle(QString::fromUtf8("Настройки интерфейса Qt")); dialog.setMinimumWidth(420);
+    QtDisplaySettings backgroundDraft = settings;
     auto* form = new QFormLayout(&dialog); auto* scale = new QComboBox; scale->setObjectName("qtScale");
     for (int value : {90, 100, 110, 125}) scale->addItem(QString::number(value) + "%", value);
     scale->setCurrentIndex(std::max(0, scale->findData(normalizedScale(settings.scalePercent))));
@@ -362,6 +576,18 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     background->setToolTip(supported
         ? QString::fromUtf8("Планировщик Windows запускает проверку каждые 15 минут в текущем сеансе пользователя. Тексты задач не показываются.")
         : QString::fromUtf8("Доступно в Windows для стандартного изолированного рабочего пространства при поддержке уведомлений системного трея."));
+    auto* backgroundsButton = new QPushButton;
+    backgroundsButton->setObjectName("qtBackgroundSettingsButton");
+    backgroundsButton->setMinimumHeight(40);
+    auto updateBackgroundsButton = [backgroundsButton, &backgroundDraft] {
+        const auto count = std::count_if(backgroundDraft.windowBackgrounds.begin(), backgroundDraft.windowBackgrounds.end(),
+            [](const QString& path) { return !normalizeBackgroundPath(path).isEmpty(); });
+        backgroundsButton->setText(QString::fromUtf8("Фоны разделов… (%1 назначено)").arg(count));
+    };
+    updateBackgroundsButton();
+    QObject::connect(backgroundsButton, &QPushButton::clicked, &dialog, [&] {
+        if (ShowQtBackgroundSettings(&dialog, directory, backgroundDraft)) updateBackgroundsButton();
+    });
     auto* presets = new QComboBox; presets->setObjectName("qtLayoutPresetList");
     auto refreshPresets = [directory, presets] {
         const auto selected = presets->currentData().toString();
@@ -384,7 +610,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     applyPreset->setAccessibleName(QString::fromUtf8("Применить выбранный пресет компоновки"));
     savePreset->setAccessibleName(QString::fromUtf8("Сохранить или обновить Qt-пресет компоновки"));
     deletePreset->setAccessibleName(QString::fromUtf8("Удалить выбранный Qt-пресет"));
-    presets->setToolTip(QString::fromUtf8("Старые пресеты доступны только для чтения. Цвета, фон и параметры профиля не импортируются."));
+    presets->setToolTip(QString::fromUtf8("Старые пресеты доступны только для чтения. Палитра и параметры профиля не импортируются; старые PNG-фоны разделов доступны отдельно."));
     auto* presetRow = new QWidget;
     auto* presetRowLayout = new QHBoxLayout(presetRow);
     presetRowLayout->setContentsMargins(0, 0, 0, 0);
@@ -399,6 +625,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     form->addRow(QString::fromUtf8("Интервалы интерфейса"), spacing);
     form->addRow(QString::fromUtf8("Скругление карточек и акцентных кнопок"), rounding);
     form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
+    form->addRow(QString(), backgroundsButton);
     form->addRow(QString(), presetRow);
     form->addRow(QString::fromUtf8("Новый/обновляемый пресет"), presetNameRow);
     QObject::connect(applyPreset, &QPushButton::clicked, &dialog, [&] {
@@ -410,8 +637,13 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         compact->setChecked(preset.compactRows);
         fullscreen->setChecked(preset.fullscreen);
         decorated->setChecked(preset.decorated);
+        backgroundDraft.windowBackgrounds = preset.windowBackgrounds;
+        backgroundDraft.backgroundAlpha = preset.backgroundAlpha;
+        backgroundDraft.backgroundTiled = preset.backgroundTiled;
+        backgroundDraft.backgroundTileScale = preset.backgroundTileScale;
+        updateBackgroundsButton();
         presetName->setText(preset.name);
-        notice->setText(QString::fromUtf8("Параметры компоновки загружены; палитра и фон не меняются."));
+        notice->setText(QString::fromUtf8("Параметры компоновки загружены; палитра не меняется."));
     });
     QObject::connect(savePreset, &QPushButton::clicked, &dialog, [&] {
         QtLayoutPreset preset;
@@ -422,11 +654,15 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         preset.compactRows = compact->isChecked();
         preset.fullscreen = fullscreen->isChecked();
         preset.decorated = decorated->isChecked();
+        preset.windowBackgrounds = backgroundDraft.windowBackgrounds;
+        preset.backgroundAlpha = backgroundDraft.backgroundAlpha;
+        preset.backgroundTiled = backgroundDraft.backgroundTiled;
+        preset.backgroundTileScale = backgroundDraft.backgroundTileScale;
         if (!SaveQtLayoutPreset(directory, preset, &presetError)) { notice->setText(presetError); return; }
         presetName->setText(preset.name);
         refreshPresets();
         presets->setCurrentIndex(presets->findData(preset.name));
-        notice->setText(QString::fromUtf8("Пресет сохранён отдельно от цветовой схемы и фонов."));
+        notice->setText(QString::fromUtf8("Пресет компоновки сохранён вместе с настройками фонов; палитра не затрагивается."));
     });
     QObject::connect(deletePreset, &QPushButton::clicked, &dialog, [&] {
         const auto name = presets->currentData().toString();
@@ -445,7 +681,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         deletePreset->setEnabled(IsQtLayoutPresetDeletable(directory, presets->currentData().toString()));
     });
     deletePreset->setEnabled(IsQtLayoutPresetDeletable(directory, presets->currentData().toString()));
-    auto* hint = new QLabel(QString::fromUtf8("Цветовая схема зафиксирована для миграции и здесь не меняется. Импорт пресета переносит только масштаб, интервалы, скругление, плотность таблиц и режим окна; исходные файлы остаются без изменений."));
+    auto* hint = new QLabel(QString::fromUtf8("Цветовая схема зафиксирована для миграции и здесь не меняется. Старые пресеты доступны только для чтения; они переносят компоновку и фоны окон, не меняя палитру и данные профилей."));
     hint->setWordWrap(true); form->addRow(hint);
     form->addRow(notice);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel); buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true); buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
@@ -454,6 +690,10 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         auto next = settings; next.scalePercent = scale->currentData().toInt(); next.spacingPercent = spacing->currentData().toInt();
         next.cornerRadius = rounding->currentData().toInt(); next.compactRows = compact->isChecked();
         next.fullscreen = fullscreen->isChecked(); next.decorated = decorated->isChecked();
+        next.windowBackgrounds = backgroundDraft.windowBackgrounds;
+        next.backgroundAlpha = backgroundDraft.backgroundAlpha;
+        next.backgroundTiled = backgroundDraft.backgroundTiled;
+        next.backgroundTileScale = backgroundDraft.backgroundTileScale;
         next.minimizeToTray = tray->isEnabled() && tray->isChecked();
         next.deadlineNotificationsWhenClosed = background->isEnabled() && background->isChecked();
         QString scheduleError;

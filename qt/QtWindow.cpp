@@ -49,6 +49,49 @@
 #include <stdexcept>
 #include <unordered_map>
 
+class QtBackgroundSurface final : public QWidget {
+public:
+    explicit QtBackgroundSurface(QWidget* parent = nullptr) : QWidget(parent) {
+        setObjectName("qtBackgroundSurface");
+        setAutoFillBackground(false);
+    }
+    void setBackground(const std::filesystem::path& directory, const QString& relativePath,
+                       double alpha, bool tiled, double tileScale) {
+        if (relativePath != path_) {
+            path_ = relativePath;
+            image_ = LoadQtBackgroundImage(directory, path_);
+        }
+        setProperty("backgroundPath", path_);
+        alpha_ = std::isfinite(alpha) ? std::clamp(alpha, 0.0, 1.0) : 0.25;
+        tiled_ = tiled;
+        tileScale_ = std::isfinite(tileScale) ? std::clamp(tileScale, 0.25, 3.0) : 1.0;
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        painter.fillRect(rect(), palette().color(QPalette::Window));
+        if (image_.isNull() || alpha_ <= 0.0) return;
+        painter.save();
+        painter.setOpacity(alpha_);
+        if (tiled_) {
+            const QSize tileSize(std::max(1, qRound(image_.width() * tileScale_)),
+                                 std::max(1, qRound(image_.height() * tileScale_)));
+            painter.drawTiledPixmap(rect(), QPixmap::fromImage(image_).scaled(tileSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+        } else {
+            painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+            painter.drawImage(rect(), image_);
+        }
+        painter.restore();
+    }
+private:
+    QString path_;
+    QImage image_;
+    double alpha_ = 0.25;
+    double tileScale_ = 1.0;
+    bool tiled_ = false;
+};
+
 namespace {
 class WindowDragHandle final : public QToolButton {
 public:
@@ -382,7 +425,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     setMinimumSize(800, 520);
     setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
     if (displaySettings_.fullscreen) setWindowState(windowState() | Qt::WindowFullScreen);
-    auto* root = new QWidget(this);
+    backgroundSurface_ = new QtBackgroundSurface(this);
+    auto* root = backgroundSurface_;
     auto* layout = new QVBoxLayout(root);
     layout->setContentsMargins(16, 8, 16, 8);
     layout->setSpacing(8);
@@ -2136,6 +2180,8 @@ void QtWindow::render() {
         navigation_->setCurrentRow(ProfilePage);
         return;
     }
+    backgroundSurface_->setBackground(workspace_.directory, displaySettings_.windowBackgrounds[size_t(page)],
+        displaySettings_.backgroundAlpha, displaySettings_.backgroundTiled, displaySettings_.backgroundTileScale);
     const auto previous = selectedId();
     table_->verticalHeader()->setDefaultSectionSize(displaySettings_.compactRows ? 24 : 28);
     const auto& data = workspace_.data;

@@ -4426,11 +4426,20 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QDir().mkpath(temp.path() + "/ui/backgrounds");
+    QImage backgroundImage(16, 12, QImage::Format_ARGB32_Premultiplied);
+    backgroundImage.fill(QColor(210, 40, 80, 220));
+    const bool imageSaved = backgroundImage.save(temp.path() + "/ui/backgrounds/reference.png", "PNG");
+    const auto listedBackgrounds = ListQtBackgroundImages(directory);
+    const auto loadedBackground = LoadQtBackgroundImage(directory, "ui/backgrounds/reference.png");
+    if (!imageSaved || !listedBackgrounds.contains("ui/backgrounds/reference.png") || loadedBackground.size() != QSize(16, 12) ||
+        !LoadQtBackgroundImage(directory, "ui/backgrounds/../reference.png").isNull() ||
+        !LoadQtBackgroundImage(directory, "C:/outside.png").isNull()) { QImageReader probe(temp.path() + "/ui/backgrounds/reference.png", "png"); std::cerr << "Qt background image validation/listing failed saved=" << imageSaved << " listed=" << listedBackgrounds.join(',').toUtf8().constData() << " size=" << loadedBackground.width() << 'x' << loadedBackground.height() << " reader=" << probe.canRead() << " readerSize=" << probe.size().width() << 'x' << probe.size().height() << " error=" << probe.errorString().toUtf8().constData() << " base=" << QFileInfo(temp.path() + "/ui/backgrounds").canonicalFilePath().toUtf8().constData() << " file=" << QFileInfo(temp.path() + "/ui/backgrounds/reference.png").canonicalFilePath().toUtf8().constData() << '\n'; return false; }
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
     QDir().mkpath(temp.path() + "/meta/ui-presets");
     QFile legacyPreset(temp.path() + "/meta/ui-presets/LegacyLayout.ini");
     if (!legacyPreset.open(QIODevice::WriteOnly) ||
-        legacyPreset.write("[style]\nfontScale=1.25\nitemSpacing=6 4\nframeRounding=9\nwindowFullscreen=1\nwindowDecorated=0\ncustomColors=1\n[profile]\ntrusted=secret-value\n") < 0)
+        legacyPreset.write("[style]\nfontScale=1.25\nitemSpacing=6 4\nframeRounding=9\nwindowFullscreen=1\nwindowDecorated=0\ncustomColors=1\nbackgroundAlpha=0.4\nbackgroundTiled=1\nbackgroundTileScale=1.5\n[backgrounds]\nПрофиль=ui/backgrounds/reference.png\n[profile]\ntrusted=secret-value\n") < 0)
         return false;
     legacyPreset.close();
     QtLayoutPreset migratedPreset;
@@ -4438,7 +4447,10 @@ static bool TestDisplaySettings(QApplication& app) {
         migratedPreset.scalePercent != 125 || migratedPreset.spacingPercent != 80 ||
         migratedPreset.cornerRadius != 8 || !migratedPreset.compactRows ||
         !migratedPreset.fullscreen || migratedPreset.decorated ||
-        IsQtLayoutPresetDeletable(directory, "LegacyLayout")) return false;
+        migratedPreset.windowBackgrounds[0] != "ui/backgrounds/reference.png" ||
+        qAbs(migratedPreset.backgroundAlpha - 0.4) > 0.001 || !migratedPreset.backgroundTiled ||
+        qAbs(migratedPreset.backgroundTileScale - 1.5) > 0.001 ||
+        IsQtLayoutPresetDeletable(directory, "LegacyLayout")) { std::cerr << "Qt background legacy preset import failed path=" << migratedPreset.windowBackgrounds[0].toUtf8().constData() << " alpha=" << migratedPreset.backgroundAlpha << " tile=" << migratedPreset.backgroundTiled << " scale=" << migratedPreset.backgroundTileScale << '\n'; return false; }
     migratedPreset.name = QString::fromUtf8("Моя компоновка / 1");
     migratedPreset.fullscreen = false; migratedPreset.decorated = true;
     QString presetError;
@@ -4448,7 +4460,10 @@ static bool TestDisplaySettings(QApplication& app) {
     QtLayoutPreset roundTrip;
     if (!LoadQtLayoutPreset(directory, QString::fromUtf8("Моя компоновка 1"), &roundTrip) ||
         roundTrip.scalePercent != 125 || roundTrip.cornerRadius != 8 || roundTrip.decorated != migratedPreset.decorated)
-        return false;
+        { std::cerr << "Qt layout preset round-trip failed\n"; return false; }
+    if (roundTrip.windowBackgrounds[0] != "ui/backgrounds/reference.png" ||
+        qAbs(roundTrip.backgroundAlpha - 0.4) > 0.001 || !roundTrip.backgroundTiled ||
+        qAbs(roundTrip.backgroundTileScale - 1.5) > 0.001) return false;
     if (!DeleteQtLayoutPreset(directory, roundTrip.name, &presetError) ||
         !QFileInfo::exists(temp.path() + "/meta/ui-presets/LegacyLayout.ini") ||
         IsQtLayoutPresetDeletable(directory, "LegacyLayout")) return false;
@@ -4508,29 +4523,53 @@ static bool TestDisplaySettings(QApplication& app) {
         const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
         if (!tray || tray->isEnabled() != trayAvailable || !background || background->isEnabled()) { qobject_cast<QDialog*>(dialog)->reject(); return; }
         tray->setChecked(trayAvailable);
+        QTimer::singleShot(0, [directory] {
+            auto* backgroundsDialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!backgroundsDialog || backgroundsDialog->objectName() != "qtBackgroundSettings") {
+                std::cerr << "Qt background dialog did not open\n";
+                if (backgroundsDialog) backgroundsDialog->reject();
+                return;
+            }
+            auto* page = backgroundsDialog->findChild<QComboBox*>("qtBackgroundPage0");
+            auto* alpha = backgroundsDialog->findChild<QSlider*>("qtBackgroundAlpha");
+            auto* tiled = backgroundsDialog->findChild<QCheckBox*>("qtBackgroundTiled");
+            auto* tileScale = backgroundsDialog->findChild<QComboBox*>("qtBackgroundTileScale");
+            auto* buttons = backgroundsDialog->findChild<QDialogButtonBox*>();
+            if (!page || !alpha || !tiled || !tileScale || !buttons) { std::cerr << "Qt background controls missing\n"; backgroundsDialog->reject(); return; }
+            page->setCurrentIndex(page->findData("ui/backgrounds/reference.png"));
+            alpha->setValue(55); tiled->setChecked(true); tileScale->setCurrentIndex(tileScale->findData(1.5));
+            std::cerr << "Nested background selection index=" << page->currentIndex() << " data=" << page->currentData().toString().toUtf8().constData() << " alpha=" << alpha->value() << '\n';
+            buttons->button(QDialogButtonBox::Save)->click();
+        });
+        auto* backgroundsButton = dialog->findChild<QPushButton*>("qtBackgroundSettingsButton");
+        if (!backgroundsButton) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        backgroundsButton->click();
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS"); if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/display-settings.png");
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click(); saved = true;
     });
     if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 ||
         settings.spacingPercent != 120 || settings.cornerRadius != 8 || !settings.compactRows ||
-        settings.minimizeToTray != (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
+        settings.minimizeToTray != (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) { std::cerr << "Qt display settings dialog/save failed\n"; return false; }
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || loaded.spacingPercent != 120 ||
         loaded.cornerRadius != 8 || !loaded.compactRows ||
         loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.profileViewMode != 2 || loaded.profileSkillSort != 3 ||
+        loaded.windowBackgrounds[0] != "ui/backgrounds/reference.png" || qAbs(loaded.backgroundAlpha - 0.55) > 0.001 ||
+        !loaded.backgroundTiled || qAbs(loaded.backgroundTileScale - 1.5) > 0.001 ||
         loaded.profileSkillWeightCategory != 4 || qAbs(loaded.profileSkillWeightMin - 0.7) > 0.001 ||
         qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
-            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
+            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) { std::cerr << "Qt display/background settings persistence mismatch path=" << loaded.windowBackgrounds[0].toUtf8().constData() << " alpha=" << loaded.backgroundAlpha << " tiled=" << loaded.backgroundTiled << " scale=" << loaded.backgroundTileScale << '\n'; return false; }
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
     auto* restoredNavigation = restoredWindow.findChild<QListWidget*>("navigation");
     auto* accessibleSearch = restoredWindow.findChild<QLineEdit*>("search");
     auto* accessibleTable = restoredWindow.findChild<QTableWidget*>();
+    auto* backgroundSurface = restoredWindow.findChild<QWidget*>("qtBackgroundSurface");
     auto* focusSearch = restoredWindow.findChild<QShortcut*>("shortcutFocusSearch");
     auto* clearSearch = restoredWindow.findChild<QShortcut*>("shortcutClearSearch");
     if (!restoredNavigation || restoredNavigation->currentRow() != 16 ||
-        restoredNavigation->accessibleName().isEmpty() || !accessibleSearch ||
+        restoredNavigation->accessibleName().isEmpty() || !accessibleSearch || !backgroundSurface ||
         accessibleSearch->accessibleName().isEmpty() || !accessibleTable || !focusSearch || !clearSearch) return false;
     auto hasAccessibleName = [&restoredWindow](const char* objectName) {
         const auto* widget = restoredWindow.findChild<QWidget*>(QString::fromLatin1(objectName));
@@ -4538,6 +4577,12 @@ static bool TestDisplaySettings(QApplication& app) {
     };
     if (!hasAccessibleName("profiles")) return false;
     restoredNavigation->setCurrentRow(0); QApplication::processEvents();
+    if (backgroundSurface->property("backgroundPath").toString() != "ui/backgrounds/reference.png") { std::cerr << "Qt page background binding failed: " << backgroundSurface->property("backgroundPath").toString().toUtf8().constData() << '\n'; return false; }
+    const auto backgroundArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!backgroundArtifacts.isEmpty()) {
+        restoredWindow.resize(1120, 720); restoredWindow.show(); QApplication::processEvents();
+        restoredWindow.grab().save(backgroundArtifacts + "/background-render.png");
+    }
     auto* profileFocusMode = restoredWindow.findChild<QPushButton*>("profileViewMode2");
     auto* profileTable = restoredWindow.findChild<QTableWidget*>("records");
     auto* profileAchievements = restoredWindow.findChild<QPushButton*>("showAchievements");
