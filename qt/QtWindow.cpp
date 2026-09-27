@@ -633,6 +633,49 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     }
     profileModesLayout->addStretch();
     content->addWidget(profileViewModes_);
+    auto* taskModeButton = new QPushButton(QString::fromUtf8("Задачи"));
+    taskModeButton->setObjectName("profileViewMode3");
+    taskModeButton->setCheckable(true);
+    taskModeButton->setToolTip(QString::fromUtf8("Назначенные задачи, приоритет по сроку и сводка XP."));
+    labelForAccessibility(taskModeButton, QString::fromUtf8("Режим профиля: Задачи"), taskModeButton->toolTip());
+    profileModesLayout->insertWidget(4, taskModeButton);
+    connect(taskModeButton, &QPushButton::clicked, this, [this] {
+        displaySettings_.profileViewMode = 3;
+        saveDisplayContext();
+        render();
+    });
+    profileTaskActions_ = new QWidget;
+    profileTaskActions_->setObjectName("profileTaskActions");
+    auto* profileTaskActionsLayout = new QHBoxLayout(profileTaskActions_);
+    profileTaskActionsLayout->setContentsMargins(0, 0, 0, 0);
+    profileTaskActionsLayout->setSpacing(6);
+    const QStringList profileTaskActionNames = {QString::fromUtf8("Все задачи"), QString::fromUtf8("Активные"),
+        QString::fromUtf8("Просроченные"), QString::fromUtf8("Ждут XP")};
+    for (int i = 0; i < 4; ++i) {
+        profileTaskFilterButtons_[i] = new QPushButton(profileTaskActionNames[i]);
+        profileTaskFilterButtons_[i]->setObjectName(QStringLiteral("profileTasksFilter%1").arg(i));
+        profileTaskFilterButtons_[i]->setMinimumHeight(32);
+        labelForAccessibility(profileTaskFilterButtons_[i], QString::fromUtf8("Открыть задачи профиля: %1").arg(profileTaskActionNames[i]));
+        profileTaskActionsLayout->addWidget(profileTaskFilterButtons_[i]);
+        connect(profileTaskFilterButtons_[i], &QPushButton::clicked, this, [this, i] {
+            const auto id = profiles_->currentData().toString();
+            if (id.isEmpty() || !workspace_.modules.tasks) return;
+            const auto set = [](QWidget* widget, auto action) { const QSignalBlocker blocker(widget); action(); };
+            set(search_, [this] { search_->clear(); });
+            set(statusFilter_, [this] { statusFilter_->setCurrentIndex(0); });
+            set(priorityFilter_, [this] { priorityFilter_->setCurrentIndex(0); });
+            set(quickTaskFilter_, [this, i] { quickTaskFilter_->setCurrentIndex(i == 1 ? 7 : i == 2 ? 3 : i == 3 ? 6 : 0); });
+            set(taskCreatedRange_, [this] { taskCreatedRange_->setCurrentIndex(0); });
+            set(taskAssigneeFilter_, [this, &id] { const int index = taskAssigneeFilter_->findData(id); taskAssigneeFilter_->setCurrentIndex(index >= 0 ? index : 0); });
+            set(taskProjectFilter_, [this] { taskProjectFilter_->setCurrentIndex(0); });
+            set(taskPipelineFilter_, [this] { taskPipelineFilter_->setCurrentIndex(0); });
+            saveDisplayContext();
+            navigation_->setCurrentRow(Tasks);
+        });
+    }
+    profileTaskActionsLayout->addStretch(1);
+    content->addWidget(profileTaskActions_);
+    profileTaskActions_->hide();
     profileSkillFilters_ = new QWidget;
     profileSkillFilters_->setObjectName("profileSkillFilters");
     auto* skillFilterGrid = new QGridLayout(profileSkillFilters_);
@@ -1326,7 +1369,17 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         const int index = profiles_->findData(id);
         if (index >= 0) { profiles_->setCurrentIndex(index); navigation_->setCurrentRow(ProfilePage); }
     });
-    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
+    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem* item) {
+        if (navigation_->currentRow() == ProfilePage && displaySettings_.profileViewMode == 3 && item && workspace_.modules.tasks) {
+            const auto taskId = item->data(Qt::UserRole).toString();
+            profileTaskFilterButtons_[0]->click();
+            for (int row = 0; row < table_->rowCount(); ++row) {
+                if (!table_->item(row, 0) || table_->item(row, 0)->data(Qt::UserRole).toString() != taskId) continue;
+                table_->selectRow(row);
+                break;
+            }
+            return;
+        }
         if (navigation_->currentRow() == Statistics) {
             if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
             details();
@@ -2053,14 +2106,21 @@ void QtWindow::render() {
     storageResolve_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
     profileViewModes_->setVisible(page == ProfilePage);
-    const int profileMode = std::clamp(displaySettings_.profileViewMode, 0, 2);
+    if (!workspace_.modules.tasks && displaySettings_.profileViewMode == 3) displaySettings_.profileViewMode = 1;
+    const int profileMode = std::clamp(displaySettings_.profileViewMode, 0, 3);
     for (int i = 0; i < 3; ++i) {
         const QSignalBlocker blocker(profileViewModeButtons_[i]);
         profileViewModeButtons_[i]->setChecked(i == profileMode);
     }
+    if (auto* taskMode = findChild<QPushButton*>("profileViewMode3")) {
+        const QSignalBlocker blocker(taskMode);
+        taskMode->setChecked(profileMode == 3);
+        taskMode->setVisible(workspace_.modules.tasks);
+    }
     table_->setVisible(!timerPage && !modelPage && (page != ProfilePage || profileMode != 2));
     profileSkillFilters_->setVisible(page == ProfilePage && profileMode == 1);
-    achievements_->setVisible(page == ProfilePage && profileMode != 2);
+    profileTaskActions_->setVisible(page == ProfilePage && profileMode == 3 && workspace_.modules.tasks);
+    achievements_->setVisible(page == ProfilePage && profileMode != 2 && profileMode != 3);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && (page == Statistics || page == AdminProfileStats));
@@ -2123,7 +2183,9 @@ void QtWindow::render() {
     if (page == Pomodoro) {
         summary_->clear();
     } else if (page == ProfilePage) {
-        headers({QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Всего XP"), QString::fromUtf8("Вес")});
+        if (profileMode == 3) headers({QString::fromUtf8("Задача"), QString::fromUtf8("Статус"), QString::fromUtf8("Срок"),
+            QString::fromUtf8("Проект"), QString::fromUtf8("Этап процесса")});
+        else headers({QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Всего XP"), QString::fromUtf8("Вес")});
         const auto id = u(profiles_->currentData().toString());
         std::optional<Profile> profile;
         // Viewing a profile must not invoke LoadActiveProfile: that legacy helper saves on read.
@@ -2139,6 +2201,52 @@ void QtWindow::render() {
             profileValues_[3]->setText(QString::number(profile->xp_to_next_level()));
             profileValues_[4]->setText(QString::number(profile->wallet_balance(), 'f', 0));
             removeSpirit_->setEnabled(unlocked && profile->spirit() == ProfileSpirit::Evil && profile->wallet_balance() + 0.000001 >= 200.0);
+            if (profileMode == 3) {
+                const auto now = QDateTime::currentSecsSinceEpoch();
+                int active = 0, overdue = 0, xpPending = 0;
+                std::vector<const TaskEntry*> tasks;
+                for (const auto& task : data.tasks) {
+                    const bool assigned = std::find(task.assignees.begin(), task.assignees.end(), id) != task.assignees.end();
+                    const bool participated = std::any_of(task.participants.begin(), task.participants.end(),
+                        [&](const auto& item) { return item.profileId == id; });
+                    if (!assigned && !participated) continue;
+                    const int status = AppNormalizeTaskStatus(task.status);
+                    const bool hasXp = std::any_of(task.participants.begin(), task.participants.end(),
+                        [](const auto& item) { return item.globalXp > 0 || item.skillXp > 0; });
+                    if (status == 2 && assigned && !hasXp) ++xpPending;
+                    if (status == 2) continue;
+                    ++active;
+                    if (task.deadlineAt > 0 && task.deadlineAt < now) ++overdue;
+                    tasks.push_back(&task);
+                }
+                std::stable_sort(tasks.begin(), tasks.end(), [now](const TaskEntry* a, const TaskEntry* b) {
+                    const bool ao = a->deadlineAt > 0 && a->deadlineAt < now;
+                    const bool bo = b->deadlineAt > 0 && b->deadlineAt < now;
+                    if (ao != bo) return ao;
+                    if ((a->deadlineAt > 0) != (b->deadlineAt > 0)) return a->deadlineAt > 0;
+                    if (a->deadlineAt > 0 && a->deadlineAt != b->deadlineAt) return a->deadlineAt < b->deadlineAt;
+                    return a->createdAt > b->createdAt;
+                });
+                summary_->setText(QString::fromUtf8("Назначенные задачи: %1 активных · %2 просрочено · %3 завершено, ждёт XP. Первые задачи отсортированы по срочности.")
+                    .arg(active).arg(overdue).arg(xpPending));
+                for (const auto* task : tasks) {
+                    const auto project = std::find_if(data.projects.begin(), data.projects.end(),
+                        [&](const auto& item) { return !task->projectId.empty() && item.id == task->projectId; });
+                    const auto stage = std::find_if(data.pipelineSteps.begin(), data.pipelineSteps.end(),
+                        [&](const auto& item) { return !task->pipelineStepId.empty() && item.id == task->pipelineStepId; });
+                    row(task->id, {q(AppTaskDisplayTitle(*task)), q(AppTaskStatusLabel(task->status)), timeText(task->deadlineAt),
+                        q(project == data.projects.end() ? task->project : project->name),
+                        q(stage == data.pipelineSteps.end() ? task->pipelineStep : stage->title)});
+                    const int taskRow = table_->rowCount() - 1;
+                    if (task->deadlineAt > 0 && task->deadlineAt < now)
+                        for (int col = 0; col < table_->columnCount(); ++col)
+                            if (auto* cell = table_->item(taskRow, col)) cell->setBackground(palette().color(QPalette::Base).darker(108));
+                }
+                if (tasks.empty()) summary_->setText(summary_->text() + QString::fromUtf8(" · Активных задач нет."));
+                table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+                table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+                table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+            }
             auto profileSkills = profile->list_skills();
             auto totalSkillXp = [](const Skill& skill) {
                 int total = skill.xp;
@@ -2159,7 +2267,7 @@ void QtWindow::render() {
                 if (leftXp != rightXp) return leftXp > rightXp;
                 return compareDisplayName(left, right);
             });
-            for (const auto& skill : profileSkills) {
+            if (profileMode != 3) for (const auto& skill : profileSkills) {
                 const int weightCategory = skill.weight >= 1.3 ? 1 : skill.weight >= 1.1 ? 2 :
                     skill.weight >= 0.9 ? 3 : skill.weight >= 0.7 ? 4 : 5;
                 if (profileMode == 1 && (skill.weight < profileSkillWeightMin_->value() ||
@@ -2171,7 +2279,7 @@ void QtWindow::render() {
                     QString::number(skill.weight, 'f', 2)});
             }
         } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Администратор может создать его через «Управление профилями»."));
-        for (int rowIndex = 0; rowIndex < table_->rowCount(); ++rowIndex)
+        if (profileMode != 3) for (int rowIndex = 0; rowIndex < table_->rowCount(); ++rowIndex)
             table_->setRowHidden(rowIndex, profileMode == 2 || (profileMode == 0 && rowIndex >= 3));
     } else if (page == Tasks) {
         headers({QString::fromUtf8("Задача"), QString::fromUtf8("Дата"), QString::fromUtf8("Проект"),
@@ -4002,16 +4110,18 @@ void QtWindow::exportLogs() {
     if (!path.endsWith(".txt", Qt::CaseInsensitive)) path += ".txt";
     QByteArray bytes("\xEF\xBB\xBF", 3);
     int count = 0;
+    int rowNumber = 0;
     const auto sourceFilter = logSourceFilter_->currentData().toString();
     for (auto it = appLogs_.rbegin(); it != appLogs_.rend(); ++it) {
+        ++rowNumber;
         const bool enabled = it->level == AppLogLevel::Info ? logInfo_->isChecked()
             : it->level == AppLogLevel::Warning ? logWarnings_->isChecked() : logErrors_->isChecked();
         if (!sourceFilter.isEmpty() && q(it->source) != sourceFilter) continue;
         const QString level = it->level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
             : it->level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
-        const QStringList searchableValues{timeText(it->timestamp), level, q(it->source), q(it->message)};
+        const QStringList searchableValues{QString::number(rowNumber), timeText(it->timestamp), level, q(it->source), q(it->message)};
         if (!enabled || !searchableValues.join(' ').contains(search_->text(), Qt::CaseInsensitive)) continue;
-        const QStringList values{QString::number(count + 1), searchableValues[0], searchableValues[1], searchableValues[2], searchableValues[3]};
+        const QStringList values{QString::number(count + 1), searchableValues[1], searchableValues[2], searchableValues[3], searchableValues[4]};
         auto clean = [](QString value) {
             return value.replace('\r', ' ').replace('\n', ' ').replace('|', '/');
         };

@@ -4564,8 +4564,9 @@ int main(int argc, char** argv) {
     auto* modeOverview = window.findChild<QPushButton*>("profileViewMode0");
     auto* modeAnalytics = window.findChild<QPushButton*>("profileViewMode1");
     auto* modeFocus = window.findChild<QPushButton*>("profileViewMode2");
+    auto* modeTasks = window.findChild<QPushButton*>("profileViewMode3");
     auto* showAchievements = window.findChild<QPushButton*>("showAchievements");
-    if (!modeOverview || !modeAnalytics || !modeFocus || !showAchievements || table->rowCount() != 4 ||
+    if (!modeOverview || !modeAnalytics || !modeFocus || !modeTasks || !showAchievements || table->rowCount() != 4 ||
         !modeAnalytics->isChecked() || table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3))
         return fail("Profile analytics mode did not show full skill list");
     auto* sortSkills = window.findChild<QComboBox*>("profileSkillSort");
@@ -4596,6 +4597,20 @@ int main(int argc, char** argv) {
     if (!table->isHidden() || !showAchievements->isHidden()) return fail("Profile focus mode did not hide details");
     modeAnalytics->click(); QApplication::processEvents();
     if (table->isHidden() || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3)) return fail("Profile analytics mode did not restore details");
+    modeTasks->click(); QApplication::processEvents();
+    if (!modeTasks->isChecked() || table->columnCount() != 5 || table->rowCount() != 1 ||
+        table->item(0, 0)->text() != QString::fromUtf8("Проверка Qt <без HTML>") ||
+        LoadQtDisplaySettings(workspace.directory).profileViewMode != 3 ||
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("1 активных")) ||
+        !window.findChild<QPushButton*>("profileTasksFilter1"))
+        return fail("Profile task dashboard did not show the assigned active task and summary");
+    window.findChild<QPushButton*>("profileTasksFilter1")->click(); QApplication::processEvents();
+    if (nav->currentRow() != 1 || table->rowCount() != 1 ||
+        window.findChild<QComboBox*>("quickTaskFilter")->currentIndex() != 7 ||
+        window.findChild<QComboBox*>("taskAssigneeFilter")->currentData().toString() != QString::fromStdString(createdProfile->id))
+        return fail("Profile task dashboard did not open the active task list scoped to the profile");
+    window.findChild<QPushButton*>("taskFilterReset")->click(); QApplication::processEvents();
+    modeAnalytics->click(); QApplication::processEvents();
     nav->setCurrentRow(0);
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
@@ -5169,8 +5184,9 @@ int main(int argc, char** argv) {
     bool exportMatchesTable = uiLogBytes.startsWith("\xEF\xBB\xBF") && exportedLines.size() == expectedExportMessages.size();
     for (int index = 0; exportMatchesTable && index < expectedExportMessages.size(); ++index)
         exportMatchesTable = exportedLines[index].endsWith(" | " + expectedExportMessages[index]);
-    if (!exportMatchesTable)
+    if (!exportMatchesTable) {
         return fail("Qt application log export did not match visible search results or encoding");
+    }
     search->clear();
     clearLogs->click();
     if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||

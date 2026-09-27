@@ -26,7 +26,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
             else if (key == "lastProfileId") out.lastProfileId = value;
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 17) : 0; }
-            else if (key == "profileViewMode") { bool ok = false; const int index = value.toInt(&ok); out.profileViewMode = ok ? std::clamp(index, 0, 2) : 1; }
+            else if (key == "profileViewMode") { bool ok = false; const int index = value.toInt(&ok); out.profileViewMode = ok ? std::clamp(index, 0, 3) : 1; }
             else if (key == "profileSkillSort") { bool ok = false; const int index = value.toInt(&ok); out.profileSkillSort = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "profileSkillWeightCategory") { bool ok = false; const int index = value.toInt(&ok); out.profileSkillWeightCategory = ok ? std::clamp(index, 0, 5) : 0; }
             else if (key == "profileSkillWeightMin") { bool ok = false; const double weight = value.toDouble(&ok); if (ok && std::isfinite(weight)) out.profileSkillWeightMin = std::clamp(weight, 0.0, 2.0); }
@@ -79,7 +79,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
     auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 17)));
-    set("profileViewMode", QString::number(std::clamp(settings.profileViewMode, 0, 2)));
+    set("profileViewMode", QString::number(std::clamp(settings.profileViewMode, 0, 3)));
     set("profileSkillSort", QString::number(std::clamp(settings.profileSkillSort, 0, 3)));
     set("profileSkillWeightCategory", QString::number(std::clamp(settings.profileSkillWeightCategory, 0, 5)));
     const double profileSkillWeightMin = std::isfinite(settings.profileSkillWeightMin)

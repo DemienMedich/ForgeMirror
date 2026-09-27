@@ -140,6 +140,8 @@ private:
     QWidget* profileMetrics_;
     QWidget* profileViewModes_;
     QPushButton* profileViewModeButtons_[3];
+    QWidget* profileTaskActions_;
+    QPushButton* profileTaskFilterButtons_[4];
     QWidget* profileSkillFilters_;
     QComboBox* profileSkillSort_;
     QComboBox* profileSkillWeightCategory_;
