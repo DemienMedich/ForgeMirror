@@ -1334,9 +1334,17 @@ bool QtWindow::reload() {
         message(error.what());
         return false;
     }
-    if (workspace_.taskRecoveryNotice) {
-        appendLog(AppLogLevel::Warning, "CoreTaskRecovery", "An interrupted Qt transaction was rolled back from its recovery journal");
-        workspace_.taskRecoveryNotice = false;
+    if (workspace_.transactionRecoveryNotice) {
+        appendLog(AppLogLevel::Warning, "CoreTransactionRecovery", "An interrupted local transaction was recovered from its journal");
+        workspace_.transactionRecoveryNotice = false;
+    }
+    if (workspace_.cloudPullRecoveryNotice) {
+        appendLog(AppLogLevel::Warning, "CoreTransactionRecovery", "An interrupted manual cloud pull was rolled back from its recovery journal");
+        workspace_.cloudPullRecoveryNotice = false;
+    }
+    if (workspace_.cloudPushRecoveryNotice) {
+        appendLog(AppLogLevel::Warning, "CoreTransactionRecovery", "An interrupted manual cloud push was rolled back from its recovery journal");
+        workspace_.cloudPushRecoveryNotice = false;
     }
     {
         QSignalBlocker blocker(profiles_);
@@ -1988,10 +1996,11 @@ void QtWindow::render() {
                 const auto& entry = appLogs_[index];
                 const bool coreWalletEvent = entry.source == "CoreWalletMutation";
                 const bool coreCloudEvent = entry.source == "CoreCloudTransaction";
-                const bool coreEvent = coreWalletEvent || coreCloudEvent || entry.source == "CoreTaskCompletion" || entry.source == "CoreTaskRecovery";
+                const bool coreRecoveryEvent = entry.source == "CoreTransactionRecovery";
+                const bool coreEvent = coreWalletEvent || coreCloudEvent || coreRecoveryEvent || entry.source == "CoreTaskCompletion";
                 const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
                     : coreCloudEvent ? QString::fromUtf8("Облачный перенос")
-                    : entry.source == "CoreTaskRecovery" ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
+                    : coreRecoveryEvent ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
                 entries.push_back({entry.timestamp, coreEvent ? 5 : 3, std::to_string(index),

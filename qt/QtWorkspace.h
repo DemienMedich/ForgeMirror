@@ -9,7 +9,9 @@ class QtWorkspace {
 public:
     explicit QtWorkspace(std::filesystem::path directory);
     void reload();
-    bool taskRecoveryNotice = false;
+    bool transactionRecoveryNotice = false;
+    bool cloudPullRecoveryNotice = false;
+    bool cloudPushRecoveryNotice = false;
     std::filesystem::path directory;
     std::unique_ptr<IJobStorage> storage;
     SkillCatalog catalog;

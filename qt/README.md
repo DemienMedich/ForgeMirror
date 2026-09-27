@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 131**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 84%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include automatic sync, core telemetry outside instrumented Qt workflows, additional accessibility work, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–131 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 132**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 84%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. The remaining gaps include automatic sync, core telemetry outside instrumented Qt workflows, additional accessibility work, and smaller items. Existing storage formats and domain services are reused. The Qt-only `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.11` remains the latest verified per-user installer; stages 47–132 are implementation checkpoints, not a release. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -673,3 +673,7 @@ The existing journaled wallet mutation path now emits a bounded local core event
 ### Manual cloud transfer outcomes in core audit (stage 131)
 
 Confirmed manual pull and push operations now report fixed generic outcomes to the existing bounded local application log. Success, unchanged pull, failure, completed rollback and pending recovery are distinguished without recording cloud paths, filenames, file contents, secrets or exception text. The administrator-only **Core-событие** audit source includes these entries, separate from ordinary Qt activity. UI tests verify successful transfers and ensure configured cloud paths do not appear in the local event text. Cancelled confirmations and read-only previews do not produce transaction events.
+
+### Recovery outcomes in core audit (stage 132)
+
+On startup or workspace refresh, successfully recovered local transaction, manual cloud-pull, and manual cloud-push journals now produce fixed generic events in the bounded local log. The admin-only core audit source classifies these as transaction recovery. Local transactions use one shared journal for XP, wallet, profile, skill, project, rules and related operations, so the event intentionally does not guess which domain action was interrupted. Pull and push recovery are identified by transaction type only; paths, filenames and file contents remain out of the log. A malformed or unrecoverable journal still blocks workspace loading and cannot emit a normal recovery event until it is resolved.

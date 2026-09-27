@@ -550,7 +550,15 @@ static bool TestCloudPullTransaction() {
     auto journalBytes = QJsonDocument(QJsonObject{{"version", 1},
         {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", entries}}).toJson();
     if (!write(journal, journalBytes)) return false;
-    { QtWorkspace recovered(workspace); }
+    {
+        QtWorkspace recovered(workspace);
+        if (!recovered.cloudPullRecoveryNotice) return false;
+        QtWindow recoveryWindow(recovered);
+        QFile log(QString::fromUtf8((workspace / "meta/qt-application-log.json").u8string()));
+        if (recovered.cloudPullRecoveryNotice || !log.open(QIODevice::ReadOnly)) return false;
+        const auto bytes = log.readAll();
+        if (!bytes.contains("interrupted manual cloud pull was rolled back") || bytes.contains(cloud.u8string().c_str())) return false;
+    }
     if (bytes(workspace / "meta/tasks.json") != before || std::filesystem::exists(journal) ||
         std::filesystem::exists(workspace / "meta/banner.json")) return false;
     entries.append(QJsonObject{{"path", "../outside.ini"}, {"existed", false}});
@@ -686,7 +694,15 @@ static bool TestCloudPushPreview() {
     bool rejected = false;
     try { RecoverQtCloudPush(workspace); } catch (const std::exception&) { rejected = true; }
     if (!rejected || inventory(cloud) == beforeInterruptedPush || !write(pushJournal, validJournal)) return false;
-    { QtWorkspace recovered(workspace); }
+    {
+        QtWorkspace recovered(workspace);
+        if (!recovered.cloudPushRecoveryNotice) return false;
+        QtWindow recoveryWindow(recovered);
+        QFile log(QString::fromUtf8((workspace / "meta/qt-application-log.json").u8string()));
+        if (recovered.cloudPushRecoveryNotice || !log.open(QIODevice::ReadOnly)) return false;
+        const auto bytes = log.readAll();
+        if (!bytes.contains("interrupted manual cloud push was rolled back") || bytes.contains(cloud.u8string().c_str())) return false;
+    }
     if (inventory(cloud) != beforeInterruptedPush || std::filesystem::exists(pushJournal) ||
         std::filesystem::exists(cloud / "spirits")) return false;
     QtWindow window(qtWorkspace); window.show(); QApplication::processEvents();
@@ -1813,11 +1829,12 @@ static bool TestTaskEditorTransaction() {
     }
     workspace.reload();
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
-    if (!workspace.taskRecoveryNotice) return false;
+    if (!workspace.transactionRecoveryNotice) return false;
     QtWindow recoveryWindow(workspace);
     QFile recoveryLog(temp.path() + "/meta/qt-application-log.json");
-    if (workspace.taskRecoveryNotice || !recoveryLog.open(QIODevice::ReadOnly) ||
-        !recoveryLog.readAll().contains("CoreTaskRecovery")) return false;
+    if (workspace.transactionRecoveryNotice || !recoveryLog.open(QIODevice::ReadOnly)) return false;
+    const auto recoveryBytes = recoveryLog.readAll();
+    if (!recoveryBytes.contains("CoreTransactionRecovery") || !recoveryBytes.contains("interrupted local transaction")) return false;
     auto& awarded = workspace.data.tasks.front();
     awarded.participants.push_back({"legacy-profile", 100, 77, 22, "snapshot"});
     awarded.status = 2;
