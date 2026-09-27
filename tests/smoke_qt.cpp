@@ -928,6 +928,62 @@ static bool TestQtAdminAuthParity() {
     return success;
 }
 
+static bool SubmitAdminLoginForTest(const QString& password, bool remember);
+
+static bool TestCatalogMutationCoreAudit() {
+    const char* overrideValue = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
+    if (overrideValue && *overrideValue) return true;
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+    QtWorkspace workspace(directory);
+    if (!SetAdminPassword(directory, "catalog-audit-password")) return false;
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* login = window.findChild<QAction*>("adminLoginAction");
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* primary = window.findChild<QPushButton*>("primary");
+    if (!login || !navigation || !primary) return false;
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest(QString::fromUtf8("catalog-audit-password"), false); });
+    login->trigger();
+    navigation->setCurrentRow(2);
+    QApplication::processEvents();
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "projectEditor") {
+            if (dialog) dialog->reject();
+            return;
+        }
+        auto* title = dialog->findChild<QLineEdit*>("entryTitle");
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        if (!title || !buttons) { dialog->reject(); return; }
+        title->setText(QString::fromUtf8("Private project title"));
+        buttons->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    QFile log(QString::fromStdWString((directory / "meta/qt-application-log.json").wstring()));
+    if (!log.open(QIODevice::ReadOnly)) return false;
+    const auto bytes = log.readAll();
+    const auto contents = QString::fromUtf8(bytes.constData(), bytes.size());
+    if (!contents.contains(QString::fromUtf8("CoreCatalogMutation")) ||
+        !contents.contains(QString::fromUtf8("Project creation committed")) ||
+        contents.contains(QString::fromUtf8("Private project title"))) return false;
+    navigation->setCurrentRow(7);
+    QApplication::processEvents();
+    auto* source = window.findChild<QComboBox*>("auditSourceFilter");
+    auto* table = window.findChild<QTableWidget*>("records");
+    if (!source || !table) return false;
+    source->setCurrentIndex(5);
+    QApplication::processEvents();
+    bool visible = false;
+    for (int row = 0; row < table->rowCount(); ++row)
+        visible |= table->item(row, 3)->text() == QString::fromUtf8("Изменение справочников") &&
+            table->item(row, 6)->text().contains(QString::fromUtf8("Project creation committed"));
+    window.close();
+    return visible;
+}
+
 static bool SubmitAdminLoginForTest(const QString& password, bool remember = false) {
     auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
     if (!dialog || dialog->objectName() != "adminLoginDialog") return false;
@@ -4872,6 +4928,7 @@ int main(int argc, char** argv) {
     if (!TestCloudAutoSync()) { std::cerr << "Cloud automatic sync failed\n"; return 1; }
     if (!TestCloudReleaseUpdate()) { std::cerr << "Cloud release update failed\n"; return 1; }
     if (!TestQtAdminAuthParity()) { std::cerr << "Administrator authentication parity failed\n"; return 1; }
+    if (!TestCatalogMutationCoreAudit()) { std::cerr << "Catalog mutation core audit failed\n"; return 1; }
     if (!TestCloudPushPreview()) { std::cerr << "Cloud push preview failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }
     if (!TestStorageConflictResolver()) { std::cerr << "Storage conflict resolver failed\n"; return 1; }

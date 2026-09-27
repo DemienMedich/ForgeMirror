@@ -3202,13 +3202,16 @@ void QtWindow::render() {
                 const bool coreProfileEvent = entry.source == "CoreProfileMutation";
                 const bool coreRecoveryEvent = entry.source == "CoreTransactionRecovery";
                 const bool coreTaskMutationEvent = entry.source == "CoreTaskMutation";
+                const bool coreCatalogMutationEvent = entry.source == "CoreCatalogMutation";
                 const bool coreEvent = coreWalletEvent || coreCloudEvent || coreProfileEvent || coreRecoveryEvent ||
-                    coreTaskMutationEvent || entry.source == "CoreTaskCompletion";
+                    coreTaskMutationEvent || coreCatalogMutationEvent || entry.source == "CoreTaskCompletion";
                 const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
                     : coreCloudEvent ? QString::fromUtf8("Облачный перенос")
                     : coreProfileEvent ? QString::fromUtf8("Операция профиля")
                     : coreRecoveryEvent ? QString::fromUtf8("Восстановление транзакции")
-                    : coreTaskMutationEvent ? QString::fromUtf8("Изменение задач") : QString::fromUtf8("Завершение XP");
+                    : coreTaskMutationEvent ? QString::fromUtf8("Изменение задач")
+                    : coreCatalogMutationEvent ? QString::fromUtf8("Изменение справочников")
+                    : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
                 entries.push_back({entry.timestamp, coreEvent ? 5 : 3, std::to_string(index),
@@ -4712,16 +4715,28 @@ void QtWindow::createEntry(bool edit) {
     }
     if (navigation_->currentRow() == Professions) {
         if (ShowProfessionEditor(this, workspace_, edit ? u(selectedId()) : std::string(),
-                                 u(profiles_->currentData().toString()))) reload();
+                                 u(profiles_->currentData().toString()))) {
+            appendLog(AppLogLevel::Info, "CoreCatalogMutation", edit
+                ? "Profession edit committed" : "Profession creation committed");
+            reload();
+        }
         return;
     }
     if (navigation_->currentRow() == Pipeline) {
-        if (ShowPipelineEditor(this, workspace_, edit ? u(selectedId()) : std::string())) reload();
+        if (ShowPipelineEditor(this, workspace_, edit ? u(selectedId()) : std::string())) {
+            appendLog(AppLogLevel::Info, "CoreCatalogMutation", edit
+                ? "Pipeline stage edit committed" : "Pipeline stage creation committed");
+            reload();
+        }
         return;
     }
     if (navigation_->currentRow() == Catalog) {
         if (ShowSkillEditor(this, workspace_, edit ? u(selectedId()) : std::string(),
-                            u(profiles_->currentData().toString()))) reload();
+                            u(profiles_->currentData().toString()))) {
+            appendLog(AppLogLevel::Info, "CoreCatalogMutation", edit
+                ? "Skill edit committed" : "Skill creation committed");
+            reload();
+        }
         return;
     }
     if (navigation_->currentRow() == ProfilePage) {
@@ -4871,7 +4886,13 @@ void QtWindow::createEntry(bool edit) {
             const int index = edit ? int(std::distance(workspace_.data.projects.begin(), current)) : -1;
             auto result = AppSaveProjectEntry(workspace_.directory, workspace_.data.projects, index,
                 u(name->text().trimmed()), u(description->toPlainText()));
-            if (!result.ok) { message(result.errorMessage); return; }
+            if (!result.ok) {
+                appendLog(AppLogLevel::Warning, "CoreCatalogMutation", edit
+                    ? "Project edit failed or rolled back" : "Project creation failed or rolled back");
+                message(result.errorMessage); return;
+            }
+            appendLog(AppLogLevel::Info, "CoreCatalogMutation", edit
+                ? "Project edit committed" : "Project creation committed");
         } else {
             TaskEntry task = originalTask;
             if (!edit) task.id = u(QUuid::createUuid().toString(QUuid::WithoutBraces));
@@ -5162,6 +5183,7 @@ void QtWindow::deleteEntry() {
             }
             CommitQtRecoveryTransaction(workspace_.directory);
         } catch (const std::exception& error) {
+            appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Skill deletion failed or rolled back");
             std::string text = error.what();
             if (prepared) {
                 try { RecoverTaskCompletion(workspace_.directory); text += u8" Изменения полностью отменены."; }
@@ -5169,6 +5191,7 @@ void QtWindow::deleteEntry() {
             }
             reload(); message(text); return;
         }
+        appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Skill deletion committed");
         reload();
         statusBar()->showMessage(QString::fromUtf8("Навык удалён"), 4000);
         return;
@@ -5220,6 +5243,7 @@ void QtWindow::deleteEntry() {
             if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить профессию." : result.errorMessage);
             CommitQtRecoveryTransaction(workspace_.directory);
         } catch (const std::exception& error) {
+            appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Profession deletion failed or rolled back");
             std::string text = error.what();
             if (prepared) {
                 try { RecoverTaskCompletion(workspace_.directory); text += u8" Изменения полностью отменены."; }
@@ -5229,6 +5253,7 @@ void QtWindow::deleteEntry() {
             message(text);
             return;
         }
+        appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Profession deletion committed");
         reload();
         statusBar()->showMessage(QString::fromUtf8("Профессия удалена · профилей очищено: %1 · навыков: %2")
             .arg(result.affectedProfiles).arg(result.affectedSkills), 5000);
@@ -5306,7 +5331,11 @@ void QtWindow::deleteEntry() {
         if (confirm.exec() != QMessageBox::Yes) return;
         const int index = int(std::distance(workspace_.data.pipelineSteps.begin(), step));
         const auto result = AppDeletePipelineStep(workspace_.directory, workspace_.data.pipelineSteps, index);
-        if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось удалить этап." : result.errorMessage); return; }
+        if (!result.ok) {
+            appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Pipeline stage deletion failed or rolled back");
+            message(result.errorMessage.empty() ? u8"Не удалось удалить этап." : result.errorMessage); return;
+        }
+        appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Pipeline stage deletion committed");
         reload();
         statusBar()->showMessage(QString::fromUtf8("Этап удалён · переходов очищено: %1").arg(inboundLinks), 5000);
         return;
@@ -5333,6 +5362,7 @@ void QtWindow::deleteEntry() {
         if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить проект." : result.errorMessage);
         CommitQtRecoveryTransaction(workspace_.directory);
     } catch (const std::exception& error) {
+        appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Project deletion failed or rolled back");
         std::string text = error.what();
         bool recovered = !prepared;
         if (prepared) {
@@ -5343,6 +5373,8 @@ void QtWindow::deleteEntry() {
         message(text);
         return;
     }
+    appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Project deletion committed: detached=" +
+        std::to_string(result.detachedTasks));
     reload();
     statusBar()->showMessage(QString::fromUtf8("Проект удалён · задач отвязано: %1").arg(result.detachedTasks), 5000);
 }
@@ -5375,7 +5407,11 @@ void QtWindow::movePipeline(int delta) {
     const int to = from + delta;
     if (to < 0 || to >= int(workspace_.data.pipelineSteps.size())) return;
     const auto result = AppMovePipelineStep(workspace_.directory, workspace_.data.pipelineSteps, from, to);
-    if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось изменить порядок этапов." : result.errorMessage); return; }
+    if (!result.ok) {
+        appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Pipeline stage reordering failed or rolled back");
+        message(result.errorMessage.empty() ? u8"Не удалось изменить порядок этапов." : result.errorMessage); return;
+    }
+    appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Pipeline stage order changed");
     render();
     statusBar()->showMessage(QString::fromUtf8("Порядок этапов сохранён"), 3000);
 }
