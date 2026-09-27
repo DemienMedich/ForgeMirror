@@ -15,6 +15,7 @@ struct AppMutationResult {
     int changedCount = 0;
     int skippedCount = 0;
     std::string errorMessage;
+    bool awardRollbackUnavailable = false;
 };
 
 struct AppProjectSaveResult {

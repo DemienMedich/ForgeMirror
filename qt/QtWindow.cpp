@@ -3826,9 +3826,26 @@ void QtWindow::deleteEntry() {
             ? DeleteAwardedTaskWithRecovery(context, workspace_.data.tasks, workspace_.data.taskAudit,
                 id, u(profiles_->currentData().toString()), "admin/qt")
             : DeleteTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, id, "admin/qt");
-        if (!result.ok) { message(result.errorMessage); return; }
+        auto deleteResult = result;
+        bool keptAwardedXp = false;
+        if (!deleteResult.ok && deleteResult.awardRollbackUnavailable) {
+            QMessageBox keepXp(QMessageBox::Warning, QString::fromUtf8("Откат XP недоступен"),
+                QString::fromUtf8("%1\n\nМожно удалить только запись задачи. Начисленные XP, уровни, навыки и счётчики профилей останутся без изменений.").arg(q(deleteResult.errorMessage)),
+                QMessageBox::Yes | QMessageBox::No, this);
+            keepXp.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить запись, оставить XP"));
+            keepXp.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+            keepXp.setDefaultButton(QMessageBox::No);
+            if (keepXp.exec() == QMessageBox::Yes) {
+                deleteResult = DeleteAwardedTaskRecordKeepXpWithRecovery(workspace_.directory,
+                    workspace_.data.tasks, workspace_.data.taskAudit, id, "admin/qt");
+                keptAwardedXp = deleteResult.ok;
+            }
+        }
+        if (!deleteResult.ok) { message(deleteResult.errorMessage); return; }
         reload();
-        statusBar()->showMessage(QString::fromUtf8("Задача удалена"), 4000);
+        statusBar()->showMessage(keptAwardedXp
+            ? QString::fromUtf8("Запись задачи удалена · начисленный XP сохранён без изменений")
+            : QString::fromUtf8("Задача удалена"), 5000);
         return;
     }
     if (page == Pipeline) {

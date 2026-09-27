@@ -700,14 +700,17 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
     for (const auto& participant : selected->participants) {
         if (!safeProfileId(participant.profileId) || !profileIds.insert(participant.profileId).second ||
             !app.storage.set_active_profile(participant.profileId)) {
+            result.awardRollbackUnavailable = true;
             result.errorMessage = u8"Профиль участника недоступен или повторяется. Удаление остановлено."; return result;
         }
         auto profile = app.storage.load_profile();
         if (!profile || !ProfileMatchesTaskRollbackPostcondition(participant.rollbackSnapshot, *profile)) {
+            result.awardRollbackUnavailable = true;
             result.errorMessage = u8"Профиль участника изменился после этой задачи или использует legacy snapshot. Новый прогресс нельзя откатывать."; return result;
         }
         Profile before = *profile;
         if (!ApplyProfileTaskRollbackSnapshot(participant.rollbackSnapshot, before)) {
+            result.awardRollbackUnavailable = true;
             result.errorMessage = u8"Rollback snapshot участника повреждён."; return result;
         }
         rollbackProfiles.push_back(std::move(before));
@@ -735,6 +738,45 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
             tasks = oldTasks;
             audit = oldAudit;
             try { RecoverTaskCompletion(app.storageDir); result.errorMessage += u8" Изменения полностью отменены."; }
+            catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
+        }
+    }
+    return result;
+}
+
+AppMutationResult DeleteAwardedTaskRecordKeepXpWithRecovery(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::string& taskId, const std::string& actor) {
+    AppMutationResult result;
+    const auto matches = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
+    if (taskId.empty() || matches != 1) {
+        result.errorMessage = u8"Задача не найдена или её ID неоднозначен.";
+        return result;
+    }
+    const auto selected = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
+    if (selected->participants.empty()) {
+        result.errorMessage = u8"У задачи нет начисленного XP для сохранения.";
+        return result;
+    }
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(directory, {}, true);
+        prepared = true;
+        result = AppDeleteTasksByIds(directory, tasks, {taskId}, actor, &audit);
+        if (!result.ok) throw std::runtime_error(result.errorMessage.empty() ? u8"Не удалось удалить задачу." : result.errorMessage);
+        if (!AppAppendTaskAudit(directory, actor, taskId, "xp_disposition", u8"начислено по задаче",
+                u8"сохранено в профилях; XP не изменён", &audit))
+            throw std::runtime_error(u8"Не удалось записать в аудит, что начисленный XP сохранён.");
+        finishJournal(directory);
+    } catch (const std::exception& error) {
+        result = {};
+        result.errorMessage = error.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }

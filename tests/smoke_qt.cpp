@@ -177,8 +177,25 @@ static bool TestTaskCompletion() {
     if (!storage.save_profile(laterProgress)) return fail("later progress fixture failed");
     const auto staleDelete = DeleteAwardedTaskWithRecovery(context, workspace.data.tasks,
         workspace.data.taskAudit, input.taskId, a->id, "test");
-    if (staleDelete.ok || workspace.data.tasks.empty() || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+    if (staleDelete.ok || !staleDelete.awardRollbackUnavailable || workspace.data.tasks.empty() ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
         return fail("later progress did not block awarded delete");
+    const auto laterProgressBytes = bytes(a->id + ".ini");
+    const auto auditBeforeKeepXp = workspace.data.taskAudit.size();
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failedKeepXpDelete = DeleteAwardedTaskRecordKeepXpWithRecovery(workspace.directory,
+        workspace.data.tasks, workspace.data.taskAudit, input.taskId, "test");
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failedKeepXpDelete.ok || workspace.data.tasks.empty() || workspace.data.taskAudit.size() != auditBeforeKeepXp ||
+        bytes(a->id + ".ini") != laterProgressBytes || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("failed keep-XP cleanup did not recover task, audit and profile");
+    const auto keepXpDelete = DeleteAwardedTaskRecordKeepXpWithRecovery(workspace.directory,
+        workspace.data.tasks, workspace.data.taskAudit, input.taskId, "test");
+    if (!keepXpDelete.ok || !workspace.data.tasks.empty() || bytes(a->id + ".ini") != laterProgressBytes ||
+        workspace.data.taskAudit.size() != auditBeforeKeepXp + 2 || workspace.data.taskAudit.back().field != "xp_disposition" ||
+        workspace.data.taskAudit.back().newValue != u8"сохранено в профилях; XP не изменён" ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("stale awarded task cleanup changed XP or missed its audit");
     if (!storage.set_active_profile(a->id) || !storage.save_profile(*afterFailedAwardedDelete)) return fail("later progress fixture restore failed");
     auto advanced = *after;
     advanced.grant_global_xp(1);
