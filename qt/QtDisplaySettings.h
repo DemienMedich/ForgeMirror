@@ -49,6 +49,7 @@ struct QtDisplaySettings {
     bool logShowWarning = true;
     bool logShowError = true;
     QString logSourceFilter;
+    QString logFilter;
     bool logAutoScroll = true;
     bool logCompactView = false;
     QString adminStatsSearch;

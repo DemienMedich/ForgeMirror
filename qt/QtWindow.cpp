@@ -1310,13 +1310,20 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
 
     connect(refresh, &QPushButton::clicked, this, [this] { reload(); });
     connect(navigation_, &QListWidget::currentRowChanged, this, [this] {
-        QSignalBlocker blocker(search_);
-        search_->clear();
+        if (displaySettings_.lastPage == Logs) displaySettings_.logFilter = search_->text();
         saveDisplayContext();
+        QSignalBlocker blocker(search_);
+        search_->setText(navigation_->currentRow() == Logs ? displaySettings_.logFilter : QString());
         render();
     });
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
-    connect(search_, &QLineEdit::textChanged, this, [this] { render(); });
+    connect(search_, &QLineEdit::textChanged, this, [this] {
+        if (navigation_->currentRow() == Logs) {
+            displaySettings_.logFilter = search_->text();
+            saveDisplayContext();
+        }
+        render();
+    });
     connect(profileSkillSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(profileSkillWeightCategory_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(profileSkillWeightMin_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
@@ -2031,6 +2038,10 @@ bool QtWindow::reload() {
     refreshTaskFilterChoices();
     refreshCatalogProfessionChoices();
     const int page = std::clamp(displaySettings_.lastPage, 0, navigation_->count() - 1);
+    if (page == Logs) {
+        const QSignalBlocker blocker(search_);
+        search_->setText(displaySettings_.logFilter);
+    }
     if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
     appendLog(AppLogLevel::Info, "Qt", "Локальное рабочее пространство загружено или обновлено.");
     updateBanner(); render();

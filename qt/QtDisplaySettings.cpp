@@ -456,6 +456,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "logShowWarning") out.logShowWarning = value != "0";
             else if (key == "logShowError") out.logShowError = value != "0";
             else if (key == "logSourceFilter") out.logSourceFilter = value;
+            else if (key == "logFilter") out.logFilter = value;
             else if (key == "logAutoScroll") out.logAutoScroll = value != "0";
             else if (key == "logCompactView") out.logCompactView = value == "1";
             else if (key == "adminStatsSearch") out.adminStatsSearch = value;
@@ -529,6 +530,8 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("logShowError", settings.logShowError ? "1" : "0");
     auto logSourceFilter = settings.logSourceFilter; logSourceFilter.remove('\r'); logSourceFilter.remove('\n');
     set("logSourceFilter", logSourceFilter);
+    auto logFilter = settings.logFilter; logFilter.remove('\r'); logFilter.remove('\n');
+    set("logFilter", logFilter);
     set("logAutoScroll", settings.logAutoScroll ? "1" : "0");
     set("logCompactView", settings.logCompactView ? "1" : "0");
     auto adminStatsSearch = settings.adminStatsSearch; adminStatsSearch.remove('\r'); adminStatsSearch.remove('\n');

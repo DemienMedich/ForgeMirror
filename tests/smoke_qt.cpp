@@ -4654,6 +4654,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!SaveQtDisplaySettings(directory, settings)) return false;
     settings.logShowInfo = false; settings.logShowWarning = true; settings.logShowError = false;
     settings.logSourceFilter = QStringLiteral("Qt");
+    settings.logFilter = QStringLiteral("remember this log query");
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -4727,8 +4728,15 @@ static bool TestDisplaySettings(QApplication& app) {
         loaded.profileSkillWeightCategory != 4 || qAbs(loaded.profileSkillWeightMin - 0.7) > 0.001 ||
         qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 ||
         loaded.logShowInfo || !loaded.logShowWarning || loaded.logShowError || loaded.logSourceFilter != QStringLiteral("Qt") ||
+        loaded.logFilter != QStringLiteral("remember this log query") ||
         loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
-            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) { std::cerr << "Qt display/background settings persistence mismatch path=" << loaded.windowBackgrounds[0].toUtf8().constData() << " alpha=" << loaded.backgroundAlpha << " tiled=" << loaded.backgroundTiled << " scale=" << loaded.backgroundTileScale << '\n'; return false; }
+            (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) {
+        std::cerr << "Qt display/background settings persistence mismatch path=" << loaded.windowBackgrounds[0].toUtf8().constData()
+                  << " alpha=" << loaded.backgroundAlpha << " tiled=" << loaded.backgroundTiled << " scale=" << loaded.backgroundTileScale
+                  << " logFilter=" << loaded.logFilter.toUtf8().constData() << " source=" << loaded.logSourceFilter.toUtf8().constData()
+                  << " levels=" << loaded.logShowInfo << loaded.logShowWarning << loaded.logShowError << '\n';
+        return false;
+    }
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
     auto* restoredNavigation = restoredWindow.findChild<QListWidget*>("navigation");
@@ -4739,7 +4747,13 @@ static bool TestDisplaySettings(QApplication& app) {
     auto* clearSearch = restoredWindow.findChild<QShortcut*>("shortcutClearSearch");
     if (!restoredNavigation || restoredNavigation->currentRow() != 16 ||
         restoredNavigation->accessibleName().isEmpty() || !accessibleSearch || !backgroundSurface ||
-        accessibleSearch->accessibleName().isEmpty() || !accessibleTable || !focusSearch || !clearSearch) return false;
+        accessibleSearch->accessibleName().isEmpty() || accessibleSearch->text() != QStringLiteral("remember this log query") ||
+        !accessibleTable || !focusSearch || !clearSearch) {
+        std::cerr << "Restored display controls navigation=" << (restoredNavigation ? restoredNavigation->currentRow() : -99)
+                  << " query=" << (accessibleSearch ? accessibleSearch->text().toUtf8().constData() : "<null>")
+                  << " navName=" << (restoredNavigation ? restoredNavigation->accessibleName().toUtf8().constData() : "<null>") << '\n';
+        return false;
+    }
     auto hasAccessibleName = [&restoredWindow](const char* objectName) {
         const auto* widget = restoredWindow.findChild<QWidget*>(QString::fromLatin1(objectName));
         return widget && !widget->accessibleName().trimmed().isEmpty();
@@ -4776,8 +4790,6 @@ static bool TestDisplaySettings(QApplication& app) {
         !hasAccessibleName("auditObjectFilter") || !hasAccessibleName("auditFieldFilter")) { std::cerr << "Missing audit filter accessible name\n"; return false; }
     restoredNavigation->setCurrentRow(16); QApplication::processEvents();
     if (!hasAccessibleName("logSourceFilter")) return false;
-    QSaveFile restoreSettings(temp.path() + "/meta/ui.ini");
-    if (!restoreSettings.open(QIODevice::WriteOnly) || restoreSettings.write(before) != before.size() || !restoreSettings.commit()) return false;
     restoredWindow.show(); restoredWindow.activateWindow(); QApplication::processEvents();
     QTest::keyClick(&restoredWindow, Qt::Key_K, Qt::ControlModifier); QApplication::processEvents();
     if (QApplication::focusWidget() != accessibleSearch) return false;
@@ -4785,6 +4797,8 @@ static bool TestDisplaySettings(QApplication& app) {
     QTest::keyClick(accessibleSearch, Qt::Key_Escape); QApplication::processEvents();
     if (!accessibleSearch->text().isEmpty() || accessibleTable->accessibleName().isEmpty() ||
         !accessibleTable->accessibleDescription().contains(QString::fromUtf8("Строк:"))) return false;
+    QSaveFile restoreSettings(temp.path() + "/meta/ui.ini");
+    if (!restoreSettings.open(QIODevice::WriteOnly) || restoreSettings.write(before) != before.size() || !restoreSettings.commit()) return false;
     const auto fixedWindowColor = app.palette().color(QPalette::Window);
     ApplyQtDisplaySettings(app, loaded);
     if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble() ||
@@ -5620,6 +5634,15 @@ int main(int argc, char** argv) {
         logPresetWarningsErrors->accessibleName().isEmpty() || logPresetErrors->accessibleName().isEmpty() ||
         exportLogs->accessibleName().isEmpty() || clearLogs->accessibleName().isEmpty() || clearLogs->accessibleDescription().isEmpty())
         return fail("Qt application log controls are missing accessible names or clear confirmation description");
+    const auto savedLogQuery = QString::fromUtf8("автопрокрутки Qt-журнала");
+    search->setText(savedLogQuery);
+    if (LoadQtDisplaySettings(workspace.directory).logFilter != savedLogQuery)
+        return fail("Qt application log query was not saved to workspace settings");
+    nav->setCurrentRow(1);
+    if (!search->text().isEmpty()) return fail("Qt log query leaked into another page");
+    nav->setCurrentRow(16);
+    if (search->text() != savedLogQuery) return fail("Qt log query did not restore when returning to logs");
+    search->clear();
     auto* logSummary = window.findChild<QLabel*>("summary");
     QFile appLogFile(temp.path() + "/meta/qt-application-log.json");
     if (!logSummary || !appLogFile.open(QIODevice::ReadOnly)) return fail("Qt application log summary unavailable");
