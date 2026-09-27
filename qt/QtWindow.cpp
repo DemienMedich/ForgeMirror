@@ -40,6 +40,7 @@
 #include <cstdlib>
 #include <limits>
 #include <functional>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -191,7 +192,7 @@ AppProfileMutationResult runWalletMutationWithAudit(
         return result;
     }
 }
-enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud, ModelViewerPage, ModelSettingsPage, Logs };
+enum Page { ProfilePage, Tasks, Projects, Catalog, Pipeline, Professions, Statistics, Audit, Pomodoro, Rules, Vault, Shortcuts, Banner, Cloud, ModelViewerPage, ModelSettingsPage, Logs, AdminProfileStats };
 struct ProfileAuditRow { std::int64_t timestamp; std::string profile; std::string action; std::string details; };
 std::vector<ProfileAuditRow> profileAudit(const std::filesystem::path& directory) {
     const auto path = q((directory / "meta/profile-audit.log").u8string());
@@ -232,6 +233,38 @@ QString reportPeriodLabel(int range, const QDate& from, const QDate& to) {
     case 4: return QString::fromUtf8("Созданы %1–%2").arg(from.toString("dd.MM.yyyy"), to.toString("dd.MM.yyyy"));
     default: return QString::fromUtf8("За всё время");
     }
+}
+const std::array<std::pair<QString, int>, 16>& adminProfileRanks() {
+    static const std::array<std::pair<QString, int>, 16> ranks{{
+        {QString::fromUtf8("Стажёр"), 1}, {QString::fromUtf8("Джуниор I"), 10},
+        {QString::fromUtf8("Джуниор II"), 20}, {QString::fromUtf8("Джуниор III"), 30},
+        {QString::fromUtf8("Джуниор IV"), 40}, {QString::fromUtf8("Мидл I"), 50},
+        {QString::fromUtf8("Мидл II"), 60}, {QString::fromUtf8("Мидл III"), 70},
+        {QString::fromUtf8("Мидл IV"), 80}, {QString::fromUtf8("Мидл V"), 90},
+        {QString::fromUtf8("Мидл VI"), 100}, {QString::fromUtf8("Сеньор I"), 150},
+        {QString::fromUtf8("Сеньор II"), 160}, {QString::fromUtf8("Сеньор III"), 170},
+        {QString::fromUtf8("Сеньор IV"), 180}, {QString::fromUtf8("Сеньор V"), 190}}};
+    return ranks;
+}
+int adminProfileRankIndex(int level) {
+    int rank = 0;
+    const auto& ranks = adminProfileRanks();
+    for (int index = 0; index < int(ranks.size()); ++index) {
+        if (level >= ranks[size_t(index)].second) rank = index;
+        else break;
+    }
+    return rank;
+}
+QString adminProfileRankName(int level) {
+    return adminProfileRanks()[size_t(adminProfileRankIndex(level))].first;
+}
+QString elapsedProfileTime(std::int64_t seconds) {
+    if (seconds < 0) seconds = 0;
+    const auto days = seconds / 86400;
+    if (days > 0) return QString::fromUtf8("%1 дн.").arg(days);
+    const auto hours = seconds / 3600;
+    if (hours > 0) return QString::fromUtf8("%1 ч.").arg(hours);
+    return QString::fromUtf8("%1 мин.").arg(seconds / 60);
 }
 std::vector<TaskEntry> reportTasksForRange(const std::vector<TaskEntry>& tasks, int range,
                                            QDate customFrom, QDate customTo,
@@ -452,7 +485,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки  F2"), QString::fromUtf8("Пайплайн  F3"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика  F5"), QString::fromUtf8("Аудит  F6"),
         QString::fromUtf8("Pomodoro"), QString::fromUtf8("Правила  F4"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Ярлыки"), QString::fromUtf8("Баннер"), QString::fromUtf8("Облако"),
-        QString::fromUtf8("3D просмотр"), QString::fromUtf8("Настройки 3D"), QString::fromUtf8("Логи")});
+        QString::fromUtf8("3D просмотр"), QString::fromUtf8("Настройки 3D"), QString::fromUtf8("Логи"),
+        QString::fromUtf8("Статистика профилей")});
     navigation_->setFixedWidth(168);
     body->addWidget(navigation_);
     auto* content = new QVBoxLayout;
@@ -815,6 +849,70 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск и все фильтры аудита"));
     auditFilterLayout->addWidget(auditFilterReset_);
     content->addWidget(auditFilters_);
+    adminStatsFilters_ = new QWidget;
+    adminStatsFilters_->setObjectName("adminProfileStatsFilters");
+    auto* adminStatsLayout = new QGridLayout(adminStatsFilters_);
+    adminStatsLayout->setContentsMargins(0, 0, 0, 0);
+    adminStatsLayout->setHorizontalSpacing(8);
+    adminStatsLayout->setVerticalSpacing(4);
+    adminStatsSearch_ = new QLineEdit;
+    adminStatsSearch_->setObjectName("adminProfileStatsSearch");
+    adminStatsSearch_->setPlaceholderText(QString::fromUtf8("Фильтр по ID или имени"));
+    adminStatsSearch_->setClearButtonEnabled(true);
+    labelForAccessibility(adminStatsSearch_, QString::fromUtf8("Поиск по ID или имени профиля в статистике"));
+    adminStatsLayout->addWidget(adminStatsSearch_, 0, 0, 1, 2);
+    adminStatsArchived_ = new QCheckBox(QString::fromUtf8("Включая архив"));
+    adminStatsArchived_->setObjectName("adminStatsIncludeArchived");
+    adminStatsArchived_->setChecked(displaySettings_.adminStatsIncludeArchived);
+    labelForAccessibility(adminStatsArchived_, QString::fromUtf8("Включить архивные профили в статистику"));
+    adminStatsLayout->addWidget(adminStatsArchived_, 0, 2);
+    adminStatsRank_ = new QComboBox;
+    adminStatsRank_->setObjectName("adminStatsRankFilter");
+    labelForAccessibility(adminStatsRank_, QString::fromUtf8("Фильтр статистики по рангу профиля"));
+    adminStatsRank_->addItem(QString::fromUtf8("Все ранги"), 0);
+    const auto& rankOptions = adminProfileRanks();
+    for (int i = 0; i < int(rankOptions.size()); ++i)
+        adminStatsRank_->addItem(rankOptions[size_t(i)].first, i + 1);
+    adminStatsRank_->setCurrentIndex(std::clamp(displaySettings_.adminStatsRankFilter, 0, 16));
+    adminStatsLayout->addWidget(adminStatsRank_, 0, 3);
+    adminStatsView_ = new QComboBox;
+    adminStatsView_->setObjectName("adminStatsView");
+    labelForAccessibility(adminStatsView_, QString::fromUtf8("Представление статистики профилей"));
+    adminStatsView_->addItems({QString::fromUtf8("Все профили"), QString::fromUtf8("Топ по уровню"),
+        QString::fromUtf8("Топ по XP"), QString::fromUtf8("Топ по ачивкам"), QString::fromUtf8("Неактивные"),
+        QString::fromUtf8("Профили на прогреве"), QString::fromUtf8("Распределение по рангам"),
+        QString::fromUtf8("Средние категории")});
+    adminStatsView_->setCurrentIndex(std::clamp(displaySettings_.adminStatsView, 0, 7));
+    adminStatsLayout->addWidget(adminStatsView_, 0, 4);
+    adminStatsInactivityLabel_ = new QLabel(QString::fromUtf8("Порог простоя, дней"));
+    adminStatsLayout->addWidget(adminStatsInactivityLabel_, 1, 0);
+    adminStatsInactivityDays_ = new QSpinBox;
+    adminStatsInactivityDays_->setObjectName("adminStatsInactivityDays");
+    adminStatsInactivityDays_->setRange(1, 365);
+    adminStatsInactivityDays_->setValue(std::clamp(displaySettings_.adminStatsInactivityDays, 1, 365));
+    labelForAccessibility(adminStatsInactivityDays_, QString::fromUtf8("Порог неактивности профиля в днях"));
+    adminStatsLayout->addWidget(adminStatsInactivityDays_, 1, 1);
+    adminStatsAutoRefresh_ = new QCheckBox(QString::fromUtf8("Автообновление"));
+    adminStatsAutoRefresh_->setObjectName("adminStatsAutoRefresh");
+    adminStatsAutoRefresh_->setChecked(displaySettings_.adminStatsAutoRefresh);
+    labelForAccessibility(adminStatsAutoRefresh_, QString::fromUtf8("Автоматически обновлять статистику профилей"));
+    adminStatsLayout->addWidget(adminStatsAutoRefresh_, 1, 2);
+    adminStatsLayout->addWidget(new QLabel(QString::fromUtf8("Интервал, сек")), 1, 3);
+    adminStatsRefreshSeconds_ = new QSpinBox;
+    adminStatsRefreshSeconds_->setObjectName("adminStatsRefreshSeconds");
+    adminStatsRefreshSeconds_->setRange(5, 120);
+    adminStatsRefreshSeconds_->setValue(std::clamp(displaySettings_.adminStatsRefreshSeconds, 5, 120));
+    labelForAccessibility(adminStatsRefreshSeconds_, QString::fromUtf8("Интервал автообновления статистики в секундах"));
+    adminStatsLayout->addWidget(adminStatsRefreshSeconds_, 1, 4);
+    adminStatsRefreshButton_ = new QPushButton(QString::fromUtf8("Обновить"));
+    adminStatsRefreshButton_->setObjectName("adminStatsRefresh");
+    labelForAccessibility(adminStatsRefreshButton_, QString::fromUtf8("Обновить статистику профилей сейчас"));
+    adminStatsLayout->addWidget(adminStatsRefreshButton_, 1, 5);
+    adminStatsReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
+    adminStatsReset_->setObjectName("adminStatsReset");
+    labelForAccessibility(adminStatsReset_, QString::fromUtf8("Сбросить фильтры статистики профилей"));
+    adminStatsLayout->addWidget(adminStatsReset_, 1, 6);
+    content->addWidget(adminStatsFilters_);
     table_ = new QTableWidget;
     table_->setObjectName("records");
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -1088,9 +1186,22 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         bulkEdit_->setEnabled(navigation_->currentRow() == Tasks && admin_ && allowed);
     });
     connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) {
-        if (navigation_->currentRow() != Statistics) return;
-        if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
-        details();
+        if (navigation_->currentRow() == AdminProfileStats) {
+            const auto id = selectedId();
+            const auto profile = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
+                [&id](const auto& item) { return item.id == u(id); });
+            if (profile != workspace_.profiles.end() && !profile->archived) {
+                const int index = profiles_->findData(id);
+                if (index >= 0) { profiles_->setCurrentIndex(index); navigation_->setCurrentRow(ProfilePage); }
+            } else if (profile != workspace_.profiles.end()) {
+                statusBar()->showMessage(QString::fromUtf8("Архивный профиль можно открыть через управление профилями."), 5000);
+            }
+            return;
+        }
+        if (navigation_->currentRow() == Statistics) {
+            if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
+            details();
+        }
     });
     connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
     connect(primary_, &QPushButton::clicked, this, [this] { if (navigation_->currentRow() == ModelSettingsPage) saveModelSettings(); else createEntry(); });
@@ -1179,7 +1290,44 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (!requireAdmin() || navigation_->currentRow() != Tasks) return;
         table_->clearSelection();
     });
-    connect(exportReport_, &QPushButton::clicked, this, [this] { exportReport(); });
+    connect(exportReport_, &QPushButton::clicked, this, [this] {
+        if (navigation_->currentRow() == AdminProfileStats) exportAdminProfileStats();
+        else exportReport();
+    });
+    const auto saveAdminStats = [this] { saveDisplayContext(); render(); };
+    connect(adminStatsSearch_, &QLineEdit::textChanged, this, saveAdminStats);
+    connect(adminStatsArchived_, &QCheckBox::toggled, this, saveAdminStats);
+    connect(adminStatsRank_, &QComboBox::currentIndexChanged, this, saveAdminStats);
+    connect(adminStatsView_, &QComboBox::currentIndexChanged, this, saveAdminStats);
+    connect(adminStatsAutoRefresh_, &QCheckBox::toggled, this, saveAdminStats);
+    connect(adminStatsRefreshSeconds_, &QSpinBox::valueChanged, this, saveAdminStats);
+    connect(adminStatsInactivityDays_, &QSpinBox::valueChanged, this, saveAdminStats);
+    connect(adminStatsRefreshButton_, &QPushButton::clicked, this, [this] { refreshAdminProfileStats(); render(); });
+    connect(adminStatsReset_, &QPushButton::clicked, this, [this] {
+        const QSignalBlocker searchBlock(adminStatsSearch_);
+        const QSignalBlocker archivedBlock(adminStatsArchived_);
+        const QSignalBlocker rankBlock(adminStatsRank_);
+        const QSignalBlocker viewBlock(adminStatsView_);
+        const QSignalBlocker daysBlock(adminStatsInactivityDays_);
+        adminStatsSearch_->clear();
+        adminStatsArchived_->setChecked(true);
+        adminStatsRank_->setCurrentIndex(0);
+        adminStatsView_->setCurrentIndex(0);
+        adminStatsInactivityDays_->setValue(30);
+        saveDisplayContext(); render();
+    });
+    auto* adminStatsTimer = new QTimer(this);
+    adminStatsTimer->setObjectName("adminProfileStatsTimer");
+    adminStatsTimer->setInterval(1000);
+    connect(adminStatsTimer, &QTimer::timeout, this, [this] {
+        if (navigation_->currentRow() != AdminProfileStats || !adminStatsAutoRefresh_->isChecked()) return;
+        const auto now = QDateTime::currentSecsSinceEpoch();
+        if (adminStatsLastRefresh_ == 0 || now - adminStatsLastRefresh_ >= adminStatsRefreshSeconds_->value()) {
+            refreshAdminProfileStats();
+            render();
+        }
+    });
+    adminStatsTimer->start();
     connect(taskCsvAction, &QAction::triggered, this, [this] { exportTasks(false); });
     connect(taskTxtAction, &QAction::triggered, this, [this] { exportTasks(true); });
     connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
@@ -1456,6 +1604,8 @@ bool QtWindow::reload() {
         message(error.what());
         return false;
     }
+    adminStatsLastRefresh_ = 0;
+    adminStatsRows_.clear();
     if (workspace_.transactionRecoveryNotice) {
         appendLog(AppLogLevel::Warning, "CoreTransactionRecovery", "An interrupted local transaction was recovered from its journal");
         workspace_.transactionRecoveryNotice = false;
@@ -1522,6 +1672,13 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.auditSourceFilter = auditSourceFilter_->currentIndex();
     displaySettings_.logAutoScroll = logAutoScroll_->isChecked();
     displaySettings_.logCompactView = logCompactView_->isChecked();
+    displaySettings_.adminStatsSearch = adminStatsSearch_->text();
+    displaySettings_.adminStatsIncludeArchived = adminStatsArchived_->isChecked();
+    displaySettings_.adminStatsRankFilter = adminStatsRank_->currentIndex();
+    displaySettings_.adminStatsView = adminStatsView_->currentIndex();
+    displaySettings_.adminStatsAutoRefresh = adminStatsAutoRefresh_->isChecked();
+    displaySettings_.adminStatsRefreshSeconds = adminStatsRefreshSeconds_->value();
+    displaySettings_.adminStatsInactivityDays = adminStatsInactivityDays_->value();
     if (!SaveQtDisplaySettings(workspace_.directory, displaySettings_))
         statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить последний раздел и профиль."), 5000);
 }
@@ -1632,7 +1789,7 @@ void QtWindow::render() {
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Shortcuts)->setHidden(!workspace_.modules.shortcuts);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
-    for (int page : {Projects, Statistics, Rules, Vault, Banner}) navigation_->item(page)->setHidden(!admin_);
+    for (int page : {Projects, Statistics, Rules, Vault, Banner, AdminProfileStats}) navigation_->item(page)->setHidden(!admin_);
     navigation_->item(Audit)->setHidden(!workspace_.modules.tasks);
     int page = navigation_->currentRow();
     if (page < 0) return;
@@ -1673,10 +1830,12 @@ void QtWindow::render() {
     summary_->setVisible(!timerPage && !modelPage);
     taskPipelineSummary_->setVisible(page == Tasks);
     statisticsChart_->setVisible(page == Statistics);
-    search_->setVisible(!timerPage && !modelPage);
+    search_->setVisible(!timerPage && !modelPage && page != AdminProfileStats);
     table_->setVisible(!timerPage && !modelPage);
     bottomActions_->setVisible(!timerPage && !modelPage);
-    details_->setVisible(!timerPage && !modelPage && details_->isVisible());
+    const bool hasDetails = page == Tasks || page == Statistics;
+    detailsToggle_->setVisible(hasDetails);
+    details_->setVisible(hasDetails && detailsToggle_->isChecked());
     pomodoro_->setVisible(timerPage);
     modelPage_->setVisible(page == ModelViewerPage);
     modelSettingsPage_->setVisible(page == ModelSettingsPage);
@@ -1696,6 +1855,10 @@ void QtWindow::render() {
     reportCompare_->setVisible(page == Statistics);
     reportCompare_->setEnabled(reportDateRange_->currentIndex() != 0);
     reportCustomRange_->setVisible(page == Statistics && reportDateRange_->currentIndex() == 4);
+    adminStatsFilters_->setVisible(page == AdminProfileStats && admin_);
+    adminStatsInactivityLabel_->setVisible(page == AdminProfileStats && admin_ && adminStatsView_->currentIndex() == 4);
+    adminStatsInactivityDays_->setVisible(adminStatsView_->currentIndex() == 4);
+    adminStatsRefreshSeconds_->setEnabled(adminStatsAutoRefresh_->isChecked());
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
     projectSort_->setVisible(page == Projects);
@@ -1728,7 +1891,8 @@ void QtWindow::render() {
     achievements_->setVisible(page == ProfilePage);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
-    exportReport_->setVisible(admin_ && page == Statistics);
+    exportReport_->setVisible(admin_ && (page == Statistics || page == AdminProfileStats));
+    exportReport_->setText(page == AdminProfileStats ? QString::fromUtf8("Экспорт статистики") : QString::fromUtf8("Экспорт CSV"));
     exportTasks_->setVisible(page == Tasks);
     exportAudit_->setVisible(page == Audit);
     exportLogs_->setVisible(page == Logs);
@@ -2066,6 +2230,169 @@ void QtWindow::render() {
     } else if (page == Professions) {
         headers({QString::fromUtf8("Профессия"), QString::fromUtf8("Описание")});
         for (const auto& item : data.professions) row(item.id, {q(item.name), q(item.description)});
+    } else if (page == AdminProfileStats && admin_) {
+        if (adminStatsLastRefresh_ == 0 || (adminStatsAutoRefresh_->isChecked() &&
+            QDateTime::currentSecsSinceEpoch() - adminStatsLastRefresh_ >= adminStatsRefreshSeconds_->value()))
+            refreshAdminProfileStats();
+        const auto now = QDateTime::currentSecsSinceEpoch();
+        const auto total = int(adminStatsRows_.size());
+        int archived = 0, maxLevel = 0, achievementsTotal = 0, achievementsActive = 0;
+        int recovery = 0, noActivity = 0, noAchievements = 0;
+        long long totalXp = 0, totalLevels = 0;
+        std::array<long long, Profile::kCategoryCount> categoryTotals{};
+        std::array<int, Profile::kCategoryCount> categoryCounts{};
+        for (const auto& item : adminStatsRows_) {
+            archived += item.archived;
+            maxLevel = std::max(maxLevel, item.level);
+            totalXp += item.totalXp;
+            totalLevels += item.level;
+            achievementsTotal += item.achievementsTotal;
+            achievementsActive += item.achievementsActive;
+            recovery += item.recoveryTasksRemaining > 0;
+            noActivity += item.lastTaskTimestamp <= 0;
+            noAchievements += item.achievementsTotal == 0;
+            for (size_t i = 0; i < item.categoryScores.size(); ++i) {
+                categoryTotals[i] += item.categoryScores[i];
+                ++categoryCounts[i];
+            }
+        }
+        const auto active = total - archived;
+        const auto averageLevel = total ? double(totalLevels) / total : 0.0;
+        const auto averageXp = total ? double(totalXp) / total : 0.0;
+        summary_->setAccessibleName(QString::fromUtf8("Сводные показатели статистики профилей"));
+        summary_->setText(QString::fromUtf8(
+            "Профилей: %1 · активных: %2 · архивных: %3\nСредний уровень: %4 · максимум: %5 · общий XP: %6 · средний XP: %7\n"
+            "Ачивки: %8 всего, %9 активных · прогрев: %10 · без активности: %11 · без ачивок: %12\n"
+            "Обновлено: %13%14")
+            .arg(total).arg(active).arg(archived).arg(averageLevel, 0, 'f', 1).arg(maxLevel)
+            .arg(totalXp).arg(averageXp, 0, 'f', 0).arg(achievementsTotal).arg(achievementsActive)
+            .arg(recovery).arg(noActivity).arg(noAchievements)
+            .arg(QDateTime::fromSecsSinceEpoch(adminStatsLastRefresh_).toString("dd.MM.yyyy HH:mm:ss"))
+            .arg(adminStatsUnreadableProfiles_ ? QString::fromUtf8(" · не удалось прочитать: %1").arg(adminStatsUnreadableProfiles_) : QString()));
+
+        std::vector<QtAdminProfileStatsRow> filtered;
+        const auto query = adminStatsSearch_->text().trimmed();
+        const int selectedRank = adminStatsRank_->currentIndex();
+        for (const auto& item : adminStatsRows_) {
+            if (!adminStatsArchived_->isChecked() && item.archived) continue;
+            if (selectedRank > 0 && adminProfileRankIndex(item.level) != selectedRank - 1) continue;
+            if (!query.isEmpty() && !QString::fromStdString(item.id + " " + item.name).contains(query, Qt::CaseInsensitive)) continue;
+            filtered.push_back(item);
+        }
+        const auto view = adminStatsView_->currentIndex();
+        auto installProfileRows = [this, now, &headers](const std::vector<QtAdminProfileStatsRow>& items) {
+            headers({QString::fromUtf8("ID"), QString::fromUtf8("Имя"), QString::fromUtf8("Ранг"),
+                QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Последняя активность"),
+                QString::fromUtf8("Простой"), QString::fromUtf8("Прогрев"), QString::fromUtf8("Ачивки · акт./всего")});
+            constexpr int widths[] = {72, 150, 92, 62, 78, 136, 72, 72, 130};
+            for (int column = 0; column < int(std::size(widths)); ++column) {
+                table_->horizontalHeader()->setSectionResizeMode(column, QHeaderView::Interactive);
+                table_->setColumnWidth(column, widths[column]);
+            }
+            for (const auto& item : items) {
+                const bool hasActivity = item.lastTaskTimestamp > 0;
+                const auto elapsed = hasActivity ? now - item.lastTaskTimestamp : 0;
+                QStringList values{q(item.id), q(item.name) + (item.archived ? QString::fromUtf8(" (архив)") : QString()),
+                    adminProfileRankName(item.level), QString::number(item.level), QString::number(item.totalXp),
+                    hasActivity ? QDateTime::fromSecsSinceEpoch(item.lastTaskTimestamp).toString("yyyy-MM-dd HH:mm") : QString::fromUtf8("нет данных"),
+                    hasActivity ? elapsedProfileTime(elapsed) : QString::fromUtf8("—"),
+                    QString::number(item.recoveryTasksRemaining),
+                    QString::fromUtf8("%1 / %2").arg(item.achievementsActive).arg(item.achievementsTotal)};
+                const int rowIndex = table_->rowCount();
+                table_->insertRow(rowIndex);
+                for (int column = 0; column < values.size(); ++column) {
+                    auto* cell = new QTableWidgetItem(values[column]);
+                    cell->setToolTip(values[column]);
+                    if (column == 0) cell->setData(Qt::UserRole, q(item.id));
+                    if (item.archived && column == 1) cell->setForeground(palette().color(QPalette::Disabled, QPalette::Text));
+                    table_->setItem(rowIndex, column, cell);
+                }
+            }
+        };
+        if (view <= 5) {
+            auto displayed = filtered;
+            if (view == 1) std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                return a.level != b.level ? a.level > b.level : a.totalXp > b.totalXp;
+            });
+            else if (view == 2) std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                return a.totalXp != b.totalXp ? a.totalXp > b.totalXp : a.level > b.level;
+            });
+            else if (view == 3) std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                if (a.achievementsActive != b.achievementsActive) return a.achievementsActive > b.achievementsActive;
+                if (a.achievementsTotal != b.achievementsTotal) return a.achievementsTotal > b.achievementsTotal;
+                return a.level > b.level;
+            });
+            else if (view == 4) {
+                const auto threshold = std::int64_t(adminStatsInactivityDays_->value()) * 86400;
+                displayed.erase(std::remove_if(displayed.begin(), displayed.end(), [&](const auto& item) {
+                    return item.lastTaskTimestamp > 0 && now - item.lastTaskTimestamp < threshold;
+                }), displayed.end());
+                std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                    if (a.lastTaskTimestamp != b.lastTaskTimestamp) {
+                        if (a.lastTaskTimestamp <= 0) return true;
+                        if (b.lastTaskTimestamp <= 0) return false;
+                        return a.lastTaskTimestamp < b.lastTaskTimestamp;
+                    }
+                    return a.totalXp > b.totalXp;
+                });
+            } else if (view == 5) {
+                displayed.erase(std::remove_if(displayed.begin(), displayed.end(), [](const auto& item) {
+                    return item.recoveryTasksRemaining <= 0;
+                }), displayed.end());
+                std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) {
+                    return a.recoveryTasksRemaining != b.recoveryTasksRemaining
+                        ? a.recoveryTasksRemaining > b.recoveryTasksRemaining : a.totalXp > b.totalXp;
+                });
+            }
+            const int matched = int(displayed.size());
+            if (view >= 1 && view <= 5 && displayed.size() > 6) displayed.resize(6);
+            installProfileRows(displayed);
+            if (view == 4 || view == 5)
+                summary_->setText(summary_->text() + QString::fromUtf8("\nПоказано: %1 из %2").arg(displayed.size()).arg(matched));
+            else summary_->setText(summary_->text() + QString::fromUtf8("\nПодходит фильтрам: %1 из %2").arg(filtered.size()).arg(total));
+        } else if (view == 6) {
+            headers({QString::fromUtf8("Ранг"), QString::fromUtf8("Профилей"), QString::fromUtf8("Доля")});
+            std::array<int, 16> counts{};
+            for (const auto& item : filtered) ++counts[size_t(adminProfileRankIndex(item.level))];
+            const int denominator = std::max(1, int(filtered.size()));
+            for (size_t i = 0; i < counts.size(); ++i) {
+                const int index = table_->rowCount(); table_->insertRow(index);
+                for (int column = 0; column < 3; ++column) {
+                    const QString value = column == 0 ? adminProfileRanks()[i].first : column == 1
+                        ? QString::number(counts[i]) : QString::number(double(counts[i]) * 100.0 / denominator, 'f', 1) + "%";
+                    table_->setItem(index, column, new QTableWidgetItem(value));
+                }
+            }
+            summary_->setText(summary_->text() + QString::fromUtf8("\nПоказано профилей после фильтров: %1").arg(filtered.size()));
+        } else {
+            headers({QString::fromUtf8("Категория"), QString::fromUtf8("Среднее"), QString::fromUtf8("Профилей")});
+            std::array<double, Profile::kCategoryCount> averages{};
+            int minIndex = -1;
+            double minimum = 0.0, maximum = 0.0;
+            for (size_t i = 0; i < averages.size(); ++i) {
+                if (categoryCounts[i] == 0) continue;
+                averages[i] = double(categoryTotals[i]) / categoryCounts[i];
+                if (minIndex < 0 || averages[i] < minimum) { minIndex = int(i); minimum = averages[i]; }
+                maximum = std::max(maximum, averages[i]);
+            }
+            for (size_t i = 0; i < averages.size(); ++i) {
+                const auto label = QString::fromUtf8("Категория %1").arg(QString::fromUtf8(Profile::kCategoryLabels[i]));
+                const int index = table_->rowCount(); table_->insertRow(index);
+                const QStringList values{label, categoryCounts[i] ? QString::fromUtf8("%1/10").arg(averages[i], 0, 'f', 1) : QString::fromUtf8("—"),
+                    QString::number(categoryCounts[i])};
+                for (int column = 0; column < values.size(); ++column)
+                    table_->setItem(index, column, new QTableWidgetItem(values[column]));
+                if (int(i) == minIndex && maximum - minimum >= 1.0) {
+                    for (int column = 0; column < table_->columnCount(); ++column) {
+                        if (auto* cell = table_->item(table_->rowCount() - 1, column))
+                            cell->setToolTip(QString::fromUtf8("Зона внимания: минимальное среднее среди категорий"));
+                    }
+                }
+            }
+            if (minIndex >= 0 && maximum - minimum >= 1.0)
+                summary_->setText(summary_->text() + QString::fromUtf8("\nЗона внимания: категория %1 (%2/10)")
+                    .arg(QString::fromUtf8(Profile::kCategoryLabels[size_t(minIndex)])).arg(minimum, 0, 'f', 1));
+        }
     } else if (page == Statistics) {
         int missingCreationDates = 0;
         const auto reportTasks = reportTasksForRange(data.tasks, reportDateRange_->currentIndex(),
@@ -2414,11 +2741,19 @@ void QtWindow::render() {
         summary_->setText(QString::fromUtf8("Ручные pull и полный push требуют подтверждения и снимка облачных данных · автоматическая синхронизация заблокирована"));
     }
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
-    table_->resizeColumnsToContents();
     table_->horizontalHeader()->setStretchLastSection(false);
-    table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    for (int col = 0; col < table_->columnCount(); ++col)
-        table_->setColumnWidth(col, std::clamp(table_->columnWidth(col), 96, 280));
+    if (page == AdminProfileStats) {
+        constexpr int widths[] = {72, 150, 92, 62, 78, 136, 72, 72, 130};
+        table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+        for (int col = 0; col < std::min(table_->columnCount(), int(std::size(widths))); ++col)
+            table_->setColumnWidth(col, widths[col]);
+        if (table_->columnCount() > 1) table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    } else {
+        table_->resizeColumnsToContents();
+        table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+        for (int col = 0; col < table_->columnCount(); ++col)
+            table_->setColumnWidth(col, std::clamp(table_->columnWidth(col), 96, 280));
+    }
     QStringList accessibleColumns;
     for (int col = 0; col < table_->columnCount(); ++col)
         if (!table_->isColumnHidden(col) && table_->horizontalHeaderItem(col))
@@ -2426,10 +2761,12 @@ void QtWindow::render() {
     table_->setAccessibleDescription(QString::fromUtf8("Строк: %1. Видимые столбцы: %2.")
         .arg(table_->rowCount()).arg(accessibleColumns.join(QString::fromUtf8(", "))));
     // Give free width to readable content instead of stretching the final numeric column.
-    int stretchColumn = 0;
-    if (page == Catalog) stretchColumn = 2;
-    else if (page == Pipeline || page == Projects || page == Professions || page == Shortcuts) stretchColumn = 1;
-    table_->horizontalHeader()->setSectionResizeMode(stretchColumn, QHeaderView::Stretch);
+    if (page != AdminProfileStats) {
+        int stretchColumn = 0;
+        if (page == Catalog) stretchColumn = 2;
+        else if (page == Pipeline || page == Projects || page == Professions || page == Shortcuts) stretchColumn = 1;
+        table_->horizontalHeader()->setSectionResizeMode(stretchColumn, QHeaderView::Stretch);
+    }
     table_->setSortingEnabled(page != Pipeline && page != Shortcuts);
     for (int index = 0; index < table_->rowCount(); ++index) {
         if (table_->item(index, 0)->data(Qt::UserRole).toString() == previous) { table_->selectRow(index); break; }
@@ -2919,6 +3256,103 @@ void QtWindow::checkMissedDeadlineReminders() {
         reminderStatePersistenceWarning_ = true;
         appendLog(AppLogLevel::Warning, "Reminder", "Не удалось сохранить время проверки пропущенных сроков; при следующем запуске возможен повтор.");
     }
+}
+
+void QtWindow::refreshAdminProfileStats() {
+    if (!admin_) return;
+    std::vector<QtAdminProfileStatsRow> rows;
+    rows.reserve(workspace_.profiles.size());
+    int unreadable = 0;
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    for (const auto& info : workspace_.profiles) {
+        try {
+            const auto loaded = workspace_.storage->load_profile_snapshot(info.id, true);
+            if (!loaded) { ++unreadable; continue; }
+            QtAdminProfileStatsRow row;
+            row.id = info.id;
+            row.name = loaded->name();
+            row.level = loaded->overall_level();
+            row.totalXp = loaded->total_xp();
+            row.lastTaskTimestamp = loaded->last_task_timestamp();
+            row.recoveryTasksRemaining = loaded->recovery_tasks_remaining();
+            row.achievementsTotal = int(loaded->achievements().size());
+            row.achievementsActive = int(std::count_if(loaded->achievements().begin(), loaded->achievements().end(),
+                [now](const Achievement& item) { return item.is_active(now); }));
+            row.categoryScores = loaded->category_best_scores();
+            row.archived = info.archived;
+            rows.push_back(std::move(row));
+        } catch (const std::exception&) {
+            ++unreadable;
+        }
+    }
+    std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
+    adminStatsRows_ = std::move(rows);
+    adminStatsUnreadableProfiles_ = unreadable;
+    adminStatsLastRefresh_ = now;
+}
+
+void QtWindow::exportAdminProfileStats() {
+    if (!requireAdmin() || navigation_->currentRow() != AdminProfileStats) return;
+    if (adminStatsLastRefresh_ == 0) refreshAdminProfileStats();
+    std::vector<QtAdminProfileStatsRow> rows;
+    const auto query = adminStatsSearch_->text().trimmed();
+    const int selectedRank = adminStatsRank_->currentIndex();
+    for (const auto& item : adminStatsRows_) {
+        if (!adminStatsArchived_->isChecked() && item.archived) continue;
+        if (selectedRank > 0 && adminProfileRankIndex(item.level) != selectedRank - 1) continue;
+        if (!query.isEmpty() && !QString::fromStdString(item.id + " " + item.name).contains(query, Qt::CaseInsensitive)) continue;
+        rows.push_back(item);
+    }
+    if (rows.empty()) { statusBar()->showMessage(QString::fromUtf8("Нет профилей для экспорта с текущими фильтрами."), 5000); return; }
+    QFileDialog dialog(this, QString::fromUtf8("Экспорт статистики профилей"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter(QString::fromUtf8("CSV-файлы (*.csv)"));
+    dialog.setDefaultSuffix("csv");
+    dialog.selectFile(QString::fromUtf8("ForgeMirror-profile-stats-%1.csv").arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss")));
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
+    auto path = dialog.selectedFiles().front();
+    if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
+
+    auto csvRecord = [](const QStringList& cells) {
+        QByteArray bytes;
+        for (int i = 0; i < cells.size(); ++i) {
+            if (i) bytes += ',';
+            auto value = cells[i].toUtf8();
+            if (cells[i].contains(',') || cells[i].contains('"') || cells[i].contains('\n') || cells[i].contains('\r')) {
+                value.replace("\"", "\"\"");
+                bytes += '"' + value + '"';
+            } else bytes += value;
+        }
+        bytes += "\r\n";
+        return bytes;
+    };
+    QByteArray payload("\xEF\xBB\xBF", 3);
+    const QStringList csvHeaders{"ID", "Name", "Level", "Rank", "TotalXP", "LastActivity", "InactiveFor", "Archived",
+        "RecoveryTasks", "AchievementsTotal", "AchievementsActive"};
+    payload += csvRecord(csvHeaders);
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    for (const auto& item : rows) {
+        const bool hasActivity = item.lastTaskTimestamp > 0;
+        payload += csvRecord({q(item.id), q(item.name), QString::number(item.level), adminProfileRankName(item.level),
+            QString::number(item.totalXp), hasActivity ? QDateTime::fromSecsSinceEpoch(item.lastTaskTimestamp).toString("yyyy-MM-dd HH:mm") : QString::fromUtf8("нет данных"),
+            hasActivity ? elapsedProfileTime(now - item.lastTaskTimestamp) : QString::fromUtf8("—"), item.archived ? "yes" : "no",
+            QString::number(item.recoveryTasksRemaining), QString::number(item.achievementsTotal), QString::number(item.achievementsActive)});
+    }
+    std::ostringstream teamReport;
+    if (!WriteTeamValueReportCsv(teamReport, BuildTeamValueReport(workspace_.data.tasks, workspace_.data.projects, now))) {
+        message(u8"Не удалось сформировать сводку командных метрик для CSV."); return;
+    }
+    const auto reportBytes = teamReport.str();
+    payload += QByteArray::fromStdString(reportBytes);
+    QSaveFile file(path);
+    file.setDirectWriteFallback(false);
+    if (QFileInfo(path).isDir() || !file.open(QIODevice::WriteOnly) || file.write(payload) != payload.size() || !file.commit()) {
+        message(u8"Не удалось атомарно сохранить CSV статистики профилей."); return;
+    }
+    statusBar()->showMessage(QString::fromUtf8("Экспортировано профилей: %1 · %2")
+        .arg(rows.size()).arg(QDir::toNativeSeparators(path)), 6000);
 }
 
 void QtWindow::exportReport() {

@@ -705,6 +705,34 @@ public:
         return profile;
     }
 
+    std::optional<Profile> load_profile_snapshot(const std::string& id, bool includeArchived) override {
+        const auto path = find_profile_path(id, includeArchived);
+        if (!path || !std::filesystem::is_regular_file(*path)) return std::nullopt;
+        const auto previousId = activeId_;
+        const auto previousPath = activePath_;
+        const auto previousToken = token_;
+        const auto previousQueue = queue_;
+        activeId_ = id;
+        activePath_ = *path;
+        token_.reset();
+        queue_.clear();
+        std::optional<Profile> result;
+        try {
+            result = load_profile();
+        } catch (...) {
+            activeId_ = previousId;
+            activePath_ = previousPath;
+            token_ = previousToken;
+            queue_ = previousQueue;
+            throw;
+        }
+        activeId_ = previousId;
+        activePath_ = previousPath;
+        token_ = previousToken;
+        queue_ = previousQueue;
+        return result;
+    }
+
     bool save_profile(const Profile& profile) override {
         if (!is_active()) return false;
 

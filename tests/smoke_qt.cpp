@@ -58,6 +58,7 @@ public:
     bool set_active_profile(const std::string& id) override { return delegate.set_active_profile(id); }
     std::vector<ProfileInfo> list_profiles() override { return delegate.list_profiles(); }
     std::optional<Profile> load_profile() override { return delegate.load_profile(); }
+    std::optional<Profile> load_profile_snapshot(const std::string& id, bool archived) override { return delegate.load_profile_snapshot(id, archived); }
     bool save_profile(const Profile& profile) override { return ++writes != failAt && delegate.save_profile(profile); }
     std::optional<ProfileInfo> create_profile(const Profile& p) override { return delegate.create_profile(p); }
     bool set_archived(const std::string& id, bool value) override { return delegate.set_archived(id, value); }
@@ -4110,12 +4111,38 @@ int main(int argc, char** argv) {
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
     Profile profile(u8"Тестовый профиль");
     profile.set_password_encoded(EncodePassword("profile-test-password"));
+    profile.set_last_task_timestamp(QDateTime::currentSecsSinceEpoch() - 5 * 86400);
     workspace.catalog.add_skill(u8"Моделирование", 1.0, u8"Создание геометрии");
     workspace.catalog.add_skill(u8"Текстурирование", 1.0, u8"Подготовка материалов");
     workspace.catalog.add_skill(u8"Анимация", 1.0, u8"Движение персонажа");
     profile.add_skill(*workspace.catalog.id_for_name(u8"Моделирование"));
     auto createdProfile = workspace.storage->create_profile(profile);
     if (!createdProfile) return fail("Profile creation failed");
+    Profile archivedProfile(u8"Архивный профиль статистики");
+    archivedProfile.set_overall_level(10);
+    archivedProfile.set_last_task_timestamp(QDateTime::currentSecsSinceEpoch() - 40 * 86400);
+    archivedProfile.start_penalty_recovery(4);
+    archivedProfile.set_category_best_scores({10, 8, 6, 4, 2});
+    Achievement activeAchievement; activeAchievement.title = "Active"; activeAchievement.awardedAt = 100;
+    archivedProfile.add_achievement(activeAchievement);
+    Achievement expiredAchievement; expiredAchievement.title = "Expired";
+    expiredAchievement.awardedAt = QDateTime::currentSecsSinceEpoch() - 2 * 86400;
+    expiredAchievement.expiresAt = QDateTime::currentSecsSinceEpoch() - 1;
+    archivedProfile.add_achievement(expiredAchievement);
+    const auto archivedInfo = workspace.storage->create_profile(archivedProfile);
+    if (!archivedInfo || !workspace.storage->set_archived(archivedInfo->id, true) ||
+        !workspace.storage->set_active_profile(createdProfile->id)) return fail("Archived stats fixture creation failed");
+    QFile archivedProfileFile(temp.path() + "/archive/" + QString::fromStdString(archivedInfo->id) + ".ini");
+    if (!archivedProfileFile.open(QIODevice::ReadOnly)) return fail("Archived profile fixture missing");
+    const auto archivedBytesBeforeSnapshot = archivedProfileFile.readAll(); archivedProfileFile.close();
+    auto archivedSnapshot = workspace.storage->load_profile_snapshot(archivedInfo->id, true);
+    auto activeSnapshot = workspace.storage->load_profile();
+    if (!archivedSnapshot || archivedSnapshot->name() != u8"Архивный профиль статистики" ||
+        !activeSnapshot || activeSnapshot->name() != profile.name() ||
+        workspace.storage->load_profile_snapshot(archivedInfo->id, false)) return fail("Profile snapshot read changed active selection or archive access");
+    if (!archivedProfileFile.open(QIODevice::ReadOnly) || archivedProfileFile.readAll() != archivedBytesBeforeSnapshot)
+        return fail("Profile snapshot read wrote normalized archive data");
+    archivedProfileFile.close();
     QFile profileFile(temp.path() + "/" + QString::fromStdString(createdProfile->id) + ".ini");
     if (!profileFile.open(QIODevice::ReadOnly)) return fail("Cannot read profile fixture");
     const auto profileBytes = profileFile.readAll();
@@ -4271,6 +4298,85 @@ int main(int argc, char** argv) {
     });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(17);
+    QApplication::processEvents();
+    auto* profileStatsSummary = window.findChild<QLabel*>("summary");
+    auto* statsArchived = window.findChild<QCheckBox*>("adminStatsIncludeArchived");
+    auto* statsView = window.findChild<QComboBox*>("adminStatsView");
+    auto* statsRank = window.findChild<QComboBox*>("adminStatsRankFilter");
+    auto* statsSearch = window.findChild<QLineEdit*>("adminProfileStatsSearch");
+    auto* statsDays = window.findChild<QSpinBox*>("adminStatsInactivityDays");
+    auto* statsAutoRefresh = window.findChild<QCheckBox*>("adminStatsAutoRefresh");
+    auto* statsRefreshSeconds = window.findChild<QSpinBox*>("adminStatsRefreshSeconds");
+    auto* statsRefreshButton = window.findChild<QPushButton*>("adminStatsRefresh");
+    auto* statsResetButton = window.findChild<QPushButton*>("adminStatsReset");
+    if (nav->item(17)->isHidden() || !profileStatsSummary || !profileStatsSummary->text().contains(QString::fromUtf8("Профилей: 2")) ||
+        !statsArchived || !statsArchived->isChecked() || !statsView || !statsRank || !statsSearch || !statsDays ||
+        !statsAutoRefresh || !statsRefreshSeconds || !statsRefreshButton || !statsResetButton ||
+        statsArchived->accessibleName().isEmpty() || statsRank->accessibleName().isEmpty() || statsView->accessibleName().isEmpty() ||
+        statsSearch->accessibleName().isEmpty() || statsAutoRefresh->accessibleName().isEmpty() ||
+        statsRefreshSeconds->accessibleName().isEmpty() || statsDays->accessibleName().isEmpty() ||
+        table->rowCount() != 2 || table->columnCount() != 9)
+        return fail("Administrator profile statistics page or archived profile data unavailable");
+    const auto statsArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!statsArtifacts.isEmpty()) {
+        QDir().mkpath(statsArtifacts);
+        window.grab().save(statsArtifacts + "/admin-profile-stats.png");
+    }
+    bool archivedRowFound = false;
+    for (int index = 0; index < table->rowCount(); ++index) {
+        const auto* idCell = table->item(index, 0);
+        const auto* nameCell = table->item(index, 1);
+        if (idCell && idCell->data(Qt::UserRole).toString() == QString::fromStdString(archivedInfo->id)) {
+            archivedRowFound = nameCell && nameCell->text().contains(QString::fromUtf8("Архив")) &&
+                table->item(index, 7)->text() == "4" && table->item(index, 8)->text() == "1 / 2";
+        }
+    }
+    if (!archivedRowFound) return fail("Profile statistics missed archived status, recovery, or achievement metrics");
+    statsArchived->setChecked(false);
+    if (table->rowCount() != 1) return fail("Archive filter did not exclude archived profile");
+    statsArchived->setChecked(true);
+    statsRank->setCurrentIndex(2);
+    if (table->rowCount() != 1 || table->item(0, 2)->text() != QString::fromUtf8("Джуниор I"))
+        return fail("Profile statistics rank filter failed");
+    statsRank->setCurrentIndex(0);
+    statsSearch->setText(QString::fromUtf8("Архивный профиль статистики"));
+    if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(archivedInfo->id))
+        return fail("Profile statistics ID/name search failed");
+    statsSearch->clear();
+    statsView->setCurrentIndex(4); statsDays->setValue(30);
+    if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(archivedInfo->id))
+        return fail("Profile inactivity ranking or threshold failed");
+    statsView->setCurrentIndex(5);
+    if (table->rowCount() != 1 || table->item(0, 7)->text() != "4") return fail("Profile recovery list failed");
+    statsView->setCurrentIndex(6);
+    if (table->rowCount() != 16 || table->item(1, 0)->text() != QString::fromUtf8("Джуниор I") || table->item(1, 1)->text() != "1")
+        return fail("Profile rank distribution failed");
+    statsView->setCurrentIndex(7);
+    if (table->rowCount() != 5 || table->item(0, 1)->text() != "5.0/10") return fail("Profile category average report failed");
+    statsView->setCurrentIndex(0);
+    const auto statsCsvPath = temp.path() + "/profile-stats.csv";
+    QTimer::singleShot(0, [statsCsvPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(statsCsvPath);
+            static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    auto* statsExportReport = window.findChild<QPushButton*>("exportReport");
+    if (!statsExportReport || !statsExportReport->isVisible()) return fail("Profile statistics export action unavailable");
+    statsExportReport->click();
+    QFile statsCsv(statsCsvPath);
+    if (!statsCsv.open(QIODevice::ReadOnly)) return fail("Profile statistics CSV was not created");
+    const auto statsCsvBytes = statsCsv.readAll();
+    if (!statsCsvBytes.startsWith("\xEF\xBB\xBF") || !statsCsvBytes.contains("AchievementsActive") ||
+        !statsCsvBytes.contains(QString::fromUtf8("Архивный профиль статистики").toUtf8()) ||
+        !statsCsvBytes.contains("TeamValueReport")) return fail("Profile statistics export omitted filtered profile or team-value report data");
+    const auto savedStatsSettings = LoadQtDisplaySettings(workspace.directory);
+    if (savedStatsSettings.adminStatsView != 0 || !savedStatsSettings.adminStatsIncludeArchived ||
+        savedStatsSettings.adminStatsRankFilter != 0 || savedStatsSettings.adminStatsInactivityDays != 30 ||
+        !savedStatsSettings.adminStatsAutoRefresh || savedStatsSettings.adminStatsRefreshSeconds != 30 ||
+        !savedStatsSettings.adminStatsSearch.isEmpty())
+        return fail("Profile statistics filters were not persisted");
     nav->setCurrentRow(0);
     auto* directXp = window.findChild<QPushButton*>("directXp");
     if (!directXp || !directXp->isVisible() || !directXp->isEnabled()) return fail("Direct XP action unavailable");

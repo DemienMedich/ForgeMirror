@@ -37,6 +37,12 @@ public:
         return it->second.profile;
     }
 
+    std::optional<Profile> load_profile_snapshot(const std::string& id, bool includeArchived) override {
+        auto it = entries_.find(id);
+        if (it == entries_.end() || (it->second.archived && !includeArchived)) return std::nullopt;
+        return it->second.profile;
+    }
+
     bool save_profile(const Profile& profile) override {
         auto it = entries_.find(activeId_);
         if (it == entries_.end() || it->second.archived) return false;

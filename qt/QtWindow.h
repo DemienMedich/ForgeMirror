@@ -5,7 +5,23 @@
 #include "QtModelViewer.h"
 #include "AppDomainTypes.h"
 #include <QMainWindow>
+#include <array>
+#include <cstdint>
+#include <string>
 #include <unordered_set>
+
+struct QtAdminProfileStatsRow {
+    std::string id;
+    std::string name;
+    int level = 0;
+    int totalXp = 0;
+    std::int64_t lastTaskTimestamp = 0;
+    int recoveryTasksRemaining = 0;
+    int achievementsTotal = 0;
+    int achievementsActive = 0;
+    std::array<int, 5> categoryScores{};
+    bool archived = false;
+};
 
 class QComboBox;
 class QDateEdit;
@@ -20,6 +36,8 @@ class QAction;
 class QSlider;
 class QCheckBox;
 class QToolButton;
+class QSpinBox;
+class QLabel;
 class QtReportChart;
 class QtLogActivityChart;
 class QSystemTrayIcon;
@@ -46,6 +64,8 @@ private:
     void exportTasks(bool textFormat);
     void exportAudit();
     void exportLogs();
+    void exportAdminProfileStats();
+    void refreshAdminProfileStats();
     void reapplyRules();
     void grantDirectXp();
     void adjustWallet();
@@ -160,6 +180,20 @@ private:
     QPushButton* logPresetErrors_;
     QCheckBox* logAutoScroll_;
     QCheckBox* logCompactView_;
+    QWidget* adminStatsFilters_;
+    QLineEdit* adminStatsSearch_;
+    QCheckBox* adminStatsArchived_;
+    QComboBox* adminStatsRank_;
+    QComboBox* adminStatsView_;
+    QCheckBox* adminStatsAutoRefresh_;
+    QSpinBox* adminStatsRefreshSeconds_;
+    QSpinBox* adminStatsInactivityDays_;
+    QLabel* adminStatsInactivityLabel_;
+    QPushButton* adminStatsRefreshButton_;
+    QPushButton* adminStatsReset_;
+    std::int64_t adminStatsLastRefresh_ = 0;
+    std::vector<QtAdminProfileStatsRow> adminStatsRows_;
+    int adminStatsUnreadableProfiles_ = 0;
     QPushButton* reapplyRules_;
     QPushButton* directXp_;
     QPushButton* walletAdjust_;

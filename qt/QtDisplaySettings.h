@@ -33,6 +33,13 @@ struct QtDisplaySettings {
     int auditSourceFilter = 0;
     bool logAutoScroll = true;
     bool logCompactView = false;
+    QString adminStatsSearch;
+    bool adminStatsIncludeArchived = true;
+    int adminStatsRankFilter = 0;
+    int adminStatsView = 0;
+    bool adminStatsAutoRefresh = true;
+    int adminStatsRefreshSeconds = 30;
+    int adminStatsInactivityDays = 30;
 };
 QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);

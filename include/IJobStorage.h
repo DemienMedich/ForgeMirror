@@ -16,6 +16,8 @@ public:
     struct ProfileInfo { std::string id; std::string name; bool archived = false; };
     virtual std::vector<ProfileInfo> list_profiles() = 0;
     virtual std::optional<Profile> load_profile() = 0;
+    // Read a profile without changing the active selection or persisting any normalization.
+    virtual std::optional<Profile> load_profile_snapshot(const std::string& id, bool includeArchived) = 0;
     virtual bool save_profile(const Profile& profile) = 0;
     virtual std::optional<ProfileInfo> create_profile(const Profile& profile) = 0;
     virtual bool set_archived(const std::string& name, bool archived) = 0;
