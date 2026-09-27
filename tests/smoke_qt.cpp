@@ -2529,6 +2529,23 @@ static bool TestPersonalWallet() {
     const auto auditAfter = auditAfterFile.readAll();
     auditAfterFile.close();
     if (!afterAuditFailure || std::abs(afterAuditFailure->wallet_balance() - 51.0) > 0.001 || auditAfter != auditBefore) return false;
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* auditSource = window.findChild<QComboBox*>("auditSourceFilter");
+    auto* auditTable = window.findChild<QTableWidget*>();
+    if (!navigation || !auditSource || !auditTable) return false;
+    navigation->setCurrentRow(7); auditSource->setCurrentIndex(5);
+    bool committedTelemetry = false, rollbackTelemetry = false;
+    for (int row = 0; row < auditTable->rowCount(); ++row) {
+        const auto sourceLabel = auditTable->item(row, 0)->text();
+        const auto event = auditTable->item(row, 6)->text();
+        committedTelemetry |= sourceLabel == QString::fromUtf8("Core-событие") &&
+            auditTable->item(row, 3)->text() == QString::fromUtf8("Операция кошелька") &&
+            event == QString::fromUtf8("Wallet mutation committed with audit");
+        rollbackTelemetry |= sourceLabel == QString::fromUtf8("Core-событие") &&
+            auditTable->item(row, 3)->text() == QString::fromUtf8("Операция кошелька") &&
+            event == QString::fromUtf8("Wallet mutation rolled back after failure");
+    }
+    if (!committedTelemetry || !rollbackTelemetry) return false;
     return true;
 }
 
@@ -4593,7 +4610,7 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(7);
     auditSourceFilter->setCurrentIndex(5);
     QApplication::processEvents();
-    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8("Core-событие XP") ||
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8("Core-событие") ||
         table->item(0, 6)->text() != QString::fromUtf8("Task XP transaction committed"))
         return fail("Core task XP transaction outcome missing from its admin audit source");
     auditSourceFilter->setCurrentIndex(1);

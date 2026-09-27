@@ -142,10 +142,12 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
 AppProfileMutationResult runWalletMutationWithAudit(
     QtWorkspace& workspace, const std::string& restoreProfileId, const std::string& profileId,
     bool includeStorageVault, const std::string& action, const std::string& details,
-    const std::function<AppProfileMutationResult()>& mutation) {
+    const std::function<AppProfileMutationResult()>& mutation,
+    const std::function<void(AppLogLevel, const std::string&)>& telemetry) {
     AppProfileMutationResult result;
     if (std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) {
         result.errorMessage = u8"Сначала завершите восстановление данных.";
+        if (telemetry) telemetry(AppLogLevel::Warning, "Wallet mutation blocked pending recovery");
         return result;
     }
     bool prepared = false;
@@ -158,6 +160,7 @@ AppProfileMutationResult runWalletMutationWithAudit(
         if (!AppendProfileAudit(workspace.directory, profileId, action, details))
             throw std::runtime_error(u8"Не удалось записать аудит кошелька; изменение отменено.");
         CommitQtRecoveryTransaction(workspace.directory);
+        if (telemetry) telemetry(AppLogLevel::Info, "Wallet mutation committed with audit");
         return result;
     } catch (const std::exception& error) {
         result.ok = false;
@@ -171,9 +174,13 @@ AppProfileMutationResult runWalletMutationWithAudit(
                 if (!restoreProfileId.empty()) workspace.storage->set_active_profile(restoreProfileId);
                 workspace.reload();
                 result.errorMessage += u8" Все изменения отменены.";
+                if (telemetry) telemetry(AppLogLevel::Warning, "Wallet mutation rolled back after failure");
             } catch (const std::exception&) {
                 result.errorMessage += u8" Откат не завершён; журнал сохранён для восстановления при запуске.";
+                if (telemetry) telemetry(AppLogLevel::Error, "Wallet mutation recovery remains pending");
             }
+        } else if (telemetry) {
+            telemetry(AppLogLevel::Error, "Wallet mutation failed before recovery began");
         }
         return result;
     }
@@ -490,7 +497,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         auto result = runWalletMutationWithAudit(workspace_, id, id, false, "pomodoro_reward",
             "credit " + std::to_string(amount) + " pomodoro_focus", [&] {
                 return AppAdjustProfileWallet(*workspace_.storage, id, id, double(amount));
-            });
+            }, [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreWalletMutation", event); });
         if (!result.ok || !result.profile)
             return QString::fromUtf8("Награда не начислена: %1").arg(q(result.errorMessage));
         reload();
@@ -1031,7 +1038,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             "evil->none cost=200", [&] {
                 return AppRemoveEvilSpiritForCoins(*workspace_.storage, id, id,
                     workspace_.directory, workspace_.data.vault, 200.0);
-            });
+            }, [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreWalletMutation", event); });
         if (!result.ok) { message(result.errorMessage.empty() ? u8"Не удалось снять Злого духа." : result.errorMessage); return; }
         reload();
     });
@@ -1979,13 +1986,14 @@ void QtWindow::render() {
             entries.reserve(entries.size() + appLogs_.size());
             for (size_t index = 0; index < appLogs_.size(); ++index) {
                 const auto& entry = appLogs_[index];
-                const bool coreEvent = entry.source == "CoreTaskCompletion" || entry.source == "CoreTaskRecovery";
-                const QString sourceLabel = entry.source == "CoreTaskRecovery"
-                    ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
+                const bool coreWalletEvent = entry.source == "CoreWalletMutation";
+                const bool coreEvent = coreWalletEvent || entry.source == "CoreTaskCompletion" || entry.source == "CoreTaskRecovery";
+                const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
+                    : entry.source == "CoreTaskRecovery" ? QString::fromUtf8("Восстановление транзакции") : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
                 entries.push_back({entry.timestamp, coreEvent ? 5 : 3, std::to_string(index),
-                    {coreEvent ? QString::fromUtf8("Core-событие XP") : QString::fromUtf8("Приложение"),
+                    {coreEvent ? QString::fromUtf8("Core-событие") : QString::fromUtf8("Приложение"),
                         timeText(entry.timestamp), q(entry.source),
                         coreEvent ? sourceLabel : QString::fromUtf8("Журнал Qt"),
                         level, QString(), q(entry.message)}});
@@ -2319,7 +2327,7 @@ void QtWindow::adjustWallet() {
         const auto result = runWalletMutationWithAudit(workspace_, profileId, profileId, false,
             "wallet_adjustment", u(audit), [&] {
                 return AppAdjustProfileWallet(*workspace_.storage, profileId, profileId, debit ? -value : value);
-            });
+            }, [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreWalletMutation", event); });
         if (!result.ok || !result.profile) {
             notice->setText(result.errorMessage.empty() ? QString::fromUtf8("Не удалось сохранить кошелёк.") : q(result.errorMessage));
             updatePreview();
