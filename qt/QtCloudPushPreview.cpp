@@ -78,6 +78,23 @@ QByteArray readFile(const fs::path& path) {
     const auto bytes = file.readAll(); require(file.error() == QFileDevice::NoError, u8"Ошибка чтения облачной транзакции.");
     return bytes;
 }
+std::string managedManifestRelativePath(const CloudSyncConfig& config, const fs::path& cloudRoot) {
+    if (!config.updateManifestOnPush) return {};
+    auto manifest = config.manifest.empty() ? cloudRoot / "meta/manifest.ini" : config.manifest;
+    if (!manifest.is_absolute()) manifest = cloudRoot / manifest;
+    const auto relativeManifest = manifest.lexically_normal().lexically_relative(cloudRoot.lexically_normal());
+    if (relativeManifest.empty() || relativeManifest.is_absolute() ||
+        (!relativeManifest.empty() && *relativeManifest.begin() == "..")) return {};
+    return relativeManifest.generic_u8string();
+}
+QByteArray normalizedManifestBytes(const std::string& relativePath, const QByteArray& bytes,
+    const std::string& manifestRelativePath) {
+    if (manifestRelativePath.empty() || relativePath != manifestRelativePath) return bytes;
+    auto text = QString::fromUtf8(bytes);
+    text.replace(QRegularExpression("^dataUpdatedAt=.*$", QRegularExpression::MultilineOption),
+        QStringLiteral("dataUpdatedAt=<generated-at-commit>"));
+    return text.toUtf8();
+}
 void writeFile(const fs::path& path, const QByteArray& bytes) {
     checkPath(path); fs::create_directories(path.parent_path());
     QSaveFile file(q(path)); file.setDirectWriteFallback(false);
@@ -264,14 +281,31 @@ QtCloudPushPreviewResult RunQtCloudWorkspacePush(const CloudSyncConfig& config,
         result = PreviewQtCloudWorkspacePush(config, workspaceDirectory, role);
         require(result.sync.ok, result.message.c_str());
         if (approvedPreview) {
+            const auto manifestRelative = managedManifestRelativePath(config, result.cloudRoot);
+            auto semanticChanges = [&](const QtCloudPushPreviewResult& preview) {
+                std::map<std::string, const QtCloudPushFileChange*> changes;
+                for (const auto& change : preview.changes) {
+                    const auto before = normalizedManifestBytes(change.relativePath, change.beforeBytes, manifestRelative);
+                    const auto after = normalizedManifestBytes(change.relativePath, change.afterBytes, manifestRelative);
+                    if (change.relativePath == manifestRelative && before == after) continue;
+                    changes.emplace(change.relativePath, &change);
+                }
+                return changes;
+            };
+            const auto approvedChanges = semanticChanges(*approvedPreview);
+            const auto currentChanges = semanticChanges(result);
             bool same = approvedPreview->sync.ok && approvedPreview->cloudRoot == result.cloudRoot &&
-                approvedPreview->changes.size() == result.changes.size();
-            for (size_t index = 0; same && index < result.changes.size(); ++index) {
-                const auto& approved = approvedPreview->changes[index];
-                const auto& current = result.changes[index];
-                same = approved.relativePath == current.relativePath &&
-                    approved.existedBefore == current.existedBefore && approved.existsAfter == current.existsAfter &&
-                    hash(approved.beforeBytes) == hash(current.beforeBytes) && hash(approved.afterBytes) == hash(current.afterBytes);
+                approvedChanges.size() == currentChanges.size();
+            for (auto approved = approvedChanges.begin(), current = currentChanges.begin();
+                same && approved != approvedChanges.end() && current != currentChanges.end(); ++approved, ++current) {
+                const auto& oldChange = *approved->second;
+                const auto& newChange = *current->second;
+                same = approved->first == current->first && oldChange.existedBefore == newChange.existedBefore &&
+                    oldChange.existsAfter == newChange.existsAfter &&
+                    normalizedManifestBytes(oldChange.relativePath, oldChange.beforeBytes, manifestRelative) ==
+                        normalizedManifestBytes(newChange.relativePath, newChange.beforeBytes, manifestRelative) &&
+                    normalizedManifestBytes(oldChange.relativePath, oldChange.afterBytes, manifestRelative) ==
+                        normalizedManifestBytes(newChange.relativePath, newChange.afterBytes, manifestRelative);
             }
             require(same, u8"Облако или локальная версия изменились после предпросмотра; повторите проверку.");
         }

@@ -58,6 +58,11 @@ protected:
 };
 QString q(const std::string& s) { return QString::fromUtf8(s.data(), int(s.size())); }
 std::string u(const QString& s) { return s.toUtf8().toStdString(); }
+void labelForAccessibility(QWidget* widget, const QString& name, const QString& description = {}) {
+    if (!widget) return;
+    widget->setAccessibleName(name);
+    if (!description.isEmpty()) widget->setAccessibleDescription(description);
+}
 QString timeText(std::int64_t t) {
     return t ? QDateTime::fromSecsSinceEpoch(t).toString("dd.MM.yyyy HH:mm") : QString::fromUtf8("—");
 }
@@ -276,6 +281,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(new QLabel(QString::fromUtf8("Профиль:")));
     profiles_ = new QComboBox;
     profiles_->setObjectName("profiles");
+    labelForAccessibility(profiles_, QString::fromUtf8("Выбранный профиль"),
+        QString::fromUtf8("Список доступных активных профилей."));
     profiles_->setMinimumWidth(200);
     header->addWidget(profiles_);
     header->addStretch();
@@ -514,11 +521,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(search_);
     catalogProfessionFilter_ = new QComboBox;
     catalogProfessionFilter_->setObjectName("catalogProfessionFilter");
+    labelForAccessibility(catalogProfessionFilter_, QString::fromUtf8("Фильтр навыков по профессии"));
     catalogProfessionFilter_->setMaximumWidth(190);
     catalogProfessionFilter_->setToolTip(QString::fromUtf8("Показать навыки, связанные с выбранной профессией"));
     filters->addWidget(catalogProfessionFilter_);
     statusFilter_ = new QComboBox;
     statusFilter_->setObjectName("statusFilter");
+    labelForAccessibility(statusFilter_, QString::fromUtf8("Фильтр задач по статусу"));
     statusFilter_->setMaximumWidth(135);
     statusFilter_->addItems({QString::fromUtf8("Все статусы"), QString::fromUtf8("Новая"),
                             QString::fromUtf8("В работе"), QString::fromUtf8("Выполнена")});
@@ -526,6 +535,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(statusFilter_);
     priorityFilter_ = new QComboBox;
     priorityFilter_->setObjectName("priorityFilter");
+    labelForAccessibility(priorityFilter_, QString::fromUtf8("Фильтр задач по приоритету"));
     priorityFilter_->setMaximumWidth(150);
     priorityFilter_->addItems({QString::fromUtf8("Любой приоритет"), QString::fromUtf8("Низкий"),
         QString::fromUtf8("Средний"), QString::fromUtf8("Высокий"), QString::fromUtf8("Критический")});
@@ -533,6 +543,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(priorityFilter_);
     quickTaskFilter_ = new QComboBox;
     quickTaskFilter_->setObjectName("quickTaskFilter");
+    labelForAccessibility(quickTaskFilter_, QString::fromUtf8("Быстрый фильтр задач"));
     quickTaskFilter_->setMaximumWidth(155);
     quickTaskFilter_->addItems({QString::fromUtf8("Все задачи"), QString::fromUtf8("Мне назначено"),
         QString::fromUtf8("На сегодня"), QString::fromUtf8("Просрочено"), QString::fromUtf8("7 дней"),
@@ -544,6 +555,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(quickTaskFilter_);
     taskCreatedRange_ = new QComboBox;
     taskCreatedRange_->setObjectName("taskCreatedRange");
+    labelForAccessibility(taskCreatedRange_, QString::fromUtf8("Фильтр задач по дате создания"));
     taskCreatedRange_->setMaximumWidth(115);
     taskCreatedRange_->addItems({QString::fromUtf8("Созданы: всё"), QString::fromUtf8("Созданы: 7 дн."),
         QString::fromUtf8("Созданы: 30 дн."), QString::fromUtf8("Созданы: 90 дн."), QString::fromUtf8("Созданы: 365 дн.")});
@@ -551,34 +563,41 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(taskCreatedRange_);
     taskSort_ = new QComboBox;
     taskSort_->setObjectName("taskSortMode");
+    labelForAccessibility(taskSort_, QString::fromUtf8("Сортировка задач"));
     taskSort_->setMaximumWidth(165);
     taskSort_->addItems({QString::fromUtf8("Сначала новые"), QString::fromUtf8("Ближайший дедлайн"), QString::fromUtf8("Высокий приоритет")});
     taskSort_->setCurrentIndex(displaySettings_.taskSortMode);
     filters->addWidget(taskSort_);
     taskAssigneeFilter_ = new QComboBox;
     taskAssigneeFilter_->setObjectName("taskAssigneeFilter");
+    labelForAccessibility(taskAssigneeFilter_, QString::fromUtf8("Фильтр задач по исполнителю"));
     taskAssigneeFilter_->setMaximumWidth(190);
     filters->addWidget(taskAssigneeFilter_);
     taskProjectFilter_ = new QComboBox;
     taskProjectFilter_->setObjectName("taskProjectFilter");
+    labelForAccessibility(taskProjectFilter_, QString::fromUtf8("Фильтр задач по проекту"));
     taskProjectFilter_->setMaximumWidth(170);
     filters->addWidget(taskProjectFilter_);
     taskPipelineFilter_ = new QComboBox;
     taskPipelineFilter_->setObjectName("taskPipelineFilter");
+    labelForAccessibility(taskPipelineFilter_, QString::fromUtf8("Фильтр задач по этапу пайплайна"));
     taskPipelineFilter_->setMaximumWidth(180);
     filters->addWidget(taskPipelineFilter_);
     taskFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
     taskFilterReset_->setObjectName("taskFilterReset");
+    labelForAccessibility(taskFilterReset_, QString::fromUtf8("Сбросить фильтры задач"));
     taskFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск и вернуть фильтры задач к значениям по умолчанию"));
     filters->addWidget(taskFilterReset_);
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
+    labelForAccessibility(reportView_, QString::fromUtf8("Группировка отчёта"));
     reportView_->setMaximumWidth(145);
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
     reportDateRange_ = new QComboBox;
     reportDateRange_->setObjectName("reportDateRange");
+    labelForAccessibility(reportDateRange_, QString::fromUtf8("Период отчёта"));
     reportDateRange_->setMaximumWidth(180);
     reportDateRange_->addItems({QString::fromUtf8("Всё время"), QString::fromUtf8("30 дней"),
         QString::fromUtf8("90 дней"), QString::fromUtf8("С начала года"), QString::fromUtf8("Период…")});
@@ -590,11 +609,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportFrom_->setCalendarPopup(true);
     reportFrom_->setDisplayFormat("dd.MM.yyyy");
     reportFrom_->setMaximumWidth(118);
+    labelForAccessibility(reportFrom_, QString::fromUtf8("Начало периода отчёта"));
     reportTo_ = new QDateEdit(displaySettings_.reportDateTo);
     reportTo_->setObjectName("reportDateTo");
     reportTo_->setCalendarPopup(true);
     reportTo_->setDisplayFormat("dd.MM.yyyy");
     reportTo_->setMaximumWidth(118);
+    labelForAccessibility(reportTo_, QString::fromUtf8("Конец периода отчёта"));
     reportCustomRange_ = new QWidget;
     reportCustomRange_->setObjectName("reportCustomRange");
     auto* reportDateLayout = new QHBoxLayout(reportCustomRange_);
@@ -617,6 +638,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(projectsXpPending_);
     projectSort_ = new QComboBox;
     projectSort_->setObjectName("projectSort");
+    labelForAccessibility(projectSort_, QString::fromUtf8("Сортировка проектов"));
     projectSort_->setMaximumWidth(150);
     projectSort_->addItems({QString::fromUtf8("Название"), QString::fromUtf8("Число задач"),
         QString::fromUtf8("Просрочка"), QString::fromUtf8("Ожидают XP")});
@@ -624,6 +646,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(projectSort_);
     auditSourceFilter_ = new QComboBox;
     auditSourceFilter_->setObjectName("auditSourceFilter");
+    labelForAccessibility(auditSourceFilter_, QString::fromUtf8("Источник событий аудита"));
     auditSourceFilter_->setMaximumWidth(145);
     auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"),
         QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Транзакции XP")});
@@ -641,6 +664,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(logErrors_);
     logSourceFilter_ = new QComboBox;
     logSourceFilter_->setObjectName("logSourceFilter");
+    labelForAccessibility(logSourceFilter_, QString::fromUtf8("Источник записей журнала"));
     logSourceFilter_->setMaximumWidth(190);
     logSourceFilter_->setToolTip(QString::fromUtf8("Показывать записи выбранного источника"));
     filters->addWidget(logSourceFilter_);
@@ -681,16 +705,19 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditActorFilter_ = new QLineEdit;
     auditActorFilter_->setObjectName("auditActorFilter");
     auditActorFilter_->setPlaceholderText(QString::fromUtf8("Актор"));
+    labelForAccessibility(auditActorFilter_, QString::fromUtf8("Фильтр аудита по актору"));
     auditActorFilter_->setClearButtonEnabled(true);
     auditFilterLayout->addWidget(auditActorFilter_);
     auditObjectFilter_ = new QLineEdit;
     auditObjectFilter_->setObjectName("auditObjectFilter");
     auditObjectFilter_->setPlaceholderText(QString::fromUtf8("Задача / профиль / значение"));
+    labelForAccessibility(auditObjectFilter_, QString::fromUtf8("Фильтр аудита по задаче, профилю или значению"));
     auditObjectFilter_->setClearButtonEnabled(true);
     auditFilterLayout->addWidget(auditObjectFilter_, 2);
     auditFieldFilter_ = new QLineEdit;
     auditFieldFilter_->setObjectName("auditFieldFilter");
     auditFieldFilter_->setPlaceholderText(QString::fromUtf8("Поле / действие"));
+    labelForAccessibility(auditFieldFilter_, QString::fromUtf8("Фильтр аудита по полю или действию"));
     auditFieldFilter_->setClearButtonEnabled(true);
     auditFilterLayout->addWidget(auditFieldFilter_);
     auditFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить"));

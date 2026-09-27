@@ -34,6 +34,8 @@
 #include "CloudSync.h"
 #include "QtSkillEditor.h"
 #include <QtWidgets>
+#include <chrono>
+#include <thread>
 #include <QtTest/QTest>
 #include <iostream>
 #include <algorithm>
@@ -677,6 +679,17 @@ static bool TestCloudPushPreview() {
     const auto interruptedPlan = PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
     if (!interruptedPlan.sync.ok || std::none_of(interruptedPlan.changes.begin(), interruptedPlan.changes.end(),
         [](const auto& change) { return change.relativePath == "spirits/temporary.png"; })) return false;
+    const auto taskPreview = std::find_if(interruptedPlan.changes.begin(), interruptedPlan.changes.end(),
+        [](const auto& change) { return change.relativePath == "meta/tasks.json"; });
+    if (taskPreview == interruptedPlan.changes.end() || taskPreview->beforeBytes != read(cloud / "meta/tasks.json")) {
+        std::cerr << "Interrupted preview tasks mismatch before wait: " << (taskPreview == interruptedPlan.changes.end() ? "missing" : taskPreview->beforeBytes.toHex().toStdString())
+            << " actual=" << read(cloud / "meta/tasks.json").toHex().toStdString() << '\n'; return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100)); // Cross a dataUpdatedAt second boundary without dispatching UI timers.
+    if (taskPreview->beforeBytes != read(cloud / "meta/tasks.json")) {
+        std::cerr << "Cloud task bytes changed during blocking wait: " << taskPreview->beforeBytes.toHex().toStdString()
+            << " actual=" << read(cloud / "meta/tasks.json").toHex().toStdString() << '\n'; return false;
+    }
     QtSetCloudPushFailureAfterFileWritesForTests(static_cast<int>(interruptedPlan.changes.size()));
     QtSetCloudPushLeaveJournalForTests(true);
     const auto interrupted = RunQtCloudWorkspacePush(config, workspace, CloudRole::Admin, &interruptedPlan);
@@ -3605,6 +3618,29 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!restoredNavigation || restoredNavigation->currentRow() != 16 ||
         restoredNavigation->accessibleName().isEmpty() || !accessibleSearch ||
         accessibleSearch->accessibleName().isEmpty() || !accessibleTable || !focusSearch || !clearSearch) return false;
+    auto hasAccessibleName = [&restoredWindow](const char* objectName) {
+        const auto* widget = restoredWindow.findChild<QWidget*>(QString::fromLatin1(objectName));
+        return widget && !widget->accessibleName().trimmed().isEmpty();
+    };
+    if (!hasAccessibleName("profiles")) return false;
+    restoredNavigation->setCurrentRow(2); QApplication::processEvents();
+    if (!hasAccessibleName("projectSort")) return false;
+    restoredNavigation->setCurrentRow(3); QApplication::processEvents();
+    if (!hasAccessibleName("catalogProfessionFilter")) return false;
+    restoredNavigation->setCurrentRow(1); QApplication::processEvents();
+    for (const auto* name : {"statusFilter", "priorityFilter", "quickTaskFilter", "taskCreatedRange",
+            "taskSortMode", "taskAssigneeFilter", "taskProjectFilter", "taskPipelineFilter", "taskFilterReset"})
+        if (!hasAccessibleName(name)) { std::cerr << "Missing task filter accessible name: " << name << '\n'; return false; }
+    restoredNavigation->setCurrentRow(6); QApplication::processEvents();
+    if (!hasAccessibleName("reportView") || !hasAccessibleName("reportDateRange") ||
+        !hasAccessibleName("reportDateFrom") || !hasAccessibleName("reportDateTo")) { std::cerr << "Missing report filter accessible name\n"; return false; }
+    restoredNavigation->setCurrentRow(7); QApplication::processEvents();
+    if (!hasAccessibleName("auditSourceFilter") || !hasAccessibleName("auditActorFilter") ||
+        !hasAccessibleName("auditObjectFilter") || !hasAccessibleName("auditFieldFilter")) { std::cerr << "Missing audit filter accessible name\n"; return false; }
+    restoredNavigation->setCurrentRow(16); QApplication::processEvents();
+    if (!hasAccessibleName("logSourceFilter")) return false;
+    QSaveFile restoreSettings(temp.path() + "/meta/ui.ini");
+    if (!restoreSettings.open(QIODevice::WriteOnly) || restoreSettings.write(before) != before.size() || !restoreSettings.commit()) return false;
     restoredWindow.show(); restoredWindow.activateWindow(); QApplication::processEvents();
     QTest::keyClick(&restoredWindow, Qt::Key_K, Qt::ControlModifier); QApplication::processEvents();
     if (QApplication::focusWidget() != accessibleSearch) return false;
