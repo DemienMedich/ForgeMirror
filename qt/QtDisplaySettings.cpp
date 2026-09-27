@@ -452,6 +452,10 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
             else if (key == "projectsXpPendingOnly") out.projectsXpPendingOnly = value == "1";
             else if (key == "auditSourceFilter") { bool ok = false; const int index = value.toInt(&ok); out.auditSourceFilter = ok ? std::clamp(index, 0, 5) : 0; }
+            else if (key == "logShowInfo") out.logShowInfo = value != "0";
+            else if (key == "logShowWarning") out.logShowWarning = value != "0";
+            else if (key == "logShowError") out.logShowError = value != "0";
+            else if (key == "logSourceFilter") out.logSourceFilter = value;
             else if (key == "logAutoScroll") out.logAutoScroll = value != "0";
             else if (key == "logCompactView") out.logCompactView = value == "1";
             else if (key == "adminStatsSearch") out.adminStatsSearch = value;
@@ -520,6 +524,11 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");
     set("projectsXpPendingOnly", settings.projectsXpPendingOnly ? "1" : "0");
     set("auditSourceFilter", QString::number(std::clamp(settings.auditSourceFilter, 0, 5)));
+    set("logShowInfo", settings.logShowInfo ? "1" : "0");
+    set("logShowWarning", settings.logShowWarning ? "1" : "0");
+    set("logShowError", settings.logShowError ? "1" : "0");
+    auto logSourceFilter = settings.logSourceFilter; logSourceFilter.remove('\r'); logSourceFilter.remove('\n');
+    set("logSourceFilter", logSourceFilter);
     set("logAutoScroll", settings.logAutoScroll ? "1" : "0");
     set("logCompactView", settings.logCompactView ? "1" : "0");
     auto adminStatsSearch = settings.adminStatsSearch; adminStatsSearch.remove('\r'); adminStatsSearch.remove('\n');

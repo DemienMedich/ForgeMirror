@@ -4652,6 +4652,8 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
     settings.deadlineNotificationsWhenClosed = false;
     if (!SaveQtDisplaySettings(directory, settings)) return false;
+    settings.logShowInfo = false; settings.logShowWarning = true; settings.logShowError = false;
+    settings.logSourceFilter = QStringLiteral("Qt");
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -4723,7 +4725,9 @@ static bool TestDisplaySettings(QApplication& app) {
         loaded.windowBackgrounds[0] != "ui/backgrounds/reference.png" || qAbs(loaded.backgroundAlpha - 0.55) > 0.001 ||
         !loaded.backgroundTiled || qAbs(loaded.backgroundTileScale - 1.5) > 0.001 ||
         loaded.profileSkillWeightCategory != 4 || qAbs(loaded.profileSkillWeightMin - 0.7) > 0.001 ||
-        qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 ||
+        loaded.logShowInfo || !loaded.logShowWarning || loaded.logShowError || loaded.logSourceFilter != QStringLiteral("Qt") ||
+        loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) { std::cerr << "Qt display/background settings persistence mismatch path=" << loaded.windowBackgrounds[0].toUtf8().constData() << " alpha=" << loaded.backgroundAlpha << " tiled=" << loaded.backgroundTiled << " scale=" << loaded.backgroundTileScale << '\n'; return false; }
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -5656,6 +5660,8 @@ int main(int argc, char** argv) {
     if (table->rowCount() == 0) return fail("Qt application log source filter returned no Qt entries");
     for (int index = 0; index < table->rowCount(); ++index)
         if (table->item(index, 3)->text() != QStringLiteral("Qt")) return fail("Qt application log source filter leaked another source");
+    if (LoadQtDisplaySettings(workspace.directory).logSourceFilter != QStringLiteral("Qt"))
+        return fail("Qt application log source filter was not saved to workspace settings");
     logSourceFilter->setCurrentIndex(0);
     auto* logAutoScroll = window.findChild<QCheckBox*>("logAutoScroll");
     auto* logCompactView = window.findChild<QCheckBox*>("logCompactView");
@@ -5676,6 +5682,8 @@ int main(int argc, char** argv) {
         !table->item(0, 4)->text().contains(QString::fromUtf8("автопрокрутки Qt-журнала 19")))
         return fail("Qt application log did not append and autoscroll to a new entry");
     logAutoScroll->setChecked(false);
+    logWarnings->setChecked(false);
+    logSourceFilter->setCurrentIndex(0);
     const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");
     search->setText(startupLogToken);
     if (table->rowCount() == 0 || !table->item(0, 4)->text().contains(startupLogToken, Qt::CaseInsensitive))
@@ -5758,9 +5766,21 @@ int main(int argc, char** argv) {
     if (restartedTable->rowCount() < 2) return fail("Qt application log history did not survive a window restart");
     auto* restartedAutoScroll = restartedWindow.findChild<QCheckBox*>("logAutoScroll");
     auto* restartedCompactView = restartedWindow.findChild<QCheckBox*>("logCompactView");
+    auto* restartedLogInfo = restartedWindow.findChild<QCheckBox*>("logInfo");
+    auto* restartedLogWarnings = restartedWindow.findChild<QCheckBox*>("logWarnings");
+    auto* restartedLogErrors = restartedWindow.findChild<QCheckBox*>("logErrors");
     if (!restartedAutoScroll || !restartedCompactView || restartedAutoScroll->isChecked() ||
-        !restartedCompactView->isChecked() || !restartedTable->isColumnHidden(1) || !restartedTable->isColumnHidden(3))
+        !restartedCompactView->isChecked() || !restartedLogInfo || !restartedLogInfo->isChecked() ||
+        !restartedLogWarnings || restartedLogWarnings->isChecked() || !restartedLogErrors || !restartedLogErrors->isChecked() ||
+        !restartedTable->isColumnHidden(1) || !restartedTable->isColumnHidden(3)) {
+        std::cerr << "Log restart state: autoscr=" << (restartedAutoScroll ? restartedAutoScroll->isChecked() : -1)
+                  << " compact=" << (restartedCompactView ? restartedCompactView->isChecked() : -1)
+                  << " info=" << (restartedLogInfo ? restartedLogInfo->isChecked() : -1)
+                  << " warnings=" << (restartedLogWarnings ? restartedLogWarnings->isChecked() : -1)
+                  << " errors=" << (restartedLogErrors ? restartedLogErrors->isChecked() : -1)
+                  << " columns=" << restartedTable->isColumnHidden(1) << ',' << restartedTable->isColumnHidden(3) << '\n';
         return fail("Qt log display preferences did not persist across a window restart");
+    }
     bool restoredClearEntry = false;
     for (int index = 0; index < restartedTable->rowCount(); ++index)
         restoredClearEntry |= restartedTable->item(index, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive);

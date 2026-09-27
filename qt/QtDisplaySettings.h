@@ -45,6 +45,10 @@ struct QtDisplaySettings {
     bool projectsOverdueOnly = false;
     bool projectsXpPendingOnly = false;
     int auditSourceFilter = 0;
+    bool logShowInfo = true;
+    bool logShowWarning = true;
+    bool logShowError = true;
+    QString logSourceFilter;
     bool logAutoScroll = true;
     bool logCompactView = false;
     QString adminStatsSearch;

@@ -967,12 +967,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     logInfo_->setObjectName("logInfo"); logInfo_->setChecked(true);
     labelForAccessibility(logInfo_, QString::fromUtf8("Показывать информационные записи журнала"));
     filters->addWidget(logInfo_);
+    logInfo_->setChecked(displaySettings_.logShowInfo);
     logWarnings_ = new QCheckBox(QString::fromUtf8("Предупреждения"));
-    logWarnings_->setObjectName("logWarnings"); logWarnings_->setChecked(true);
+    logWarnings_->setObjectName("logWarnings"); logWarnings_->setChecked(displaySettings_.logShowWarning);
     labelForAccessibility(logWarnings_, QString::fromUtf8("Показывать предупреждения журнала"));
     filters->addWidget(logWarnings_);
     logErrors_ = new QCheckBox(QString::fromUtf8("Ошибки"));
-    logErrors_->setObjectName("logErrors"); logErrors_->setChecked(true);
+    logErrors_->setObjectName("logErrors"); logErrors_->setChecked(displaySettings_.logShowError);
     labelForAccessibility(logErrors_, QString::fromUtf8("Показывать ошибки журнала"));
     filters->addWidget(logErrors_);
     logSourceFilter_ = new QComboBox;
@@ -1389,10 +1390,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     connect(projectSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(auditSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
-    connect(logInfo_, &QCheckBox::toggled, this, [this] { render(); });
-    connect(logWarnings_, &QCheckBox::toggled, this, [this] { render(); });
-    connect(logErrors_, &QCheckBox::toggled, this, [this] { render(); });
-    connect(logSourceFilter_, &QComboBox::currentIndexChanged, this, [this] { render(); });
+    connect(logInfo_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    connect(logWarnings_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    connect(logErrors_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    connect(logSourceFilter_, &QComboBox::currentIndexChanged, this, [this] {
+        displaySettings_.logSourceFilter = logSourceFilter_->currentData().toString();
+        saveDisplayContext(); render();
+    });
     connect(logAutoScroll_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(logCompactView_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     const auto setLogLevels = [this](bool info, bool warnings, bool errors) {
@@ -1402,6 +1406,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         logInfo_->setChecked(info);
         logWarnings_->setChecked(warnings);
         logErrors_->setChecked(errors);
+        saveDisplayContext();
         render();
     };
     connect(logPresetAll_, &QPushButton::clicked, this, [setLogLevels] { setLogLevels(true, true, true); });
@@ -2069,6 +2074,9 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
     displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
     displaySettings_.auditSourceFilter = auditSourceFilter_->currentIndex();
+    displaySettings_.logShowInfo = logInfo_->isChecked();
+    displaySettings_.logShowWarning = logWarnings_->isChecked();
+    displaySettings_.logShowError = logErrors_->isChecked();
     displaySettings_.logAutoScroll = logAutoScroll_->isChecked();
     displaySettings_.logCompactView = logCompactView_->isChecked();
     displaySettings_.adminStatsSearch = adminStatsSearch_->text();
@@ -3255,7 +3263,8 @@ void QtWindow::render() {
             QString::fromUtf8("Источник"), QString::fromUtf8("Сообщение")});
         table_->setColumnHidden(1, logCompactView_->isChecked());
         table_->setColumnHidden(3, logCompactView_->isChecked());
-        const auto selectedSource = logSourceFilter_->currentData().toString();
+        const auto currentSource = logSourceFilter_->currentData().toString();
+        const auto selectedSource = currentSource.isEmpty() ? displaySettings_.logSourceFilter : currentSource;
         QStringList sources;
         for (const auto& entry : appLogs_) {
             const auto source = q(entry.source);
