@@ -1,5 +1,23 @@
 #include "QtTheme.h"
 #include <QtWidgets>
+#include <algorithm>
+
+void ApplyQtLayoutMetrics(QApplication& app, int spacingPercent, int cornerRadius) {
+    const double factor = std::clamp(spacingPercent, 80, 120) / 100.0;
+    const int controlHeight = qRound(26 * factor);
+    const int horizontalPadding = qRound(8 * factor);
+    const int listPadding = qRound(8 * factor);
+    const int radius = std::clamp(cornerRadius, 0, 12);
+    app.setStyleSheet(QStringLiteral(
+        "QPushButton, QToolButton, QComboBox, QLineEdit { min-height: %1px; }"
+        "QPushButton { padding: 0 %2px; } QListWidget::item { padding: %3px; }"
+        "QPushButton#primary, QPushButton[primary=true] { background: #7554ad; color: white; border: 0; border-radius: %4px; }"
+        "QPushButton#primary:hover, QPushButton[primary=true]:hover { background: #8764bf; } QLabel#title { font-weight: 600; }"
+        "QFrame[metric=true] { background: #26262c; border-radius: %4px; } QLabel[metricValue=true] { font-weight: 600; }"
+        "QLabel[timerValue=true] { font-size: 30px; font-weight: 600; } QProgressBar { min-height: 8px; max-height: 8px; }"
+        "QProgressBar::chunk { background: #7554ad; }")
+        .arg(controlHeight).arg(horizontalPadding).arg(listPadding).arg(radius));
+}
 
 void ApplyQtTheme(QApplication& app) {
     QApplication::setStyle("Fusion");
@@ -16,11 +34,5 @@ void ApplyQtTheme(QApplication& app) {
     palette.setColor(QPalette::Disabled, QPalette::Text, QColor("#99999f"));
     app.setPalette(palette);
     app.setFont(QFont("Segoe UI", 10));
-    app.setStyleSheet("QPushButton, QToolButton, QComboBox, QLineEdit { min-height: 26px; }"
-        "QPushButton { padding: 0 8px; } QListWidget::item { padding: 8px; }"
-        "QPushButton#primary, QPushButton[primary=true] { background: #7554ad; color: white; border: 0; border-radius: 4px; }"
-        "QPushButton#primary:hover, QPushButton[primary=true]:hover { background: #8764bf; } QLabel#title { font-weight: 600; }"
-        "QFrame[metric=true] { background: #26262c; border-radius: 4px; } QLabel[metricValue=true] { font-weight: 600; }"
-        "QLabel[timerValue=true] { font-size: 30px; font-weight: 600; } QProgressBar { min-height: 8px; max-height: 8px; }"
-        "QProgressBar::chunk { background: #7554ad; }");
+    ApplyQtLayoutMetrics(app, 100, 4);
 }

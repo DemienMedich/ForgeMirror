@@ -1,11 +1,14 @@
 #pragma once
 #include <filesystem>
 #include <QDate>
+#include <QStringList>
 #include <QString>
 class QApplication;
 class QWidget;
 struct QtDisplaySettings {
     int scalePercent = 100;
+    int spacingPercent = 100;
+    int cornerRadius = 4;
     bool compactRows = false;
     bool fullscreen = false;
     bool decorated = true;
@@ -46,7 +49,21 @@ struct QtDisplaySettings {
     int adminStatsRefreshSeconds = 30;
     int adminStatsInactivityDays = 30;
 };
+struct QtLayoutPreset {
+    QString name;
+    int scalePercent = 100;
+    int spacingPercent = 100;
+    int cornerRadius = 4;
+    bool compactRows = false;
+    bool fullscreen = false;
+    bool decorated = true;
+};
 QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);
+QStringList ListQtLayoutPresets(const std::filesystem::path& directory);
+bool LoadQtLayoutPreset(const std::filesystem::path& directory, const QString& name, QtLayoutPreset* preset);
+bool SaveQtLayoutPreset(const std::filesystem::path& directory, const QtLayoutPreset& preset, QString* error = nullptr);
+bool DeleteQtLayoutPreset(const std::filesystem::path& directory, const QString& name, QString* error = nullptr);
+bool IsQtLayoutPresetDeletable(const std::filesystem::path& directory, const QString& name);
 void ApplyQtDisplaySettings(QApplication& app, const QtDisplaySettings& settings);
 bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings);

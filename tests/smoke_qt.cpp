@@ -4427,6 +4427,43 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    QDir().mkpath(temp.path() + "/meta/ui-presets");
+    QFile legacyPreset(temp.path() + "/meta/ui-presets/LegacyLayout.ini");
+    if (!legacyPreset.open(QIODevice::WriteOnly) ||
+        legacyPreset.write("[style]\nfontScale=1.25\nitemSpacing=6 4\nframeRounding=9\nwindowFullscreen=1\nwindowDecorated=0\ncustomColors=1\n[profile]\ntrusted=secret-value\n") < 0)
+        return false;
+    legacyPreset.close();
+    QtLayoutPreset migratedPreset;
+    if (!LoadQtLayoutPreset(directory, "LegacyLayout", &migratedPreset) ||
+        migratedPreset.scalePercent != 125 || migratedPreset.spacingPercent != 80 ||
+        migratedPreset.cornerRadius != 8 || !migratedPreset.compactRows ||
+        !migratedPreset.fullscreen || migratedPreset.decorated ||
+        IsQtLayoutPresetDeletable(directory, "LegacyLayout")) return false;
+    migratedPreset.name = QString::fromUtf8("Моя компоновка / 1");
+    migratedPreset.fullscreen = false; migratedPreset.decorated = true;
+    QString presetError;
+    if (!SaveQtLayoutPreset(directory, migratedPreset, &presetError) || !presetError.isEmpty() ||
+        !ListQtLayoutPresets(directory).contains(QString::fromUtf8("Моя компоновка 1")) ||
+        !IsQtLayoutPresetDeletable(directory, QString::fromUtf8("Моя компоновка 1"))) return false;
+    QtLayoutPreset roundTrip;
+    if (!LoadQtLayoutPreset(directory, QString::fromUtf8("Моя компоновка 1"), &roundTrip) ||
+        roundTrip.scalePercent != 125 || roundTrip.cornerRadius != 8 || roundTrip.decorated != migratedPreset.decorated)
+        return false;
+    if (!DeleteQtLayoutPreset(directory, roundTrip.name, &presetError) ||
+        !QFileInfo::exists(temp.path() + "/meta/ui-presets/LegacyLayout.ini") ||
+        IsQtLayoutPresetDeletable(directory, "LegacyLayout")) return false;
+    QFile corruptPresets(temp.path() + "/meta/qt-layout-presets.json");
+    if (!corruptPresets.open(QIODevice::WriteOnly) || corruptPresets.write("{broken") != 7) return false;
+    corruptPresets.close();
+    QtLayoutPreset rejectedPreset; rejectedPreset.name = "Must not overwrite";
+    if (SaveQtLayoutPreset(directory, rejectedPreset, &presetError) ||
+        !corruptPresets.open(QIODevice::ReadOnly) || corruptPresets.readAll() != "{broken") return false;
+    corruptPresets.close();
+    if (!corruptPresets.remove()) return false;
+    QFile legacyBeforeFile(temp.path() + "/meta/ui-presets/LegacyLayout.ini");
+    if (!legacyBeforeFile.open(QIODevice::ReadOnly)) return false;
+    const auto legacyBytesBefore = legacyBeforeFile.readAll();
+    legacyBeforeFile.close();
     settings.profileViewMode = 2;
     settings.profileSkillSort = 3; settings.profileSkillWeightCategory = 4;
     settings.profileSkillWeightMin = 0.7; settings.profileSkillWeightMax = 1.4;
@@ -4439,6 +4476,33 @@ static bool TestDisplaySettings(QApplication& app) {
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
+        auto* spacing = dialog->findChild<QComboBox*>("qtSpacing");
+        auto* rounding = dialog->findChild<QComboBox*>("qtCornerRadius");
+        auto* presetList = dialog->findChild<QComboBox*>("qtLayoutPresetList");
+        auto* applyPreset = dialog->findChild<QPushButton*>("qtLayoutPresetApply");
+        auto* presetName = dialog->findChild<QLineEdit*>("qtLayoutPresetName");
+        auto* savePreset = dialog->findChild<QPushButton*>("qtLayoutPresetSave");
+        if (!spacing || !rounding || !presetList || !applyPreset || !presetName || !savePreset) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        presetName->setText(QString::fromUtf8("Интерфейс Qt"));
+        savePreset->click();
+        if (!IsQtLayoutPresetDeletable(directory, QString::fromUtf8("Интерфейс Qt"))) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        presetList->setCurrentIndex(presetList->findData("LegacyLayout"));
+        applyPreset->click();
+        if (scale->currentData().toInt() != 125 || spacing->currentData().toInt() != 80 ||
+            rounding->currentData().toInt() != 8 || !dialog->findChild<QCheckBox*>("qtFullscreen")->isChecked() ||
+            dialog->findChild<QCheckBox*>("qtDecorated")->isChecked()) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        // Applying an imported preset changes layout controls only. Keep this test's requested final values.
+        scale->setCurrentIndex(scale->findData(125));
+        spacing->setCurrentIndex(spacing->findData(120));
+        rounding->setCurrentIndex(rounding->findData(8));
+        dialog->findChild<QCheckBox*>("qtFullscreen")->setChecked(false);
+        dialog->findChild<QCheckBox*>("qtDecorated")->setChecked(true);
         auto* tray = dialog->findChild<QCheckBox*>("qtMinimizeToTray");
         auto* background = dialog->findChild<QCheckBox*>("qtDeadlineNotificationsWhenClosed");
         const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
@@ -4447,11 +4511,13 @@ static bool TestDisplaySettings(QApplication& app) {
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS"); if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/display-settings.png");
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click(); saved = true;
     });
-    if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 || !settings.compactRows ||
+    if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 ||
+        settings.spacingPercent != 120 || settings.cornerRadius != 8 || !settings.compactRows ||
         settings.minimizeToTray != (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) return false;
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
-    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
+    const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || loaded.spacingPercent != 120 ||
+        loaded.cornerRadius != 8 || !loaded.compactRows ||
         loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.profileViewMode != 2 || loaded.profileSkillSort != 3 ||
         loaded.profileSkillWeightCategory != 4 || qAbs(loaded.profileSkillWeightMin - 0.7) > 0.001 ||
         qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
@@ -4505,14 +4571,20 @@ static bool TestDisplaySettings(QApplication& app) {
     QTest::keyClick(accessibleSearch, Qt::Key_Escape); QApplication::processEvents();
     if (!accessibleSearch->text().isEmpty() || accessibleTable->accessibleName().isEmpty() ||
         !accessibleTable->accessibleDescription().contains(QString::fromUtf8("Строк:"))) return false;
-    ApplyQtDisplaySettings(app, loaded); if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble()) return false;
+    const auto fixedWindowColor = app.palette().color(QPalette::Window);
+    ApplyQtDisplaySettings(app, loaded);
+    if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble() ||
+        !app.styleSheet().contains(QStringLiteral("min-height: 31px")) ||
+        !app.styleSheet().contains(QStringLiteral("border-radius: 8px")) ||
+        app.palette().color(QPalette::Window) != fixedWindowColor) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});
 #ifdef _WIN32
     const auto path = (directory / "meta/ui.ini").wstring(); const auto lock = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
     if (lock == INVALID_HANDLE_VALUE) return false; settings.scalePercent = 90; const bool blocked = SaveQtDisplaySettings(directory, settings); CloseHandle(lock);
     if (blocked || !file.open(QIODevice::ReadOnly)) return false; const auto after = file.readAll(); file.close(); if (after != before) return false;
 #endif
-    return true;
+    QFile legacyAfterFile(temp.path() + "/meta/ui-presets/LegacyLayout.ini");
+    return legacyAfterFile.open(QIODevice::ReadOnly) && legacyAfterFile.readAll() == legacyBytesBefore;
 }
 
 static bool TestQtDeadlineEvaluation() {
