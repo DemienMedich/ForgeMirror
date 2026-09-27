@@ -2505,14 +2505,20 @@ static bool TestReportPeriodComparison() {
     TaskEntry current; current.id = "comparison-current"; current.title = "Current task";
     current.createdAt = QDateTime::currentSecsSinceEpoch(); current.assignees = {profile->id};
     current.projectId = currentProject.id; current.project = currentProject.name; current.pipelineStepId = currentStage.id;
+    const auto reportNow = QDateTime::currentSecsSinceEpoch();
+    TaskEntry overdue = current; overdue.id = "comparison-overdue"; overdue.title = "Overdue task";
+    overdue.deadlineAt = reportNow - 60;
+    TaskEntry upcoming = current; upcoming.id = "comparison-upcoming"; upcoming.title = "Upcoming task";
+    upcoming.deadlineAt = reportNow + 86400;
     TaskEntry previous; previous.id = "comparison-previous"; previous.title = "Previous task"; previous.status = 2;
     previous.priority = 3;
     previous.createdAt = QDateTime(QDate::currentDate().addDays(-40), QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch();
+    previous.deadlineAt = reportNow - 40 * 86400;
     previous.category = 1;
     previous.assignees = {profile->id}; previous.projectId = previousProject.id; previous.project = previousProject.name;
     previous.pipelineStepId = previousStage.id; previous.pipelineStep = previousStage.title;
     previous.participants.push_back({profile->id, 100, 45, 15, "comparison"});
-    workspace.data.tasks = {current, previous};
+    workspace.data.tasks = {current, overdue, upcoming, previous};
     if (!AppSaveProjects(workspace.directory, workspace.data.projects) ||
         !AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps) ||
         !AppSaveTasks(workspace.directory, workspace.data.tasks)) return fail("save fixtures");
@@ -2547,7 +2553,7 @@ static bool TestReportPeriodComparison() {
     if (table->rowCount() != 1 || table->columnCount() != 14 ||
         table->item(0, 9)->text() != "1" || table->item(0, 12)->text() != "45" || table->item(0, 13)->text() != "15") return fail("employee previous metrics");
     view->setCurrentIndex(2);
-    if (view->count() != 6 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
+    if (view->count() != 7 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
     int previousStageRow = -1;
     for (int row = 0; row < table->rowCount(); ++row)
         if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("previous-stage")) previousStageRow = row;
@@ -2618,10 +2624,43 @@ static bool TestReportPeriodComparison() {
         !priorityCsvBytes.contains(QString::fromUtf8("Приоритет").toUtf8()) ||
         !priorityCsvBytes.contains(QString::fromUtf8("Критический").toUtf8()) ||
         !priorityCsvBytes.contains(QString::fromUtf8("Задач · пред.").toUtf8())) return fail("priority report CSV content");
+    view->setCurrentIndex(6);
+    if (table->rowCount() != 4 || table->columnCount() != 15) return fail("deadline report layout");
+    auto deadlineRow = [table](const QString& key) {
+        for (int row = 0; row < table->rowCount(); ++row)
+            if (table->item(row, 0)->data(Qt::UserRole).toString() == key) return row;
+        return -1;
+    };
+    const int completedDeadline = deadlineRow(QStringLiteral("__deadline_0"));
+    const int overdueDeadline = deadlineRow(QStringLiteral("__deadline_1"));
+    const int upcomingDeadline = deadlineRow(QStringLiteral("__deadline_2"));
+    const int noDeadline = deadlineRow(QStringLiteral("__deadline_3"));
+    if (completedDeadline < 0 || table->item(completedDeadline, 1)->text() != "0" ||
+        table->item(completedDeadline, 8)->text() != "1" || overdueDeadline < 0 ||
+        table->item(overdueDeadline, 1)->text() != "1" || upcomingDeadline < 0 ||
+        table->item(upcomingDeadline, 1)->text() != "1" || noDeadline < 0 ||
+        table->item(noDeadline, 1)->text() != "1") return fail("deadline-state report counts or prior-only row");
+    table->selectRow(completedDeadline);
+    if (!details->toPlainText().contains("Previous task") ||
+        !details->toPlainText().contains(QString::fromUtf8("Состояние срока"))) return fail("deadline report drill-down");
+    const auto deadlineCsvPath = temp.path() + "/deadline-report.csv";
+    QTimer::singleShot(0, [deadlineCsvPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(deadlineCsvPath); static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportButton->click();
+    QFile deadlineCsv(deadlineCsvPath);
+    if (!deadlineCsv.open(QIODevice::ReadOnly)) return fail("deadline report CSV missing");
+    const auto deadlineCsvBytes = deadlineCsv.readAll();
+    if (!deadlineCsvBytes.startsWith("\xEF\xBB\xBF") ||
+        !deadlineCsvBytes.contains(QString::fromUtf8("Состояние срока").toUtf8()) ||
+        !deadlineCsvBytes.contains(QString::fromUtf8("Просрочена").toUtf8()) ||
+        !deadlineCsvBytes.contains(QString::fromUtf8("Без срока").toUtf8())) return fail("deadline report CSV content");
     range->setCurrentIndex(0);
     if (compare->isEnabled() || table->columnCount() != 8 || !compare->isChecked()) return fail("all-time guard");
     const auto settings = LoadQtDisplaySettings(workspace.directory);
-    return (settings.reportComparePrevious && settings.reportView == 5) || fail("setting persistence");
+    return (settings.reportComparePrevious && settings.reportView == 6) || fail("setting persistence");
 }
 
 static bool TestAuditExport() {
@@ -5308,7 +5347,7 @@ int main(int argc, char** argv) {
     if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
         return fail("Report export UI failed");
     auto* reportView = window.findChild<QComboBox*>("reportView");
-    if (!reportView || reportView->count() != 6) return fail("Report view selector unavailable");
+    if (!reportView || reportView->count() != 7) return fail("Report view selector unavailable");
     reportView->setCurrentIndex(1);
     auto* reportRange = window.findChild<QComboBox*>("reportDateRange");
     auto* reportCompare = window.findChild<QCheckBox*>("reportComparePrevious");
@@ -5991,16 +6030,18 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(7);
     auditSourceFilter->setCurrentIndex(5);
     QApplication::processEvents();
-    bool taskCompletionCoreEvent = false;
+    bool taskCompletionCoreEvent = false, taskMutationCoreEvent = false;
     for (int row = 0; row < table->rowCount(); ++row) {
         if (table->item(row, 0)->text() != QString::fromUtf8("Core-событие")) continue;
         const auto event = table->item(row, 6)->text();
         const auto category = table->item(row, 3)->text();
         taskCompletionCoreEvent |= category == QString::fromUtf8("Завершение XP") &&
             event == QString::fromUtf8("Task XP transaction committed");
+        taskMutationCoreEvent |= category == QString::fromUtf8("Изменение задач") &&
+            event == QString::fromUtf8("Task status update committed");
     }
-    if (table->rowCount() != 1 || !taskCompletionCoreEvent)
-        return fail("Core task XP transaction outcome missing from its admin audit source");
+    if (!taskCompletionCoreEvent || !taskMutationCoreEvent)
+        return fail("Core task mutation or XP transaction outcome missing from admin audit source");
     auditSourceFilter->setCurrentIndex(1);
     QApplication::processEvents();
     if (table->rowCount() == 0 || table->item(0, 0)->text() != QString::fromUtf8("Задача"))
