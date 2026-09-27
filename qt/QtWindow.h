@@ -72,6 +72,7 @@ private:
     void showWalletHistory();
     void showProfileHistory();
     void exportProfileReport(bool csv);
+    void exportStorageHealthReport();
     void checkDeadlineReminders();
     void checkMissedDeadlineReminders();
     void updateBanner();
@@ -97,6 +98,7 @@ private:
     QtDisplaySettings displaySettings_;
     QAction* profileAccessAction_;
     QAction* ownPasswordAction_;
+    QAction* storageHealthReportAction_;
     QComboBox* profiles_;
     QListWidget* navigation_;
     QLineEdit* search_;

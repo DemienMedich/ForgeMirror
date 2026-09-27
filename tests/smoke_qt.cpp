@@ -21,6 +21,7 @@
 #include "QtDeadlineAgent.h"
 #include "QtReportExport.h"
 #include "QtProfileReportExport.h"
+#include "QtStorageHealthReport.h"
 #include "QtAuditExport.h"
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
@@ -1963,6 +1964,79 @@ static bool TestProfileReportExport() {
         !txtBytes.contains(QString::fromUtf8("Имя: Анна, тест").toUtf8()) || !txtBytes.contains("Прогрев:") ||
         !txtBytes.contains("cpp\tcpp\t3\t17/83")) return false;
     if (ExportProfileReport(QString(), profile, catalog, QStringLiteral("profile-1"), true, 1700001000, &error) || error.isEmpty()) return false;
+    return true;
+}
+
+static bool TestQtStorageHealthReport() {
+    auto fail = [](const char* where) { std::cerr << "storageHealth: " << where << '\n'; return false; };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return fail("temporary directory");
+    const auto root = std::filesystem::path(temp.path().toStdWString());
+    const auto workspacePath = root / "workspace";
+    const auto cloudPath = root / "cloud-copy";
+    std::filesystem::create_directories(workspacePath);
+    QtWorkspace workspace(workspacePath);
+    if (!SetAdminPassword(workspacePath, "report-password")) return fail("password fixture");
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* reportAction = window.findChild<QAction*>("storageHealthReport");
+    if (!reportAction || reportAction->isVisible()) return fail("action missing or visible without admin");
+    QAction* adminAction = nullptr;
+    for (auto* action : window.findChildren<QAction*>())
+        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return fail("admin action missing");
+    QTimer::singleShot(0, [] {
+        if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+            input->setTextValue("report-password");
+            input->accept();
+        }
+    });
+    adminAction->trigger();
+    if (!reportAction->isVisible()) return fail("admin authentication");
+    std::filesystem::create_directories(workspacePath / "meta");
+    std::filesystem::create_directories(cloudPath / "meta");
+    const auto localTasks = workspacePath / "meta" / "tasks.json";
+    const std::string invalidLocal = "not-json-private-content";
+    { std::ofstream out(localTasks, std::ios::binary | std::ios::trunc); out << invalidLocal; }
+    { std::ofstream out(cloudPath / "meta" / "tasks.json", std::ios::binary | std::ios::trunc); out << "[]"; }
+    { std::ofstream out(workspacePath / "stray-report-test.bin", std::ios::binary | std::ios::trunc); out << "not included"; }
+    CloudSyncConfig config;
+    config.enabled = true;
+    config.root = cloudPath;
+    if (!SaveCloudSyncConfig(workspacePath, config)) return fail("save cloud config");
+    QString report, error;
+    if (!BuildQtStorageHealthReport(workspacePath, workspace.modules, 1700000000, &report, &error) || !error.isEmpty()) return fail("build: ");
+    if (!report.contains(QString::fromUtf8("РАСХОЖДЕНИЯ ЛОКАЛЬНОЙ И ОБЛАЧНОЙ КОПИИ")) ||
+        !report.contains(QString::fromUtf8("meta/tasks.json")) || !report.contains(QString::fromUtf8("JSON не распознан")) ||
+        !report.contains(QString::fromUtf8("stray-report-test.bin")) ||
+        report.contains(QString::fromUtf8("qt-application-log.json")) ||
+        report.contains(QString::fromUtf8("not-json-private-content")) || report.contains(QString::fromUtf8("not included")) ||
+        !report.contains(QString::fromUtf8("не изменялись и не удалялись"))) {
+        std::cerr << report.toUtf8().constData() << '\n';
+        return fail("content");
+    }
+    std::ifstream verifyInput(localTasks, std::ios::binary);
+    const std::string after((std::istreambuf_iterator<char>(verifyInput)), std::istreambuf_iterator<char>());
+    if (after != invalidLocal) return fail("source changed");
+    const auto outputPath = temp.path() + "/storage-health.txt";
+    if (!ExportQtStorageHealthReport(outputPath, report, &error) || !error.isEmpty()) return fail("direct export");
+    QFile output(outputPath);
+    if (!output.open(QIODevice::ReadOnly)) return fail("output open");
+    const auto bytes = output.readAll();
+    if (!bytes.startsWith("\xEF\xBB\xBF") || !bytes.contains("stray-report-test.bin")) return fail("output bytes");
+    const auto uiOutputPath = temp.path() + "/storage-health-ui.txt";
+    QTimer::singleShot(0, [uiOutputPath] {
+        if (auto* picker = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            picker->selectFile(uiOutputPath);
+            static_cast<QDialog*>(picker)->accept();
+        }
+    });
+    reportAction->trigger();
+    QFile uiOutput(uiOutputPath);
+    if (!uiOutput.open(QIODevice::ReadOnly) || !uiOutput.readAll().contains("stray-report-test.bin")) return fail("UI export");
+    if (ExportQtStorageHealthReport(QString(), report, &error) || error.isEmpty() ||
+        ExportQtStorageHealthReport(temp.path(), report, &error)) return fail("invalid destination");
     return true;
 }
 
@@ -4158,6 +4232,7 @@ int main(int argc, char** argv) {
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestProfileReportExport()) { std::cerr << "Profile report export failed\n"; return 1; }
+    if (!TestQtStorageHealthReport()) { std::cerr << "Qt storage health report failed\n"; return 1; }
     if (!TestReportPeriodComparison()) { std::cerr << "Report period comparison failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestStatisticsTrendBeyondAuditPageLimit()) { std::cerr << "Statistics trend audit history failed\n"; return 1; }

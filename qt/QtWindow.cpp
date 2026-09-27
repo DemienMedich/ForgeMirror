@@ -14,6 +14,7 @@
 #include "QtModelViewer.h"
 #include "QtReportExport.h"
 #include "QtProfileReportExport.h"
+#include "QtStorageHealthReport.h"
 #include "QtAuditExport.h"
 #include "QtReportChart.h"
 #include "QtLogActivityChart.h"
@@ -419,6 +420,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     ownPasswordAction_ = passwordAction;
     passwordAction->setObjectName("changeOwnProfilePassword");
+    storageHealthReportAction_ = menu->addAction(QString::fromUtf8("Расширенный отчёт хранилища"));
+    storageHealthReportAction_->setObjectName("storageHealthReport");
+    storageHealthReportAction_->setToolTip(QString::fromUtf8("Проверить sync-файлы, расхождения облачной копии и лишние элементы без изменений данных"));
+    connect(storageHealthReportAction_, &QAction::triggered, this, [this] { exportStorageHealthReport(); });
     menu->addAction(QString::fromUtf8("Открыть папку данных Qt"), this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(q(workspace_.directory.u8string())));
     });
@@ -1797,6 +1802,7 @@ void QtWindow::render() {
     profileAccessAction_->setText(QString::fromUtf8(unlocked ? "Выйти из профиля" : "Войти в выбранный профиль"));
     profileAccessAction_->setEnabled(!profileId.empty());
     ownPasswordAction_->setEnabled(unlocked);
+    storageHealthReportAction_->setVisible(admin_);
     navigation_->item(ModelViewerPage)->setHidden(!workspace_.modules.view3d);
     navigation_->item(ModelSettingsPage)->setHidden(!workspace_.modules.view3d || !admin_);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
@@ -3224,6 +3230,34 @@ void QtWindow::exportProfileReport(bool asCsv) {
         return;
     }
     statusBar()->showMessage(QString::fromUtf8("Отчёт профиля сохранён: %1").arg(QDir::toNativeSeparators(outputPath)), 7000);
+}
+
+void QtWindow::exportStorageHealthReport() {
+    if (!requireAdmin()) return;
+    QString report;
+    QString error;
+    if (!BuildQtStorageHealthReport(workspace_.directory, workspace_.modules,
+            QDateTime::currentSecsSinceEpoch(), &report, &error)) {
+        message(error.toUtf8().toStdString());
+        return;
+    }
+    const QString reportsPath = QString::fromStdWString((workspace_.directory / "meta" / "reports").wstring());
+    if (!QDir().mkpath(reportsPath)) {
+        message(u8"Не удалось создать папку отчётов.");
+        return;
+    }
+    const QString defaultPath = QDir(reportsPath).filePath(QStringLiteral("storage-health-%1.txt")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss")));
+    QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("Расширенный отчёт хранилища"),
+        defaultPath, QString::fromUtf8("Текстовый файл (*.txt)"));
+    if (path.isEmpty()) return;
+    if (QFileInfo(path).suffix().isEmpty()) path += QStringLiteral(".txt");
+    if (!ExportQtStorageHealthReport(path, report, &error)) {
+        message(error.toUtf8().toStdString());
+        return;
+    }
+    appendLog(AppLogLevel::Info, "StorageHealthReport", "Read-only storage health report exported");
+    statusBar()->showMessage(QString::fromUtf8("Отчёт хранилища сохранён: %1").arg(QDir::toNativeSeparators(path)), 7000);
 }
 
 void QtWindow::showWalletHistory() {
