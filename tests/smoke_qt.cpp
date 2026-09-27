@@ -1930,6 +1930,7 @@ static bool TestReportPeriodComparison() {
     current.projectId = currentProject.id; current.project = currentProject.name; current.pipelineStepId = currentStage.id;
     TaskEntry previous; previous.id = "comparison-previous"; previous.title = "Previous task"; previous.status = 2;
     previous.createdAt = QDateTime(QDate::currentDate().addDays(-40), QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch();
+    previous.category = 1;
     previous.assignees = {profile->id}; previous.projectId = previousProject.id; previous.project = previousProject.name;
     previous.pipelineStepId = previousStage.id; previous.pipelineStep = previousStage.title;
     previous.participants.push_back({profile->id, 100, 45, 15, "comparison"});
@@ -1972,7 +1973,7 @@ static bool TestReportPeriodComparison() {
     if (table->rowCount() != 1 || table->columnCount() != 14 ||
         table->item(0, 9)->text() != "1" || table->item(0, 12)->text() != "45" || table->item(0, 13)->text() != "15") return fail("employee previous metrics");
     view->setCurrentIndex(2);
-    if (view->count() != 3 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
+    if (view->count() != 4 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
     int previousStageRow = -1;
     for (int row = 0; row < table->rowCount(); ++row)
         if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("previous-stage")) previousStageRow = row;
@@ -1996,10 +1997,33 @@ static bool TestReportPeriodComparison() {
     if (!stageCsvBytes.startsWith("\xEF\xBB\xBF") || !stageCsvBytes.contains(QString::fromUtf8("Этап").toUtf8()) ||
         !stageCsvBytes.contains(QString::fromUtf8("Previous stage").toUtf8()) ||
         !stageCsvBytes.contains(QString::fromUtf8("Задач · пред.").toUtf8())) return fail("stage report CSV content");
+    view->setCurrentIndex(3);
+    if (table->rowCount() != 2 || table->columnCount() != 15) return fail("category report layout");
+    int previousCategoryRow = -1;
+    for (int row = 0; row < table->rowCount(); ++row)
+        if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("category:1")) previousCategoryRow = row;
+    if (previousCategoryRow < 0 || table->item(previousCategoryRow, 1)->text() != "0" ||
+        table->item(previousCategoryRow, 8)->text() != "1") return fail("previous-only category metrics");
+    table->selectRow(previousCategoryRow);
+    if (!details->toPlainText().contains("Previous task") ||
+        !details->toPlainText().contains(QString::fromUtf8("Категория"))) return fail("category drill-down");
+    const auto categoryCsvPath = temp.path() + "/category-report.csv";
+    QTimer::singleShot(0, [categoryCsvPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(categoryCsvPath); static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportButton->click();
+    QFile categoryCsv(categoryCsvPath);
+    if (!categoryCsv.open(QIODevice::ReadOnly)) return fail("category report CSV missing");
+    const auto categoryCsvBytes = categoryCsv.readAll();
+    if (!categoryCsvBytes.startsWith("\xEF\xBB\xBF") || !categoryCsvBytes.contains("Категория") ||
+        !categoryCsvBytes.contains("D") || !categoryCsvBytes.contains(QString::fromUtf8("Задач · пред.").toUtf8()))
+        return fail("category report CSV content");
     range->setCurrentIndex(0);
     if (compare->isEnabled() || table->columnCount() != 8 || !compare->isChecked()) return fail("all-time guard");
     const auto settings = LoadQtDisplaySettings(workspace.directory);
-    return (settings.reportComparePrevious && settings.reportView == 2) || fail("setting persistence");
+    return (settings.reportComparePrevious && settings.reportView == 3) || fail("setting persistence");
 }
 
 static bool TestAuditExport() {
@@ -3811,7 +3835,7 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
-    settings.reportComparePrevious = true; settings.reportView = 2;
+    settings.reportComparePrevious = true; settings.reportView = 3;
     settings.deadlineNotificationsWhenClosed = true;
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
     settings.deadlineNotificationsWhenClosed = false;
@@ -3833,7 +3857,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || !loaded.compactRows ||
-        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 2 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
+        loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 || loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
@@ -4312,7 +4336,7 @@ int main(int argc, char** argv) {
     if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
         return fail("Report export UI failed");
     auto* reportView = window.findChild<QComboBox*>("reportView");
-    if (!reportView || reportView->count() != 3) return fail("Report view selector unavailable");
+    if (!reportView || reportView->count() != 4) return fail("Report view selector unavailable");
     reportView->setCurrentIndex(1);
     auto* reportRange = window.findChild<QComboBox*>("reportDateRange");
     auto* reportCompare = window.findChild<QCheckBox*>("reportComparePrevious");

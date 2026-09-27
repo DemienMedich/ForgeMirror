@@ -37,6 +37,7 @@
 #include <QJsonObject>
 #include <QtWidgets>
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <functional>
 #include <stdexcept>
@@ -312,6 +313,21 @@ std::vector<QtReportStageGroup> buildReportStageGroups(const std::vector<TaskEnt
         if (ai != bi) return ai < bi;
         return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
     });
+    return result;
+}
+std::string reportCategoryKey(const TaskEntry& task) {
+    return "category:" + std::to_string(std::clamp(task.category, 0, 4));
+}
+struct QtReportCategoryGroup { std::string id; int index = 0; TeamValueReport report; };
+std::vector<QtReportCategoryGroup> buildReportCategoryGroups(const std::vector<TaskEntry>& tasks,
+    const std::vector<ProjectEntry>& projects, std::int64_t now) {
+    std::unordered_map<std::string, std::vector<TaskEntry>> grouped;
+    for (const auto& task : tasks) grouped[reportCategoryKey(task)].push_back(task);
+    std::vector<QtReportCategoryGroup> result;
+    result.reserve(grouped.size());
+    for (auto& [id, entries] : grouped)
+        result.push_back({id, std::clamp(std::atoi(id.c_str() + 9), 0, 4), BuildTeamValueReport(entries, projects, now)});
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) { return a.index < b.index; });
     return result;
 }
 }
@@ -650,7 +666,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportView_->setObjectName("reportView");
     labelForAccessibility(reportView_, QString::fromUtf8("Группировка отчёта"));
     reportView_->setMaximumWidth(145);
-    reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам"), QString::fromUtf8("По этапам")});
+    reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам"),
+        QString::fromUtf8("По этапам"), QString::fromUtf8("По категориям")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
     reportDateRange_ = new QComboBox;
@@ -2132,7 +2149,7 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · сотрудников в задачах: %2 · без исполнителя: %3 · XP: %4 · состояние на сейчас%5%6")
                 .arg(periodLabel).arg(int(report.assignees.size())).arg(report.unassignedTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
-        } else {
+        } else if (reportView_->currentIndex() == 2) {
             const auto now = QDateTime::currentSecsSinceEpoch();
             auto displayed = buildReportStageGroups(reportTasks, data.pipelineSteps, data.projects, now);
             const auto previous = comparePrevious
@@ -2170,6 +2187,42 @@ void QtWindow::render() {
                 row(item.id, values);
             }
             summary_->setText(QString::fromUtf8("%1 · этапов в задачах: %2 · задач: %3 · XP: %4 · состояние на сейчас%5%6")
+                .arg(periodLabel).arg(displayed.size()).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
+        } else {
+            const auto now = QDateTime::currentSecsSinceEpoch();
+            auto displayed = buildReportCategoryGroups(reportTasks, data.projects, now);
+            const auto previous = comparePrevious
+                ? buildReportCategoryGroups(previousTasks, data.projects, now) : std::vector<QtReportCategoryGroup>{};
+            if (comparePrevious) for (const auto& old : previous) {
+                if (std::none_of(displayed.begin(), displayed.end(), [&](const auto& item) { return item.id == old.id; })) {
+                    auto empty = old; empty.report = TeamValueReport{};
+                    displayed.push_back(std::move(empty));
+                }
+            }
+            std::sort(displayed.begin(), displayed.end(), [](const auto& a, const auto& b) { return a.index < b.index; });
+            QStringList columns{QString::fromUtf8("Категория"), QString::fromUtf8("Задач"), QString::fromUtf8("Активно"),
+                QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"),
+                QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")};
+            if (comparePrevious) columns << QString::fromUtf8("Задач · пред.") << QString::fromUtf8("Активно · пред.")
+                << QString::fromUtf8("Выполнено · пред.") << QString::fromUtf8("Просрочено · пред.")
+                << QString::fromUtf8("Ждут XP · пред.") << QString::fromUtf8("Глобальный XP · пред.")
+                << QString::fromUtf8("XP навыков · пред.");
+            headers(columns);
+            for (const auto& item : displayed) {
+                const auto& m = item.report;
+                QStringList values{QString::fromUtf8(Profile::kCategoryLabels[size_t(item.index)]), QString::number(m.totalTasks),
+                    QString::number(m.activeTasks), QString::number(m.doneTasks), QString::number(m.overdueTasks),
+                    QString::number(m.xpPendingTasks), QString::number(m.totalGlobalXp), QString::number(m.totalSkillXp)};
+                if (comparePrevious) {
+                    const auto old = std::find_if(previous.begin(), previous.end(), [&](const auto& candidate) { return candidate.id == item.id; });
+                    const auto& p = old == previous.end() ? TeamValueReport{} : old->report;
+                    values << QString::number(p.totalTasks) << QString::number(p.activeTasks) << QString::number(p.doneTasks)
+                        << QString::number(p.overdueTasks) << QString::number(p.xpPendingTasks)
+                        << QString::number(p.totalGlobalXp) << QString::number(p.totalSkillXp);
+                }
+                row(item.id, values);
+            }
+            summary_->setText(QString::fromUtf8("%1 · категорий в задачах: %2 · задач: %3 · XP: %4 · состояние на сейчас%5%6")
                 .arg(periodLabel).arg(displayed.size()).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
         }
     } else if (page == Audit) {
@@ -2871,7 +2924,7 @@ void QtWindow::exportReport() {
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
     auto path = dialog.selectedFiles().front();
     if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
-    if (reportView_->currentIndex() == 2) {
+    if (reportView_->currentIndex() >= 2) {
         QStringList columns;
         for (int column = 0; column < table_->columnCount(); ++column) {
             const auto* item = table_->horizontalHeaderItem(column);
@@ -3147,6 +3200,7 @@ void QtWindow::details() {
         const auto targetKey = u(targetId);
         const bool employeeView = reportView_->currentIndex() == 1;
         const bool stageView = reportView_->currentIndex() == 2;
+        const bool categoryView = reportView_->currentIndex() == 3;
         const auto targetName = table_->item(table_->currentRow(), 0)->text();
         const auto currentTasks = reportTasksForRange(workspace_.data.tasks, reportDateRange_->currentIndex(),
             reportFrom_->date(), reportTo_->date());
@@ -3160,7 +3214,8 @@ void QtWindow::details() {
         auto reportTasks = currentTasks;
         reportTasks.insert(reportTasks.end(), previousTasks.begin(), previousTasks.end());
         const QString groupLabel = employeeView ? QString::fromUtf8("Сотрудник")
-            : stageView ? QString::fromUtf8("Этап пайплайна") : QString::fromUtf8("Проект");
+            : stageView ? QString::fromUtf8("Этап пайплайна")
+            : categoryView ? QString::fromUtf8("Категория") : QString::fromUtf8("Проект");
         QString html = field(groupLabel, u(targetName));
         std::vector<TaskEntry> matchedTasks;
         std::vector<TaskEntry> matchedCurrent, matchedPrevious;
@@ -3173,6 +3228,8 @@ void QtWindow::details() {
                     });
             } else if (stageView) {
                 belongs = reportStageKey(task) == targetKey;
+            } else if (categoryView) {
+                belongs = reportCategoryKey(task) == targetKey;
             } else {
                 const std::string projectKey = !task.projectId.empty() ? task.projectId :
                     (task.project.empty() ? "__no_project" : "name:" + task.project);
