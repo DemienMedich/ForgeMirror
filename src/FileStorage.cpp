@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
@@ -10,12 +11,19 @@
 #include <iomanip>
 #include <locale>
 #include <chrono>
+#include <cstdint>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -315,12 +323,13 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
     return objects;
 }
 
-        std::string read_all(const std::filesystem::path& p) {
+        bool read_all_checked(const std::filesystem::path& p, std::string& data) {
             std::ifstream in(p, std::ios::binary);
-            if (!in) return {};
+            if (!in) return false;
             std::ostringstream ss;
             ss << in.rdbuf();
-            std::string data = ss.str();
+            if (in.bad()) return false;
+            data = ss.str();
             // Strip UTF-8 BOM if present
             if (data.size() >= 3 &&
                 static_cast<unsigned char>(data[0]) == 0xEF &&
@@ -328,6 +337,12 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
                 static_cast<unsigned char>(data[2]) == 0xBF) {
                 data.erase(0, 3);
             }
+            return true;
+        }
+
+        std::string read_all(const std::filesystem::path& p) {
+            std::string data;
+            read_all_checked(p, data);
             return data;
         }
 
@@ -412,27 +427,52 @@ std::vector<std::unordered_map<std::string, std::string>> parse_object_array(con
             out << "]";
         }
 
-        bool write_all(const std::filesystem::path& p, const std::string& data) {
+        bool write_all(const std::filesystem::path& p, const std::string& data,
+                       const std::optional<std::string>* expectedContents = nullptr) {
             auto parent = p.parent_path();
             if (!parent.empty()) {
-                std::filesystem::create_directories(parent);
+                std::error_code createError;
+                std::filesystem::create_directories(parent, createError);
+                if (createError) return false;
             }
-    auto tmp = p;
-    tmp += ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (!out) return false;
-        out << data;
-        if (!out.good()) return false;
-    }
-    std::error_code ec;
-    std::filesystem::rename(tmp, p, ec);
-    if (ec) {
-        std::filesystem::remove(p, ec);
-        std::filesystem::rename(tmp, p, ec);
-    }
-    return !ec;
-}
+            static std::atomic<std::uint64_t> tempSequence{0};
+            auto tmp = p;
+            tmp += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+                   "-" + std::to_string(tempSequence.fetch_add(1, std::memory_order_relaxed));
+            {
+                std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+                if (!out) return false;
+                out.write(data.data(), static_cast<std::streamsize>(data.size()));
+                out.flush();
+                if (!out.good()) { out.close(); std::error_code cleanup; std::filesystem::remove(tmp, cleanup); return false; }
+            }
+
+            // Profile saves are optimistic compare-and-replace operations: if another client
+            // replaced the profile since it was selected/read, leave that newer file intact.
+            if (expectedContents) {
+                std::error_code ec;
+                const bool exists = std::filesystem::exists(p, ec);
+                std::string currentContents;
+                const bool readable = !exists || read_all_checked(p, currentContents);
+                if (ec || exists != expectedContents->has_value() || !readable ||
+                    (exists && currentContents != expectedContents->value_or(std::string{}))) {
+                    std::filesystem::remove(tmp, ec);
+                    return false;
+                }
+            }
+
+#ifdef _WIN32
+            const bool replaced = MoveFileExW(tmp.c_str(), p.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+            if (!replaced) { std::error_code ec; std::filesystem::remove(tmp, ec); }
+            return replaced;
+#else
+            std::error_code ec;
+            std::filesystem::rename(tmp, p, ec);
+            if (ec) { std::error_code cleanup; std::filesystem::remove(tmp, cleanup); return false; }
+            return true;
+#endif
+        }
 
 bool is_numeric_id(const std::string& s) {
     if (s.empty()) return false;
@@ -483,8 +523,10 @@ public:
         if (id.empty()) return false;
         auto path = find_profile_path(id, /*includeArchived*/false);
         if (!path) return false;
+        if (activeId_ == id && activePath_ == *path) return true;
         activeId_ = id;
         activePath_ = *path;
+        activeProfileContents_ = read_all(activePath_);
         token_.reset();
         queue_.clear();
         return true;
@@ -702,6 +744,7 @@ public:
 
         token_ = token;
         queue_ = std::move(queue);
+        activeProfileContents_ = txt;
         return profile;
     }
 
@@ -712,8 +755,10 @@ public:
         const auto previousPath = activePath_;
         const auto previousToken = token_;
         const auto previousQueue = queue_;
+        const auto previousProfileContents = activeProfileContents_;
         activeId_ = id;
         activePath_ = *path;
+        activeProfileContents_ = read_all(activePath_);
         token_.reset();
         queue_.clear();
         std::optional<Profile> result;
@@ -724,12 +769,14 @@ public:
             activePath_ = previousPath;
             token_ = previousToken;
             queue_ = previousQueue;
+            activeProfileContents_ = previousProfileContents;
             throw;
         }
         activeId_ = previousId;
         activePath_ = previousPath;
         token_ = previousToken;
         queue_ = previousQueue;
+        activeProfileContents_ = previousProfileContents;
         return result;
     }
 
@@ -803,15 +850,19 @@ public:
         }
         ss << "\n";
 
-        bool ok = write_all(activePath_, ss.str());
+        const auto serialized = ss.str();
+        bool ok = write_all(activePath_, serialized, &activeProfileContents_);
+        if (!ok) return false;
+        activeProfileContents_ = serialized;
         save_achievements(baseDir_, activeId_, profile.achievements());
-        return ok;
+        return true;
     }
 
     std::optional<ProfileInfo> create_profile(const Profile& profile) override {
         const std::string id = generate_id(nextId_++);
         activeId_ = id;
         activePath_ = baseDir_ / (id + ".ini");
+        activeProfileContents_.reset();
         token_.reset();
         queue_.clear();
         if (!save_profile(profile)) {
@@ -841,6 +892,7 @@ public:
             if (archived) {
                 activeId_.clear();
                 activePath_.clear();
+                activeProfileContents_.reset();
             } else {
                 activePath_ = target;
             }
@@ -862,6 +914,7 @@ public:
         if (activeId_ == id) {
             activeId_.clear();
             activePath_.clear();
+            activeProfileContents_.reset();
             token_.reset();
             queue_.clear();
         }
@@ -1003,6 +1056,7 @@ private:
     std::filesystem::path baseDir_;
     std::string activeId_;
     std::filesystem::path activePath_;
+    std::optional<std::string> activeProfileContents_;
     std::optional<std::string> token_;
     std::vector<XpEvent> queue_;
     int nextId_ = 1;

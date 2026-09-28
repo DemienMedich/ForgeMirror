@@ -1257,6 +1257,25 @@ static bool TestProfileSpirit(const std::filesystem::path& dir) {
     if (!storage->save_profile(*loaded)) return false;
     auto reloaded = storage->load_profile();
     if (!reloaded || reloaded->spirit() != ProfileSpirit::Evil) return false;
+    if (!storage->save_token("remembered-token")) return false;
+    const std::vector<IJobStorage::XpEvent> pendingQueue = {{"Focus", 17}};
+    if (!storage->save_queue(pendingQueue) || !storage->set_active_profile(info->id)) return false;
+    const auto retainedToken = storage->load_token();
+    const auto retainedQueue = storage->load_queue();
+    if (!retainedToken || *retainedToken != "remembered-token" || retainedQueue.size() != 1 ||
+        retainedQueue.front().skill != "Focus" || retainedQueue.front().amount != 17) return false;
+
+    const auto profilePath = dir / (info->id + ".ini");
+    std::string externalProfile;
+    if (!ReadFile(profilePath, externalProfile)) return false;
+    externalProfile += "\n[external-client]\nrevision=preserve-me\n";
+    if (!WriteFile(profilePath, externalProfile)) return false;
+    if (!storage->set_active_profile(info->id)) return false; // Re-selecting the active profile must not bless the stale snapshot.
+    reloaded->set_name("Stale local edit");
+    if (storage->save_profile(*reloaded)) return false;
+    std::string afterConflict;
+    if (!ReadFile(profilePath, afterConflict) || afterConflict != externalProfile) return false;
+    if (!storage->set_active_profile(info->id) || !storage->load_profile()) return false;
 
     Profile legacy("Legacy");
     auto legacyInfo = storage->create_profile(legacy);
