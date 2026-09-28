@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 186**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include additional report dimensions, core telemetry outside instrumented Qt workflows, broader external profile-storage cases and accessibility work. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.32` is the current Qt per-user installer; stages 47–186 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 187**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include additional report dimensions, core telemetry outside instrumented Qt workflows, broader external profile-storage cases and accessibility work. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.33` is the current Qt per-user installer; stages 47–187 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.32.exe`. Version `0.6.32` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.32.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.33.exe`. Version `0.6.33` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.33.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -994,3 +994,9 @@ Verification and installer lifecycle results are recorded in `docs/releases/Forg
 An unlocked 30/90-day profile session now revalidates the persisted trust expiry and trust entry on each access. If the time limit passes, Qt records `trust_expired`, clears the stale entry and locks the profile. If the trust entry changes externally before expiry, Qt closes its local session, records the invalidation and leaves the changed file untouched. Recovery journaling preserves the externally written state when audit persistence fails; the next access can retry expiry cleanup. Smoke coverage exercises external expiry, failed audit rollback, retry, external logout and relogin.
 
 Verification: `build-qt.ps1 -Package` and installer lifecycle checks are recorded in `docs/releases/ForgeMirror-0.6.32.md`.
+
+### Stage 187 — privacy-safe interface settings telemetry
+
+Successful saves from the Qt display-settings dialog and the 3D-viewer settings page now append generic local application-log events. The events contain no selected paths, background names, or setting values. Cancelled or failed saves do not report success. Smoke tests save settings through both real Qt pages and verify their persisted events; the interface-settings test closes its reader before later atomic log rewrites.
+
+Verification: `build-qt.ps1 -Package` passed (`smoke_qt` 1/1, `smoke_core: OK`). The isolated installer lifecycle updated 0.6.32 to 0.6.33, launched with Qt removed from `PATH`, and uninstalled while preserving a separate user-data marker and the stable ImGui uninstall record. Evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.33.md`.

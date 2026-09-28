@@ -5903,6 +5903,18 @@ int main(int argc, char** argv) {
     });
     displayAction->trigger();
     if (table->verticalHeader()->defaultSectionSize() != 24) return fail("Compact table setting not applied");
+    QFile settingsEventLog(QString::fromStdWString((workspace.directory / "meta/qt-application-log.json").wstring()));
+    if (!settingsEventLog.open(QIODevice::ReadOnly)) return fail("Qt display settings event log missing");
+    const auto settingsEventDocument = QJsonDocument::fromJson(settingsEventLog.readAll());
+    settingsEventLog.close();
+    const auto settingsEvents = settingsEventDocument.array();
+    const bool displaySettingsEventLogged = settingsEventDocument.isArray() && std::any_of(
+        settingsEvents.begin(), settingsEvents.end(), [](const QJsonValue& value) {
+            const auto entry = value.toObject();
+            return entry.value("source").toString() == QStringLiteral("InterfaceSettings") &&
+                entry.value("message").toString() == QStringLiteral("Qt display settings saved");
+        });
+    if (!displaySettingsEventLogged) return fail("Qt display settings save was not logged");
     QFile shortcutTarget(temp.path() + "/launch target.txt");
     if (!shortcutTarget.open(QIODevice::WriteOnly) || shortcutTarget.write("target") != 6) return fail("Shortcut target fixture failed");
     shortcutTarget.close();
@@ -5991,6 +6003,32 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("qt-test-password"); });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    workspace.modules.view3d = true;
+    nav->item(15)->setHidden(false);
+    if (nav->item(15)->isHidden()) return fail("3D viewer settings page unavailable to administrator");
+    nav->setCurrentRow(15);
+    auto* modelYaw = window.findChild<QSlider*>("modelYaw");
+    if (!modelYaw || !primary->isVisible() || primary->text() != QString::fromUtf8("Сохранить настройки"))
+        return fail("3D viewer settings controls unavailable");
+    modelYaw->setValue(37);
+    QTimer::singleShot(0, [] {
+        if (auto* message = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) message->accept();
+    });
+    primary->click();
+    if (std::abs(LoadQtModelSettings(workspace.directory).yaw - 0.37f) > 0.001f)
+        return fail("3D viewer settings did not persist through the real page");
+    QFile modelSettingsEventLog(QString::fromStdWString((workspace.directory / "meta/qt-application-log.json").wstring()));
+    if (!modelSettingsEventLog.open(QIODevice::ReadOnly)) return fail("3D viewer settings event log unavailable");
+    const auto modelSettingsEvents = QJsonDocument::fromJson(modelSettingsEventLog.readAll()).array();
+    modelSettingsEventLog.close();
+    const bool modelSettingsEventLogged = std::any_of(modelSettingsEvents.begin(), modelSettingsEvents.end(),
+        [](const QJsonValue& value) {
+            const auto entry = value.toObject();
+            return entry.value("source").toString() == QStringLiteral("ModelSettings") &&
+                entry.value("message").toString() == QStringLiteral("3D viewer settings saved");
+        });
+    if (!modelSettingsEventLogged) return fail("3D viewer settings save was not logged");
+    nav->setCurrentRow(0);
     nav->setCurrentRow(17);
     QApplication::processEvents();
     auto* profileStatsSummary = window.findChild<QLabel*>("summary");
@@ -6103,11 +6141,20 @@ int main(int argc, char** argv) {
     const auto directXpProfile = workspace.storage->load_profile();
     if (!directXpProfile || directXpProfile->total_xp() != directXpBefore + 200 ||
         !window.statusBar()->currentMessage().contains(QString::fromUtf8("Начислено"))) return fail("Direct XP UI failed");
-    QFile coreLog(QString::fromUtf8((workspace.directory / "meta/qt-application-log.json").u8string()));
+    QFile coreLog(QString::fromStdWString((workspace.directory / "meta/qt-application-log.json").wstring()));
     if (!coreLog.open(QIODevice::ReadOnly)) return fail("Direct XP telemetry file unavailable");
-    const auto directXpTelemetry = coreLog.readAll(); coreLog.close();
-    if (!directXpTelemetry.contains("Direct skill XP transaction committed") ||
-        directXpTelemetry.contains(createdProfile->id.c_str())) return fail("Direct XP telemetry privacy or outcome failed");
+    const auto directXpLogBytes = coreLog.readAll();
+    const auto directXpEntries = QJsonDocument::fromJson(directXpLogBytes).array(); coreLog.close();
+    bool directXpTelemetryFound = false;
+    for (const auto& value : directXpEntries) {
+        const auto entry = value.toObject();
+        if (entry.value("source").toString() != QStringLiteral("CoreProfileMutation") ||
+            entry.value("message").toString() != QStringLiteral("Direct skill XP transaction committed")) continue;
+        directXpTelemetryFound = true;
+        if (QJsonDocument(entry).toJson(QJsonDocument::Compact).contains(createdProfile->id.c_str()))
+            return fail("Direct XP telemetry contains the profile ID");
+    }
+    if (!directXpTelemetryFound) return fail("Direct XP telemetry event missing");
     auto hasAdminCoreEvent = [&] (const QString& expected) {
         const int priorPage = nav->currentRow();
         auto* filter = window.findChild<QComboBox*>("auditSourceFilter");

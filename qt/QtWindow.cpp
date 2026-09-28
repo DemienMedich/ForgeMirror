@@ -697,6 +697,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     auto* displaySettings = menu->addAction(QString::fromUtf8("Настройки интерфейса Qt"), this, [this] {
         if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
+        appendLog(AppLogLevel::Info, "InterfaceSettings", "Qt display settings saved");
         ApplyQtDisplaySettings(*qApp, displaySettings_);
         applyQtWindowLayoutGeometry(backgroundSurface_, displaySettings_);
         setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
@@ -2600,6 +2601,7 @@ void QtWindow::saveModelSettings() {
         message(u8"Не удалось сохранить настройки 3D в meta/ui.ini.");
         return;
     }
+    appendLog(AppLogLevel::Info, "ModelSettings", "3D viewer settings saved");
     loadSelectedModel();
     message(u8"Настройки 3D сохранены.");
 }
