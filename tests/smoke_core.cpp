@@ -122,6 +122,7 @@ static bool TestTaskTextMutation(const std::filesystem::path& dir) {
     task.description = "Old description";
     task.createdAt = 1700000000;
     tasks.push_back(task);
+    if (!AppSaveTasks(dir, tasks)) return false;
 
     std::vector<TaskAuditEntry> audit;
     AppMutationResult result = AppUpdateTaskText(
@@ -143,6 +144,79 @@ static bool TestTaskTextMutation(const std::filesystem::path& dir) {
     return auditLog.find("|title|Old title|New title") != std::string::npos &&
            auditLog.find("|description|Old description|New description") != std::string::npos &&
            audit.size() == 2;
+}
+
+static bool TestTaskMutationsRejectStaleSnapshots(const std::filesystem::path& dir) {
+    auto fail = [](const char* reason) {
+        std::cerr << "taskStaleGuard: " << reason << "\n";
+        return false;
+    };
+    TaskEntry original;
+    original.id = "stale_task";
+    original.title = "Original";
+    original.description = "Original description";
+    original.status = 0;
+    original.projectId = "stale_project";
+    original.project = "Stale project";
+    ProjectEntry project;
+    project.id = original.projectId;
+    project.name = original.project;
+    std::vector<ProjectEntry> projects{project};
+    if (!AppSaveProjects(dir, projects)) return fail("initial project save");
+    std::vector<TaskEntry> staleSnapshot{original};
+    if (!AppSaveTasks(dir, staleSnapshot)) return fail("initial save");
+
+    TaskEntry external = original;
+    external.title = "External edit";
+    external.description = "External description";
+    external.status = 1;
+    const std::vector<TaskEntry> externalTasks{external};
+    if (!AppSaveTasks(dir, externalTasks)) return fail("external write");
+    std::string externalBytes;
+    if (!ReadFile(dir / "meta" / "tasks.json", externalBytes)) return fail("read external write");
+
+    const auto textEdit = AppUpdateTaskText(dir, staleSnapshot, original.id,
+        "Stale edit", "Stale description", "admin");
+    if (textEdit.ok || textEdit.errorMessage.find(u8"изменились в другом процессе") == std::string::npos ||
+        staleSnapshot.size() != 1 || staleSnapshot[0].title != original.title ||
+        staleSnapshot[0].description != original.description) return fail("single edit accepted stale data");
+    std::string afterTextEdit;
+    if (!ReadFile(dir / "meta" / "tasks.json", afterTextEdit) || afterTextEdit != externalBytes)
+        return fail("single edit replaced external data");
+
+    AppTaskWorkflowService workflow(dir, staleSnapshot);
+    const auto bulkStatus = workflow.BulkUpdateStatus({original.id}, 2, "admin");
+    if (bulkStatus.ok || bulkStatus.errorMessage.find(u8"изменились в другом процессе") == std::string::npos ||
+        staleSnapshot[0].status != original.status) return fail("bulk status accepted stale data");
+    std::string afterBulk;
+    if (!ReadFile(dir / "meta" / "tasks.json", afterBulk) || afterBulk != externalBytes)
+        return fail("bulk status replaced external data");
+
+    const auto deletion = AppDeleteTasksByIds(dir, staleSnapshot, {original.id}, "admin");
+    if (deletion.ok || deletion.errorMessage.find(u8"изменились в другом процессе") == std::string::npos ||
+        staleSnapshot.size() != 1 || staleSnapshot[0].title != original.title) return fail("delete accepted stale data");
+    std::string afterDelete;
+    if (!ReadFile(dir / "meta" / "tasks.json", afterDelete) || afterDelete != externalBytes)
+        return fail("delete replaced external data");
+
+    std::string projectBytes;
+    if (!ReadFile(dir / "meta" / "projects.json", projectBytes)) return fail("read project before stale delete");
+    const auto projectDelete = AppDeleteProjectAndDetachTasks(dir, projects, staleSnapshot, project.id, "admin");
+    std::string projectsAfterConflict;
+    if (projectDelete.ok || projectDelete.errorMessage.find(u8"изменились в другом процессе") == std::string::npos ||
+        projects.size() != 1 || !ReadFile(dir / "meta" / "projects.json", projectsAfterConflict) ||
+        projectsAfterConflict != projectBytes) return fail("project deletion did not roll back around stale tasks");
+    std::string tasksAfterProjectConflict;
+    if (!ReadFile(dir / "meta" / "tasks.json", tasksAfterProjectConflict) || tasksAfterProjectConflict != externalBytes)
+        return fail("project deletion replaced external tasks");
+
+    std::vector<TaskEntry> refreshed;
+    if (!TryLoadTasksDataReadOnly(dir, refreshed) || refreshed.size() != 1 ||
+        refreshed[0].title != external.title || refreshed[0].status != external.status)
+        return fail("read-only refresh lost external values");
+    const auto retry = AppUpdateTaskText(dir, refreshed, external.id,
+        "Reloaded edit", "Reloaded description", "admin");
+    return retry.ok && refreshed[0].title == "Reloaded edit";
 }
 
 static bool TestTasksPipelineRecovery(const std::filesystem::path& dir) {
@@ -1557,6 +1631,7 @@ int main() {
     const bool okProjectDeleteRollback = TestProjectDeleteDetachesAndRollsBack(tmp / "project_delete_rollback");
     const bool okPipelineDeleteRollback = TestPipelineDeleteCleansLinksAndRollsBack(tmp / "pipeline_delete_rollback");
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
+    const bool okTaskStaleGuard = TestTaskMutationsRejectStaleSnapshots(tmp / "task_stale_guard");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
@@ -1601,7 +1676,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1617,6 +1692,7 @@ int main() {
               << " projectDeleteRollback=" << okProjectDeleteRollback
               << " pipelineDeleteRollback=" << okPipelineDeleteRollback
               << " taskText=" << okTaskText
+              << " taskStaleGuard=" << okTaskStaleGuard
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
               << " taskXpDistribution=" << okTaskXpDistribution

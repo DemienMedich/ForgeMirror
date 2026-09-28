@@ -1039,20 +1039,28 @@ std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir) {
 }
 
 std::vector<TaskEntry> LoadTasksDataReadOnly(const std::filesystem::path& storageDir) {
+    std::vector<TaskEntry> tasks;
+    if (!TryLoadTasksDataReadOnly(storageDir, tasks)) return {};
+    return tasks;
+}
+
+bool TryLoadTasksDataReadOnly(const std::filesystem::path& storageDir, std::vector<TaskEntry>& tasks) {
+    tasks.clear();
     const auto path = TasksStoragePath(storageDir);
     std::error_code ec;
     const auto status = std::filesystem::symlink_status(path, ec);
-    if (ec || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) return {};
+    if (ec || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) return false;
     const auto size = std::filesystem::file_size(path, ec);
-    if (ec || size > 16 * 1024 * 1024) return {};
+    if (ec || size > 16 * 1024 * 1024) return false;
     const std::string content = ReadAllText(path);
     std::vector<std::unordered_map<std::string, std::string>> objects;
     if (!ParseJsonObjectArrayStrict(content, objects) ||
         !std::all_of(objects.begin(), objects.end(), [](const auto& obj) {
             const auto id = obj.find("id");
             return id != obj.end() && !id->second.empty();
-        })) return {};
-    return LoadTasksDataFromFile(path);
+        })) return false;
+    tasks = LoadTasksDataFromFile(path);
+    return true;
 }
 
 static std::vector<ProjectEntry> LoadProjectsDataFromFile(const std::filesystem::path& filePath) {

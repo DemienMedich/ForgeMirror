@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 199**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include hands-on NVDA/JAWS interaction testing, core events outside the instrumented Qt workflows, and live external writes during multi-file transactions. Interrupted transaction recovery now preserves divergent in-flight file versions before rollback. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.44` is the current Qt per-user installer; stages 47–199 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 200**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include hands-on NVDA/JAWS interaction testing, core events outside the instrumented Qt workflows, and the narrow race where another process writes tasks after the optimistic comparison but before replacement, as well as live external writes during multi-file transactions. Task mutations now reject a stale in-memory snapshot when the on-disk task file has changed before the save check. Interrupted transaction recovery preserves divergent in-flight file versions before rollback. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.45` is the current Qt per-user installer; stages 47–200 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -13,12 +13,12 @@ Design direction for subsequent UI work: [user-supplied interface references](..
 These guide composition and hierarchy; the existing dark/purple palette is unchanged.
 
 ```powershell
-.\build-qt.ps1 -Package -PackageDirectory package-qt-next4
-.\package-qt-next4\ForgeMirrorQt.exe
-.\installer\build-qt-installer.ps1 -PackageDirectory .\package-qt-next4
+.\build-qt.ps1 -Package -PackageDirectory package-qt-next5
+.\package-qt-next5\ForgeMirrorQt.exe
+.\installer\build-qt-installer.ps1 -PackageDirectory .\package-qt-next5
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.44.exe`. Version `0.6.44` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.44.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.45.exe`. Version `0.6.45` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.45.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`. The alternate package directory keeps an already-running package executable intact; use the default package-qt path when it is not in use.
 
@@ -1074,3 +1074,11 @@ Profile editing, administrator password reset and normal password change now emi
 Smoke verifies committed and rolled-back profile/password/rules/direct-XP outcomes and keeps profile identifiers and entered passwords out of the event messages. Broader services and non-Qt core operations remain outside the telemetry sink.
 
 Verification and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.44.md`.
+
+### Stage 200 — stale task snapshot protection
+
+Task saves now compare the caller's expected task snapshot with the last known saved snapshot and the current task file bytes. If another process changes `meta/tasks.json`, the service rereads the strict JSON and rejects a stale single, bulk, status, deletion, XP-finalize, or project-detach mutation; it restores the caller's in-memory edit and leaves the changed task file intact. A small per-process cache avoids reparsing unchanged task JSON on each normal save. The project-delete path rolls back its project edit without writing stale tasks. Smoke covers stale single/bulk/delete/project-delete rejection, byte-exact preservation, and a successful retry after explicit reload.
+
+This is an optimistic pre-write guard, not a cross-process lock: a writer that changes the task file in the interval after comparison and before atomic replacement can still race. Coordinated writers and multi-file external transactions remain outside the guarantee. Stable ImGui behavior and `develop` remain unchanged.
+
+Verification and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.45.md`.

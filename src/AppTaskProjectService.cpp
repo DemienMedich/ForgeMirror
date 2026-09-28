@@ -2,6 +2,7 @@
 #include "AppTaskWorkflowService.h"
 #include "AppRecoveryStorage.h"
 #include "AppUtils.h"
+#include "AppWorkspaceDataService.h"
 #include "Profile.h"
 
 #include <algorithm>
@@ -12,7 +13,9 @@
 #include <fstream>
 #include <iterator>
 #include <locale>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 namespace {
 
@@ -26,6 +29,12 @@ constexpr int kTaskPriorityHigh = 2;
 constexpr int kTaskPriorityCritical = 3;
 
 bool g_forceTaskAuditFailureForTests = false;
+
+std::string TaskSaveFailureMessage(AppTaskSaveStatus status, const char* fallback) {
+    return status == AppTaskSaveStatus::Stale
+        ? std::string(u8"Задачи изменились в другом процессе. Перезагрузите данные и повторите операцию.")
+        : std::string(fallback);
+}
 
 std::int64_t NowSecondsLocal() {
     return static_cast<std::int64_t>(std::time(nullptr));
@@ -419,7 +428,7 @@ std::string AppTaskDisplayTitle(const TaskEntry& task) {
     return task.project;
 }
 
-bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<TaskEntry>& tasks) {
+static std::string SerializeTasks(const std::vector<TaskEntry>& tasks) {
     std::ostringstream out;
     out.imbue(std::locale::classic());
     out << "[\n";
@@ -448,7 +457,128 @@ bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<Tas
         out << "\n";
     }
     out << "]";
-    return AppWriteUtf8BomWithRecovery(TasksStoragePath(storageDir), out.str());
+    return out.str();
+}
+
+static std::vector<std::string> EffectiveTaskAssignees(const TaskEntry& task) {
+    if (!task.assignees.empty()) return task.assignees;
+    std::vector<std::string> assignees;
+    for (const auto& participant : task.participants)
+        if (!participant.profileId.empty()) assignees.push_back(participant.profileId);
+    return assignees;
+}
+
+static bool TasksEqual(const std::vector<TaskEntry>& left, const std::vector<TaskEntry>& right) {
+    if (left.size() != right.size()) return false;
+    for (size_t i = 0; i < left.size(); ++i) {
+        const auto& a = left[i];
+        const auto& b = right[i];
+        if (a.id != b.id || a.projectId != b.projectId || a.project != b.project ||
+            a.pipelineStepId != b.pipelineStepId || a.pipelineStep != b.pipelineStep ||
+            a.title != b.title || a.description != b.description || a.deadlineAt != b.deadlineAt ||
+            AppNormalizeTaskStatus(a.status) != AppNormalizeTaskStatus(b.status) ||
+            AppNormalizeTaskPriority(a.priority) != AppNormalizeTaskPriority(b.priority) ||
+            ClampTaskCategory(a.category) != ClampTaskCategory(b.category) ||
+            ClampTaskPenaltyPercent(a.deadlinePenaltyPercent) != ClampTaskPenaltyPercent(b.deadlinePenaltyPercent) ||
+            a.score != b.score || a.baseXp != b.baseXp || a.basePool != b.basePool || a.createdAt != b.createdAt ||
+            EffectiveTaskAssignees(a) != EffectiveTaskAssignees(b) || a.skillIds != b.skillIds ||
+            a.participants.size() != b.participants.size())
+            return false;
+        for (size_t participantIndex = 0; participantIndex < a.participants.size(); ++participantIndex) {
+            const auto& participantA = a.participants[participantIndex];
+            const auto& participantB = b.participants[participantIndex];
+            if (participantA.profileId != participantB.profileId || participantA.percent != participantB.percent ||
+                participantA.globalXp != participantB.globalXp || participantA.skillXp != participantB.skillXp ||
+                participantA.rollbackSnapshot != participantB.rollbackSnapshot) return false;
+        }
+    }
+    return true;
+}
+
+struct TaskSnapshotCacheEntry {
+    std::vector<TaskEntry> tasks;
+    std::string fileBytes;
+};
+
+static std::mutex g_taskSnapshotCacheMutex;
+static std::unordered_map<std::string, TaskSnapshotCacheEntry> g_taskSnapshotCache;
+
+static std::string TaskSnapshotCacheKey(const std::filesystem::path& storageDir) {
+    std::error_code ec;
+    auto path = std::filesystem::absolute(TasksStoragePath(storageDir), ec);
+    if (ec) path = TasksStoragePath(storageDir);
+    return path.lexically_normal().u8string();
+}
+
+static bool ReadTaskFileBytes(const std::filesystem::path& storageDir, std::string& bytes,
+                              bool* missing = nullptr) {
+    if (missing) *missing = false;
+    const auto path = TasksStoragePath(storageDir);
+    std::error_code ec;
+    const auto status = std::filesystem::symlink_status(path, ec);
+    if (status.type() == std::filesystem::file_type::not_found &&
+        (!ec || ec == std::errc::no_such_file_or_directory)) {
+        if (missing) *missing = true;
+        bytes.clear();
+        return true;
+    }
+    if (ec || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) return false;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec || size > 16 * 1024 * 1024) return false;
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return false;
+    bytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    return !input.bad() && bytes.size() == size;
+}
+
+static void RefreshTaskSnapshotCacheLocked(const std::string& key,
+                                           const std::filesystem::path& storageDir,
+                                           const std::vector<TaskEntry>& tasks) {
+    std::string bytes;
+    if (!ReadTaskFileBytes(storageDir, bytes)) {
+        g_taskSnapshotCache.erase(key);
+        return;
+    }
+    g_taskSnapshotCache[key] = {tasks, std::move(bytes)};
+}
+
+bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<TaskEntry>& tasks) {
+    std::lock_guard<std::mutex> lock(g_taskSnapshotCacheMutex);
+    const auto key = TaskSnapshotCacheKey(storageDir);
+    if (!AppWriteUtf8BomWithRecovery(TasksStoragePath(storageDir), SerializeTasks(tasks))) {
+        g_taskSnapshotCache.erase(key);
+        return false;
+    }
+    RefreshTaskSnapshotCacheLocked(key, storageDir, tasks);
+    return true;
+}
+
+AppTaskSaveStatus AppSaveTasksIfUnchanged(const std::filesystem::path& storageDir,
+                                          const std::vector<TaskEntry>& expectedTasks,
+                                          const std::vector<TaskEntry>& updatedTasks) {
+    std::lock_guard<std::mutex> lock(g_taskSnapshotCacheMutex);
+    const auto key = TaskSnapshotCacheKey(storageDir);
+    std::string fileBytes;
+    bool missing = false;
+    if (!ReadTaskFileBytes(storageDir, fileBytes, &missing)) return AppTaskSaveStatus::Failed;
+
+    const auto cached = g_taskSnapshotCache.find(key);
+    bool matchesExpected = false;
+    if (!missing && cached != g_taskSnapshotCache.end() && cached->second.fileBytes == fileBytes) {
+        matchesExpected = TasksEqual(cached->second.tasks, expectedTasks);
+    } else if (!missing) {
+        std::vector<TaskEntry> currentTasks;
+        if (!TryLoadTasksDataReadOnly(storageDir, currentTasks)) return AppTaskSaveStatus::Failed;
+        matchesExpected = TasksEqual(currentTasks, expectedTasks);
+    } else {
+        matchesExpected = expectedTasks.empty();
+    }
+    if (!matchesExpected) return AppTaskSaveStatus::Stale;
+
+    if (!AppWriteUtf8BomWithRecovery(TasksStoragePath(storageDir), SerializeTasks(updatedTasks)))
+        return AppTaskSaveStatus::Failed;
+    RefreshTaskSnapshotCacheLocked(key, storageDir, updatedTasks);
+    return AppTaskSaveStatus::Saved;
 }
 
 bool AppSaveProjects(const std::filesystem::path& storageDir, const std::vector<ProjectEntry>& projects) {
@@ -621,15 +751,21 @@ AppProjectDeleteResult AppDeleteProjectAndDetachTasks(const std::filesystem::pat
     }
 
     const bool projectsSaved = AppSaveProjects(storageDir, projects);
-    const bool tasksSaved = projectsSaved && AppSaveTasks(storageDir, tasks);
+    const auto taskSaveStatus = projectsSaved
+        ? AppSaveTasksIfUnchanged(storageDir, prevTasks, tasks)
+        : AppTaskSaveStatus::Failed;
+    const bool tasksSaved = taskSaveStatus == AppTaskSaveStatus::Saved;
     if (!projectsSaved || !tasksSaved) {
         projects = prevProjects;
         tasks = prevTasks;
         const bool rollbackProjectsOk = AppSaveProjects(storageDir, projects);
-        const bool rollbackTasksOk = AppSaveTasks(storageDir, tasks);
+        const bool rollbackTasksOk = !projectsSaved || taskSaveStatus == AppTaskSaveStatus::Stale
+            ? true : AppSaveTasks(storageDir, tasks);
         result.errorMessage = (!rollbackProjectsOk || !rollbackTasksOk)
             ? std::string(u8"Ошибка удаления проекта и отката. Проверьте файлы в meta/.")
-            : std::string(u8"Не удалось удалить проект: изменения отменены.");
+            : taskSaveStatus == AppTaskSaveStatus::Stale
+                ? std::string(u8"Задачи изменились в другом процессе. Проект не удалён; перезагрузите данные и повторите операцию.")
+                : std::string(u8"Не удалось удалить проект: изменения отменены.");
         result.detachedTasks = 0;
         return result;
     }
@@ -677,9 +813,10 @@ AppMutationResult AppCreateTaskEntry(const std::filesystem::path& storageDir,
     }
     const auto prevTasks = tasks;
     tasks.push_back(task);
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, prevTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         tasks = prevTasks;
-        result.errorMessage = u8"Не удалось сохранить задачу.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить задачу.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, task.id, "create", u8"—", AppTaskDisplayTitle(task), auditCache)) {
@@ -720,10 +857,12 @@ AppMutationResult AppUpdateTaskPriority(const std::filesystem::path& storageDir,
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->priority = next;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->priority = prev;
-        result.errorMessage = u8"Не удалось сохранить приоритет задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить приоритет задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "priority", AppTaskPriorityLabel(prev), AppTaskPriorityLabel(next), auditCache)) {
@@ -755,12 +894,14 @@ AppMutationResult AppUpdateTaskProject(const std::filesystem::path& storageDir,
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->projectId = nextProjectId;
     task->project = nextProjectName;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->projectId = prevId;
         task->project = prevName;
-        result.errorMessage = u8"Не удалось сохранить проект задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить проект задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "project",
@@ -795,12 +936,14 @@ AppMutationResult AppUpdateTaskPipelineStep(const std::filesystem::path& storage
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->pipelineStepId = nextPipelineStepId;
     task->pipelineStep = nextPipelineStepName;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->pipelineStepId = prevId;
         task->pipelineStep = prevName;
-        result.errorMessage = u8"Не удалось сохранить этап задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить этап задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "pipeline",
@@ -834,10 +977,12 @@ AppMutationResult AppUpdateTaskDeadline(const std::filesystem::path& storageDir,
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->deadlineAt = nextDeadline;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->deadlineAt = prevDeadline;
-        result.errorMessage = u8"Не удалось сохранить дедлайн задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить дедлайн задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "deadline",
@@ -884,12 +1029,14 @@ AppMutationResult AppUpdateTaskText(const std::filesystem::path& storageDir,
         return result;
     }
 
+    const auto expectedTasks = tasks;
     task->title = nextTitle;
     task->description = nextDescription;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->title = prevTitle;
         task->description = prevDescription;
-        result.errorMessage = u8"Не удалось сохранить текст задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить текст задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "title",
@@ -923,10 +1070,12 @@ AppMutationResult AppUpdateTaskCategory(const std::filesystem::path& storageDir,
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->category = nextCategory;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->category = prevCategory;
-        result.errorMessage = u8"Не удалось сохранить категорию задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить категорию задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "category",
@@ -959,10 +1108,12 @@ AppMutationResult AppUpdateTaskPenaltyPercent(const std::filesystem::path& stora
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->deadlinePenaltyPercent = nextPenalty;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->deadlinePenaltyPercent = prevPenalty;
-        result.errorMessage = u8"Не удалось сохранить штраф дедлайна.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить штраф дедлайна.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "deadlinePenalty",
@@ -994,10 +1145,12 @@ AppMutationResult AppUpdateTaskSkillIds(const std::filesystem::path& storageDir,
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->skillIds = skillIds;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->skillIds = prevSkillIds;
-        result.errorMessage = u8"Не удалось сохранить навыки задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить навыки задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "skills",
@@ -1037,10 +1190,12 @@ AppMutationResult AppUpdateTaskAssignees(const std::filesystem::path& storageDir
         result.ok = true;
         return result;
     }
+    const auto expectedTasks = tasks;
     task->assignees = assignees;
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         task->assignees = prevAssignees;
-        result.errorMessage = u8"Не удалось сохранить исполнителей задачи.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить исполнителей задачи.");
         return result;
     }
     if (!AppendTaskAuditIfChanged(storageDir, actor, taskId, "assignees",
@@ -1102,6 +1257,7 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
         return result;
     }
 
+    const auto expectedTasks = tasks;
     const auto prevAssignees = task->assignees;
     const auto prevSkillIds = task->skillIds;
     const auto prevParticipants = task->participants;
@@ -1144,9 +1300,10 @@ AppMutationResult AppFinalizeTaskXp(const std::filesystem::path& storageDir,
     task->skillIds = request.skillIds;
     task->participants = request.participants;
 
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         restoreTask();
-        result.errorMessage = u8"Не удалось сохранить закрытие задачи с XP.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить закрытие задачи с XP.");
         return result;
     }
 
@@ -1208,6 +1365,7 @@ AppMutationResult AppBulkUpdateTaskPriority(const std::filesystem::path& storage
                                             const std::string& actor,
                                             std::vector<TaskAuditEntry>* auditCache) {
     AppMutationResult result;
+    const auto expectedTasks = tasks;
     struct PrevState { TaskEntry* task = nullptr; int priority = 0; };
     std::vector<PrevState> touched;
     touched.reserve(taskIds.size());
@@ -1223,11 +1381,12 @@ AppMutationResult AppBulkUpdateTaskPriority(const std::filesystem::path& storage
         result.ok = true;
         return result;
     }
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         for (const auto& prev : touched) {
             if (prev.task) prev.task->priority = prev.priority;
         }
-        result.errorMessage = u8"Не удалось сохранить массовое изменение приоритета.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить массовое изменение приоритета.");
         return result;
     }
     for (const auto& prev : touched) {
@@ -1253,6 +1412,7 @@ AppMutationResult AppBulkUpdateTaskProject(const std::filesystem::path& storageD
                                            const std::string& actor,
                                            std::vector<TaskAuditEntry>* auditCache) {
     AppMutationResult result;
+    const auto expectedTasks = tasks;
     struct PrevState { TaskEntry* task = nullptr; std::string projectId; std::string projectName; };
     std::vector<PrevState> touched;
     touched.reserve(taskIds.size());
@@ -1267,13 +1427,14 @@ AppMutationResult AppBulkUpdateTaskProject(const std::filesystem::path& storageD
         result.ok = true;
         return result;
     }
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         for (const auto& prev : touched) {
             if (!prev.task) continue;
             prev.task->projectId = prev.projectId;
             prev.task->project = prev.projectName;
         }
-        result.errorMessage = u8"Не удалось сохранить массовое изменение проекта.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить массовое изменение проекта.");
         return result;
     }
     for (const auto& prev : touched) {
@@ -1300,6 +1461,7 @@ AppMutationResult AppBulkUpdateTaskPipelineStep(const std::filesystem::path& sto
                                                 const std::string& actor,
                                                 std::vector<TaskAuditEntry>* auditCache) {
     AppMutationResult result;
+    const auto expectedTasks = tasks;
     struct PrevState { TaskEntry* task = nullptr; std::string pipelineStepId; std::string pipelineStepName; };
     std::vector<PrevState> touched;
     touched.reserve(taskIds.size());
@@ -1314,13 +1476,14 @@ AppMutationResult AppBulkUpdateTaskPipelineStep(const std::filesystem::path& sto
         result.ok = true;
         return result;
     }
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         for (const auto& prev : touched) {
             if (!prev.task) continue;
             prev.task->pipelineStepId = prev.pipelineStepId;
             prev.task->pipelineStep = prev.pipelineStepName;
         }
-        result.errorMessage = u8"Не удалось сохранить массовое изменение этапа.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить массовое изменение этапа.");
         return result;
     }
     for (const auto& prev : touched) {
@@ -1346,6 +1509,7 @@ AppMutationResult AppBulkUpdateTaskDeadline(const std::filesystem::path& storage
                                             const std::string& actor,
                                             std::vector<TaskAuditEntry>* auditCache) {
     AppMutationResult result;
+    const auto expectedTasks = tasks;
     struct PrevState { TaskEntry* task = nullptr; std::int64_t deadlineAt = 0; };
     std::vector<PrevState> touched;
     touched.reserve(taskIds.size());
@@ -1360,11 +1524,12 @@ AppMutationResult AppBulkUpdateTaskDeadline(const std::filesystem::path& storage
         result.ok = true;
         return result;
     }
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         for (const auto& prev : touched) {
             if (prev.task) prev.task->deadlineAt = prev.deadlineAt;
         }
-        result.errorMessage = u8"Не удалось сохранить массовое изменение дедлайна.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить массовое изменение дедлайна.");
         return result;
     }
     for (const auto& prev : touched) {
@@ -1390,6 +1555,7 @@ AppMutationResult AppBulkUpdateTaskAssignees(const std::filesystem::path& storag
                                              const std::string& actor,
                                              std::vector<TaskAuditEntry>* auditCache) {
     AppMutationResult result;
+    const auto expectedTasks = tasks;
     if (assignees.empty()) {
         result.errorMessage = u8"Выберите хотя бы одного исполнителя.";
         return result;
@@ -1411,11 +1577,12 @@ AppMutationResult AppBulkUpdateTaskAssignees(const std::filesystem::path& storag
         result.ok = true;
         return result;
     }
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, expectedTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         for (const auto& prev : touched) {
             if (prev.task) prev.task->assignees = prev.assignees;
         }
-        result.errorMessage = u8"Не удалось сохранить массовое изменение исполнителей.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить массовое изменение исполнителей.");
         return result;
     }
     for (const auto& prev : touched) {
@@ -1461,9 +1628,10 @@ AppMutationResult AppDeleteTasksByIds(const std::filesystem::path& storageDir,
         result.ok = true;
         return result;
     }
-    if (!AppSaveTasks(storageDir, tasks)) {
+    const auto taskSaveStatus = AppSaveTasksIfUnchanged(storageDir, prevTasks, tasks);
+    if (taskSaveStatus != AppTaskSaveStatus::Saved) {
         tasks = prevTasks;
-        result.errorMessage = u8"Не удалось сохранить удаление задач.";
+        result.errorMessage = TaskSaveFailureMessage(taskSaveStatus, u8"Не удалось сохранить удаление задач.");
         return result;
     }
     for (const auto& removedTask : removed) {

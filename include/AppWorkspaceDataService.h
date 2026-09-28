@@ -40,6 +40,7 @@ struct WorkspaceSyncHealth {
 std::vector<TaskEntry> LoadTasksData(const std::filesystem::path& storageDir);
 // Reads only the current tasks file and never restores or rewrites a last-good copy.
 std::vector<TaskEntry> LoadTasksDataReadOnly(const std::filesystem::path& storageDir);
+bool TryLoadTasksDataReadOnly(const std::filesystem::path& storageDir, std::vector<TaskEntry>& tasks);
 std::vector<TaskEntry> LoadTasksDataFromFile(const std::filesystem::path& filePath);
 std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries = 200,
                                               std::int64_t sinceTimestamp = 0);
