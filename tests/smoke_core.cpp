@@ -23,6 +23,7 @@
 #endif
 
 #include "AppProfileMutationService.h"
+#include "AppMetaService.h"
 #include "AppPipelineService.h"
 #include "AppRecoveryStorage.h"
 #include "AppTaskProjectService.h"
@@ -1596,6 +1597,131 @@ static bool TestStorageVaultRobustParsing(const std::filesystem::path& dir) {
     return true;
 }
 
+static bool TestMetaMutationsPreserveConcurrentData(const std::filesystem::path& dir) {
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+    std::filesystem::create_directories(dir, ec);
+    if (ec) return false;
+
+    std::vector<std::string> bannerTexts{ "initial phrase" };
+    if (!SaveBannerTexts(dir, bannerTexts)) return false;
+    std::vector<std::pair<AppLogLevel, std::string>> bannerEvents;
+    AppMetaEventLogger bannerLogger = [&](AppLogLevel level, const std::string& event) {
+        bannerEvents.emplace_back(level, event);
+    };
+    const std::string privatePhrase = "private banner wording";
+    const auto added = AppAddBannerText(dir, bannerTexts, privatePhrase, bannerLogger);
+    if (!added.ok || added.itemIndex != 1 || bannerTexts.size() != 2 ||
+        bannerEvents.empty() || bannerEvents.back().first != AppLogLevel::Info ||
+        bannerEvents.back().second != "Banner phrase created" ||
+        bannerEvents.back().second.find(privatePhrase) != std::string::npos) return false;
+
+    const auto staleTexts = bannerTexts;
+    auto externalTexts = bannerTexts;
+    externalTexts.push_back("external banner addition");
+    if (!SaveBannerTexts(dir, externalTexts)) return false;
+    auto attemptedStaleEdit = staleTexts;
+    const auto staleEdit = AppUpdateBannerText(dir, attemptedStaleEdit, 0, "stale replacement", bannerLogger);
+    if (staleEdit.ok || staleEdit.changed || attemptedStaleEdit != externalTexts ||
+        LoadBannerTexts(dir) != externalTexts || bannerEvents.back().first != AppLogLevel::Warning ||
+        bannerEvents.back().second.find("stale replacement") != std::string::npos) return false;
+
+    auto staleAdd = staleTexts;
+    const auto mergedAdd = AppAddBannerText(dir, staleAdd, "new local phrase", bannerLogger);
+    if (!mergedAdd.ok || staleAdd.size() != 4 || staleAdd[2] != "external banner addition" ||
+        staleAdd[3] != "new local phrase" || LoadBannerTexts(dir) != staleAdd) return false;
+    auto staleDelete = externalTexts;
+    const auto staleDeleteResult = AppDeleteBannerText(dir, staleDelete, 0);
+    if (staleDeleteResult.ok || staleDelete != staleAdd || LoadBannerTexts(dir) != staleAdd) return false;
+
+    std::string bannerBeforeFailure, bannerAfterFailure;
+    if (!ReadFile(dir / "meta" / "banner.json", bannerBeforeFailure)) return false;
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    const bool bannerWriteFailed = !SaveBannerTexts(dir, {"uncommitted replacement"});
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (!bannerWriteFailed || !ReadFile(dir / "meta" / "banner.json", bannerAfterFailure) ||
+        bannerAfterFailure != bannerBeforeFailure) return false;
+
+    const std::string malformedBanner = "{\"items\":[\"kept phrase\"";
+    if (!WriteFile(dir / "meta" / "banner.json", malformedBanner)) return false;
+    auto malformedBannerState = externalTexts;
+    const auto malformedBannerAdd = AppAddBannerText(dir, malformedBannerState, "must not overwrite corruption");
+    std::string malformedBannerAfter;
+    if (malformedBannerAdd.ok || !ReadFile(dir / "meta" / "banner.json", malformedBannerAfter) ||
+        malformedBannerAfter != malformedBanner) return false;
+    if (!SaveBannerTexts(dir, externalTexts)) return false;
+
+    const auto bannerPath = dir / "meta" / "banner.json";
+    const auto externalBanner = dir / "external-banner.json";
+    if (!WriteFile(externalBanner, "external file must remain untouched")) return false;
+    std::filesystem::remove(bannerPath, ec);
+    ec.clear();
+    std::filesystem::create_symlink(externalBanner, bannerPath, ec);
+    if (!ec) {
+        const auto symlinkWrite = SaveBannerTexts(dir, {"must not replace link"});
+        std::string externalAfter;
+        ec.clear();
+        const auto bannerStatus = std::filesystem::symlink_status(bannerPath, ec);
+        const bool linkPreserved = !ec && std::filesystem::is_symlink(bannerStatus);
+        if (symlinkWrite || !linkPreserved || !ReadFile(externalBanner, externalAfter) ||
+            externalAfter != "external file must remain untouched") return false;
+        std::filesystem::remove(bannerPath, ec);
+        if (ec) return false;
+    }
+    if (!SaveBannerTexts(dir, externalTexts)) return false;
+    auto bannerTempPath = bannerPath;
+    bannerTempPath += ".tmp";
+    ec.clear();
+    std::filesystem::create_symlink(externalBanner, bannerTempPath, ec);
+    if (!ec) {
+        const auto symlinkTempWrite = SaveBannerTexts(dir, {"must not follow temp link"});
+        std::string externalAfter;
+        ec.clear();
+        const auto tempStatus = std::filesystem::symlink_status(bannerTempPath, ec);
+        const bool tempLinkPreserved = !ec && std::filesystem::is_symlink(tempStatus);
+        if (symlinkTempWrite || !tempLinkPreserved || !ReadFile(externalBanner, externalAfter) ||
+            externalAfter != "external file must remain untouched") return false;
+        std::filesystem::remove(bannerTempPath, ec);
+        if (ec) return false;
+    }
+    if (!SaveBannerTexts(dir, externalTexts)) return false;
+
+    StorageVaultData originalVault;
+    originalVault.balance = 41.25;
+    originalVault.log.push_back({1700000000, 5.0, "test", "original entry"});
+    if (!SaveStorageVault(dir, originalVault)) return false;
+    StorageVaultData staleVault = LoadStorageVault(dir);
+    StorageVaultData externalVault = LoadStorageVault(dir);
+    externalVault.balance = 987.65;
+    externalVault.log.push_back({1700000010, 7.0, "test", "newer external entry"});
+    if (!SaveStorageVault(dir, externalVault)) return false;
+
+    std::vector<std::pair<AppLogLevel, std::string>> vaultEvents;
+    AppMetaEventLogger vaultLogger = [&](AppLogLevel level, const std::string& event) {
+        vaultEvents.emplace_back(level, event);
+    };
+    const auto applied = AppApplyVaultDraft(dir, staleVault, "Test currency", "TST", 17,
+        8 * 60, 19 * 60, 25, 3, (1 << 1) | (1 << 3), vaultLogger);
+    if (!applied.ok || staleVault.currencyName != "Test currency" || staleVault.currencyCode != "TST" ||
+        staleVault.logLimit != 17 || std::abs(staleVault.balance - 987.65) > 0.000001 ||
+        staleVault.log.size() != 2 || staleVault.log[0].note != "original entry" ||
+        staleVault.log[1].note != "newer external entry" || vaultEvents.size() != 1 ||
+        vaultEvents.back().first != AppLogLevel::Info || vaultEvents.back().second != "Vault settings updated" ||
+        vaultEvents.back().second.find("Test currency") != std::string::npos ||
+        vaultEvents.back().second.find("987.65") != std::string::npos) return false;
+
+    std::string vaultBeforeFailure, vaultAfterFailure;
+    if (!ReadFile(dir / "meta" / "storage.json", vaultBeforeFailure)) return false;
+    auto failedVault = LoadStorageVault(dir);
+    failedVault.balance = 1.0;
+    AppSetRecoveryPrimaryWriteFailureForTests(true);
+    const bool vaultWriteFailed = !SaveStorageVault(dir, failedVault);
+    AppSetRecoveryPrimaryWriteFailureForTests(false);
+    if (!vaultWriteFailed || !ReadFile(dir / "meta" / "storage.json", vaultAfterFailure) ||
+        vaultAfterFailure != vaultBeforeFailure) return false;
+    return true;
+}
+
 static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
     CloudSyncConfig config;
     config.enabled = true;
@@ -1920,6 +2046,7 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
     const bool okWhitelist = TestWhitelist(tmp);
     const bool okVault = TestStorageVaultRobustParsing(tmp);
+    const bool okMetaMutations = TestMetaMutationsPreserveConcurrentData(tmp / "meta_mutations");
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudOverwrite = TestCloudAtomicOverwrite(tmp);
@@ -1933,7 +2060,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okProfileCreateTelemetry && okSpirit && okStaleProfileCreateIds && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskWriteLock && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okProfileCreateTelemetry && okSpirit && okStaleProfileCreateIds && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskWriteLock && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault && okMetaMutations &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace && okCloudStorageConflictApply) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1982,6 +2109,7 @@ int main() {
               << " syncHealth=" << okSyncHealth
               << " whitelist=" << okWhitelist
               << " vault=" << okVault
+              << " metaMutations=" << okMetaMutations
               << " cloudOverwrite=" << okCloudOverwrite
               << " cloudSpirits=" << okCloudSpirits
               << " cloudWorkspace=" << okCloudWorkspace

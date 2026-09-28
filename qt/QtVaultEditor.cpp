@@ -1,19 +1,6 @@
 #include "QtVaultEditor.h"
 #include "AppMetaService.h"
 #include <QtWidgets>
-#include <QSaveFile>
-#include <QTemporaryDir>
-#include <cmath>
-
-namespace {
-bool sameVaultSettings(const StorageVaultData& a, const StorageVaultData& b) {
-    return a.currencyName == b.currencyName && a.currencyCode == b.currencyCode &&
-        a.logLimit == b.logLimit && a.pomodoroStartMinutes == b.pomodoroStartMinutes &&
-        a.pomodoroEndMinutes == b.pomodoroEndMinutes && a.pomodoroMinMinutes == b.pomodoroMinMinutes &&
-        a.pomodoroCoinsPerCycle == b.pomodoroCoinsPerCycle && a.pomodoroDaysMask == b.pomodoroDaysMask &&
-        std::abs(a.balance - b.balance) < 0.000001;
-}
-}
 
 bool ShowVaultEditor(QWidget* parent, QtWorkspace& workspace) {
     QDialog dialog(parent); dialog.setObjectName("vaultEditor"); dialog.setWindowTitle(QString::fromUtf8("Настройки хранилища"));
@@ -50,24 +37,16 @@ bool ShowVaultEditor(QWidget* parent, QtWorkspace& workspace) {
         if (currencyName.isEmpty() || currencyCode.isEmpty()) { notice->setText(QString::fromUtf8("Название и код валюты не должны быть пустыми.")); return; }
         int mask = 0; for (int index = 0; index < checks.size(); ++index) if (checks[index]->isChecked()) mask |= 1 << index;
         if (!mask) { notice->setText(QString::fromUtf8("Выберите хотя бы один день наград.")); return; }
-        StorageVaultData draft = current;
-        draft.currencyName = currencyName.toUtf8().toStdString(); draft.currencyCode = currencyCode.toUtf8().toStdString();
-        draft.logLimit = limit->value(); draft.pomodoroStartMinutes = start->time().hour() * 60 + start->time().minute();
-        draft.pomodoroEndMinutes = end->time().hour() * 60 + end->time().minute(); draft.pomodoroMinMinutes = minimum->value();
-        draft.pomodoroCoinsPerCycle = coins->value(); draft.pomodoroDaysMask = mask;
-        QTemporaryDir staging; if (!staging.isValid()) { notice->setText(QString::fromUtf8("Не удалось создать временный каталог.")); return; }
-        const auto stagingDir = std::filesystem::u8path(staging.path().toUtf8().toStdString());
-        if (!SaveStorageVault(stagingDir, draft)) { notice->setText(QString::fromUtf8("Не удалось сериализовать настройки.")); return; }
-        const auto checked = LoadStorageVault(stagingDir);
-        QFile source(staging.path() + "/meta/storage.json");
-        if (!sameVaultSettings(checked, draft) || !source.open(QIODevice::ReadOnly)) { notice->setText(QString::fromUtf8("Проверка настроек не пройдена.")); return; }
-        const auto bytes = source.readAll(); const auto target = QString::fromUtf8((workspace.directory / "meta/storage.json").u8string());
-        if (QFileInfo(QFileInfo(target).absolutePath()).isSymLink() || QFileInfo(target).isSymLink()) { notice->setText(QString::fromUtf8("Символьная ссылка storage.json не поддерживается.")); return; }
-        QDir().mkpath(QFileInfo(target).absolutePath()); QSaveFile output(target); output.setDirectWriteFallback(false);
-        if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) { notice->setText(QString::fromUtf8("Не удалось атомарно сохранить настройки.")); return; }
-        const auto persisted = LoadStorageVault(workspace.directory);
-        if (!sameVaultSettings(persisted, draft)) { notice->setText(QString::fromUtf8("Сохранённые настройки не прошли проверку.")); return; }
-        workspace.data.vault = persisted; dialog.accept();
+        const auto result = AppApplyVaultDraft(workspace.directory, workspace.data.vault,
+            currencyName.toUtf8().toStdString(), currencyCode.toUtf8().toStdString(), limit->value(),
+            start->time().hour() * 60 + start->time().minute(),
+            end->time().hour() * 60 + end->time().minute(), minimum->value(), coins->value(), mask,
+            workspace.metaEventLogger);
+        if (!result.ok) {
+            notice->setText(QString::fromUtf8(result.errorMessage.c_str()));
+            return;
+        }
+        dialog.accept();
     });
     return dialog.exec() == QDialog::Accepted;
 }

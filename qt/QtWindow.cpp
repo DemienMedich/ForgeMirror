@@ -616,6 +616,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     workspace_.taskEventLogger = [guardedWindow](AppLogLevel level, const std::string& event) {
         if (guardedWindow) guardedWindow->appendLog(level, "CoreTaskMutation", event);
     };
+    workspace_.metaEventLogger = [guardedWindow](AppLogLevel level, const std::string& event) {
+        if (guardedWindow) guardedWindow->appendLog(level, "CoreMetaMutation", event);
+    };
     if (admin_) appendLog(AppLogLevel::Info, "CoreAuthentication", "Administrator session restored");
     lastCloudAutoSyncAt_ = QDateTime::currentSecsSinceEpoch();
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
@@ -3894,18 +3897,20 @@ void QtWindow::render() {
                 const bool coreRecoveryEvent = entry.source == "CoreTransactionRecovery";
                 const bool coreTaskMutationEvent = entry.source == "CoreTaskMutation";
                 const bool coreCatalogMutationEvent = entry.source == "CoreCatalogMutation";
+                const bool coreMetaMutationEvent = entry.source == "CoreMetaMutation";
                 const bool coreAuthenticationEvent = entry.source == "CoreAuthentication";
                 const bool coreStorageEvent = entry.source == "StorageCleanup" || entry.source == "StorageHealthReport";
                 const bool coreReleaseEvent = entry.source == "CloudRelease";
                 const bool coreEvent = coreWalletEvent || coreCloudEvent || coreProfileEvent || coreRecoveryEvent ||
                     coreTaskMutationEvent || coreCatalogMutationEvent || coreAuthenticationEvent || coreStorageEvent ||
-                    coreReleaseEvent || entry.source == "CoreTaskCompletion";
+                    coreMetaMutationEvent || coreReleaseEvent || entry.source == "CoreTaskCompletion";
                 const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
                     : coreCloudEvent ? QString::fromUtf8("Облачный перенос")
                     : coreProfileEvent ? QString::fromUtf8("Операция профиля")
                     : coreRecoveryEvent ? QString::fromUtf8("Восстановление транзакции")
                     : coreTaskMutationEvent ? QString::fromUtf8("Изменение задач")
                     : coreCatalogMutationEvent ? QString::fromUtf8("Изменение справочников")
+                    : coreMetaMutationEvent ? QString::fromUtf8("Настройки баннера и хранилища")
                     : coreAuthenticationEvent ? QString::fromUtf8("Аутентификация администратора")
                     : coreStorageEvent ? QString::fromUtf8("Проверка и очистка хранилища")
                     : coreReleaseEvent ? QString::fromUtf8("Установка обновления")
@@ -5414,7 +5419,8 @@ void QtWindow::createEntry(bool edit) {
     if (navigation_->currentRow() == Banner) {
         bool ok = false; const int index = edit ? selectedId().toInt(&ok) : -1;
         if (edit && !ok) return;
-        if (ShowBannerEditor(this, workspace_, index)) { bannerIndex_ = std::max(0, index); updateBanner(); render(); }
+        ShowBannerEditor(this, workspace_, index);
+        bannerIndex_ = std::max(0, index); updateBanner(); render();
         return;
     }
     if (navigation_->currentRow() == Rules) {
@@ -5973,7 +5979,7 @@ void QtWindow::deleteEntry() {
             QString::fromUtf8("Удалить выбранную фразу из ротации баннера?"), QMessageBox::Yes | QMessageBox::No, this);
         confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Удалить")); confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена")); confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
-        QString error; if (!DeleteBannerTextChecked(workspace_, index, &error)) { message(u(error)); return; }
+        QString error; if (!DeleteBannerTextChecked(workspace_, index, &error)) { message(u(error)); updateBanner(); render(); return; }
         bannerIndex_ = 0; updateBanner(); render(); statusBar()->showMessage(QString::fromUtf8("Фраза удалена"), 3000); return;
     }
     if (page != Tasks && page != Projects && page != Catalog && page != Pipeline && page != Professions) return;

@@ -5,6 +5,12 @@
 
 std::filesystem::path AppRecoveryBackupPath(const std::filesystem::path& path);
 
+bool AppWriteBinaryAtomically(const std::filesystem::path& path,
+                              const std::string& payload);
+
+bool AppWriteBinaryWithRecovery(const std::filesystem::path& path,
+                                const std::string& payload);
+
 bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
                                  const std::string& payloadWithoutBom);
 

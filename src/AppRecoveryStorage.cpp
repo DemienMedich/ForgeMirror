@@ -60,6 +60,24 @@ bool ReadBinary(const std::filesystem::path& path, std::string& data) {
     return in.good() || in.eof();
 }
 
+bool safeAtomicTarget(const std::filesystem::path& path) {
+    std::error_code ec;
+    const auto parentStatus = std::filesystem::symlink_status(path.parent_path(), ec);
+    if (ec || std::filesystem::is_symlink(parentStatus) || !std::filesystem::is_directory(parentStatus)) return false;
+
+    auto temporary = path;
+    temporary += ".tmp";
+    for (const auto& candidate : {path, temporary}) {
+        ec.clear();
+        const auto status = std::filesystem::symlink_status(candidate, ec);
+        if (ec == std::errc::no_such_file_or_directory) continue;
+        if (ec) return false;
+        if (!std::filesystem::exists(status)) continue;
+        if (std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) return false;
+    }
+    return true;
+}
+
 std::filesystem::path MakeDamagedCopyPath(const std::filesystem::path& path) {
     const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -82,6 +100,14 @@ std::filesystem::path AppRecoveryBackupPath(const std::filesystem::path& path) {
 
 bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
                                  const std::string& payloadWithoutBom) {
+    static constexpr unsigned char bom[] = {0xEF, 0xBB, 0xBF};
+    std::string data(reinterpret_cast<const char*>(bom), sizeof(bom));
+    data += payloadWithoutBom;
+    return AppWriteBinaryWithRecovery(path, data);
+}
+
+bool AppWriteBinaryAtomically(const std::filesystem::path& path,
+                              const std::string& payload) {
     auto workspace = path.parent_path();
     for (auto current = workspace; !current.empty(); current = current.parent_path()) {
         if (current.filename() == "meta") {
@@ -90,16 +116,25 @@ bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
         }
     }
     AppWorkspaceStorageWriteLock writeLock(workspace);
-    if (!writeLock.acquired()) return false;
-    static constexpr unsigned char bom[] = {0xEF, 0xBB, 0xBF};
-    std::string data(reinterpret_cast<const char*>(bom), sizeof(bom));
-    data += payloadWithoutBom;
+    if (!writeLock.acquired() || g_forcePrimaryWriteFailureForTests || !safeAtomicTarget(path)) return false;
+    return WriteBinaryAtomic(path, payload);
+}
 
-    if (g_forcePrimaryWriteFailureForTests) return false;
-    if (!WriteBinaryAtomic(path, data)) return false;
+bool AppWriteBinaryWithRecovery(const std::filesystem::path& path,
+                                const std::string& payload) {
+    auto workspace = path.parent_path();
+    for (auto current = workspace; !current.empty(); current = current.parent_path()) {
+        if (current.filename() == "meta") {
+            workspace = current.parent_path();
+            break;
+        }
+    }
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired() || g_forcePrimaryWriteFailureForTests) return false;
+    if (!WriteBinaryAtomic(path, payload)) return false;
 
     // The primary file is authoritative. A stale backup is safer than an uncommitted one.
-    WriteBinaryAtomic(AppRecoveryBackupPath(path), data);
+    WriteBinaryAtomic(AppRecoveryBackupPath(path), payload);
     return true;
 }
 

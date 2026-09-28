@@ -523,7 +523,8 @@ static bool TestVaultEditor() {
     workspace.data.vault.log.push_back({1700000000, 12.0, "test", "preserve"});
     if (!SaveStorageVault(workspace.directory, workspace.data.vault)) return false;
     workspace.reload();
-    QTimer::singleShot(0, [] {
+    bool latestVaultWritten = false;
+    QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!dialog || dialog->objectName() != "vaultEditor") return;
         dialog->findChild<QLineEdit*>("vaultCurrencyName")->setText(QString::fromUtf8("Фаркойн"));
@@ -536,14 +537,21 @@ static bool TestVaultEditor() {
         for (int index = 0; index < 7; ++index) dialog->findChild<QCheckBox*>(QString("vaultDay%1").arg(index))->setChecked(index == 1 || index == 3);
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/vault-editor.png");
+        auto external = LoadStorageVault(workspace.directory);
+        external.balance = 654.25;
+        external.log.push_back({1700000010, 7.0, "external", "newer external entry"});
+        latestVaultWritten = SaveStorageVault(workspace.directory, external);
+        if (!latestVaultWritten) { dialog->reject(); return; }
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
     });
-    if (!ShowVaultEditor(nullptr, workspace)) return false;
+    if (!ShowVaultEditor(nullptr, workspace) || !latestVaultWritten) return false;
     const auto saved = LoadStorageVault(workspace.directory);
     if (saved.currencyName != u8"Фаркойн" || saved.currencyCode != "FRC" || saved.logLimit != 12 ||
         saved.pomodoroStartMinutes != 8 * 60 + 15 || saved.pomodoroEndMinutes != 19 * 60 + 45 ||
         saved.pomodoroMinMinutes != 25 || saved.pomodoroCoinsPerCycle != 3 || saved.pomodoroDaysMask != ((1 << 1) | (1 << 3)) ||
-        std::abs(saved.balance - 321.5) > 0.000001 || saved.log.size() != 1 || saved.log[0].note != "preserve") return false;
+        std::abs(saved.balance - 654.25) > 0.000001 || saved.log.size() != 2 ||
+        saved.log[0].note != "preserve" || saved.log[1].note != "newer external entry" ||
+        std::abs(workspace.data.vault.balance - 654.25) > 0.000001) return false;
 #ifdef _WIN32
     const auto path = (workspace.directory / "meta/storage.json").wstring();
     QFile before(QString::fromStdWString(path)); if (!before.open(QIODevice::ReadOnly)) return false; const auto bytes = before.readAll(); before.close();
@@ -572,15 +580,26 @@ static bool TestBannerEditor() {
     workspace.data.bannerTexts = {u8"Первая фраза"};
     if (!SaveBannerTexts(workspace.directory, workspace.data.bannerTexts)) return false;
     workspace.reload();
-    QTimer::singleShot(0, [] {
+    bool staleSaveRejected = false;
+    QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!dialog || dialog->objectName() != "bannerEditor") return;
         dialog->findChild<QPlainTextEdit*>("bannerText")->setPlainText(QString::fromUtf8("Обновлённая фраза"));
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/banner-editor.png"); }
+        auto external = workspace.data.bannerTexts;
+        external.push_back("external banner entry");
+        if (!SaveBannerTexts(workspace.directory, external)) { dialog->reject(); return; }
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+        QTimer::singleShot(0, [&, dialog] {
+            staleSaveRejected = !dialog->findChild<QLabel*>("bannerNotice")->text().isEmpty() &&
+                workspace.data.bannerTexts == std::vector<std::string>{u8"Первая фраза", "external banner entry"};
+            if (staleSaveRejected) dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+            else dialog->reject();
+        });
     });
-    if (!ShowBannerEditor(nullptr, workspace, 0) || workspace.data.bannerTexts != std::vector<std::string>{u8"Обновлённая фраза"}) return false;
+    if (!ShowBannerEditor(nullptr, workspace, 0) || !staleSaveRejected ||
+        workspace.data.bannerTexts != std::vector<std::string>{u8"Обновлённая фраза", "external banner entry"}) return false;
 #ifdef _WIN32
     const auto path = (workspace.directory / "meta/banner.json").wstring();
     QFile stored(QString::fromStdWString(path)); if (!stored.open(QIODevice::ReadOnly)) return false; const auto before = stored.readAll(); stored.close();
@@ -597,7 +616,9 @@ static bool TestBannerEditor() {
     if (accepted || !failureSeen || !stored.open(QIODevice::ReadOnly) || stored.readAll() != before) return false; stored.close();
 #endif
     QString error;
-    return DeleteBannerTextChecked(workspace, 0, &error) && workspace.data.bannerTexts.empty() && LoadBannerTexts(workspace.directory).empty();
+    return DeleteBannerTextChecked(workspace, 0, &error) &&
+        DeleteBannerTextChecked(workspace, 0, &error) &&
+        workspace.data.bannerTexts.empty() && LoadBannerTexts(workspace.directory).empty();
 }
 
 static bool TestCloudSettings() {

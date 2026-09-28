@@ -1,9 +1,11 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
+#include "AppDomainTypes.h"
 #include "AppUtils.h"
 
 struct AppBannerMutationResult {
@@ -19,18 +21,23 @@ struct AppVaultMutationResult {
     std::string errorMessage;
 };
 
+using AppMetaEventLogger = std::function<void(AppLogLevel, const std::string&)>;
+
 AppBannerMutationResult AppAddBannerText(const std::filesystem::path& storageDir,
                                          std::vector<std::string>& texts,
-                                         const std::string& text);
+                                         const std::string& text,
+                                         AppMetaEventLogger eventLogger = {});
 
 AppBannerMutationResult AppUpdateBannerText(const std::filesystem::path& storageDir,
                                             std::vector<std::string>& texts,
                                             int index,
-                                            const std::string& text);
+                                            const std::string& text,
+                                            AppMetaEventLogger eventLogger = {});
 
 AppBannerMutationResult AppDeleteBannerText(const std::filesystem::path& storageDir,
                                             std::vector<std::string>& texts,
-                                            int index);
+                                            int index,
+                                            AppMetaEventLogger eventLogger = {});
 
 AppVaultMutationResult AppApplyVaultDraft(const std::filesystem::path& storageDir,
                                           StorageVaultData& vault,
@@ -41,4 +48,5 @@ AppVaultMutationResult AppApplyVaultDraft(const std::filesystem::path& storageDi
                                           int pomodoroEndMinutes,
                                           int pomodoroMinMinutes,
                                           int pomodoroCoinsPerCycle,
-                                          int pomodoroDaysMask);
+                                          int pomodoroDaysMask,
+                                          AppMetaEventLogger eventLogger = {});

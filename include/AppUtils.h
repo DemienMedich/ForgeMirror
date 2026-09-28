@@ -81,6 +81,7 @@ void AppSetProfileAuditFailureHookForTests(bool enabled);
 ModuleToggles LoadModuleToggles();
 // Storage vault data (meta/storage.json).
 StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir);
+std::filesystem::path StorageVaultPath(const std::filesystem::path& storageDir);
 bool ValidateStorageVaultFile(const std::filesystem::path& storageDir);
 bool ValidateStorageVaultFileAtPath(const std::filesystem::path& filePath);
 bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data);

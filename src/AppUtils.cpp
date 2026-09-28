@@ -5,6 +5,7 @@
 #include <iomanip>
 
 #include "IJobStorage.h"
+#include "AppRecoveryStorage.h"
 #include "AppWorkspaceStorageLock.h"
 #include "SkillCatalog.h"
 #include "Profile.h"
@@ -945,18 +946,15 @@ std::vector<std::string> LoadBannerTexts(const std::filesystem::path& storageDir
 }
 
 bool SaveBannerTexts(const std::filesystem::path& storageDir, const std::vector<std::string>& texts) {
-    AppWorkspaceStorageWriteLock writeLock(storageDir);
-    if (!writeLock.acquired()) return false;
-    std::filesystem::create_directories(storageDir / "meta");
-    std::ofstream out(BannerTextPath(storageDir), std::ios::binary | std::ios::trunc);
-    if (!out) return false;
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
     out << "{\n  \"items\": [";
     for (size_t i = 0; i < texts.size(); ++i) {
         out << "\"" << EscapeJsonString(texts[i]) << "\"";
         if (i + 1 < texts.size()) out << ", ";
     }
     out << "]\n}";
-    return true;
+    return AppWriteBinaryAtomically(BannerTextPath(storageDir), out.str());
 }
 
 
@@ -1257,8 +1255,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
             }
         }
     }
-    std::ofstream out(StorageVaultPath(storageDir), std::ios::binary | std::ios::trunc);
-    if (!out) return false;
+    std::ostringstream out;
     out.imbue(std::locale::classic());
     StorageVaultData save = data;
     if (save.currencyName.empty()) save.currencyName = u8"Кукоин";
@@ -1303,7 +1300,7 @@ bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaul
     }
     if (!save.log.empty()) out << "\n  ";
     out << "]\n}";
-    return true;
+    return AppWriteBinaryAtomically(StorageVaultPath(storageDir), out.str());
 }
 
 ModuleToggles LoadModuleToggles() {

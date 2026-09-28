@@ -23,4 +23,5 @@ public:
     // Optional, exception-isolated outcome observers installed by the owning UI.
     std::function<void(AppLogLevel, const std::string&)> profileEventLogger;
     std::function<void(AppLogLevel, const std::string&)> taskEventLogger;
+    std::function<void(AppLogLevel, const std::string&)> metaEventLogger;
 };
