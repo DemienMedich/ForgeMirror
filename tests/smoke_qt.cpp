@@ -4661,6 +4661,38 @@ static bool TestDisplaySettings(QApplication& app) {
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtLayoutPreset quickPreset;
+    quickPreset.scalePercent = 110;
+    quickPreset.windowOpacityPercent = 84;
+    quickPreset.spacingPercent = 120;
+    quickPreset.cornerRadius = 12;
+    quickPreset.compactRows = true;
+    quickPreset.fullscreen = true;
+    quickPreset.decorated = true;
+    quickPreset.windowBackgrounds[0] = QStringLiteral("ui/backgrounds/keep.png");
+    quickPreset.backgroundAlpha = 0.7;
+    quickPreset.backgroundTiled = true;
+    quickPreset.backgroundTileScale = 1.5;
+    if (!ApplyQtBuiltInLayoutPreset(QString::fromUtf8("Минимализм"), &quickPreset) ||
+        quickPreset.scalePercent != 100 || quickPreset.windowOpacityPercent != 98 || quickPreset.spacingPercent != 110 ||
+        quickPreset.cornerRadius != 8 || quickPreset.compactRows || !quickPreset.fullscreen || quickPreset.decorated ||
+        quickPreset.backgroundAlpha != 0.18 || quickPreset.backgroundTiled ||
+        quickPreset.windowBackgrounds[0] != QStringLiteral("ui/backgrounds/keep.png") || quickPreset.backgroundTileScale != 1.5)
+        return false;
+    quickPreset.decorated = true;
+    if (!ApplyQtBuiltInLayoutPreset(QString::fromUtf8("Презентация"), &quickPreset) ||
+        quickPreset.scalePercent != 125 || quickPreset.windowOpacityPercent != 100 || quickPreset.spacingPercent != 110 ||
+        quickPreset.cornerRadius != 8 || quickPreset.compactRows || !quickPreset.fullscreen || !quickPreset.decorated ||
+        quickPreset.backgroundAlpha != 0.18 || quickPreset.backgroundTiled) return false;
+    if (!ApplyQtBuiltInLayoutPreset(QString::fromUtf8("Компактный"), &quickPreset) ||
+        quickPreset.scalePercent != 90 || quickPreset.windowOpacityPercent != 95 || quickPreset.spacingPercent != 80 ||
+        quickPreset.cornerRadius != 4 || !quickPreset.compactRows || !quickPreset.fullscreen || !quickPreset.decorated)
+        return false;
+    const auto unsupportedPresetBefore = quickPreset;
+    if (ApplyQtBuiltInLayoutPreset(QString::fromUtf8("Техно-стекло"), &quickPreset) ||
+        quickPreset.scalePercent != unsupportedPresetBefore.scalePercent ||
+        quickPreset.windowOpacityPercent != unsupportedPresetBefore.windowOpacityPercent ||
+        quickPreset.windowBackgrounds != unsupportedPresetBefore.windowBackgrounds) return false;
     QDir().mkpath(temp.path() + "/ui/backgrounds");
     QImage backgroundImage(16, 12, QImage::Format_ARGB32_Premultiplied);
     backgroundImage.fill(QColor(210, 40, 80, 220));
@@ -4727,6 +4759,7 @@ static bool TestDisplaySettings(QApplication& app) {
     settings.logSourceFilter = QStringLiteral("Qt");
     settings.logFilter = QStringLiteral("remember this log query");
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
+    const auto paletteBeforeQuickPresets = app.palette().color(QPalette::Window);
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
         scale->setCurrentIndex(scale->findData(125)); dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
@@ -4735,9 +4768,31 @@ static bool TestDisplaySettings(QApplication& app) {
         auto* rounding = dialog->findChild<QComboBox*>("qtCornerRadius");
         auto* presetList = dialog->findChild<QComboBox*>("qtLayoutPresetList");
         auto* applyPreset = dialog->findChild<QPushButton*>("qtLayoutPresetApply");
+        auto* builtInPreset = dialog->findChild<QComboBox*>("qtBuiltInLayoutPreset");
+        auto* applyBuiltInPreset = dialog->findChild<QPushButton*>("qtBuiltInLayoutPresetApply");
         auto* presetName = dialog->findChild<QLineEdit*>("qtLayoutPresetName");
         auto* savePreset = dialog->findChild<QPushButton*>("qtLayoutPresetSave");
-        if (!opacity || !spacing || !rounding || !presetList || !applyPreset || !presetName || !savePreset) {
+        if (!opacity || !spacing || !rounding || !presetList || !applyPreset || !presetName || !savePreset ||
+            !builtInPreset || !applyBuiltInPreset) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        builtInPreset->setCurrentText(QString::fromUtf8("Компактный"));
+        applyBuiltInPreset->click();
+        if (scale->currentData().toInt() != 90 || opacity->value() != 95 || spacing->currentData().toInt() != 80 ||
+            rounding->currentData().toInt() != 4 || !dialog->findChild<QCheckBox*>("qtCompactRows")->isChecked()) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        builtInPreset->setCurrentText(QString::fromUtf8("Презентация"));
+        applyBuiltInPreset->click();
+        if (scale->currentData().toInt() != 125 || opacity->value() != 100 || spacing->currentData().toInt() != 110 ||
+            rounding->currentData().toInt() != 8 || dialog->findChild<QCheckBox*>("qtCompactRows")->isChecked()) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        builtInPreset->setCurrentText(QString::fromUtf8("Минимализм"));
+        applyBuiltInPreset->click();
+        if (scale->currentData().toInt() != 100 || opacity->value() != 98 || spacing->currentData().toInt() != 110 ||
+            rounding->currentData().toInt() != 8 || dialog->findChild<QCheckBox*>("qtDecorated")->isChecked() ||
+            app.palette().color(QPalette::Window) != paletteBeforeQuickPresets) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
         opacity->setValue(86);
@@ -4754,11 +4809,16 @@ static bool TestDisplaySettings(QApplication& app) {
             dialog->findChild<QCheckBox*>("qtDecorated")->isChecked()) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
+        builtInPreset->setCurrentText(QString::fromUtf8("Минимализм"));
+        applyBuiltInPreset->click();
+        if (scale->currentData().toInt() != 100 || opacity->value() != 98 || spacing->currentData().toInt() != 110 ||
+            rounding->currentData().toInt() != 8) { qobject_cast<QDialog*>(dialog)->reject(); return; }
         // Applying an imported preset changes layout controls only. Keep this test's requested final values.
         scale->setCurrentIndex(scale->findData(125));
         opacity->setValue(86);
         spacing->setCurrentIndex(spacing->findData(120));
         rounding->setCurrentIndex(rounding->findData(8));
+        dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
         dialog->findChild<QCheckBox*>("qtFullscreen")->setChecked(false);
         dialog->findChild<QCheckBox*>("qtDecorated")->setChecked(true);
         auto* tray = dialog->findChild<QCheckBox*>("qtMinimizeToTray");
@@ -4779,6 +4839,7 @@ static bool TestDisplaySettings(QApplication& app) {
             auto* tileScale = backgroundsDialog->findChild<QComboBox*>("qtBackgroundTileScale");
             auto* buttons = backgroundsDialog->findChild<QDialogButtonBox*>();
             if (!page || !alpha || !tiled || !tileScale || !buttons) { std::cerr << "Qt background controls missing\n"; backgroundsDialog->reject(); return; }
+            if (alpha->value() != 18 || tiled->isChecked()) { std::cerr << "Minimal layout did not apply its background defaults\n"; backgroundsDialog->reject(); return; }
             page->setCurrentIndex(page->findData("ui/backgrounds/reference.png"));
             alpha->setValue(55); tiled->setChecked(true); tileScale->setCurrentIndex(tileScale->findData(1.5));
             std::cerr << "Nested background selection index=" << page->currentIndex() << " data=" << page->currentData().toString().toUtf8().constData() << " alpha=" << alpha->value() << '\n';

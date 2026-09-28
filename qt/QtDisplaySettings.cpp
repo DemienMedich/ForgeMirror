@@ -552,6 +552,37 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     QDir().mkpath(meta); QSaveFile output(path); output.setDirectWriteFallback(false);
     return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
 }
+bool ApplyQtBuiltInLayoutPreset(const QString& name, QtLayoutPreset* preset) {
+    if (!preset) return false;
+    if (name == QString::fromUtf8("Минимализм")) {
+        preset->scalePercent = 100;
+        preset->windowOpacityPercent = 98;
+        preset->spacingPercent = 110;
+        preset->cornerRadius = 8;
+        preset->compactRows = false;
+        preset->decorated = false;
+        preset->backgroundAlpha = 0.18;
+        preset->backgroundTiled = false;
+        return true;
+    }
+    if (name == QString::fromUtf8("Презентация")) {
+        preset->scalePercent = 125;
+        preset->windowOpacityPercent = 100;
+        preset->spacingPercent = 110;
+        preset->cornerRadius = 8;
+        preset->compactRows = false;
+        return true;
+    }
+    if (name == QString::fromUtf8("Компактный")) {
+        preset->scalePercent = 90;
+        preset->windowOpacityPercent = 95;
+        preset->spacingPercent = 80;
+        preset->cornerRadius = 4;
+        preset->compactRows = true;
+        return true;
+    }
+    return false;
+}
 void ApplyQtDisplaySettings(QApplication& app, const QtDisplaySettings& settings) {
     double base = app.property("forgeBasePointSize").toDouble();
     if (base <= 0.0) { base = app.font().pointSizeF(); app.setProperty("forgeBasePointSize", base); }
@@ -602,6 +633,11 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     background->setToolTip(supported
         ? QString::fromUtf8("Планировщик Windows запускает проверку каждые 15 минут в текущем сеансе пользователя. Тексты задач не показываются.")
         : QString::fromUtf8("Доступно в Windows для стандартного изолированного рабочего пространства при поддержке уведомлений системного трея."));
+    auto* builtInPreset = new QComboBox;
+    builtInPreset->setObjectName("qtBuiltInLayoutPreset");
+    builtInPreset->addItems({QString::fromUtf8("Минимализм"), QString::fromUtf8("Презентация"), QString::fromUtf8("Компактный")});
+    auto* applyBuiltInPreset = new QPushButton(QString::fromUtf8("Применить раскладку"));
+    applyBuiltInPreset->setObjectName("qtBuiltInLayoutPresetApply");
     auto* backgroundsButton = new QPushButton;
     backgroundsButton->setObjectName("qtBackgroundSettingsButton");
     backgroundsButton->setMinimumHeight(40);
@@ -647,12 +683,45 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     presetNameLayout->addWidget(presetName, 1); presetNameLayout->addWidget(savePreset);
     auto* notice = new QLabel; notice->setObjectName("qtSettingsNotice"); notice->setWordWrap(true);
     QString presetError;
+    QObject::connect(applyBuiltInPreset, &QPushButton::clicked, &dialog,
+        [builtInPreset, scale, opacity, spacing, rounding, compact, decorated, &backgroundDraft, updateBackgroundsButton, notice] {
+            QtLayoutPreset preset;
+            preset.scalePercent = scale->currentData().toInt();
+            preset.windowOpacityPercent = opacity->value();
+            preset.spacingPercent = spacing->currentData().toInt();
+            preset.cornerRadius = rounding->currentData().toInt();
+            preset.compactRows = compact->isChecked();
+            preset.decorated = decorated->isChecked();
+            preset.windowBackgrounds = backgroundDraft.windowBackgrounds;
+            preset.backgroundAlpha = backgroundDraft.backgroundAlpha;
+            preset.backgroundTiled = backgroundDraft.backgroundTiled;
+            preset.backgroundTileScale = backgroundDraft.backgroundTileScale;
+            if (!ApplyQtBuiltInLayoutPreset(builtInPreset->currentText(), &preset)) return;
+            scale->setCurrentIndex(std::max(0, scale->findData(preset.scalePercent)));
+            opacity->setValue(preset.windowOpacityPercent);
+            spacing->setCurrentIndex(std::max(0, spacing->findData(preset.spacingPercent)));
+            rounding->setCurrentIndex(std::max(0, rounding->findData(preset.cornerRadius)));
+            compact->setChecked(preset.compactRows);
+            decorated->setChecked(preset.decorated);
+            backgroundDraft.windowBackgrounds = preset.windowBackgrounds;
+            backgroundDraft.backgroundAlpha = preset.backgroundAlpha;
+            backgroundDraft.backgroundTiled = preset.backgroundTiled;
+            backgroundDraft.backgroundTileScale = preset.backgroundTileScale;
+            updateBackgroundsButton();
+            notice->setText(QString::fromUtf8("Раскладка применена; палитра интерфейса не меняется. Сохраните настройки, чтобы оставить её после перезапуска."));
+        });
     form->addRow(QString::fromUtf8("Масштаб текста"), scale);
     form->addRow(QString::fromUtf8("Прозрачность окна"), opacityRow);
     form->addRow(QString::fromUtf8("Интервалы интерфейса"), spacing);
     form->addRow(QString::fromUtf8("Скругление карточек и акцентных кнопок"), rounding);
     form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
     form->addRow(QString(), backgroundsButton);
+    auto* builtInPresetRow = new QWidget;
+    auto* builtInPresetLayout = new QHBoxLayout(builtInPresetRow);
+    builtInPresetLayout->setContentsMargins(0, 0, 0, 0);
+    builtInPresetLayout->addWidget(builtInPreset, 1);
+    builtInPresetLayout->addWidget(applyBuiltInPreset);
+    form->addRow(QString::fromUtf8("Быстрая раскладка"), builtInPresetRow);
     form->addRow(QString(), presetRow);
     form->addRow(QString::fromUtf8("Новый/обновляемый пресет"), presetNameRow);
     QObject::connect(applyPreset, &QPushButton::clicked, &dialog, [&] {
