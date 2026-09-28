@@ -748,6 +748,8 @@ static bool TestCloudAutoSync() {
     return success;
 }
 
+static bool SubmitAdminLoginForTest(const QString& password, bool remember);
+
 static bool TestCloudReleaseUpdate() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     const auto workspace = std::filesystem::u8path((temp.path() + "/workspace").toUtf8().toStdString());
@@ -814,6 +816,22 @@ static bool TestCloudReleaseUpdate() {
         }
     });
     launchAction->trigger();
+    QAction* adminAction = nullptr;
+    for (auto* action : window.findChildren<QAction*>())
+        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+    if (!adminAction) return false;
+    QTimer::singleShot(0, [] { SubmitAdminLoginForTest(QStringLiteral("admin123"), false); });
+    adminAction->trigger();
+    auto* auditSource = window.findChild<QComboBox*>("auditSourceFilter");
+    auto* auditTable = window.findChild<QTableWidget*>("records");
+    if (!navigation || !auditSource || !auditTable) return false;
+    navigation->setCurrentRow(7);
+    auditSource->setCurrentIndex(5);
+    bool releaseAuditVisible = false;
+    for (int row = 0; row < auditTable->rowCount(); ++row)
+        releaseAuditVisible |= auditTable->item(row, 3)->text() == QString::fromUtf8("Установка обновления") &&
+            auditTable->item(row, 6)->text() == QStringLiteral("Cloud release installer downloaded and local copy hashed");
+    if (!releaseAuditVisible) return false;
     window.close();
     return canceled;
 }
@@ -835,6 +853,20 @@ static bool TestQtAdminAuthParity() {
     auto* login = window.findChild<QAction*>("adminLoginAction");
     auto* passwordAction = window.findChild<QAction*>("changeAdminPasswordAction");
     if (!login || !passwordAction || passwordAction->isVisible()) return false;
+    bool rejectedAttempt = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* password = dialog ? dialog->findChild<QLineEdit*>("adminLoginPassword") : nullptr;
+        auto* notice = dialog ? dialog->findChild<QLabel*>("adminLoginNotice") : nullptr;
+        auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
+        if (!dialog || !password || !notice || !buttons) { if (dialog) dialog->reject(); return; }
+        password->setText(QStringLiteral("private-wrong-password-fixture"));
+        buttons->button(QDialogButtonBox::Ok)->click();
+        rejectedAttempt = notice->text().contains(QString::fromUtf8("Неверный пароль")) && password->text().isEmpty();
+        dialog->reject();
+    });
+    login->trigger();
+    if (!rejectedAttempt || LoadAdminStayLoggedIn(directory) || passwordAction->isVisible()) return false;
     bool rememberControlSeen = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -865,6 +897,24 @@ static bool TestQtAdminAuthParity() {
     });
     login->trigger();
     if (!rememberControlSeen || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible()) return false;
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* auditSource = window.findChild<QComboBox*>("auditSourceFilter");
+    auto* auditTable = window.findChild<QTableWidget*>("records");
+    if (!navigation || !auditSource || !auditTable) return false;
+    navigation->setCurrentRow(7);
+    auditSource->setCurrentIndex(5);
+    bool rejectedEvent = false, successEvent = false;
+    for (int row = 0; row < auditTable->rowCount(); ++row) {
+        rejectedEvent |= auditTable->item(row, 3)->text() == QString::fromUtf8("Аутентификация администратора") &&
+            auditTable->item(row, 6)->text() == QStringLiteral("Administrator login rejected");
+        successEvent |= auditTable->item(row, 3)->text() == QString::fromUtf8("Аутентификация администратора") &&
+            auditTable->item(row, 6)->text() == QStringLiteral("Administrator login succeeded; persistent session enabled");
+    }
+    QFile authLogFile(QString::fromStdWString((directory / "meta/qt-application-log.json").wstring()));
+    if (!rejectedEvent || !successEvent || !authLogFile.open(QIODevice::ReadOnly)) return false;
+    const auto authLogBytes = authLogFile.readAll();
+    authLogFile.close();
+    if (authLogBytes.contains("private-wrong-password-fixture")) return false;
     window.close();
     QtWindow restarted(workspace); restarted.show(); QApplication::processEvents();
     passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
@@ -878,6 +928,7 @@ static bool TestQtAdminAuthParity() {
             LoadAdminPassword(directory) != "old-admin-password" || !LoadAdminStayLoggedIn(directory)) return false;
         repeatedLaunch.close();
     }
+    if (!authLogFile.open(QIODevice::ReadOnly) || !authLogFile.readAll().contains("Administrator session restored")) return false;
     restarted.show(); QApplication::processEvents();
     passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
     login = restarted.findChild<QAction*>("adminLoginAction");
@@ -935,8 +986,6 @@ static bool TestQtAdminAuthParity() {
     restarted.close();
     return success;
 }
-
-static bool SubmitAdminLoginForTest(const QString& password, bool remember);
 
 static bool TestCatalogMutationCoreAudit() {
     const char* overrideValue = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
@@ -2534,6 +2583,20 @@ static bool TestQtStorageHealthReport() {
     std::cerr << "storageHealth: after delete preview" << std::endl;
     if (std::filesystem::exists(workspacePath / "stray-report-test.bin") ||
         !std::filesystem::exists(workspacePath / "appeared-after-preview.bin")) return fail("selected cleanup scope");
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* auditSource = window.findChild<QComboBox*>("auditSourceFilter");
+    auto* auditTable = window.findChild<QTableWidget*>("records");
+    if (!navigation || !auditSource || !auditTable) return fail("audit controls unavailable after cleanup");
+    navigation->setCurrentRow(7);
+    auditSource->setCurrentIndex(5);
+    bool cleanupAuditVisible = false;
+    for (int row = 0; row < auditTable->rowCount(); ++row) {
+        if (auditTable->item(row, 3)->text() == QString::fromUtf8("Проверка и очистка хранилища") &&
+            auditTable->item(row, 6)->text() == QStringLiteral("Administrator removed explicitly approved stray workspace entries")) {
+            cleanupAuditVisible = !auditTable->item(row, 6)->text().contains(QString::fromUtf8("stray-report-test.bin"));
+        }
+    }
+    if (!cleanupAuditVisible) return fail("privacy-safe storage cleanup missing from core audit");
 
     const auto treeRoot = root / "tree-cleanup";
     std::filesystem::create_directories(treeRoot / "unknown-dir" / "nested");

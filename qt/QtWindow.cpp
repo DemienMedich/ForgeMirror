@@ -425,6 +425,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
     admin_ = (!adminPasswordOverride || !*adminPasswordOverride) && LoadAdminStayLoggedIn(workspace_.directory);
     loadAppLogs();
+    if (admin_) appendLog(AppLogLevel::Info, "CoreAuthentication", "Administrator session restored");
     lastCloudAutoSyncAt_ = QDateTime::currentSecsSinceEpoch();
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
     ApplyQtDisplaySettings(*qApp, displaySettings_);
@@ -1051,7 +1052,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     labelForAccessibility(auditSourceFilter_, QString::fromUtf8("Источник событий аудита"));
     auditSourceFilter_->setMaximumWidth(145);
     auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"),
-        QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Транзакции XP")});
+        QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Core-события")});
     auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 5));
     auditSourceFilter_->setToolTip(QString::fromUtf8("Показывать события выбранного источника аудита"));
     filters->addWidget(auditSourceFilter_);
@@ -1983,6 +1984,7 @@ void QtWindow::authenticate() {
             return;
         }
         admin_ = false;
+        appendLog(AppLogLevel::Info, "CoreAuthentication", "Administrator session ended");
     } else {
         QDialog dialog(this);
         dialog.setObjectName("adminLoginDialog");
@@ -2017,6 +2019,7 @@ void QtWindow::authenticate() {
         connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
             const auto entered = password->text();
             if (u(entered) != LoadAdminPassword(workspace_.directory)) {
+                appendLog(AppLogLevel::Warning, "CoreAuthentication", "Administrator login rejected");
                 password->clear();
                 notice->setText(QString::fromUtf8("Неверный пароль администратора."));
                 password->setFocus();
@@ -2028,6 +2031,9 @@ void QtWindow::authenticate() {
             }
             password->clear();
             admin_ = true;
+            appendLog(AppLogLevel::Info, "CoreAuthentication", remember->isChecked()
+                ? "Administrator login succeeded; persistent session enabled"
+                : "Administrator login succeeded; session-only mode");
             dialog.accept();
         });
         if (dialog.exec() != QDialog::Accepted) return;
@@ -3314,14 +3320,21 @@ void QtWindow::render() {
                 const bool coreRecoveryEvent = entry.source == "CoreTransactionRecovery";
                 const bool coreTaskMutationEvent = entry.source == "CoreTaskMutation";
                 const bool coreCatalogMutationEvent = entry.source == "CoreCatalogMutation";
+                const bool coreAuthenticationEvent = entry.source == "CoreAuthentication";
+                const bool coreStorageEvent = entry.source == "StorageCleanup" || entry.source == "StorageHealthReport";
+                const bool coreReleaseEvent = entry.source == "CloudRelease";
                 const bool coreEvent = coreWalletEvent || coreCloudEvent || coreProfileEvent || coreRecoveryEvent ||
-                    coreTaskMutationEvent || coreCatalogMutationEvent || entry.source == "CoreTaskCompletion";
+                    coreTaskMutationEvent || coreCatalogMutationEvent || coreAuthenticationEvent || coreStorageEvent ||
+                    coreReleaseEvent || entry.source == "CoreTaskCompletion";
                 const QString sourceLabel = coreWalletEvent ? QString::fromUtf8("Операция кошелька")
                     : coreCloudEvent ? QString::fromUtf8("Облачный перенос")
                     : coreProfileEvent ? QString::fromUtf8("Операция профиля")
                     : coreRecoveryEvent ? QString::fromUtf8("Восстановление транзакции")
                     : coreTaskMutationEvent ? QString::fromUtf8("Изменение задач")
                     : coreCatalogMutationEvent ? QString::fromUtf8("Изменение справочников")
+                    : coreAuthenticationEvent ? QString::fromUtf8("Аутентификация администратора")
+                    : coreStorageEvent ? QString::fromUtf8("Проверка и очистка хранилища")
+                    : coreReleaseEvent ? QString::fromUtf8("Установка обновления")
                     : QString::fromUtf8("Завершение XP");
                 const auto level = entry.level == AppLogLevel::Info ? QString::fromUtf8("Инфо")
                     : entry.level == AppLogLevel::Warning ? QString::fromUtf8("Предупреждение") : QString::fromUtf8("Ошибка");
