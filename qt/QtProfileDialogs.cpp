@@ -251,7 +251,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         } catch (const std::exception& error) {
             std::string text = error.what();
             if (prepared) {
-                try { RecoverTaskCompletion(workspace.directory); text += u8" Изменения полностью отменены."; }
+                try { text += RecoverTaskCompletionWithNotice(workspace.directory); }
                 catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
             }
             status->setText(q(text));

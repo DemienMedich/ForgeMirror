@@ -349,6 +349,18 @@ bool RecoverTaskCompletion(const std::filesystem::path& root,
     return true;
 }
 
+std::string RecoverTaskCompletionWithNotice(const std::filesystem::path& root,
+                                            const std::string& rollbackMessage) {
+    std::filesystem::path preservedFiles;
+    RecoverTaskCompletion(root, &preservedFiles);
+    std::string notice = " " + rollbackMessage;
+    if (!preservedFiles.empty()) {
+        preservedFiles.make_preferred();
+        notice += std::string(u8" Изменённые файлы перед откатом сохранены: ") + preservedFiles.u8string() + ".";
+    }
+    return notice;
+}
+
 void PrepareProjectDeletionRecovery(const std::filesystem::path& directory) {
     prepareFileJournal(directory, "FORGEMIRROR_QT_PROJECT_DELETE_1",
         {"meta/projects.json", "meta/updates/projects.last-good.json", "meta/tasks.json",
@@ -469,8 +481,7 @@ AppProfileMutationResult ReapplyRulesWithRecovery(AppContext& app,
         result.errorMessage = error.what();
         try {
             if (std::filesystem::exists(journalPath(app.storageDir))) {
-                RecoverTaskCompletion(app.storageDir);
-                result.errorMessage += u8" Изменения полностью отменены.";
+                result.errorMessage += RecoverTaskCompletionWithNotice(app.storageDir);
             }
         } catch (const std::exception&) {
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
@@ -500,8 +511,7 @@ AppProfileMutationResult GrantDirectSkillXpWithRecovery(AppContext& app,
         result.awardedGlobalXp = 0; result.awardedSkillXp = 0; result.errorMessage = error.what();
         try {
             if (std::filesystem::exists(journalPath(app.storageDir))) {
-                RecoverTaskCompletion(app.storageDir);
-                result.errorMessage += u8" Изменения полностью отменены.";
+                result.errorMessage += RecoverTaskCompletionWithNotice(app.storageDir);
             }
         } catch (const std::exception&) {
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
@@ -529,8 +539,7 @@ AppProfileMutationResult SaveProfileSnapshotWithAuditRecovery(AppContext& app,
         result.profile.reset(); result.errorMessage = error.what();
         try {
             if (std::filesystem::exists(journalPath(app.storageDir))) {
-                RecoverTaskCompletion(app.storageDir);
-                result.errorMessage += u8" Изменения полностью отменены.";
+                result.errorMessage += RecoverTaskCompletionWithNotice(app.storageDir);
             }
         } catch (const std::exception&) {
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
@@ -562,8 +571,7 @@ AppProfileMutationResult ChangeProfilePasswordWithAuditRecovery(AppContext& app,
         result.profile.reset(); result.errorMessage = error.what();
         try {
             if (std::filesystem::exists(journalPath(app.storageDir))) {
-                RecoverTaskCompletion(app.storageDir);
-                result.errorMessage += u8" Изменения полностью отменены.";
+                result.errorMessage += RecoverTaskCompletionWithNotice(app.storageDir);
             }
         } catch (const std::exception&) {
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
@@ -590,8 +598,7 @@ AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
         result.ok = false; result.changed = false; result.errorMessage = error.what();
         try {
             if (std::filesystem::exists(journalPath(directory))) {
-                RecoverTaskCompletion(directory);
-                result.errorMessage += u8" Изменения полностью отменены.";
+                result.errorMessage += RecoverTaskCompletionWithNotice(directory);
             }
         } catch (const std::exception&) {
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён для восстановления при запуске.";
@@ -677,7 +684,7 @@ AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -703,7 +710,7 @@ AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -730,7 +737,7 @@ AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& dire
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -766,7 +773,7 @@ AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -830,7 +837,7 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(app.storageDir); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(app.storageDir); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -937,7 +944,7 @@ AppMutationResult DeleteAwardedTasksWithRecovery(AppContext& app,
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(app.storageDir); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(app.storageDir); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -979,7 +986,7 @@ AppMutationResult DeleteAwardedTaskRecordKeepXpWithRecovery(const std::filesyste
         if (prepared) {
             tasks = oldTasks;
             audit = oldAudit;
-            try { RecoverTaskCompletion(directory); result.errorMessage += u8" Изменения полностью отменены."; }
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
@@ -1145,8 +1152,8 @@ AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& ta
             tasks = oldTasks;
             audit = oldAudit;
             try {
-                RecoverTaskCompletion(app.storageDir);
-                result.errorMessage += u8" Начисление полностью отменено.";
+                result.errorMessage += RecoverTaskCompletionWithNotice(
+                    app.storageDir, u8"Начисление полностью отменено.");
             } catch (const std::exception&) {
                 result.errorMessage += u8" Откат не завершён. Закройте Qt; журнал meta/qt-xp-transaction сохранён для восстановления при запуске.";
             }

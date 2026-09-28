@@ -37,6 +37,11 @@ AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& ta
 // Recover a pending Qt XP or metadata transaction before loading workspace data. Throws on failure.
 bool RecoverTaskCompletion(const std::filesystem::path& directory,
                            std::filesystem::path* preservedInterruptedFiles = nullptr);
+// Roll back a pending transaction and retain a diagnostic copy of every changed
+// in-flight file before restoring its pre-image. The returned notice includes
+// the recovery-copy path when one was needed.
+std::string RecoverTaskCompletionWithNotice(const std::filesystem::path& directory,
+    const std::string& rollbackMessage = u8"Изменения полностью отменены.");
 
 // Project deletion spans projects, tasks and audit. The Qt caller brackets the existing
 // mutation with this journal so a process interruption restores one coherent snapshot.

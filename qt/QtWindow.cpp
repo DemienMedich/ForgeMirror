@@ -287,10 +287,9 @@ AppProfileMutationResult runWalletMutationWithAudit(
         result.errorMessage = error.what();
         if (prepared) {
             try {
-                RecoverTaskCompletion(workspace.directory);
+                result.errorMessage += RecoverTaskCompletionWithNotice(workspace.directory, u8"Все изменения отменены.");
                 if (!restoreProfileId.empty()) workspace.storage->set_active_profile(restoreProfileId);
                 workspace.reload();
-                result.errorMessage += u8" Все изменения отменены.";
                 if (telemetry) telemetry(AppLogLevel::Warning, "Wallet mutation rolled back after failure");
             } catch (const std::exception&) {
                 result.errorMessage += u8" Откат не завершён; журнал сохранён для восстановления при запуске.";
@@ -5937,7 +5936,7 @@ void QtWindow::deleteEntry() {
             appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Skill deletion failed or rolled back");
             std::string text = error.what();
             if (prepared) {
-                try { RecoverTaskCompletion(workspace_.directory); text += u8" Изменения полностью отменены."; }
+                try { text += RecoverTaskCompletionWithNotice(workspace_.directory); }
                 catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
             }
             reload(); message(text); return;
@@ -5997,7 +5996,7 @@ void QtWindow::deleteEntry() {
             appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Profession deletion failed or rolled back");
             std::string text = error.what();
             if (prepared) {
-                try { RecoverTaskCompletion(workspace_.directory); text += u8" Изменения полностью отменены."; }
+                try { text += RecoverTaskCompletionWithNotice(workspace_.directory); }
                 catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
             }
             reload();
@@ -6118,7 +6117,7 @@ void QtWindow::deleteEntry() {
         std::string text = error.what();
         bool recovered = !prepared;
         if (prepared) {
-            try { RecoverTaskCompletion(workspace_.directory); recovered = true; text += u8" Изменения полностью отменены."; }
+            try { text += RecoverTaskCompletionWithNotice(workspace_.directory); recovered = true; }
             catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
         }
         if (recovered && prepared) reload();

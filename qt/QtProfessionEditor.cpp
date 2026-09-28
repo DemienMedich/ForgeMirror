@@ -154,10 +154,9 @@ QString MergeQtProfessions(QtWorkspace& workspace, const std::string& restorePro
         std::string message = error.what();
         if (prepared) {
             try {
-                RecoverTaskCompletion(workspace.directory);
+                message += RecoverTaskCompletionWithNotice(workspace.directory, u8"Все изменения отменены.");
                 if (!restoreProfileId.empty()) workspace.storage->set_active_profile(restoreProfileId);
                 workspace.reload();
-                message += u8" Все изменения отменены.";
             } catch (const std::exception&) { message += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
         }
         return q(message);

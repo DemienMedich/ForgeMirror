@@ -85,7 +85,7 @@ bool appendSessionAudit(const std::filesystem::path& directory, const std::strin
         return true;
     } catch (...) {
         if (prepared) {
-            try { RecoverTaskCompletion(directory); } catch (...) {}
+            try { (void)RecoverTaskCompletionWithNotice(directory); } catch (...) {}
         }
         return false;
     }
@@ -101,7 +101,7 @@ bool persistTrustedSessionChange(const std::filesystem::path& directory, const s
         CommitQtRecoveryTransaction(directory);
         return true;
     } catch (...) {
-        if (prepared) { try { RecoverTaskCompletion(directory); } catch (...) {} }
+        if (prepared) { try { (void)RecoverTaskCompletionWithNotice(directory); } catch (...) {} }
         return false;
     }
 }
@@ -141,7 +141,7 @@ bool QtProfileSession::unlock(IJobStorage& storage, const std::string& id, const
         id_ = id; fingerprint_ = fingerprint(*profile); trusted_ = days > 0; trustedUntil_ = expiry;
         return true;
     } catch (...) {
-        if (prepared) { try { RecoverTaskCompletion(directory_); } catch (...) {} }
+        if (prepared) { try { (void)RecoverTaskCompletionWithNotice(directory_); } catch (...) {} }
         return false;
     }
 }
@@ -213,7 +213,7 @@ bool QtProfileSession::lock(bool forgetTrust) {
         } catch (...) {
             saved = false;
             if (prepared) {
-                try { RecoverTaskCompletion(directory_); } catch (...) {}
+                try { (void)RecoverTaskCompletionWithNotice(directory_); } catch (...) {}
             }
         }
     }

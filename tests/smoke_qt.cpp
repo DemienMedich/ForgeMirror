@@ -3769,6 +3769,60 @@ static bool TestSkillMergeRecovery() {
     return true;
 }
 
+static bool TestImmediateRollbackPreservesChangedFiles() {
+    auto fail = [](const char* text) {
+        std::cerr << "immediateRollbackPreservation: " << text << '\n';
+        return false;
+    };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return fail("temporary directory");
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    const auto target = directory / "skills.txt";
+    const QByteArray original = "original catalog\n";
+    const QByteArray external = "external catalog edit\n";
+    auto writeBytes = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QDir().mkpath(QFileInfo(QString::fromStdWString(path.wstring())).absolutePath());
+        QFile file(QString::fromStdWString(path.wstring()));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    auto readBytes = [](const std::filesystem::path& path) {
+        QFile file(QString::fromStdWString(path.wstring()));
+        if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+        return file.readAll();
+    };
+    if (!writeBytes(target, original)) return fail("initial bytes");
+    PrepareSkillDeletionRecovery(directory);
+    if (!writeBytes(target, external)) return fail("external in-flight edit");
+
+    const auto notice = RecoverTaskCompletionWithNotice(directory);
+    if (readBytes(target) != original) return fail("transaction pre-image was not restored");
+    std::filesystem::path preservedDirectory;
+    for (const auto& item : std::filesystem::directory_iterator(directory / "meta" / "updates")) {
+        if (item.is_directory() && item.path().filename().u8string().rfind("qt-xp-recovery-", 0) == 0) {
+            preservedDirectory = item.path();
+            break;
+        }
+    }
+    if (preservedDirectory.empty()) return fail("preservation directory was not created");
+    const auto preservedBytes = readBytes(preservedDirectory / "skills.txt");
+    if (preservedBytes != external) {
+        std::cerr << "preserved skill bytes=" << preservedBytes.toHex().constData()
+                  << " expected=" << external.toHex().constData() << '\n';
+        return fail("external bytes were not copied before rollback");
+    }
+    auto displayPath = preservedDirectory;
+    displayPath.make_preferred();
+    const auto preservedPath = displayPath.u8string();
+    if (notice.find(preservedPath) == std::string::npos) {
+        std::cerr << "notice=" << notice << " path=" << preservedPath << '\n';
+        return fail("recovery copy path missing from user message");
+    }
+    const auto manifest = readBytes(preservedDirectory / "manifest.txt");
+    if (!manifest.contains("skills.txt") || !manifest.contains("saved"))
+        return fail("preservation manifest missing changed target");
+    return true;
+}
+
 static bool TestProfileDeletionRecovery() {
     auto fail = [](const char* text) { std::cerr << "profileDelete: " << text << '\n'; return false; };
     QTemporaryDir temp;
@@ -6040,6 +6094,7 @@ int main(int argc, char** argv) {
     if (!TestProfessionMergeRecovery()) { std::cerr << "Profession merge recovery failed\n"; return 1; }
     if (!TestSkillDeletionRecovery()) { std::cerr << "Skill deletion recovery failed\n"; return 1; }
     if (!TestSkillMergeRecovery()) { std::cerr << "Skill merge recovery failed\n"; return 1; }
+    if (!TestImmediateRollbackPreservesChangedFiles()) { std::cerr << "Immediate rollback preservation failed\n"; return 1; }
     if (!TestProfileDeletionRecovery()) { std::cerr << "Profile deletion recovery failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
