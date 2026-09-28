@@ -1059,6 +1059,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Просрочка"), QString::fromUtf8("Ожидают XP")});
     projectSort_->setCurrentIndex(displaySettings_.projectSortMode);
     filters->addWidget(projectSort_);
+    projectFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
+    projectFilterReset_->setObjectName("projectFilterReset");
+    labelForAccessibility(projectFilterReset_, QString::fromUtf8("Сбросить поиск и фильтры проектов"));
+    projectFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск и снять фильтры просрочки и ожидания XP; сортировка не меняется"));
+    filters->addWidget(projectFilterReset_);
     auditSourceFilter_ = new QComboBox;
     auditSourceFilter_->setObjectName("auditSourceFilter");
     labelForAccessibility(auditSourceFilter_, QString::fromUtf8("Источник событий аудита"));
@@ -1416,15 +1421,22 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(refresh, &QPushButton::clicked, this, [this] { reload(); });
     connect(navigation_, &QListWidget::currentRowChanged, this, [this] {
         if (displaySettings_.lastPage == Logs) displaySettings_.logFilter = search_->text();
+        if (displaySettings_.lastPage == Projects) displaySettings_.projectFilter = search_->text();
+        const int page = navigation_->currentRow();
+        {
+            QSignalBlocker blocker(search_);
+            search_->setText(page == Logs ? displaySettings_.logFilter : page == Projects ? displaySettings_.projectFilter : QString());
+        }
         saveDisplayContext();
-        QSignalBlocker blocker(search_);
-        search_->setText(navigation_->currentRow() == Logs ? displaySettings_.logFilter : QString());
         render();
     });
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
     connect(search_, &QLineEdit::textChanged, this, [this] {
         if (navigation_->currentRow() == Logs) {
             displaySettings_.logFilter = search_->text();
+            saveDisplayContext();
+        } else if (navigation_->currentRow() == Projects) {
+            displaySettings_.projectFilter = search_->text();
             saveDisplayContext();
         }
         render();
@@ -1526,6 +1538,16 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(logPresetErrors_, &QPushButton::clicked, this, [setLogLevels] { setLogLevels(false, false, true); });
     connect(projectsOverdue_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
     connect(projectsXpPending_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
+    connect(projectFilterReset_, &QPushButton::clicked, this, [this] {
+        const QSignalBlocker searchBlocker(search_);
+        const QSignalBlocker overdueBlocker(projectsOverdue_);
+        const QSignalBlocker xpPendingBlocker(projectsXpPending_);
+        search_->clear();
+        projectsOverdue_->setChecked(false);
+        projectsXpPending_->setChecked(false);
+        saveDisplayContext();
+        render();
+    });
     for (auto* filter : {auditActorFilter_, auditObjectFilter_, auditFieldFilter_})
         connect(filter, &QLineEdit::textChanged, this, [this] { render(); });
     connect(auditFilterReset_, &QPushButton::clicked, this, [this] {
@@ -2181,6 +2203,9 @@ bool QtWindow::reload() {
     if (page == Logs) {
         const QSignalBlocker blocker(search_);
         search_->setText(displaySettings_.logFilter);
+    } else if (page == Projects) {
+        const QSignalBlocker blocker(search_);
+        search_->setText(displaySettings_.projectFilter);
     }
     if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
     appendLog(AppLogLevel::Info, "Qt", "Локальное рабочее пространство загружено или обновлено.");
@@ -2221,6 +2246,7 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.reportComparePrevious = reportCompare_->isChecked();
     displaySettings_.reportDateFrom = reportFrom_->date();
     displaySettings_.reportDateTo = reportTo_->date();
+    if (navigation_->currentRow() == Projects) displaySettings_.projectFilter = search_->text();
     displaySettings_.projectSortMode = projectSort_->currentIndex();
     displaySettings_.projectsOverdueOnly = projectsOverdue_->isChecked();
     displaySettings_.projectsXpPendingOnly = projectsXpPending_->isChecked();
@@ -2381,7 +2407,9 @@ void QtWindow::render() {
         for (int column = 0; column < labels.size(); ++column) table_->setColumnHidden(column, false);
     };
     auto row = [this](const std::string& id, const QStringList& values) {
-        if (!values.join(' ').contains(search_->text(), Qt::CaseInsensitive)) return;
+        const auto searchableText = navigation_->currentRow() == Projects && values.size() >= 2
+            ? values.mid(0, 2).join(' ') : values.join(' ');
+        if (!searchableText.contains(search_->text(), Qt::CaseInsensitive)) return;
         int index = table_->rowCount();
         table_->insertRow(index);
         for (int col = 0; col < values.size(); ++col) {
@@ -2432,6 +2460,7 @@ void QtWindow::render() {
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
     projectSort_->setVisible(page == Projects);
+    projectFilterReset_->setVisible(page == Projects);
     auditSourceFilter_->setVisible(page == Audit && admin_);
     auditFilters_->setVisible(page == Audit);
     logInfo_->setVisible(page == Logs);

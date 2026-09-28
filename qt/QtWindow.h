@@ -133,6 +133,7 @@ private:
     QDateEdit* reportTo_;
     QWidget* reportCustomRange_;
     QComboBox* projectSort_;
+    QPushButton* projectFilterReset_;
     QComboBox* auditSourceFilter_;
     QWidget* auditFilters_;
     QLineEdit* auditActorFilter_;

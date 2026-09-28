@@ -42,6 +42,7 @@ struct QtDisplaySettings {
     bool reportComparePrevious = false;
     QDate reportDateFrom;
     QDate reportDateTo;
+    QString projectFilter;
     int projectSortMode = 0;
     bool projectsOverdueOnly = false;
     bool projectsXpPendingOnly = false;

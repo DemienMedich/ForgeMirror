@@ -4667,7 +4667,7 @@ static bool TestRulesEditor() {
 static bool TestDisplaySettings(QApplication& app) {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
-    if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n") < 0) return false; seed.close();
+    if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n\n[projects]\nfilter=legacy-project-query\nsortMode=3\noverdueOnly=1\nxpPendingOnly=1\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     QtLayoutPreset quickPreset;
     quickPreset.scalePercent = 110;
@@ -4710,7 +4710,11 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!imageSaved || !listedBackgrounds.contains("ui/backgrounds/reference.png") || loadedBackground.size() != QSize(16, 12) ||
         !LoadQtBackgroundImage(directory, "ui/backgrounds/../reference.png").isNull() ||
         !LoadQtBackgroundImage(directory, "C:/outside.png").isNull()) { QImageReader probe(temp.path() + "/ui/backgrounds/reference.png", "png"); std::cerr << "Qt background image validation/listing failed saved=" << imageSaved << " listed=" << listedBackgrounds.join(',').toUtf8().constData() << " size=" << loadedBackground.width() << 'x' << loadedBackground.height() << " reader=" << probe.canRead() << " readerSize=" << probe.size().width() << 'x' << probe.size().height() << " error=" << probe.errorString().toUtf8().constData() << " base=" << QFileInfo(temp.path() + "/ui/backgrounds").canonicalFilePath().toUtf8().constData() << " file=" << QFileInfo(temp.path() + "/ui/backgrounds/reference.png").canonicalFilePath().toUtf8().constData() << '\n'; return false; }
-    auto settings = LoadQtDisplaySettings(directory); settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    auto settings = LoadQtDisplaySettings(directory);
+    if (settings.projectFilter != QStringLiteral("legacy-project-query") || settings.projectSortMode != 3 ||
+        !settings.projectsOverdueOnly || !settings.projectsXpPendingOnly) return false;
+    settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
+    settings.projectFilter = QString::fromUtf8("remember project query");
     QDir().mkpath(temp.path() + "/meta/ui-presets");
     QFile legacyPreset(temp.path() + "/meta/ui-presets/LegacyLayout.ini");
     if (!legacyPreset.open(QIODevice::WriteOnly) ||
@@ -4874,6 +4878,7 @@ static bool TestDisplaySettings(QApplication& app) {
         qAbs(loaded.profileSkillWeightMax - 1.4) > 0.001 || loaded.taskQuickFilter != 13 || !loaded.reportComparePrevious || loaded.reportView != 3 ||
         loaded.logShowInfo || !loaded.logShowWarning || loaded.logShowError || loaded.logSourceFilter != QStringLiteral("Qt") ||
         loaded.logFilter != QStringLiteral("remember this log query") ||
+        loaded.projectFilter != QString::fromUtf8("remember project query") ||
         loaded.logAutoScroll || !loaded.logCompactView || loaded.minimizeToTray !=
             (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) || loaded.deadlineNotificationsWhenClosed) {
         std::cerr << "Qt display/background settings persistence mismatch path=" << loaded.windowBackgrounds[0].toUtf8().constData()
@@ -4882,6 +4887,7 @@ static bool TestDisplaySettings(QApplication& app) {
                   << " levels=" << loaded.logShowInfo << loaded.logShowWarning << loaded.logShowError << '\n';
         return false;
     }
+    if (!SetAdminStayLoggedIn(directory, true)) return false;
     QtWorkspace restoredWorkspace(directory);
     QtWindow restoredWindow(restoredWorkspace);
     if (qAbs(restoredWindow.windowOpacity() - 0.86) > 0.01) return false;
@@ -4922,8 +4928,27 @@ static bool TestDisplaySettings(QApplication& app) {
     if (profileTable->isHidden() || LoadQtDisplaySettings(directory).profileViewMode != 0) return false;
     restoredNavigation->setCurrentRow(2); QApplication::processEvents();
     if (!hasAccessibleName("projectSort")) return false;
+    auto* projectReset = restoredWindow.findChild<QPushButton*>("projectFilterReset");
+    auto* projectsOverdue = restoredWindow.findChild<QCheckBox*>("projectsOverdueOnly");
+    auto* projectsXpPending = restoredWindow.findChild<QCheckBox*>("projectsXpPendingOnly");
+    auto* projectSort = restoredWindow.findChild<QComboBox*>("projectSort");
+    if (!projectReset || !projectsOverdue || !projectsXpPending || !projectSort ||
+        accessibleSearch->text() != QString::fromUtf8("remember project query")) return false;
+    accessibleSearch->setText(QString::fromUtf8("temporary project query"));
+    if (LoadQtDisplaySettings(directory).projectFilter != QString::fromUtf8("temporary project query")) return false;
+    restoredNavigation->setCurrentRow(0); QApplication::processEvents();
+    if (!accessibleSearch->text().isEmpty()) return false;
+    restoredNavigation->setCurrentRow(2); QApplication::processEvents();
+    if (accessibleSearch->text() != QString::fromUtf8("temporary project query")) return false;
+    projectsOverdue->setChecked(true); projectsXpPending->setChecked(true); projectSort->setCurrentIndex(2);
+    projectReset->click(); QApplication::processEvents();
+    const auto resetProjectFilters = LoadQtDisplaySettings(directory);
+    if (!accessibleSearch->text().isEmpty() || projectsOverdue->isChecked() || projectsXpPending->isChecked() ||
+        projectSort->currentIndex() != 2 || !resetProjectFilters.projectFilter.isEmpty() ||
+        resetProjectFilters.projectsOverdueOnly || resetProjectFilters.projectsXpPendingOnly || resetProjectFilters.projectSortMode != 2)
+        return false;
     restoredNavigation->setCurrentRow(3); QApplication::processEvents();
-    if (!hasAccessibleName("catalogProfessionFilter")) return false;
+    if (!hasAccessibleName("catalogProfessionFilter") || !hasAccessibleName("projectFilterReset")) return false;
     restoredNavigation->setCurrentRow(1); QApplication::processEvents();
     for (const auto* name : {"statusFilter", "priorityFilter", "quickTaskFilter", "taskCreatedRange",
             "taskSortMode", "taskAssigneeFilter", "taskProjectFilter", "taskPipelineFilter", "taskFilterReset"})
@@ -5000,6 +5025,7 @@ static bool TestQtUiSettingsReset() {
     settings.cornerRadius = 12; settings.compactRows = true; settings.fullscreen = true; settings.decorated = false;
     settings.minimizeToTray = true; settings.deadlineNotificationsWhenClosed = true;
     settings.lastProfileId = QStringLiteral("profile-keep"); settings.lastPage = 13;
+    settings.projectFilter = QStringLiteral("reset-me-project-query");
     settings.taskQuickFilter = 8; settings.logFilter = QStringLiteral("keep-independent-state");
     settings.windowBackgrounds[0] = QStringLiteral("ui/backgrounds/keep.png");
     if (!SaveQtDisplaySettings(directory, settings)) return failAt(__LINE__);
@@ -5043,7 +5069,7 @@ static bool TestQtUiSettingsReset() {
     if (reset.scalePercent != 100 || reset.windowOpacityPercent != 100 || reset.spacingPercent != 100 ||
         reset.cornerRadius != 4 || reset.compactRows || reset.fullscreen || !reset.decorated || reset.minimizeToTray ||
         reset.deadlineNotificationsWhenClosed || reset.lastProfileId != QStringLiteral("profile-keep") ||
-        reset.lastPage != 0 || reset.taskQuickFilter != 0 || !reset.logFilter.isEmpty() ||
+        reset.lastPage != 0 || reset.taskQuickFilter != 0 || !reset.logFilter.isEmpty() || !reset.projectFilter.isEmpty() ||
         !reset.windowBackgrounds[0].isEmpty()) return failAt(__LINE__);
     const auto resetModel = LoadQtModelSettings(directory);
     if (!resetModel.modelPath.isEmpty() || resetModel.yaw != 0.0f || resetModel.pitch != 0.0f ||
@@ -5070,6 +5096,56 @@ static bool TestQtUiSettingsReset() {
     if (!music.open(QIODevice::ReadOnly) || music.readAll() != QByteArray("audio-data")) return failAt(__LINE__);
     QFile background(QString::fromUtf8((directory / "ui/backgrounds/keep.png").u8string()));
     return background.open(QIODevice::ReadOnly) && background.readAll() == QByteArray("background-data");
+}
+
+static bool TestVisibleQtAccessibleNames() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    if (!SetAdminStayLoggedIn(directory, true)) return false;
+    QtWorkspace workspace(directory);
+    QtWindow window(workspace);
+    window.resize(1280, 800);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    if (!navigation) return false;
+    QStringList missing;
+    for (int page = 0; page < navigation->count(); ++page) {
+        auto* item = navigation->item(page);
+        if (!item || item->isHidden()) continue;
+        navigation->setCurrentRow(page);
+        QApplication::processEvents();
+        for (auto* widget : window.findChildren<QWidget*>()) {
+            if (!widget->isVisible() || !widget->isEnabled()) continue;
+            // These are sub-controls of their owning accessible widget, not separate actions.
+            if (qobject_cast<QHeaderView*>(widget) || qobject_cast<QScrollBar*>(widget) ||
+                ((qobject_cast<QLineEdit*>(widget)) &&
+                    (qobject_cast<QAbstractSpinBox*>(widget->parentWidget()) || qobject_cast<QComboBox*>(widget->parentWidget())))) continue;
+            const bool interactive = qobject_cast<QAbstractButton*>(widget) || qobject_cast<QComboBox*>(widget) ||
+                qobject_cast<QLineEdit*>(widget) || qobject_cast<QAbstractSpinBox*>(widget) ||
+                qobject_cast<QAbstractSlider*>(widget) || qobject_cast<QAbstractItemView*>(widget);
+            if (!interactive) continue;
+            auto* accessible = QAccessible::queryAccessibleInterface(widget);
+            const auto accessibleName = widget->accessibleName().trimmed().isEmpty() && accessible
+                ? accessible->text(QAccessible::Name).trimmed() : widget->accessibleName().trimmed();
+            if (accessibleName.isEmpty()) {
+                const auto description = widget->accessibleDescription().trimmed();
+                missing.push_back(QStringLiteral("%1 <%2>%3")
+                    .arg(widget->objectName().isEmpty() ? QStringLiteral("(unnamed object)") : widget->objectName(),
+                        QString::fromLatin1(widget->metaObject()->className()),
+                        description.isEmpty() ? QString() : QStringLiteral(" — ") + description));
+            }
+        }
+    }
+    window.close();
+    missing.removeDuplicates();
+    if (!missing.isEmpty()) {
+        std::cerr << "Visible Qt controls without accessible names:\n";
+        for (const auto& name : missing) std::cerr << "  " << name.toUtf8().constData() << '\n';
+        return false;
+    }
+    return true;
 }
 
 static bool TestQtModuleToggleParity() {
@@ -5275,6 +5351,7 @@ int main(int argc, char** argv) {
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }
     if (!TestQtUiSettingsReset()) { std::cerr << "Qt UI settings reset failed\n"; return 1; }
+    if (!TestVisibleQtAccessibleNames()) { std::cerr << "Qt accessible-name audit failed\n"; return 1; }
     if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }

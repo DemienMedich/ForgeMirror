@@ -424,7 +424,8 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
                 if (pageMap[page] >= 0 && key == names[size_t(pageMap[page])]) out.windowBackgrounds[page] = normalizeBackgroundPath(value);
         }
         if (section == "projects") {
-            if (key == "sortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
+            if (key == "filter") out.projectFilter = value;
+            else if (key == "sortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "overdueOnly") out.projectsOverdueOnly = value == "1";
             else if (key == "xpPendingOnly") out.projectsXpPendingOnly = value == "1";
         }
@@ -455,6 +456,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "reportComparePrevious") out.reportComparePrevious = value == "1";
             else if (key == "reportDateFrom") out.reportDateFrom = QDate::fromString(value, Qt::ISODate);
             else if (key == "reportDateTo") out.reportDateTo = QDate::fromString(value, Qt::ISODate);
+            else if (key == "projectFilter") out.projectFilter = value;
             else if (key == "projectSortMode") { bool ok = false; const int index = value.toInt(&ok); out.projectSortMode = ok ? std::clamp(index, 0, 3) : 0; }
             else if (key == "projectsOverdueOnly") out.projectsOverdueOnly = value == "1";
             else if (key == "projectsXpPendingOnly") out.projectsXpPendingOnly = value == "1";
@@ -528,6 +530,8 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     const auto reportTo = settings.reportDateTo.isValid() ? settings.reportDateTo : today;
     set("reportDateFrom", (reportFrom <= reportTo ? reportFrom : reportTo).toString(Qt::ISODate));
     set("reportDateTo", reportTo.toString(Qt::ISODate));
+    auto projectFilter = settings.projectFilter; projectFilter.remove('\r'); projectFilter.remove('\n');
+    set("projectFilter", projectFilter);
     set("projectSortMode", QString::number(std::clamp(settings.projectSortMode, 0, 3)));
     set("projectsOverdueOnly", settings.projectsOverdueOnly ? "1" : "0");
     set("projectsXpPendingOnly", settings.projectsXpPendingOnly ? "1" : "0");
