@@ -97,6 +97,50 @@ private:
     bool tiled_ = false;
 };
 
+class QtAnalogClock final : public QWidget {
+public:
+    explicit QtAnalogClock(QWidget* parent = nullptr) : QWidget(parent) {
+        setObjectName("localAnalogClock");
+        setAccessibleName(QString::fromUtf8("Аналоговые часы"));
+        setAccessibleDescription(QString::fromUtf8("Текущее местное время."));
+        setFixedSize(76, 76);
+    }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QPointF center = rect().center();
+        const qreal radius = std::min(width(), height()) * 0.46;
+        const QColor dim = palette().color(QPalette::Disabled, QPalette::Text);
+        const QColor accent = palette().color(QPalette::Highlight);
+        constexpr qreal pi = 3.14159265358979323846;
+        painter.setPen(QPen(dim, 1.4));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(center, radius, radius);
+        for (int index = 0; index < 60; ++index) {
+            const qreal angle = (index / 60.0) * 2.0 * pi - pi * 0.5;
+            const qreal length = index % 5 == 0 ? radius * 0.12 : radius * 0.055;
+            const QPointF outer(center.x() + radius * std::cos(angle), center.y() + radius * std::sin(angle));
+            const QPointF inner(center.x() + (radius - length) * std::cos(angle), center.y() + (radius - length) * std::sin(angle));
+            painter.setPen(QPen(dim, index % 5 == 0 ? 1.6 : 0.8));
+            painter.drawLine(inner, outer);
+        }
+        const QTime time = QTime::currentTime();
+        auto hand = [&](qreal value, qreal divisions, qreal length, qreal width, const QColor& color) {
+            const qreal angle = (value / divisions) * 2.0 * pi - pi * 0.5;
+            painter.setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap));
+            painter.drawLine(center, QPointF(center.x() + radius * length * std::cos(angle),
+                center.y() + radius * length * std::sin(angle)));
+        };
+        hand(time.hour() % 12 + time.minute() / 60.0, 12.0, 0.48, 2.8, accent);
+        hand(time.minute() + time.second() / 60.0, 60.0, 0.68, 2.0, accent);
+        hand(time.second(), 60.0, 0.78, 1.2, dim);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(accent);
+        painter.drawEllipse(center, 2.3, 2.3);
+    }
+};
+
 namespace {
 class WindowDragHandle final : public QToolButton {
 public:
@@ -784,7 +828,39 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (!tooltip.isEmpty()) item->setToolTip(item->text() + QStringLiteral(" · ") + tooltip);
     }
     navigation_->setFixedWidth(168);
-    body->addWidget(navigation_);
+    auto* navigationColumn = new QWidget;
+    navigationColumn->setObjectName("navigationColumn");
+    navigationColumn->setFixedWidth(168);
+    auto* navigationLayout = new QVBoxLayout(navigationColumn);
+    navigationLayout->setContentsMargins(0, 0, 0, 0);
+    navigationLayout->setSpacing(8);
+    navigationLayout->addWidget(navigation_, 1);
+    auto* clockCard = new QFrame;
+    clockCard->setObjectName("localClockCard");
+    clockCard->setProperty("metric", true);
+    auto* clockLayout = new QVBoxLayout(clockCard);
+    clockLayout->setContentsMargins(8, 8, 8, 8);
+    clockLayout->setSpacing(4);
+    auto* clockHeading = new QLabel(QString::fromUtf8("Местное время"));
+    clockHeading->setAlignment(Qt::AlignCenter);
+    clockLayout->addWidget(clockHeading);
+    auto* analogClock = new QtAnalogClock;
+    clockLayout->addWidget(analogClock, 0, Qt::AlignHCenter);
+    auto* digitalClock = new QLabel(QTime::currentTime().toString("HH:mm:ss"));
+    digitalClock->setObjectName("localClockDigital");
+    digitalClock->setAlignment(Qt::AlignCenter);
+    digitalClock->setAccessibleName(QString::fromUtf8("Текущее местное время"));
+    clockLayout->addWidget(digitalClock);
+    navigationLayout->addWidget(clockCard);
+    auto* clockTimer = new QTimer(this);
+    clockTimer->setObjectName("localClockTimer");
+    clockTimer->setInterval(1000);
+    connect(clockTimer, &QTimer::timeout, this, [digitalClock, analogClock] {
+        digitalClock->setText(QTime::currentTime().toString("HH:mm:ss"));
+        analogClock->update();
+    });
+    clockTimer->start();
+    body->addWidget(navigationColumn);
     auto* content = new QVBoxLayout;
     content->setSpacing(8);
     auto* toolbar = new QHBoxLayout;

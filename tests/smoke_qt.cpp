@@ -4663,6 +4663,23 @@ static bool TestPomodoroQuickHeader() {
     return navigation->currentRow() == 8 || fail(8);
 }
 
+static bool TestNavigationClock() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    QtWindow window(workspace);
+    window.show(); QApplication::processEvents();
+    auto* clock = window.findChild<QWidget*>("localAnalogClock");
+    auto* digital = window.findChild<QLabel*>("localClockDigital");
+    auto* timer = window.findChild<QTimer*>("localClockTimer");
+    if (!clock || !digital || !timer || !clock->isVisible() || !timer->isActive() || timer->interval() != 1000 ||
+        digital->accessibleName() != QString::fromUtf8("Текущее местное время") ||
+        !QTime::fromString(digital->text(), "HH:mm:ss").isValid()) return false;
+    const auto pixels = clock->grab().toImage();
+    if (pixels.size() != QSize(76, 76) || pixels.pixelColor(pixels.rect().center()) != window.palette().color(QPalette::Highlight)) return false;
+    auto* accessible = QAccessible::queryAccessibleInterface(clock);
+    return accessible && accessible->text(QAccessible::Name) == QString::fromUtf8("Аналоговые часы");
+}
+
 static bool TestRulesEditor() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -5493,6 +5510,7 @@ int main(int argc, char** argv) {
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestPomodoroQuickHeader()) { std::cerr << "Pomodoro quick header failed\n"; return 1; }
+    if (!TestNavigationClock()) { std::cerr << "Navigation clock failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }
