@@ -4990,6 +4990,88 @@ static bool TestWindowDecorationHotkey() {
     return restoredDecorated;
 }
 
+static bool TestQtUiSettingsReset() {
+    auto failAt = [](int line) { std::cerr << "Qt reset test failed at line " << line << '\n'; return false; };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return failAt(__LINE__);
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    auto settings = QtDisplaySettings{};
+    settings.scalePercent = 125; settings.windowOpacityPercent = 75; settings.spacingPercent = 120;
+    settings.cornerRadius = 12; settings.compactRows = true; settings.fullscreen = true; settings.decorated = false;
+    settings.minimizeToTray = true; settings.deadlineNotificationsWhenClosed = true;
+    settings.lastProfileId = QStringLiteral("profile-keep"); settings.lastPage = 13;
+    settings.taskQuickFilter = 8; settings.logFilter = QStringLiteral("keep-independent-state");
+    settings.windowBackgrounds[0] = QStringLiteral("ui/backgrounds/keep.png");
+    if (!SaveQtDisplaySettings(directory, settings)) return failAt(__LINE__);
+    QtModelSettings model;
+    model.modelPath = QStringLiteral("models/keep.obj"); model.yaw = 2.0f; model.pitch = 0.4f;
+    model.zoom = 2.3f; model.autoRotate = false; model.autoSpeed = 2.0f; model.lineColor = QColor(Qt::red);
+    if (!SaveQtModelSettings(directory, model)) return failAt(__LINE__);
+
+    QFile ui(QString::fromUtf8((directory / "meta/ui.ini").u8string()));
+    if (!ui.open(QIODevice::Append)) return failAt(__LINE__);
+    const QByteArray preservedSections = "\n[profile]\nlastProfileId=profile-keep\ntrusted=profile-keep:4102444800\nrecent=profile-keep\n"
+        "\n[cloud]\nroot=keep-cloud-location\nautoSync=1\n"
+        "\n[pomodoro]\nworkMinutes=50\nbreakMinutes=20\nlongBreakMinutes=45\ncyclesBeforeLong=8\n"
+        "autoAdvance=1\nsoundEnabled=0\nsoundFocus=focus.wav\nsoundBreak=break.wav\nsoundVolume=12\n";
+    if (ui.write(preservedSections) != preservedSections.size()) return failAt(__LINE__);
+    ui.close();
+
+    if (!SetAdminPassword(directory, "reset-test-admin-secret") || !SetAdminStayLoggedIn(directory, true)) return failAt(__LINE__);
+    QFile adminFile(QString::fromUtf8((directory / "meta/admin.ini").u8string()));
+    if (!adminFile.open(QIODevice::ReadOnly)) return failAt(__LINE__);
+    const auto adminBytes = adminFile.readAll(); adminFile.close();
+    if (!std::filesystem::create_directories(directory / "models") && !std::filesystem::exists(directory / "models")) return failAt(__LINE__);
+    if (!std::filesystem::create_directories(directory / "music") && !std::filesystem::exists(directory / "music")) return failAt(__LINE__);
+    if (!std::filesystem::create_directories(directory / "ui/backgrounds") && !std::filesystem::exists(directory / "ui/backgrounds")) return failAt(__LINE__);
+    auto writeFixture = [](const std::filesystem::path& path, const QByteArray& bytes) {
+        QFile file(QString::fromUtf8(path.u8string()));
+        return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
+    };
+    if (!writeFixture(directory / "models/keep.obj", "model-data") ||
+        !writeFixture(directory / "music/keep.wav", "audio-data") ||
+        !writeFixture(directory / "ui/backgrounds/keep.png", "background-data")) return failAt(__LINE__);
+    QtLayoutPreset preset; preset.name = QStringLiteral("Keep this preset"); preset.scalePercent = 125;
+    QString error;
+    if (!SaveQtLayoutPreset(directory, preset, &error)) return failAt(__LINE__);
+    QFile presetFile(QString::fromUtf8((directory / "meta/qt-layout-presets.json").u8string()));
+    if (!presetFile.open(QIODevice::ReadOnly)) return failAt(__LINE__);
+    const auto presetBytes = presetFile.readAll(); presetFile.close();
+
+    if (!ResetQtUiSettings(directory)) return failAt(__LINE__);
+    const auto reset = LoadQtDisplaySettings(directory);
+    if (reset.scalePercent != 100 || reset.windowOpacityPercent != 100 || reset.spacingPercent != 100 ||
+        reset.cornerRadius != 4 || reset.compactRows || reset.fullscreen || !reset.decorated || reset.minimizeToTray ||
+        reset.deadlineNotificationsWhenClosed || reset.lastProfileId != QStringLiteral("profile-keep") ||
+        reset.lastPage != 0 || reset.taskQuickFilter != 0 || !reset.logFilter.isEmpty() ||
+        !reset.windowBackgrounds[0].isEmpty()) return failAt(__LINE__);
+    const auto resetModel = LoadQtModelSettings(directory);
+    if (!resetModel.modelPath.isEmpty() || resetModel.yaw != 0.0f || resetModel.pitch != 0.0f ||
+        resetModel.zoom != 1.0f || !resetModel.autoRotate || resetModel.autoSpeed != 0.6f ||
+        resetModel.lineColor != QColor(153, 217, 255)) return failAt(__LINE__);
+    QFile afterUi(QString::fromUtf8((directory / "meta/ui.ini").u8string()));
+    if (!afterUi.open(QIODevice::ReadOnly)) return failAt(__LINE__);
+    const auto afterBytes = afterUi.readAll(); afterUi.close();
+    const auto text = QString::fromUtf8(afterBytes);
+    if (!text.contains(QStringLiteral("trusted=profile-keep:4102444800")) ||
+        !text.contains(QStringLiteral("recent=profile-keep")) || !text.contains(QStringLiteral("root=keep-cloud-location")) ||
+        !text.contains(QStringLiteral("workMinutes=25")) || !text.contains(QStringLiteral("breakMinutes=5")) ||
+        !text.contains(QStringLiteral("longBreakMinutes=15")) || !text.contains(QStringLiteral("cyclesBeforeLong=4")) ||
+        !text.contains(QStringLiteral("autoAdvance=0")) || !text.contains(QStringLiteral("soundEnabled=1")) ||
+        !text.contains(QStringLiteral("soundVolume=80")) || text.contains(QStringLiteral("soundFocus=focus.wav")) ||
+        text.contains(QStringLiteral("scalePercent=125")) || text.contains(QStringLiteral("modelPath=models/keep.obj"))) return failAt(__LINE__);
+    QFile adminAfter(QString::fromUtf8((directory / "meta/admin.ini").u8string()));
+    if (!adminAfter.open(QIODevice::ReadOnly) || adminAfter.readAll() != adminBytes) return failAt(__LINE__);
+    QFile presetsAfter(QString::fromUtf8((directory / "meta/qt-layout-presets.json").u8string()));
+    if (!presetsAfter.open(QIODevice::ReadOnly) || presetsAfter.readAll() != presetBytes) return failAt(__LINE__);
+    QFile cloud(QString::fromUtf8((directory / "models/keep.obj").u8string()));
+    if (!cloud.open(QIODevice::ReadOnly) || cloud.readAll() != QByteArray("model-data")) return failAt(__LINE__);
+    QFile music(QString::fromUtf8((directory / "music/keep.wav").u8string()));
+    if (!music.open(QIODevice::ReadOnly) || music.readAll() != QByteArray("audio-data")) return failAt(__LINE__);
+    QFile background(QString::fromUtf8((directory / "ui/backgrounds/keep.png").u8string()));
+    return background.open(QIODevice::ReadOnly) && background.readAll() == QByteArray("background-data");
+}
+
 static bool TestQtModuleToggleParity() {
     struct RestoreModuleEnvironment {
         bool wasSet = qEnvironmentVariableIsSet("FORGEMIRROR_DISABLE_MODULES");
@@ -5192,6 +5274,7 @@ int main(int argc, char** argv) {
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }
+    if (!TestQtUiSettingsReset()) { std::cerr << "Qt UI settings reset failed\n"; return 1; }
     if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
@@ -5358,7 +5441,8 @@ int main(int argc, char** argv) {
         {"shortcutCreate", QKeySequence::New}, {"shortcutEdit", QKeySequence("Ctrl+E")},
         {"shortcutDelete", QKeySequence::Delete}, {"shortcutRefresh", QKeySequence::Refresh},
         {"shortcutDetails", QKeySequence("Ctrl+I")}, {"shortcutHelp", QKeySequence("Ctrl+/")},
-        {"shortcutToggleWindowDecoration", QKeySequence(Qt::Key_F10)}
+        {"shortcutToggleWindowDecoration", QKeySequence(Qt::Key_F10)},
+        {"shortcutResetUiSettings", QKeySequence("Ctrl+F10")}
     };
     if (!shortcutHelpAction) return fail("Shortcut help action missing");
     for (const auto& expected : shortcuts) {
@@ -5369,9 +5453,10 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* helpTable = dialog ? dialog->findChild<QTableWidget*>("shortcutHelpTable") : nullptr;
-        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 16 &&
+        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 17 &&
             helpTable->item(8, 0)->text() == "Ctrl+N" && helpTable->item(13, 0)->text() == "Ctrl+/" &&
-            helpTable->item(14, 0)->text() == "F10" && helpTable->item(15, 0)->text() == "F11";
+            helpTable->item(14, 0)->text() == "F10" && helpTable->item(15, 0)->text() == "Ctrl+F10" &&
+            helpTable->item(16, 0)->text() == "F11";
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcuts.png"); }
         if (dialog) dialog->accept();

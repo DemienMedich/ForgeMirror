@@ -72,39 +72,55 @@ int main(int argc, char** argv) {
         std::filesystem::create_directories(directory.parent_path());
         QLockFile lock(QString::fromStdWString(directory.wstring()) + ".qt.lock");
         if (!lock.tryLock(0)) throw std::runtime_error("This Qt workspace is already open in another process.");
-        if (!std::filesystem::exists(directory) && !parser.isSet("storage-dir") && std::filesystem::exists(production)) {
-            const auto answer = QMessageBox::question(nullptr, QString::fromUtf8("Копия данных для Qt"),
-                QString::fromUtf8("Скопировать данные стабильной версии в отдельную папку Qt?\n"
-                    "Исходные данные останутся без изменений. Изменения Qt не попадут обратно.\n\n")
-                    + QString::fromStdWString(production.wstring()) + "\n → " + QString::fromStdWString(directory.wstring()),
-                QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (answer == QMessageBox::Cancel) return 0;
-            if (answer == QMessageBox::Yes) {
-                // Stage the copy so an interrupted import never looks like a complete workspace.
-                const auto staging = directory.parent_path() / ("import-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString());
-                std::filesystem::copy(production, staging, std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_symlinks);
-                std::filesystem::rename(staging, directory);
+        int exitCode = 0;
+        bool restartRequested = false;
+        {
+            if (!std::filesystem::exists(directory) && !parser.isSet("storage-dir") && std::filesystem::exists(production)) {
+                const auto answer = QMessageBox::question(nullptr, QString::fromUtf8("Копия данных для Qt"),
+                    QString::fromUtf8("Скопировать данные стабильной версии в отдельную папку Qt?\n"
+                        "Исходные данные останутся без изменений. Изменения Qt не попадут обратно.\n\n")
+                        + QString::fromStdWString(production.wstring()) + "\n → " + QString::fromStdWString(directory.wstring()),
+                    QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (answer == QMessageBox::Cancel) return 0;
+                if (answer == QMessageBox::Yes) {
+                    // Stage the copy so an interrupted import never looks like a complete workspace.
+                    const auto staging = directory.parent_path() / ("import-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString());
+                    std::filesystem::copy(production, staging, std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_symlinks);
+                    std::filesystem::rename(staging, directory);
+                }
+            }
+            std::filesystem::create_directories(directory);
+            QtWorkspace workspace(directory);
+            QtWindow window(workspace);
+            runtimeLogWindow = &window;
+            previousQtMessageHandler = qInstallMessageHandler(qtRuntimeMessageHandler);
+            window.show();
+            if (parser.isSet("smoke-test")) {
+                qWarning("ForgeMirror Qt runtime warning smoke probe: token=SMOKE_TOKEN password=SMOKE_PASSWORD https://smoke-user:smoke-pass@example.com");
+                qCritical("ForgeMirror Qt runtime critical smoke probe");
+                QTimer::singleShot(1000, &app, [&] {
+                    bool success = window.isVisible();
+                    if (parser.isSet("screenshot")) success &= window.grab().save(parser.value("screenshot"));
+                    app.exit(success ? 0 : 2);
+                });
+            }
+            exitCode = app.exec();
+            qInstallMessageHandler(previousQtMessageHandler);
+            previousQtMessageHandler = nullptr;
+            runtimeLogWindow.clear();
+            restartRequested = app.property("forgeRestartRequested").toBool();
+            if (restartRequested) window.hide();
+        }
+        if (restartRequested) {
+            lock.unlock();
+            QStringList restartArguments;
+            restartArguments << QStringLiteral("--storage-dir") << QString::fromStdWString(directory.wstring());
+            if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), restartArguments)) {
+                QMessageBox::critical(nullptr, QString::fromUtf8("ForgeMirror Qt"),
+                    QString::fromUtf8("Настройки сохранены, но автоматически перезапустить программу не удалось. Запустите её снова вручную."));
+                return 1;
             }
         }
-        std::filesystem::create_directories(directory);
-        QtWorkspace workspace(directory);
-        QtWindow window(workspace);
-        runtimeLogWindow = &window;
-        previousQtMessageHandler = qInstallMessageHandler(qtRuntimeMessageHandler);
-        window.show();
-        if (parser.isSet("smoke-test")) {
-            qWarning("ForgeMirror Qt runtime warning smoke probe: token=SMOKE_TOKEN password=SMOKE_PASSWORD https://smoke-user:smoke-pass@example.com");
-            qCritical("ForgeMirror Qt runtime critical smoke probe");
-            QTimer::singleShot(1000, &app, [&] {
-                bool success = window.isVisible();
-                if (parser.isSet("screenshot")) success &= window.grab().save(parser.value("screenshot"));
-                app.exit(success ? 0 : 2);
-            });
-        }
-        const int exitCode = app.exec();
-        qInstallMessageHandler(previousQtMessageHandler);
-        previousQtMessageHandler = nullptr;
-        runtimeLogWindow.clear();
         return exitCode;
     } catch (const std::exception& error) {
         if (parser.isSet("smoke-test")) std::cerr << error.what() << '\n';

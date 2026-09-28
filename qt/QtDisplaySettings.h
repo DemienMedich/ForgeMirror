@@ -83,6 +83,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory);
 bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDisplaySettings& settings);
 QStringList ListQtLayoutPresets(const std::filesystem::path& directory);
 bool LoadQtLayoutPreset(const std::filesystem::path& directory, const QString& name, QtLayoutPreset* preset);
+bool ResetQtUiSettings(const std::filesystem::path& directory);
 bool SaveQtLayoutPreset(const std::filesystem::path& directory, const QtLayoutPreset& preset, QString* error = nullptr);
 bool DeleteQtLayoutPreset(const std::filesystem::path& directory, const QString& name, QString* error = nullptr);
 bool IsQtLayoutPresetDeletable(const std::filesystem::path& directory, const QString& name);

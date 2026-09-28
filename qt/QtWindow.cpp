@@ -1826,6 +1826,16 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         statusBar()->showMessage(next.decorated ? QString::fromUtf8("Рамка окна включена.")
                                                 : QString::fromUtf8("Безрамочный режим включён."), 4000);
     });
+    bindShortcut("shortcutResetUiSettings", QKeySequence(QStringLiteral("Ctrl+F10")), [this] {
+        if (!ResetQtUiSettings(workspace_.directory)) {
+            message(u8"Не удалось сбросить настройки интерфейса; исходный файл сохранён.");
+            return;
+        }
+        QMessageBox::information(this, QString::fromUtf8("Настройки интерфейса"),
+            QString::fromUtf8("Настройки интерфейса сброшены. ForgeMirror Qt перезапустится в этом же рабочем месте."));
+        QCoreApplication::instance()->setProperty("forgeRestartRequested", true);
+        QCoreApplication::quit();
+    });
     bindShortcut("shortcutFullscreen", QKeySequence(Qt::Key_F11), [this] {
         auto next = displaySettings_;
         next.fullscreen = !isFullScreen();
@@ -1846,7 +1856,7 @@ void QtWindow::showShortcutHelp() {
         "Команды работают в текущем разделе. Защищённые операции требуют входа администратора; локальные ярлыки доступны всем пользователям."));
     intro->setWordWrap(true);
     layout->addWidget(intro);
-    auto* table = new QTableWidget(16, 2, &dialog);
+    auto* table = new QTableWidget(17, 2, &dialog);
     table->setObjectName("shortcutHelpTable");
     table->setHorizontalHeaderLabels({QString::fromUtf8("Клавиша"), QString::fromUtf8("Действие")});
     const std::vector<std::pair<QString, QString>> rows = {
@@ -1858,6 +1868,7 @@ void QtWindow::showShortcutHelp() {
         {"Delete", QString::fromUtf8("Удалить выбранный проект или этап")}, {"Ctrl+R", QString::fromUtf8("Перечитать локальные данные")},
         {"Ctrl+I", QString::fromUtf8("Показать или скрыть подробности")}, {"Ctrl+/", QString::fromUtf8("Открыть эту памятку")},
         {"F10", QString::fromUtf8("Показать или скрыть рамку окна")},
+        {"Ctrl+F10", QString::fromUtf8("Сбросить настройки интерфейса")},
         {"F11", QString::fromUtf8("Переключить полноэкранный режим")}
     };
     for (int row = 0; row < int(rows.size()); ++row) {

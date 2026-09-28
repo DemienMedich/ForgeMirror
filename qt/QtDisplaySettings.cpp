@@ -1,5 +1,6 @@
 #include "QtDisplaySettings.h"
 #include "QtDeadlineAgent.h"
+#include "QtModelViewer.h"
 #include "QtTheme.h"
 #include <QtWidgets>
 #include <QSaveFile>
@@ -551,6 +552,84 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     const auto bytes = (bom ? QByteArray("\xEF\xBB\xBF") : QByteArray()) + lines.join('\n').toUtf8();
     QDir().mkpath(meta); QSaveFile output(path); output.setDirectWriteFallback(false);
     return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
+}
+bool ResetQtUiSettings(const std::filesystem::path& directory) {
+    const auto settingsPath = pathFor(directory);
+    const QFileInfo settingsInfo(settingsPath);
+    const QFileInfo metaInfo(settingsInfo.absolutePath());
+    if (settingsInfo.isSymLink() || metaInfo.isSymLink()) return false;
+
+    // Use the existing serializers as the source of truth for every Qt setting key.
+    // The temporary template is separate from the user's workspace and disappears on return.
+    QTemporaryDir templateDirectory;
+    if (!templateDirectory.isValid()) return false;
+    auto display = QtDisplaySettings{};
+    display.lastProfileId = LoadQtDisplaySettings(directory).lastProfileId;
+    if (!SaveQtDisplaySettings(std::filesystem::u8path(templateDirectory.path().toUtf8().constData()), display)) return false;
+    if (!SaveQtModelSettings(std::filesystem::u8path(templateDirectory.path().toUtf8().constData()), QtModelSettings{})) return false;
+
+    QFile templateFile(QDir(templateDirectory.path()).filePath("meta/ui.ini"));
+    if (!templateFile.open(QIODevice::ReadOnly)) return false;
+    auto templateBytes = templateFile.readAll();
+    if (templateBytes.startsWith("\xEF\xBB\xBF")) templateBytes.remove(0, 3);
+    const auto templateLines = QString::fromUtf8(templateBytes).split('\n');
+
+    QByteArray original;
+    QFile input(settingsPath);
+    if (input.exists()) {
+        if (!input.open(QIODevice::ReadOnly)) return false;
+        original = input.readAll();
+        input.close();
+    }
+    const bool bom = original.startsWith("\xEF\xBB\xBF");
+    if (bom) original.remove(0, 3);
+    auto lines = QString::fromUtf8(original).split('\n');
+
+    auto extractSection = [](const QStringList& source, const QString& name) {
+        QStringList result;
+        bool active = false;
+        for (const auto& line : source) {
+            const auto trimmed = line.trimmed();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                if (active) break;
+                active = trimmed == QStringLiteral("[") + name + QStringLiteral("]");
+            }
+            if (active) result.push_back(line);
+        }
+        return result;
+    };
+    auto replaceSection = [](QStringList& destination, const QString& name, const QStringList& replacement) {
+        int begin = -1;
+        int end = destination.size();
+        for (int i = 0; i < destination.size(); ++i) {
+            const auto trimmed = destination[i].trimmed();
+            if (trimmed == QStringLiteral("[") + name + QStringLiteral("]")) { begin = i; continue; }
+            if (begin >= 0 && i > begin && trimmed.startsWith('[') && trimmed.endsWith(']')) { end = i; break; }
+        }
+        if (begin >= 0) {
+            destination = destination.mid(0, begin) + replacement + destination.mid(end);
+        } else {
+            if (!destination.isEmpty() && !destination.back().isEmpty()) destination.push_back(QString());
+            destination.append(replacement);
+        }
+    };
+
+    for (const auto& section : {QStringLiteral("qt"), QStringLiteral("qt3d")}) {
+        const auto canonical = extractSection(templateLines, section);
+        if (canonical.isEmpty()) return false;
+        replaceSection(lines, section, canonical);
+    }
+    replaceSection(lines, QStringLiteral("pomodoro"), {
+        QStringLiteral("[pomodoro]"), QStringLiteral("workMinutes=25"), QStringLiteral("breakMinutes=5"),
+        QStringLiteral("longBreakMinutes=15"), QStringLiteral("cyclesBeforeLong=4"), QStringLiteral("autoAdvance=0"),
+        QStringLiteral("soundEnabled=1"), QStringLiteral("soundFocus="), QStringLiteral("soundBreak="), QStringLiteral("soundVolume=80")});
+
+    const auto bytes = (bom ? QByteArray("\xEF\xBB\xBF") : QByteArray()) + lines.join('\n').toUtf8();
+    QDir().mkpath(metaInfo.absoluteFilePath());
+    QSaveFile output(settingsPath);
+    output.setDirectWriteFallback(false);
+    const bool saved = output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
+    return saved;
 }
 bool ApplyQtBuiltInLayoutPreset(const QString& name, QtLayoutPreset* preset) {
     if (!preset) return false;
