@@ -1023,11 +1023,34 @@ static bool TestQtAdminAuthParity() {
     return success;
 }
 
+static bool SubmitAdminLoginForTest(const QString& password, bool remember);
+
 static bool TestQtAdminAuthAcrossProcesses() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData()) / "workspace";
-    if (!SetAdminPassword(directory, "process-auth-fixture-password") || !SetAdminStayLoggedIn(directory, true)) return false;
+    if (!SetAdminPassword(directory, "process-auth-fixture-password") || !SetAdminStayLoggedIn(directory, false)) return false;
+
+    // Exercise the same path as the reported failure: accept a real Qt login with
+    // the remember-session option checked, then cross actual process boundaries.
+    QtWorkspace workspace(directory);
+    QtWindow loginWindow(workspace);
+    loginWindow.show();
+    QApplication::processEvents();
+    auto* loginAction = loginWindow.findChild<QAction*>("adminLoginAction");
+    bool loginAccepted = false;
+    if (!loginAction) return false;
+    QTimer::singleShot(0, [&] {
+        loginAccepted = SubmitAdminLoginForTest(QStringLiteral("process-auth-fixture-password"), true);
+        if (!loginAccepted && QApplication::activeModalWidget()) QApplication::activeModalWidget()->close();
+    });
+    loginAction->trigger();
+    loginWindow.close();
+    if (!loginAccepted || LoadAdminPassword(directory) != "process-auth-fixture-password" ||
+        !LoadAdminStayLoggedIn(directory)) {
+        std::cerr << "Admin UI login did not persist the checked remember-session option\n";
+        return false;
+    }
 
     const QString executable = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ForgeMirrorQt.exe"));
     if (!QFileInfo(executable).isFile()) {
