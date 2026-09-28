@@ -1470,6 +1470,30 @@ static bool TestProfileSpirit(const std::filesystem::path& dir) {
     return legacyLoaded && legacyLoaded->spirit() == ProfileSpirit::None;
 }
 
+static bool TestFileStorageStaleProfileCreateIds(const std::filesystem::path& dir) {
+    std::unique_ptr<IJobStorage> first(CreateFileStorage(dir));
+    std::unique_ptr<IJobStorage> second(CreateFileStorage(dir));
+    Profile firstProfile("First client");
+    Profile secondProfile("Second client");
+    std::optional<IJobStorage::ProfileInfo> firstCreated;
+    std::optional<IJobStorage::ProfileInfo> secondCreated;
+
+    // Model two already-open clients: both storage instances cache the same next ID
+    // before either starts writing. The second sequential writer must refresh that
+    // stale ID while holding the cross-process lock instead of replacing the first.
+    firstCreated = first->create_profile(firstProfile);
+    secondCreated = second->create_profile(secondProfile);
+    if (!firstCreated || !secondCreated || firstCreated->id == secondCreated->id) return false;
+
+    const auto profiles = first->list_profiles();
+    const auto hasProfile = [&](const IJobStorage::ProfileInfo& expected) {
+        return std::any_of(profiles.begin(), profiles.end(), [&](const auto& actual) {
+            return actual.id == expected.id && actual.name == expected.name && !actual.archived;
+        });
+    };
+    return hasProfile(*firstCreated) && hasProfile(*secondCreated);
+}
+
 static bool TestEvilSpiritRemovalForCoins(const std::filesystem::path& dir) {
     std::unique_ptr<IJobStorage> storage(CreateFileStorage(dir));
 
@@ -1735,6 +1759,7 @@ int main() {
     const bool okProfile = TestProfileRank();
     const bool okProfileCreateTelemetry = TestProfileCreationTelemetry(tmp / "profile_create_telemetry");
     const bool okSpirit = TestProfileSpirit(tmp / "spirit");
+    const bool okStaleProfileCreateIds = TestFileStorageStaleProfileCreateIds(tmp / "stale_profile_create_ids");
     const bool okSpiritRemoval = TestEvilSpiritRemovalForCoins(tmp / "spirit_removal");
     const bool okRules = TestGameplayConfig(tmp);
     const bool okTasks = TestTasksPipelineRoundtrip(tmp);
@@ -1789,7 +1814,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okProfileCreateTelemetry && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskWriteLock && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okProfileCreateTelemetry && okSpirit && okStaleProfileCreateIds && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskWriteLock && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1798,6 +1823,7 @@ int main() {
               << "profile=" << okProfile
               << " profileCreateTelemetry=" << okProfileCreateTelemetry
               << " spirit=" << okSpirit
+              << " staleProfileCreateIds=" << okStaleProfileCreateIds
               << " spiritRemoval=" << okSpiritRemoval
               << " rules=" << okRules
               << " tasks=" << okTasks

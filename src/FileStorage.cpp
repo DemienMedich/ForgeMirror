@@ -865,6 +865,12 @@ public:
     }
 
     std::optional<ProfileInfo> create_profile(const Profile& profile) override {
+        AppWorkspaceStorageWriteLock writeLock(baseDir_);
+        if (!writeLock.acquired()) return std::nullopt;
+        // A storage instance may have been open while another client created a
+        // profile. Recompute under the same lock that protects the write so two
+        // stale nextId_ snapshots cannot replace one another's profile file.
+        nextId_ = compute_next_id();
         const std::string id = generate_id(nextId_++);
         activeId_ = id;
         activePath_ = baseDir_ / (id + ".ini");

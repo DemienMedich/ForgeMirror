@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 215**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include hands-on NVDA/JAWS interaction testing, core events outside the instrumented Qt workflows, and writes by older clients or tools that ignore the shared workspace lock. Current shared persistence paths use one reentrant cross-process lock; journaled Qt mutations hold it from recovery-snapshot creation through commit or rollback. External writers that bypass the lock remain outside that guarantee. Initial stable-workspace import verifies a staged copy against source content before activation. Both interrupted startup recovery and immediate checked rollback preserve changed in-flight files before restoring pre-images. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.60` is the current Qt per-user installer; stages 47–215 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 216**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include hands-on NVDA/JAWS interaction testing, core events outside the instrumented Qt workflows, and writes by older clients or tools that ignore the shared workspace lock. Current shared persistence paths use one reentrant cross-process lock; journaled Qt mutations hold it from recovery-snapshot creation through commit or rollback. Profile ID allocation now refreshes its cached sequence under that lock before creating a profile. External writers that bypass the lock remain outside that guarantee. Initial stable-workspace import verifies a staged copy against source content before activation. Both interrupted startup recovery and immediate checked rollback preserve changed in-flight files before restoring pre-images. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.61` is the current Qt per-user installer; stages 47–216 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -13,12 +13,12 @@ Design direction for subsequent UI work: [user-supplied interface references](..
 These guide composition and hierarchy; the existing dark/purple palette is unchanged.
 
 ```powershell
-.\build-qt.ps1 -Package -PackageDirectory package-qt-0.6.60
-.\package-qt-0.6.60\ForgeMirrorQt.exe
-.\installer\build-qt-installer.ps1 -PackageDirectory .\package-qt-0.6.60
+.\build-qt.ps1 -Package -PackageDirectory package-qt-0.6.61
+.\package-qt-0.6.61\ForgeMirrorQt.exe
+.\installer\build-qt-installer.ps1 -PackageDirectory .\package-qt-0.6.61
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.60.exe`. Version `0.6.60` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.60.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.61.exe`. Version `0.6.61` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.61.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`. The alternate package directory keeps an already-running package executable intact; use the default package-qt path when it is not in use.
 
@@ -1174,3 +1174,9 @@ Creating a profile through the Qt manager now appends the same `create` event to
 Permanent deletion of an empty archived profile now records one privacy-safe core event after the recovery transaction commits or its rollback/recovery result is known. A failed rollback is marked as recovery pending. The event contains neither profile ID nor name, and an event-sink exception cannot change the deletion result.
 
 `smoke_qt` injects a real storage deletion failure through the profile manager, verifies rollback leaves the profile intact and records a warning, then retries and verifies the committed event and deletion even when the event observer throws. It also checks that neither event includes the disposable profile ID or name. Installer lifecycle and package verification are recorded in `docs/releases/ForgeMirror-0.6.60.md`.
+
+### Stage 216 — refresh profile IDs for already-open storage clients
+
+`FileStorage::create_profile` now acquires the shared workspace-write lock before allocating an ID, recalculates the next numeric ID while holding it, and retains the lock through the nested profile save. This prevents a long-lived client with a stale `nextId_` snapshot from replacing a profile created by another cooperating client. Lock contention still fails without writing. The stable ImGui UI and workspace format are unchanged.
+
+`smoke_core` opens two storage clients before either write, then creates profiles sequentially and verifies distinct IDs and both persisted names. The previous implementation failed this regression by overwriting the first file. Build and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.61.md`.
