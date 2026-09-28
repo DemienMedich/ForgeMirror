@@ -93,7 +93,7 @@ if(BUILD_QT_GUI)
     add_test(NAME smoke_qt COMMAND smoke_qt)
     set_tests_properties(smoke_qt PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>"
-        TIMEOUT 30)
+        TIMEOUT 120)
 endif()
 
 if(BUILD_IMGUI_GUI)

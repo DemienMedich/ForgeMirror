@@ -36,6 +36,7 @@
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
 #include "AppShortcutsService.h"
+#include "AppWorkspaceStorageLock.h"
 #include "CloudSync.h"
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -2172,7 +2173,17 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(exportAudit_, &QPushButton::clicked, this, [this] { exportAudit(); });
     connect(exportLogs_, &QPushButton::clicked, this, [this] { exportLogs(); });
     connect(clearLogs_, &QPushButton::clicked, this, [this] {
+        QMessageBox confirm(QMessageBox::Warning, QString::fromUtf8("Очистить журнал приложения?"),
+            QString::fromUtf8("Будут удалены сохранённые записи локального журнала Qt. Отмена оставит их без изменений."),
+            QMessageBox::Yes | QMessageBox::Cancel, this);
+        confirm.setObjectName("clearLogsConfirm");
+        confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Очистить журнал"));
+        confirm.button(QMessageBox::Cancel)->setText(QString::fromUtf8("Отмена"));
+        confirm.setDefaultButton(QMessageBox::Cancel);
+        if (confirm.exec() != QMessageBox::Yes) return;
         appLogs_.clear();
+        appLogPending_.clear();
+        appLogClearPending_ = true;
         appLogPersistenceWarning_ = !saveAppLogs();
         search_->clear(); render();
         statusBar()->showMessage(QString::fromUtf8("Журнал Qt-сессии очищен."), 4000);
@@ -2315,9 +2326,12 @@ void QtWindow::appendLog(AppLogLevel level, const std::string& source, const std
     if (text.empty()) return;
     const auto safeText = u(SanitizeQtLogMessage(q(text)));
     if (safeText.empty()) return;
-    appLogs_.push_back({QDateTime::currentSecsSinceEpoch(), level, source, safeText});
+    AppLogEntry entry{QDateTime::currentSecsSinceEpoch(), level, source, safeText};
+    appLogs_.push_back(entry);
+    appLogPending_.push_back(std::move(entry));
     constexpr size_t maxEntries = 200;
     if (appLogs_.size() > maxEntries) appLogs_.erase(appLogs_.begin());
+    if (appLogPending_.size() > maxEntries) appLogPending_.erase(appLogPending_.begin());
     appLogPersistenceWarning_ = !saveAppLogs();
 }
 
@@ -2358,12 +2372,42 @@ void QtWindow::loadAppLogs() {
         appLogs_.erase(appLogs_.begin(), appLogs_.end() - static_cast<std::ptrdiff_t>(maxEntries));
 }
 
-bool QtWindow::saveAppLogs() const {
+bool QtWindow::saveAppLogs() {
+    AppWorkspaceStorageWriteLock writeLock(workspace_.directory);
+    if (!writeLock.acquired()) return false;
     const auto metaPath = q((workspace_.directory / "meta").u8string());
     const auto path = q((workspace_.directory / "meta/qt-application-log.json").u8string());
     if (QFileInfo(metaPath).isSymLink() || QFileInfo(path).isSymLink()) return false;
+    std::vector<AppLogEntry> merged;
+    if (!appLogClearPending_ && QFileInfo::exists(path)) {
+        const QFileInfo info(path);
+        if (info.isSymLink() || info.size() > 4 * 1024 * 1024) return false;
+        QFile input(path);
+        if (!input.open(QIODevice::ReadOnly)) return false;
+        const auto currentBytes = input.readAll();
+        if (input.error() != QFileDevice::NoError) return false;
+        QJsonParseError parseError;
+        const auto document = QJsonDocument::fromJson(currentBytes, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isArray()) return false;
+        for (const auto& value : document.array()) {
+            if (!value.isObject()) continue;
+            const auto object = value.toObject();
+            const auto timestamp = object.value("timestamp").toVariant().toLongLong();
+            const auto rawLevel = object.value("level").toInt(-1);
+            if (timestamp <= 0 || rawLevel < 0 || rawLevel > 2) continue;
+            const auto message = u(SanitizeQtLogMessage(object.value("message").toString()));
+            if (message.empty()) continue;
+            merged.push_back({timestamp, static_cast<AppLogLevel>(rawLevel),
+                u(object.value("source").toString()), message});
+        }
+        input.close();
+    }
+    merged.insert(merged.end(), appLogPending_.begin(), appLogPending_.end());
+    constexpr size_t maxEntries = 200;
+    if (merged.size() > maxEntries)
+        merged.erase(merged.begin(), merged.end() - static_cast<std::ptrdiff_t>(maxEntries));
     QJsonArray entries;
-    for (const auto& entry : appLogs_) {
+    for (const auto& entry : merged) {
         QJsonObject value;
         value.insert("timestamp", qlonglong(entry.timestamp));
         value.insert("level", int(entry.level));
@@ -2375,6 +2419,9 @@ bool QtWindow::saveAppLogs() const {
     QSaveFile file(path);
     file.setDirectWriteFallback(false);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) return false;
+    appLogs_ = std::move(merged);
+    appLogPending_.clear();
+    appLogClearPending_ = false;
     return true;
 }
 

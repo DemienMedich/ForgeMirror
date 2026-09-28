@@ -103,7 +103,7 @@ private:
     void message(const std::string& error);
     void appendLog(AppLogLevel level, const std::string& source, const std::string& message);
     void loadAppLogs();
-    bool saveAppLogs() const;
+    bool saveAppLogs();
     QString selectedId() const;
     QtWorkspace& workspace_;
     bool admin_ = false;
@@ -251,6 +251,8 @@ private:
     QAction* cloudReleaseLaunch_;
     int bannerIndex_ = 0;
     std::vector<AppLogEntry> appLogs_;
+    std::vector<AppLogEntry> appLogPending_;
+    bool appLogClearPending_ = false;
     bool appLogPersistenceWarning_ = false;
     std::int64_t lastReminderCheckAt_ = 0;
     std::int64_t lastCloudAutoSyncAt_ = 0;

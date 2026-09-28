@@ -6366,17 +6366,17 @@ static bool TestLogActivityHistogram() {
 
 static bool TestQtLogSourceSanitizationAndRetention() {
     QTemporaryDir temp;
-    if (!temp.isValid()) return false;
+    if (!temp.isValid()) { std::cerr << "log retention: temp unavailable\n"; return false; }
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
     QtWindow window(workspace);
     window.show();
     QApplication::processEvents();
     auto* navigation = window.findChild<QListWidget*>("navigation");
-    if (!navigation) return false;
+    if (!navigation) { std::cerr << "log retention: navigation unavailable\n"; return false; }
     navigation->setCurrentRow(1);
     window.statusBar()->showMessage(QStringLiteral("Task event password=leak token=other https://user:secret@example.test"));
     QFile file(temp.path() + "/meta/qt-application-log.json");
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly)) { std::cerr << "log retention: file missing after sanitized append\n"; return false; }
     auto entries = QJsonDocument::fromJson(file.readAll()).array();
     file.close();
     bool sanitizedTaskEvent = false;
@@ -6388,9 +6388,9 @@ static bool TestQtLogSourceSanitizationAndRetention() {
             message.contains("[REDACTED]") && !message.contains("leak") && !message.contains("other") &&
             !message.contains("user:secret");
     }
-    if (!sanitizedTaskEvent) return false;
+    if (!sanitizedTaskEvent) { std::cerr << "log retention: sanitized event missing, rows=" << entries.size() << "\n"; return false; }
     window.statusBar()->showMessage(QString::fromUtf8("Не удалось сохранить тестовую задачу"));
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly)) { std::cerr << "log retention: file missing after error append\n"; return false; }
     entries = QJsonDocument::fromJson(file.readAll()).array();
     file.close();
     bool errorClassified = false;
@@ -6399,13 +6399,40 @@ static bool TestQtLogSourceSanitizationAndRetention() {
         if (item.value("message").toString().contains(QString::fromUtf8("Не удалось сохранить тестовую задачу")))
             errorClassified = item.value("level").toInt(-1) == int(AppLogLevel::Error);
     }
-    if (!errorClassified) return false;
+    if (!errorClassified) { std::cerr << "log retention: error classification missing\n"; return false; }
     for (int index = 0; index < 205; ++index)
         window.statusBar()->showMessage(QStringLiteral("retention-%1").arg(index));
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly)) { std::cerr << "log retention: file missing after retention writes\n"; return false; }
     entries = QJsonDocument::fromJson(file.readAll()).array();
+    file.close();
     if (entries.size() != 200 || entries.first().toObject().value("message").toString() != "retention-5" ||
-        entries.last().toObject().value("message").toString() != "retention-204") return false;
+        entries.last().toObject().value("message").toString() != "retention-204") {
+        std::cerr << "log retention: expected 200 latest rows, got " << entries.size()
+                  << " first=" << (entries.isEmpty() ? "<empty>" : entries.first().toObject().value("message").toString().toStdString())
+                  << " last=" << (entries.isEmpty() ? "<empty>" : entries.last().toObject().value("message").toString().toStdString()) << "\n";
+        return false;
+    }
+
+    QtWindow peerWindow(workspace);
+    peerWindow.show();
+    QApplication::processEvents();
+    peerWindow.statusBar()->showMessage(QStringLiteral("peer-window-retention-marker"));
+    window.statusBar()->showMessage(QStringLiteral("stale-window-retention-marker"));
+    if (!file.open(QIODevice::ReadOnly)) { std::cerr << "log merge: file missing after two-window writes\n"; return false; }
+    entries = QJsonDocument::fromJson(file.readAll()).array();
+    file.close();
+    bool peerEntryRetained = false;
+    bool originalWindowEntryRetained = false;
+    for (const auto& value : entries) {
+        const auto message = value.toObject().value("message").toString();
+        peerEntryRetained |= message == QStringLiteral("peer-window-retention-marker");
+        originalWindowEntryRetained |= message == QStringLiteral("stale-window-retention-marker");
+    }
+    if (entries.size() != 200 || !peerEntryRetained || !originalWindowEntryRetained) {
+        std::cerr << "log merge: rows=" << entries.size() << " peer=" << peerEntryRetained
+                  << " original=" << originalWindowEntryRetained << "\n";
+        return false;
+    }
     return true;
 }
 
@@ -7324,11 +7351,41 @@ int main(int argc, char** argv) {
         return fail("Qt application log export did not match visible search results or encoding");
     }
     search->clear();
+    QFile persistedLog(temp.path() + "/meta/qt-application-log.json");
+    if (!persistedLog.open(QIODevice::ReadOnly)) return fail("Qt application log could not be opened before clear confirmation");
+    const auto beforeCancelledClear = persistedLog.readAll();
+    persistedLog.close();
+    bool cancelClearDialogSeen = false;
+    bool cancelWasDefault = false;
+    QTimer::singleShot(0, [&] {
+        auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if (!confirm) return;
+        if (confirm->objectName() != QStringLiteral("clearLogsConfirm")) { confirm->reject(); return; }
+        cancelClearDialogSeen = true;
+        cancelWasDefault = confirm->defaultButton() == confirm->button(QMessageBox::Cancel);
+        confirm->button(QMessageBox::Cancel)->click();
+    });
     clearLogs->click();
+    if (!cancelClearDialogSeen || !cancelWasDefault || !persistedLog.open(QIODevice::ReadOnly))
+        return fail("Qt application log clear did not offer a cancel-default confirmation");
+    const auto afterCancelledClear = persistedLog.readAll();
+    persistedLog.close();
+    if (afterCancelledClear != beforeCancelledClear)
+        return fail("Cancelling Qt application log clear changed persisted history");
+
+    bool acceptedClearDialogSeen = false;
+    QTimer::singleShot(0, [&] {
+        auto* confirm = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if (!confirm) return;
+        if (confirm->objectName() != QStringLiteral("clearLogsConfirm")) { confirm->reject(); return; }
+        acceptedClearDialogSeen = true;
+        confirm->button(QMessageBox::Yes)->click();
+    });
+    clearLogs->click();
+    if (!acceptedClearDialogSeen) return fail("Qt application log clear confirmation was not accepted");
     if (!logSummary || table->rowCount() != 1 || !logSummary->text().contains(QString::fromUtf8("1 из 1")) ||
         !table->item(0, 4)->text().contains(QString::fromUtf8("очищен"), Qt::CaseInsensitive))
         return fail("Qt application log clear failed");
-    QFile persistedLog(temp.path() + "/meta/qt-application-log.json");
     if (!persistedLog.open(QIODevice::ReadOnly)) return fail("Qt application log persistence file could not be opened");
     const auto persistedLogBytes = persistedLog.readAll();
     persistedLog.close();
