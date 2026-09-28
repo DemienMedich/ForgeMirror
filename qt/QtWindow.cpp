@@ -4006,6 +4006,9 @@ void QtWindow::render() {
         }
         const auto manifest = LoadCloudManifest(config, workspace_.directory);
         row("manifest", {QString::fromUtf8("Версия в manifest"), manifest.appVersion.empty() ? QString::fromUtf8("—") : q(manifest.appVersion)});
+        row("manifestUpdatedAt", {QString::fromUtf8("Данные обновлены"), manifest.dataUpdatedAt > 0
+            ? QDateTime::fromSecsSinceEpoch(manifest.dataUpdatedAt).toString("yyyy-MM-dd HH:mm")
+            : QString::fromUtf8("—")});
         row("clientVersion", {QString::fromUtf8("Версия Qt"), QString::fromUtf8(APP_VERSION)});
         const bool updateAvailable = IsUpdateAvailable(manifest, APP_VERSION);
         row("update", {QString::fromUtf8("Обновление клиента"), QString::fromUtf8(updateAvailable ? "Доступно" : "Нет новой версии")});

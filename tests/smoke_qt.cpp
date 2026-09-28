@@ -6529,12 +6529,27 @@ int main(int argc, char** argv) {
     window.findChild<QPushButton*>("deleteEntry")->click();
     if (!workspace.data.shortcuts.empty() || table->rowCount() != 0 || !QFileInfo::exists(shortcutTarget.fileName()))
         return fail("Shortcut UI delete removed data incorrectly");
+    CloudSyncConfig displayCloudConfig;
+    displayCloudConfig.enabled = false;
+    displayCloudConfig.root = std::filesystem::u8path((temp.path() + "/manifest-cloud").toUtf8().constData());
+    displayCloudConfig.manifest = displayCloudConfig.root / "meta/manifest.ini";
+    CloudManifest displayCloudManifest;
+    displayCloudManifest.appVersion = "0.6.57";
+    displayCloudManifest.dataUpdatedAt = 1790609509;
+    if (!SaveCloudSyncConfig(workspace.directory, displayCloudConfig) ||
+        !SaveCloudManifest(displayCloudConfig, workspace.directory, displayCloudManifest)) return fail("Cloud manifest fixture failed");
     nav->setCurrentRow(13);
     auto* cloudPull = window.findChild<QPushButton*>("cloudPull");
     auto* storageResolve = window.findChild<QPushButton*>("storageResolve");
     if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настроить облако") ||
         !cloudPull || !cloudPull->isVisible() || cloudPull->isEnabled() || !storageResolve || !storageResolve->isVisible() || storageResolve->isEnabled() ||
         !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Ручные pull"))) return fail("Cloud guarded pull page unavailable");
+    const auto expectedCloudUpdate = QDateTime::fromSecsSinceEpoch(displayCloudManifest.dataUpdatedAt).toString("yyyy-MM-dd HH:mm");
+    bool cloudUpdateTimestampVisible = false;
+    for (int row = 0; row < table->rowCount(); ++row)
+        cloudUpdateTimestampVisible |= table->item(row, 0)->text() == QString::fromUtf8("Данные обновлены") &&
+            table->item(row, 1)->text() == expectedCloudUpdate;
+    if (!cloudUpdateTimestampVisible) return fail("Cloud data update timestamp was not shown from the manifest");
     const auto cloudArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!cloudArtifacts.isEmpty()) window.grab().save(cloudArtifacts + "/cloud-page.png");
     QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });
