@@ -2,6 +2,7 @@
 #include "AppTaskCompletionService.h"
 #include "AppTaskProjectService.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "Profile.h"
 #include <QtWidgets>
 #include <QSaveFile>
@@ -85,6 +86,8 @@ bool sameAchievements(const std::vector<Achievement>& a, const std::vector<Achie
 QString SaveQtSkill(QtWorkspace& workspace, const std::string& id, const QString& name,
                     double weight, const QString& description, const QString& category,
                     const std::optional<std::vector<std::string>>& professions) {
+    AppWorkspaceStorageWriteLock writeLock(workspace.directory);
+    if (!writeLock.acquired()) return QString::fromUtf8("Рабочее место изменяет другая программа. Повторите позже.");
     const auto title = name.trimmed(), desc = description.trimmed(), cat = category.trimmed();
     if (title.isEmpty() || desc.isEmpty()) return QString::fromUtf8("Название и описание обязательны.");
     if (!safeField(title) || !safeField(desc) || !safeField(cat))
@@ -154,6 +157,8 @@ QString MergeQtSkills(QtWorkspace& workspace, const std::string& restoreProfileI
                       const std::string& fromId, const std::string& toId,
                       const QString& name, double weight, const QString& description,
                       const QString& category, const std::vector<std::string>& professions) {
+    AppWorkspaceStorageWriteLock writeLock(workspace.directory);
+    if (!writeLock.acquired()) return QString::fromUtf8("Рабочее место изменяет другая программа. Повторите позже.");
     const auto title = name.trimmed(), desc = description.trimmed(), cat = category.trimmed();
     if (fromId.empty() || toId.empty() || fromId == toId || !workspace.catalog.contains_id(fromId) ||
         !workspace.catalog.contains_id(toId)) return QString::fromUtf8("Исходный или целевой навык больше не существует.");

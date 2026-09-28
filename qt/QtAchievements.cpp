@@ -1,5 +1,5 @@
 #include "QtAchievements.h"
-#include "AppProfileStorageLock.h"
+#include "AppWorkspaceStorageLock.h"
 #include <QtWidgets>
 #include <QSaveFile>
 #include <cmath>
@@ -57,7 +57,7 @@ static QString MutateAchievement(QtWorkspace& workspace, const std::string& prof
     const auto id = q(profileId);
     if (id.isEmpty() || id == "." || id == ".." || id.contains('/') || id.contains('\\') || id.contains(':'))
         return QString::fromUtf8("Некорректный ID профиля.");
-    AppProfileStorageWriteLock writeLock(workspace.directory);
+    AppWorkspaceStorageWriteLock writeLock(workspace.directory);
     if (!writeLock.acquired()) return QString::fromUtf8("Хранилище занято другим клиентом. Повторите операцию позже.");
     if (std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
         return QString::fromUtf8("Сначала завершите восстановление данных.");

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "SkillCatalog.h"
 
 namespace {
@@ -25,6 +26,15 @@ std::int64_t CurrentUnixSeconds() {
 }
 
 bool WriteAllUtf8Bom(const std::filesystem::path& path, const std::string& payloadWithoutBom) {
+    auto workspace = path.parent_path();
+    for (auto current = workspace; !current.empty(); current = current.parent_path()) {
+        if (current.filename() == "meta") {
+            workspace = current.parent_path();
+            break;
+        }
+    }
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) return false;
     std::error_code ec;
     const auto parent = path.parent_path();
     if (!parent.empty()) {

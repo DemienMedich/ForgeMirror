@@ -238,7 +238,7 @@ static bool TestTaskSavesRespectActiveLock(const std::filesystem::path& dir) {
     const std::vector<TaskEntry> expected{initial};
     if (!AppSaveTasks(dir, expected)) return false;
 
-    const auto lockPath = dir / "meta" / "tasks.json.lock";
+    const auto lockPath = dir / "meta" / "workspace-write.lock";
 #ifdef _WIN32
     HANDLE lock = CreateFileW(lockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -1431,7 +1431,7 @@ static bool TestProfileSpirit(const std::filesystem::path& dir) {
     if (!lockTarget) return false;
     std::string beforeLockedWrite;
     if (!ReadFile(profilePath, beforeLockedWrite)) return false;
-    const auto profileLockPath = dir / "meta" / "profile-write.lock";
+    const auto profileLockPath = dir / "meta" / "workspace-write.lock";
 #ifdef _WIN32
     HANDLE profileLock = CreateFileW(profileLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);

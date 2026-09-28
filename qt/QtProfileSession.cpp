@@ -1,6 +1,7 @@
 #include "QtProfileSession.h"
 #include "AppTaskCompletionService.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "Profile.h"
 #include <QtCore>
 #include <algorithm>
@@ -51,6 +52,8 @@ std::map<std::string, std::int64_t> loadTrusted(const std::filesystem::path& dir
     return {};
 }
 bool changeTrusted(const std::filesystem::path& directory, const std::string& id, std::int64_t expiresAt) {
+    AppWorkspaceStorageWriteLock writeLock(directory);
+    if (!writeLock.acquired()) return false;
     const auto path = uiPath(directory);
     if (QFileInfo(QString::fromUtf8((directory / "meta").u8string())).isSymLink() || QFileInfo(path).isSymLink()) return false;
     QFile input(path); QByteArray original; if (input.open(QIODevice::ReadOnly)) original = input.readAll(); input.close();

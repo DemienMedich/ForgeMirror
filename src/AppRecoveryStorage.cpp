@@ -1,4 +1,5 @@
 #include "AppRecoveryStorage.h"
+#include "AppWorkspaceStorageLock.h"
 
 #include <chrono>
 #include <fstream>
@@ -81,6 +82,15 @@ std::filesystem::path AppRecoveryBackupPath(const std::filesystem::path& path) {
 
 bool AppWriteUtf8BomWithRecovery(const std::filesystem::path& path,
                                  const std::string& payloadWithoutBom) {
+    auto workspace = path.parent_path();
+    for (auto current = workspace; !current.empty(); current = current.parent_path()) {
+        if (current.filename() == "meta") {
+            workspace = current.parent_path();
+            break;
+        }
+    }
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) return false;
     static constexpr unsigned char bom[] = {0xEF, 0xBB, 0xBF};
     std::string data(reinterpret_cast<const char*>(bom), sizeof(bom));
     data += payloadWithoutBom;

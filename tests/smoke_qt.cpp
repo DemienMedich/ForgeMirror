@@ -4,7 +4,7 @@
 #include "QtProfileAnalytics.h"
 #include "QtLogActivityChart.h"
 #include "AppTaskProjectService.h"
-#include "AppProfileStorageLock.h"
+#include "AppWorkspaceStorageLock.h"
 #include "AppTaskCompletionService.h"
 #include "AppRecoveryStorage.h"
 #include "QtTaskCompletionDialog.h"
@@ -47,6 +47,7 @@
 #include <QSaveFile>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <QtTest/QTest>
@@ -88,6 +89,27 @@ static bool TestTaskCompletion() {
     auto fail = [](const char* text) { std::cerr << "taskCompletion: " << text << '\n'; return false; };
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    auto contendingWriterAcquires = [&] {
+        bool acquired = false;
+        std::thread contender([&] {
+            AppWorkspaceStorageWriteLock lock(workspace.directory);
+            acquired = lock.acquired();
+        });
+        contender.join();
+        return acquired;
+    };
+    {
+        AppWorkspaceStorageWriteLock outer(workspace.directory);
+        AppWorkspaceStorageWriteLock nested(workspace.directory);
+        if (!outer.acquired() || !nested.acquired() || contendingWriterAcquires())
+            return fail("workspace write lock was not reentrant and exclusive across threads");
+    }
+    if (!contendingWriterAcquires()) return fail("workspace write lock remained held after scope exit");
+    PrepareProjectDeletionRecovery(workspace.directory);
+    if (contendingWriterAcquires() || !AppSaveTasks(workspace.directory, workspace.data.tasks))
+        return fail("journaled workspace lock did not exclude a writer or admit its own nested save");
+    CommitQtRecoveryTransaction(workspace.directory);
+    if (!contendingWriterAcquires()) return fail("journal commit did not release the workspace lock");
     workspace.catalog.add_skill("Modeling", 1.0, "Test modeling skill");
     const auto skill = *workspace.catalog.id_for_name("Modeling");
     auto a = workspace.storage->create_profile(Profile("Alice"));
@@ -2130,15 +2152,27 @@ static bool TestAchievements() {
     if (GrantQtAchievement(workspace, id, "", skill, 10, 1).isEmpty() ||
         GrantQtAchievement(workspace, id, "Invalid", "unknown", 10, 1).isEmpty()) return false;
     const auto beforeLock = read(achievementPath);
-    {
-        AppProfileStorageWriteLock held(workspace.directory);
-        const auto blockedResult = GrantQtAchievement(workspace, id, QString::fromUtf8("Заблокированное"), skill, 25, 1);
-        if (!held.acquired() || blockedResult.isEmpty() || read(achievementPath) != beforeLock) {
-            std::cerr << "Achievement lock test failed: acquired=" << held.acquired()
-                      << " error=" << blockedResult.toStdString()
-                      << " bytes-unchanged=" << (read(achievementPath) == beforeLock) << "\n";
-            return false;
-        }
+    std::atomic<bool> lockHolderReady{false};
+    std::atomic<bool> releaseLockHolder{false};
+    std::atomic<bool> lockHolderAcquired{false};
+    std::thread lockHolder([&] {
+        AppWorkspaceStorageWriteLock held(workspace.directory);
+        lockHolderAcquired = held.acquired();
+        lockHolderReady = true;
+        while (!releaseLockHolder) std::this_thread::yield();
+    });
+    while (!lockHolderReady) std::this_thread::yield();
+    const auto blockedResult = lockHolderAcquired
+        ? GrantQtAchievement(workspace, id, QString::fromUtf8("Заблокированное"), skill, 25, 1)
+        : QString();
+    const bool blockedWithoutMutation = lockHolderAcquired && !blockedResult.isEmpty() && read(achievementPath) == beforeLock;
+    releaseLockHolder = true;
+    lockHolder.join();
+    if (!blockedWithoutMutation) {
+        std::cerr << "Achievement lock test failed: acquired=" << lockHolderAcquired
+                  << " error=" << blockedResult.toStdString()
+                  << " bytes-unchanged=" << (read(achievementPath) == beforeLock) << "\n";
+        return false;
     }
     if (!GrantQtAchievement(workspace, id, QString::fromUtf8("Мастер геометрии"), skill, 25, 1).isEmpty()) return false;
     workspace.storage->set_active_profile(id);

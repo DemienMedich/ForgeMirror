@@ -5,6 +5,7 @@
 #include <iomanip>
 
 #include "IJobStorage.h"
+#include "AppWorkspaceStorageLock.h"
 #include "SkillCatalog.h"
 #include "Profile.h"
 
@@ -223,6 +224,8 @@ bool ShouldSkipSeedCopy(const std::filesystem::path& rel) {
     if (relPath == "meta/gui-layout.ini") return true;
     if (relPath == "meta/shortcuts.json") return true;
     if (relPath == "meta/profile-write.lock") return true;
+    if (relPath == "meta/tasks.json.lock") return true;
+    if (relPath == "meta/workspace-write.lock") return true;
     if (relPath.rfind("meta/ui-presets", 0) == 0) return true;
     return false;
 }
@@ -511,6 +514,8 @@ bool LoadAdminStayLoggedInFlag(const std::filesystem::path& storageDir) {
 
 bool SaveAdminConfig(const std::filesystem::path& storageDir, const std::string& encodedPassword,
                      bool stayLoggedIn) {
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     auto path = AdminPasswordPath(storageDir);
     auto tempPath = path;
     tempPath += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -848,6 +853,8 @@ bool AppendProfileAudit(const std::filesystem::path& storageDir, const std::stri
                         const std::string& action, const std::string& details) {
     if (g_forceProfileAuditFailureForTests) return false;
     if (storageDir.empty() || profileId.empty() || action.empty()) return false;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     std::error_code ec;
     const auto path = storageDir / "meta" / "profile-audit.log";
     std::filesystem::create_directories(path.parent_path(), ec);
@@ -938,6 +945,8 @@ std::vector<std::string> LoadBannerTexts(const std::filesystem::path& storageDir
 }
 
 bool SaveBannerTexts(const std::filesystem::path& storageDir, const std::vector<std::string>& texts) {
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     std::filesystem::create_directories(storageDir / "meta");
     std::ofstream out(BannerTextPath(storageDir), std::ios::binary | std::ios::trunc);
     if (!out) return false;
@@ -1216,6 +1225,8 @@ bool ValidateStorageVaultFile(const std::filesystem::path& storageDir) {
 }
 
 bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data) {
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     std::filesystem::create_directories(storageDir / "meta");
     std::int64_t existingRev = 0;
     {
@@ -1343,7 +1354,7 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
         "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "tasks.json.lock",
-        "seed.merged", "gui-layout.ini", "admin.ini", "profile-write.lock"
+        "seed.merged", "gui-layout.ini", "admin.ini", "profile-write.lock", "workspace-write.lock"
     };
     if (parent.empty()) {
         if (ext == ".ini") return true;

@@ -1,6 +1,7 @@
 #include "AppTaskCompletionService.h"
 #include "AppTaskWorkflowService.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "GameplayConfig.h"
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
@@ -11,6 +12,7 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <stdexcept>
 
@@ -44,6 +46,18 @@ bool safeProfileId(const std::string& id) {
     });
 }
 std::filesystem::path journalPath(const std::filesystem::path& root) { return root / "meta" / "qt-xp-transaction"; }
+thread_local std::optional<AppWorkspaceStorageWriteLock> activeTransactionWriteLock;
+void retainTransactionWriteLock(const std::filesystem::path& root) {
+    if (activeTransactionWriteLock) throw std::runtime_error(u8"В этом процессе уже выполняется другая операция записи.");
+    activeTransactionWriteLock.emplace(root);
+    if (!activeTransactionWriteLock->acquired()) {
+        activeTransactionWriteLock.reset();
+        throw std::runtime_error(u8"Рабочее место сейчас изменяет другая программа. Повторите операцию позже.");
+    }
+}
+void releaseTransactionWriteLock() {
+    activeTransactionWriteLock.reset();
+}
 void emitTransactionOutcome(AppContext& app, bool succeeded,
                             const std::string& successMessage, const std::string& failureMessage) noexcept {
     if (succeeded) {
@@ -70,6 +84,9 @@ void checkPath(const std::filesystem::path& root, const std::filesystem::path& r
 
 void prepareFileJournal(const std::filesystem::path& root, const std::string& version,
                         const std::vector<std::string>& files) {
+    AppWorkspaceStorageWriteLock writeLock(root);
+    if (!writeLock.acquired()) throw std::runtime_error(u8"Рабочее место сейчас изменяет другая программа. Повторите операцию позже.");
+    if (activeTransactionWriteLock) throw std::runtime_error(u8"В этом процессе уже выполняется другая операция записи.");
     const auto pending = journalPath(root);
     if (std::filesystem::exists(pending)) throw std::runtime_error(u8"Сначала восстановите незавершённую Qt-транзакцию перезапуском приложения.");
     const auto staging = root / "meta" / "qt-xp-staging";
@@ -96,6 +113,7 @@ void prepareFileJournal(const std::filesystem::path& root, const std::string& ve
     if (!manifest) throw std::runtime_error(u8"Не удалось сохранить журнал восстановления Qt.");
     manifest.close();
     std::filesystem::rename(staging, pending);
+    retainTransactionWriteLock(root);
 }
 // Reject links in every path component, not just in the final file.
 void checkPath(const std::filesystem::path& root, const std::filesystem::path& relative) {
@@ -139,8 +157,12 @@ void finishJournal(const std::filesystem::path& root) {
     std::filesystem::rename(journalPath(root), destination);
     std::error_code ec;
     std::filesystem::remove_all(destination, ec);
+    releaseTransactionWriteLock();
 }
 void prepareJournal(const std::filesystem::path& root, const TaskCompletionPreview& preview, bool editing = false) {
+    AppWorkspaceStorageWriteLock writeLock(root);
+    if (!writeLock.acquired()) throw std::runtime_error(u8"Рабочее место сейчас изменяет другая программа. Повторите операцию позже.");
+    if (activeTransactionWriteLock) throw std::runtime_error(u8"В этом процессе уже выполняется другая операция записи.");
     const auto pending = journalPath(root);
     if (std::filesystem::exists(pending)) throw std::runtime_error(u8"Сначала восстановите незавершённую XP-транзакцию перезапуском Qt.");
     const auto staging = root / "meta" / "qt-xp-staging";
@@ -168,6 +190,7 @@ void prepareJournal(const std::filesystem::path& root, const TaskCompletionPrevi
     if (!manifest) throw std::runtime_error(u8"Не удалось сохранить журнал восстановления XP.");
     manifest.close();
     std::filesystem::rename(staging, pending);
+    retainTransactionWriteLock(root);
 }
 }
 
@@ -176,6 +199,9 @@ bool RecoverTaskCompletion(const std::filesystem::path& root,
     const auto pending = journalPath(root);
     checkPath(root, "meta/qt-xp-transaction");
     if (!std::filesystem::exists(pending)) return false;
+    AppWorkspaceStorageWriteLock recoveryWriteLock(root);
+    if (!recoveryWriteLock.acquired())
+        throw std::runtime_error(u8"Рабочее место сейчас изменяет другая программа. Повторите восстановление позже.");
     if (preservedInterruptedFiles) preservedInterruptedFiles->clear();
     checkPath(root, "meta/qt-xp-finished");
     checkPath(pending, "manifest");

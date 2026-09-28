@@ -1,6 +1,6 @@
 #include "IJobStorage.h"
 #include "AppUtils.h"
-#include "AppProfileStorageLock.h"
+#include "AppWorkspaceStorageLock.h"
 
 #include <algorithm>
 #include <array>
@@ -515,7 +515,7 @@ class FileStorage : public IJobStorage {
 public:
     explicit FileStorage(std::filesystem::path baseDir)
         : baseDir_(std::move(baseDir)) {
-        AppProfileStorageWriteLock writeLock(baseDir_);
+        AppWorkspaceStorageWriteLock writeLock(baseDir_);
         if (writeLock.acquired()) {
             normalize_directory(baseDir_);
             normalize_directory(archive_dir());
@@ -786,7 +786,7 @@ public:
 
     bool save_profile(const Profile& profile) override {
         if (!is_active()) return false;
-        AppProfileStorageWriteLock writeLock(baseDir_);
+        AppWorkspaceStorageWriteLock writeLock(baseDir_);
         if (!writeLock.acquired()) return false;
 
         std::ostringstream ss;
@@ -880,7 +880,7 @@ public:
     }
 
     bool set_archived(const std::string& id, bool archived) override {
-        AppProfileStorageWriteLock writeLock(baseDir_);
+        AppWorkspaceStorageWriteLock writeLock(baseDir_);
         if (!writeLock.acquired()) return false;
         auto current = find_profile_path(id, /*includeArchived*/true);
         if (!current) return false;
@@ -911,7 +911,7 @@ public:
     }
 
     bool delete_profile(const std::string& id) override {
-        AppProfileStorageWriteLock writeLock(baseDir_);
+        AppWorkspaceStorageWriteLock writeLock(baseDir_);
         if (!writeLock.acquired()) return false;
         auto current = find_profile_path(id, /*includeArchived*/true);
         if (!current) return false;
@@ -971,7 +971,7 @@ public:
         ss << "[auth]\n";
         ss << "token=" << token << "\n\n[profile]\nid=" << activeId_ << "\nname=" << activeId_
            << "\noverall=1\n\n[skills]\nnames=\n\n[queue]\nitems=\n";
-        AppProfileStorageWriteLock writeLock(baseDir_);
+        AppWorkspaceStorageWriteLock writeLock(baseDir_);
         return writeLock.acquired() && write_all(activePath_, ss.str());
     }
 

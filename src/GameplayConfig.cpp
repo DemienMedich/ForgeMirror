@@ -1,4 +1,5 @@
 #include "GameplayConfig.h"
+#include "AppWorkspaceStorageLock.h"
 
 #include <algorithm>
 #include <cctype>
@@ -172,6 +173,8 @@ GameplayConfig LoadGameplayConfig(const std::filesystem::path& storageDir) {
 }
 
 bool SaveGameplayConfig(const GameplayConfig& config, const std::filesystem::path& storageDir) {
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     GameplayConfig sanitized = SanitizeGameplayConfig(config);
     auto path = GameplayConfigPath(storageDir);
     std::filesystem::create_directories(path.parent_path());

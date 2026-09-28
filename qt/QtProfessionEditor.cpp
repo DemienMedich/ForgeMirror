@@ -2,6 +2,7 @@
 #include "AppProfessionService.h"
 #include "AppTaskCompletionService.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
 #include <QtWidgets>
@@ -32,6 +33,8 @@ bool sameCatalog(const SkillCatalog& a, const SkillCatalog& b) {
 QString MergeQtProfessions(QtWorkspace& workspace, const std::string& restoreProfileId,
                            const std::string& fromId, const std::string& toId,
                            const QString& destinationDescription) {
+    AppWorkspaceStorageWriteLock writeLock(workspace.directory);
+    if (!writeLock.acquired()) return QString::fromUtf8("Рабочее место изменяет другая программа. Повторите позже.");
     auto failText = [](const char* value) { return QString::fromUtf8(value); };
     const auto source = std::find_if(workspace.data.professions.begin(), workspace.data.professions.end(),
         [&](const auto& p) { return p.id == fromId; });
@@ -192,6 +195,8 @@ bool ShowProfessionEditor(QWidget* parent, QtWorkspace& workspace, const std::st
     form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        AppWorkspaceStorageWriteLock writeLock(workspace.directory);
+        if (!writeLock.acquired()) { notice->setText(QString::fromUtf8("Рабочее место изменяет другая программа. Повторите позже.")); return; }
         const auto title = name->text().trimmed(), desc = description->text().trimmed();
         if (title.isEmpty() || !safe(title) || !safe(desc)) {
             notice->setText(QString::fromUtf8("Укажите название. Переносы строк, управляющие символы и | не поддерживаются.")); return;

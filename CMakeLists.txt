@@ -27,7 +27,7 @@ add_executable(ForgeMirror
     src/FakeStorage.cpp
     src/FakeApiClient.cpp
     src/FileStorage.cpp
-    src/AppProfileStorageLock.cpp
+    src/AppWorkspaceStorageLock.cpp
     src/AppProfileService.cpp
     src/AppProfileDeletionService.cpp
     src/AppProfileMutationService.cpp
@@ -121,7 +121,7 @@ if(BUILD_IMGUI_GUI)
         src/Skill.cpp
         src/Profile.cpp
         src/FileStorage.cpp
-        src/AppProfileStorageLock.cpp
+        src/AppWorkspaceStorageLock.cpp
         src/AppProfileService.cpp
         src/AppProfileMutationService.cpp
         src/AppRecoveryStorage.cpp
@@ -167,7 +167,7 @@ if(BUILD_CORE_TESTS)
         src/GameplayConfig.cpp
         src/CloudSync.cpp
         src/FileStorage.cpp
-        src/AppProfileStorageLock.cpp
+        src/AppWorkspaceStorageLock.cpp
         src/FakeStorage.cpp
         src/AppProfileService.cpp
         src/AppProfileMutationService.cpp

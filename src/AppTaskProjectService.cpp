@@ -2,6 +2,7 @@
 #include "AppTaskWorkflowService.h"
 #include "AppRecoveryStorage.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "AppWorkspaceDataService.h"
 #include "Profile.h"
 
@@ -22,11 +23,6 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#elif defined(__unix__) || defined(__APPLE__)
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #endif
 
 namespace {
@@ -524,67 +520,6 @@ static std::string TaskSnapshotCacheKey(const std::filesystem::path& storageDir)
     return path.lexically_normal().u8string();
 }
 
-class TaskWriteLock {
-public:
-    explicit TaskWriteLock(const std::filesystem::path& storageDir) {
-        const auto path = TasksStoragePath(storageDir).parent_path() / "tasks.json.lock";
-        std::error_code ec;
-        std::filesystem::create_directories(path.parent_path(), ec);
-        if (ec) return;
-#ifdef _WIN32
-        handle_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        if (handle_ == INVALID_HANDLE_VALUE) return;
-        FILE_ATTRIBUTE_TAG_INFO attributes{};
-        if (!GetFileInformationByHandleEx(handle_, FileAttributeTagInfo, &attributes, sizeof(attributes)) ||
-            (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
-            CloseHandle(handle_);
-            handle_ = INVALID_HANDLE_VALUE;
-        }
-#elif defined(__unix__) || defined(__APPLE__)
-        descriptor_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
-        if (descriptor_ < 0) return;
-        struct stat info{};
-        if (::fstat(descriptor_, &info) != 0 || !S_ISREG(info.st_mode) ||
-            ::flock(descriptor_, LOCK_EX | LOCK_NB) != 0) {
-            ::close(descriptor_);
-            descriptor_ = -1;
-        }
-#endif
-    }
-
-    ~TaskWriteLock() {
-#ifdef _WIN32
-        if (handle_ != INVALID_HANDLE_VALUE) CloseHandle(handle_);
-#elif defined(__unix__) || defined(__APPLE__)
-        if (descriptor_ >= 0) {
-            ::flock(descriptor_, LOCK_UN);
-            ::close(descriptor_);
-        }
-#endif
-    }
-
-    TaskWriteLock(const TaskWriteLock&) = delete;
-    TaskWriteLock& operator=(const TaskWriteLock&) = delete;
-
-    bool acquired() const {
-#ifdef _WIN32
-        return handle_ != INVALID_HANDLE_VALUE;
-#elif defined(__unix__) || defined(__APPLE__)
-        return descriptor_ >= 0;
-#else
-        return false;
-#endif
-    }
-
-private:
-#ifdef _WIN32
-    HANDLE handle_ = INVALID_HANDLE_VALUE;
-#elif defined(__unix__) || defined(__APPLE__)
-    int descriptor_ = -1;
-#endif
-};
-
 static bool ReadTaskFileBytes(const std::filesystem::path& storageDir, std::string& bytes,
                               bool* missing = nullptr) {
     if (missing) *missing = false;
@@ -618,9 +553,9 @@ static void RefreshTaskSnapshotCacheLocked(const std::string& key,
 }
 
 bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<TaskEntry>& tasks) {
-    std::lock_guard<std::mutex> lock(g_taskSnapshotCacheMutex);
-    TaskWriteLock writeLock(storageDir);
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
     if (!writeLock.acquired()) return false;
+    std::lock_guard<std::mutex> lock(g_taskSnapshotCacheMutex);
     const auto key = TaskSnapshotCacheKey(storageDir);
     if (!AppWriteUtf8BomWithRecovery(TasksStoragePath(storageDir), SerializeTasks(tasks))) {
         g_taskSnapshotCache.erase(key);
@@ -633,9 +568,9 @@ bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<Tas
 AppTaskSaveStatus AppSaveTasksIfUnchanged(const std::filesystem::path& storageDir,
                                           const std::vector<TaskEntry>& expectedTasks,
                                           const std::vector<TaskEntry>& updatedTasks) {
-    std::lock_guard<std::mutex> lock(g_taskSnapshotCacheMutex);
-    TaskWriteLock writeLock(storageDir);
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
     if (!writeLock.acquired()) return AppTaskSaveStatus::Busy;
+    std::lock_guard<std::mutex> lock(g_taskSnapshotCacheMutex);
     const auto key = TaskSnapshotCacheKey(storageDir);
     std::string fileBytes;
     bool missing = false;
@@ -690,6 +625,9 @@ bool AppAppendTaskAudit(const std::filesystem::path& storageDir,
     const std::string safeTaskId = SanitizeLogToken(taskId);
     const std::string safeField = SanitizeLogToken(field);
     if (safeTaskId.empty() || safeField.empty()) return false;
+
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
 
     std::error_code ec;
     const auto path = TaskAuditStoragePath(storageDir);

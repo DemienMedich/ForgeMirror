@@ -1,4 +1,5 @@
 #include "SkillCatalog.h"
+#include "AppWorkspaceStorageLock.h"
 
 #include <algorithm>
 #include <cctype>
@@ -665,6 +666,8 @@ std::string SkillCatalog::description(const std::string& id) const {
 }
 
 bool WriteTextFileAtomic(const std::filesystem::path& path, const std::string& data) {
+    AppWorkspaceStorageWriteLock writeLock(path.parent_path());
+    if (!writeLock.acquired()) return false;
     std::error_code ec;
     auto parent = path.parent_path();
     if (!parent.empty()) {
