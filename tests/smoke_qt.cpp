@@ -5733,25 +5733,66 @@ static bool TestWindowDecorationHotkey() {
     QtWindow window(workspace);
     window.show();
     QApplication::processEvents();
+    auto* fullscreenShortcut = window.findChild<QShortcut*>("shortcutFullscreen");
+    auto* fullscreenAction = window.findChild<QAction*>("windowFullscreenAction");
     auto* shortcut = window.findChild<QShortcut*>("shortcutToggleWindowDecoration");
+    auto* decoratedAction = window.findChild<QAction*>("windowDecoratedAction");
     auto* dragHandle = window.findChild<QToolButton*>("windowDragHandle");
-    if (!shortcut || !dragHandle || window.windowFlags().testFlag(Qt::FramelessWindowHint) || dragHandle->isVisible()) return false;
-    shortcut->activated();
+    auto* windowMenu = window.findChild<QMenu*>("windowMenu");
+    if (!fullscreenShortcut || !fullscreenAction || !shortcut || !decoratedAction || !dragHandle || !windowMenu ||
+        !fullscreenAction->isCheckable() || !decoratedAction->isCheckable() ||
+        !windowMenu->actions().contains(fullscreenAction) || !windowMenu->actions().contains(decoratedAction) ||
+        fullscreenAction->isChecked() || decoratedAction->isChecked() ||
+        window.windowFlags().testFlag(Qt::FramelessWindowHint) || dragHandle->isVisible()) return false;
+    fullscreenShortcut->activated();
     QApplication::processEvents();
     auto settings = LoadQtDisplaySettings(directory);
-    if (settings.decorated || !window.windowFlags().testFlag(Qt::FramelessWindowHint) || !dragHandle->isVisible()) return false;
+    if (!settings.fullscreen || !fullscreenAction->isChecked() || !window.isFullScreen()) return false;
+    fullscreenAction->trigger();
+    QApplication::processEvents();
+    settings = LoadQtDisplaySettings(directory);
+    if (settings.fullscreen || fullscreenAction->isChecked() || window.isFullScreen()) return false;
+    shortcut->activated();
+    QApplication::processEvents();
+    settings = LoadQtDisplaySettings(directory);
+    if (settings.decorated || !decoratedAction->isChecked() || !window.windowFlags().testFlag(Qt::FramelessWindowHint) || !dragHandle->isVisible()) return false;
     window.close();
     QtWindow restored(workspace);
     restored.show(); QApplication::processEvents();
     dragHandle = restored.findChild<QToolButton*>("windowDragHandle");
     if (!dragHandle || restored.windowFlags().testFlag(Qt::FramelessWindowHint) == false || !dragHandle->isVisible()) return false;
     shortcut = restored.findChild<QShortcut*>("shortcutToggleWindowDecoration");
-    if (!shortcut) return false;
-    shortcut->activated(); QApplication::processEvents();
+    decoratedAction = restored.findChild<QAction*>("windowDecoratedAction");
+    if (!shortcut || !decoratedAction || !decoratedAction->isChecked()) return false;
+    decoratedAction->trigger(); QApplication::processEvents();
     settings = LoadQtDisplaySettings(directory);
     const bool restoredDecorated = settings.decorated && !restored.windowFlags().testFlag(Qt::FramelessWindowHint) && !dragHandle->isVisible();
+    fullscreenAction = restored.findChild<QAction*>("windowFullscreenAction");
+    auto* displayAction = restored.findChild<QAction*>("qtDisplaySettingsAction");
+    if (!restoredDecorated || !fullscreenAction || !displayAction) { restored.close(); return false; }
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog) return;
+        dialog->findChild<QCheckBox*>("qtFullscreen")->setChecked(true);
+        dialog->findChild<QCheckBox*>("qtDecorated")->setChecked(false);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    displayAction->trigger();
+    QApplication::processEvents();
+    settings = LoadQtDisplaySettings(directory);
+    if (!settings.fullscreen || settings.decorated || !fullscreenAction->isChecked() || !decoratedAction->isChecked() ||
+        !restored.isFullScreen() || !restored.windowFlags().testFlag(Qt::FramelessWindowHint)) {
+        restored.close();
+        return false;
+    }
+    fullscreenAction->trigger();
+    decoratedAction->trigger();
+    QApplication::processEvents();
+    settings = LoadQtDisplaySettings(directory);
+    const bool settingsMenuRoundTrip = !settings.fullscreen && settings.decorated && !fullscreenAction->isChecked() &&
+        !decoratedAction->isChecked() && !restored.isFullScreen() && !restored.windowFlags().testFlag(Qt::FramelessWindowHint);
     restored.close();
-    return restoredDecorated;
+    return settingsMenuRoundTrip;
 }
 
 static bool TestQtUiSettingsReset() {
@@ -6446,6 +6487,9 @@ int main(int argc, char** argv) {
     });
     displayAction->trigger();
     if (table->verticalHeader()->defaultSectionSize() != 24) return fail("Compact table setting not applied");
+    auto* fullscreenMenuAction = window.findChild<QAction*>("windowFullscreenAction");
+    auto* framelessMenuAction = window.findChild<QAction*>("windowDecoratedAction");
+    if (!fullscreenMenuAction || !framelessMenuAction) return fail("Window mode menu actions missing");
     QFile settingsEventLog(QString::fromStdWString((workspace.directory / "meta/qt-application-log.json").wstring()));
     if (!settingsEventLog.open(QIODevice::ReadOnly)) return fail("Qt display settings event log missing");
     const auto settingsEventDocument = QJsonDocument::fromJson(settingsEventLog.readAll());

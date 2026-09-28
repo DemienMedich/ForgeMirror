@@ -771,6 +771,52 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     storageCleanupAction_->setObjectName("storageCleanup");
     storageCleanupAction_->setToolTip(QString::fromUtf8("Показать точный список Qt-копии; удалить можно только отмеченные элементы после подтверждения"));
     connect(storageCleanupAction_, &QAction::triggered, this, [this] { cleanupStrayStorage(); });
+    auto* windowMenu = menu->addMenu(QString::fromUtf8("Окно"));
+    windowMenu->setObjectName("windowMenu");
+    windowFullscreenAction_ = windowMenu->addAction(QString::fromUtf8("Во весь экран (F11)"));
+    windowFullscreenAction_->setObjectName("windowFullscreenAction");
+    windowFullscreenAction_->setCheckable(true);
+    windowFullscreenAction_->setChecked(displaySettings_.fullscreen);
+    connect(windowFullscreenAction_, &QAction::triggered, this, [this](bool enabled) {
+        auto next = displaySettings_;
+        next.fullscreen = enabled;
+        if (!SaveQtDisplaySettings(workspace_.directory, next)) {
+            QSignalBlocker blocker(windowFullscreenAction_);
+            windowFullscreenAction_->setChecked(displaySettings_.fullscreen);
+            message(u8"Не удалось сохранить режим окна.");
+            return;
+        }
+        displaySettings_ = next;
+        if (next.fullscreen) showFullScreen(); else showNormal();
+    });
+    windowDecoratedAction_ = windowMenu->addAction(QString::fromUtf8("Без рамки (F10)"));
+    windowDecoratedAction_->setObjectName("windowDecoratedAction");
+    windowDecoratedAction_->setCheckable(true);
+    windowDecoratedAction_->setChecked(!displaySettings_.decorated);
+    connect(windowDecoratedAction_, &QAction::triggered, this, [this](bool frameless) {
+        auto next = displaySettings_;
+        next.decorated = !frameless;
+        if (!SaveQtDisplaySettings(workspace_.directory, next)) {
+            QSignalBlocker blocker(windowDecoratedAction_);
+            windowDecoratedAction_->setChecked(!displaySettings_.decorated);
+            message(u8"Не удалось сохранить режим рамки окна.");
+            return;
+        }
+        const bool wasVisible = isVisible();
+        const bool wasFullscreen = isFullScreen();
+        const bool wasMaximized = isMaximized();
+        displaySettings_ = next;
+        setWindowFlag(Qt::FramelessWindowHint, frameless);
+        dragHandle_->setVisible(frameless);
+        if (wasVisible) {
+            if (wasFullscreen) showFullScreen();
+            else if (wasMaximized) showMaximized();
+            else showNormal();
+        }
+        statusBar()->showMessage(frameless ? QString::fromUtf8("Безрамочный режим включён.")
+                                           : QString::fromUtf8("Рамка окна включена."), 4000);
+    });
+    windowMenu->addSeparator();
     menu->addAction(QString::fromUtf8("Открыть папку данных Qt"), this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(q(workspace_.directory.u8string())));
     });
@@ -782,6 +828,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
         dragHandle_->setVisible(!displaySettings_.decorated);
+        {
+            QSignalBlocker fullscreenBlocker(windowFullscreenAction_);
+            QSignalBlocker decoratedBlocker(windowDecoratedAction_);
+            windowFullscreenAction_->setChecked(displaySettings_.fullscreen);
+            windowDecoratedAction_->setChecked(!displaySettings_.decorated);
+        }
         if (trayIcon_) trayIcon_->setVisible(displaySettings_.minimizeToTray);
         applyQtTextScaleMetrics(this, displaySettings_.scalePercent);
         if (displaySettings_.fullscreen) showFullScreen();
@@ -2182,24 +2234,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (detailsToggle_->isVisible() && detailsToggle_->isEnabled()) detailsToggle_->toggle();
     });
     bindShortcut("shortcutHelp", QKeySequence(QStringLiteral("Ctrl+/")), [this] { showShortcutHelp(); });
-    bindShortcut("shortcutToggleWindowDecoration", QKeySequence(Qt::Key_F10), [this] {
-        auto next = displaySettings_;
-        next.decorated = !next.decorated;
-        if (!SaveQtDisplaySettings(workspace_.directory, next)) { message(u8"Не удалось сохранить режим рамки окна."); return; }
-        const bool wasVisible = isVisible();
-        const bool wasFullscreen = isFullScreen();
-        const bool wasMaximized = isMaximized();
-        displaySettings_ = next;
-        setWindowFlag(Qt::FramelessWindowHint, !next.decorated);
-        dragHandle_->setVisible(!next.decorated);
-        if (wasVisible) {
-            if (wasFullscreen) showFullScreen();
-            else if (wasMaximized) showMaximized();
-            else showNormal();
-        }
-        statusBar()->showMessage(next.decorated ? QString::fromUtf8("Рамка окна включена.")
-                                                : QString::fromUtf8("Безрамочный режим включён."), 4000);
-    });
+    bindShortcut("shortcutToggleWindowDecoration", QKeySequence(Qt::Key_F10), [this] { windowDecoratedAction_->trigger(); });
     bindShortcut("shortcutResetUiSettings", QKeySequence(QStringLiteral("Ctrl+F10")), [this] {
         if (!ResetQtUiSettings(workspace_.directory)) {
             message(u8"Не удалось сбросить настройки интерфейса; исходный файл сохранён.");
@@ -2210,13 +2245,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QCoreApplication::instance()->setProperty("forgeRestartRequested", true);
         QCoreApplication::quit();
     });
-    bindShortcut("shortcutFullscreen", QKeySequence(Qt::Key_F11), [this] {
-        auto next = displaySettings_;
-        next.fullscreen = !isFullScreen();
-        if (!SaveQtDisplaySettings(workspace_.directory, next)) { message(u8"Не удалось сохранить режим окна."); return; }
-        displaySettings_ = next;
-        if (next.fullscreen) showFullScreen(); else showNormal();
-    });
+    bindShortcut("shortcutFullscreen", QKeySequence(Qt::Key_F11), [this] { windowFullscreenAction_->trigger(); });
     // Restoring the Pomodoro page before the top-level window is shown can
     // crash Qt Widgets on Windows when the settings panel is made visible.
     // Build the initial frame on the safe default page, then restore Pomodoro

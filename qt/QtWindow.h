@@ -114,6 +114,8 @@ private:
     QAction* adminLoginAction_ = nullptr;
     QAction* adminPasswordAction_;
     QAction* ownPasswordAction_;
+    QAction* windowFullscreenAction_ = nullptr;
+    QAction* windowDecoratedAction_ = nullptr;
     QAction* storageHealthReportAction_;
     QAction* storageCleanupAction_;
     QComboBox* profiles_;
