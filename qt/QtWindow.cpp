@@ -6375,32 +6375,34 @@ void QtWindow::bulkEditTasks() {
         if (found == workspace_.data.pipelineSteps.end()) { message(u8"Выбранный этап больше недоступен."); return; }
         referenceName = found->title;
     }
-    const auto result = mode == QStringLiteral("status")
-        ? AppBulkUpdateTaskStatus(workspace_.directory, workspace_.data.tasks, taskIds,
-            target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
-        : mode == QStringLiteral("priority")
-        ? AppBulkUpdateTaskPriority(workspace_.directory, workspace_.data.tasks, taskIds,
-            target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
-        : mode == QStringLiteral("project")
-        ? AppBulkUpdateTaskProject(workspace_.directory, workspace_.data.tasks, taskIds,
-            referenceId, referenceName, "admin", &workspace_.data.taskAudit)
-        : mode == QStringLiteral("pipeline")
-        ? AppBulkUpdateTaskPipelineStep(workspace_.directory, workspace_.data.tasks, taskIds,
-            referenceId, referenceName, "admin", &workspace_.data.taskAudit)
-        : mode == QStringLiteral("deadline")
-        ? AppBulkUpdateTaskDeadline(workspace_.directory, workspace_.data.tasks, taskIds,
-            hasDeadline->isChecked() ? std::optional<std::int64_t>(deadline->dateTime().toSecsSinceEpoch()) : std::nullopt,
-            "admin", &workspace_.data.taskAudit)
-        : AppBulkUpdateTaskAssignees(workspace_.directory, workspace_.data.tasks, taskIds,
-            assignees, "admin", &workspace_.data.taskAudit);
+    const auto result = BulkUpdateTasksWithRecovery(workspace_.directory, workspace_.data.tasks,
+        workspace_.data.taskAudit, [&] {
+            return mode == QStringLiteral("status")
+                ? AppBulkUpdateTaskStatus(workspace_.directory, workspace_.data.tasks, taskIds,
+                    target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
+                : mode == QStringLiteral("priority")
+                ? AppBulkUpdateTaskPriority(workspace_.directory, workspace_.data.tasks, taskIds,
+                    target->currentData().toInt(), "admin", &workspace_.data.taskAudit)
+                : mode == QStringLiteral("project")
+                ? AppBulkUpdateTaskProject(workspace_.directory, workspace_.data.tasks, taskIds,
+                    referenceId, referenceName, "admin", &workspace_.data.taskAudit)
+                : mode == QStringLiteral("pipeline")
+                ? AppBulkUpdateTaskPipelineStep(workspace_.directory, workspace_.data.tasks, taskIds,
+                    referenceId, referenceName, "admin", &workspace_.data.taskAudit)
+                : mode == QStringLiteral("deadline")
+                ? AppBulkUpdateTaskDeadline(workspace_.directory, workspace_.data.tasks, taskIds,
+                    hasDeadline->isChecked() ? std::optional<std::int64_t>(deadline->dateTime().toSecsSinceEpoch()) : std::nullopt,
+                    "admin", &workspace_.data.taskAudit)
+                : AppBulkUpdateTaskAssignees(workspace_.directory, workspace_.data.tasks, taskIds,
+                    assignees, "admin", &workspace_.data.taskAudit);
+        }, [this](AppLogLevel level, const std::string& event) {
+            appendLog(level, "CoreTaskMutation", event);
+        });
     if (!result.ok) {
-        appendLog(AppLogLevel::Warning, "CoreTaskMutation", "Bulk task update failed or rolled back");
         reload();
         message(result.errorMessage.empty() ? std::string(u8"Не удалось применить массовое изменение.") : result.errorMessage);
         return;
     }
-    appendLog(AppLogLevel::Info, "CoreTaskMutation", "Bulk task update committed: changed=" +
-        std::to_string(result.changedCount) + " skipped=" + std::to_string(result.skippedCount));
     reload();
     statusBar()->showMessage(QString::fromUtf8("Обновлено: %1 · пропущено: %2")
         .arg(result.changedCount).arg(result.skippedCount), 7000);

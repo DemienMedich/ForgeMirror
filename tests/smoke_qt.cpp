@@ -2818,6 +2818,7 @@ static bool TestTaskEditorTransaction() {
     original.id = "edit-fixture";
     original.title = "Original";
     original.description = "Original description";
+    original.priority = 0;
     original.createdAt = 123;
     original.assignees = {"legacy-profile"};
     original.skillIds = {"legacy-skill"};
@@ -2866,6 +2867,35 @@ static bool TestTaskEditorTransaction() {
         workspace.data.tasks.size() != 1 || workspace.data.tasks.front().id != original.id ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
+
+    const std::unordered_set<std::string> selectedTaskIds{original.id};
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failedBulk = BulkUpdateTasksWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, [&] {
+            return AppBulkUpdateTaskPriority(workspace.directory, workspace.data.tasks, selectedTaskIds,
+                2, "test", &workspace.data.taskAudit);
+        }, observeTaskEvent);
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failedBulk.ok || workspace.data.tasks.front().priority != original.priority ||
+        !hasTaskEvent(AppLogLevel::Warning, "Bulk task update failed or was rolled back") ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+    for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
+
+    const auto successfulBulk = BulkUpdateTasksWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, [&] {
+            return AppBulkUpdateTaskPriority(workspace.directory, workspace.data.tasks, selectedTaskIds,
+                2, "test", &workspace.data.taskAudit);
+        }, [&](AppLogLevel level, const std::string& message) {
+            observeTaskEvent(level, message);
+            throw std::runtime_error("bulk observer must be isolated");
+        });
+    if (!successfulBulk.ok || !successfulBulk.changed || successfulBulk.changedCount != 1 ||
+        workspace.data.tasks.front().priority != 2 ||
+        !hasTaskEvent(AppLogLevel::Info, "Bulk task update committed") ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+    before.clear();
+    for (const auto& file : files) before.push_back(read(file));
+
     auto duplicateTasks = std::vector<TaskEntry>{original, original};
     auto duplicateAudit = workspace.data.taskAudit;
     if (DeleteTaskWithRecovery(workspace.directory, duplicateTasks, duplicateAudit, original.id, "test").ok ||
@@ -5065,7 +5095,7 @@ static bool TestBulkTaskEditsUi() {
     const auto bulkCommitted = std::find_if(bulkEvents.begin(), bulkEvents.end(), [](const auto& value) {
         const auto entry = value.toObject();
         return entry.value("source").toString() == QStringLiteral("CoreTaskMutation") &&
-            entry.value("message").toString() == QStringLiteral("Bulk task update committed: changed=2 skipped=0");
+            entry.value("message").toString() == QStringLiteral("Bulk task update committed");
     });
     if (bulkCommitted == bulkEvents.end()) return false;
     for (const auto& value : bulkEvents) if (value.toObject().value("source").toString() == QStringLiteral("CoreTaskMutation")) {

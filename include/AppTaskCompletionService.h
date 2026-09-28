@@ -95,6 +95,14 @@ AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
     const TaskEntry& task, const std::string& actor,
     std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
+// Run a metadata-only task batch in the shared recovery journal. The callback
+// may use existing AppBulkUpdateTask* operations; a failed task or audit write
+// restores both files and in-memory snapshots before returning.
+AppMutationResult BulkUpdateTasksWithRecovery(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::function<AppMutationResult()>& mutation,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
+
 AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const std::string& taskId, int newStatus, const std::string& actor,

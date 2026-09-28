@@ -765,6 +765,61 @@ AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
     return result;
 }
 
+AppMutationResult BulkUpdateTasksWithRecovery(const std::filesystem::path& directory,
+    std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
+    const std::function<AppMutationResult()>& mutation,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
+    AppMutationResult result;
+    if (!mutation) {
+        result.errorMessage = u8"Не задана операция массового изменения задач.";
+        emitOptionalEvent(eventLogger, AppLogLevel::Warning, "Bulk task update failed or was rolled back");
+        return result;
+    }
+
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        prepareJournal(directory, {}, true);
+        prepared = true;
+        result = mutation();
+        if (!result.ok)
+            throw std::runtime_error(result.errorMessage.empty()
+                ? u8"Не удалось выполнить массовое изменение задач."
+                : result.errorMessage);
+        finishJournal(directory);
+    } catch (const std::exception& error) {
+        result = {};
+        result.errorMessage = error.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
+            catch (const std::exception&) {
+                result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала.";
+            }
+        }
+    } catch (...) {
+        result = {};
+        result.errorMessage = u8"Массовое изменение задач завершилось неизвестной ошибкой.";
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
+            catch (...) {
+                result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала.";
+            }
+        }
+    }
+
+    std::error_code ec;
+    const bool recoveryPending = std::filesystem::exists(journalPath(directory), ec) && !ec;
+    emitOptionalEvent(eventLogger,
+        result.ok ? AppLogLevel::Info : recoveryPending ? AppLogLevel::Error : AppLogLevel::Warning,
+        result.ok ? "Bulk task update committed" : "Bulk task update failed or was rolled back");
+    return result;
+}
+
 AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
     const std::string& taskId, int newStatus, const std::string& actor,
