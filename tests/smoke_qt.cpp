@@ -980,7 +980,18 @@ static bool TestQtAdminAuthParity() {
     authLogFile.close();
     if (authLogBytes.contains("private-wrong-password-fixture")) return false;
     window.close();
+    auto restartDisplay = LoadQtDisplaySettings(directory);
+    restartDisplay.lastPage = 8; // Pomodoro is the user's persisted startup page.
+    if (!SaveQtDisplaySettings(directory, restartDisplay)) return false;
     QtWindow restarted(workspace); restarted.show(); QApplication::processEvents();
+    auto* restartedNavigation = restarted.findChild<QListWidget*>("navigation");
+    auto* pomodoroSoundSettings = restarted.findChild<QCheckBox*>("pomodoroSoundEnabled");
+    if (!restartedNavigation || restartedNavigation->currentRow() != 8 || !pomodoroSoundSettings ||
+        !pomodoroSoundSettings->isVisible()) return false;
+    QEventLoop startupStability;
+    QTimer::singleShot(3200, &startupStability, &QEventLoop::quit);
+    startupStability.exec();
+    if (!restarted.isVisible() || restartedNavigation->currentRow() != 8) return false;
     passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
     login = restarted.findChild<QAction*>("adminLoginAction");
     if (!passwordAction || !passwordAction->isVisible() || !login ||

@@ -2114,7 +2114,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         displaySettings_ = next;
         if (next.fullscreen) showFullScreen(); else showNormal();
     });
+    // Restoring the Pomodoro page before the top-level window is shown can
+    // crash Qt Widgets on Windows when the settings panel is made visible.
+    // Build the initial frame on the safe default page, then restore Pomodoro
+    // from the event queue once the caller has had a chance to show the window.
+    const bool deferPomodoroRestore = displaySettings_.lastPage == Pomodoro;
+    if (deferPomodoroRestore) displaySettings_.lastPage = ProfilePage;
     reload();
+    if (deferPomodoroRestore) {
+        displaySettings_.lastPage = Pomodoro;
+        QTimer::singleShot(0, this, [this] {
+            if (navigation_ && navigation_->count() > Pomodoro &&
+                !navigation_->item(Pomodoro)->isHidden())
+                navigation_->setCurrentRow(Pomodoro);
+        });
+    }
 }
 
 void QtWindow::showShortcutHelp() {
