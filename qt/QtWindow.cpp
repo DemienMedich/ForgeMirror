@@ -442,6 +442,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     layout->setSpacing(8);
     auto* header = new QHBoxLayout;
     dragHandle_ = new WindowDragHandle;
+    dragHandle_->setObjectName("windowDragHandle");
     dragHandle_->setText(QString::fromUtf8("⋮⋮"));
     dragHandle_->setToolTip(QString::fromUtf8("Перетащить окно"));
     dragHandle_->setFixedSize(28, 28);
@@ -1807,6 +1808,24 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (detailsToggle_->isVisible() && detailsToggle_->isEnabled()) detailsToggle_->toggle();
     });
     bindShortcut("shortcutHelp", QKeySequence(QStringLiteral("Ctrl+/")), [this] { showShortcutHelp(); });
+    bindShortcut("shortcutToggleWindowDecoration", QKeySequence(Qt::Key_F10), [this] {
+        auto next = displaySettings_;
+        next.decorated = !next.decorated;
+        if (!SaveQtDisplaySettings(workspace_.directory, next)) { message(u8"Не удалось сохранить режим рамки окна."); return; }
+        const bool wasVisible = isVisible();
+        const bool wasFullscreen = isFullScreen();
+        const bool wasMaximized = isMaximized();
+        displaySettings_ = next;
+        setWindowFlag(Qt::FramelessWindowHint, !next.decorated);
+        dragHandle_->setVisible(!next.decorated);
+        if (wasVisible) {
+            if (wasFullscreen) showFullScreen();
+            else if (wasMaximized) showMaximized();
+            else showNormal();
+        }
+        statusBar()->showMessage(next.decorated ? QString::fromUtf8("Рамка окна включена.")
+                                                : QString::fromUtf8("Безрамочный режим включён."), 4000);
+    });
     bindShortcut("shortcutFullscreen", QKeySequence(Qt::Key_F11), [this] {
         auto next = displaySettings_;
         next.fullscreen = !isFullScreen();
@@ -1827,7 +1846,7 @@ void QtWindow::showShortcutHelp() {
         "Команды работают в текущем разделе. Защищённые операции требуют входа администратора; локальные ярлыки доступны всем пользователям."));
     intro->setWordWrap(true);
     layout->addWidget(intro);
-    auto* table = new QTableWidget(15, 2, &dialog);
+    auto* table = new QTableWidget(16, 2, &dialog);
     table->setObjectName("shortcutHelpTable");
     table->setHorizontalHeaderLabels({QString::fromUtf8("Клавиша"), QString::fromUtf8("Действие")});
     const std::vector<std::pair<QString, QString>> rows = {
@@ -1838,6 +1857,7 @@ void QtWindow::showShortcutHelp() {
         {"Ctrl+N", QString::fromUtf8("Создать запись")}, {"Ctrl+E", QString::fromUtf8("Редактировать выбранную запись")},
         {"Delete", QString::fromUtf8("Удалить выбранный проект или этап")}, {"Ctrl+R", QString::fromUtf8("Перечитать локальные данные")},
         {"Ctrl+I", QString::fromUtf8("Показать или скрыть подробности")}, {"Ctrl+/", QString::fromUtf8("Открыть эту памятку")},
+        {"F10", QString::fromUtf8("Показать или скрыть рамку окна")},
         {"F11", QString::fromUtf8("Переключить полноэкранный режим")}
     };
     for (int row = 0; row < int(rows.size()); ++row) {

@@ -4961,6 +4961,35 @@ static bool TestDisplaySettings(QApplication& app) {
     return legacyAfterFile.open(QIODevice::ReadOnly) && legacyAfterFile.readAll() == legacyBytesBefore;
 }
 
+static bool TestWindowDecorationHotkey() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* shortcut = window.findChild<QShortcut*>("shortcutToggleWindowDecoration");
+    auto* dragHandle = window.findChild<QToolButton*>("windowDragHandle");
+    if (!shortcut || !dragHandle || window.windowFlags().testFlag(Qt::FramelessWindowHint) || dragHandle->isVisible()) return false;
+    shortcut->activated();
+    QApplication::processEvents();
+    auto settings = LoadQtDisplaySettings(directory);
+    if (settings.decorated || !window.windowFlags().testFlag(Qt::FramelessWindowHint) || !dragHandle->isVisible()) return false;
+    window.close();
+    QtWindow restored(workspace);
+    restored.show(); QApplication::processEvents();
+    dragHandle = restored.findChild<QToolButton*>("windowDragHandle");
+    if (!dragHandle || restored.windowFlags().testFlag(Qt::FramelessWindowHint) == false || !dragHandle->isVisible()) return false;
+    shortcut = restored.findChild<QShortcut*>("shortcutToggleWindowDecoration");
+    if (!shortcut) return false;
+    shortcut->activated(); QApplication::processEvents();
+    settings = LoadQtDisplaySettings(directory);
+    const bool restoredDecorated = settings.decorated && !restored.windowFlags().testFlag(Qt::FramelessWindowHint) && !dragHandle->isVisible();
+    restored.close();
+    return restoredDecorated;
+}
+
 static bool TestQtModuleToggleParity() {
     struct RestoreModuleEnvironment {
         bool wasSet = qEnvironmentVariableIsSet("FORGEMIRROR_DISABLE_MODULES");
@@ -5162,6 +5191,7 @@ int main(int argc, char** argv) {
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
+    if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }
     if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
@@ -5327,7 +5357,8 @@ int main(int argc, char** argv) {
     const std::vector<std::pair<const char*, QKeySequence>> shortcuts = {
         {"shortcutCreate", QKeySequence::New}, {"shortcutEdit", QKeySequence("Ctrl+E")},
         {"shortcutDelete", QKeySequence::Delete}, {"shortcutRefresh", QKeySequence::Refresh},
-        {"shortcutDetails", QKeySequence("Ctrl+I")}, {"shortcutHelp", QKeySequence("Ctrl+/")}
+        {"shortcutDetails", QKeySequence("Ctrl+I")}, {"shortcutHelp", QKeySequence("Ctrl+/")},
+        {"shortcutToggleWindowDecoration", QKeySequence(Qt::Key_F10)}
     };
     if (!shortcutHelpAction) return fail("Shortcut help action missing");
     for (const auto& expected : shortcuts) {
@@ -5338,8 +5369,9 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* helpTable = dialog ? dialog->findChild<QTableWidget*>("shortcutHelpTable") : nullptr;
-        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 15 &&
-            helpTable->item(8, 0)->text() == "Ctrl+N" && helpTable->item(13, 0)->text() == "Ctrl+/";
+        shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 16 &&
+            helpTable->item(8, 0)->text() == "Ctrl+N" && helpTable->item(13, 0)->text() == "Ctrl+/" &&
+            helpTable->item(14, 0)->text() == "F10" && helpTable->item(15, 0)->text() == "F11";
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcuts.png"); }
         if (dialog) dialog->accept();
