@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 198**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include hands-on NVDA/JAWS interaction testing, broader non-UI core telemetry, and live external writes during multi-file transactions. Interrupted transaction recovery now preserves divergent in-flight file versions before rollback. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.43` is the current Qt per-user installer; stages 47–198 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 199**, not a feature-complete replacement for ImGui. Estimated functional migration remains **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include hands-on NVDA/JAWS interaction testing, core events outside the instrumented Qt workflows, and live external writes during multi-file transactions. Interrupted transaction recovery now preserves divergent in-flight file versions before rollback. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.44` is the current Qt per-user installer; stages 47–199 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -13,12 +13,12 @@ Design direction for subsequent UI work: [user-supplied interface references](..
 These guide composition and hierarchy; the existing dark/purple palette is unchanged.
 
 ```powershell
-.\build-qt.ps1 -Package -PackageDirectory package-qt-next3
-.\package-qt-next3\ForgeMirrorQt.exe
-.\installer\build-qt-installer.ps1 -PackageDirectory .\package-qt-next3
+.\build-qt.ps1 -Package -PackageDirectory package-qt-next4
+.\package-qt-next4\ForgeMirrorQt.exe
+.\installer\build-qt-installer.ps1 -PackageDirectory .\package-qt-next4
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.43.exe`. Version `0.6.43` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.43.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.44.exe`. Version `0.6.44` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.44.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`. The alternate package directory keeps an already-running package executable intact; use the default package-qt path when it is not in use.
 
@@ -1065,3 +1065,12 @@ Accessible descriptions now expose the report chart selected-period status total
 Smoke verifies these values through QAccessible. This improves semantic access to the Qt-painted charts but does not certify behavior with an external screen reader.
 
 Verification and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.43.md`.
+
+
+### Stage 199 — transaction outcomes from core services
+
+Profile editing, administrator password reset and normal password change now emit generic commit or rollback events from their journaled core wrappers. Rules reapplication, direct skill-XP grants, and single/bulk task deletion do the same; the Qt dialogs connect these optional observers to the existing bounded application log and admin Audit source. Core callbacks are exception-isolated, and messages omit profile/task IDs, names, field contents and password values. UI-side duplicates were removed so each service outcome is recorded once.
+
+Smoke verifies committed and rolled-back profile/password/rules/direct-XP outcomes and keeps profile identifiers and entered passwords out of the event messages. Broader services and non-Qt core operations remain outside the telemetry sink.
+
+Verification and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.44.md`.

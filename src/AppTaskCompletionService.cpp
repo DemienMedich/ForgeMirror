@@ -15,7 +15,7 @@
 #include <stdexcept>
 
 namespace {
-void emitCoreEvent(AppContext& app, AppLogLevel level, const char* message) noexcept {
+void emitCoreEvent(AppContext& app, AppLogLevel level, const std::string& message) noexcept {
     if (!app.eventLogger) return;
     try { app.eventLogger(level, message); }
     catch (...) { /* Observability must never change a committed domain result. */ }
@@ -37,6 +37,16 @@ bool safeProfileId(const std::string& id) {
     });
 }
 std::filesystem::path journalPath(const std::filesystem::path& root) { return root / "meta" / "qt-xp-transaction"; }
+void emitTransactionOutcome(AppContext& app, bool succeeded,
+                            const std::string& successMessage, const std::string& failureMessage) noexcept {
+    if (succeeded) {
+        emitCoreEvent(app, AppLogLevel::Info, successMessage);
+        return;
+    }
+    std::error_code ec;
+    const bool recoveryPending = std::filesystem::exists(journalPath(app.storageDir), ec) && !ec;
+    emitCoreEvent(app, recoveryPending ? AppLogLevel::Error : AppLogLevel::Warning, failureMessage);
+}
 bool safeBackupName(const std::string& name) {
     if (name == "meta/tasks.json" || name == "meta/projects.json" || name == "meta/task-audit.log" ||
         name == "meta/updates/tasks.last-good.json" || name == "meta/updates/projects.last-good.json" ||
@@ -467,6 +477,8 @@ AppProfileMutationResult ReapplyRulesWithRecovery(AppContext& app,
         }
         if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
     }
+    emitTransactionOutcome(app, result.ok, "Rules reapply transaction committed",
+                           "Rules reapply failed or was rolled back");
     return result;
 }
 
@@ -496,6 +508,8 @@ AppProfileMutationResult GrantDirectSkillXpWithRecovery(AppContext& app,
         }
         if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
     }
+    emitTransactionOutcome(app, result.ok, "Direct skill XP transaction committed",
+                           "Direct skill XP failed or was rolled back");
     return result;
 }
 
@@ -523,6 +537,10 @@ AppProfileMutationResult SaveProfileSnapshotWithAuditRecovery(AppContext& app,
         }
         if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
     }
+    const bool passwordOperation = action == "password_change" || action == "password_reset";
+    emitTransactionOutcome(app, result.ok,
+        passwordOperation ? "Profile password transaction committed" : "Profile update transaction committed",
+        passwordOperation ? "Profile password transaction failed or was rolled back" : "Profile update failed or was rolled back");
     return result;
 }
 
@@ -552,6 +570,8 @@ AppProfileMutationResult ChangeProfilePasswordWithAuditRecovery(AppContext& app,
         }
         if (!restoreProfileId.empty()) app.storage.set_active_profile(restoreProfileId);
     }
+    emitTransactionOutcome(app, result.ok, "Profile password transaction committed",
+                           "Profile password transaction failed or was rolled back");
     return result;
 }
 
@@ -761,7 +781,11 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
     const auto matches = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
     if (taskId.empty() || matches != 1) { result.errorMessage = u8"Задача не найдена или её ID неоднозначен."; return result; }
     const auto selected = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
-    if (selected->participants.empty()) return DeleteTaskWithRecovery(app.storageDir, tasks, audit, taskId, actor);
+    if (selected->participants.empty()) {
+        result = DeleteTaskWithRecovery(app.storageDir, tasks, audit, taskId, actor);
+        emitTransactionOutcome(app, result.ok, "Task deletion committed", "Task deletion failed or was rolled back");
+        return result;
+    }
 
     std::set<std::string> profileIds;
     std::vector<Profile> rollbackProfiles;
@@ -810,6 +834,8 @@ AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
+    emitTransactionOutcome(app, result.ok, "Task and awarded XP deletion committed",
+                           "Task and awarded XP deletion failed or was rolled back");
     return result;
 }
 
@@ -915,6 +941,9 @@ AppMutationResult DeleteAwardedTasksWithRecovery(AppContext& app,
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
+    emitTransactionOutcome(app, result.ok,
+        "Bulk task deletion committed: " + std::to_string(result.changedCount),
+        "Bulk task deletion failed or was rolled back");
     return result;
 }
 

@@ -65,7 +65,7 @@ bool ShowProfilePasswordDialog(QWidget* parent, QtWorkspace& workspace, const QS
             error->setText(QString::fromUtf8("Профиль заблокирован или не имеет пароля. Обратитесь к администратору."));
             return;
         }
-        AppContext context{workspace.directory, storage, workspace.catalog};
+        AppContext context{workspace.directory, storage, workspace.catalog, workspace.profileEventLogger};
         auto result = ChangeProfilePasswordWithAuditRecovery(context, u(activeId), u(profileId),
             u(current->text()), u(next->text()), !adminReset, adminReset ? "password_reset" : "password_change");
         if (!result.ok) { error->setText(q(result.errorMessage)); return; }
@@ -312,7 +312,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
             if (draft.profession_id() != loaded->profession_id()) changedFields << "profession";
             if (draft.spirit() != loaded->spirit()) changedFields << "spirit";
             if (draft.is_blocked() != loaded->is_blocked()) changedFields << "blocked";
-            AppContext context{workspace.directory, *workspace.storage, workspace.catalog};
+            AppContext context{workspace.directory, *workspace.storage, workspace.catalog, workspace.profileEventLogger};
             const auto result = SaveProfileSnapshotWithAuditRecovery(context, u(activeId), info->id, draft,
                 "profile_edit", u(changedFields.join(',')));
             if (!result.ok) {

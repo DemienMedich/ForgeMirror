@@ -2,6 +2,7 @@
 #include "AppWorkspaceDataService.h"
 #include "IJobStorage.h"
 #include "SkillCatalog.h"
+#include <functional>
 #include <memory>
 
 // Migration workspaces are isolated from the production client's cloud folder.
@@ -19,4 +20,7 @@ public:
     ModuleToggles modules;
     WorkspaceDataSnapshot data;
     std::vector<IJobStorage::ProfileInfo> profiles;
+    // Optional, exception-isolated outcome observers installed by the owning UI.
+    std::function<void(AppLogLevel, const std::string&)> profileEventLogger;
+    std::function<void(AppLogLevel, const std::string&)> taskEventLogger;
 };

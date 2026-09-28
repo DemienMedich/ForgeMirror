@@ -41,6 +41,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtWidgets>
+#include <QPointer>
 #include <algorithm>
 #include <cstdlib>
 #include <limits>
@@ -608,6 +609,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
     admin_ = (!adminPasswordOverride || !*adminPasswordOverride) && LoadAdminStayLoggedIn(workspace_.directory);
     loadAppLogs();
+    const QPointer<QtWindow> guardedWindow(this);
+    workspace_.profileEventLogger = [guardedWindow](AppLogLevel level, const std::string& event) {
+        if (guardedWindow) guardedWindow->appendLog(level, "CoreProfileMutation", event);
+    };
+    workspace_.taskEventLogger = [guardedWindow](AppLogLevel level, const std::string& event) {
+        if (guardedWindow) guardedWindow->appendLog(level, "CoreTaskMutation", event);
+    };
     if (admin_) appendLog(AppLogLevel::Info, "CoreAuthentication", "Administrator session restored");
     lastCloudAutoSyncAt_ = QDateTime::currentSecsSinceEpoch();
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
@@ -2050,15 +2058,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
                 [&](const auto& item) { return item.id == id; });
             return task != workspace_.data.tasks.end() && !task->participants.empty();
         });
-        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog, workspace_.taskEventLogger};
         const auto result = DeleteAwardedTasksWithRecovery(context, workspace_.data.tasks,
             workspace_.data.taskAudit, ids, u(profiles_->currentData().toString()), "admin/qt");
         if (!result.ok) {
-            appendLog(AppLogLevel::Warning, "CoreTaskMutation", "Bulk task deletion failed or rolled back");
             message(result.errorMessage); return;
         }
-        appendLog(AppLogLevel::Info, "CoreTaskMutation",
-            "Bulk task deletion committed: " + std::to_string(result.changedCount));
         reload();
         statusBar()->showMessage(includesAwardedTask
             ? QString::fromUtf8("Удалено выбранных задач: %1 · XP профилей откатан транзакционно").arg(result.changedCount)
@@ -4039,16 +4044,12 @@ void QtWindow::reapplyRules() {
     confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
     confirm.setDefaultButton(QMessageBox::No);
     if (confirm.exec() != QMessageBox::Yes) return;
-    AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+    AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog, workspace_.profileEventLogger};
     const auto result = ReapplyRulesWithRecovery(context, u(profiles_->currentData().toString()));
     if (!result.ok) {
-        const bool pending = std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction");
-        appendLog(pending ? AppLogLevel::Error : AppLogLevel::Warning, "CoreProfileMutation",
-            pending ? "Rules reapply recovery pending" : "Rules reapply failed or rolled back");
         message(result.errorMessage.empty() ? u8"Не удалось пересчитать профили." : result.errorMessage);
         return;
     }
-    appendLog(AppLogLevel::Info, "CoreProfileMutation", "Rules reapply transaction committed");
     reload();
     statusBar()->showMessage(QString::fromUtf8("Профили пересчитаны: %1 · общий XP сохранён").arg(result.affectedProfiles), 5000);
 }
@@ -4096,16 +4097,12 @@ void QtWindow::grantDirectXp() {
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
-        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog, workspace_.profileEventLogger};
         const auto result = GrantDirectSkillXpWithRecovery(context, profileId, profileId,
             u(skill->currentData().toString()), amount->value(), QDateTime::currentSecsSinceEpoch());
         if (!result.ok) {
-            const bool pending = std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction");
-            appendLog(pending ? AppLogLevel::Error : AppLogLevel::Warning, "CoreProfileMutation",
-                pending ? "Direct skill XP recovery pending" : "Direct skill XP failed or rolled back");
             notice->setText(q(result.errorMessage)); return;
         }
-        appendLog(AppLogLevel::Info, "CoreProfileMutation", "Direct skill XP transaction committed");
         dialog.setProperty("awardedGlobalXp", result.awardedGlobalXp);
         dialog.setProperty("awardedSkillXp", result.awardedSkillXp);
         dialog.accept();
@@ -6032,7 +6029,7 @@ void QtWindow::deleteEntry() {
         confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
         confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
-        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog};
+        AppContext context{workspace_.directory, *workspace_.storage, workspace_.catalog, workspace_.taskEventLogger};
         const auto result = awarded
             ? DeleteAwardedTaskWithRecovery(context, workspace_.data.tasks, workspace_.data.taskAudit,
                 id, u(profiles_->currentData().toString()), "admin/qt")
@@ -6053,8 +6050,9 @@ void QtWindow::deleteEntry() {
             }
         }
         if (!deleteResult.ok) { message(deleteResult.errorMessage); return; }
-        appendLog(AppLogLevel::Info, "CoreTaskMutation", keptAwardedXp
-            ? "Task record deleted; awarded XP preserved" : awarded ? "Task and awarded XP deletion committed" : "Task deletion committed");
+        if (!awarded || keptAwardedXp)
+            appendLog(AppLogLevel::Info, "CoreTaskMutation", keptAwardedXp
+                ? "Task record deleted; awarded XP preserved" : "Task deletion committed");
         reload();
         statusBar()->showMessage(keptAwardedXp
             ? QString::fromUtf8("Запись задачи удалена · начисленный XP сохранён без изменений")

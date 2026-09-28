@@ -385,13 +385,17 @@ static bool TestRulesReapplyRecovery() {
     const auto activeBefore = read(activePath), archivedBefore = read(archivedPath);
     FailingProfileStorage failing(*workspace.storage);
     AppContext context{workspace.directory, failing, workspace.catalog};
+    std::vector<std::pair<AppLogLevel, std::string>> coreEvents;
+    context.eventLogger = [&](AppLogLevel level, const std::string& event) { coreEvents.emplace_back(level, event); };
     GameplayConfig changed = GetGameplayConfig();
     changed.levelBaseXp = 300; changed.levelLinearXp = 20; changed.levelQuadraticXp = 2;
     SetGameplayConfig(changed);
     failing.failAt = 2;
     const auto rejected = ReapplyRulesWithRecovery(context, active->id);
     if (rejected.ok || read(activePath) != activeBefore || read(archivedPath) != archivedBefore ||
-        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("partial-write rollback");
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") || coreEvents.size() != 1 ||
+        coreEvents.back().first != AppLogLevel::Warning ||
+        coreEvents.back().second != "Rules reapply failed or was rolled back") return fail("partial-write rollback or telemetry");
 
     PrepareRulesReapplyRecovery(workspace.directory, {{active->id, false}, {archived->id, true}});
     { std::ofstream corrupt(workspace.directory / activePath, std::ios::binary | std::ios::trunc); corrupt << "interrupted"; }
@@ -401,7 +405,9 @@ static bool TestRulesReapplyRecovery() {
 
     failing.writes = 0; failing.failAt = 0;
     const auto applied = ReapplyRulesWithRecovery(context, active->id);
-    if (!applied.ok || applied.affectedProfiles != 2 || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) {
+    if (!applied.ok || applied.affectedProfiles != 2 || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") ||
+        coreEvents.size() != 2 || coreEvents.back().first != AppLogLevel::Info ||
+        coreEvents.back().second != "Rules reapply transaction committed") {
         std::cerr << "rulesReapply result: " << applied.errorMessage << " affected=" << applied.affectedProfiles << '\n';
         return fail("commit");
     }
@@ -438,15 +444,21 @@ static bool TestDirectXpRecovery() {
     const auto beforeProfile = read(profilePath), beforeAchievements = read(achievementPath), beforeProfileAudit = read(profileAuditPath);
     FailingProfileStorage failing(*workspace.storage);
     AppContext context{workspace.directory, failing, workspace.catalog};
+    std::vector<std::pair<AppLogLevel, std::string>> coreEvents;
+    context.eventLogger = [&](AppLogLevel level, const std::string& event) { coreEvents.emplace_back(level, event); };
     failing.failAt = 1;
     const auto rejected = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
     if (rejected.ok || read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements ||
+        coreEvents.size() != 1 || coreEvents.back().first != AppLogLevel::Warning ||
+        coreEvents.back().second != "Direct skill XP failed or was rolled back" ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("write rollback");
 
     AppSetProfileAuditFailureHookForTests(true);
     const auto auditRejected = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
     AppSetProfileAuditFailureHookForTests(false);
     if (auditRejected.ok || read(profilePath) != beforeProfile || read(achievementPath) != beforeAchievements ||
+        coreEvents.size() != 2 || coreEvents.back().first != AppLogLevel::Warning ||
+        coreEvents.back().second != "Direct skill XP failed or was rolled back" ||
         read(profileAuditPath) != beforeProfileAudit ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("audit rollback");
 
@@ -461,6 +473,8 @@ static bool TestDirectXpRecovery() {
     failing.writes = 0; failing.failAt = 0;
     const auto applied = GrantDirectSkillXpWithRecovery(context, created->id, created->id, skillId, 100, 1000);
     if (!applied.ok || applied.awardedGlobalXp != 100 || applied.awardedSkillXp != 150 ||
+        coreEvents.size() != 3 || coreEvents.back().first != AppLogLevel::Info ||
+        coreEvents.back().second != "Direct skill XP transaction committed" ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return fail("commit");
     if (!read(profileAuditPath).contains("|direct_xp|" + QByteArray::fromStdString(skillId) + " base=100 skill=150"))
         return fail("audit commit");
@@ -1827,6 +1841,8 @@ static bool TestStorageConflictResolver() {
 static bool TestProfileDialogs() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    std::vector<std::pair<AppLogLevel, std::string>> coreEvents;
+    workspace.profileEventLogger = [&](AppLogLevel level, const std::string& event) { coreEvents.emplace_back(level, event); };
     Profile original("Original");
     original.set_total_xp(777);
     original.set_wallet_balance(42);
@@ -2023,6 +2039,20 @@ static bool TestProfileDialogs() {
     delegate->set_active_profile(created->id);
     checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "my-password";
     missingProfileDialogAccessibleNames.removeDuplicates();
+    const auto hasEvent = [&](AppLogLevel level, const std::string& message) {
+        return std::any_of(coreEvents.begin(), coreEvents.end(), [&](const auto& entry) {
+            return entry.first == level && entry.second == message;
+        });
+    };
+    checks &= hasEvent(AppLogLevel::Info, "Profile update transaction committed") &&
+        hasEvent(AppLogLevel::Warning, "Profile update failed or was rolled back") &&
+        hasEvent(AppLogLevel::Info, "Profile password transaction committed") &&
+        hasEvent(AppLogLevel::Warning, "Profile password transaction failed or was rolled back");
+    for (const auto& [level, event] : coreEvents) {
+        (void)level;
+        checks &= event.find(created->id) == std::string::npos &&
+            event.find("reset-password") == std::string::npos && event.find("my-password") == std::string::npos;
+    }
     if (!missingProfileDialogAccessibleNames.isEmpty()) {
         std::cerr << "Visible profile dialog controls without accessible names:\n";
         for (const auto& name : missingProfileDialogAccessibleNames)
