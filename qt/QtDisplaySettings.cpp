@@ -368,6 +368,8 @@ bool ShowQtBackgroundSettings(QWidget* parent, const std::filesystem::path& dire
     tiled->setObjectName("qtBackgroundTiled"); tiled->setChecked(draft.backgroundTiled);
     auto* tileScale = new QComboBox;
     tileScale->setObjectName("qtBackgroundTileScale");
+    tileScale->setAccessibleName(QString::fromUtf8("Масштаб повторяющегося фонового изображения"));
+    tileScale->setAccessibleDescription(QString::fromUtf8("Изменяет размер замощённого изображения; настройка доступна при включённом замощении."));
     for (double value : {0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0})
         tileScale->addItem(QStringLiteral("%1×").arg(value, 0, 'f', 2).remove(QRegularExpression(QStringLiteral("0+$"))).remove(QRegularExpression(QStringLiteral("\\.$"))), value);
     int scaleIndex = 0;
@@ -862,6 +864,8 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         : QString::fromUtf8("Доступно в Windows для стандартного изолированного рабочего пространства при поддержке уведомлений системного трея."));
     auto* builtInPreset = new QComboBox;
     builtInPreset->setObjectName("qtBuiltInLayoutPreset");
+    builtInPreset->setAccessibleName(QString::fromUtf8("Быстрая раскладка интерфейса"));
+    builtInPreset->setAccessibleDescription(QString::fromUtf8("Выберите готовую раскладку, затем примените её отдельной кнопкой. Палитра не меняется."));
     builtInPreset->addItems({QString::fromUtf8("Минимализм"), QString::fromUtf8("Презентация"), QString::fromUtf8("Компактный")});
     auto* applyBuiltInPreset = new QPushButton(QString::fromUtf8("Применить раскладку"));
     applyBuiltInPreset->setObjectName("qtBuiltInLayoutPresetApply");

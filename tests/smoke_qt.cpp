@@ -59,6 +59,8 @@
 #include <windows.h>
 #endif
 
+static QStringList MissingAccessibleNames(QWidget* root);
+
 // File-backed failure injection keeps the test on the real persistence path.
 class FailingProfileStorage : public IJobStorage {
 public:
@@ -924,20 +926,23 @@ static bool TestQtAdminAuthParity() {
         !login->toolTip().contains(QString::fromUtf8("восстановление")) ||
         !passwordAction || passwordAction->isVisible()) return false;
     bool rejectedAttempt = false;
+    QStringList missingAdminLoginNames;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         auto* password = dialog ? dialog->findChild<QLineEdit*>("adminLoginPassword") : nullptr;
         auto* notice = dialog ? dialog->findChild<QLabel*>("adminLoginNotice") : nullptr;
         auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
         if (!dialog || !password || !notice || !buttons) { if (dialog) dialog->reject(); return; }
+        missingAdminLoginNames.append(MissingAccessibleNames(dialog));
         password->setText(QStringLiteral("private-wrong-password-fixture"));
         buttons->button(QDialogButtonBox::Ok)->click();
         rejectedAttempt = notice->text().contains(QString::fromUtf8("Неверный пароль")) && password->text().isEmpty();
         dialog->reject();
     });
     login->trigger();
-    if (!rejectedAttempt || LoadAdminStayLoggedIn(directory) || passwordAction->isVisible()) return false;
+    if (!rejectedAttempt || LoadAdminStayLoggedIn(directory) || passwordAction->isVisible() || !missingAdminLoginNames.isEmpty()) return false;
     bool rememberControlSeen = false;
+    bool rememberStateAnnounced = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!dialog || dialog->objectName() != "adminLoginDialog") {
@@ -963,10 +968,12 @@ static bool TestQtAdminAuthParity() {
         rememberControlSeen = true;
         password->setText(QString::fromUtf8("old-admin-password"));
         remember->setChecked(true);
+        if (auto* accessible = QAccessible::queryAccessibleInterface(remember))
+            rememberStateAnnounced = accessible->state().checkable && accessible->state().checked;
         buttons->button(QDialogButtonBox::Ok)->click();
     });
     login->trigger();
-    if (!rememberControlSeen || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() ||
+    if (!rememberControlSeen || !rememberStateAnnounced || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() ||
         login->text() != QString::fromUtf8("Выйти из режима администратора") ||
         !login->toolTip().contains(QString::fromUtf8("отключить"))) return false;
     auto* navigation = window.findChild<QListWidget*>("navigation");
@@ -5233,6 +5240,7 @@ static bool TestDisplaySettings(QApplication& app) {
     settings.logSourceFilter = QStringLiteral("Qt");
     settings.logFilter = QStringLiteral("remember this log query");
     settings.logAutoScroll = false; settings.logCompactView = true; bool saved = false;
+    QStringList missingDialogAccessibleNames;
     const auto paletteBeforeQuickPresets = app.palette().color(QPalette::Window);
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget(); auto* scale = dialog->findChild<QComboBox*>("qtScale");
@@ -5252,6 +5260,8 @@ static bool TestDisplaySettings(QApplication& app) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
         geometryToggle->click();
+        QApplication::processEvents();
+        missingDialogAccessibleNames.append(MissingAccessibleNames(dialog));
         auto* windowRounding = dialog->findChild<QDoubleSpinBox*>("qtWindowRounding");
         auto* frameRounding = dialog->findChild<QDoubleSpinBox*>("qtFrameRounding");
         auto* scrollbarRounding = dialog->findChild<QDoubleSpinBox*>("qtScrollbarRounding");
@@ -5339,13 +5349,14 @@ static bool TestDisplaySettings(QApplication& app) {
         const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
         if (!tray || tray->isEnabled() != trayAvailable || !background || background->isEnabled()) { qobject_cast<QDialog*>(dialog)->reject(); return; }
         tray->setChecked(trayAvailable);
-        QTimer::singleShot(0, [directory] {
+        QTimer::singleShot(0, [directory, &missingDialogAccessibleNames] {
             auto* backgroundsDialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!backgroundsDialog || backgroundsDialog->objectName() != "qtBackgroundSettings") {
                 std::cerr << "Qt background dialog did not open\n";
                 if (backgroundsDialog) backgroundsDialog->reject();
                 return;
             }
+            missingDialogAccessibleNames.append(MissingAccessibleNames(backgroundsDialog));
             auto* page = backgroundsDialog->findChild<QComboBox*>("qtBackgroundPage0");
             auto* alpha = backgroundsDialog->findChild<QSlider*>("qtBackgroundAlpha");
             auto* tiled = backgroundsDialog->findChild<QCheckBox*>("qtBackgroundTiled");
@@ -5377,6 +5388,13 @@ static bool TestDisplaySettings(QApplication& app) {
                   << ',' << settings.scrollbarRounding << ',' << settings.grabRounding << " padding=" << settings.windowPaddingX << ','
                   << settings.windowPaddingY << ',' << settings.framePaddingX << ',' << settings.framePaddingY << " item="
                   << settings.itemSpacingX << ',' << settings.itemSpacingY << " tray=" << settings.minimizeToTray << '\n';
+        return false;
+    }
+    missingDialogAccessibleNames.removeDuplicates();
+    if (!missingDialogAccessibleNames.isEmpty()) {
+        std::cerr << "Visible settings controls without accessible names:\n";
+        for (const auto& name : missingDialogAccessibleNames)
+            std::cerr << "  " << name.toUtf8().constData() << '\n';
         return false;
     }
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
@@ -5613,6 +5631,36 @@ static bool TestQtUiSettingsReset() {
     return background.open(QIODevice::ReadOnly) && background.readAll() == QByteArray("background-data");
 }
 
+static QStringList MissingAccessibleNames(QWidget* root) {
+    QStringList missing;
+    if (!root) return {QStringLiteral("<missing root>")};
+    auto widgets = root->findChildren<QWidget*>();
+    widgets.prepend(root);
+    for (auto* widget : widgets) {
+        if (!widget->isVisible()) continue;
+        // These are sub-controls of their owning accessible widget, not separate actions.
+        if (qobject_cast<QHeaderView*>(widget) || qobject_cast<QScrollBar*>(widget) ||
+            ((qobject_cast<QLineEdit*>(widget)) &&
+                (qobject_cast<QAbstractSpinBox*>(widget->parentWidget()) || qobject_cast<QComboBox*>(widget->parentWidget())))) continue;
+        const bool interactive = qobject_cast<QAbstractButton*>(widget) || qobject_cast<QComboBox*>(widget) ||
+            qobject_cast<QLineEdit*>(widget) || qobject_cast<QAbstractSpinBox*>(widget) ||
+            qobject_cast<QAbstractSlider*>(widget) || qobject_cast<QAbstractItemView*>(widget);
+        if (!interactive) continue;
+        auto* accessible = QAccessible::queryAccessibleInterface(widget);
+        const auto accessibleName = widget->accessibleName().trimmed().isEmpty() && accessible
+            ? accessible->text(QAccessible::Name).trimmed() : widget->accessibleName().trimmed();
+        if (accessibleName.isEmpty()) {
+            const auto description = widget->accessibleDescription().trimmed();
+            missing.push_back(QStringLiteral("%1 <%2>%3")
+                .arg(widget->objectName().isEmpty() ? QStringLiteral("(unnamed object)") : widget->objectName(),
+                    QString::fromLatin1(widget->metaObject()->className()),
+                    description.isEmpty() ? QString() : QStringLiteral(" — ") + description));
+        }
+    }
+    missing.removeDuplicates();
+    return missing;
+}
+
 static bool TestVisibleQtAccessibleNames() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -5631,27 +5679,7 @@ static bool TestVisibleQtAccessibleNames() {
         if (!item || item->isHidden()) continue;
         navigation->setCurrentRow(page);
         QApplication::processEvents();
-        for (auto* widget : window.findChildren<QWidget*>()) {
-            if (!widget->isVisible() || !widget->isEnabled()) continue;
-            // These are sub-controls of their owning accessible widget, not separate actions.
-            if (qobject_cast<QHeaderView*>(widget) || qobject_cast<QScrollBar*>(widget) ||
-                ((qobject_cast<QLineEdit*>(widget)) &&
-                    (qobject_cast<QAbstractSpinBox*>(widget->parentWidget()) || qobject_cast<QComboBox*>(widget->parentWidget())))) continue;
-            const bool interactive = qobject_cast<QAbstractButton*>(widget) || qobject_cast<QComboBox*>(widget) ||
-                qobject_cast<QLineEdit*>(widget) || qobject_cast<QAbstractSpinBox*>(widget) ||
-                qobject_cast<QAbstractSlider*>(widget) || qobject_cast<QAbstractItemView*>(widget);
-            if (!interactive) continue;
-            auto* accessible = QAccessible::queryAccessibleInterface(widget);
-            const auto accessibleName = widget->accessibleName().trimmed().isEmpty() && accessible
-                ? accessible->text(QAccessible::Name).trimmed() : widget->accessibleName().trimmed();
-            if (accessibleName.isEmpty()) {
-                const auto description = widget->accessibleDescription().trimmed();
-                missing.push_back(QStringLiteral("%1 <%2>%3")
-                    .arg(widget->objectName().isEmpty() ? QStringLiteral("(unnamed object)") : widget->objectName(),
-                        QString::fromLatin1(widget->metaObject()->className()),
-                        description.isEmpty() ? QString() : QStringLiteral(" — ") + description));
-            }
-        }
+        missing.append(MissingAccessibleNames(&window));
     }
     window.close();
     missing.removeDuplicates();
