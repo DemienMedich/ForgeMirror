@@ -95,6 +95,8 @@ void showRulesHistory(QWidget* parent, const std::filesystem::path& directory) {
     dialog.setWindowTitle(QString::fromUtf8("История правил XP")); dialog.resize(680, 380);
     auto* layout = new QVBoxLayout(&dialog);
     auto* table = new QTableWidget(&dialog); table->setObjectName("rulesHistoryTable");
+    table->setAccessibleName(QString::fromUtf8("История изменений правил XP"));
+    table->setAccessibleDescription(QString::fromUtf8("Дата изменения и перечень параметров, которые были изменены."));
     table->setColumnCount(2); table->setHorizontalHeaderLabels({QString::fromUtf8("Время"), QString::fromUtf8("Изменённые параметры")});
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -128,6 +130,8 @@ bool ShowRulesEditor(QWidget* parent, QtWorkspace& workspace) {
     hint->setWordWrap(true); outer->addWidget(hint);
     auto* presetRow = new QHBoxLayout;
     auto* presetCombo = new QComboBox; presetCombo->setObjectName("rulesPresetCombo");
+    presetCombo->setAccessibleName(QString::fromUtf8("Локальный пресет правил XP"));
+    presetCombo->setAccessibleDescription(QString::fromUtf8("Выберите сохранённый пресет для просмотра или загрузки в редактор."));
     auto* savePreset = new QPushButton(QString::fromUtf8("Сохранить пресет")); savePreset->setObjectName("rulesSavePreset");
     auto* applyPreset = new QPushButton(QString::fromUtf8("Загрузить")); applyPreset->setObjectName("rulesApplyPreset");
     auto* deletePreset = new QPushButton(QString::fromUtf8("Удалить")); deletePreset->setObjectName("rulesDeletePreset");

@@ -167,6 +167,8 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
     layout->addWidget(expiringSoon);
     auto* table = new QTableWidget(0, 5);
     table->setObjectName("achievementRecords");
+    table->setAccessibleName(QString::fromUtf8("Список достижений"));
+    table->setAccessibleDescription(QString::fromUtf8("Название, связанный навык, бонус XP, срок действия и состояние достижений профиля."));
     table->setHorizontalHeaderLabels({QString::fromUtf8("Название"), QString::fromUtf8("Навык"), QString::fromUtf8("Бонус XP"), QString::fromUtf8("Действует до"), QString::fromUtf8("Состояние")});
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -279,7 +281,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         auto* bonus = new QDoubleSpinBox; bonus->setObjectName("achievementBonus"); bonus->setRange(0, 10000); bonus->setDecimals(6); bonus->setValue(original.bonusPercent);
         const auto displayedBonus = bonus->value();
         auto* change = new QCheckBox(QString::fromUtf8("Изменить срок от даты выдачи")); change->setObjectName("changeAchievementDuration");
-        auto* days = new QSpinBox; days->setObjectName("achievementDays"); days->setRange(0, 36500); days->setSpecialValueText(QString::fromUtf8("Без срока")); days->setEnabled(false);
+        auto* days = new QSpinBox; days->setObjectName("achievementDays"); days->setAccessibleName(QString::fromUtf8("Срок достижения в днях")); days->setAccessibleDescription(QString::fromUtf8("Ноль означает отсутствие срока действия.")); days->setRange(0, 36500); days->setSpecialValueText(QString::fromUtf8("Без срока")); days->setEnabled(false);
         days->setValue(original.expiresAt ? int(std::clamp<std::int64_t>((original.expiresAt - original.awardedAt) / 86400, 0, 36500)) : 0);
         form->addRow(QString::fromUtf8("Название"), title); form->addRow(QString::fromUtf8("Бонус XP, %"), bonus);
         auto* hint = new QLabel(QString::fromUtf8("Выдано: ") + date(original.awardedAt) + QString::fromUtf8("\nТекущий срок: ") + date(original.expiresAt)); hint->setWordWrap(true); form->addRow(hint);
@@ -325,7 +327,7 @@ void ShowAchievements(QWidget* parent, QtWorkspace& workspace, const std::string
         auto* skill = new QComboBox; skill->setObjectName("achievementSkill");
         for (const auto& id : workspace.catalog.skills()) skill->addItem(q(workspace.catalog.display_name(id)), q(id));
         auto* bonus = new QDoubleSpinBox; bonus->setObjectName("achievementBonus"); bonus->setRange(0, 10000); bonus->setSuffix(" %");
-        auto* days = new QSpinBox; days->setObjectName("achievementDays"); days->setRange(0, 36500); days->setSpecialValueText(QString::fromUtf8("Без срока"));
+        auto* days = new QSpinBox; days->setObjectName("achievementDays"); days->setAccessibleName(QString::fromUtf8("Срок достижения в днях")); days->setAccessibleDescription(QString::fromUtf8("Ноль означает отсутствие срока действия.")); days->setRange(0, 36500); days->setSpecialValueText(QString::fromUtf8("Без срока"));
         form->addRow(QString::fromUtf8("Название"), title);
         form->addRow(QString::fromUtf8("Навык"), skill);
         form->addRow(QString::fromUtf8("Бонус XP"), bonus);

@@ -88,6 +88,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     search->setPlaceholderText(QString::fromUtf8("Поиск по имени или ID"));
     search->setClearButtonEnabled(true);
     search->setObjectName("profileSearch");
+    search->setAccessibleName(QString::fromUtf8("Поиск профилей"));
+    search->setAccessibleDescription(QString::fromUtf8("Фильтрует профили по имени или идентификатору."));
     auto* archived = new QCheckBox(QString::fromUtf8("Показать архив"));
     archived->setObjectName("showArchivedProfiles");
     auto* create = new QPushButton(QString::fromUtf8("Создать профиль"));
@@ -100,6 +102,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     layout->addLayout(toolbar);
     auto* table = new QTableWidget;
     table->setObjectName("profileRecords");
+    table->setAccessibleName(QString::fromUtf8("Список профилей"));
+    table->setAccessibleDescription(QString::fromUtf8("Таблица профилей с идентификатором и состоянием; выберите строку для доступных действий."));
     table->setColumnCount(3);
     table->setHorizontalHeaderLabels({QString::fromUtf8("Профиль"), "ID", QString::fromUtf8("Состояние")});
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);

@@ -119,6 +119,8 @@ bool ShowQtStorageConflictResolver(QWidget* parent, const fs::path& workspace, b
     auto* warning = new QLabel(QString::fromUtf8("Выберите целую версию кошелька. Баланс и журнал не объединяются. Обе исходные версии будут сохранены локально."));
     warning->setWordWrap(true); warning->setProperty("warning", true); layout->addWidget(warning);
     auto* table = new QTableWidget(2, 3); table->setObjectName("storageComparison"); table->setHorizontalHeaderLabels({QString::fromUtf8("Версия"), QString::fromUtf8("Сводка"), QString::fromUtf8("Путь")});
+    table->setAccessibleName(QString::fromUtf8("Сравнение локального и облачного кошелька"));
+    table->setAccessibleDescription(QString::fromUtf8("Показывает сторону, сводку баланса и журнала и путь. Выберите целую версию кнопками ниже."));
     table->verticalHeader()->hide(); table->setEditTriggers(QAbstractItemView::NoEditTriggers); table->setSelectionMode(QAbstractItemView::NoSelection); table->setShowGrid(false); table->setAlternatingRowColors(true);
     table->setItem(0, 0, new QTableWidgetItem(QString::fromUtf8("Локальная"))); table->setItem(0, 1, new QTableWidgetItem(summary(local))); table->setItem(0, 2, new QTableWidgetItem(q(localPath)));
     table->setItem(1, 0, new QTableWidgetItem(QString::fromUtf8("Облачная"))); table->setItem(1, 1, new QTableWidgetItem(summary(cloud))); table->setItem(1, 2, new QTableWidgetItem(q(cloudPath)));

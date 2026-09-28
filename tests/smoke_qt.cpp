@@ -1861,10 +1861,12 @@ static bool TestProfileDialogs() {
     auto* failures = wrapper.get();
     workspace.storage = std::move(wrapper);
     bool checks = true;
+    QStringList missingProfileDialogAccessibleNames;
     QString disposableId;
     QTimer::singleShot(0, [&] {
         auto* manager = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!manager) { checks = false; return; }
+        missingProfileDialogAccessibleNames.append(MissingAccessibleNames(manager));
         auto* table = manager->findChild<QTableWidget*>("profileRecords");
         QTimer::singleShot(0, [] {
             if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
@@ -1883,6 +1885,7 @@ static bool TestProfileDialogs() {
         QTimer::singleShot(0, [&] {
             auto* editor = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!editor) { checks = false; return; }
+            missingProfileDialogAccessibleNames.append(MissingAccessibleNames(editor));
             auto* profileName = editor->findChild<QLineEdit*>("profileName");
             profileName->clear();
             editor->findChild<QComboBox*>("profileProfession")->setCurrentIndex(1);
@@ -1949,6 +1952,7 @@ static bool TestProfileDialogs() {
         QTimer::singleShot(0, [&] {
             auto* password = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!password) { checks = false; return; }
+            missingProfileDialogAccessibleNames.append(MissingAccessibleNames(password));
             const auto oldPassword = DecodePassword(delegate->load_profile()->password_encoded());
             const auto oldProfileBytes = readProfileFile(id + ".ini");
             const auto oldAuditBytes = readProfileFile("meta/profile-audit.log");
@@ -2005,6 +2009,7 @@ static bool TestProfileDialogs() {
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!dialog) { checks = false; return; }
+        missingProfileDialogAccessibleNames.append(MissingAccessibleNames(dialog));
         dialog->findChild<QLineEdit*>("currentPassword")->setText("wrong-password");
         dialog->findChild<QLineEdit*>("newPassword")->setText("my-password");
         dialog->findChild<QLineEdit*>("confirmPassword")->setText("my-password");
@@ -2017,6 +2022,13 @@ static bool TestProfileDialogs() {
     checks &= ShowProfilePasswordDialog(nullptr, workspace, id, id, false);
     delegate->set_active_profile(created->id);
     checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "my-password";
+    missingProfileDialogAccessibleNames.removeDuplicates();
+    if (!missingProfileDialogAccessibleNames.isEmpty()) {
+        std::cerr << "Visible profile dialog controls without accessible names:\n";
+        for (const auto& name : missingProfileDialogAccessibleNames)
+            std::cerr << "  " << name.toUtf8().constData() << '\n';
+        checks = false;
+    }
     if (!checks) std::cerr << "profile dialog lifecycle failed\n";
     return checks;
 }
@@ -5657,6 +5669,7 @@ static QStringList MissingAccessibleNames(QWidget* root) {
         if (!widget->isVisible()) continue;
         // These are sub-controls of their owning accessible widget, not separate actions.
         if (qobject_cast<QHeaderView*>(widget) || qobject_cast<QScrollBar*>(widget) ||
+            QByteArray(widget->metaObject()->className()) == QByteArrayLiteral("QTableCornerButton") ||
             ((qobject_cast<QLineEdit*>(widget)) &&
                 (qobject_cast<QAbstractSpinBox*>(widget->parentWidget()) || qobject_cast<QComboBox*>(widget->parentWidget())))) continue;
         const bool interactive = qobject_cast<QAbstractButton*>(widget) || qobject_cast<QComboBox*>(widget) ||
@@ -5677,6 +5690,31 @@ static QStringList MissingAccessibleNames(QWidget* root) {
     missing.removeDuplicates();
     return missing;
 }
+
+static QStringList g_dialogAccessibilityFailures;
+static int g_dialogAccessibilityAudits = 0;
+
+class DialogAccessibilityAuditor final : public QObject {
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::Show) {
+            if (auto* dialog = qobject_cast<QDialog*>(watched)) {
+                QPointer<QDialog> guarded(dialog);
+                QTimer::singleShot(0, dialog, [guarded] {
+                    if (!guarded || !guarded->isVisible()) return;
+                    ++g_dialogAccessibilityAudits;
+                    const auto missing = MissingAccessibleNames(guarded);
+                    if (missing.isEmpty()) return;
+                    const auto identity = guarded->objectName().isEmpty()
+                        ? guarded->windowTitle() : guarded->objectName();
+                    for (const auto& control : missing)
+                        g_dialogAccessibilityFailures.append(identity + QStringLiteral(": ") + control);
+                });
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
 
 static bool TestVisibleQtAccessibleNames() {
     QTemporaryDir temp;
@@ -5918,6 +5956,8 @@ static bool TestQtLogSourceSanitizationAndRetention() {
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
+    DialogAccessibilityAuditor dialogAccessibilityAuditor;
+    app.installEventFilter(&dialogAccessibilityAuditor);
     if (!TestQtLogSourceSanitizationAndRetention()) { std::cerr << "Qt log source, sanitization, or retention failed\n"; return 1; }
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
@@ -7135,8 +7175,12 @@ int main(int argc, char** argv) {
         return fail("Viewing a profile modified its stored bytes");
     profileFile.close();
     // Cancellation and invalid inputs must never persist a partial task completion.
-    QTimer::singleShot(0, [] {
-        if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject();
+    QStringList missingTaskCompletionAccessibleNames;
+    QTimer::singleShot(0, [&] {
+        if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) {
+            missingTaskCompletionAccessibleNames.append(MissingAccessibleNames(dialog));
+            dialog->reject();
+        }
     });
     if (ShowTaskCompletionDialog(&window, workspace, "qt-smoke-task", QString::fromStdString(createdProfile->id)))
         return fail("Cancelled completion succeeded");
@@ -7154,6 +7198,7 @@ int main(int argc, char** argv) {
         QTimer::singleShot(0, [&] {
             auto* dialog = QApplication::activeModalWidget();
             if (!dialog) return;
+            missingTaskCompletionAccessibleNames.append(MissingAccessibleNames(dialog));
             auto* save = dialog->findChild<QPushButton*>("completeXp");
             auto* participants = dialog->findChild<QTableWidget*>("xpParticipants");
             if (!save || !participants) { std::cerr << "Unexpected XP dialog\n"; qobject_cast<QDialog*>(dialog)->reject(); return; }
@@ -7181,6 +7226,13 @@ int main(int argc, char** argv) {
     window.findChild<QPushButton*>("changeStatus")->click();
     if (!dialogChecks) return fail("XP form validation failed");
     const auto finishedTasks = LoadTasksData(workspace.directory);
+    missingTaskCompletionAccessibleNames.removeDuplicates();
+    if (!missingTaskCompletionAccessibleNames.isEmpty()) {
+        std::cerr << "Visible task completion controls without accessible names:\n";
+        for (const auto& name : missingTaskCompletionAccessibleNames)
+            std::cerr << "  " << name.toUtf8().constData() << '\n';
+        return fail("Task completion dialog accessibility audit failed");
+    }
     auto finished = std::find_if(finishedTasks.begin(), finishedTasks.end(), [](const auto& t) { return t.id == "qt-smoke-task"; });
     if (finished == finishedTasks.end() || finished->status != 2 || finished->participants.size() != 1)
         return fail("XP form did not complete task");
@@ -7271,6 +7323,13 @@ int main(int argc, char** argv) {
         QApplication::processEvents();
         window.grab().save(artifacts + "/profile-small.png");
     }
-    std::cout << "smoke_qt: OK\n";
+    QApplication::processEvents();
+    if (!g_dialogAccessibilityFailures.isEmpty()) {
+        std::cerr << "Dialog accessible-name audit failed:\n";
+        for (const auto& failure : g_dialogAccessibilityFailures)
+            std::cerr << "  " << failure.toUtf8().constData() << '\n';
+        return 1;
+    }
+    std::cout << "smoke_qt: OK; accessible dialogs audited: " << g_dialogAccessibilityAudits << '\n';
     return 0;
 }

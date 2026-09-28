@@ -695,6 +695,8 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         const bool catalogPair = relative == "skills.txt" || relative == "meta/professions.txt";
         const auto local = workspace / std::filesystem::u8path(relative); const auto cloud = root / std::filesystem::u8path(relative);
         auto* comparison = new QTableWidget(2, 3); comparison->setObjectName(objectName(relative, "Comparison"));
+        comparison->setAccessibleName(QString::fromUtf8("Сравнение локальной и облачной версий файла"));
+        comparison->setAccessibleDescription(QString::fromUtf8("Столбцы показывают сторону, сводку содержимого и путь. Выберите направление кнопками ниже."));
         comparison->setHorizontalHeaderLabels({QString::fromUtf8("Версия"), QString::fromUtf8("Сводка"), QString::fromUtf8("Путь")});
         comparison->verticalHeader()->hide(); comparison->setEditTriggers(QAbstractItemView::NoEditTriggers);
         comparison->setSelectionMode(QAbstractItemView::NoSelection); comparison->setShowGrid(false); comparison->setAlternatingRowColors(true);
@@ -714,6 +716,8 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         auto* push = new QPushButton(QString::fromUtf8("Отправить локальную")); push->setObjectName(objectName(relative, "PushCloud"));
         push->setStyleSheet("min-height: 40px; max-height: 40px;"); push->setEnabled(config.enabled && std::filesystem::is_regular_file(local)); actions->addWidget(push); actions->addStretch(); box->addLayout(actions);
         auto* backups = new QTableWidget; backups->setObjectName(objectName(relative, "Backups"));
+        backups->setAccessibleName(QString::fromUtf8("Резервные копии файла"));
+        backups->setAccessibleDescription(QString::fromUtf8("Список локальных снимков с датой, источником и сводкой. Восстановление доступно в последнем столбце."));
         backups->setColumnCount(4); backups->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Источник"), QString::fromUtf8("Сводка"), QString::fromUtf8("Действие")});
         backups->verticalHeader()->hide(); backups->setEditTriggers(QAbstractItemView::NoEditTriggers); backups->setSelectionMode(QAbstractItemView::NoSelection); backups->setShowGrid(false);
         const auto snapshots = ListCloudWorkspaceBackups(workspace, relative); const int shown = int(std::min<size_t>(5, snapshots.size())); backups->setRowCount(shown);

@@ -44,10 +44,14 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
     auto* top = new QHBoxLayout;
     auto* category = new QComboBox;
     category->setObjectName("xpCategory");
+    category->setAccessibleName(QString::fromUtf8("Категория завершённой задачи"));
+    category->setAccessibleDescription(QString::fromUtf8("Определяет базовый пул опыта для начисления."));
     for (auto* label : Profile::kCategoryLabels) category->addItem(label);
     category->setCurrentIndex(std::clamp(task.category, 0, 4));
     auto* score = new QSpinBox;
     score->setObjectName("xpScore");
+    score->setAccessibleName(QString::fromUtf8("Оценка выполнения задачи"));
+    score->setAccessibleDescription(QString::fromUtf8("Оценка от 1 до 10 влияет на начисляемый опыт."));
     score->setRange(1, 10);
     score->setValue(10);
     top->addWidget(new QLabel(QString::fromUtf8("Категория")));
@@ -68,6 +72,8 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
     layout->addLayout(participantsHeader);
     auto* participants = new QTableWidget;
     participants->setObjectName("xpParticipants");
+    participants->setAccessibleName(QString::fromUtf8("Распределение опыта между участниками"));
+    participants->setAccessibleDescription(QString::fromUtf8("Укажите долю каждого участника. Ненулевые доли должны составлять 100 процентов."));
     setupTable(participants, {QString::fromUtf8("Профиль"), QString::fromUtf8("Вклад, %"), "XP", QString::fromUtf8("XP навыков"), QString::fromUtf8("Модификаторы")});
     layout->addWidget(participants, 1);
     std::vector<std::string> profileIds;
@@ -78,6 +84,8 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
         participants->setItem(row, 0, new QTableWidgetItem(q(profile.name)));
         auto* share = new QSpinBox;
         share->setRange(0, 100);
+        share->setAccessibleName(QString::fromUtf8("Доля участника %1").arg(q(profile.name)));
+        share->setAccessibleDescription(QString::fromUtf8("Процент общего опыта, назначаемый этому участнику."));
         const bool assigned = std::find(task.assignees.begin(), task.assignees.end(), profile.id) != task.assignees.end();
         share->setValue(assigned || (task.assignees.empty() && profile.id == u(activeProfileId)) ? 1 : 0);
         participants->setCellWidget(row, 1, share);
@@ -98,6 +106,8 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
     layout->addWidget(new QLabel(QString::fromUtf8("Навыки · оценки 0–5 автоматически распределяют 100%")));
     auto* skills = new QTableWidget;
     skills->setObjectName("xpSkills");
+    skills->setAccessibleName(QString::fromUtf8("Распределение опыта по навыкам"));
+    skills->setAccessibleDescription(QString::fromUtf8("Оценки от 0 до 5 распределяют между выбранными навыками до 100 процентов."));
     setupTable(skills, {QString::fromUtf8("Навык"), QString::fromUtf8("Оценка"), QString::fromUtf8("Доля, %")});
     layout->addWidget(skills, 1);
     std::vector<std::string> skillIds = workspace.catalog.skills();
@@ -108,6 +118,8 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
         skills->setItem(row, 0, new QTableWidgetItem(q(workspace.catalog.display_name(id))));
         auto* rating = new QSpinBox;
         rating->setRange(0, 5);
+        rating->setAccessibleName(QString::fromUtf8("Оценка навыка %1").arg(q(workspace.catalog.display_name(id))));
+        rating->setAccessibleDescription(QString::fromUtf8("Оценка относительной доли опыта этого навыка от 0 до 5."));
         rating->setValue(task.skillIds.empty() || std::find(task.skillIds.begin(), task.skillIds.end(), id) != task.skillIds.end() ? 1 : 0);
         skills->setCellWidget(row, 1, rating);
         skills->setItem(row, 2, new QTableWidgetItem);

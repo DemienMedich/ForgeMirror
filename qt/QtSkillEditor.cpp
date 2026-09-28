@@ -336,6 +336,8 @@ bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string&
     form->addRow(QString::fromUtf8("Вес"), weight);
     auto* professionList = new QListWidget;
     professionList->setObjectName("skillProfessions");
+    professionList->setAccessibleName(QString::fromUtf8("Профессии, связанные с навыком"));
+    professionList->setAccessibleDescription(QString::fromUtf8("Отметьте профессии, которым будет назначен этот навык."));
     professionList->setMaximumHeight(120);
     const auto previousBindings = workspace.catalog.professions(id);
     auto addProfession = [&](const std::string& key, const QString& title, bool checked) {

@@ -4237,6 +4237,14 @@ void QtWindow::showProfileHistory() {
         QFileDialog picker(&dialog, QString::fromUtf8("Экспорт истории профиля"),
             QDir(reportsPath).filePath(QStringLiteral("profile-%1-%2-%3.csv")
                 .arg(safeId, kind, QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"))));
+        if (auto* folder = picker.findChild<QComboBox*>(QStringLiteral("lookInCombo"))) {
+            folder->setAccessibleName(QString::fromUtf8("Папка для экспорта"));
+            folder->setAccessibleDescription(QString::fromUtf8("Выберите папку, в которой будет сохранён CSV-файл."));
+        }
+        if (auto* fileType = picker.findChild<QComboBox*>(QStringLiteral("fileTypeCombo"))) {
+            fileType->setAccessibleName(QString::fromUtf8("Тип экспортируемого файла"));
+            fileType->setAccessibleDescription(QString::fromUtf8("Для истории профиля доступен формат CSV."));
+        }
         picker.setAcceptMode(QFileDialog::AcceptSave);
         picker.setFileMode(QFileDialog::AnyFile);
         picker.setNameFilter(QString::fromUtf8("CSV-файлы (*.csv)"));
@@ -4294,6 +4302,8 @@ void QtWindow::showProfileHistory() {
     eventsLayout->addWidget(exportEvents);
     auto* table = new QTableWidget(eventsPage);
     table->setObjectName("profileActivityHistoryTable");
+    labelForAccessibility(table, QString::fromUtf8("История событий профиля"),
+        QString::fromUtf8("Дата, тип события и пояснение из локального аудита."));
     table->setColumnCount(3);
     table->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Событие"), QString::fromUtf8("Детали")});
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -4336,6 +4346,8 @@ void QtWindow::showProfileHistory() {
     tasksLayout->addWidget(taskSummary);
     auto* taskFilter = new QLineEdit(tasksPage);
     taskFilter->setObjectName("profileTaskXpHistoryFilter");
+    labelForAccessibility(taskFilter, QString::fromUtf8("Фильтр истории задач и XP"),
+        QString::fromUtf8("Ищет по названию задачи и проекта."));
     taskFilter->setClearButtonEnabled(true);
     taskFilter->setPlaceholderText(QString::fromUtf8("Фильтр по задаче или проекту"));
     auto* taskTools = new QHBoxLayout;
@@ -4348,6 +4360,8 @@ void QtWindow::showProfileHistory() {
     tasksLayout->addLayout(taskTools);
     auto* taskTable = new QTableWidget(tasksPage);
     taskTable->setObjectName("profileTaskXpHistoryTable");
+    labelForAccessibility(taskTable, QString::fromUtf8("История задач и начислений XP профиля"),
+        QString::fromUtf8("Показывает дату, проект, задачу, статус, участие и начисленный XP."));
     taskTable->setColumnCount(7);
     taskTable->setHorizontalHeaderLabels({QString::fromUtf8("Дата задачи"), QString::fromUtf8("Проект"),
         QString::fromUtf8("Задача"), QString::fromUtf8("Статус"), QString::fromUtf8("Участие"),
