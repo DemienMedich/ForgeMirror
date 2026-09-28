@@ -327,6 +327,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
             workspace.profileEventLogger);
         if (!activeId.isEmpty()) workspace.storage->set_active_profile(u(activeId));
         if (!result.ok) { status->setText(q(result.errorMessage)); return; }
+        const bool profileAuditSaved = AppendProfileAudit(workspace.directory, result.profileId,
+            "create", "login=" + result.login);
         createdLoginValue = q(result.login);
         createdPasswordValue = q(result.password);
         reveal->setChecked(false);
@@ -334,7 +336,9 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         credentials->show();
         reveal->show();
         credentialActionsWidget->show();
-        status->setText(QString::fromUtf8("Профиль создан. Сохраните реквизиты перед закрытием окна."));
+        status->setText(profileAuditSaved
+            ? QString::fromUtf8("Профиль создан. Сохраните реквизиты перед закрытием окна.")
+            : QString::fromUtf8("Профиль создан, но событие не записано в историю профиля. Сохраните реквизиты."));
         refresh();
     });
     QObject::connect(archive, &QPushButton::clicked, &dialog, [&] {

@@ -1910,14 +1910,27 @@ static bool TestProfileDialogs() {
         if (!manager) { checks = false; return; }
         missingProfileDialogAccessibleNames.append(MissingAccessibleNames(manager));
         auto* table = manager->findChild<QTableWidget*>("profileRecords");
-        QTimer::singleShot(0, [] {
-            if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
-                input->setTextValue(QString::fromUtf8("Новый профиль")); input->accept();
-            }
-        });
-        manager->findChild<QPushButton*>("createProfile")->click();
+        auto createProfileThroughUi = [&](const QString& profileName) {
+            QTimer::singleShot(0, [profileName] {
+                if (auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+                    input->setTextValue(profileName); input->accept();
+                }
+            });
+            manager->findChild<QPushButton*>("createProfile")->click();
+        };
+        AppSetProfileAuditFailureHookForTests(true);
+        createProfileThroughUi(QString::fromUtf8("Профиль без записи аудита"));
+        AppSetProfileAuditFailureHookForTests(false);
         checks &= delegate->list_profiles().size() == 2;
-        for (const auto& p : delegate->list_profiles()) if (p.id != created->id) disposableId = QString::fromStdString(p.id);
+        QString auditFailureProfileId;
+        for (const auto& p : delegate->list_profiles()) if (p.id != created->id) auditFailureProfileId = QString::fromStdString(p.id);
+        auto* managerStatus = manager->findChild<QLabel*>("profileNotice");
+        checks &= managerStatus && managerStatus->text().contains(QString::fromUtf8("не записано в историю")) &&
+            !readProfileFile("meta/profile-audit.log").contains("|" + auditFailureProfileId.toUtf8() + "|create|");
+        createProfileThroughUi(QString::fromUtf8("Новый профиль"));
+        checks &= delegate->list_profiles().size() == 3;
+        for (const auto& p : delegate->list_profiles())
+            if (p.id != created->id && p.id != auditFailureProfileId.toStdString()) disposableId = QString::fromStdString(p.id);
         auto* credentials = manager->findChild<QLineEdit*>("createdProfileCredentials");
         checks &= !credentials->text().isEmpty() && credentials->echoMode() == QLineEdit::Password;
         auto* revealCredentials = manager->findChild<QCheckBox*>("showCreatedProfileCredentials");
@@ -1927,6 +1940,9 @@ static bool TestProfileDialogs() {
         const auto createdFields = credentials->text().split(QString::fromUtf8("   Пароль: "));
         const auto createdLogin = createdFields.value(0).mid(QString::fromUtf8("Логин: ").size());
         const auto createdPassword = createdFields.value(1);
+        const auto createAudit = readProfileFile("meta/profile-audit.log");
+        checks &= createAudit.contains("|" + disposableId.toUtf8() + "|create|login=" + createdLogin.toUtf8()) &&
+            !createAudit.contains(createdPassword.toUtf8());
         copyCreatedLogin->click();
         checks &= QApplication::clipboard()->text() == createdLogin;
         revealCredentials->setChecked(true);
