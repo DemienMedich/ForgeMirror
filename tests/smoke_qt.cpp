@@ -3,6 +3,7 @@
 #include "QtProfileAnalytics.h"
 #include "QtLogActivityChart.h"
 #include "AppTaskProjectService.h"
+#include "AppProfileStorageLock.h"
 #include "AppTaskCompletionService.h"
 #include "AppRecoveryStorage.h"
 #include "QtTaskCompletionDialog.h"
@@ -2086,6 +2087,17 @@ static bool TestAchievements() {
     const auto original = read(profilePath);
     if (GrantQtAchievement(workspace, id, "", skill, 10, 1).isEmpty() ||
         GrantQtAchievement(workspace, id, "Invalid", "unknown", 10, 1).isEmpty()) return false;
+    const auto beforeLock = read(achievementPath);
+    {
+        AppProfileStorageWriteLock held(workspace.directory);
+        const auto blockedResult = GrantQtAchievement(workspace, id, QString::fromUtf8("Заблокированное"), skill, 25, 1);
+        if (!held.acquired() || blockedResult.isEmpty() || read(achievementPath) != beforeLock) {
+            std::cerr << "Achievement lock test failed: acquired=" << held.acquired()
+                      << " error=" << blockedResult.toStdString()
+                      << " bytes-unchanged=" << (read(achievementPath) == beforeLock) << "\n";
+            return false;
+        }
+    }
     if (!GrantQtAchievement(workspace, id, QString::fromUtf8("Мастер геометрии"), skill, 25, 1).isEmpty()) return false;
     workspace.storage->set_active_profile(id);
     auto loaded = workspace.storage->load_profile();

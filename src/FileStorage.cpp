@@ -1,5 +1,6 @@
 #include "IJobStorage.h"
 #include "AppUtils.h"
+#include "AppProfileStorageLock.h"
 
 #include <algorithm>
 #include <array>
@@ -23,11 +24,6 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#elif defined(__unix__) || defined(__APPLE__)
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #endif
 
 namespace {
@@ -484,70 +480,6 @@ bool is_numeric_id(const std::string& s) {
     return std::all_of(s.begin(), s.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
 }
 
-class ProfileStorageWriteLock {
-public:
-    explicit ProfileStorageWriteLock(const std::filesystem::path& baseDir) {
-        const auto metaDir = baseDir / "meta";
-        const auto lockPath = metaDir / "profile-write.lock";
-        std::error_code ec;
-        std::filesystem::create_directories(metaDir, ec);
-        if (ec) return;
-        const auto metaStatus = std::filesystem::symlink_status(metaDir, ec);
-        if (ec || std::filesystem::is_symlink(metaStatus) || !std::filesystem::is_directory(metaStatus)) return;
-#ifdef _WIN32
-        handle_ = CreateFileW(lockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        if (handle_ == INVALID_HANDLE_VALUE) return;
-        FILE_ATTRIBUTE_TAG_INFO attributes{};
-        if (!GetFileInformationByHandleEx(handle_, FileAttributeTagInfo, &attributes, sizeof(attributes)) ||
-            (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
-            CloseHandle(handle_);
-            handle_ = INVALID_HANDLE_VALUE;
-        }
-#elif defined(__unix__) || defined(__APPLE__)
-        descriptor_ = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
-        if (descriptor_ < 0) return;
-        struct stat info{};
-        if (::fstat(descriptor_, &info) != 0 || !S_ISREG(info.st_mode) ||
-            ::flock(descriptor_, LOCK_EX | LOCK_NB) != 0) {
-            ::close(descriptor_);
-            descriptor_ = -1;
-        }
-#endif
-    }
-
-    ~ProfileStorageWriteLock() {
-#ifdef _WIN32
-        if (handle_ != INVALID_HANDLE_VALUE) CloseHandle(handle_);
-#elif defined(__unix__) || defined(__APPLE__)
-        if (descriptor_ >= 0) {
-            ::flock(descriptor_, LOCK_UN);
-            ::close(descriptor_);
-        }
-#endif
-    }
-
-    ProfileStorageWriteLock(const ProfileStorageWriteLock&) = delete;
-    ProfileStorageWriteLock& operator=(const ProfileStorageWriteLock&) = delete;
-
-    bool acquired() const {
-#ifdef _WIN32
-        return handle_ != INVALID_HANDLE_VALUE;
-#elif defined(__unix__) || defined(__APPLE__)
-        return descriptor_ >= 0;
-#else
-        return false;
-#endif
-    }
-
-private:
-#ifdef _WIN32
-    HANDLE handle_ = INVALID_HANDLE_VALUE;
-#elif defined(__unix__) || defined(__APPLE__)
-    int descriptor_ = -1;
-#endif
-};
-
 std::string generate_id(int value, int width = 4) {
     std::ostringstream ss;
     ss << std::setw(width) << std::setfill('0') << value;
@@ -583,7 +515,7 @@ class FileStorage : public IJobStorage {
 public:
     explicit FileStorage(std::filesystem::path baseDir)
         : baseDir_(std::move(baseDir)) {
-        ProfileStorageWriteLock writeLock(baseDir_);
+        AppProfileStorageWriteLock writeLock(baseDir_);
         if (writeLock.acquired()) {
             normalize_directory(baseDir_);
             normalize_directory(archive_dir());
@@ -854,7 +786,7 @@ public:
 
     bool save_profile(const Profile& profile) override {
         if (!is_active()) return false;
-        ProfileStorageWriteLock writeLock(baseDir_);
+        AppProfileStorageWriteLock writeLock(baseDir_);
         if (!writeLock.acquired()) return false;
 
         std::ostringstream ss;
@@ -948,7 +880,7 @@ public:
     }
 
     bool set_archived(const std::string& id, bool archived) override {
-        ProfileStorageWriteLock writeLock(baseDir_);
+        AppProfileStorageWriteLock writeLock(baseDir_);
         if (!writeLock.acquired()) return false;
         auto current = find_profile_path(id, /*includeArchived*/true);
         if (!current) return false;
@@ -979,7 +911,7 @@ public:
     }
 
     bool delete_profile(const std::string& id) override {
-        ProfileStorageWriteLock writeLock(baseDir_);
+        AppProfileStorageWriteLock writeLock(baseDir_);
         if (!writeLock.acquired()) return false;
         auto current = find_profile_path(id, /*includeArchived*/true);
         if (!current) return false;
@@ -1039,7 +971,7 @@ public:
         ss << "[auth]\n";
         ss << "token=" << token << "\n\n[profile]\nid=" << activeId_ << "\nname=" << activeId_
            << "\noverall=1\n\n[skills]\nnames=\n\n[queue]\nitems=\n";
-        ProfileStorageWriteLock writeLock(baseDir_);
+        AppProfileStorageWriteLock writeLock(baseDir_);
         return writeLock.acquired() && write_all(activePath_, ss.str());
     }
 
