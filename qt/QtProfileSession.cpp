@@ -90,20 +90,27 @@ bool appendSessionAudit(const std::filesystem::path& directory, const std::strin
         return false;
     }
 }
-bool revokeTrustedSession(const std::filesystem::path& directory, const std::string& id,
-                          const std::string& reason) {
+bool persistTrustedSessionChange(const std::filesystem::path& directory, const std::string& id,
+                                const std::string& action, const std::string& details) {
     bool prepared = false;
     try {
         PrepareProfileSessionAuditRecovery(directory, true);
         prepared = true;
-        if (!changeTrusted(directory, id, 0) || !AppendProfileAudit(directory, id, "trust_revoked", reason))
-            throw std::runtime_error("trusted session revocation failed");
+        if (!changeTrusted(directory, id, 0) || !AppendProfileAudit(directory, id, action, details))
+            throw std::runtime_error("trusted session state change failed");
         CommitQtRecoveryTransaction(directory);
         return true;
     } catch (...) {
         if (prepared) { try { RecoverTaskCompletion(directory); } catch (...) {} }
         return false;
     }
+}
+bool revokeTrustedSession(const std::filesystem::path& directory, const std::string& id,
+                          const std::string& reason) {
+    return persistTrustedSessionChange(directory, id, "trust_revoked", reason);
+}
+bool expireTrustedSession(const std::filesystem::path& directory, const std::string& id) {
+    return persistTrustedSessionChange(directory, id, "trust_expired", {});
 }
 }
 
@@ -142,20 +149,7 @@ bool QtProfileSession::restoreTrusted(IJobStorage& storage, const std::string& i
     const auto trusted = loadTrusted(directory_); const auto found = trusted.find(id); const auto now = QDateTime::currentSecsSinceEpoch();
     if (found == trusted.end()) return false;
     if (found->second <= now) {
-        bool prepared = false;
-        try {
-            PrepareProfileSessionAuditRecovery(directory_, true);
-            prepared = true;
-            if (!updateTrust(id, 0) || !AppendProfileAudit(directory_, id, "trust_expired", {})) {
-                RecoverTaskCompletion(directory_);
-                prepared = false;
-                return false;
-            }
-            CommitQtRecoveryTransaction(directory_);
-            prepared = false;
-        } catch (...) {
-            if (prepared) { try { RecoverTaskCompletion(directory_); } catch (...) {} }
-        }
+        expireTrustedSession(directory_, id);
         return false;
     }
     try {
@@ -174,6 +168,21 @@ bool QtProfileSession::restoreTrusted(IJobStorage& storage, const std::string& i
 }
 bool QtProfileSession::isUnlocked(IJobStorage& storage, const std::string& id) {
     if (id_ != id || id_.empty()) { lock(); if (!restoreTrusted(storage, id)) return false; }
+    if (trusted_) {
+        const auto currentTrust = loadTrusted(directory_);
+        const auto saved = currentTrust.find(id_);
+        const auto now = QDateTime::currentSecsSinceEpoch();
+        const bool expired = trustedUntil_ <= now ||
+            (saved != currentTrust.end() && saved->second <= now);
+        const bool changedExternally = saved == currentTrust.end() || saved->second != trustedUntil_;
+        if (expired || changedExternally) {
+            const auto sessionId = id_;
+            if (expired) expireTrustedSession(directory_, sessionId);
+            else appendSessionAudit(directory_, sessionId, "trust_session_invalidated", "persistent_trust_changed", false);
+            id_.clear(); fingerprint_.clear(); trusted_ = false; trustedUntil_ = 0;
+            return false;
+        }
+    }
     bool valid = false;
     try {
         const auto profile = available(storage, id);

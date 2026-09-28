@@ -2161,6 +2161,62 @@ static bool TestProfileSession() {
     if (!ui.open(QIODevice::ReadOnly)) return false;
     const auto trustBytes = ui.readAll(); ui.close();
     if (!trustBytes.contains("trusted=" + QByteArray::fromStdString(created->id) + ":")) return false;
+    auto externallyExpiredBytes = trustBytes;
+    const QByteArray trustToken = QByteArray::fromStdString(created->id) + ':';
+    const auto expiryStart = externallyExpiredBytes.indexOf(trustToken);
+    if (expiryStart < 0) { std::cerr << "session: active trust entry missing before simulated external expiry\n"; return false; }
+    const auto valueStart = expiryStart + trustToken.size();
+    auto valueEnd = valueStart;
+    while (valueEnd < externallyExpiredBytes.size() && externallyExpiredBytes[valueEnd] >= '0' && externallyExpiredBytes[valueEnd] <= '9') ++valueEnd;
+    if (valueEnd == valueStart) { std::cerr << "session: malformed active trust expiry\n"; return false; }
+    externallyExpiredBytes.replace(valueStart, valueEnd - valueStart, "1");
+    QSaveFile externalTrustChange(temp.path() + "/meta/ui.ini");
+    if (!externalTrustChange.open(QIODevice::WriteOnly) || externalTrustChange.write(externallyExpiredBytes) != externallyExpiredBytes.size() ||
+        !externalTrustChange.commit()) { std::cerr << "session: could not write simulated external expiry\n"; return false; }
+    if (!audit.open(QIODevice::ReadOnly)) { std::cerr << "session: could not read audit before external expiry\n"; return false; }
+    const auto auditBeforeExternalExpiry = audit.readAll(); audit.close();
+    AppSetProfileAuditFailureHookForTests(true);
+    const bool remainedUnlockedAfterExternalExpiry = session.isUnlocked(*workspace.storage, created->id);
+    AppSetProfileAuditFailureHookForTests(false);
+    if (remainedUnlockedAfterExternalExpiry || session.isTrusted()) { std::cerr << "session: active trusted session survived external expiry\n"; return false; }
+    if (!ui.open(QIODevice::ReadOnly)) { std::cerr << "session: could not read ui after failed expiry audit\n"; return false; }
+    const auto trustAfterFailedExternalExpiry = ui.readAll(); ui.close();
+    if (trustAfterFailedExternalExpiry != externallyExpiredBytes || !audit.open(QIODevice::ReadOnly)) { std::cerr << "session: failed external expiry was not rolled back exactly\n"; return false; }
+    const auto auditAfterFailedExternalExpiry = audit.readAll(); audit.close();
+    if (auditAfterFailedExternalExpiry != auditBeforeExternalExpiry) { std::cerr << "session: failed external expiry changed audit bytes\n"; return false; }
+    if (session.isUnlocked(*workspace.storage, created->id)) { std::cerr << "session: externally expired trust restored\n"; return false; }
+    if (!ui.open(QIODevice::ReadOnly)) { std::cerr << "session: could not read ui after retrying expiry\n"; return false; }
+    const auto trustAfterExternalExpiry = ui.readAll(); ui.close();
+    if (trustAfterExternalExpiry.contains(trustToken + "1") || !audit.open(QIODevice::ReadOnly)) { std::cerr << "session: expired persistent trust was not pruned\n"; return false; }
+    const auto auditAfterExternalExpiry = audit.readAll(); audit.close();
+    if (!auditAfterExternalExpiry.contains("|trust_expired")) { std::cerr << "session: external expiry audit missing\n"; return false; }
+    if (!session.unlock(*workspace.storage, created->id, "secret", 30)) { std::cerr << "session: relogin after external expiry failed\n"; return false; }
+    if (!ui.open(QIODevice::ReadOnly)) return false;
+    auto externallyRevokedBytes = ui.readAll(); ui.close();
+    const auto revokeStart = externallyRevokedBytes.indexOf(trustToken);
+    if (revokeStart < 0) { std::cerr << "session: active trust entry missing before simulated external revocation\n"; return false; }
+    auto revokeEnd = revokeStart + trustToken.size();
+    while (revokeEnd < externallyRevokedBytes.size() && externallyRevokedBytes[revokeEnd] >= '0' && externallyRevokedBytes[revokeEnd] <= '9') ++revokeEnd;
+    if (revokeEnd == revokeStart + trustToken.size()) return false;
+    externallyRevokedBytes.remove(revokeStart, revokeEnd - revokeStart);
+    QSaveFile externalRevokeChange(temp.path() + "/meta/ui.ini");
+    if (!externalRevokeChange.open(QIODevice::WriteOnly) || externalRevokeChange.write(externallyRevokedBytes) != externallyRevokedBytes.size() ||
+        !externalRevokeChange.commit()) { std::cerr << "session: could not write simulated external revocation\n"; return false; }
+    if (session.isUnlocked(*workspace.storage, created->id) || session.isTrusted()) {
+        std::cerr << "session: active trusted session survived external revocation\n"; return false;
+    }
+    if (!ui.open(QIODevice::ReadOnly)) return false;
+    const auto trustAfterExternalRevocation = ui.readAll(); ui.close();
+    if (trustAfterExternalRevocation != externallyRevokedBytes || !audit.open(QIODevice::ReadOnly)) {
+        std::cerr << "session: external revocation was overwritten\n"; return false;
+    }
+    const auto auditAfterExternalRevocation = audit.readAll(); audit.close();
+    if (!auditAfterExternalRevocation.contains("|trust_session_invalidated|persistent_trust_changed")) {
+        std::cerr << "session: external revocation audit missing\n"; return false;
+    }
+    QtProfileSession afterExternalRevocation(workspace.directory);
+    if (afterExternalRevocation.isUnlocked(*workspace.storage, created->id) ||
+        !session.unlock(*workspace.storage, created->id, "secret", 30)) return false;
     const auto profileBeforeRevocation = profile;
     profile.set_blocked(true);
     if (!workspace.storage->save_profile(profile)) return false;
