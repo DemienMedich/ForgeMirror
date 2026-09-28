@@ -43,6 +43,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <chrono>
 #include <thread>
 #include <QtTest/QTest>
@@ -993,6 +995,60 @@ static bool TestQtAdminAuthParity() {
         LoadAdminPassword(directory) == "new-admin-password" && restarted.findChild<QAction*>("adminLoginAction");
     restarted.close();
     return success;
+}
+
+static bool TestQtAdminAuthAcrossProcesses() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData()) / "workspace";
+    if (!SetAdminPassword(directory, "process-auth-fixture-password") || !SetAdminStayLoggedIn(directory, true)) return false;
+
+    const QString executable = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ForgeMirrorQt.exe"));
+    if (!QFileInfo(executable).isFile()) {
+        std::cerr << "Process authentication test cannot find sibling ForgeMirrorQt.exe: " << executable.toStdString() << '\n';
+        return false;
+    }
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    environment.remove(QStringLiteral("FORGEMIRROR_ADMIN_PASSWORD"));
+    environment.remove(QStringLiteral("QT_PLUGIN_PATH"));
+    environment.remove(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"));
+
+    for (int launch = 1; launch <= 3; ++launch) {
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        process.start(executable, {QStringLiteral("--storage-dir"), QString::fromStdWString(directory.wstring()),
+            QStringLiteral("--smoke-test")});
+        if (!process.waitForStarted(5000) || !process.waitForFinished(7000)) {
+            process.kill(); process.waitForFinished(2000);
+            std::cerr << "Admin persistence process launch timed out at " << launch << '\n';
+            return false;
+        }
+        if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+            std::cerr << "Admin persistence process failed at " << launch << ": "
+                      << process.readAllStandardError().toStdString() << '\n';
+            return false;
+        }
+
+        QFile log(QString::fromStdWString((directory / "meta/qt-application-log.json").wstring()));
+        if (!log.open(QIODevice::ReadOnly)) return false;
+        const auto parsed = QJsonDocument::fromJson(log.readAll());
+        if (!parsed.isArray()) return false;
+        int restored = 0;
+        int rejected = 0;
+        for (const auto& value : parsed.array()) {
+            const auto message = value.toObject().value("message").toString();
+            restored += message == QStringLiteral("Administrator session restored");
+            rejected += message == QStringLiteral("Administrator login rejected");
+        }
+        if (restored != launch || rejected != 0 || LoadAdminPassword(directory) != "process-auth-fixture-password" ||
+            !LoadAdminStayLoggedIn(directory)) {
+            std::cerr << "Admin session did not survive process restart " << launch
+                      << " (restored=" << restored << ", rejected=" << rejected << ")\n";
+            return false;
+        }
+    }
+    return true;
 }
 
 static bool TestCatalogMutationCoreAudit() {
@@ -2375,7 +2431,8 @@ static bool TestTaskEditorTransaction() {
     if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
     const auto blockedDelete = DeleteTaskWithRecovery(workspace.directory, workspace.data.tasks,
         workspace.data.taskAudit, awarded.id, "test");
-    if (blockedDelete.ok || workspace.data.tasks.size() != 1 ||
+    if (blockedDelete.ok || blockedDelete.errorMessage.find(u8"контекстом профилей") == std::string::npos ||
+        workspace.data.tasks.size() != 1 ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     draft = awarded;
     draft.category = 2;
@@ -5325,6 +5382,7 @@ int main(int argc, char** argv) {
     if (!TestCloudAutoSync()) { std::cerr << "Cloud automatic sync failed\n"; return 1; }
     if (!TestCloudReleaseUpdate()) { std::cerr << "Cloud release update failed\n"; return 1; }
     if (!TestQtAdminAuthParity()) { std::cerr << "Administrator authentication parity failed\n"; return 1; }
+    if (!TestQtAdminAuthAcrossProcesses()) { std::cerr << "Administrator process-restart persistence failed\n"; return 1; }
     if (!TestCatalogMutationCoreAudit()) { std::cerr << "Catalog mutation core audit failed\n"; return 1; }
     if (!TestCloudPushPreview()) { std::cerr << "Cloud push preview failed\n"; return 1; }
     if (!TestCloudConflictResolver()) { std::cerr << "Cloud conflict resolver failed\n"; return 1; }

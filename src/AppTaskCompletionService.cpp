@@ -660,7 +660,7 @@ AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
     }
     const auto selected = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
     if (!selected->participants.empty()) {
-        result.errorMessage = u8"По задаче уже начислен XP. Безопасный откат профилей ещё не перенесён в Qt.";
+        result.errorMessage = u8"По задаче уже начислен XP. Для безопасного отката нужен вариант удаления с контекстом профилей.";
         return result;
     }
     const auto oldTasks = tasks;
