@@ -35,7 +35,8 @@ TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<T
 AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& tasks,
                                      std::vector<TaskAuditEntry>& audit, const TaskCompletionInput& input);
 // Recover a pending Qt XP or metadata transaction before loading workspace data. Throws on failure.
-bool RecoverTaskCompletion(const std::filesystem::path& directory);
+bool RecoverTaskCompletion(const std::filesystem::path& directory,
+                           std::filesystem::path* preservedInterruptedFiles = nullptr);
 
 // Project deletion spans projects, tasks and audit. The Qt caller brackets the existing
 // mutation with this journal so a process interruption restores one coherent snapshot.

@@ -10,6 +10,7 @@ public:
     explicit QtWorkspace(std::filesystem::path directory);
     void reload();
     bool transactionRecoveryNotice = false;
+    std::filesystem::path transactionRecoveryPreservedFiles;
     bool cloudPullRecoveryNotice = false;
     bool cloudPushRecoveryNotice = false;
     std::filesystem::path directory;

@@ -160,6 +160,14 @@ static bool TestTaskCompletion() {
     }
     workspace.reload();
     for (size_t i = 0; i < paths.size(); ++i) if (bytes(paths[i]) != originals[i]) return fail("restart recovery failed");
+    const auto interruptedProfileCopy = workspace.transactionRecoveryPreservedFiles / (a->id + ".ini");
+    QFile interruptedProfile(QString::fromStdWString(interruptedProfileCopy.wstring()));
+    if (workspace.transactionRecoveryPreservedFiles.empty() ||
+        !interruptedProfile.open(QIODevice::ReadOnly) || interruptedProfile.readAll() != "interrupted-write")
+        return fail("restart recovery did not preserve the changed in-flight profile before rollback");
+    QFile interruptedManifest(QString::fromStdWString((workspace.transactionRecoveryPreservedFiles / "manifest.txt").wstring()));
+    if (!interruptedManifest.open(QIODevice::ReadOnly) || !interruptedManifest.readAll().contains(a->id.c_str()))
+        return fail("restart recovery preservation manifest omitted the changed profile");
     const auto completion = CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input);
     if (!completion.ok) { std::cerr << completion.errorMessage << '\n'; return fail("completion failed"); }
     if (workspace.data.tasks[0].status != 2 || workspace.data.tasks[0].participants.size() != 2) return fail("completion not recorded");
@@ -2610,7 +2618,9 @@ static bool TestTaskEditorTransaction() {
     // Simulate interrupted metadata editing and exercise the startup recovery format.
     const auto journal = workspace.directory / "meta/qt-xp-transaction";
     std::filesystem::create_directories(journal);
+    std::vector<QByteArray> interruptedImages;
     {
+        for (const auto& file : files) interruptedImages.push_back(read(file));
         std::ofstream manifest(journal / "manifest");
         manifest << "FORGEMIRROR_QT_TASK_EDIT_1 3\n";
         for (size_t i = 0; i < files.size(); ++i) {
@@ -2623,11 +2633,36 @@ static bool TestTaskEditorTransaction() {
     workspace.reload();
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
     if (!workspace.transactionRecoveryNotice) return false;
+    if (workspace.transactionRecoveryPreservedFiles.empty()) return false;
+    bool preservedInterruptedBytes = false;
+    for (size_t i = 0; i < files.size(); ++i) {
+        if (interruptedImages[i] == before[i]) continue;
+        QFile preserved(QString::fromStdWString((workspace.transactionRecoveryPreservedFiles / files[i]).wstring()));
+        if (!preserved.open(QIODevice::ReadOnly) || preserved.readAll() != interruptedImages[i]) return false;
+        preservedInterruptedBytes = true;
+    }
+    if (!preservedInterruptedBytes) return false;
     QtWindow recoveryWindow(workspace);
     QFile recoveryLog(temp.path() + "/meta/qt-application-log.json");
     if (workspace.transactionRecoveryNotice || !recoveryLog.open(QIODevice::ReadOnly)) return false;
     const auto recoveryBytes = recoveryLog.readAll();
-    if (!recoveryBytes.contains("CoreTransactionRecovery") || !recoveryBytes.contains("interrupted local transaction")) return false;
+    if (!recoveryBytes.contains("CoreTransactionRecovery") || !recoveryBytes.contains("interrupted local transaction") ||
+        !recoveryBytes.contains(workspace.transactionRecoveryPreservedFiles.filename().string().c_str())) return false;
+    recoveryLog.close();
+    {
+        PrepareProjectDeletionRecovery(workspace.directory);
+        { std::ofstream interrupted(workspace.directory / "meta/tasks.json", std::ios::binary | std::ios::trunc);
+          interrupted << "interrupted-project-transaction"; }
+        QtWorkspace constructorRecovery(workspace.directory);
+        const auto preservedDirectory = constructorRecovery.transactionRecoveryPreservedFiles;
+        QFile preservedTask(QString::fromStdWString((preservedDirectory / "meta/tasks.json").wstring()));
+        if (!constructorRecovery.transactionRecoveryNotice || preservedDirectory.empty() ||
+            !preservedTask.open(QIODevice::ReadOnly) || preservedTask.readAll() != "interrupted-project-transaction") return false;
+        QtWindow constructorRecoveryWindow(constructorRecovery);
+        QFile constructorRecoveryLog(temp.path() + "/meta/qt-application-log.json");
+        if (!constructorRecoveryLog.open(QIODevice::ReadOnly) ||
+            !constructorRecoveryLog.readAll().contains(preservedDirectory.filename().string().c_str())) return false;
+    }
     auto& awarded = workspace.data.tasks.front();
     awarded.participants.push_back({"legacy-profile", 100, 77, 22, "snapshot"});
     awarded.status = 2;

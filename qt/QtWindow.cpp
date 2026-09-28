@@ -2439,7 +2439,15 @@ bool QtWindow::reload() {
     adminStatsLastRefresh_ = 0;
     adminStatsRows_.clear();
     if (workspace_.transactionRecoveryNotice) {
-        appendLog(AppLogLevel::Warning, "CoreTransactionRecovery", "An interrupted local transaction was recovered from its journal");
+        const auto preservedDirectory = workspace_.transactionRecoveryPreservedFiles.filename();
+        const auto detail = preservedDirectory.empty()
+            ? std::string("An interrupted local transaction was recovered from its journal")
+            : std::string("An interrupted local transaction was recovered; changed in-flight files were preserved in meta/updates/") +
+                preservedDirectory.u8string();
+        appendLog(AppLogLevel::Warning, "CoreTransactionRecovery", detail);
+        if (!preservedDirectory.empty())
+            statusBar()->showMessage(QString::fromUtf8("Откат завершён; копии изменённых файлов: meta/updates/%1")
+                .arg(QString::fromStdWString(preservedDirectory.wstring())), 20000);
         workspace_.transactionRecoveryNotice = false;
     }
     if (workspace_.cloudPullRecoveryNotice) {

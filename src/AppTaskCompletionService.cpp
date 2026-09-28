@@ -83,6 +83,32 @@ void checkPath(const std::filesystem::path& root, const std::filesystem::path& r
             throw std::runtime_error(u8"Ссылки в файлах XP не поддерживаются.");
     }
 }
+bool filesEqual(const std::filesystem::path& first, const std::filesystem::path& second) {
+    std::error_code ec;
+    const auto firstSize = std::filesystem::file_size(first, ec);
+    if (ec) return false;
+    const auto secondSize = std::filesystem::file_size(second, ec);
+    if (ec || firstSize != secondSize) return false;
+    std::ifstream a(first, std::ios::binary), b(second, std::ios::binary);
+    if (!a || !b) return false;
+    return std::equal(std::istreambuf_iterator<char>(a), std::istreambuf_iterator<char>(),
+                      std::istreambuf_iterator<char>(b));
+}
+std::filesystem::path createInterruptedFilesDirectory(const std::filesystem::path& root) {
+    checkPath(root, "meta/updates");
+    const auto parent = root / "meta/updates";
+    std::filesystem::create_directories(parent);
+    const auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    for (int attempt = 0; attempt < 1000; ++attempt) {
+        const auto candidate = parent / ("qt-xp-recovery-" + std::to_string(stamp) + "-" + std::to_string(attempt));
+        std::error_code ec;
+        if (std::filesystem::create_directory(candidate, ec)) return candidate;
+        if (ec && ec != std::errc::file_exists)
+            throw std::runtime_error(u8"Не удалось создать папку сохранения прерванных файлов Qt.");
+    }
+    throw std::runtime_error(u8"Не удалось подобрать имя папки сохранения прерванных файлов Qt.");
+}
 void finishJournal(const std::filesystem::path& root) {
     auto destination = root / "meta" / "qt-xp-finished";
     // A prior completed transaction can safely be cleaned up; pending is never deleted first.
@@ -122,10 +148,12 @@ void prepareJournal(const std::filesystem::path& root, const TaskCompletionPrevi
 }
 }
 
-bool RecoverTaskCompletion(const std::filesystem::path& root) {
+bool RecoverTaskCompletion(const std::filesystem::path& root,
+                           std::filesystem::path* preservedInterruptedFiles) {
     const auto pending = journalPath(root);
     checkPath(root, "meta/qt-xp-transaction");
     if (!std::filesystem::exists(pending)) return false;
+    if (preservedInterruptedFiles) preservedInterruptedFiles->clear();
     checkPath(root, "meta/qt-xp-finished");
     checkPath(pending, "manifest");
     std::ifstream manifest(pending / "manifest", std::ios::binary);
@@ -257,6 +285,39 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
     if (!manifest.eof() || !commonComplete || !projectComplete)
         throw std::runtime_error(u8"Неполный журнал XP: требуется ручное восстановление.");
     manifest.close(); // Windows cannot rename the journal directory while this stream is open.
+    std::vector<std::string> changedPaths;
+    if (preservedInterruptedFiles) {
+        for (const auto& entry : entries) {
+            const auto target = root / entry.first;
+            const auto before = pending / entry.first;
+            const bool currentExists = std::filesystem::exists(target);
+            if (currentExists && !std::filesystem::is_regular_file(target))
+                throw std::runtime_error(u8"Нельзя сохранить или восстановить прерванную Qt-транзакцию поверх каталога.");
+            if (currentExists != entry.second ||
+                (currentExists && entry.second && !filesEqual(target, before)))
+                changedPaths.push_back(entry.first);
+        }
+    }
+    std::filesystem::path preservedDirectory;
+    if (!changedPaths.empty()) {
+        preservedDirectory = createInterruptedFilesDirectory(root);
+        std::ofstream preservedManifest(preservedDirectory / "manifest.txt", std::ios::binary | std::ios::trunc);
+        if (!preservedManifest) throw std::runtime_error(u8"Не удалось записать список сохранённых прерванных файлов.");
+        preservedManifest << "Interrupted Qt transaction files; copies are captured before rollback.\n";
+        for (const auto& name : changedPaths) {
+            const auto source = root / name;
+            preservedManifest << std::quoted(name) << ' ' << (std::filesystem::exists(source) ? "saved" : "missing") << '\n';
+            if (!std::filesystem::exists(source)) continue;
+            const auto destination = preservedDirectory / name;
+            std::filesystem::create_directories(destination.parent_path());
+            checkPath(preservedDirectory, name);
+            if (!std::filesystem::copy_file(source, destination))
+                throw std::runtime_error(u8"Не удалось сохранить изменённый файл перед откатом Qt.");
+        }
+        preservedManifest.flush();
+        if (!preservedManifest) throw std::runtime_error(u8"Не удалось завершить список сохранённых прерванных файлов.");
+        preservedManifest.close();
+    }
     for (const auto& entry : entries) {
         const auto target = root / entry.first;
         if (entry.second) {
@@ -268,6 +329,7 @@ bool RecoverTaskCompletion(const std::filesystem::path& root) {
         }
     }
     finishJournal(root);
+    if (preservedInterruptedFiles) *preservedInterruptedFiles = preservedDirectory;
     return true;
 }
 
