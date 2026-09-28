@@ -6727,6 +6727,12 @@ int main(int argc, char** argv) {
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
     auto* shortcutHelpAction = window.findChild<QAction*>("shortcutHelpAction");
+    auto* navigateF6 = window.findChild<QShortcut*>("navigationF6");
+    if (!navigateF6 || navigateF6->property("navigationPageIndex").toInt() != 16 ||
+        nav->item(16)->text() != QString::fromUtf8("Логи") ||
+        !nav->item(16)->toolTip().contains(QStringLiteral("F6")) ||
+        nav->item(7)->toolTip().contains(QStringLiteral("F6")))
+        return fail("F6 did not retain the legacy Logs destination");
     const std::vector<std::pair<const char*, QKeySequence>> shortcuts = {
         {"shortcutCreate", QKeySequence::New}, {"shortcutEdit", QKeySequence("Ctrl+E")},
         {"shortcutDelete", QKeySequence::Delete}, {"shortcutRefresh", QKeySequence::Refresh},
@@ -6746,6 +6752,8 @@ int main(int argc, char** argv) {
         shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 17 &&
             helpTable->item(8, 0)->text() == "Ctrl+N" && helpTable->item(13, 0)->text() == "Ctrl+/" &&
             helpTable->item(14, 0)->text() == "F10" && helpTable->item(15, 0)->text() == "Ctrl+F10" &&
+            helpTable->item(5, 0)->text() == "F6" &&
+            helpTable->item(5, 1)->text() == QString::fromUtf8("Логи") &&
             helpTable->item(16, 0)->text() == "F11";
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (dialog && !artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/shortcuts.png"); }

@@ -935,8 +935,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("Статистика профилей")});
     const std::array<QString, 18> navigationHotkeys = {
         QStringLiteral("F1"), QString(), QString(), QStringLiteral("F2"), QStringLiteral("F3"), QString(),
-        QStringLiteral("F5"), QStringLiteral("F6"), QString(), QStringLiteral("F4"), QString(), QString(),
-        QString(), QString(), QString(), QString(), QString(), QString()
+        QStringLiteral("F5"), QString(), QString(), QStringLiteral("F4"), QString(), QString(),
+        QString(), QString(), QString(), QString(), QStringLiteral("F6"), QString()
     };
     navigation_->setIconSize(QSize(18, 18));
     const auto drawNavigationIcon = [](int index, const QColor& color) {
@@ -2220,8 +2220,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         statusBar()->showMessage(QString::fromUtf8("Показаны задачи выбранного проекта."), 4000);
     });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
-             {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Audit}}) {
+             {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, Statistics}, {Qt::Key_F6, Logs}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
+        action->setObjectName(QStringLiteral("navigationF%1").arg(shortcut.first - Qt::Key_F1 + 1));
+        action->setProperty("navigationPageIndex", shortcut.second);
         connect(action, &QShortcut::activated, this, [this, page = shortcut.second] {
             if (!navigation_->item(page)->isHidden()) navigation_->setCurrentRow(page);
         });
@@ -2293,7 +2295,7 @@ void QtWindow::showShortcutHelp() {
     const std::vector<std::pair<QString, QString>> rows = {
         {"F1", QString::fromUtf8("Профиль")}, {"F2", QString::fromUtf8("Навыки")},
         {"F3", QString::fromUtf8("Пайплайн")}, {"F4", QString::fromUtf8("Правила")},
-        {"F5", QString::fromUtf8("Статистика")}, {"F6", QString::fromUtf8("Аудит")},
+        {"F5", QString::fromUtf8("Статистика")}, {"F6", QString::fromUtf8("Логи")},
         {"Ctrl+K", QString::fromUtf8("Перейти к поиску текущего раздела")}, {"Esc", QString::fromUtf8("Очистить активный поиск")},
         {"Ctrl+N", QString::fromUtf8("Создать запись")}, {"Ctrl+E", QString::fromUtf8("Редактировать выбранную запись")},
         {"Delete", QString::fromUtf8("Удалить выбранный проект или этап")}, {"Ctrl+R", QString::fromUtf8("Перечитать локальные данные")},
