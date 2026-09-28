@@ -1427,6 +1427,41 @@ static bool TestProfileSpirit(const std::filesystem::path& dir) {
     if (!ReadFile(profilePath, afterConflict) || afterConflict != externalProfile) return false;
     if (!storage->set_active_profile(info->id) || !storage->load_profile()) return false;
 
+    auto lockTarget = storage->load_profile();
+    if (!lockTarget) return false;
+    std::string beforeLockedWrite;
+    if (!ReadFile(profilePath, beforeLockedWrite)) return false;
+    const auto profileLockPath = dir / "meta" / "profile-write.lock";
+#ifdef _WIN32
+    HANDLE profileLock = CreateFileW(profileLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (profileLock == INVALID_HANDLE_VALUE) return false;
+#elif defined(__unix__) || defined(__APPLE__)
+    const int profileLock = ::open(profileLockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
+    if (profileLock < 0 || ::flock(profileLock, LOCK_EX | LOCK_NB) != 0) {
+        if (profileLock >= 0) ::close(profileLock);
+        return false;
+    }
+#else
+    return false;
+#endif
+    lockTarget->set_name("Profile write lock contention");
+    const bool refusedLockedWrite = !storage->save_profile(*lockTarget);
+#ifdef _WIN32
+    CloseHandle(profileLock);
+#elif defined(__unix__) || defined(__APPLE__)
+    ::flock(profileLock, LOCK_UN);
+    ::close(profileLock);
+#endif
+    std::string afterLockedWrite;
+    if (!refusedLockedWrite || !ReadFile(profilePath, afterLockedWrite) || afterLockedWrite != beforeLockedWrite ||
+        !storage->save_profile(*lockTarget)) return false;
+    const auto lockRetry = storage->load_profile();
+    if (!lockRetry || lockRetry->name() != "Profile write lock contention") return false;
+    std::vector<std::string> strayFiles;
+    if (!CollectStrayStorageFiles(dir, strayFiles) ||
+        std::find(strayFiles.begin(), strayFiles.end(), "meta/profile-write.lock") != strayFiles.end()) return false;
+
     Profile legacy("Legacy");
     auto legacyInfo = storage->create_profile(legacy);
     if (!legacyInfo) return false;

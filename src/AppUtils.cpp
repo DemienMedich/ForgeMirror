@@ -222,6 +222,7 @@ bool ShouldSkipSeedCopy(const std::filesystem::path& rel) {
     if (relPath == "meta/ui.ini") return true;
     if (relPath == "meta/gui-layout.ini") return true;
     if (relPath == "meta/shortcuts.json") return true;
+    if (relPath == "meta/profile-write.lock") return true;
     if (relPath.rfind("meta/ui-presets", 0) == 0) return true;
     return false;
 }
@@ -1342,7 +1343,7 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
         "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "tasks.json.lock",
-        "seed.merged", "gui-layout.ini", "admin.ini"
+        "seed.merged", "gui-layout.ini", "admin.ini", "profile-write.lock"
     };
     if (parent.empty()) {
         if (ext == ".ini") return true;
