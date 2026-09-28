@@ -818,7 +818,7 @@ static bool TestCloudReleaseUpdate() {
     launchAction->trigger();
     QAction* adminAction = nullptr;
     for (auto* action : window.findChildren<QAction*>())
-        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+        if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return false;
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest(QStringLiteral("admin123"), false); });
     adminAction->trigger();
@@ -852,7 +852,9 @@ static bool TestQtAdminAuthParity() {
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     auto* login = window.findChild<QAction*>("adminLoginAction");
     auto* passwordAction = window.findChild<QAction*>("changeAdminPasswordAction");
-    if (!login || !passwordAction || passwordAction->isVisible()) return false;
+    if (!login || login->text() != QString::fromUtf8("Войти как администратор") ||
+        !login->toolTip().contains(QString::fromUtf8("восстановление")) ||
+        !passwordAction || passwordAction->isVisible()) return false;
     bool rejectedAttempt = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -896,7 +898,9 @@ static bool TestQtAdminAuthParity() {
         buttons->button(QDialogButtonBox::Ok)->click();
     });
     login->trigger();
-    if (!rememberControlSeen || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible()) return false;
+    if (!rememberControlSeen || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() ||
+        login->text() != QString::fromUtf8("Выйти из режима администратора") ||
+        !login->toolTip().contains(QString::fromUtf8("отключить"))) return false;
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* auditSource = window.findChild<QComboBox*>("auditSourceFilter");
     auto* auditTable = window.findChild<QTableWidget*>("records");
@@ -919,7 +923,8 @@ static bool TestQtAdminAuthParity() {
     QtWindow restarted(workspace); restarted.show(); QApplication::processEvents();
     passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
     login = restarted.findChild<QAction*>("adminLoginAction");
-    if (!passwordAction || !passwordAction->isVisible() || !login) return false;
+    if (!passwordAction || !passwordAction->isVisible() || !login ||
+        login->text() != QString::fromUtf8("Выйти из режима администратора")) return false;
     restarted.close();
     for (int launch = 0; launch < 3; ++launch) {
         QtWindow repeatedLaunch(workspace); repeatedLaunch.show(); QApplication::processEvents();
@@ -932,9 +937,11 @@ static bool TestQtAdminAuthParity() {
     restarted.show(); QApplication::processEvents();
     passwordAction = restarted.findChild<QAction*>("changeAdminPasswordAction");
     login = restarted.findChild<QAction*>("adminLoginAction");
-    if (!passwordAction || !passwordAction->isVisible() || !login) return false;
+    if (!passwordAction || !passwordAction->isVisible() || !login ||
+        login->text() != QString::fromUtf8("Выйти из режима администратора")) return false;
     login->trigger(); // Logged-in admin action logs out and clears the opt-in flag.
-    if (LoadAdminStayLoggedIn(directory) || passwordAction->isVisible()) return false;
+    if (LoadAdminStayLoggedIn(directory) || passwordAction->isVisible() ||
+        login->text() != QString::fromUtf8("Войти как администратор")) return false;
 
     bool loginWithoutRemember = false;
     QTimer::singleShot(0, [&] {
@@ -954,7 +961,8 @@ static bool TestQtAdminAuthParity() {
         loginWithoutRemember = true;
     });
     login->trigger();
-    if (!loginWithoutRemember || LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() || !passwordAction->isEnabled()) return false;
+    if (!loginWithoutRemember || LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() || !passwordAction->isEnabled() ||
+        login->text() != QString::fromUtf8("Выйти из режима администратора")) return false;
 
     bool wrongPasswordRejected = false, mismatchRejected = false;
     QTimer::singleShot(0, [&] {
@@ -1169,7 +1177,7 @@ static bool TestCloudPushPreview() {
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>())
         for (auto* action : menu->actions())
-            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+            if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return false;
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
@@ -2477,7 +2485,7 @@ static bool TestQtStorageHealthReport() {
     if (!reportAction || !cleanupAction || reportAction->isVisible() || cleanupAction->isVisible()) return fail("admin-only actions missing or visible without admin");
     QAction* adminAction = nullptr;
     for (auto* action : window.findChildren<QAction*>())
-        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+        if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return fail("admin action missing");
     QTimer::singleShot(0, [] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -2662,7 +2670,7 @@ static bool TestReportPeriodComparison() {
         return fail("Reference-style navigation labels, icons, keyboard hint or accessible text missing");
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
-        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+        if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return fail("admin action");
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
@@ -3572,7 +3580,7 @@ static bool TestPersonalWallet() {
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>())
         for (auto* action : menu->actions())
-            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+            if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return false;
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
@@ -3689,7 +3697,7 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>())
         for (auto* action : menu->actions())
-            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+            if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!navigation || !adminAction) return false;
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
@@ -4114,7 +4122,7 @@ static bool TestQtVisibleTaskSelectionTools() {
     if (selectionTools->isVisible()) return false;
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>()) for (auto* action : menu->actions())
-        if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+        if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return false;
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
@@ -4319,7 +4327,7 @@ static bool TestBulkTaskEditsUi() {
     QAction* adminAction = nullptr;
     for (auto* menu : window.findChildren<QMenu*>())
         for (auto* action : menu->actions())
-            if (action->text() == QString::fromUtf8("Вход / выход администратора")) adminAction = action;
+            if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
     if (!adminAction) return false;
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
@@ -5428,7 +5436,7 @@ int main(int argc, char** argv) {
     if (!SetAdminPassword(workspace.directory, "qt-test-password")) return fail("Admin fixture failed");
     QAction* login = nullptr;
     for (auto* action : window.findChildren<QAction*>())
-        if (action->text().contains(QString::fromUtf8("Вход / выход"))) login = action;
+        if (action->objectName() == QStringLiteral("adminLoginAction")) login = action;
     if (!login) return fail("Admin action missing");
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("qt-test-password"); });
     login->trigger();

@@ -108,6 +108,7 @@ private:
     QtDisplaySettings displaySettings_;
     QtBackgroundSurface* backgroundSurface_ = nullptr;
     QAction* profileAccessAction_;
+    QAction* adminLoginAction_ = nullptr;
     QAction* adminPasswordAction_;
     QAction* ownPasswordAction_;
     QAction* storageHealthReportAction_;

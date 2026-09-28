@@ -464,8 +464,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     menuButton->setText(QString::fromUtf8("⋯"));
     menuButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(menuButton);
-    auto* adminLoginAction = menu->addAction(QString::fromUtf8("Вход / выход администратора"), this, [this] { authenticate(); });
-    adminLoginAction->setObjectName("adminLoginAction");
+    adminLoginAction_ = menu->addAction(QString::fromUtf8("Войти как администратор"), this, [this] { authenticate(); });
+    adminLoginAction_->setObjectName("adminLoginAction");
     adminPasswordAction_ = menu->addAction(QString::fromUtf8("Сменить пароль администратора…"), this, [this] { changeAdminPassword(); });
     adminPasswordAction_->setObjectName("changeAdminPasswordAction");
     profileAccessAction_ = menu->addAction(QString::fromUtf8("Войти в выбранный профиль"), this, [this] { authenticateProfile(); });
@@ -2308,6 +2308,10 @@ void QtWindow::render() {
     const bool unlocked = profileSession_.isUnlocked(*workspace_.storage, profileId);
     profileAccessAction_->setText(QString::fromUtf8(unlocked ? "Выйти из профиля" : "Войти в выбранный профиль"));
     profileAccessAction_->setEnabled(!profileId.empty());
+    adminLoginAction_->setText(QString::fromUtf8(admin_ ? "Выйти из режима администратора" : "Войти как администратор"));
+    adminLoginAction_->setToolTip(QString::fromUtf8(admin_
+        ? "Завершить режим администратора и отключить его восстановление после перезапуска."
+        : "Открыть вход администратора; после входа можно включить восстановление на этом рабочем месте."));
     adminPasswordAction_->setVisible(admin_);
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
     adminPasswordAction_->setEnabled(!(adminPasswordOverride && *adminPasswordOverride));
