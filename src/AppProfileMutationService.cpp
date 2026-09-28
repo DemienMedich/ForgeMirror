@@ -36,6 +36,12 @@ bool VerifyEncodedPassword(const Profile& profile, const std::string& input) {
     return !decoded.empty() && decoded == input;
 }
 
+void EmitProfileCreateEvent(const std::function<void(AppLogLevel, const std::string&)>& logger,
+                            AppLogLevel level, const char* message) noexcept {
+    if (!logger) return;
+    try { logger(level, message); } catch (...) {}
+}
+
 AppProfileMutationResult PersistProfile(IJobStorage& storage,
                                         const std::string& restoreProfileId,
                                         const std::string& profileId,
@@ -116,12 +122,14 @@ std::int64_t MutationNowSeconds() {
 
 AppProfileCreateResult AppCreateProfile(IJobStorage& storage,
                                         SkillCatalog& catalog,
-                                        const std::string& name) {
+                                        const std::string& name,
+                                        std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppProfileCreateResult result;
     const std::string trimmed = TrimCopy(name);
     if (trimmed.empty()) {
         result.userError = true;
         result.errorMessage = u8"Имя не может быть пустым.";
+        EmitProfileCreateEvent(eventLogger, AppLogLevel::Warning, "Profile creation rejected");
         return result;
     }
 
@@ -130,6 +138,7 @@ AppProfileCreateResult AppCreateProfile(IJobStorage& storage,
     auto info = storage.create_profile(profile);
     if (!info) {
         result.errorMessage = u8"Не удалось создать профиль.";
+        EmitProfileCreateEvent(eventLogger, AppLogLevel::Error, "Profile creation failed");
         return result;
     }
 
@@ -140,6 +149,7 @@ AppProfileCreateResult AppCreateProfile(IJobStorage& storage,
     if (!storage.save_profile(profile)) {
         storage.delete_profile(info->id);
         result.errorMessage = u8"Не удалось сохранить профиль.";
+        EmitProfileCreateEvent(eventLogger, AppLogLevel::Error, "Profile creation failed");
         return result;
     }
 
@@ -148,6 +158,7 @@ AppProfileCreateResult AppCreateProfile(IJobStorage& storage,
     result.profileId = info->id;
     result.login = login;
     result.password = password;
+    EmitProfileCreateEvent(eventLogger, AppLogLevel::Info, "Profile creation committed");
     return result;
 }
 

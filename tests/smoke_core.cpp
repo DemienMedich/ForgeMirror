@@ -5,6 +5,7 @@
 #include <memory>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <chrono>
@@ -1310,6 +1311,27 @@ static bool TestProfileRank() {
     return rank.find("Джуниор") != std::string::npos;
 }
 
+static bool TestProfileCreationTelemetry(const std::filesystem::path& dir) {
+    std::unique_ptr<IJobStorage> storage(CreateFileStorage(dir));
+    SkillCatalog catalog(dir);
+    AppLogLevel level = AppLogLevel::Info;
+    std::string event;
+    const auto rejected = AppCreateProfile(*storage, catalog, "",
+        [&](AppLogLevel emittedLevel, const std::string& message) { level = emittedLevel; event = message; });
+    if (rejected.ok || level != AppLogLevel::Warning || event != "Profile creation rejected") return false;
+
+    const auto created = AppCreateProfile(*storage, catalog, "Private Profile Name",
+        [&](AppLogLevel emittedLevel, const std::string& message) { level = emittedLevel; event = message; });
+    if (!created.ok || level != AppLogLevel::Info || event != "Profile creation committed") return false;
+    if (event.find(created.profileId) != std::string::npos || event.find(created.login) != std::string::npos ||
+        event.find(created.password) != std::string::npos || event.find("Private Profile Name") != std::string::npos) return false;
+
+    const auto observerFailure = AppCreateProfile(*storage, catalog, "Observer Isolation",
+        [](AppLogLevel, const std::string&) { throw std::runtime_error("observer failure"); });
+    return observerFailure.ok && !observerFailure.profileId.empty() && !observerFailure.login.empty() &&
+           !observerFailure.password.empty();
+}
+
 static bool TestProfileSpirit(const std::filesystem::path& dir) {
     Profile profile("Spirit");
     if (profile.spirit() != ProfileSpirit::None) return false;
@@ -1622,6 +1644,7 @@ int main() {
     std::filesystem::create_directories(tmp, ec);
 
     const bool okProfile = TestProfileRank();
+    const bool okProfileCreateTelemetry = TestProfileCreationTelemetry(tmp / "profile_create_telemetry");
     const bool okSpirit = TestProfileSpirit(tmp / "spirit");
     const bool okSpiritRemoval = TestEvilSpiritRemovalForCoins(tmp / "spirit_removal");
     const bool okRules = TestGameplayConfig(tmp);
@@ -1676,13 +1699,14 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okProfileCreateTelemetry && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
     std::cerr << "smoke_core failed: "
               << "profile=" << okProfile
+              << " profileCreateTelemetry=" << okProfileCreateTelemetry
               << " spirit=" << okSpirit
               << " spiritRemoval=" << okSpiritRemoval
               << " rules=" << okRules

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -36,7 +37,8 @@ struct AppProfileMutationResult {
 
 AppProfileCreateResult AppCreateProfile(IJobStorage& storage,
                                         SkillCatalog& catalog,
-                                        const std::string& name);
+                                        const std::string& name,
+                                        std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 AppProfileActionResult AppSetProfileArchived(IJobStorage& storage,
                                              const std::string& profileId,

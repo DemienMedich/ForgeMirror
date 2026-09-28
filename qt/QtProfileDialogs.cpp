@@ -200,7 +200,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         if (name.isEmpty() || std::any_of(name.begin(), name.end(), [](QChar c) { return c.category() == QChar::Other_Control; })) {
             status->setText(QString::fromUtf8("Введите непустое имя без управляющих символов.")); return;
         }
-        const auto result = AppCreateProfile(*workspace.storage, workspace.catalog, u(name));
+        const auto result = AppCreateProfile(*workspace.storage, workspace.catalog, u(name),
+            workspace.profileEventLogger);
         if (!activeId.isEmpty()) workspace.storage->set_active_profile(u(activeId));
         if (!result.ok) { status->setText(q(result.errorMessage)); return; }
         reveal->setChecked(false);
