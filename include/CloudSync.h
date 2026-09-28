@@ -94,6 +94,8 @@ CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConf
                                                              const std::filesystem::path& storageDir,
                                                              const std::string& relativePath,
                                                              bool preferCloud);
+CloudWorkspaceResolveResult ApplyCloudStorageConflictCopy(const std::filesystem::path& storageDir,
+                                                          const std::filesystem::path& conflictPath);
 std::vector<CloudWorkspaceBackupEntry> ListCloudWorkspaceBackups(const std::filesystem::path& storageDir,
                                                                  const std::string& relativePath = std::string());
 CloudWorkspaceResolveResult RestoreCloudWorkspaceBackup(const std::filesystem::path& storageDir,

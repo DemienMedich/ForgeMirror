@@ -1144,7 +1144,7 @@ static void TrimVaultLog(StorageVaultData& data) {
     }
 }
 
-StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
+static StorageVaultData DefaultStorageVaultData() {
     StorageVaultData data;
     data.currencyName = u8"Кукоин";
     data.currencyCode = "KUK";
@@ -1158,9 +1158,11 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     data.pomodoroMinMinutes = 20;
     data.pomodoroCoinsPerCycle = 1;
     data.pomodoroDaysMask = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
-    std::ifstream in(StorageVaultPath(storageDir), std::ios::binary);
-    if (!in) return data;
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return data;
+}
+
+static StorageVaultData ParseStorageVaultContent(const std::string& content) {
+    StorageVaultData data = DefaultStorageVaultData();
     std::string value;
     if (ExtractJsonStringField(content, "currency_name", value) && !value.empty()) {
         data.currencyName = value;
@@ -1214,14 +1216,30 @@ StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     return data;
 }
 
-bool ValidateStorageVaultFile(const std::filesystem::path& storageDir) {
+StorageVaultData LoadStorageVault(const std::filesystem::path& storageDir) {
     std::ifstream in(StorageVaultPath(storageDir), std::ios::binary);
+    if (!in) return DefaultStorageVaultData();
+    const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (in.bad()) return DefaultStorageVaultData();
+    return ParseStorageVaultContent(content);
+}
+
+bool ValidateStorageVaultFileAtPath(const std::filesystem::path& filePath) {
+    std::error_code ec;
+    const auto status = std::filesystem::symlink_status(filePath, ec);
+    if (ec || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) return false;
+    std::ifstream in(filePath, std::ios::binary);
     if (!in) return false;
     const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (in.bad()) return false;
     std::string storedHash;
     if (!ExtractJsonStringField(content, "content_hash", storedHash) || storedHash.empty()) return false;
-    const auto data = LoadStorageVault(storageDir);
+    const auto data = ParseStorageVaultContent(content);
     return storedHash == BuildVaultContentHash(data, FormatVaultAmount(data.balance));
+}
+
+bool ValidateStorageVaultFile(const std::filesystem::path& storageDir) {
+    return ValidateStorageVaultFileAtPath(StorageVaultPath(storageDir));
 }
 
 bool SaveStorageVault(const std::filesystem::path& storageDir, const StorageVaultData& data) {

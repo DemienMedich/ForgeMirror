@@ -1655,6 +1655,76 @@ static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
     return true;
 }
 
+static bool TestCloudStorageConflictApply(const std::filesystem::path& dir) {
+    auto fail = [](const char* message) {
+        std::cerr << "cloudStorageConflict: " << message << "\n";
+        return false;
+    };
+    std::error_code ec;
+    const auto updatesDir = dir / "meta" / "updates";
+    const auto target = dir / "meta" / "storage.json";
+    const auto conflict = updatesDir / "storage.cloud.conflict.1700000001.json";
+    const auto outsideConflict = dir / "storage.cloud.conflict.1700000002.json";
+    const auto sourceDir = dir.parent_path() / "storage_conflict_source";
+    std::filesystem::remove_all(dir, ec);
+    ec.clear();
+    std::filesystem::remove_all(sourceDir, ec);
+
+    StorageVaultData local;
+    local.balance = 10.0;
+    if (!SaveStorageVault(dir, local)) return fail("save local storage");
+    StorageVaultData cloud;
+    cloud.balance = 25.5;
+    if (!SaveStorageVault(sourceDir, cloud)) return fail("save cloud storage");
+
+    std::string originalLocal;
+    std::string cloudBytes;
+    if (!ReadFile(target, originalLocal) || !ReadFile(sourceDir / "meta" / "storage.json", cloudBytes))
+        return fail("read prepared storage files");
+    if (!WriteFile(conflict, cloudBytes) || !WriteFile(outsideConflict, cloudBytes))
+        return fail("write conflict copies");
+
+    const auto outsideResult = ApplyCloudStorageConflictCopy(dir, outsideConflict);
+    std::string unchanged;
+    if (outsideResult.ok || !ReadFile(target, unchanged) || unchanged != originalLocal)
+        return fail("reject source outside updates without mutation");
+
+    if (!WriteFile(conflict, "{\"content_hash\":\"invalid\"}")) return fail("write malformed conflict");
+    const auto malformedResult = ApplyCloudStorageConflictCopy(dir, conflict);
+    if (malformedResult.ok || !ReadFile(target, unchanged) || unchanged != originalLocal)
+        return fail("reject malformed conflict without mutation");
+    if (!WriteFile(conflict, cloudBytes)) return fail("restore valid conflict bytes");
+
+#ifdef _WIN32
+    const auto workspaceLockPath = dir / "meta" / "workspace-write.lock";
+    const HANDLE workspaceLock = CreateFileW(workspaceLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+        nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return fail("cannot hold workspace lock");
+    const auto blockedResult = ApplyCloudStorageConflictCopy(dir, conflict);
+    CloseHandle(workspaceLock);
+    if (blockedResult.ok || !ReadFile(target, unchanged) || unchanged != originalLocal)
+        return fail("respect held workspace lock");
+    for (const auto& entry : std::filesystem::directory_iterator(updatesDir, ec)) {
+        if (entry.path().filename().string().rfind("storage.local.", 0) == 0)
+            return fail("do not create backup when lock blocks operation");
+    }
+#endif
+
+    const auto applied = ApplyCloudStorageConflictCopy(dir, conflict);
+    if (!applied.ok || !applied.changed || applied.backupPaths.size() != 1)
+        return fail("apply valid conflict");
+    std::string appliedBytes;
+    std::string backupBytes;
+    if (!ReadFile(target, appliedBytes) || appliedBytes != cloudBytes ||
+        !ReadFile(applied.backupPaths.front(), backupBytes) || backupBytes != originalLocal)
+        return fail("verify applied bytes and preserved local backup");
+    if (LoadStorageVault(dir).balance != cloud.balance || !ValidateStorageVaultFile(dir))
+        return fail("verify applied vault state");
+
+    std::filesystem::remove_all(sourceDir, ec);
+    return true;
+}
+
 static bool TestCloudSpiritIcons(const std::filesystem::path& dir) {
     std::error_code ec;
     std::filesystem::path cloudRoot = dir;
@@ -1859,11 +1929,12 @@ int main() {
     std::filesystem::remove_all(tmp, ec);
     std::filesystem::create_directories(tmp, ec);
     const bool okCloudWorkspace = TestCloudDriftResolveRestore(tmp);
+    const bool okCloudStorageConflictApply = TestCloudStorageConflictApply(tmp / "storage_conflict_apply");
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
     if (okProfile && okProfileCreateTelemetry && okSpirit && okStaleProfileCreateIds && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskWriteLock && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
-        okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
+        okCloudOverwrite && okCloudSpirits && okCloudWorkspace && okCloudStorageConflictApply) {
         std::cout << "smoke_core: OK\n";
         return 0;
     }
@@ -1913,6 +1984,7 @@ int main() {
               << " vault=" << okVault
               << " cloudOverwrite=" << okCloudOverwrite
               << " cloudSpirits=" << okCloudSpirits
-              << " cloudWorkspace=" << okCloudWorkspace << "\n";
+              << " cloudWorkspace=" << okCloudWorkspace
+              << " cloudStorageConflictApply=" << okCloudStorageConflictApply << "\n";
     return 1;
 }

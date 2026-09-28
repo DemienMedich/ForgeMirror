@@ -290,19 +290,18 @@ static void DrawStorageConflictModal(GuiState& state) {
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
         if (ImGui::Button(u8"Принять облачную", ImVec2(200.0f, 0.0f))) {
             if (!state.storageConflictPath.empty()) {
-                std::error_code ec;
-                const auto target = state.storageDir / "meta" / "storage.json";
-                std::filesystem::copy_file(state.storageConflictPath, target,
-                                           std::filesystem::copy_options::overwrite_existing, ec);
-                if (!ec) {
+                const auto result = ApplyCloudStorageConflictCopy(state.storageDir, state.storageConflictPath);
+                if (result.ok) {
                     state.vault = LoadStorageVault(state.storageDir);
                     SyncVaultBuffers(state);
-                    SetStatus(state, u8"Применена облачная версия хранилища.", 0.45f, 0.9f, 0.45f);
+                    SetStatus(state, result.message, 0.45f, 0.9f, 0.45f, 1.0f,
+                              AppLogLevel::Info, "CloudStorageConflict");
+                    ImGui::CloseCurrentPopup();
                 } else {
-                    SetStatus(state, u8"Не удалось применить облачную версию.", 1.0f, 0.75f, 0.35f);
+                    SetStatus(state, result.message, 1.0f, 0.75f, 0.35f, 1.0f,
+                              AppLogLevel::Warning, "CloudStorageConflict");
                 }
             }
-            ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
         if (ImGui::Button(u8"Оставить локальную", ImVec2(200.0f, 0.0f))) {

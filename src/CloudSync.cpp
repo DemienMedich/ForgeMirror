@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -97,6 +98,54 @@ bool PathsOverlap(const std::filesystem::path& a, const std::filesystem::path& b
     if (sa.rfind(sb, 0) == 0) return true; // a inside b
     if (sb.rfind(sa, 0) == 0) return true; // b inside a
     return false;
+}
+
+bool HasReparsePoint(const std::filesystem::path& path) {
+    std::error_code ec;
+    const auto absolute = std::filesystem::absolute(path, ec).lexically_normal();
+    if (ec || absolute.empty()) return true;
+#ifdef _WIN32
+    auto check = [](const std::filesystem::path& item) {
+        const DWORD attributes = GetFileAttributesW(item.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+    };
+    auto current = absolute.root_path();
+    if (current.empty() || check(current)) return true;
+    for (const auto& part : absolute.relative_path()) {
+        current /= part;
+        if (check(current)) return true;
+    }
+#else
+    std::filesystem::path current = absolute.root_path();
+    for (const auto& part : absolute.relative_path()) {
+        current /= part;
+        const auto status = std::filesystem::symlink_status(current, ec);
+        if (ec || std::filesystem::is_symlink(status)) return true;
+    }
+#endif
+    return false;
+}
+
+bool ReadFileBytes(const std::filesystem::path& path, std::string& bytes) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return false;
+    bytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    return !input.bad();
+}
+
+bool SameCanonicalPath(const std::filesystem::path& first, const std::filesystem::path& second) {
+    auto a = CanonicalSafe(first);
+    auto b = CanonicalSafe(second);
+    if (a.empty() || b.empty()) return false;
+    auto aText = a.generic_string();
+    auto bText = b.generic_string();
+#ifdef _WIN32
+    std::transform(aText.begin(), aText.end(), aText.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(bText.begin(), bText.end(), bText.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+    return aText == bText;
 }
 
 bool ParseBool(const std::string& text, bool fallback) {
@@ -409,6 +458,146 @@ bool SaveStorageConflictCopy(const std::filesystem::path& cloudStorage,
     const auto ts = NowSeconds();
     outPath = targetDir / ("storage.cloud.conflict." + std::to_string(ts) + ".json");
     return std::filesystem::copy_file(cloudStorage, outPath, std::filesystem::copy_options::overwrite_existing, ec);
+}
+
+CloudWorkspaceResolveResult ApplyCloudStorageConflictCopyImpl(const std::filesystem::path& storageDir,
+                                                              const std::filesystem::path& conflictPath) {
+    CloudWorkspaceResolveResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
+
+    const auto updatesDir = storageDir / "meta" / "updates";
+    const auto target = storageDir / "meta" / "storage.json";
+    const auto sourceParent = conflictPath.parent_path();
+    const auto name = conflictPath.filename().string();
+    constexpr const char* prefix = "storage.cloud.conflict.";
+    const size_t prefixLength = std::char_traits<char>::length(prefix);
+    if (name.rfind(prefix, 0) != 0 || name.size() <= prefixLength + 5 ||
+        name.compare(name.size() - 5, 5, ".json") != 0) {
+        result.message = u8"Файл не является сохранённой копией конфликта storage.json.";
+        return result;
+    }
+    const auto stamp = name.substr(prefixLength, name.size() - prefixLength - 5);
+    if (stamp.empty() || !std::all_of(stamp.begin(), stamp.end(),
+            [](unsigned char c) { return std::isdigit(c) != 0; })) {
+        result.message = u8"Имя копии конфликта storage.json некорректно.";
+        return result;
+    }
+    if (HasReparsePoint(storageDir) || HasReparsePoint(updatesDir) || HasReparsePoint(conflictPath) ||
+        HasReparsePoint(target) || !SameCanonicalPath(sourceParent, updatesDir) ||
+        !IsPathInsideDirectory(conflictPath, updatesDir)) {
+        result.message = u8"Путь копии конфликта или storage.json проходит через ссылку либо находится вне meta/updates.";
+        return result;
+    }
+    std::error_code ec;
+    const auto sourceStatus = std::filesystem::symlink_status(conflictPath, ec);
+    if (ec || !std::filesystem::is_regular_file(sourceStatus) ||
+        !ValidateStorageVaultFileAtPath(conflictPath)) {
+        result.message = u8"Сохранённая облачная копия storage.json повреждена или недоступна.";
+        return result;
+    }
+    const auto targetStatus = std::filesystem::symlink_status(target, ec);
+    if (ec || !std::filesystem::is_regular_file(targetStatus) ||
+        !ValidateStorageVaultFileAtPath(target)) {
+        result.message = u8"Локальный storage.json повреждён или недоступен; облачная версия не применена.";
+        return result;
+    }
+
+    std::string sourceBytes;
+    std::string localBytes;
+    if (!ReadFileBytes(conflictPath, sourceBytes) || !ReadFileBytes(target, localBytes)) {
+        result.message = u8"Не удалось прочитать исходные версии storage.json.";
+        return result;
+    }
+
+    std::int64_t backupTimestamp = NowSeconds();
+    std::filesystem::path backupPath;
+    do {
+        backupPath = updatesDir / ("storage.local." + std::to_string(backupTimestamp++) + ".json");
+    } while (std::filesystem::exists(backupPath, ec) && !ec);
+    ec.clear();
+    if (!std::filesystem::copy_file(target, backupPath, std::filesystem::copy_options::none, ec)) {
+        result.message = u8"Не удалось сохранить локальную копию storage.json; облачная версия не применена.";
+        return result;
+    }
+    result.backupPaths.push_back(backupPath);
+    std::string backupBytes;
+    if (!ReadFileBytes(backupPath, backupBytes) || backupBytes != localBytes) {
+        result.message = u8"Локальная копия storage.json изменилась во время резервирования; облачная версия не применена.";
+        return result;
+    }
+
+    static std::atomic<std::uint64_t> temporarySequence{0};
+    auto makeTemporaryPath = [&] {
+        auto temporary = target;
+        temporary += ".conflict-" + std::to_string(NowSeconds()) + "-" +
+            std::to_string(temporarySequence.fetch_add(1, std::memory_order_relaxed)) + ".tmp";
+        return temporary;
+    };
+    auto staged = makeTemporaryPath();
+    if (!std::filesystem::copy_file(conflictPath, staged, std::filesystem::copy_options::none, ec)) {
+        result.message = u8"Не удалось подготовить облачную версию storage.json.";
+        return result;
+    }
+    std::string stagedBytes;
+    if (!ReadFileBytes(staged, stagedBytes) || stagedBytes != sourceBytes ||
+        !ValidateStorageVaultFileAtPath(staged)) {
+        std::filesystem::remove(staged, ec);
+        result.message = u8"Облачная версия storage.json изменилась после проверки; откройте конфликт заново.";
+        return result;
+    }
+    std::string latestLocalBytes;
+    if (!ReadFileBytes(target, latestLocalBytes) || latestLocalBytes != localBytes) {
+        std::filesystem::remove(staged, ec);
+        result.message = u8"Локальный storage.json изменился после сравнения; откройте конфликт заново.";
+        return result;
+    }
+
+#ifdef _WIN32
+    const bool replaced = MoveFileExW(staged.c_str(), target.c_str(),
+        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (!replaced) std::filesystem::remove(staged, ec);
+#else
+    std::filesystem::rename(staged, target, ec);
+    const bool replaced = !ec;
+    if (ec) std::filesystem::remove(staged, ec);
+#endif
+    if (!replaced) {
+        result.message = u8"Не удалось атомарно применить облачный storage.json.";
+        return result;
+    }
+
+    std::string appliedBytes;
+    if (!ReadFileBytes(target, appliedBytes) || appliedBytes != sourceBytes ||
+        !ValidateStorageVaultFileAtPath(target)) {
+        auto restoreStage = makeTemporaryPath();
+        ec.clear();
+        bool restored = std::filesystem::copy_file(backupPath, restoreStage,
+            std::filesystem::copy_options::none, ec);
+        if (restored) {
+#ifdef _WIN32
+            restored = MoveFileExW(restoreStage.c_str(), target.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+            std::filesystem::rename(restoreStage, target, ec);
+            restored = !ec;
+#endif
+        }
+        if (!restored) std::filesystem::remove(restoreStage, ec);
+        result.message = restored
+            ? std::string(u8"Применение не прошло проверку; исходный storage.json восстановлен из ") + backupPath.filename().u8string() + "."
+            : std::string(u8"Не удалось проверить или восстановить storage.json. Локальная копия сохранена в ") + backupPath.u8string() + ".";
+        return result;
+    }
+
+    result.ok = true;
+    result.changed = true;
+    result.message = std::string(u8"Облачная версия storage.json применена. Локальная копия сохранена в ") +
+        backupPath.filename().u8string() + ".";
+    return result;
 }
 
 std::filesystem::path CloudConfigPath(const std::filesystem::path& storageDir) {
@@ -1172,6 +1361,11 @@ int CompareVersions(const std::string& a, const std::string& b) {
 }
 
 } // namespace
+
+CloudWorkspaceResolveResult ApplyCloudStorageConflictCopy(const std::filesystem::path& storageDir,
+                                                          const std::filesystem::path& conflictPath) {
+    return ApplyCloudStorageConflictCopyImpl(storageDir, conflictPath);
+}
 
 std::filesystem::path ResolveCloudRootPath(const CloudSyncConfig& config, const std::filesystem::path& storageDir) {
     return ResolveCloudRoot(config, storageDir);
