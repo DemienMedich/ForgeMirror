@@ -4953,6 +4953,44 @@ static bool TestDisplaySettings(QApplication& app) {
     return legacyAfterFile.open(QIODevice::ReadOnly) && legacyAfterFile.readAll() == legacyBytesBefore;
 }
 
+static bool TestQtModuleToggleParity() {
+    struct RestoreModuleEnvironment {
+        bool wasSet = qEnvironmentVariableIsSet("FORGEMIRROR_DISABLE_MODULES");
+        QByteArray previous = qgetenv("FORGEMIRROR_DISABLE_MODULES");
+        ~RestoreModuleEnvironment() {
+            if (wasSet) qputenv("FORGEMIRROR_DISABLE_MODULES", previous);
+            else qunsetenv("FORGEMIRROR_DISABLE_MODULES");
+        }
+    } restore;
+    if (!qputenv("FORGEMIRROR_DISABLE_MODULES",
+        "tasks,pipeline,achievements,shortcuts,pomodoro,cloud,view3d,professions")) return false;
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    auto settings = LoadQtDisplaySettings(directory);
+    settings.lastPage = 13; // Cloud was selected before its module was disabled.
+    if (!SaveQtDisplaySettings(directory, settings)) return false;
+    QtWorkspace workspace(directory);
+    if (workspace.modules.tasks || workspace.modules.pipeline || workspace.modules.achievements ||
+        workspace.modules.shortcuts || workspace.modules.pomodoro || workspace.modules.cloud ||
+        workspace.modules.view3d || workspace.modules.professions) return false;
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* title = window.findChild<QLabel*>("title");
+    auto* achievementButton = window.findChild<QPushButton*>("showAchievements");
+    if (!navigation || !title || !achievementButton) return false;
+    for (int page : {1, 4, 5, 7, 8, 11, 13, 14, 15})
+        if (!navigation->item(page)->isHidden()) return false;
+    if (!achievementButton->isHidden()) return false;
+    navigation->setCurrentRow(13);
+    QApplication::processEvents();
+    if (navigation->currentRow() != 0 || title->text() != QString::fromUtf8("Профиль")) return false;
+    window.close();
+    return true;
+}
+
 static bool TestQtDeadlineEvaluation() {
     const std::int64_t now = 1800000000;
     TaskEntry overdue; overdue.id = "private-overdue-id"; overdue.deadlineAt = now - 1;
@@ -5116,6 +5154,7 @@ int main(int argc, char** argv) {
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
+    if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }

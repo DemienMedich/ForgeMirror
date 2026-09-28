@@ -2321,6 +2321,7 @@ void QtWindow::render() {
     navigation_->item(Pomodoro)->setHidden(!workspace_.modules.pomodoro);
     navigation_->item(Shortcuts)->setHidden(!workspace_.modules.shortcuts);
     navigation_->item(Professions)->setHidden(!workspace_.modules.professions || !admin_);
+    navigation_->item(Cloud)->setHidden(!workspace_.modules.cloud);
     for (int page : {Projects, Statistics, Rules, Vault, Banner, AdminProfileStats}) navigation_->item(page)->setHidden(!admin_);
     navigation_->item(Audit)->setHidden(!workspace_.modules.tasks);
     int page = navigation_->currentRow();
@@ -2439,7 +2440,7 @@ void QtWindow::render() {
     profileSkillFilters_->setVisible(page == ProfilePage && profileMode == 1);
     profileAnalytics_->setVisible(page == ProfilePage && profileMode == 1);
     profileTaskActions_->setVisible(page == ProfilePage && profileMode == 3 && workspace_.modules.tasks);
-    achievements_->setVisible(page == ProfilePage && profileMode != 2 && profileMode != 3);
+    achievements_->setVisible(page == ProfilePage && profileMode != 2 && profileMode != 3 && workspace_.modules.achievements);
     achievements_->setEnabled(!profiles_->currentData().toString().isEmpty());
     removeSpirit_->setVisible(page == ProfilePage && unlocked);
     exportReport_->setVisible(admin_ && (page == Statistics || page == AdminProfileStats));
@@ -5072,7 +5073,7 @@ void QtWindow::createEntry(bool edit) {
 }
 
 void QtWindow::previewCloudPush() {
-    if (!requireAdmin() || navigation_->currentRow() != Cloud) return;
+    if (!workspace_.modules.cloud || !requireAdmin() || navigation_->currentRow() != Cloud) return;
     const auto config = LoadCloudSyncConfig(workspace_.directory);
     const auto preview = PreviewQtCloudWorkspacePush(config, workspace_.directory, CloudRole::Admin);
     if (!preview.sync.ok) {
@@ -5105,6 +5106,7 @@ void QtWindow::previewCloudPush() {
 }
 
 void QtWindow::pullCloud() {
+    if (!workspace_.modules.cloud) return;
     const auto config = LoadCloudSyncConfig(workspace_.directory);
     const auto root = ResolveCloudRootPath(config, workspace_.directory);
     std::error_code ec;
@@ -5150,6 +5152,10 @@ void QtWindow::pullCloud() {
 
 void QtWindow::runAutomaticCloudSync() {
     const auto now = QDateTime::currentSecsSinceEpoch();
+    if (!workspace_.modules.cloud) {
+        lastCloudAutoSyncAt_ = now;
+        return;
+    }
     const auto config = LoadCloudSyncConfig(workspace_.directory);
     if (!config.enabled || !config.autoSyncEnabled) {
         lastCloudAutoSyncAt_ = now;
@@ -5197,6 +5203,7 @@ void QtWindow::runAutomaticCloudSync() {
 }
 
 void QtWindow::downloadCloudRelease() {
+    if (!workspace_.modules.cloud) return;
     const auto config = LoadCloudSyncConfig(workspace_.directory);
     const auto manifest = LoadCloudManifest(config, workspace_.directory);
     if (!IsUpdateAvailable(manifest, APP_VERSION)) {
@@ -5217,6 +5224,7 @@ void QtWindow::downloadCloudRelease() {
 }
 
 void QtWindow::launchCloudRelease() {
+    if (!workspace_.modules.cloud) return;
     const auto config = LoadCloudSyncConfig(workspace_.directory);
     const auto manifest = LoadCloudManifest(config, workspace_.directory);
     const auto target = QtCloudReleaseTargetPath(workspace_.directory, manifest);
@@ -5245,13 +5253,14 @@ void QtWindow::launchCloudRelease() {
 }
 
 void QtWindow::resolveCloudConflict() {
+    if (!workspace_.modules.cloud) return;
     if (!ShowCloudConflictResolver(this, workspace_.directory)) return;
     profileSession_.lock();
     if (reload()) statusBar()->showMessage(QString::fromUtf8("Локальная версия обновлена; облако не изменялось."), 15000);
 }
 
 void QtWindow::resolveStorageConflict() {
-    if (!requireAdmin()) return;
+    if (!workspace_.modules.cloud || !requireAdmin()) return;
     bool localChanged = false;
     if (!ShowQtStorageConflictResolver(this, workspace_.directory, &localChanged)) return;
     if (localChanged) { profileSession_.lock(); if (!reload()) return; }
