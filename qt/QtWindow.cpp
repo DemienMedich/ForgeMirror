@@ -97,6 +97,18 @@ private:
     bool tiled_ = false;
 };
 
+static void applyQtWindowLayoutGeometry(QWidget* root, const QtDisplaySettings& settings) {
+    if (!root || !root->layout()) return;
+    auto* layout = root->layout();
+    const auto metric = [](double value, double maximum, double fallback) {
+        return std::isfinite(value) ? qRound(std::clamp(value, 0.0, maximum)) : qRound(fallback);
+    };
+    const int horizontal = metric(settings.windowPaddingX, 32.0, 16.0);
+    const int vertical = metric(settings.windowPaddingY, 32.0, 8.0);
+    layout->setContentsMargins(horizontal, vertical, horizontal, vertical);
+    layout->setSpacing(metric(settings.itemSpacingY, 32.0, 6.0));
+}
+
 class QtAnalogClock final : public QWidget {
 public:
     explicit QtAnalogClock(QWidget* parent = nullptr) : QWidget(parent) {
@@ -539,8 +551,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     backgroundSurface_ = new QtBackgroundSurface(this);
     auto* root = backgroundSurface_;
     auto* layout = new QVBoxLayout(root);
-    layout->setContentsMargins(16, 8, 16, 8);
-    layout->setSpacing(8);
+    applyQtWindowLayoutGeometry(root, displaySettings_);
     auto* header = new QHBoxLayout;
     dragHandle_ = new WindowDragHandle;
     dragHandle_->setObjectName("windowDragHandle");
@@ -687,6 +698,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* displaySettings = menu->addAction(QString::fromUtf8("Настройки интерфейса Qt"), this, [this] {
         if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
         ApplyQtDisplaySettings(*qApp, displaySettings_);
+        applyQtWindowLayoutGeometry(backgroundSurface_, displaySettings_);
         setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
         dragHandle_->setVisible(!displaySettings_.decorated);

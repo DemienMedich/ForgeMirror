@@ -37,6 +37,24 @@ QString normalizeBackgroundPath(QString value) {
 }
 int normalizedScale(int value) { for (int allowed : {90, 100, 110, 125}) if (value == allowed) return value; return 100; }
 int normalizedOpacity(int value) { return std::clamp(value, 60, 100); }
+double boundedMetric(double value, double maximum, double fallback) {
+    return std::isfinite(value) ? std::clamp(value, 0.0, maximum) : fallback;
+}
+double parseMetric(const QString& value, double maximum, double fallback) {
+    bool ok = false;
+    const double parsed = value.toDouble(&ok);
+    return ok ? boundedMetric(parsed, maximum, fallback) : fallback;
+}
+bool readMetricPair(const QString& text, double maximum, double* x, double* y) {
+    const auto parts = text.split(QRegularExpression(QStringLiteral("[ ,\\t]+")), Qt::SkipEmptyParts);
+    if (parts.size() != 2 || !x || !y) return false;
+    bool xOk = false, yOk = false;
+    const double parsedX = parts[0].toDouble(&xOk), parsedY = parts[1].toDouble(&yOk);
+    if (!xOk || !yOk || !std::isfinite(parsedX) || !std::isfinite(parsedY)) return false;
+    *x = boundedMetric(parsedX, maximum, *x);
+    *y = boundedMetric(parsedY, maximum, *y);
+    return true;
+}
 int nearestValue(int value, std::initializer_list<int> values) {
     return *std::min_element(values.begin(), values.end(), [value](int a, int b) {
         return std::abs(a - value) < std::abs(b - value);
@@ -107,6 +125,16 @@ QJsonObject presetObject(const QtLayoutPreset& preset) {
         {"windowOpacityPercent", normalizedOpacity(preset.windowOpacityPercent)},
         {"spacingPercent", nearestValue(preset.spacingPercent, {80, 90, 100, 110, 120})},
         {"cornerRadius", nearestValue(preset.cornerRadius, {0, 4, 8, 12})},
+        {"windowRounding", boundedMetric(preset.windowRounding, 24.0, 4.0)},
+        {"frameRounding", boundedMetric(preset.frameRounding, 24.0, 4.0)},
+        {"scrollbarRounding", boundedMetric(preset.scrollbarRounding, 24.0, 6.0)},
+        {"grabRounding", boundedMetric(preset.grabRounding, 24.0, 4.0)},
+        {"windowPaddingX", boundedMetric(preset.windowPaddingX, 32.0, 16.0)},
+        {"windowPaddingY", boundedMetric(preset.windowPaddingY, 32.0, 8.0)},
+        {"framePaddingX", boundedMetric(preset.framePaddingX, 24.0, 8.0)},
+        {"framePaddingY", boundedMetric(preset.framePaddingY, 24.0, 0.0)},
+        {"itemSpacingX", boundedMetric(preset.itemSpacingX, 32.0, 8.0)},
+        {"itemSpacingY", boundedMetric(preset.itemSpacingY, 32.0, 6.0)},
         {"compactRows", preset.compactRows}, {"fullscreen", preset.fullscreen}, {"decorated", preset.decorated},
         {"windowBackgrounds", backgrounds}, {"backgroundAlpha", std::clamp(preset.backgroundAlpha, 0.0, 1.0)},
         {"backgroundTiled", preset.backgroundTiled}, {"backgroundTileScale", std::clamp(preset.backgroundTileScale, 0.25, 3.0)}};
@@ -118,6 +146,16 @@ QtLayoutPreset presetFromObject(const QJsonObject& object) {
     preset.windowOpacityPercent = normalizedOpacity(object.value("windowOpacityPercent").toInt(100));
     preset.spacingPercent = nearestValue(object.value("spacingPercent").toInt(100), {80, 90, 100, 110, 120});
     preset.cornerRadius = nearestValue(object.value("cornerRadius").toInt(4), {0, 4, 8, 12});
+    preset.windowRounding = boundedMetric(object.value("windowRounding").toDouble(4.0), 24.0, 4.0);
+    preset.frameRounding = boundedMetric(object.value("frameRounding").toDouble(4.0), 24.0, 4.0);
+    preset.scrollbarRounding = boundedMetric(object.value("scrollbarRounding").toDouble(6.0), 24.0, 6.0);
+    preset.grabRounding = boundedMetric(object.value("grabRounding").toDouble(4.0), 24.0, 4.0);
+    preset.windowPaddingX = boundedMetric(object.value("windowPaddingX").toDouble(16.0), 32.0, 16.0);
+    preset.windowPaddingY = boundedMetric(object.value("windowPaddingY").toDouble(8.0), 32.0, 8.0);
+    preset.framePaddingX = boundedMetric(object.value("framePaddingX").toDouble(8.0), 24.0, 8.0);
+    preset.framePaddingY = boundedMetric(object.value("framePaddingY").toDouble(0.0), 24.0, 0.0);
+    preset.itemSpacingX = boundedMetric(object.value("itemSpacingX").toDouble(8.0), 32.0, 8.0);
+    preset.itemSpacingY = boundedMetric(object.value("itemSpacingY").toDouble(6.0), 32.0, 6.0);
     preset.compactRows = object.value("compactRows").toBool();
     preset.fullscreen = object.value("fullscreen").toBool();
     preset.decorated = object.value("decorated").toBool(true);
@@ -173,6 +211,18 @@ bool readLegacyLayoutPreset(const std::filesystem::path& directory, const QStrin
     }
     const double rounding = source.value("frameRounding", 4.0).toDouble(&ok);
     if (ok && std::isfinite(rounding)) result.cornerRadius = nearestValue(int(std::lround(std::clamp(rounding, 0.0, 12.0))), {0, 4, 8, 12});
+    auto readLegacyStyleMetric = [&source](const char* key, double maximum, double fallback) {
+        bool metricOk = false;
+        const double value = source.value(QLatin1String(key), fallback).toDouble(&metricOk);
+        return metricOk && std::isfinite(value) ? std::clamp(value, 0.0, maximum) : fallback;
+    };
+    result.windowRounding = readLegacyStyleMetric("windowRounding", 24.0, result.windowRounding);
+    result.frameRounding = readLegacyStyleMetric("frameRounding", 24.0, result.frameRounding);
+    result.scrollbarRounding = readLegacyStyleMetric("scrollbarRounding", 24.0, result.scrollbarRounding);
+    result.grabRounding = readLegacyStyleMetric("grabRounding", 24.0, result.grabRounding);
+    readMetricPair(source.value("windowPadding").toString(), 32.0, &result.windowPaddingX, &result.windowPaddingY);
+    readMetricPair(source.value("framePadding").toString(), 24.0, &result.framePaddingX, &result.framePaddingY);
+    readMetricPair(source.value("itemSpacing").toString(), 32.0, &result.itemSpacingX, &result.itemSpacingY);
     result.fullscreen = source.value("windowFullscreen", false).toBool();
     result.decorated = source.value("windowDecorated", true).toBool();
     result.backgroundAlpha = std::clamp(source.value("backgroundAlpha", 0.25).toDouble(), 0.0, 1.0);
@@ -413,6 +463,20 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         if (section == "ui" && key == "windowDecorated") out.decorated = value != "0";
         if (section == "style") {
             if (key == "alpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.windowOpacityPercent = int(std::lround(std::clamp(alpha, 0.6, 1.0) * 100.0)); }
+            else if (key == "windowRounding" || key == "frameRounding" || key == "scrollbarRounding" || key == "grabRounding") {
+                bool ok = false;
+                const double metric = value.toDouble(&ok);
+                if (ok && std::isfinite(metric)) {
+                    const auto clamped = std::clamp(metric, 0.0, 24.0);
+                    if (key == "windowRounding") out.windowRounding = clamped;
+                    else if (key == "frameRounding") out.frameRounding = clamped;
+                    else if (key == "scrollbarRounding") out.scrollbarRounding = clamped;
+                    else out.grabRounding = clamped;
+                }
+            }
+            else if (key == "windowPadding") readMetricPair(value, 32.0, &out.windowPaddingX, &out.windowPaddingY);
+            else if (key == "framePadding") readMetricPair(value, 24.0, &out.framePaddingX, &out.framePaddingY);
+            else if (key == "itemSpacing") readMetricPair(value, 32.0, &out.itemSpacingX, &out.itemSpacingY);
             else if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
             else if (key == "backgroundTiled") out.backgroundTiled = value == "1" || value.compare("true", Qt::CaseInsensitive) == 0;
             else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
@@ -431,6 +495,16 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         }
         if (section == "qt") {
             if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "windowOpacityPercent") out.windowOpacityPercent = normalizedOpacity(value.toInt()); else if (key == "spacingPercent") out.spacingPercent = nearestValue(value.toInt(), {80, 90, 100, 110, 120}); else if (key == "cornerRadius") out.cornerRadius = nearestValue(value.toInt(), {0, 4, 8, 12}); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
+            else if (key == "windowRounding") out.windowRounding = parseMetric(value, 24.0, out.windowRounding);
+            else if (key == "frameRounding") out.frameRounding = parseMetric(value, 24.0, out.frameRounding);
+            else if (key == "scrollbarRounding") out.scrollbarRounding = parseMetric(value, 24.0, out.scrollbarRounding);
+            else if (key == "grabRounding") out.grabRounding = parseMetric(value, 24.0, out.grabRounding);
+            else if (key == "windowPaddingX") out.windowPaddingX = parseMetric(value, 32.0, out.windowPaddingX);
+            else if (key == "windowPaddingY") out.windowPaddingY = parseMetric(value, 32.0, out.windowPaddingY);
+            else if (key == "framePaddingX") out.framePaddingX = parseMetric(value, 24.0, out.framePaddingX);
+            else if (key == "framePaddingY") out.framePaddingY = parseMetric(value, 24.0, out.framePaddingY);
+            else if (key == "itemSpacingX") out.itemSpacingX = parseMetric(value, 32.0, out.itemSpacingX);
+            else if (key == "itemSpacingY") out.itemSpacingY = parseMetric(value, 32.0, out.itemSpacingY);
             else if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
             else if (key == "backgroundTiled") out.backgroundTiled = value == "1";
             else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
@@ -494,6 +568,19 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     if (begin < 0) { if (!lines.isEmpty() && !lines.back().isEmpty()) lines << ""; begin = lines.size(); lines << "[qt]"; end = lines.size(); }
     auto set = [&](const QString& key, const QString& value) { for (int i = begin + 1; i < end; ++i) if (lines[i].section('=', 0, 0).trimmed() == key) { lines[i] = key + '=' + value; return; } lines.insert(end++, key + '=' + value); };
     set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("windowOpacityPercent", QString::number(normalizedOpacity(settings.windowOpacityPercent))); set("spacingPercent", QString::number(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))); set("cornerRadius", QString::number(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
+    const auto metricText = [](double value, double maximum, double fallback) {
+        return QString::number(boundedMetric(value, maximum, fallback), 'f', 1);
+    };
+    set("windowRounding", metricText(settings.windowRounding, 24.0, 4.0));
+    set("frameRounding", metricText(settings.frameRounding, 24.0, 4.0));
+    set("scrollbarRounding", metricText(settings.scrollbarRounding, 24.0, 6.0));
+    set("grabRounding", metricText(settings.grabRounding, 24.0, 4.0));
+    set("windowPaddingX", metricText(settings.windowPaddingX, 32.0, 16.0));
+    set("windowPaddingY", metricText(settings.windowPaddingY, 32.0, 8.0));
+    set("framePaddingX", metricText(settings.framePaddingX, 24.0, 8.0));
+    set("framePaddingY", metricText(settings.framePaddingY, 24.0, 0.0));
+    set("itemSpacingX", metricText(settings.itemSpacingX, 32.0, 8.0));
+    set("itemSpacingY", metricText(settings.itemSpacingY, 32.0, 6.0));
     set("backgroundAlpha", QString::number(std::isfinite(settings.backgroundAlpha) ? std::clamp(settings.backgroundAlpha, 0.0, 1.0) : 0.25, 'f', 2));
     set("backgroundTiled", settings.backgroundTiled ? "1" : "0");
     set("backgroundTileScale", QString::number(std::isfinite(settings.backgroundTileScale) ? std::clamp(settings.backgroundTileScale, 0.25, 3.0) : 1.0, 'f', 2));
@@ -670,7 +757,9 @@ void ApplyQtDisplaySettings(QApplication& app, const QtDisplaySettings& settings
     double base = app.property("forgeBasePointSize").toDouble();
     if (base <= 0.0) { base = app.font().pointSizeF(); app.setProperty("forgeBasePointSize", base); }
     auto font = app.font(); font.setPointSizeF(base * normalizedScale(settings.scalePercent) / 100.0); app.setFont(font);
-    ApplyQtLayoutMetrics(app, settings.spacingPercent, settings.cornerRadius);
+    ApplyQtLayoutMetrics(app, settings.spacingPercent, settings.cornerRadius,
+        settings.windowRounding, settings.frameRounding, settings.scrollbarRounding, settings.grabRounding,
+        settings.framePaddingX, settings.framePaddingY, settings.itemSpacingX, settings.itemSpacingY);
 }
 bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings) {
     QDialog dialog(parent); dialog.setObjectName("qtDisplaySettings"); dialog.setWindowTitle(QString::fromUtf8("Настройки интерфейса Qt")); dialog.setMinimumWidth(420);
@@ -692,6 +781,61 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* rounding = new QComboBox; rounding->setObjectName("qtCornerRadius");
     for (int value : {0, 4, 8, 12}) rounding->addItem(QString::number(value) + QString::fromUtf8(" px"), value);
     rounding->setCurrentIndex(std::max(0, rounding->findData(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))));
+    std::array<QDoubleSpinBox*, 10> geometry{};
+    const std::array<const char*, 10> geometryNames{{
+        "qtWindowRounding", "qtFrameRounding", "qtScrollbarRounding", "qtGrabRounding",
+        "qtWindowPaddingX", "qtWindowPaddingY", "qtFramePaddingX", "qtFramePaddingY",
+        "qtItemSpacingX", "qtItemSpacingY"}};
+    const std::array<QString, 10> geometryLabels{{
+        QString::fromUtf8("Скругление окна"), QString::fromUtf8("Скругление элементов"),
+        QString::fromUtf8("Скругление полосы прокрутки"), QString::fromUtf8("Скругление захвата ползунка"),
+        QString::fromUtf8("Отступ окна по горизонтали"), QString::fromUtf8("Отступ окна по вертикали"),
+        QString::fromUtf8("Внутренний отступ по горизонтали"), QString::fromUtf8("Внутренний отступ по вертикали"),
+        QString::fromUtf8("Интервал по горизонтали"), QString::fromUtf8("Интервал по вертикали")}};
+    const std::array<double, 10> geometryValues{{settings.windowRounding, settings.frameRounding,
+        settings.scrollbarRounding, settings.grabRounding, settings.windowPaddingX, settings.windowPaddingY,
+        settings.framePaddingX, settings.framePaddingY, settings.itemSpacingX, settings.itemSpacingY}};
+    const std::array<double, 10> geometryMax{{24.0, 24.0, 24.0, 24.0, 32.0, 32.0, 24.0, 24.0, 32.0, 32.0}};
+    for (size_t i = 0; i < geometry.size(); ++i) {
+        auto* spin = new QDoubleSpinBox;
+        spin->setObjectName(QString::fromLatin1(geometryNames[i]));
+        spin->setRange(0.0, geometryMax[i]);
+        spin->setDecimals(1);
+        spin->setSingleStep(0.5);
+        spin->setSuffix(QString::fromUtf8(" px"));
+        spin->setValue(boundedMetric(geometryValues[i], geometryMax[i], 0.0));
+        spin->setAccessibleName(geometryLabels[i]);
+        geometry[i] = spin;
+    }
+    QObject::connect(rounding, &QComboBox::currentIndexChanged, &dialog, [geometry, rounding](int) {
+        const double commonRadius = rounding->currentData().toInt();
+        geometry[0]->setValue(commonRadius);
+        geometry[1]->setValue(commonRadius);
+    });
+    auto* geometryToggle = new QToolButton;
+    geometryToggle->setObjectName("qtAdvancedGeometryToggle");
+    geometryToggle->setText(QString::fromUtf8("Подробная геометрия интерфейса"));
+    geometryToggle->setCheckable(true);
+    geometryToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    auto* geometryGroup = new QGroupBox(QString::fromUtf8("Параметры геометрии"));
+    geometryGroup->setObjectName("qtAdvancedGeometry");
+    auto* geometryForm = new QFormLayout(geometryGroup);
+    for (size_t i = 0; i < geometry.size(); ++i) geometryForm->addRow(geometryLabels[i], geometry[i]);
+    geometryGroup->setVisible(false);
+    QObject::connect(geometryToggle, &QToolButton::toggled, geometryGroup, &QWidget::setVisible);
+    auto applyGeometry = [geometry](const QtLayoutPreset& preset) {
+        const std::array<double, 10> values{{preset.windowRounding, preset.frameRounding,
+            preset.scrollbarRounding, preset.grabRounding, preset.windowPaddingX, preset.windowPaddingY,
+            preset.framePaddingX, preset.framePaddingY, preset.itemSpacingX, preset.itemSpacingY}};
+        for (size_t i = 0; i < geometry.size(); ++i) geometry[i]->setValue(values[i]);
+    };
+    auto readGeometry = [geometry](QtLayoutPreset& preset) {
+        preset.windowRounding = geometry[0]->value(); preset.frameRounding = geometry[1]->value();
+        preset.scrollbarRounding = geometry[2]->value(); preset.grabRounding = geometry[3]->value();
+        preset.windowPaddingX = geometry[4]->value(); preset.windowPaddingY = geometry[5]->value();
+        preset.framePaddingX = geometry[6]->value(); preset.framePaddingY = geometry[7]->value();
+        preset.itemSpacingX = geometry[8]->value(); preset.itemSpacingY = geometry[9]->value();
+    };
     auto* compact = new QCheckBox(QString::fromUtf8("Компактные строки таблиц")); compact->setObjectName("qtCompactRows"); compact->setChecked(settings.compactRows);
     auto* fullscreen = new QCheckBox(QString::fromUtf8("Полноэкранный режим (F11)")); fullscreen->setObjectName("qtFullscreen"); fullscreen->setChecked(settings.fullscreen);
     auto* decorated = new QCheckBox(QString::fromUtf8("Показывать рамку окна")); decorated->setObjectName("qtDecorated"); decorated->setChecked(settings.decorated);
@@ -767,7 +911,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* notice = new QLabel; notice->setObjectName("qtSettingsNotice"); notice->setWordWrap(true);
     QString presetError;
     QObject::connect(applyBuiltInPreset, &QPushButton::clicked, &dialog,
-        [builtInPreset, scale, opacity, spacing, rounding, compact, decorated, &backgroundDraft, updateBackgroundsButton, notice] {
+        [builtInPreset, scale, opacity, spacing, rounding, compact, decorated, &backgroundDraft, updateBackgroundsButton, notice, readGeometry, applyGeometry] {
             QtLayoutPreset preset;
             preset.scalePercent = scale->currentData().toInt();
             preset.windowOpacityPercent = opacity->value();
@@ -779,6 +923,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
             preset.backgroundAlpha = backgroundDraft.backgroundAlpha;
             preset.backgroundTiled = backgroundDraft.backgroundTiled;
             preset.backgroundTileScale = backgroundDraft.backgroundTileScale;
+            readGeometry(preset);
             if (!ApplyQtBuiltInLayoutPreset(builtInPreset->currentText(), &preset)) return;
             scale->setCurrentIndex(std::max(0, scale->findData(preset.scalePercent)));
             opacity->setValue(preset.windowOpacityPercent);
@@ -786,6 +931,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
             rounding->setCurrentIndex(std::max(0, rounding->findData(preset.cornerRadius)));
             compact->setChecked(preset.compactRows);
             decorated->setChecked(preset.decorated);
+            applyGeometry(preset);
             backgroundDraft.windowBackgrounds = preset.windowBackgrounds;
             backgroundDraft.backgroundAlpha = preset.backgroundAlpha;
             backgroundDraft.backgroundTiled = preset.backgroundTiled;
@@ -797,6 +943,8 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     form->addRow(QString::fromUtf8("Прозрачность окна"), opacityRow);
     form->addRow(QString::fromUtf8("Интервалы интерфейса"), spacing);
     form->addRow(QString::fromUtf8("Скругление карточек и акцентных кнопок"), rounding);
+    form->addRow(geometryToggle);
+    form->addRow(geometryGroup);
     form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
     form->addRow(QString(), backgroundsButton);
     auto* builtInPresetRow = new QWidget;
@@ -807,13 +955,14 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     form->addRow(QString::fromUtf8("Быстрая раскладка"), builtInPresetRow);
     form->addRow(QString(), presetRow);
     form->addRow(QString::fromUtf8("Новый/обновляемый пресет"), presetNameRow);
-    QObject::connect(applyPreset, &QPushButton::clicked, &dialog, [&] {
+    QObject::connect(applyPreset, &QPushButton::clicked, &dialog, [&, applyGeometry] {
         QtLayoutPreset preset;
         if (!LoadQtLayoutPreset(directory, presets->currentData().toString(), &preset)) return;
         scale->setCurrentIndex(std::max(0, scale->findData(preset.scalePercent)));
         opacity->setValue(normalizedOpacity(preset.windowOpacityPercent));
         spacing->setCurrentIndex(std::max(0, spacing->findData(preset.spacingPercent)));
         rounding->setCurrentIndex(std::max(0, rounding->findData(preset.cornerRadius)));
+        applyGeometry(preset);
         compact->setChecked(preset.compactRows);
         fullscreen->setChecked(preset.fullscreen);
         decorated->setChecked(preset.decorated);
@@ -825,7 +974,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         presetName->setText(preset.name);
         notice->setText(QString::fromUtf8("Параметры компоновки загружены; палитра не меняется."));
     });
-    QObject::connect(savePreset, &QPushButton::clicked, &dialog, [&] {
+    QObject::connect(savePreset, &QPushButton::clicked, &dialog, [&, readGeometry] {
         QtLayoutPreset preset;
         preset.name = presetName->text();
         preset.scalePercent = scale->currentData().toInt();
@@ -839,6 +988,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         preset.backgroundAlpha = backgroundDraft.backgroundAlpha;
         preset.backgroundTiled = backgroundDraft.backgroundTiled;
         preset.backgroundTileScale = backgroundDraft.backgroundTileScale;
+        readGeometry(preset);
         if (!SaveQtLayoutPreset(directory, preset, &presetError)) { notice->setText(presetError); return; }
         presetName->setText(preset.name);
         refreshPresets();
@@ -867,9 +1017,16 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     form->addRow(notice);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel); buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true); buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&, readGeometry] {
         auto next = settings; next.scalePercent = scale->currentData().toInt(); next.windowOpacityPercent = opacity->value(); next.spacingPercent = spacing->currentData().toInt();
         next.cornerRadius = rounding->currentData().toInt(); next.compactRows = compact->isChecked();
+        QtLayoutPreset geometrySettings;
+        readGeometry(geometrySettings);
+        next.windowRounding = geometrySettings.windowRounding; next.frameRounding = geometrySettings.frameRounding;
+        next.scrollbarRounding = geometrySettings.scrollbarRounding; next.grabRounding = geometrySettings.grabRounding;
+        next.windowPaddingX = geometrySettings.windowPaddingX; next.windowPaddingY = geometrySettings.windowPaddingY;
+        next.framePaddingX = geometrySettings.framePaddingX; next.framePaddingY = geometrySettings.framePaddingY;
+        next.itemSpacingX = geometrySettings.itemSpacingX; next.itemSpacingY = geometrySettings.itemSpacingY;
         next.fullscreen = fullscreen->isChecked(); next.decorated = decorated->isChecked();
         next.windowBackgrounds = backgroundDraft.windowBackgrounds;
         next.backgroundAlpha = backgroundDraft.backgroundAlpha;

@@ -5,7 +5,7 @@
 - `codex/pre-qt-2026-08-28`: exact stable ImGui snapshot, commit `7306152`, version 0.5.54.
 - `codex/qt-gui`: incremental migration. `develop` and the ImGui implementation remain unchanged.
 
-This is **stage 184**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include core telemetry outside instrumented Qt workflows, additional accessibility work, and smaller items. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.30` is the current Qt per-user installer; stages 47–184 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
+This is **stage 185**, not a feature-complete replacement for ImGui. Estimated functional migration is **about 90%**, based on the breadth of user-facing scenarios in the coverage map below; this is an expert estimate, not a measured code or test percentage. Remaining gaps include core telemetry outside instrumented Qt workflows, additional accessibility work, and smaller items. Existing storage formats and domain services are reused. Qt's `AppTaskCompletionService` adds transactional cross-file recovery without changing the stable ImGui implementation. Version `0.6.31` is the current Qt per-user installer; stages 47–185 are implementation checkpoints, not standalone releases. The preserved ImGui baseline remains version 0.5.54.
 
 ## Build and run
 
@@ -18,7 +18,7 @@ These guide composition and hierarchy; the existing dark/purple palette is uncha
 .\installer\build-qt-installer.ps1
 ```
 
-The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.30.exe`. Version `0.6.30` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.30.md`.
+The portable directory is a QA output, not the release deliverable. The current installer is `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.31.exe`. Version `0.6.31` comes only from the root `VERSION` file and is propagated into the application, Windows EXE metadata, installer metadata and artifact name. Full install/update/uninstall evidence and SHA-256 are recorded in `docs/releases/ForgeMirror-0.6.31.md`.
 
 Requires MSVC 2022, CMake and Qt 6.8+ Widgets/Test. Override the default installed Qt path using `-QtRoot`.
 
@@ -980,3 +980,11 @@ Verification: `build-qt.ps1 -Package` passed (`smoke_qt` 1/1, `smoke_core: OK`).
 The process-boundary regression now performs the administrator login through the actual Qt dialog, checks **Не выходить после перезапуска**, and only then launches the packaged client as three independent processes against the disposable workspace. Each launch must restore the session, preserve the password and avoid a rejected-login event. This covers the complete path from the checkbox to process restart; production user credentials and workspace data are not read or modified.
 
 Verification and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.30.md`.
+
+### Stage 185 — detailed Qt layout geometry migration
+
+The display settings now expose advanced controls for the legacy geometry values that were missing from Qt: window, frame, scrollbar and grab rounding; horizontal/vertical window and frame padding; and horizontal/vertical item spacing. Existing ImGui `[style]` values and read-only legacy layout presets import these metrics into the isolated Qt workspace. Custom Qt layout presets save and restore them. The metrics update Qt layout margins, control padding, list/table spacing, and scrollbar/slider rounding; the fixed Qt palette remains unchanged.
+
+Verification: `build-qt.ps1 -Package` passed (`smoke_qt` 1/1, `smoke_core: OK`). Tests cover legacy style and preset import, custom preset round-trip, built-in preset preservation, persisted controls and applied stylesheet metrics. Administrator remembered-login coverage uses the real Qt dialog followed by three fresh processes; all restore the same session and password.
+
+Verification and installer lifecycle results are recorded in `docs/releases/ForgeMirror-0.6.31.md`.

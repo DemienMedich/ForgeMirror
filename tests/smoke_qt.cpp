@@ -4854,7 +4854,7 @@ static bool TestRulesEditor() {
 static bool TestDisplaySettings(QApplication& app) {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
-    if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n\n[projects]\nfilter=legacy-project-query\nsortMode=3\noverdueOnly=1\nxpPendingOnly=1\n") < 0) return false; seed.close();
+    if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n\n[style]\nwindowRounding=14\nframeRounding=10\nscrollbarRounding=12\ngrabRounding=8\nwindowPadding=12 14\nframePadding=7 5\nitemSpacing=9 4\n\n[projects]\nfilter=legacy-project-query\nsortMode=3\noverdueOnly=1\nxpPendingOnly=1\n") < 0) return false; seed.close();
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     QtLayoutPreset quickPreset;
     quickPreset.scalePercent = 110;
@@ -4899,19 +4899,25 @@ static bool TestDisplaySettings(QApplication& app) {
         !LoadQtBackgroundImage(directory, "C:/outside.png").isNull()) { QImageReader probe(temp.path() + "/ui/backgrounds/reference.png", "png"); std::cerr << "Qt background image validation/listing failed saved=" << imageSaved << " listed=" << listedBackgrounds.join(',').toUtf8().constData() << " size=" << loadedBackground.width() << 'x' << loadedBackground.height() << " reader=" << probe.canRead() << " readerSize=" << probe.size().width() << 'x' << probe.size().height() << " error=" << probe.errorString().toUtf8().constData() << " base=" << QFileInfo(temp.path() + "/ui/backgrounds").canonicalFilePath().toUtf8().constData() << " file=" << QFileInfo(temp.path() + "/ui/backgrounds/reference.png").canonicalFilePath().toUtf8().constData() << '\n'; return false; }
     auto settings = LoadQtDisplaySettings(directory);
     if (settings.projectFilter != QStringLiteral("legacy-project-query") || settings.projectSortMode != 3 ||
+        settings.windowRounding != 14 || settings.frameRounding != 10 || settings.scrollbarRounding != 12 ||
+        settings.grabRounding != 8 || settings.windowPaddingX != 12 || settings.windowPaddingY != 14 ||
+        settings.framePaddingX != 7 || settings.framePaddingY != 5 || settings.itemSpacingX != 9 || settings.itemSpacingY != 4 ||
         !settings.projectsOverdueOnly || !settings.projectsXpPendingOnly) return false;
     settings.auditSourceFilter = 5; settings.lastPage = 16; settings.taskQuickFilter = 13;
     settings.projectFilter = QString::fromUtf8("remember project query");
     QDir().mkpath(temp.path() + "/meta/ui-presets");
     QFile legacyPreset(temp.path() + "/meta/ui-presets/LegacyLayout.ini");
     if (!legacyPreset.open(QIODevice::WriteOnly) ||
-        legacyPreset.write("[style]\nfontScale=1.25\nalpha=0.78\nitemSpacing=6 4\nframeRounding=9\nwindowFullscreen=1\nwindowDecorated=0\ncustomColors=1\nbackgroundAlpha=0.4\nbackgroundTiled=1\nbackgroundTileScale=1.5\n[backgrounds]\nПрофиль=ui/backgrounds/reference.png\n[profile]\ntrusted=secret-value\n") < 0)
+        legacyPreset.write("[style]\nfontScale=1.25\nalpha=0.78\nwindowRounding=15\nframeRounding=9\nscrollbarRounding=11\ngrabRounding=7\nwindowPadding=13 15\nframePadding=6 3\nitemSpacing=6 4\nwindowFullscreen=1\nwindowDecorated=0\ncustomColors=1\nbackgroundAlpha=0.4\nbackgroundTiled=1\nbackgroundTileScale=1.5\n[backgrounds]\nПрофиль=ui/backgrounds/reference.png\n[profile]\ntrusted=secret-value\n") < 0)
         return false;
     legacyPreset.close();
     QtLayoutPreset migratedPreset;
     if (!LoadQtLayoutPreset(directory, "LegacyLayout", &migratedPreset) ||
         migratedPreset.scalePercent != 125 || migratedPreset.windowOpacityPercent != 78 || migratedPreset.spacingPercent != 80 ||
         migratedPreset.cornerRadius != 8 || !migratedPreset.compactRows ||
+        migratedPreset.windowRounding != 15 || migratedPreset.frameRounding != 9 || migratedPreset.scrollbarRounding != 11 ||
+        migratedPreset.grabRounding != 7 || migratedPreset.windowPaddingX != 13 || migratedPreset.windowPaddingY != 15 ||
+        migratedPreset.framePaddingX != 6 || migratedPreset.framePaddingY != 3 || migratedPreset.itemSpacingX != 6 || migratedPreset.itemSpacingY != 4 ||
         !migratedPreset.fullscreen || migratedPreset.decorated ||
         migratedPreset.windowBackgrounds[0] != "ui/backgrounds/reference.png" ||
         qAbs(migratedPreset.backgroundAlpha - 0.4) > 0.001 || !migratedPreset.backgroundTiled ||
@@ -4950,6 +4956,9 @@ static bool TestDisplaySettings(QApplication& app) {
     settings.profileSkillWeightMin = 0.7; settings.profileSkillWeightMax = 1.4;
     settings.reportComparePrevious = true; settings.reportView = 3;
     settings.windowOpacityPercent = 100;
+    settings.windowRounding = 13; settings.frameRounding = 11; settings.scrollbarRounding = 12; settings.grabRounding = 7;
+    settings.windowPaddingX = 10; settings.windowPaddingY = 11; settings.framePaddingX = 6; settings.framePaddingY = 5;
+    settings.itemSpacingX = 9; settings.itemSpacingY = 4;
     settings.deadlineNotificationsWhenClosed = true;
     if (!SaveQtDisplaySettings(directory, settings) || !LoadQtDisplaySettings(directory).deadlineNotificationsWhenClosed) return false;
     settings.deadlineNotificationsWhenClosed = false;
@@ -4971,8 +4980,24 @@ static bool TestDisplaySettings(QApplication& app) {
         auto* applyBuiltInPreset = dialog->findChild<QPushButton*>("qtBuiltInLayoutPresetApply");
         auto* presetName = dialog->findChild<QLineEdit*>("qtLayoutPresetName");
         auto* savePreset = dialog->findChild<QPushButton*>("qtLayoutPresetSave");
+        auto* geometryToggle = dialog->findChild<QToolButton*>("qtAdvancedGeometryToggle");
         if (!opacity || !spacing || !rounding || !presetList || !applyPreset || !presetName || !savePreset ||
-            !builtInPreset || !applyBuiltInPreset) {
+            !builtInPreset || !applyBuiltInPreset || !geometryToggle) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        geometryToggle->click();
+        auto* windowRounding = dialog->findChild<QDoubleSpinBox*>("qtWindowRounding");
+        auto* frameRounding = dialog->findChild<QDoubleSpinBox*>("qtFrameRounding");
+        auto* scrollbarRounding = dialog->findChild<QDoubleSpinBox*>("qtScrollbarRounding");
+        auto* grabRounding = dialog->findChild<QDoubleSpinBox*>("qtGrabRounding");
+        auto* windowPaddingX = dialog->findChild<QDoubleSpinBox*>("qtWindowPaddingX");
+        auto* windowPaddingY = dialog->findChild<QDoubleSpinBox*>("qtWindowPaddingY");
+        auto* framePaddingX = dialog->findChild<QDoubleSpinBox*>("qtFramePaddingX");
+        auto* framePaddingY = dialog->findChild<QDoubleSpinBox*>("qtFramePaddingY");
+        auto* itemSpacingX = dialog->findChild<QDoubleSpinBox*>("qtItemSpacingX");
+        auto* itemSpacingY = dialog->findChild<QDoubleSpinBox*>("qtItemSpacingY");
+        if (!windowRounding || !frameRounding || !scrollbarRounding || !grabRounding || !windowPaddingX ||
+            !windowPaddingY || !framePaddingX || !framePaddingY || !itemSpacingX || !itemSpacingY) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
         builtInPreset->setCurrentText(QString::fromUtf8("Компактный"));
@@ -4994,10 +5019,27 @@ static bool TestDisplaySettings(QApplication& app) {
             app.palette().color(QPalette::Window) != paletteBeforeQuickPresets) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
+        rounding->setCurrentIndex(rounding->findData(4));
+        if (windowRounding->value() != 4 || frameRounding->value() != 4) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        rounding->setCurrentIndex(rounding->findData(8));
+        windowRounding->setValue(13); frameRounding->setValue(11);
+        if (windowRounding->value() != 13 || frameRounding->value() != 11 || itemSpacingX->value() != 9 || itemSpacingY->value() != 4) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        windowRounding->setValue(13); frameRounding->setValue(11); scrollbarRounding->setValue(12); grabRounding->setValue(7);
+        windowPaddingX->setValue(10); windowPaddingY->setValue(11); framePaddingX->setValue(6); framePaddingY->setValue(5);
+        itemSpacingX->setValue(9); itemSpacingY->setValue(4);
         opacity->setValue(86);
         presetName->setText(QString::fromUtf8("Интерфейс Qt"));
         savePreset->click();
         if (!IsQtLayoutPresetDeletable(directory, QString::fromUtf8("Интерфейс Qt"))) {
+            qobject_cast<QDialog*>(dialog)->reject(); return;
+        }
+        presetList->setCurrentIndex(presetList->findData(QString::fromUtf8("Интерфейс Qt")));
+        applyPreset->click();
+        if (windowRounding->value() != 13 || frameRounding->value() != 11 || scrollbarRounding->value() != 12 ||
+            grabRounding->value() != 7 || windowPaddingX->value() != 10 || windowPaddingY->value() != 11 ||
+            framePaddingX->value() != 6 || framePaddingY->value() != 5 || itemSpacingX->value() != 9 || itemSpacingY->value() != 4) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
         presetList->setCurrentIndex(presetList->findData("LegacyLayout"));
@@ -5005,7 +5047,10 @@ static bool TestDisplaySettings(QApplication& app) {
         if (scale->currentData().toInt() != 125 || spacing->currentData().toInt() != 80 ||
             opacity->value() != 78 ||
             rounding->currentData().toInt() != 8 || !dialog->findChild<QCheckBox*>("qtFullscreen")->isChecked() ||
-            dialog->findChild<QCheckBox*>("qtDecorated")->isChecked()) {
+            dialog->findChild<QCheckBox*>("qtDecorated")->isChecked() || windowRounding->value() != 15 ||
+            frameRounding->value() != 9 || scrollbarRounding->value() != 11 || grabRounding->value() != 7 ||
+            windowPaddingX->value() != 13 || windowPaddingY->value() != 15 || framePaddingX->value() != 6 ||
+            framePaddingY->value() != 3 || itemSpacingX->value() != 6 || itemSpacingY->value() != 4) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
         builtInPreset->setCurrentText(QString::fromUtf8("Минимализм"));
@@ -5017,6 +5062,9 @@ static bool TestDisplaySettings(QApplication& app) {
         opacity->setValue(86);
         spacing->setCurrentIndex(spacing->findData(120));
         rounding->setCurrentIndex(rounding->findData(8));
+        windowRounding->setValue(13); frameRounding->setValue(11); scrollbarRounding->setValue(12); grabRounding->setValue(7);
+        windowPaddingX->setValue(10); windowPaddingY->setValue(11); framePaddingX->setValue(6); framePaddingY->setValue(5);
+        itemSpacingX->setValue(9); itemSpacingY->setValue(4);
         dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
         dialog->findChild<QCheckBox*>("qtFullscreen")->setChecked(false);
         dialog->findChild<QCheckBox*>("qtDecorated")->setChecked(true);
@@ -5053,11 +5101,25 @@ static bool TestDisplaySettings(QApplication& app) {
     if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 ||
         settings.windowOpacityPercent != 86 ||
         settings.spacingPercent != 120 || settings.cornerRadius != 8 || !settings.compactRows ||
-        settings.minimizeToTray != (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) { std::cerr << "Qt display settings dialog/save failed\n"; return false; }
+        settings.windowRounding != 13 || settings.frameRounding != 11 || settings.scrollbarRounding != 12 || settings.grabRounding != 7 ||
+        settings.windowPaddingX != 10 || settings.windowPaddingY != 11 || settings.framePaddingX != 6 || settings.framePaddingY != 5 ||
+        settings.itemSpacingX != 9 || settings.itemSpacingY != 4 ||
+        settings.minimizeToTray != (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages())) {
+        std::cerr << "Qt display settings dialog/save failed saved=" << saved << " scale=" << settings.scalePercent
+                  << " opacity=" << settings.windowOpacityPercent << " spacing=" << settings.spacingPercent
+                  << " radius=" << settings.cornerRadius << " geometry=" << settings.windowRounding << ',' << settings.frameRounding
+                  << ',' << settings.scrollbarRounding << ',' << settings.grabRounding << " padding=" << settings.windowPaddingX << ','
+                  << settings.windowPaddingY << ',' << settings.framePaddingX << ',' << settings.framePaddingY << " item="
+                  << settings.itemSpacingX << ',' << settings.itemSpacingY << " tray=" << settings.minimizeToTray << '\n';
+        return false;
+    }
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || loaded.windowOpacityPercent != 86 || loaded.spacingPercent != 120 ||
         loaded.cornerRadius != 8 || !loaded.compactRows ||
+        loaded.windowRounding != 13 || loaded.frameRounding != 11 || loaded.scrollbarRounding != 12 || loaded.grabRounding != 7 ||
+        loaded.windowPaddingX != 10 || loaded.windowPaddingY != 11 || loaded.framePaddingX != 6 || loaded.framePaddingY != 5 ||
+        loaded.itemSpacingX != 9 || loaded.itemSpacingY != 4 ||
         loaded.auditSourceFilter != 5 || loaded.lastPage != 16 || loaded.profileViewMode != 2 || loaded.profileSkillSort != 3 ||
         loaded.windowBackgrounds[0] != "ui/backgrounds/reference.png" || qAbs(loaded.backgroundAlpha - 0.55) > 0.001 ||
         !loaded.backgroundTiled || qAbs(loaded.backgroundTileScale - 1.5) > 0.001 ||
@@ -5160,8 +5222,8 @@ static bool TestDisplaySettings(QApplication& app) {
     const auto fixedWindowColor = app.palette().color(QPalette::Window);
     ApplyQtDisplaySettings(app, loaded);
     if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble() ||
-        !app.styleSheet().contains(QStringLiteral("min-height: 31px")) ||
-        !app.styleSheet().contains(QStringLiteral("border-radius: 8px")) ||
+        !app.styleSheet().contains(QStringLiteral("min-height: 34px")) ||
+        !app.styleSheet().contains(QStringLiteral("border-radius: 11px")) ||
         app.palette().color(QPalette::Window) != fixedWindowColor) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});
 #ifdef _WIN32
