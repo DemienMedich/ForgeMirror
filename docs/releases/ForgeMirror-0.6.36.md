@@ -18,7 +18,8 @@
 - Installed 0.6.36 `--version` returned `ForgeMirrorQt 0.6.36`; `--help` listed the options. Both exited successfully without opening the main UI.
 - Installed smoke launch used a disposable workspace, Windows Qt platform plugin, `PATH=C:\Windows\System32;C:\Windows`, and cleared Qt plugin overrides. It exited 0, produced a 54,729-byte screenshot, and wrote no stderr.
 - Silent uninstall exited 0, removed the isolated application and uninstall entry, and preserved the separate user-data marker. The stable ImGui uninstall entry remained at version 0.5.27 and `Z:\Soft\ForgeMirror\`.
-- The user's separate installed Qt executable remained at 0.6.18; it was not upgraded, replaced, or terminated. The stable `develop` branch remains unchanged.
+- During the isolated lifecycle test, the separate user installation was not touched. After that test passed, the now-closed current-user installation at `%LOCALAPPDATA%\Programs\ForgeMirror` was updated with this installer. The installed EXE and HKCU uninstall record report 0.6.36; the `admin.ini` SHA-256 was identical before/after and its `stayLoggedIn` flag remained enabled. Opening the updated app recorded `Administrator session restored`, added no rejected-login event, and left the window open. The stable ImGui uninstall record remained unchanged.
+- The stable `develop` branch remains unchanged.
 
 ## Scope
 
