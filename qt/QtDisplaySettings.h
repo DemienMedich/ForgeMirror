@@ -9,6 +9,7 @@ class QApplication;
 class QWidget;
 struct QtDisplaySettings {
     int scalePercent = 100;
+    int windowOpacityPercent = 100;
     int spacingPercent = 100;
     int cornerRadius = 4;
     std::array<QString, 18> windowBackgrounds{};
@@ -63,6 +64,7 @@ struct QtDisplaySettings {
 struct QtLayoutPreset {
     QString name;
     int scalePercent = 100;
+    int windowOpacityPercent = 100;
     int spacingPercent = 100;
     int cornerRadius = 4;
     bool compactRows = false;

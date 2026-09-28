@@ -35,6 +35,7 @@ QString normalizeBackgroundPath(QString value) {
     return value;
 }
 int normalizedScale(int value) { for (int allowed : {90, 100, 110, 125}) if (value == allowed) return value; return 100; }
+int normalizedOpacity(int value) { return std::clamp(value, 60, 100); }
 int nearestValue(int value, std::initializer_list<int> values) {
     return *std::min_element(values.begin(), values.end(), [value](int a, int b) {
         return std::abs(a - value) < std::abs(b - value);
@@ -102,6 +103,7 @@ QJsonObject presetObject(const QtLayoutPreset& preset) {
     QJsonArray backgrounds;
     for (const auto& path : preset.windowBackgrounds) backgrounds.append(normalizeBackgroundPath(path));
     return {{"name", preset.name}, {"scalePercent", normalizedScale(preset.scalePercent)},
+        {"windowOpacityPercent", normalizedOpacity(preset.windowOpacityPercent)},
         {"spacingPercent", nearestValue(preset.spacingPercent, {80, 90, 100, 110, 120})},
         {"cornerRadius", nearestValue(preset.cornerRadius, {0, 4, 8, 12})},
         {"compactRows", preset.compactRows}, {"fullscreen", preset.fullscreen}, {"decorated", preset.decorated},
@@ -112,6 +114,7 @@ QtLayoutPreset presetFromObject(const QJsonObject& object) {
     QtLayoutPreset preset;
     preset.name = object.value("name").toString();
     preset.scalePercent = normalizedScale(object.value("scalePercent").toInt(100));
+    preset.windowOpacityPercent = normalizedOpacity(object.value("windowOpacityPercent").toInt(100));
     preset.spacingPercent = nearestValue(object.value("spacingPercent").toInt(100), {80, 90, 100, 110, 120});
     preset.cornerRadius = nearestValue(object.value("cornerRadius").toInt(4), {0, 4, 8, 12});
     preset.compactRows = object.value("compactRows").toBool();
@@ -157,6 +160,8 @@ bool readLegacyLayoutPreset(const std::filesystem::path& directory, const QStrin
     bool ok = false;
     const double fontScale = source.value("fontScale", 1.0).toDouble(&ok);
     if (ok && std::isfinite(fontScale)) result.scalePercent = nearestValue(int(std::lround(std::clamp(fontScale, 0.6, 2.0) * 100.0)), {90, 100, 110, 125});
+    const double opacity = source.value("alpha", 1.0).toDouble(&ok);
+    if (ok && std::isfinite(opacity)) result.windowOpacityPercent = int(std::lround(std::clamp(opacity, 0.6, 1.0) * 100.0));
     const QString spacing = source.value("itemSpacing").toString();
     const auto pair = spacing.split(QRegularExpression(QStringLiteral("[ ,\\t]+")), Qt::SkipEmptyParts);
     if (pair.size() == 2) {
@@ -406,7 +411,8 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         if (section == "profile" && key == "lastProfileId") out.lastProfileId = value;
         if (section == "ui" && key == "windowDecorated") out.decorated = value != "0";
         if (section == "style") {
-            if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
+            if (key == "alpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.windowOpacityPercent = int(std::lround(std::clamp(alpha, 0.6, 1.0) * 100.0)); }
+            else if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
             else if (key == "backgroundTiled") out.backgroundTiled = value == "1" || value.compare("true", Qt::CaseInsensitive) == 0;
             else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
         }
@@ -422,7 +428,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "xpPendingOnly") out.projectsXpPendingOnly = value == "1";
         }
         if (section == "qt") {
-            if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "spacingPercent") out.spacingPercent = nearestValue(value.toInt(), {80, 90, 100, 110, 120}); else if (key == "cornerRadius") out.cornerRadius = nearestValue(value.toInt(), {0, 4, 8, 12}); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
+            if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "windowOpacityPercent") out.windowOpacityPercent = normalizedOpacity(value.toInt()); else if (key == "spacingPercent") out.spacingPercent = nearestValue(value.toInt(), {80, 90, 100, 110, 120}); else if (key == "cornerRadius") out.cornerRadius = nearestValue(value.toInt(), {0, 4, 8, 12}); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
             else if (key == "backgroundAlpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.backgroundAlpha = std::clamp(alpha, 0.0, 1.0); }
             else if (key == "backgroundTiled") out.backgroundTiled = value == "1";
             else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
@@ -484,7 +490,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     for (int i = 0; i < lines.size(); ++i) { const auto line = lines[i].trimmed(); if (line == "[qt]") { begin = i; continue; } if (begin >= 0 && i > begin && line.startsWith('[')) { end = i; break; } }
     if (begin < 0) { if (!lines.isEmpty() && !lines.back().isEmpty()) lines << ""; begin = lines.size(); lines << "[qt]"; end = lines.size(); }
     auto set = [&](const QString& key, const QString& value) { for (int i = begin + 1; i < end; ++i) if (lines[i].section('=', 0, 0).trimmed() == key) { lines[i] = key + '=' + value; return; } lines.insert(end++, key + '=' + value); };
-    set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("spacingPercent", QString::number(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))); set("cornerRadius", QString::number(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
+    set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("windowOpacityPercent", QString::number(normalizedOpacity(settings.windowOpacityPercent))); set("spacingPercent", QString::number(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))); set("cornerRadius", QString::number(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
     set("backgroundAlpha", QString::number(std::isfinite(settings.backgroundAlpha) ? std::clamp(settings.backgroundAlpha, 0.0, 1.0) : 0.25, 'f', 2));
     set("backgroundTiled", settings.backgroundTiled ? "1" : "0");
     set("backgroundTileScale", QString::number(std::isfinite(settings.backgroundTileScale) ? std::clamp(settings.backgroundTileScale, 0.25, 3.0) : 1.0, 'f', 2));
@@ -558,6 +564,14 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* form = new QFormLayout(&dialog); auto* scale = new QComboBox; scale->setObjectName("qtScale");
     for (int value : {90, 100, 110, 125}) scale->addItem(QString::number(value) + "%", value);
     scale->setCurrentIndex(std::max(0, scale->findData(normalizedScale(settings.scalePercent))));
+    auto* opacity = new QSlider(Qt::Horizontal); opacity->setObjectName("qtWindowOpacity"); opacity->setRange(60, 100);
+    opacity->setValue(normalizedOpacity(settings.windowOpacityPercent));
+    opacity->setAccessibleName(QString::fromUtf8("Непрозрачность основного окна"));
+    opacity->setToolTip(QString::fromUtf8("Прозрачность применится к главному окну; диалоги сохраняют читаемость."));
+    auto* opacityValue = new QLabel(QString::number(opacity->value()) + "%");
+    QObject::connect(opacity, &QSlider::valueChanged, opacityValue, [opacityValue](int value) { opacityValue->setText(QString::number(value) + "%"); });
+    auto* opacityRow = new QWidget; auto* opacityLayout = new QHBoxLayout(opacityRow); opacityLayout->setContentsMargins(0, 0, 0, 0);
+    opacityLayout->addWidget(opacity, 1); opacityLayout->addWidget(opacityValue);
     auto* spacing = new QComboBox; spacing->setObjectName("qtSpacing");
     for (int value : {80, 90, 100, 110, 120}) spacing->addItem(QString::number(value) + "%", value);
     spacing->setCurrentIndex(std::max(0, spacing->findData(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))));
@@ -634,6 +648,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* notice = new QLabel; notice->setObjectName("qtSettingsNotice"); notice->setWordWrap(true);
     QString presetError;
     form->addRow(QString::fromUtf8("Масштаб текста"), scale);
+    form->addRow(QString::fromUtf8("Прозрачность окна"), opacityRow);
     form->addRow(QString::fromUtf8("Интервалы интерфейса"), spacing);
     form->addRow(QString::fromUtf8("Скругление карточек и акцентных кнопок"), rounding);
     form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
@@ -644,6 +659,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         QtLayoutPreset preset;
         if (!LoadQtLayoutPreset(directory, presets->currentData().toString(), &preset)) return;
         scale->setCurrentIndex(std::max(0, scale->findData(preset.scalePercent)));
+        opacity->setValue(normalizedOpacity(preset.windowOpacityPercent));
         spacing->setCurrentIndex(std::max(0, spacing->findData(preset.spacingPercent)));
         rounding->setCurrentIndex(std::max(0, rounding->findData(preset.cornerRadius)));
         compact->setChecked(preset.compactRows);
@@ -661,6 +677,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         QtLayoutPreset preset;
         preset.name = presetName->text();
         preset.scalePercent = scale->currentData().toInt();
+        preset.windowOpacityPercent = opacity->value();
         preset.spacingPercent = spacing->currentData().toInt();
         preset.cornerRadius = rounding->currentData().toInt();
         preset.compactRows = compact->isChecked();
@@ -699,7 +716,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel); buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true); buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
-        auto next = settings; next.scalePercent = scale->currentData().toInt(); next.spacingPercent = spacing->currentData().toInt();
+        auto next = settings; next.scalePercent = scale->currentData().toInt(); next.windowOpacityPercent = opacity->value(); next.spacingPercent = spacing->currentData().toInt();
         next.cornerRadius = rounding->currentData().toInt(); next.compactRows = compact->isChecked();
         next.fullscreen = fullscreen->isChecked(); next.decorated = decorated->isChecked();
         next.windowBackgrounds = backgroundDraft.windowBackgrounds;

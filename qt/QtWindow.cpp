@@ -429,6 +429,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     lastCloudAutoSyncAt_ = QDateTime::currentSecsSinceEpoch();
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
     ApplyQtDisplaySettings(*qApp, displaySettings_);
+    setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
     setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
     resize(1120, 720);
     setMinimumSize(800, 520);
@@ -496,6 +497,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* displaySettings = menu->addAction(QString::fromUtf8("Настройки интерфейса Qt"), this, [this] {
         if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
         ApplyQtDisplaySettings(*qApp, displaySettings_);
+        setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
         dragHandle_->setVisible(!displaySettings_.decorated);
         if (trayIcon_) trayIcon_->setVisible(displaySettings_.minimizeToTray);
