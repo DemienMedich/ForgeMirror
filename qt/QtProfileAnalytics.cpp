@@ -31,6 +31,7 @@ QtProfileAnalytics::QtProfileAnalytics(QWidget* parent) : QWidget(parent) {
     toolbar->addWidget(axisCount_);
     toolbar->addStretch(1);
     layout->addLayout(toolbar);
+    layout->setAlignment(toolbar, Qt::AlignTop);
     connect(axisCount_, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
         updateAccessibleDescription();
         update();
@@ -106,9 +107,9 @@ void QtProfileAnalytics::paintEvent(QPaintEvent* event) {
     const QColor accent = palette().color(QPalette::Highlight);
     const QColor accentFill(accent.red(), accent.green(), accent.blue(), 42);
     const int gap = 10;
-    // The spin-box toolbar is a real child layout above this custom-painted area.
-    // Reserve its height so chart panels never paint underneath the control.
-    const int contentTop = 34;
+    // The toolbar is top-aligned in the layout. Use its live size hint so text
+    // scaling and platform style metrics cannot push the controls into the radar.
+    const int contentTop = layout()->sizeHint().height() + layout()->spacing() + 8;
     const int contentHeight = std::max(0, height() - contentTop);
     const int top = contentTop;
     const int panelHeight = std::min(172, std::max(148, contentHeight / 3));

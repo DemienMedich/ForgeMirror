@@ -6545,6 +6545,10 @@ int main(int argc, char** argv) {
         !profileCharts->accessibleDescription().contains(QString::fromUtf8("уровень 1 +")) ||
         !profileCharts->accessibleDescription().contains(QString::fromUtf8("Моделирование")))
         return fail("Profile analytics category, skill chart, or accessible radar controls missing");
+    const int analyticsContentTop = profileCharts->layout()->sizeHint().height() + profileCharts->layout()->spacing() + 8;
+    if (profileCharts->axisControl()->y() > 8 ||
+        profileCharts->axisControl()->geometry().bottom() >= analyticsContentTop)
+        return fail("Profile radar axis control overlaps the custom-painted analytics panels");
     const auto* profileChartsAccessible = QAccessible::queryAccessibleInterface(profileCharts);
     if (!profileChartsAccessible || !profileChartsAccessible->text(QAccessible::Description)
             .contains(QString::fromUtf8("уровень 1 +")))
