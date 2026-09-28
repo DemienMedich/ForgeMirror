@@ -2829,6 +2829,47 @@ static bool TestPipelineEditor() {
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
     });
     if (!ShowPipelineEditor(nullptr, workspace) || workspace.data.pipelineSteps.size() != count + 1) return false;
+
+    bool staleRejected = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* title = dialog->findChild<QLineEdit*>("stageTitle");
+        auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        const auto originalStage = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+            [&](const auto& value) { return value.id == step.id; });
+        if (originalStage == workspace.data.pipelineSteps.end()) { dialog->reject(); return; }
+        const auto originalTitle = originalStage->title;
+        auto external = LoadPipelineData(workspace.directory);
+        const auto externalStage = std::find_if(external.begin(), external.end(),
+            [&](const auto& value) { return value.id == step.id; });
+        if (externalStage == external.end()) { dialog->reject(); return; }
+        externalStage->description = "concurrent pipeline edit";
+        if (!AppSavePipelineData(workspace.directory, external)) { dialog->reject(); return; }
+        title->setText("Stale editor must not overwrite");
+        save->click();
+        const auto refreshedStage = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+            [&](const auto& value) { return value.id == step.id; });
+        const auto disk = LoadPipelineData(workspace.directory);
+        const auto diskStage = std::find_if(disk.begin(), disk.end(),
+            [&](const auto& value) { return value.id == step.id; });
+        staleRejected = dialog->isVisible() && !save->isEnabled() &&
+            dialog->findChild<QLabel*>("pipelineNotice")->text().contains(QString::fromUtf8("Список обновлён")) &&
+            refreshedStage != workspace.data.pipelineSteps.end() && refreshedStage->description == "concurrent pipeline edit" &&
+            diskStage != disk.end() && diskStage->title == originalTitle && diskStage->description == "concurrent pipeline edit";
+        dialog->reject();
+    });
+    if (ShowPipelineEditor(nullptr, workspace, step.id) || !staleRejected) return false;
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = QApplication::activeModalWidget();
+        dialog->findChild<QLineEdit*>("stageTitle")->setText("Saved after conflict refresh");
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+    });
+    if (!ShowPipelineEditor(nullptr, workspace, step.id)) return false;
+    const auto retried = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+        [&](const auto& value) { return value.id == step.id; });
+    if (retried == workspace.data.pipelineSteps.end() || retried->title != "Saved after conflict refresh" ||
+        retried->description != "concurrent pipeline edit") return false;
     return true;
 }
 

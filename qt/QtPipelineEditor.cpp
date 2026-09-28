@@ -14,6 +14,7 @@ bool ShowPipelineEditor(QWidget* parent, QtWorkspace& workspace, const std::stri
         [&](const auto& step) { return step.id == id; });
     if (!id.empty() && found == workspace.data.pipelineSteps.end()) return false;
     const PipelineStep original = id.empty() ? PipelineStep{} : *found;
+    const auto expectedSnapshot = workspace.data.pipelineSteps;
     QDialog dialog(parent);
     dialog.setObjectName("pipelineEditor");
     dialog.setWindowTitle(QString::fromUtf8(id.empty() ? "Новый этап" : "Редактирование этапа"));
@@ -125,7 +126,7 @@ bool ShowPipelineEditor(QWidget* parent, QtWorkspace& workspace, const std::stri
             if (std::find(selected.begin(), selected.end(), target) != selected.end()) draft.nextIds.push_back(target);
         for (const auto& target : selected)
             if (std::find(draft.nextIds.begin(), draft.nextIds.end(), target) == draft.nextIds.end()) draft.nextIds.push_back(target);
-        auto candidate = workspace.data.pipelineSteps;
+        auto candidate = expectedSnapshot;
         if (id.empty()) {
             draft.id = "qt-step-" + u(QUuid::createUuid().toString(QUuid::WithoutBraces));
             candidate.push_back(draft);
@@ -134,11 +135,19 @@ bool ShowPipelineEditor(QWidget* parent, QtWorkspace& workspace, const std::stri
             if (current == candidate.end()) { notice->setText(QString::fromUtf8("Этап больше не существует.")); return; }
             *current = draft;
         }
-        // Persist the complete draft once; cancellation never creates placeholder steps.
-        if (!AppSavePipelineData(workspace.directory, candidate)) {
-            notice->setText(QString::fromUtf8("Не удалось сохранить пайплайн. Исходные данные не изменены.")); return;
+        // Persist the complete draft only if the editor's opening snapshot is still current.
+        const auto saved = AppSavePipelineCandidate(workspace.directory, expectedSnapshot,
+                                                    workspace.data.pipelineSteps, candidate);
+        if (!saved.ok) {
+            notice->setText(QString::fromUtf8(saved.errorMessage.empty()
+                ? "Не удалось сохранить пайплайн. Исходные данные не изменены."
+                : saved.errorMessage.c_str()));
+            if (saved.staleSnapshot) {
+                notice->setText(QString::fromUtf8("Пайплайн изменился во время редактирования. Список обновлён; закройте окно и откройте редактор снова."));
+                buttons->button(QDialogButtonBox::Save)->setEnabled(false);
+            }
+            return;
         }
-        workspace.data.pipelineSteps = std::move(candidate);
         dialog.accept();
     });
     return dialog.exec() == QDialog::Accepted;

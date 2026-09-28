@@ -68,6 +68,7 @@ bool RefreshPipelineForMutation(const std::filesystem::path& storageDir,
     const auto latest = LoadPipelineData(storageDir);
     if (SamePipeline(MergeLoadedPipelineWithDefaults(steps), latest)) return true;
     steps = latest;
+    result.staleSnapshot = true;
     result.errorMessage = u8"Пайплайн изменился в другом процессе. Данные обновлены; проверьте их и повторите операцию.";
     return false;
 }
@@ -127,6 +128,39 @@ bool AppSavePipelineData(const std::filesystem::path& storageDir,
     }
     out << "]";
     return AppWriteUtf8BomWithRecovery(PipelineStoragePath(storageDir), out.str());
+}
+
+AppPipelineMutationResult AppSavePipelineCandidate(const std::filesystem::path& storageDir,
+                                                   const std::vector<PipelineStep>& expectedSnapshot,
+                                                   std::vector<PipelineStep>& liveSteps,
+                                                   const std::vector<PipelineStep>& candidate) {
+    AppPipelineMutationResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.errorMessage = u8"Другая программа сейчас сохраняет данные. Повторите операцию через несколько секунд.";
+        return result;
+    }
+    if (!RefreshPipelineForMutation(storageDir, liveSteps, result) ||
+        !SamePipeline(MergeLoadedPipelineWithDefaults(expectedSnapshot), LoadPipelineData(storageDir))) {
+        if (!result.staleSnapshot) {
+            liveSteps = LoadPipelineData(storageDir);
+            result.staleSnapshot = true;
+            result.errorMessage = u8"Пайплайн изменился в другом процессе. Данные обновлены; проверьте их и повторите операцию.";
+        }
+        return result;
+    }
+    if (SamePipeline(candidate, liveSteps)) {
+        result.ok = true;
+        return result;
+    }
+    if (!AppSavePipelineData(storageDir, candidate)) {
+        result.errorMessage = u8"Не удалось сохранить пайплайн.";
+        return result;
+    }
+    liveSteps = candidate;
+    result.ok = true;
+    result.changed = true;
+    return result;
 }
 
 AppPipelineMutationResult AppAddPipelineStep(const std::filesystem::path& storageDir,

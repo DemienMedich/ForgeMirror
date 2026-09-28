@@ -503,7 +503,7 @@ static bool TestPipelineDeleteCleansLinksAndRollsBack(const std::filesystem::pat
     const auto preservedFirst = std::find_if(afterStaleEdit.begin(), afterStaleEdit.end(), [](const auto& item) { return item.id == "first"; });
     const auto preservedTarget = std::find_if(afterStaleEdit.begin(), afterStaleEdit.end(), [](const auto& item) { return item.id == "target"; });
     const auto refreshedFirst = std::find_if(staleSteps.begin(), staleSteps.end(), [](const auto& item) { return item.id == "first"; });
-    if (result.ok || result.changed || preservedFirst == afterStaleEdit.end() || preservedFirst->description != "external update" ||
+    if (result.ok || result.changed || !result.staleSnapshot || preservedFirst == afterStaleEdit.end() || preservedFirst->description != "external update" ||
         preservedTarget == afterStaleEdit.end() || preservedTarget->title != target.title ||
         refreshedFirst == staleSteps.end() || refreshedFirst->description != "external update")
         return fail("stale edit rejected and refreshed");
@@ -518,9 +518,41 @@ static bool TestPipelineDeleteCleansLinksAndRollsBack(const std::filesystem::pat
     const auto retainedFirst = std::find_if(afterStaleDelete.begin(), afterStaleDelete.end(), [](const auto& item) { return item.id == "first"; });
     const auto retainedExternal = std::find_if(afterStaleDelete.begin(), afterStaleDelete.end(), [](const auto& item) { return item.id == "external-stage"; });
     const auto refreshedExternal = std::find_if(staleSteps.begin(), staleSteps.end(), [](const auto& item) { return item.id == "external-stage"; });
-    if (result.ok || result.changed || retainedFirst == afterStaleDelete.end() || retainedExternal == afterStaleDelete.end() ||
+    if (result.ok || result.changed || !result.staleSnapshot || retainedFirst == afterStaleDelete.end() || retainedExternal == afterStaleDelete.end() ||
         refreshedExternal == staleSteps.end())
         return fail("stale delete rejected without dropping external addition");
+
+    auto openingSnapshot = staleSteps;
+    auto liveSteps = staleSteps;
+    auto candidate = openingSnapshot;
+    const auto candidateFirst = std::find_if(candidate.begin(), candidate.end(), [](const auto& item) { return item.id == "first"; });
+    if (candidateFirst == candidate.end()) return fail("editor candidate fixture");
+    candidateFirst->title = "stale full-list candidate";
+    externalSteps = LoadPipelineData(dir);
+    const auto externalFirst = std::find_if(externalSteps.begin(), externalSteps.end(), [](const auto& item) { return item.id == "first"; });
+    if (externalFirst == externalSteps.end()) return fail("external pipeline reload");
+    externalFirst->description = "external editor update";
+    if (!AppSavePipelineData(dir, externalSteps)) return fail("external editor save");
+    result = AppSavePipelineCandidate(dir, openingSnapshot, liveSteps, candidate);
+    const auto afterStaleCandidate = LoadPipelineData(dir);
+    const auto preservedCandidateFirst = std::find_if(afterStaleCandidate.begin(), afterStaleCandidate.end(), [](const auto& item) { return item.id == "first"; });
+    const auto refreshedCandidateFirst = std::find_if(liveSteps.begin(), liveSteps.end(), [](const auto& item) { return item.id == "first"; });
+    if (result.ok || !result.staleSnapshot || preservedCandidateFirst == afterStaleCandidate.end() ||
+        preservedCandidateFirst->title != first.title || preservedCandidateFirst->description != "external editor update" ||
+        refreshedCandidateFirst == liveSteps.end() || refreshedCandidateFirst->description != "external editor update")
+        return fail("stale full-list candidate rejected and refreshed");
+
+    openingSnapshot = liveSteps;
+    candidate = openingSnapshot;
+    const auto retryFirst = std::find_if(candidate.begin(), candidate.end(), [](const auto& item) { return item.id == "first"; });
+    if (retryFirst == candidate.end()) return fail("editor retry fixture");
+    retryFirst->title = "edited after refresh";
+    result = AppSavePipelineCandidate(dir, openingSnapshot, liveSteps, candidate);
+    const auto afterRetry = LoadPipelineData(dir);
+    const auto savedFirst = std::find_if(afterRetry.begin(), afterRetry.end(), [](const auto& item) { return item.id == "first"; });
+    if (!result.ok || !result.changed || result.staleSnapshot || savedFirst == afterRetry.end() ||
+        savedFirst->title != "edited after refresh" || savedFirst->description != "external editor update")
+        return fail("editor retry after refresh");
     return true;
 }
 
