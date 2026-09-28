@@ -71,6 +71,7 @@ public:
     IJobStorage& delegate;
     int failAt = 0;
     int writes = 0;
+    bool failDelete = false;
     bool set_active_profile(const std::string& id) override { return delegate.set_active_profile(id); }
     std::vector<ProfileInfo> list_profiles() override { return delegate.list_profiles(); }
     std::optional<Profile> load_profile() override { return delegate.load_profile(); }
@@ -78,7 +79,7 @@ public:
     bool save_profile(const Profile& profile) override { return ++writes != failAt && delegate.save_profile(profile); }
     std::optional<ProfileInfo> create_profile(const Profile& p) override { return delegate.create_profile(p); }
     bool set_archived(const std::string& id, bool value) override { return delegate.set_archived(id, value); }
-    bool delete_profile(const std::string& id) override { return delegate.delete_profile(id); }
+    bool delete_profile(const std::string& id) override { return !failDelete && delegate.delete_profile(id); }
     std::optional<std::string> load_token() override { return delegate.load_token(); }
     bool save_token(const std::string& token) override { return delegate.save_token(token); }
     std::vector<XpEvent> load_queue() override { return delegate.load_queue(); }
@@ -1866,7 +1867,11 @@ static bool TestProfileDialogs() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
     std::vector<std::pair<AppLogLevel, std::string>> coreEvents;
-    workspace.profileEventLogger = [&](AppLogLevel level, const std::string& event) { coreEvents.emplace_back(level, event); };
+    bool throwProfileEvents = false;
+    workspace.profileEventLogger = [&](AppLogLevel level, const std::string& event) {
+        coreEvents.emplace_back(level, event);
+        if (throwProfileEvents) throw std::runtime_error("profile event observer failure");
+    };
     Profile original("Original");
     original.set_total_xp(777);
     original.set_wallet_balance(42);
@@ -2089,8 +2094,22 @@ static bool TestProfileDialogs() {
             QApplication::processEvents();
             manager->grab().save(artifacts + "/profile-manager-small.png");
         }
+        failures->failDelete = true;
+        const size_t eventsBeforeFailedDelete = coreEvents.size();
         QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
         permanentDelete->click();
+        const auto afterFailedDelete = delegate->list_profiles();
+        checks &= std::find_if(afterFailedDelete.begin(), afterFailedDelete.end(),
+            [&](const auto& p) { return QString::fromStdString(p.id) == disposableId; }) != afterFailedDelete.end();
+        checks &= coreEvents.size() == eventsBeforeFailedDelete + 1 &&
+            coreEvents.back().first == AppLogLevel::Warning &&
+            coreEvents.back().second == "Profile deletion failed or was rolled back";
+        failures->failDelete = false;
+        selectId(disposableId);
+        throwProfileEvents = true;
+        QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
+        permanentDelete->click();
+        throwProfileEvents = false;
         const auto afterPermanentDelete = delegate->list_profiles();
         checks &= std::none_of(afterPermanentDelete.begin(), afterPermanentDelete.end(),
             [&](const auto& p) { return QString::fromStdString(p.id) == disposableId; });
@@ -2127,12 +2146,16 @@ static bool TestProfileDialogs() {
         hasEvent(AppLogLevel::Warning, "Profile update failed or was rolled back") &&
         hasEvent(AppLogLevel::Info, "Profile archive transaction committed") &&
         hasEvent(AppLogLevel::Warning, "Profile archive transaction failed or was rolled back") &&
+        hasEvent(AppLogLevel::Warning, "Profile deletion failed or was rolled back") &&
+        hasEvent(AppLogLevel::Info, "Profile deletion committed") &&
         hasEvent(AppLogLevel::Info, "Profile restore transaction committed") &&
         hasEvent(AppLogLevel::Info, "Profile password transaction committed") &&
         hasEvent(AppLogLevel::Warning, "Profile password transaction failed or was rolled back");
     for (const auto& [level, event] : coreEvents) {
         (void)level;
         checks &= event.find(created->id) == std::string::npos &&
+            event.find(disposableId.toStdString()) == std::string::npos &&
+            event.find("Новый профиль") == std::string::npos &&
             event.find("reset-password") == std::string::npos && event.find("my-password") == std::string::npos;
         checks &= event.find(resetPasswordResult.toUtf8().toStdString()) == std::string::npos;
     }

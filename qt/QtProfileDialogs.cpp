@@ -372,20 +372,33 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
         confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
         bool prepared = false;
+        bool committed = false;
+        bool recoveryPending = false;
         try {
             PrepareProfileDeletionRecovery(workspace.directory, info->id);
             prepared = true;
             const auto result = AppDeleteEmptyArchivedProfile(*workspace.storage, workspace.profiles, workspace.data.tasks, info->id);
             if (!result.ok) throw std::runtime_error(result.errorMessage);
             CommitQtRecoveryTransaction(workspace.directory);
+            committed = true;
             status->setText(QString::fromUtf8("Пустой архивный профиль удалён."));
         } catch (const std::exception& error) {
             std::string text = error.what();
-            if (prepared) {
+            if (prepared && !committed) {
                 try { text += RecoverTaskCompletionWithNotice(workspace.directory); }
-                catch (const std::exception&) { text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt."; }
+                catch (const std::exception&) {
+                    recoveryPending = true;
+                    text += u8" Восстановление не завершено; журнал сохранён до перезапуска Qt.";
+                }
             }
             status->setText(q(text));
+        }
+        if (workspace.profileEventLogger) {
+            const auto level = committed ? AppLogLevel::Info : recoveryPending ? AppLogLevel::Error : AppLogLevel::Warning;
+            const char* event = committed ? "Profile deletion committed" :
+                recoveryPending ? "Profile deletion recovery remains pending" :
+                "Profile deletion failed or was rolled back";
+            try { workspace.profileEventLogger(level, event); } catch (...) {}
         }
         refresh();
     });
