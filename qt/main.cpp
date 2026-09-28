@@ -33,14 +33,18 @@ int main(int argc, char** argv) {
     ApplyQtTheme(app);
     QCommandLineParser parser;
     parser.setApplicationDescription(QString::fromUtf8("ForgeMirror Qt — изолированный клиент переноса"));
-    parser.addHelpOption();
-    parser.addVersionOption();
+    const auto helpOption = parser.addHelpOption();
+    const auto versionOption = parser.addVersionOption();
     parser.addOption({"storage-dir", "Explicit test workspace (never use the production directory).", "path"});
     parser.addOption({"smoke-test", "Open the real window and exit after one second."});
     parser.addOption({"screenshot", "Save the Qt window as PNG before smoke-test exit.", "path"});
     parser.addOption({"deadline-agent", "One-shot deadline notifier used by the opt-in Windows schedule."});
     parser.addOption({"remove-deadline-schedule", "Remove this installation's opt-in Windows deadline schedule."});
     parser.process(app);
+    // QCommandLineParser schedules QCoreApplication::exit() for these built-in
+    // options. Because this GUI entry point starts the event loop later, return
+    // now so informational CLI requests never construct the workspace/window.
+    if (parser.isSet(helpOption) || parser.isSet(versionOption)) return 0;
     if (parser.isSet("remove-deadline-schedule"))
         return ConfigureQtDeadlineSchedule(false, nullptr) ? 0 : 1;
     try {

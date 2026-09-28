@@ -633,11 +633,17 @@ static bool TestCloudPullTransaction() {
 #endif
     // Recreate an interrupted commit, then recover through the actual workspace constructor.
     const QByteArray before = bytes(result.backupPath / "meta/tasks.json");
+    const QByteArray pulledTasks = "[{\"id\":\"cloud\"}]";
+    const QByteArray pulledBanner = "[\"remote\"]";
+    const QByteArray emptyHash = QCryptographicHash::hash({}, QCryptographicHash::Sha256).toHex();
     QJsonArray entries{QJsonObject{{"path", "meta/tasks.json"}, {"existed", true},
-        {"hash", QString::fromLatin1(QCryptographicHash::hash(before, QCryptographicHash::Sha256).toHex())}},
-        QJsonObject{{"path", "meta/banner.json"}, {"existed", false}}};
+        {"hash", QString::fromLatin1(QCryptographicHash::hash(before, QCryptographicHash::Sha256).toHex())},
+        {"afterExists", true}, {"afterHash", QString::fromLatin1(QCryptographicHash::hash(pulledTasks, QCryptographicHash::Sha256).toHex())}},
+        QJsonObject{{"path", "meta/banner.json"}, {"existed", false}, {"hash", QString::fromLatin1(emptyHash)},
+            {"afterExists", true}, {"afterHash", QString::fromLatin1(QCryptographicHash::hash(pulledBanner, QCryptographicHash::Sha256).toHex())}}};
     const auto journal = workspace / "meta/qt-cloud-pull.json";
-    auto journalBytes = QJsonDocument(QJsonObject{{"version", 1},
+    if (!write(workspace / "meta/tasks.json", pulledTasks) || !write(workspace / "meta/banner.json", pulledBanner)) return false;
+    auto journalBytes = QJsonDocument(QJsonObject{{"version", 2},
         {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", entries}}).toJson();
     if (!write(journal, journalBytes)) return false;
     {
@@ -651,8 +657,34 @@ static bool TestCloudPullTransaction() {
     }
     if (bytes(workspace / "meta/tasks.json") != before || std::filesystem::exists(journal) ||
         std::filesystem::exists(workspace / "meta/banner.json")) return false;
+
+    // If another client edits one target after an interrupted pull, validate every target
+    // before restoring any of them. The conflicting bytes and the other pulled file stay intact.
+    if (!write(workspace / "meta/tasks.json", pulledTasks) || !write(workspace / "meta/banner.json", pulledBanner) ||
+        !write(journal, journalBytes) || !write(workspace / "meta/tasks.json", "[{\"id\":\"external\"}]")) return false;
+    bool externalChangeRejected = false;
+    try { RecoverQtCloudPull(workspace); } catch (const std::exception&) { externalChangeRejected = true; }
+    if (!externalChangeRejected || bytes(workspace / "meta/tasks.json") != "[{\"id\":\"external\"}]" ||
+        bytes(workspace / "meta/banner.json") != pulledBanner || !std::filesystem::exists(journal)) return false;
+    if (!write(workspace / "meta/tasks.json", pulledTasks) || !RecoverQtCloudPull(workspace) ||
+        bytes(workspace / "meta/tasks.json") != before || std::filesystem::exists(workspace / "meta/banner.json") ||
+        std::filesystem::exists(journal)) return false;
+
+    // A v1 journal lacks the applied-state hashes, so a changed target must be left untouched
+    // for manual inspection instead of being guessed to be a partial pull write.
+    const auto legacyEntries = QJsonArray{QJsonObject{{"path", "meta/tasks.json"}, {"existed", true},
+        {"hash", QString::fromLatin1(QCryptographicHash::hash(before, QCryptographicHash::Sha256).toHex())}}};
+    const auto legacyJournal = QJsonDocument(QJsonObject{{"version", 1},
+        {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", legacyEntries}}).toJson();
+    if (!write(workspace / "meta/tasks.json", "[{\"id\":\"legacy-external\"}]") || !write(journal, legacyJournal)) return false;
+    bool legacyConflictRejected = false;
+    try { RecoverQtCloudPull(workspace); } catch (const std::exception&) { legacyConflictRejected = true; }
+    if (!legacyConflictRejected || bytes(workspace / "meta/tasks.json") != "[{\"id\":\"legacy-external\"}]" ||
+        !std::filesystem::exists(journal)) return false;
+    if (!write(workspace / "meta/tasks.json", before) || !RecoverQtCloudPull(workspace) || std::filesystem::exists(journal)) return false;
+
     entries.append(QJsonObject{{"path", "../outside.ini"}, {"existed", false}});
-    journalBytes = QJsonDocument(QJsonObject{{"version", 1},
+    journalBytes = QJsonDocument(QJsonObject{{"version", 2},
         {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", entries}}).toJson();
     if (!write(journal, journalBytes)) return false;
     bool rejected = false;
@@ -1059,9 +1091,36 @@ static bool TestQtAdminAuthAcrossProcesses() {
     }
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    const auto isolatedLocalData = temp.path() + QStringLiteral("/local-app-data");
+    const auto isolatedRoamingData = temp.path() + QStringLiteral("/roaming-app-data");
+    QDir().mkpath(isolatedLocalData); QDir().mkpath(isolatedRoamingData);
+    environment.insert(QStringLiteral("LOCALAPPDATA"), isolatedLocalData);
+    environment.insert(QStringLiteral("APPDATA"), isolatedRoamingData);
     environment.remove(QStringLiteral("FORGEMIRROR_ADMIN_PASSWORD"));
+    environment.remove(QStringLiteral("FORGEMIRROR_STORAGE_DIR"));
     environment.remove(QStringLiteral("QT_PLUGIN_PATH"));
     environment.remove(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"));
+
+    auto verifyInformationalOption = [&](const QString& option, const QByteArray& expected) {
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        process.start(executable, {option});
+        if (!process.waitForStarted(5000) || !process.waitForFinished(5000)) {
+            process.kill(); process.waitForFinished(2000);
+            std::cerr << "Qt CLI option did not exit: " << option.toStdString() << '\n';
+            return false;
+        }
+        const auto output = process.readAllStandardOutput() + process.readAllStandardError();
+        if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0 || !output.contains(expected)) {
+            std::cerr << "Qt CLI option returned unexpected result: " << option.toStdString()
+                      << " exit=" << process.exitCode() << " output=" << output.toStdString() << '\n';
+            return false;
+        }
+        return true;
+    };
+    if (!verifyInformationalOption(QStringLiteral("--version"), QByteArray(APP_VERSION)) ||
+        !verifyInformationalOption(QStringLiteral("--help"), QByteArray("--storage-dir")) ||
+        QDir(isolatedLocalData + QStringLiteral("/Pharos/ForgeMirrorQt/workspace")).exists()) return false;
 
     for (int launch = 1; launch <= 3; ++launch) {
         QProcess process;

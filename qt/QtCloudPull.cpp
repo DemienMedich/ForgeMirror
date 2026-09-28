@@ -87,6 +87,11 @@ bool safeRelative(const QString& name) {
     return meta.count(name) != 0;
 }
 QByteArray hash(const QByteArray& bytes) { return QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex(); }
+bool matches(const fs::path& file, bool exists, const QByteArray& expectedHash) {
+    checkPath(file);
+    if (!fs::exists(file)) return !exists;
+    return exists && fs::is_regular_file(file) && hash(read(file)) == expectedHash;
+}
 }
 
 bool RecoverQtCloudPull(const std::filesystem::path& workspace) {
@@ -96,7 +101,8 @@ bool RecoverQtCloudPull(const std::filesystem::path& workspace) {
     QJsonParseError error;
     const auto doc = QJsonDocument::fromJson(read(journal), &error);
     const auto obj = doc.object();
-    require(error.error == QJsonParseError::NoError && obj["version"].toInt() == 1 &&
+    const int journalVersion = obj["version"].toInt();
+    require(error.error == QJsonParseError::NoError && (journalVersion == 1 || journalVersion == 2) &&
             obj["files"].isArray(), u8"Повреждён журнал pull. Рабочая папка заблокирована до восстановления.");
     const auto name = obj["backup"].toString();
     require(QRegularExpression("^qt-cloud-backup-[0-9a-f-]{36}$").match(name).hasMatch(),
@@ -111,20 +117,47 @@ bool RecoverQtCloudPull(const std::filesystem::path& workspace) {
         const auto item = entry.toObject(); const auto relative = item["path"].toString();
         require(safeRelative(relative) && seen.insert(relative.toCaseFolded()).second && item["existed"].isBool(),
                 u8"Некорректная запись журнала pull.");
+        const bool beforeExists = item["existed"].toBool();
+        const auto beforeHash = item["hash"].toString().toLatin1();
+        const auto hashValid = [](const QByteArray& value) {
+            return QRegularExpression("^[0-9a-f]{64}$").match(QString::fromLatin1(value)).hasMatch();
+        };
+        require((!beforeExists || hashValid(beforeHash)), u8"Некорректная контрольная сумма исходного файла pull.");
+        bool afterExists = false;
+        QByteArray afterHash;
+        if (journalVersion == 2) {
+            require(item["afterExists"].isBool(), u8"В журнале pull отсутствует ожидаемое состояние файла.");
+            afterExists = item["afterExists"].toBool();
+            afterHash = item["afterHash"].toString().toLatin1();
+            require((!afterExists || hashValid(afterHash)) && (beforeExists || afterExists),
+                    u8"Некорректная контрольная сумма целевого файла pull.");
+        }
         checkPath(workspace / p(relative)); checkPath(backup / p(relative));
         require(!fs::exists(workspace / p(relative)) || fs::is_regular_file(workspace / p(relative)),
                 u8"Вместо файла pull найден каталог.");
-        if (item["existed"].toBool())
-            require(hash(read(backup / p(relative))) == item["hash"].toString().toLatin1(),
+        if (beforeExists)
+            require(fs::is_regular_file(backup / p(relative)) && hash(read(backup / p(relative))) == beforeHash,
                     u8"Резервная копия pull повреждена.");
+        if (journalVersion == 2) {
+            require(matches(workspace / p(relative), beforeExists, beforeHash) ||
+                    matches(workspace / p(relative), afterExists, afterHash),
+                    u8"Файл рабочего места изменён вне pull; откат остановлен, чтобы не затереть внешние данные.");
+        } else {
+            // A v1 journal has no post-image hash. We cannot distinguish a partial pull write from a
+            // later external edit, so only finish recovery when every target is still at its pre-image.
+            require(matches(workspace / p(relative), beforeExists, beforeHash),
+                    u8"Старый журнал pull не содержит контрольной суммы результата; внешний файл не изменён, но откат требует ручной проверки.");
+        }
     }
     for (const auto& entry : entries) {
         const auto item = entry.toObject(); const auto relative = p(item["path"].toString());
         const auto target = workspace / relative;
-        if (item["existed"].toBool()) {
+        const bool beforeExists = item["existed"].toBool();
+        const auto beforeHash = item["hash"].toString().toLatin1();
+        if (beforeExists) {
             const auto before = read(backup / relative);
             // An unchanged sharing-locked file must not prevent other files' rollback.
-            if (!fs::exists(target) || read(target) != before) write(target, before);
+            if (!matches(target, true, beforeHash)) write(target, before);
         } else if (fs::exists(target)) {
             require(fs::is_regular_file(target) && fs::remove(target), u8"Не удалось отменить новый файл pull.");
         }
@@ -157,7 +190,8 @@ QtCloudPullResult RunQtCloudPullTransaction(const CloudSyncConfig& config,
         require(result.sync.ok, result.sync.message.c_str());
         require(!result.sync.storageConflict, u8"Конфликт storage.json: pull отменён до изменения локальных данных.");
         QJsonArray entries;
-        for (const auto& relative : inventory(stage)) {
+        const auto stagedFiles = inventory(stage);
+        for (const auto& relative : stagedFiles) {
             const auto data = read(stage / relative);
             const bool existed = original.count(relative) != 0;
             const auto before = existed ? originals.at(relative) : QByteArray();
@@ -170,7 +204,16 @@ QtCloudPullResult RunQtCloudPullTransaction(const CloudSyncConfig& config,
                 require(parse.error == QJsonParseError::NoError && (parsed.isObject() || parsed.isArray()),
                         u8"Облачный JSON повреждён: pull отменён.");
             }
-            entries.append(QJsonObject{{"path", name}, {"existed", existed}, {"hash", QString::fromLatin1(hash(before))}});
+            entries.append(QJsonObject{{"path", name}, {"existed", existed}, {"hash", QString::fromLatin1(hash(before))},
+                {"afterExists", true}, {"afterHash", QString::fromLatin1(hash(data))}});
+        }
+        for (const auto& relative : original) {
+            if (stagedFiles.count(relative)) continue;
+            const auto name = QString::fromUtf8(relative.generic_u8string());
+            require(safeRelative(name), u8"Pull попытался удалить неподдерживаемый файл.");
+            const auto before = originals.at(relative);
+            entries.append(QJsonObject{{"path", name}, {"existed", true}, {"hash", QString::fromLatin1(hash(before))},
+                {"afterExists", false}, {"afterHash", QString()}});
         }
         if (entries.isEmpty()) { result.sync.changed = false; result.message = u8"Локальная и облачная копии совпадают."; return result; }
         const auto name = "qt-cloud-backup-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -183,7 +226,7 @@ QtCloudPullResult RunQtCloudPullTransaction(const CloudSyncConfig& config,
                 (!item["existed"].toBool() || hash(read(target)) == item["hash"].toString().toLatin1()),
                 u8"Локальные данные изменились во время подготовки pull. Повторите операцию.");
         }
-        write(workspace / journalName, QJsonDocument(QJsonObject{{"version", 1}, {"backup", name}, {"files", entries}}).toJson());
+        write(workspace / journalName, QJsonDocument(QJsonObject{{"version", 2}, {"backup", name}, {"files", entries}}).toJson());
         journalCreated = true;
         for (const auto& entry : entries) {
             const auto relative = p(entry.toObject()["path"].toString());
