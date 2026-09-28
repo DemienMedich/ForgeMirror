@@ -5232,10 +5232,12 @@ static bool TestQtModuleToggleParity() {
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* title = window.findChild<QLabel*>("title");
     auto* achievementButton = window.findChild<QPushButton*>("showAchievements");
-    if (!navigation || !title || !achievementButton) return false;
+    auto* shortcutLauncher = window.findChild<QToolButton*>("quickShortcutLauncher");
+    if (!navigation || !title || !achievementButton || !shortcutLauncher) return false;
     for (int page : {1, 4, 5, 7, 8, 11, 13, 14, 15})
         if (!navigation->item(page)->isHidden()) return false;
     if (!achievementButton->isHidden()) return false;
+    if (!shortcutLauncher->isHidden()) return false;
     navigation->setCurrentRow(13);
     QApplication::processEvents();
     if (navigation->currentRow() != 0 || title->text() != QString::fromUtf8("Профиль")) return false;
@@ -5292,6 +5294,48 @@ static bool TestShortcutPersistence() {
     if (failed.ok || shortcuts.size() != 2 || shortcuts.front().label != u8"Второй" || !stored.open(QIODevice::ReadOnly)) return false;
     const auto after = stored.readAll(); stored.close();
     return before == after;
+}
+
+static bool TestQuickShortcutLauncher() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    std::vector<ShortcutEntry> shortcuts;
+    const QString runningPath = QCoreApplication::applicationFilePath();
+    const QString missingPath = temp.path() + "/not-running.exe";
+    const QString unknownPath = temp.path() + "/document.txt";
+    QFile missingFile(missingPath), unknownFile(unknownPath);
+    if (!missingFile.open(QIODevice::WriteOnly) || missingFile.write("fixture") != 7) return false;
+    missingFile.close();
+    if (!unknownFile.open(QIODevice::WriteOnly) || unknownFile.write("fixture") != 7) return false;
+    unknownFile.close();
+    const std::vector<QPair<QString, QString>> entries{{"Running", runningPath}, {"Stopped", missingPath}, {"Unknown", unknownPath}};
+    for (const auto& item : entries)
+        if (!AppAddShortcut(directory, shortcuts, item.first.toUtf8().toStdString(), item.second.toUtf8().toStdString()).ok) return false;
+    QtWorkspace workspace(directory);
+    QtWindow window(workspace);
+    auto* launcher = window.findChild<QToolButton*>("quickShortcutLauncher");
+    auto* menu = window.findChild<QMenu*>("quickShortcutMenu");
+    if (!launcher || !menu || launcher->accessibleName() != QString::fromUtf8("Быстрый запуск ярлыков")) return false;
+    QMetaObject::invokeMethod(menu, "aboutToShow", Qt::DirectConnection);
+    int seen = 0;
+    for (auto* action : menu->actions()) {
+        if (action->objectName() != "quickShortcutAction") continue;
+        ++seen;
+        const auto id = action->data().toString();
+        const int expected = id == QString::fromStdString(shortcuts[0].id) ? 1 :
+            id == QString::fromStdString(shortcuts[1].id) ? 2 :
+            id == QString::fromStdString(shortcuts[2].id) ? 0 : -1;
+        if (expected < 0 || action->property("shortcutRunState").toInt() != expected || action->icon().isNull()) return false;
+    }
+    if (seen != 3) return false;
+    QAction* manage = nullptr;
+    for (auto* action : menu->actions()) if (action->objectName() == "manageShortcutsAction") manage = action;
+    if (!manage) return false;
+    menu->close();
+    manage->trigger();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    return navigation && navigation->currentRow() == 11;
 }
 
 static bool TestLogActivityHistogram() {
@@ -5413,6 +5457,7 @@ int main(int argc, char** argv) {
     if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
+    if (!TestQuickShortcutLauncher()) { std::cerr << "Quick shortcut launcher failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestProfileReportExport()) { std::cerr << "Profile report export failed\n"; return 1; }
     if (!TestQtStorageHealthReport()) { std::cerr << "Qt storage health report failed\n"; return 1; }

@@ -36,6 +36,7 @@ class QAction;
 class QSlider;
 class QCheckBox;
 class QToolButton;
+class QMenu;
 class QAction;
 class QSpinBox;
 class QDoubleSpinBox;
@@ -183,6 +184,8 @@ private:
     QTextBrowser* details_;
     QPushButton* primary_;
     QToolButton* dragHandle_;
+    QToolButton* shortcutLauncher_ = nullptr;
+    QMenu* shortcutMenu_ = nullptr;
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
     QPushButton* bulkEdit_;

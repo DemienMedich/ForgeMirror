@@ -48,6 +48,11 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <tlhelp32.h>
+#endif
 
 class QtBackgroundSurface final : public QWidget {
 public:
@@ -421,6 +426,48 @@ int reportDeadlineGroup(const TaskEntry& task, std::int64_t now) {
 }
 }
 
+enum class QtShortcutRunState { Unknown, Running, NotRunning };
+static std::vector<QtShortcutRunState> qtShortcutRunStates(const std::vector<ShortcutEntry>& entries) {
+    std::vector<QtShortcutRunState> states(entries.size(), QtShortcutRunState::Unknown);
+#ifdef _WIN32
+    QSet<QString> running;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return states;
+    PROCESSENTRY32W process{};
+    process.dwSize = sizeof(process);
+    if (Process32FirstW(snapshot, &process)) {
+        do {
+            const QString candidate = QFileInfo(QString::fromWCharArray(process.szExeFile)).completeBaseName();
+            if (!candidate.isEmpty()) running.insert(candidate.toCaseFolded());
+        } while (Process32NextW(snapshot, &process));
+    } else {
+        CloseHandle(snapshot);
+        return states;
+    }
+    CloseHandle(snapshot);
+    for (size_t index = 0; index < entries.size(); ++index) {
+        const auto& entry = entries[index];
+        if (QFileInfo(q(entry.path)).suffix().compare(QStringLiteral("exe"), Qt::CaseInsensitive) != 0) continue;
+        const QString wanted = QFileInfo(q(entry.path)).completeBaseName();
+        if (!wanted.isEmpty()) states[index] = running.contains(wanted.toCaseFolded())
+            ? QtShortcutRunState::Running : QtShortcutRunState::NotRunning;
+    }
+#endif
+    return states;
+}
+static QIcon qtShortcutStatusIcon(QtShortcutRunState state) {
+    QPixmap pixmap(14, 14);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    const QColor color = state == QtShortcutRunState::Running ? QColor(70, 190, 105) :
+        state == QtShortcutRunState::NotRunning ? QColor(220, 90, 90) : QColor(135, 140, 150);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    painter.drawEllipse(QRect(2, 2, 10, 10));
+    return QIcon(pixmap);
+}
+
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
     admin_ = (!adminPasswordOverride || !*adminPasswordOverride) && LoadAdminStayLoggedIn(workspace_.directory);
@@ -461,6 +508,40 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* refresh = new QPushButton(QString::fromUtf8("Обновить"));
     refresh->setToolTip(QString::fromUtf8("Перечитать локальную копию данных без облачной синхронизации"));
     header->addWidget(refresh);
+    shortcutLauncher_ = new QToolButton;
+    shortcutLauncher_->setObjectName("quickShortcutLauncher");
+    shortcutLauncher_->setText(QString::fromUtf8("Ярлыки"));
+    shortcutLauncher_->setAccessibleName(QString::fromUtf8("Быстрый запуск ярлыков"));
+    shortcutLauncher_->setAccessibleDescription(QString::fromUtf8("Открывает сохранённые программы; цвет точки показывает состояние процесса."));
+    shortcutLauncher_->setToolTip(QString::fromUtf8("Быстрый запуск. Зелёная точка — запущена, красная — не запущена, серая — статус неизвестен."));
+    shortcutLauncher_->setPopupMode(QToolButton::InstantPopup);
+    shortcutMenu_ = new QMenu(shortcutLauncher_);
+    shortcutMenu_->setObjectName("quickShortcutMenu");
+    shortcutLauncher_->setMenu(shortcutMenu_);
+    connect(shortcutMenu_, &QMenu::aboutToShow, this, [this] {
+        shortcutMenu_->clear();
+        const auto entries = LoadShortcutsData(workspace_.directory);
+        const auto states = qtShortcutRunStates(entries);
+        for (size_t index = 0; index < entries.size(); ++index) {
+            const auto& entry = entries[index];
+            const auto state = states[index];
+            auto* action = shortcutMenu_->addAction(qtShortcutStatusIcon(state), q(entry.label));
+            action->setObjectName("quickShortcutAction");
+            action->setData(q(entry.id));
+            action->setProperty("shortcutRunState", int(state));
+            action->setToolTip(state == QtShortcutRunState::Running ? QString::fromUtf8("Запущена") :
+                state == QtShortcutRunState::NotRunning ? QString::fromUtf8("Не запущена") : QString::fromUtf8("Статус недоступен"));
+            const auto path = q(entry.path);
+            connect(action, &QAction::triggered, this, [path] { QDesktopServices::openUrl(QUrl::fromLocalFile(path)); });
+        }
+        if (!shortcutMenu_->actions().isEmpty()) shortcutMenu_->addSeparator();
+        auto* manage = shortcutMenu_->addAction(QString::fromUtf8("Управление ярлыками…"));
+        manage->setObjectName("manageShortcutsAction");
+        connect(manage, &QAction::triggered, this, [this] {
+            navigation_->setCurrentRow(Shortcuts);
+        });
+    });
+    header->addWidget(shortcutLauncher_);
     auto* menuButton = new QToolButton;
     menuButton->setText(QString::fromUtf8("⋯"));
     menuButton->setPopupMode(QToolButton::InstantPopup);
@@ -2375,6 +2456,7 @@ void QtWindow::render() {
     ownPasswordAction_->setEnabled(unlocked);
     storageHealthReportAction_->setVisible(admin_);
     storageCleanupAction_->setVisible(admin_);
+    shortcutLauncher_->setVisible(workspace_.modules.shortcuts);
     navigation_->item(ModelViewerPage)->setHidden(!workspace_.modules.view3d);
     navigation_->item(ModelSettingsPage)->setHidden(!workspace_.modules.view3d || !admin_);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
