@@ -55,14 +55,28 @@ void QtLogActivityChart::setEntries(const std::vector<AppLogEntry>& entries) {
     values_ = BuildHistogram(entries);
     firstTimestamp_ = 0;
     lastTimestamp_ = 0;
+    bool hasMissingTimestamp = false;
     for (const auto& entry : entries) {
-        if (entry.timestamp <= 0) continue;
+        if (entry.timestamp <= 0) { hasMissingTimestamp = true; continue; }
         if (firstTimestamp_ == 0 || entry.timestamp < firstTimestamp_) firstTimestamp_ = entry.timestamp;
         if (entry.timestamp > lastTimestamp_) lastTimestamp_ = entry.timestamp;
     }
     QStringList bins;
-    for (const int count : values_) bins << QString::number(count);
-    setAccessibleDescription(QString::fromUtf8("Распределение %1 записей по 16 временным интервалам: ").arg(entries.size()) + bins.join(", "));
+    for (int index = 0; index < int(values_.size()); ++index)
+        bins << QString::fromUtf8("Интервал %1: %2").arg(index + 1).arg(values_[size_t(index)]);
+    QString description = QString::fromUtf8("Распределение %1 записей журнала по 16 интервалам от самых ранних к поздним. График не зависит от фильтров. ")
+        .arg(entries.size());
+    if (firstTimestamp_ > 0) {
+        description += QString::fromUtf8("Диапазон записей с временной меткой: %1 — %2. ")
+            .arg(QDateTime::fromSecsSinceEpoch(firstTimestamp_).toString("yyyy-MM-dd HH:mm"),
+                 QDateTime::fromSecsSinceEpoch(lastTimestamp_).toString("yyyy-MM-dd HH:mm"));
+    }
+    if (firstTimestamp_ == 0 || firstTimestamp_ == lastTimestamp_)
+        description += QString::fromUtf8("Временной диапазон неразличим; интервалы сформированы по исходному порядку записей. ");
+    else if (hasMissingTimestamp)
+        description += QString::fromUtf8("Записи без временной метки распределены по исходному порядку. ");
+    description += QString::fromUtf8("Число записей по интервалам: ") + bins.join(QStringLiteral("; ")) + QLatin1Char('.');
+    setAccessibleDescription(description);
     update();
 }
 

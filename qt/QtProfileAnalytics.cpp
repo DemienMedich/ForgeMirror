@@ -31,7 +31,10 @@ QtProfileAnalytics::QtProfileAnalytics(QWidget* parent) : QWidget(parent) {
     toolbar->addWidget(axisCount_);
     toolbar->addStretch(1);
     layout->addLayout(toolbar);
-    connect(axisCount_, qOverload<int>(&QSpinBox::valueChanged), this, qOverload<>(&QWidget::update));
+    connect(axisCount_, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
+        updateAccessibleDescription();
+        update();
+    });
     setAccessibleName(QString::fromUtf8("Аналитика профиля: категории, топ навыков и радар"));
 }
 
@@ -54,13 +57,42 @@ void QtProfileAnalytics::setData(const std::array<int, 5>& categoryScores,
     axisCount_->setEnabled(maximum >= 3);
     axisCount_->setRange(3, std::max(3, maximum));
     if (!skills_.empty() && maximum < axisCount_->value()) axisCount_->setValue(maximum);
-    QStringList description;
-    for (int i = 0; i < categoryLabels_.size() && i < int(categoryScores_.size()); ++i)
-        description << QString::fromUtf8("%1: %2/10").arg(categoryLabels_[i]).arg(categoryScores_[size_t(i)]);
-    for (const auto& skill : skills_) description << QString::fromUtf8("%1: уровень %2, всего XP %3")
-        .arg(skill.name).arg(skill.level).arg(skill.totalXp);
-    setAccessibleDescription(description.join(QString::fromUtf8(". ")));
+    updateAccessibleDescription();
     update();
+}
+
+void QtProfileAnalytics::updateAccessibleDescription() {
+    QStringList description;
+    QStringList categories;
+    for (int i = 0; i < categoryLabels_.size() && i < int(categoryScores_.size()); ++i)
+        categories << QString::fromUtf8("%1: %2/10").arg(categoryLabels_[i]).arg(categoryScores_[size_t(i)]);
+    description << QString::fromUtf8("Оценки категорий из 10: ") + categories.join(QStringLiteral("; "));
+
+    const auto topSix = TopSkills(skills_, 6);
+    QStringList topSkillValues;
+    for (const auto& skill : topSix)
+        topSkillValues << QString::fromUtf8("%1: %2 XP").arg(skill.name).arg(skill.totalXp);
+    description << QString::fromUtf8("Топ навыков по общему XP: ") + topSkillValues.join(QStringLiteral("; "));
+
+    const int radarAxes = std::min(axisCount_->value(), int(skills_.size()));
+    QStringList radarValues;
+    for (int i = 0; i < radarAxes; ++i) {
+        const auto& skill = skills_[size_t(i)];
+        if (skill.nextLevelXp > 0) {
+            radarValues << QString::fromUtf8("%1: уровень %2 + %3/%4 XP")
+                .arg(skill.name).arg(skill.level).arg(skill.currentXp).arg(skill.nextLevelXp);
+        } else {
+            radarValues << QString::fromUtf8("%1: уровень %2, прогресс XP недоступен")
+                .arg(skill.name).arg(skill.level);
+        }
+    }
+    if (radarAxes >= 3) {
+        description << QString::fromUtf8("Радар: %1 навыков с наибольшим общим XP; показан уровень и прогресс до следующего уровня: ")
+            .arg(radarAxes) + radarValues.join(QStringLiteral("; "));
+    } else {
+        description << QString::fromUtf8("Радар недоступен: нужно не менее 3 навыков с XP.");
+    }
+    setAccessibleDescription(description.join(QString::fromUtf8(". ")));
 }
 
 void QtProfileAnalytics::paintEvent(QPaintEvent* event) {

@@ -28,6 +28,7 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
 private:
+    void updateAccessibleDescription();
     std::array<int, 5> categoryScores_{};
     QStringList categoryLabels_;
     std::vector<QtProfileSkillMetric> skills_;

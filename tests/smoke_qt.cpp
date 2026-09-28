@@ -4075,10 +4075,16 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
     auto* chart = static_cast<QtReportChart*>(window.findChild<QWidget*>("statisticsStatusChart"));
     QApplication::processEvents();
     if (!chart || !chart->isVisible()) return false;
+    const auto* chartAccessible = QAccessible::queryAccessibleInterface(chart);
+    if (!chartAccessible) return false;
+    const auto chartDescription = chartAccessible->text(QAccessible::Description);
     const int markerIndex = (markerDate.year() - firstMonth.year()) * 12 + markerDate.month() - firstMonth.month();
-    return chart->completionTrend()[size_t(markerIndex)] == 1 &&
-        chart->completionTrend()[11] == 205 &&
-        chart->accessibleDescription().contains(QString::fromUtf8("последние 12 месяцев"));
+    if (chart->completionTrend()[size_t(markerIndex)] != 1 || chart->completionTrend()[11] != 205) return false;
+    const auto markerLabel = markerDate.toString("yyyy-MM") + QStringLiteral(": 1");
+    const auto currentLabel = today.toString("yyyy-MM") + QStringLiteral(": 205");
+    if (!chartDescription.contains(markerLabel) || !chartDescription.contains(currentLabel)) return false;
+    chart->setCompletionTrend(chart->completionTrend());
+    return chart->accessibleDescription().count(QString::fromUtf8("Завершения по месяцам")) == 1;
 }
 
 static bool TestPipelineMap() {
@@ -5891,6 +5897,15 @@ static bool TestLogActivityHistogram() {
     const auto histogram = QtLogActivityChart::BuildHistogram(entries);
     if (histogram[0] != 2 || histogram[7] != 1 || histogram[15] != 1 ||
         std::accumulate(histogram.begin(), histogram.end(), 0) != int(entries.size())) return false;
+    QtLogActivityChart chart;
+    chart.setEntries(entries);
+    const auto dateRange = QString::fromUtf8("%1 — %2")
+        .arg(QDateTime::fromSecsSinceEpoch(100).toString("yyyy-MM-dd HH:mm"),
+             QDateTime::fromSecsSinceEpoch(200).toString("yyyy-MM-dd HH:mm"));
+    if (!chart.accessibleDescription().contains(QString::fromUtf8("Интервал 1: 2")) ||
+        !chart.accessibleDescription().contains(QString::fromUtf8("Интервал 8: 1")) ||
+        !chart.accessibleDescription().contains(QString::fromUtf8("Интервал 16: 1")) ||
+        !chart.accessibleDescription().contains(dateRange)) return false;
     const std::vector<AppLogEntry> identicalTimes{
         {500, AppLogLevel::Info, "Qt", "one"},
         {500, AppLogLevel::Info, "Qt", "two"},
@@ -5899,13 +5914,17 @@ static bool TestLogActivityHistogram() {
     const auto fallback = QtLogActivityChart::BuildHistogram(identicalTimes);
     if (fallback[0] != 1 || fallback[5] != 1 || fallback[10] != 1 ||
         std::accumulate(fallback.begin(), fallback.end(), 0) != int(identicalTimes.size())) return false;
+    chart.setEntries(identicalTimes);
+    if (!chart.accessibleDescription().contains(QString::fromUtf8("Временной диапазон неразличим"))) return false;
     const std::vector<AppLogEntry> missingTimes{
         {100, AppLogLevel::Info, "Qt", "first"},
         {0, AppLogLevel::Warning, "Qt", "unknown time"},
         {200, AppLogLevel::Error, "Qt", "last"}
     };
     const auto withMissingTime = QtLogActivityChart::BuildHistogram(missingTimes);
-    return std::accumulate(withMissingTime.begin(), withMissingTime.end(), 0) == int(missingTimes.size());
+    chart.setEntries(missingTimes);
+    return std::accumulate(withMissingTime.begin(), withMissingTime.end(), 0) == int(missingTimes.size()) &&
+        chart.accessibleDescription().contains(QString::fromUtf8("Записи без временной метки распределены"));
 }
 
 static bool TestQtLogSourceSanitizationAndRetention() {
@@ -6112,8 +6131,19 @@ int main(int argc, char** argv) {
     if (!profileCharts || !profileCharts->isVisible() || !profileCharts->axisControl()->isEnabled() ||
         profileCharts->axisControl()->maximum() != 4 ||
         !profileCharts->accessibleDescription().contains(QString::fromUtf8(Profile::kCategoryLabels[0])) ||
-        !profileCharts->accessibleDescription().contains(QString::fromUtf8("всего XP")))
+        !profileCharts->accessibleDescription().contains(QString::fromUtf8("Топ навыков по общему XP")) ||
+        !profileCharts->accessibleDescription().contains(QString::fromUtf8("Радар:")) ||
+        !profileCharts->accessibleDescription().contains(QString::fromUtf8("уровень 1 +")) ||
+        !profileCharts->accessibleDescription().contains(QString::fromUtf8("Моделирование")))
         return fail("Profile analytics category, skill chart, or accessible radar controls missing");
+    const auto* profileChartsAccessible = QAccessible::queryAccessibleInterface(profileCharts);
+    if (!profileChartsAccessible || !profileChartsAccessible->text(QAccessible::Description)
+            .contains(QString::fromUtf8("уровень 1 +")))
+        return fail("Profile chart values were not exposed through QAccessible");
+    profileCharts->axisControl()->setValue(3);
+    if (!profileCharts->accessibleDescription().contains(QString::fromUtf8("Радар: 3 навыков")))
+        return fail("Profile radar accessible data did not follow the selected axis count");
+    profileCharts->axisControl()->setValue(4);
     const auto rankedCharts = QtProfileAnalytics::TopSkills({
         {"Низкий", 1, 0, 100, 12, 1.0}, {"Высокий", 2, 0, 100, 240, 1.0},
         {"Средний", 1, 0, 100, 81, 1.0}}, 2);
@@ -6738,8 +6768,13 @@ int main(int argc, char** argv) {
     auto* logActivityChartWidget = window.findChild<QWidget*>("logActivityChart");
     auto* logActivityChart = static_cast<QtLogActivityChart*>(logActivityChartWidget);
     if (!logActivityChart || !logActivityChart->isVisible() ||
-        !logActivityChart->accessibleDescription().contains(QString::fromUtf8("по 16 временным интервалам")))
+        !logActivityChart->accessibleDescription().contains(QString::fromUtf8("по 16 интервалам")) ||
+        !logActivityChart->accessibleDescription().contains(QString::fromUtf8("Число записей по интервалам")))
         return fail("Qt application log activity chart unavailable");
+    const auto* logActivityAccessible = QAccessible::queryAccessibleInterface(logActivityChart);
+    if (!logActivityAccessible || !logActivityAccessible->text(QAccessible::Description)
+            .contains(QString::fromUtf8("Интервал 1:")))
+        return fail("Qt application log chart values were not exposed through QAccessible");
     const auto appLogBytes = appLogFile.readAll();
     appLogFile.close();
     const auto appLogEntries = QJsonDocument::fromJson(appLogBytes).array();

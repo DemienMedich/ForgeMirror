@@ -20,7 +20,9 @@ protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
+    void updateAccessibleDescription();
     int values_[3] = {0, 0, 0};
     QString periodLabel_;
+    QString completionTrendDescription_;
     std::array<int, 12> monthlyCompletions_{};
 };

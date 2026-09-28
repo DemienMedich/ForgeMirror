@@ -16,10 +16,15 @@ QtReportChart::QtReportChart(QWidget* parent) : QWidget(parent) {
 
 void QtReportChart::setCompletionTrend(const std::array<int, 12>& monthlyCompletions) {
     monthlyCompletions_ = monthlyCompletions;
-    QStringList values;
-    for (const int value : monthlyCompletions_) values << QString::number(value);
-    setAccessibleDescription(accessibleDescription() + QString::fromUtf8(" Завершения по месяцам, последние 12 месяцев: ") + values.join(", ") +
-        QString::fromUtf8(". Учитываются все загруженные события task-audit.log за этот период."));
+    const auto today = QDate::currentDate();
+    const auto firstMonth = QDate(today.year(), today.month(), 1).addMonths(-11);
+    QStringList months;
+    for (int index = 0; index < int(monthlyCompletions_.size()); ++index)
+        months << QStringLiteral("%1: %2").arg(firstMonth.addMonths(index).toString("yyyy-MM"))
+            .arg(monthlyCompletions_[size_t(index)]);
+    completionTrendDescription_ = QString::fromUtf8("Завершения по месяцам (ГГГГ-ММ: число), последние 12 месяцев: ") +
+        months.join(QStringLiteral("; ")) + QString::fromUtf8(". Учитываются все загруженные события task-audit.log за этот период.");
+    updateAccessibleDescription();
     update();
 }
 
@@ -44,9 +49,15 @@ void QtReportChart::setValues(int newTasks, int inProgressTasks, int doneTasks, 
     values_[1] = std::max(0, inProgressTasks);
     values_[2] = std::max(0, doneTasks);
     periodLabel_ = periodLabel;
-    setAccessibleDescription(QString::fromUtf8("%1. Новых: %2; в работе: %3; выполнено: %4.")
-        .arg(periodLabel_).arg(values_[0]).arg(values_[1]).arg(values_[2]));
+    updateAccessibleDescription();
     update();
+}
+
+void QtReportChart::updateAccessibleDescription() {
+    QString description = QString::fromUtf8("%1. Новых: %2; в работе: %3; выполнено: %4.")
+        .arg(periodLabel_).arg(values_[0]).arg(values_[1]).arg(values_[2]);
+    if (!completionTrendDescription_.isEmpty()) description += QLatin1Char(' ') + completionTrendDescription_;
+    setAccessibleDescription(description);
 }
 
 void QtReportChart::paintEvent(QPaintEvent* event) {
