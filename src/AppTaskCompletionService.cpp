@@ -585,7 +585,8 @@ AppProfileMutationResult ChangeProfilePasswordWithAuditRecovery(AppContext& app,
 
 AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
     const std::filesystem::path& directory, const std::string& restoreProfileId,
-    const std::string& profileId, bool archived) {
+    const std::string& profileId, bool archived,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppProfileActionResult result;
     try {
         PrepareProfileArchiveAuditRecovery(directory, profileId);
@@ -604,6 +605,14 @@ AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
             result.errorMessage += u8" Восстановление не завершено; журнал сохранён для восстановления при запуске.";
         }
         if (!restoreProfileId.empty()) storage.set_active_profile(restoreProfileId);
+    }
+    if (eventLogger) {
+        try {
+            eventLogger(result.ok ? AppLogLevel::Info : AppLogLevel::Warning,
+                result.ok
+                    ? (archived ? "Profile archive transaction committed" : "Profile restore transaction committed")
+                    : (archived ? "Profile archive transaction failed or was rolled back" : "Profile restore transaction failed or was rolled back"));
+        } catch (...) {}
     }
     return result;
 }

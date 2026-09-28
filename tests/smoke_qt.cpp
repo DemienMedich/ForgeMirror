@@ -2046,6 +2046,9 @@ static bool TestProfileDialogs() {
     };
     checks &= hasEvent(AppLogLevel::Info, "Profile update transaction committed") &&
         hasEvent(AppLogLevel::Warning, "Profile update failed or was rolled back") &&
+        hasEvent(AppLogLevel::Info, "Profile archive transaction committed") &&
+        hasEvent(AppLogLevel::Warning, "Profile archive transaction failed or was rolled back") &&
+        hasEvent(AppLogLevel::Info, "Profile restore transaction committed") &&
         hasEvent(AppLogLevel::Info, "Profile password transaction committed") &&
         hasEvent(AppLogLevel::Warning, "Profile password transaction failed or was rolled back");
     for (const auto& [level, event] : coreEvents) {

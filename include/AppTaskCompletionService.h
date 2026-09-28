@@ -81,7 +81,8 @@ AppProfileMutationResult ChangeProfilePasswordWithAuditRecovery(AppContext& app,
     bool requireCurrentPassword, const std::string& action);
 AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
     const std::filesystem::path& directory, const std::string& restoreProfileId,
-    const std::string& profileId, bool archived);
+    const std::string& profileId, bool archived,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,

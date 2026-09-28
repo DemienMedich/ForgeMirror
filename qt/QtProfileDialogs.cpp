@@ -223,7 +223,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
         }
         const auto result = ArchiveProfileWithAuditRecovery(*workspace.storage, workspace.directory,
-            u(activeId), info->id, !info->archived);
+            u(activeId), info->id, !info->archived, workspace.profileEventLogger);
         status->setText(result.ok ? QString::fromUtf8("Состояние архива сохранено.") : q(result.errorMessage));
         refresh();
     });
