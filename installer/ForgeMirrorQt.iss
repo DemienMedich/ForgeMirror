@@ -4,6 +4,10 @@
   #error AppVersion must be passed from installer/build-qt-installer.ps1
 #endif
 
+#ifndef PackageRoot
+  #define PackageRoot SourceRoot + "\\package-qt"
+#endif
+
 #ifndef OutputDir
   #define OutputDir SourceRoot + "\\dist"
 #endif
@@ -36,7 +40,7 @@ RestartApplications=no
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; Flags: unchecked
 
 [Files]
-Source: "{#SourceRoot}\package-qt\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PackageRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\ForgeMirror"; Filename: "{app}\ForgeMirrorQt.exe"; WorkingDir: "{app}"

@@ -99,6 +99,10 @@ static bool TestTaskCompletion() {
     if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test", &workspace.data.taskAudit).ok) return fail("task");
     FailingProfileStorage storage(*workspace.storage);
     AppContext context{workspace.directory, storage, workspace.catalog};
+    std::vector<std::pair<AppLogLevel, std::string>> coreEvents;
+    context.eventLogger = [&](AppLogLevel level, const std::string& event) {
+        coreEvents.emplace_back(level, event);
+    };
     TaskCompletionInput input;
     input.taskId = task.id;
     input.category = 0;
@@ -139,6 +143,9 @@ static bool TestTaskCompletion() {
         AppSetTaskAuditFailureHookForTests(false);
         AppSetRecoveryPrimaryWriteFailureForTests(false);
         if (result.ok) return fail("write failure ignored");
+        if (coreEvents.size() != size_t(failure + 1) || coreEvents.back().first != AppLogLevel::Error ||
+            coreEvents.back().second != "Task XP transaction failed or was rolled back")
+            return fail("core failure outcome was not reported through the optional event sink");
         for (size_t i = 0; i < paths.size(); ++i) if (bytes(paths[i]) != originals[i]) return fail("rollback changed stored bytes");
         if (!workspace.data.tasks[0].participants.empty() || workspace.data.tasks[0].status != 0 || workspace.data.taskAudit.size() != auditSize)
             return fail("rollback changed memory");
@@ -172,6 +179,13 @@ static bool TestTaskCompletion() {
         return fail("restart recovery preservation manifest omitted the changed profile");
     const auto completion = CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input);
     if (!completion.ok) { std::cerr << completion.errorMessage << '\n'; return fail("completion failed"); }
+    if (coreEvents.size() != 4 || coreEvents.back().first != AppLogLevel::Info ||
+        coreEvents.back().second != "Task XP transaction committed" ||
+        coreEvents.back().second.find(task.title) != std::string::npos ||
+        coreEvents.back().second.find(a->id) != std::string::npos ||
+        coreEvents.back().second.find("Alice") != std::string::npos ||
+        coreEvents.back().second.find("Bob") != std::string::npos)
+        return fail("core telemetry was not generic and privacy-safe");
     if (workspace.data.tasks[0].status != 2 || workspace.data.tasks[0].participants.size() != 2) return fail("completion not recorded");
     storage.set_active_profile(a->id);
     const auto after = storage.load_profile();
@@ -231,7 +245,10 @@ static bool TestTaskCompletion() {
     task.deadlinePenaltyPercent = 100;
     if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test").ok) return fail("zero fixture");
     input.taskId = task.id;
-    if (!CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input).ok || workspace.data.tasks.back().participants[0].globalXp != 0)
+    auto throwingContext = context;
+    throwingContext.eventLogger = [](AppLogLevel, const std::string&) { throw std::runtime_error("observer failure"); };
+    if (!CompleteTaskWithXp(throwingContext, workspace.data.tasks, workspace.data.taskAudit, input).ok ||
+        workspace.data.tasks.back().participants[0].globalXp != 0)
         return fail("zero pool completion");
     // Exact parity with ImGui: repeat, recovery, achievement and spirit modifiers.
     task.id = "modifiers";

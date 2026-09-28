@@ -1,6 +1,7 @@
 param(
     [string]$QtRoot = 'Z:\Soft\Qt\6.8.3\msvc2022_64',
-    [switch]$Package
+    [switch]$Package,
+    [string]$PackageDirectory = ''
 )
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
@@ -17,7 +18,9 @@ try {
     if ($LASTEXITCODE) { throw 'Core smoke tests failed' }
 } finally { $env:PATH = $savedPath }
 if ($Package) {
-    $output = "$repo\package-qt"
+    if (-not $PackageDirectory) { $PackageDirectory = "$repo\package-qt" }
+    if ([System.IO.Path]::IsPathRooted($PackageDirectory)) { $output = $PackageDirectory }
+    else { $output = Join-Path $repo $PackageDirectory }
     New-Item -ItemType Directory -Force -Path $output | Out-Null
     Copy-Item -LiteralPath "$repo\build-qt\Release\ForgeMirrorQt.exe" -Destination $output -Force
     Set-Content -LiteralPath "$output\qt.conf" -Encoding Ascii -Value "[Paths]`nPlugins=.`n"

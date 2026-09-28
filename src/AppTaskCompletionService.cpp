@@ -15,6 +15,12 @@
 #include <stdexcept>
 
 namespace {
+void emitCoreEvent(AppContext& app, AppLogLevel level, const char* message) noexcept {
+    if (!app.eventLogger) return;
+    try { app.eventLogger(level, message); }
+    catch (...) { /* Observability must never change a committed domain result. */ }
+}
+
 struct RestoreSelection {
     IJobStorage& storage;
     std::string id;
@@ -1083,7 +1089,11 @@ AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& ta
     AppMutationResult result;
     RestoreSelection restore{app.storage, input.restoreProfileId};
     auto preview = PreviewTaskCompletion(app, tasks, input);
-    if (!preview.ok) { result.errorMessage = preview.errorMessage; return result; }
+    if (!preview.ok) {
+        result.errorMessage = preview.errorMessage;
+        emitCoreEvent(app, AppLogLevel::Error, "Task XP transaction failed or was rolled back");
+        return result;
+    }
     const auto oldTasks = tasks;
     const auto oldAudit = audit;
     bool prepared = false;
@@ -1098,6 +1108,7 @@ AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& ta
         result = workflow.FinalizeXp(preview.finalize);
         if (!result.ok) throw std::runtime_error(result.errorMessage);
         finishJournal(app.storageDir);
+        emitCoreEvent(app, AppLogLevel::Info, "Task XP transaction committed");
     } catch (const std::exception& e) {
         result = {};
         result.errorMessage = e.what();
@@ -1111,6 +1122,7 @@ AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& ta
                 result.errorMessage += u8" Откат не завершён. Закройте Qt; журнал meta/qt-xp-transaction сохранён для восстановления при запуске.";
             }
         }
+        emitCoreEvent(app, AppLogLevel::Error, "Task XP transaction failed or was rolled back");
     }
     return result;
 }
