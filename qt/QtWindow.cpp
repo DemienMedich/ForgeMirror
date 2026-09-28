@@ -475,6 +475,10 @@ std::vector<QtReportCategoryGroup> buildReportCategoryGroups(const std::vector<T
 std::string reportPriorityKey(int priority) {
     return "__priority_" + std::to_string(AppNormalizeTaskPriority(priority));
 }
+std::string reportCreationMonthKey(const TaskEntry& task) {
+    if (task.createdAt <= 0) return "__created_month_unknown";
+    return QDateTime::fromSecsSinceEpoch(task.createdAt).date().toString("yyyy-MM").toStdString();
+}
 int reportDeadlineGroup(const TaskEntry& task, std::int64_t now) {
     if (AppNormalizeTaskStatus(task.status) == 2) return 0;
     if (task.deadlineAt <= 0) return 3;
@@ -1245,7 +1249,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportView_->setMaximumWidth(170);
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам"),
         QString::fromUtf8("По этапам"), QString::fromUtf8("По категориям"), QString::fromUtf8("По статусам"),
-        QString::fromUtf8("По приоритетам"), QString::fromUtf8("По срокам")});
+        QString::fromUtf8("По приоритетам"), QString::fromUtf8("По срокам"), QString::fromUtf8("По месяцу создания")});
     reportView_->setCurrentIndex(displaySettings_.reportView);
     filters->addWidget(reportView_);
     reportDateRange_ = new QComboBox;
@@ -3584,7 +3588,7 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · задач по приоритетам · %2 задач · XP: %3 · состояние на сейчас%4%5")
                 .arg(periodLabel).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
-        } else {
+        } else if (reportView_->currentIndex() == 6) {
             std::array<std::vector<TaskEntry>, 4> currentByDeadline, previousByDeadline;
             const auto now = QDateTime::currentSecsSinceEpoch();
             for (const auto& task : reportTasks)
@@ -3618,6 +3622,50 @@ void QtWindow::render() {
             }
             summary_->setText(QString::fromUtf8("%1 · задач по состоянию срока · %2 задач · XP: %3 · состояние на сейчас%4%5")
                 .arg(periodLabel).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
+        } else {
+            std::unordered_map<std::string, std::vector<TaskEntry>> currentByMonth, previousByMonth;
+            for (const auto& task : reportTasks) currentByMonth[reportCreationMonthKey(task)].push_back(task);
+            if (comparePrevious) for (const auto& task : previousTasks)
+                previousByMonth[reportCreationMonthKey(task)].push_back(task);
+            std::vector<std::string> keys;
+            keys.reserve(currentByMonth.size() + previousByMonth.size());
+            for (const auto& [key, entries] : currentByMonth) { Q_UNUSED(entries); keys.push_back(key); }
+            for (const auto& [key, entries] : previousByMonth) {
+                Q_UNUSED(entries);
+                if (std::find(keys.begin(), keys.end(), key) == keys.end()) keys.push_back(key);
+            }
+            std::sort(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
+                if (a == "__created_month_unknown") return false;
+                if (b == "__created_month_unknown") return true;
+                return a > b;
+            });
+            QStringList columns{QString::fromUtf8("Месяц создания"), QString::fromUtf8("Задач"), QString::fromUtf8("Активно"),
+                QString::fromUtf8("Выполнено"), QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP"),
+                QString::fromUtf8("Глобальный XP"), QString::fromUtf8("XP навыков")};
+            if (comparePrevious) columns << QString::fromUtf8("Задач · пред.") << QString::fromUtf8("Активно · пред.")
+                << QString::fromUtf8("Выполнено · пред.") << QString::fromUtf8("Просрочено · пред.")
+                << QString::fromUtf8("Ждут XP · пред.") << QString::fromUtf8("Глобальный XP · пред.")
+                << QString::fromUtf8("XP навыков · пред.");
+            headers(columns);
+            const auto now = QDateTime::currentSecsSinceEpoch();
+            for (const auto& key : keys) {
+                const auto current = BuildTeamValueReport(currentByMonth[key], data.projects, now);
+                const auto previous = comparePrevious
+                    ? BuildTeamValueReport(previousByMonth[key], data.projects, now) : TeamValueReport{};
+                const auto label = key == "__created_month_unknown" ? QString::fromUtf8("Без даты")
+                    : QString::fromStdString(key);
+                QStringList values{label, QString::number(current.totalTasks), QString::number(current.activeTasks),
+                    QString::number(current.doneTasks), QString::number(current.overdueTasks),
+                    QString::number(current.xpPendingTasks), QString::number(current.totalGlobalXp),
+                    QString::number(current.totalSkillXp)};
+                if (comparePrevious) values << QString::number(previous.totalTasks) << QString::number(previous.activeTasks)
+                    << QString::number(previous.doneTasks) << QString::number(previous.overdueTasks)
+                    << QString::number(previous.xpPendingTasks) << QString::number(previous.totalGlobalXp)
+                    << QString::number(previous.totalSkillXp);
+                row(key, values);
+            }
+            summary_->setText(QString::fromUtf8("%1 · месяцев создания: %2 · задач: %3 · XP: %4 · состояние на сейчас%5%6")
+                .arg(periodLabel).arg(keys.size()).arg(report.totalTasks).arg(report.totalGlobalXp).arg(missingNote).arg(comparisonLabel));
         }
     } else if (page == Audit) {
         if (!admin_ && auditSourceFilter_->currentIndex() != 1) {
@@ -4970,6 +5018,7 @@ void QtWindow::details() {
         const bool statusView = reportView_->currentIndex() == 4;
         const bool priorityView = reportView_->currentIndex() == 5;
         const bool deadlineView = reportView_->currentIndex() == 6;
+        const bool creationMonthView = reportView_->currentIndex() == 7;
         const int statusKey = statusView && targetKey.rfind("__status_", 0) == 0
             ? std::clamp(std::atoi(targetKey.c_str() + 9), 0, 2) : -1;
         const int priorityKey = priorityView && targetKey.rfind("__priority_", 0) == 0
@@ -4993,7 +5042,8 @@ void QtWindow::details() {
             : categoryView ? QString::fromUtf8("Категория")
             : statusView ? QString::fromUtf8("Статус задачи")
             : priorityView ? QString::fromUtf8("Приоритет")
-            : deadlineView ? QString::fromUtf8("Состояние срока") : QString::fromUtf8("Проект");
+            : deadlineView ? QString::fromUtf8("Состояние срока")
+            : creationMonthView ? QString::fromUtf8("Месяц создания") : QString::fromUtf8("Проект");
         QString html = field(groupLabel, u(targetName));
         std::vector<TaskEntry> matchedTasks;
         std::vector<TaskEntry> matchedCurrent, matchedPrevious;
@@ -5014,6 +5064,8 @@ void QtWindow::details() {
                 belongs = priorityKey >= 0 && AppNormalizeTaskPriority(task.priority) == priorityKey;
             } else if (deadlineView) {
                 belongs = deadlineKey >= 0 && reportDeadlineGroup(task, QDateTime::currentSecsSinceEpoch()) == deadlineKey;
+            } else if (creationMonthView) {
+                belongs = reportCreationMonthKey(task) == targetKey;
             } else {
                 const std::string projectKey = !task.projectId.empty() ? task.projectId :
                     (task.project.empty() ? "__no_project" : "name:" + task.project);

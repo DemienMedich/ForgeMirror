@@ -2815,7 +2815,8 @@ static bool TestReportPeriodComparison() {
     previous.assignees = {profile->id}; previous.projectId = previousProject.id; previous.project = previousProject.name;
     previous.pipelineStepId = previousStage.id; previous.pipelineStep = previousStage.title;
     previous.participants.push_back({profile->id, 100, 45, 15, "comparison"});
-    workspace.data.tasks = {current, overdue, upcoming, previous};
+    TaskEntry noCreationDate; noCreationDate.id = "comparison-no-date"; noCreationDate.title = "Legacy task without date";
+    workspace.data.tasks = {current, overdue, upcoming, previous, noCreationDate};
     if (!AppSaveProjects(workspace.directory, workspace.data.projects) ||
         !AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps) ||
         !AppSaveTasks(workspace.directory, workspace.data.tasks)) return fail("save fixtures");
@@ -2854,7 +2855,7 @@ static bool TestReportPeriodComparison() {
     if (table->rowCount() != 1 || table->columnCount() != 14 ||
         table->item(0, 9)->text() != "1" || table->item(0, 12)->text() != "45" || table->item(0, 13)->text() != "15") return fail("employee previous metrics");
     view->setCurrentIndex(2);
-    if (view->count() != 7 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
+    if (view->count() != 8 || table->rowCount() != 2 || table->columnCount() != 15) return fail("stage report layout");
     int previousStageRow = -1;
     for (int row = 0; row < table->rowCount(); ++row)
         if (table->item(row, 0)->data(Qt::UserRole).toString() == QStringLiteral("previous-stage")) previousStageRow = row;
@@ -2958,10 +2959,47 @@ static bool TestReportPeriodComparison() {
         !deadlineCsvBytes.contains(QString::fromUtf8("Состояние срока").toUtf8()) ||
         !deadlineCsvBytes.contains(QString::fromUtf8("Просрочена").toUtf8()) ||
         !deadlineCsvBytes.contains(QString::fromUtf8("Без срока").toUtf8())) return fail("deadline report CSV content");
+    view->setCurrentIndex(7);
+    if (table->rowCount() != 2 || table->columnCount() != 15) return fail("creation-month report layout");
+    const auto monthRow = [table](const QString& key) {
+        for (int row = 0; row < table->rowCount(); ++row)
+            if (table->item(row, 0)->data(Qt::UserRole).toString() == key) return row;
+        return -1;
+    };
+    const auto currentMonth = QDate::currentDate().toString("yyyy-MM");
+    const auto previousMonth = QDate::currentDate().addDays(-40).toString("yyyy-MM");
+    const int currentMonthRow = monthRow(currentMonth);
+    const int previousMonthRow = monthRow(previousMonth);
+    if (currentMonthRow < 0 || previousMonthRow < 0 ||
+        table->item(currentMonthRow, 1)->text() != "3" || table->item(currentMonthRow, 8)->text() != "0" ||
+        table->item(previousMonthRow, 1)->text() != "0" || table->item(previousMonthRow, 8)->text() != "1")
+        return fail("creation-month current and previous cohort metrics");
+    table->selectRow(previousMonthRow);
+    if (!details->toPlainText().contains("Previous task") ||
+        !details->toPlainText().contains(QString::fromUtf8("Месяц создания")))
+        return fail("creation-month drill-down");
+    const auto monthCsvPath = temp.path() + "/creation-month-report.csv";
+    QTimer::singleShot(0, [monthCsvPath] {
+        if (auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget())) {
+            dialog->selectFile(monthCsvPath); static_cast<QDialog*>(dialog)->accept();
+        }
+    });
+    exportButton->click();
+    QFile monthCsv(monthCsvPath);
+    if (!monthCsv.open(QIODevice::ReadOnly)) return fail("creation-month report CSV missing");
+    const auto monthCsvBytes = monthCsv.readAll();
+    if (!monthCsvBytes.startsWith("\xEF\xBB\xBF") ||
+        !monthCsvBytes.contains(QString::fromUtf8("Месяц создания").toUtf8()) ||
+        !monthCsvBytes.contains(previousMonth.toUtf8()) ||
+        !monthCsvBytes.contains(QString::fromUtf8("Задач · пред.").toUtf8())) return fail("creation-month report CSV content");
     range->setCurrentIndex(0);
     if (compare->isEnabled() || table->columnCount() != 8 || !compare->isChecked()) return fail("all-time guard");
+    view->setCurrentIndex(7);
+    if (table->columnCount() != 8 || monthRow(QStringLiteral("__created_month_unknown")) < 0 ||
+        table->item(monthRow(QStringLiteral("__created_month_unknown")), 0)->text() != QString::fromUtf8("Без даты"))
+        return fail("legacy tasks without creation date are not grouped");
     const auto settings = LoadQtDisplaySettings(workspace.directory);
-    return (settings.reportComparePrevious && settings.reportView == 6) || fail("setting persistence");
+    return (settings.reportComparePrevious && settings.reportView == 7) || fail("setting persistence");
 }
 
 static bool TestAuditExport() {
@@ -6212,7 +6250,7 @@ int main(int argc, char** argv) {
     if (!uiReport.open(QIODevice::ReadOnly) || !uiReport.readAll().startsWith("\xEF\xBB\xBF"))
         return fail("Report export UI failed");
     auto* reportView = window.findChild<QComboBox*>("reportView");
-    if (!reportView || reportView->count() != 7) return fail("Report view selector unavailable");
+    if (!reportView || reportView->count() != 8) return fail("Report view selector unavailable");
     reportView->setCurrentIndex(1);
     auto* reportRange = window.findChild<QComboBox*>("reportDateRange");
     auto* reportCompare = window.findChild<QCheckBox*>("reportComparePrevious");
@@ -6255,6 +6293,18 @@ int main(int argc, char** argv) {
         return fail("Status report drill-down failed");
     if (LoadQtDisplaySettings(workspace.directory).reportView != 4)
         return fail("Status report grouping did not persist");
+    reportView->setCurrentIndex(7);
+    const auto currentMonth = QDate::currentDate().toString("yyyy-MM");
+    if (table->rowCount() != 1 || table->columnCount() != 15 ||
+        table->horizontalHeaderItem(0)->text() != QString::fromUtf8("Месяц создания") ||
+        table->item(0, 0)->text() != currentMonth || table->item(0, 1)->text() != "1" ||
+        LoadQtDisplaySettings(workspace.directory).reportView != 7)
+        return fail("Creation-month report grouping or persistence failed");
+    table->selectRow(0);
+    reportDetails = window.findChild<QTextBrowser*>("details");
+    if (!reportDetails || !reportDetails->toPlainText().contains(QString::fromUtf8("Месяц создания")) ||
+        !reportDetails->toPlainText().contains(QString::fromUtf8("Проверка Qt <без HTML>")))
+        return fail("Creation-month report drill-down failed");
     reportView->setCurrentIndex(1);
     reportRange->setCurrentIndex(0);
     if (reportCompare->isEnabled() || table->columnCount() != 8 || !reportCompare->isChecked())
