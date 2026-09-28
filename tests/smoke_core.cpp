@@ -489,6 +489,38 @@ static bool TestPipelineDeleteCleansLinksAndRollsBack(const std::filesystem::pat
     AppSetRecoveryPrimaryWriteFailureForTests(false);
     if (result.ok || steps[0].id != target.id || steps[1].id != first.id || steps[2].id != third.id)
         return fail("move rollback");
+
+    steps = {first, target, third};
+    if (!AppSavePipelineData(dir, steps)) return fail("stale fixture save");
+    auto staleSteps = steps;
+    auto externalSteps = steps;
+    externalSteps[0].description = "external update";
+    if (!AppSavePipelineData(dir, externalSteps)) return fail("external edit save");
+    PipelineStep staleEdit = staleSteps[1];
+    staleEdit.title = "stale edit must not win";
+    result = AppUpdatePipelineStep(dir, staleSteps, 1, staleEdit);
+    const auto afterStaleEdit = LoadPipelineData(dir);
+    const auto preservedFirst = std::find_if(afterStaleEdit.begin(), afterStaleEdit.end(), [](const auto& item) { return item.id == "first"; });
+    const auto preservedTarget = std::find_if(afterStaleEdit.begin(), afterStaleEdit.end(), [](const auto& item) { return item.id == "target"; });
+    const auto refreshedFirst = std::find_if(staleSteps.begin(), staleSteps.end(), [](const auto& item) { return item.id == "first"; });
+    if (result.ok || result.changed || preservedFirst == afterStaleEdit.end() || preservedFirst->description != "external update" ||
+        preservedTarget == afterStaleEdit.end() || preservedTarget->title != target.title ||
+        refreshedFirst == staleSteps.end() || refreshedFirst->description != "external update")
+        return fail("stale edit rejected and refreshed");
+
+    staleSteps = LoadPipelineData(dir);
+    externalSteps = staleSteps;
+    PipelineStep concurrentStep; concurrentStep.id = "external-stage"; concurrentStep.title = "External stage";
+    externalSteps.push_back(concurrentStep);
+    if (!AppSavePipelineData(dir, externalSteps)) return fail("external addition save");
+    result = AppDeletePipelineStep(dir, staleSteps, 0);
+    const auto afterStaleDelete = LoadPipelineData(dir);
+    const auto retainedFirst = std::find_if(afterStaleDelete.begin(), afterStaleDelete.end(), [](const auto& item) { return item.id == "first"; });
+    const auto retainedExternal = std::find_if(afterStaleDelete.begin(), afterStaleDelete.end(), [](const auto& item) { return item.id == "external-stage"; });
+    const auto refreshedExternal = std::find_if(staleSteps.begin(), staleSteps.end(), [](const auto& item) { return item.id == "external-stage"; });
+    if (result.ok || result.changed || retainedFirst == afterStaleDelete.end() || retainedExternal == afterStaleDelete.end() ||
+        refreshedExternal == staleSteps.end())
+        return fail("stale delete rejected without dropping external addition");
     return true;
 }
 

@@ -1,5 +1,7 @@
 #include "AppPipelineService.h"
 #include "AppRecoveryStorage.h"
+#include "AppWorkspaceDataService.h"
+#include "AppWorkspaceStorageLock.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -44,6 +46,30 @@ std::string EscapeJson(const std::string& value) {
 
 bool IsValidIndex(const std::vector<PipelineStep>& steps, int index) {
     return index >= 0 && index < static_cast<int>(steps.size());
+}
+
+bool SamePipeline(const std::vector<PipelineStep>& left, const std::vector<PipelineStep>& right) {
+    if (left.size() != right.size()) return false;
+    for (size_t i = 0; i < left.size(); ++i) {
+        const auto& a = left[i];
+        const auto& b = right[i];
+        if (a.id != b.id || a.stageCode != b.stageCode || a.branch != b.branch || a.title != b.title ||
+            a.description != b.description || a.input != b.input || a.output != b.output || a.owner != b.owner ||
+            a.doneCriteria != b.doneCriteria || a.engineCheck != b.engineCheck || a.risk != b.risk ||
+            a.nextStageLabel != b.nextStageLabel || a.legacyNotes != b.legacyNotes || a.nextIds != b.nextIds ||
+            a.hints != b.hints) return false;
+    }
+    return true;
+}
+
+bool RefreshPipelineForMutation(const std::filesystem::path& storageDir,
+                                std::vector<PipelineStep>& steps,
+                                AppPipelineMutationResult& result) {
+    const auto latest = LoadPipelineData(storageDir);
+    if (SamePipeline(MergeLoadedPipelineWithDefaults(steps), latest)) return true;
+    steps = latest;
+    result.errorMessage = u8"Пайплайн изменился в другом процессе. Данные обновлены; проверьте их и повторите операцию.";
+    return false;
 }
 
 std::string JoinStringList(const std::vector<std::string>& values, const char* delimiter) {
@@ -107,6 +133,12 @@ AppPipelineMutationResult AppAddPipelineStep(const std::filesystem::path& storag
                                              std::vector<PipelineStep>& steps,
                                              int insertAfterIndex) {
     AppPipelineMutationResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.errorMessage = u8"Другая программа сейчас сохраняет данные. Повторите операцию через несколько секунд.";
+        return result;
+    }
+    if (!RefreshPipelineForMutation(storageDir, steps, result)) return result;
     std::vector<PipelineStep> backup = steps;
     PipelineStep step;
     step.id = MakeUniqueStepId(steps);
@@ -131,6 +163,12 @@ AppPipelineMutationResult AppUpdatePipelineStep(const std::filesystem::path& sto
                                                 int index,
                                                 const PipelineStep& updatedStep) {
     AppPipelineMutationResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.errorMessage = u8"Другая программа сейчас сохраняет данные. Повторите операцию через несколько секунд.";
+        return result;
+    }
+    if (!RefreshPipelineForMutation(storageDir, steps, result)) return result;
     if (!IsValidIndex(steps, index)) {
         result.errorMessage = u8"Этап не найден.";
         return result;
@@ -159,6 +197,12 @@ AppPipelineMutationResult AppDeletePipelineStep(const std::filesystem::path& sto
                                                 std::vector<PipelineStep>& steps,
                                                 int index) {
     AppPipelineMutationResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.errorMessage = u8"Другая программа сейчас сохраняет данные. Повторите операцию через несколько секунд.";
+        return result;
+    }
+    if (!RefreshPipelineForMutation(storageDir, steps, result)) return result;
     if (!IsValidIndex(steps, index)) {
         result.errorMessage = u8"Этап не найден.";
         return result;
@@ -184,6 +228,12 @@ AppPipelineMutationResult AppMovePipelineStep(const std::filesystem::path& stora
                                               int fromIndex,
                                               int toIndex) {
     AppPipelineMutationResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.errorMessage = u8"Другая программа сейчас сохраняет данные. Повторите операцию через несколько секунд.";
+        return result;
+    }
+    if (!RefreshPipelineForMutation(storageDir, steps, result)) return result;
     if (!IsValidIndex(steps, fromIndex) || !IsValidIndex(steps, toIndex)) {
         result.errorMessage = u8"Этап не найден.";
         return result;

@@ -845,7 +845,7 @@ void OverlayPipelineStep(PipelineStep& target, const PipelineStep& loaded) {
     if (!loaded.hints.empty()) target.hints = loaded.hints;
 }
 
-std::vector<PipelineStep> MergeLoadedPipelineWithDefaults(const std::vector<PipelineStep>& loaded) {
+std::vector<PipelineStep> MergeLoadedPipelineWithDefaultsImpl(const std::vector<PipelineStep>& loaded) {
     const auto& defaults = DefaultPipelineSteps();
     if (loaded.empty()) return defaults;
 
@@ -906,6 +906,10 @@ std::vector<PipelineStep> MergeLoadedPipelineWithDefaults(const std::vector<Pipe
 }
 
 } // namespace
+
+std::vector<PipelineStep> MergeLoadedPipelineWithDefaults(const std::vector<PipelineStep>& loaded) {
+    return MergeLoadedPipelineWithDefaultsImpl(loaded);
+}
 
 std::vector<TaskAuditEntry> LoadTaskAuditData(const std::filesystem::path& storageDir, size_t maxEntries,
                                                std::int64_t sinceTimestamp) {

@@ -48,6 +48,7 @@ std::vector<ProjectEntry> LoadProjectsData(const std::filesystem::path& storageD
 std::vector<ShortcutEntry> LoadShortcutsData(const std::filesystem::path& storageDir);
 std::vector<PipelineStep> LoadPipelineData(const std::filesystem::path& storageDir);
 std::vector<PipelineStep> LoadPipelineDataFromFile(const std::filesystem::path& filePath);
+std::vector<PipelineStep> MergeLoadedPipelineWithDefaults(const std::vector<PipelineStep>& loaded);
 std::vector<ProfessionEntry> LoadProfessionsData(const std::filesystem::path& storageDir);
 WorkspaceSyncHealth InspectWorkspaceSyncHealth(const std::filesystem::path& storageDir,
                                                const ModuleToggles& modules);
