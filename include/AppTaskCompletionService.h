@@ -87,11 +87,13 @@ AppProfileActionResult ArchiveProfileWithAuditRecovery(IJobStorage& storage,
 // Qt metadata edits share the task/audit recovery journal; XP fields are never assigned.
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const TaskEntry& draft, const std::string& actor);
+    const TaskEntry& draft, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const TaskEntry& task, const std::string& actor);
+    const TaskEntry& task, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
@@ -100,7 +102,8 @@ AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& dire
 
 AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const std::string& taskId, const std::string& actor);
+    const std::string& taskId, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 AppMutationResult DeleteAwardedTaskWithRecovery(AppContext& app,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
@@ -113,7 +116,8 @@ AppMutationResult DeleteAwardedTasksWithRecovery(AppContext& app,
 // Safely removes a legacy/stale awarded task record without changing profile XP or progress.
 AppMutationResult DeleteAwardedTaskRecordKeepXpWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const std::string& taskId, const std::string& actor);
+    const std::string& taskId, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,

@@ -21,6 +21,13 @@ void emitCoreEvent(AppContext& app, AppLogLevel level, const std::string& messag
     catch (...) { /* Observability must never change a committed domain result. */ }
 }
 
+void emitOptionalEvent(const std::function<void(AppLogLevel, const std::string&)>& logger,
+                       AppLogLevel level, const char* message) noexcept {
+    if (!logger) return;
+    try { logger(level, message); }
+    catch (...) { /* Observability must never change a committed domain result. */ }
+}
+
 struct RestoreSelection {
     IJobStorage& storage;
     std::string id;
@@ -644,7 +651,8 @@ AppMutationResult AdvanceTaskPipeline(const std::filesystem::path& directory,
 
 AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const TaskEntry& draft, const std::string& actor) {
+    const TaskEntry& draft, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppMutationResult result;
     const auto found = std::find_if(tasks.begin(), tasks.end(), [&](const auto& t) { return t.id == draft.id; });
     if (found == tasks.end()) { result.errorMessage = u8"Задача не найдена."; return result; }
@@ -697,12 +705,15 @@ AppMutationResult EditTaskDetails(const std::filesystem::path& directory,
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
+    emitOptionalEvent(eventLogger, result.ok ? AppLogLevel::Info : AppLogLevel::Warning,
+        result.ok ? "Task edit committed" : "Task edit failed or rolled back");
     return result;
 }
 
 AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const TaskEntry& task, const std::string& actor) {
+    const TaskEntry& task, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppMutationResult result;
     const auto oldTasks = tasks;
     const auto oldAudit = audit;
@@ -723,6 +734,8 @@ AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
+    emitOptionalEvent(eventLogger, result.ok ? AppLogLevel::Info : AppLogLevel::Warning,
+        result.ok ? "Task creation committed" : "Task creation failed or rolled back");
     return result;
 }
 
@@ -763,7 +776,8 @@ AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& dire
 
 AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const std::string& taskId, const std::string& actor) {
+    const std::string& taskId, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppMutationResult result;
     const auto matches = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
     if (taskId.empty() || matches != 1) {
@@ -794,6 +808,8 @@ AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
+    emitOptionalEvent(eventLogger, result.ok ? AppLogLevel::Info : AppLogLevel::Warning,
+        result.ok ? "Task deletion committed" : "Task deletion failed or was rolled back");
     return result;
 }
 
@@ -973,7 +989,8 @@ AppMutationResult DeleteAwardedTasksWithRecovery(AppContext& app,
 
 AppMutationResult DeleteAwardedTaskRecordKeepXpWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const std::string& taskId, const std::string& actor) {
+    const std::string& taskId, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppMutationResult result;
     const auto matches = std::count_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == taskId; });
     if (taskId.empty() || matches != 1) {
@@ -1007,6 +1024,9 @@ AppMutationResult DeleteAwardedTaskRecordKeepXpWithRecovery(const std::filesyste
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
     }
+    emitOptionalEvent(eventLogger, result.ok ? AppLogLevel::Info : AppLogLevel::Warning,
+        result.ok ? "Task record deleted with awarded XP preserved"
+                  : "Task record deletion failed or was rolled back");
     return result;
 }
 

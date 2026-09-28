@@ -2618,6 +2618,13 @@ static bool TestTaskEditorTransaction() {
     original.assignees = {"legacy-profile"};
     original.skillIds = {"legacy-skill"};
     if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, original, "test", &workspace.data.taskAudit).ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    std::vector<std::pair<AppLogLevel, std::string>> taskEvents;
+    const auto observeTaskEvent = [&](AppLogLevel level, const std::string& message) { taskEvents.emplace_back(level, message); };
+    const auto hasTaskEvent = [&](AppLogLevel level, const std::string& message) {
+        return std::any_of(taskEvents.begin(), taskEvents.end(), [&](const auto& event) {
+            return event.first == level && event.second == message;
+        });
+    };
     const std::vector<std::string> files = {"meta/tasks.json", "meta/task-audit.log", "meta/updates/tasks.last-good.json"};
     auto read = [&](const std::string& name) {
         QFile f(temp.path() + "/" + QString::fromStdString(name));
@@ -2630,9 +2637,9 @@ static bool TestTaskEditorTransaction() {
     createCandidate.title = "Must roll back";
     AppSetTaskAuditFailureHookForTests(true);
     const auto failedCreate = CreateTaskWithRecovery(workspace.directory, workspace.data.tasks,
-        workspace.data.taskAudit, createCandidate, "test");
+        workspace.data.taskAudit, createCandidate, "test", observeTaskEvent);
     AppSetTaskAuditFailureHookForTests(false);
-    if (failedCreate.ok || workspace.data.tasks.size() != 1 ||
+    if (failedCreate.ok || !hasTaskEvent(AppLogLevel::Warning, "Task creation failed or rolled back") || workspace.data.tasks.size() != 1 ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     AppSetTaskAuditFailureHookForTests(true);
@@ -2649,9 +2656,10 @@ static bool TestTaskEditorTransaction() {
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     AppSetTaskAuditFailureHookForTests(true);
     const auto failedDelete = DeleteTaskWithRecovery(workspace.directory, workspace.data.tasks,
-        workspace.data.taskAudit, original.id, "test");
+        workspace.data.taskAudit, original.id, "test", observeTaskEvent);
     AppSetTaskAuditFailureHookForTests(false);
-    if (failedDelete.ok || workspace.data.tasks.size() != 1 || workspace.data.tasks.front().id != original.id ||
+    if (failedDelete.ok || !hasTaskEvent(AppLogLevel::Warning, "Task deletion failed or was rolled back") ||
+        workspace.data.tasks.size() != 1 || workspace.data.tasks.front().id != original.id ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     auto duplicateTasks = std::vector<TaskEntry>{original, original};
@@ -2665,11 +2673,11 @@ static bool TestTaskEditorTransaction() {
     draft.pipelineStepId = "stage-new";
     draft.pipelineStep = "New stage";
     draft.deadlineAt = 1900000000;
-    auto edit = [&] { return EditTaskDetails(workspace.directory, workspace.data.tasks, workspace.data.taskAudit, draft, "test"); };
+    auto edit = [&] { return EditTaskDetails(workspace.directory, workspace.data.tasks, workspace.data.taskAudit, draft, "test", observeTaskEvent); };
     AppSetRecoveryPrimaryWriteFailureForTests(true);
     const auto failedWrite = edit();
     AppSetRecoveryPrimaryWriteFailureForTests(false);
-    if (failedWrite.ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    if (failedWrite.ok || !hasTaskEvent(AppLogLevel::Warning, "Task edit failed or rolled back")) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
 #ifdef _WIN32
     // Allow the journal to read the audit, but deny actual append and rollback writes.
@@ -2762,8 +2770,21 @@ static bool TestTaskEditorTransaction() {
     draft.participants.clear();
     if (!edit().ok) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
     const auto disk = LoadTasksData(workspace.directory).front();
-    return disk.status == 2 && disk.score == 9 && disk.participants.size() == 1 &&
-        disk.participants.front().rollbackSnapshot == "snapshot" && disk.participants.front().globalXp == 77;
+    if (disk.status != 2 || disk.score != 9 || disk.participants.size() != 1 ||
+        disk.participants.front().rollbackSnapshot != "snapshot" || disk.participants.front().globalXp != 77 ||
+        !hasTaskEvent(AppLogLevel::Info, "Task edit committed")) return false;
+    TaskEntry removable;
+    removable.id = "delete-telemetry-fixture";
+    removable.title = "Disposable delete telemetry task";
+    if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, removable, "test", &workspace.data.taskAudit).ok) return false;
+    std::string committedDeleteEvent;
+    const auto deleted = DeleteTaskWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, removable.id, "test",
+        [&](AppLogLevel level, const std::string& event) {
+            if (level == AppLogLevel::Info) committedDeleteEvent = event;
+        });
+    return deleted.ok && committedDeleteEvent == "Task deletion committed" &&
+        std::none_of(workspace.data.tasks.begin(), workspace.data.tasks.end(), [&](const auto& item) { return item.id == removable.id; });
 }
 
 static bool TestReportExport() {
@@ -7264,8 +7285,11 @@ int main(int argc, char** argv) {
             text.contains(QString::fromStdString(createdProfile->id)))
             return fail("Core task telemetry leaked task or profile data");
     }
-    if (!taskCreateLogged || !taskEditLogged || !taskStatusLogged)
-        return fail("Qt task create, edit, or status core telemetry is missing");
+    if (!taskCreateLogged || !taskEditLogged || !taskStatusLogged) {
+        std::cerr << "Qt task telemetry presence (create/edit/status): " << taskCreateLogged << '/'
+                  << taskEditLogged << '/' << taskStatusLogged << '\n';
+        return fail("Qt task create, edit, or status core telemetry is missing from retained log");
+    }
     QString deletableTaskId;
     for (int i = 0; i < table->rowCount(); ++i) {
         const auto candidate = table->item(i, 0)->data(Qt::UserRole).toString();

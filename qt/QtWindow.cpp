@@ -5554,14 +5554,13 @@ void QtWindow::createEntry(bool edit) {
             task.assignees = collectIds(assignees, originalTask.assignees);
             task.skillIds = collectIds(skills, originalTask.skillIds);
             auto result = edit
-                ? EditTaskDetails(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt")
-                : CreateTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt");
+                ? EditTaskDetails(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt",
+                    [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreTaskMutation", event); })
+                : CreateTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, task, "admin/qt",
+                    [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreTaskMutation", event); });
             if (!result.ok) {
-                appendLog(AppLogLevel::Warning, "CoreTaskMutation", edit
-                    ? "Task edit failed or rolled back" : "Task creation failed or rolled back");
                 message(result.errorMessage); return;
             }
-            appendLog(AppLogLevel::Info, "CoreTaskMutation", edit ? "Task edit committed" : "Task creation committed");
         }
         dialog.accept();
     });
@@ -6032,7 +6031,8 @@ void QtWindow::deleteEntry() {
         const auto result = awarded
             ? DeleteAwardedTaskWithRecovery(context, workspace_.data.tasks, workspace_.data.taskAudit,
                 id, u(profiles_->currentData().toString()), "admin/qt")
-            : DeleteTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit, id, "admin/qt");
+            : DeleteTaskWithRecovery(workspace_.directory, workspace_.data.tasks, workspace_.data.taskAudit,
+                id, "admin/qt", workspace_.taskEventLogger);
         auto deleteResult = result;
         bool keptAwardedXp = false;
         if (!deleteResult.ok && deleteResult.awardRollbackUnavailable) {
@@ -6044,14 +6044,11 @@ void QtWindow::deleteEntry() {
             keepXp.setDefaultButton(QMessageBox::No);
             if (keepXp.exec() == QMessageBox::Yes) {
                 deleteResult = DeleteAwardedTaskRecordKeepXpWithRecovery(workspace_.directory,
-                    workspace_.data.tasks, workspace_.data.taskAudit, id, "admin/qt");
+                    workspace_.data.tasks, workspace_.data.taskAudit, id, "admin/qt", workspace_.taskEventLogger);
                 keptAwardedXp = deleteResult.ok;
             }
         }
         if (!deleteResult.ok) { message(deleteResult.errorMessage); return; }
-        if (!awarded || keptAwardedXp)
-            appendLog(AppLogLevel::Info, "CoreTaskMutation", keptAwardedXp
-                ? "Task record deleted; awarded XP preserved" : "Task deletion committed");
         reload();
         statusBar()->showMessage(keptAwardedXp
             ? QString::fromUtf8("Запись задачи удалена · начисленный XP сохранён без изменений")
