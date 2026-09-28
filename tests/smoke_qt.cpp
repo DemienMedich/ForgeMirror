@@ -1343,6 +1343,35 @@ static bool TestCloudPushPreview() {
     }
     if (inventory(cloud) != beforeInterruptedPush || std::filesystem::exists(pushJournal) ||
         std::filesystem::exists(cloud / "spirits")) return false;
+
+    // If an external writer changes any member of an interrupted multi-file push,
+    // recovery validates the entire journal before restoring even the files already
+    // written by the push. Preserve the external bytes, then recover once the conflict
+    // is removed.
+    if (interruptedPlan.changes.size() < 2) return false;
+    QtSetCloudPushFailureAfterFileWritesForTests(1);
+    QtSetCloudPushLeaveJournalForTests(true);
+    const auto partialPush = RunQtCloudWorkspacePush(config, workspace, CloudRole::Admin, &interruptedPlan);
+    QtSetCloudPushLeaveJournalForTests(false);
+    QtSetCloudPushFailureAfterFileWritesForTests(-1);
+    if (partialPush.sync.ok || !std::filesystem::exists(pushJournal)) return false;
+    const auto& externallyEditedChange = interruptedPlan.changes[1];
+    const auto externallyEditedPath = cloud / std::filesystem::u8path(externallyEditedChange.relativePath);
+    const bool existedBeforeExternalEdit = std::filesystem::exists(externallyEditedPath);
+    const auto bytesBeforeExternalEdit = existedBeforeExternalEdit ? read(externallyEditedPath) : QByteArray();
+    const QByteArray externalBytes = "written by another process during recovery";
+    if (!write(externallyEditedPath, externalBytes)) return false;
+    const auto inventoryWithExternalEdit = inventory(cloud);
+    bool externalPushEditRejected = false;
+    try { RecoverQtCloudPush(workspace); } catch (const std::exception&) { externalPushEditRejected = true; }
+    if (!externalPushEditRejected || inventory(cloud) != inventoryWithExternalEdit ||
+        !std::filesystem::exists(pushJournal)) return false;
+    if (existedBeforeExternalEdit) {
+        if (!write(externallyEditedPath, bytesBeforeExternalEdit)) return false;
+    } else if (!std::filesystem::remove(externallyEditedPath)) return false;
+    if (!RecoverQtCloudPush(workspace) || inventory(cloud) != beforeInterruptedPush ||
+        std::filesystem::exists(pushJournal) || std::filesystem::exists(cloud / "spirits")) return false;
+
     QtWindow window(qtWorkspace); window.show(); QApplication::processEvents();
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* pushButton = window.findChild<QPushButton*>("cloudPushPreview");
