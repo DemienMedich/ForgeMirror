@@ -1879,8 +1879,10 @@ static bool TestProfileDialogs() {
     auto* failures = wrapper.get();
     workspace.storage = std::move(wrapper);
     bool checks = true;
+    const QString originalClipboard = QApplication::clipboard()->text();
     QStringList missingProfileDialogAccessibleNames;
     QString disposableId;
+    QString resetPasswordResult;
     QTimer::singleShot(0, [&] {
         auto* manager = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!manager) { checks = false; return; }
@@ -1896,6 +1898,20 @@ static bool TestProfileDialogs() {
         for (const auto& p : delegate->list_profiles()) if (p.id != created->id) disposableId = QString::fromStdString(p.id);
         auto* credentials = manager->findChild<QLineEdit*>("createdProfileCredentials");
         checks &= !credentials->text().isEmpty() && credentials->echoMode() == QLineEdit::Password;
+        auto* revealCredentials = manager->findChild<QCheckBox*>("showCreatedProfileCredentials");
+        auto* copyCreatedLogin = manager->findChild<QPushButton*>("copyCreatedProfileLogin");
+        auto* copyCreatedPassword = manager->findChild<QPushButton*>("copyCreatedProfilePassword");
+        checks &= revealCredentials && copyCreatedLogin && copyCreatedPassword && !copyCreatedPassword->isEnabled();
+        const auto createdFields = credentials->text().split(QString::fromUtf8("   Пароль: "));
+        const auto createdLogin = createdFields.value(0).mid(QString::fromUtf8("Логин: ").size());
+        const auto createdPassword = createdFields.value(1);
+        copyCreatedLogin->click();
+        checks &= QApplication::clipboard()->text() == createdLogin;
+        revealCredentials->setChecked(true);
+        copyCreatedPassword->click();
+        checks &= QApplication::clipboard()->text() == createdPassword;
+        revealCredentials->setChecked(false);
+        checks &= !copyCreatedPassword->isEnabled();
         auto select = [&] {
             for (int r = 0; r < table->rowCount(); ++r) if (table->item(r, 0)->data(Qt::UserRole).toString() == id) table->selectRow(r);
         };
@@ -1974,12 +1990,32 @@ static bool TestProfileDialogs() {
             const auto oldPassword = DecodePassword(delegate->load_profile()->password_encoded());
             const auto oldProfileBytes = readProfileFile(id + ".ini");
             const auto oldAuditBytes = readProfileFile("meta/profile-audit.log");
-            password->findChild<QLineEdit*>("newPassword")->setText("reset-password");
-            password->findChild<QLineEdit*>("confirmPassword")->setText("different");
+            auto* generatedPassword = password->findChild<QLineEdit*>("resetProfileGeneratedPassword");
+            auto* reveal = password->findChild<QCheckBox*>("revealResetProfilePassword");
+            auto* confirmed = password->findChild<QCheckBox*>("confirmProfilePasswordReset");
+            auto* resetLogin = password->findChild<QLineEdit*>("resetProfileLogin");
+            auto* copyLogin = password->findChild<QPushButton*>("copyResetProfileLogin");
+            auto* copyPassword = password->findChild<QPushButton*>("copyResetProfilePassword");
+            checks &= generatedPassword && reveal && confirmed && copyPassword && !copyPassword->isEnabled() &&
+                resetLogin && copyLogin;
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) {
+                QDir().mkpath(artifacts);
+                password->grab().save(artifacts + "/profile-reset-credentials.png");
+            }
+            const auto newPassword = generatedPassword->text();
+            const auto resetProfileLogin = resetLogin->text();
+            resetPasswordResult = newPassword;
+            copyLogin->click();
+            checks &= QApplication::clipboard()->text() == resetProfileLogin;
+            reveal->setChecked(true);
+            copyPassword->click();
+            checks &= QApplication::clipboard()->text() == newPassword;
             auto* save = password->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
             save->click();
-            checks &= !password->findChild<QLabel*>("profileNotice")->text().isEmpty();
-            password->findChild<QLineEdit*>("confirmPassword")->setText("reset-password");
+            checks &= !password->findChild<QLabel*>("profileNotice")->text().isEmpty() &&
+                DecodePassword(delegate->load_profile()->password_encoded()) == oldPassword;
+            confirmed->setChecked(true);
             AppSetProfileAuditFailureHookForTests(true);
             save->click();
             AppSetProfileAuditFailureHookForTests(false);
@@ -1988,10 +2024,13 @@ static bool TestProfileDialogs() {
                 readProfileFile("meta/profile-audit.log") == oldAuditBytes &&
                 !std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction");
             save->click();
+            checks &= DecodePassword(delegate->load_profile()->password_encoded()) == newPassword.toUtf8().toStdString();
+            checks &= password->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->text() == QString::fromUtf8("Готово");
+            save->click();
         });
         manager->findChild<QPushButton*>("resetProfilePassword")->click();
         delegate->set_active_profile(created->id);
-        checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "reset-password";
+        checks &= DecodePassword(delegate->load_profile()->password_encoded()) == resetPasswordResult.toUtf8().toStdString();
         auto selectId = [&](const QString& target) {
             for (int r = 0; r < table->rowCount(); ++r)
                 if (table->item(r, 0)->data(Qt::UserRole).toString() == target) table->selectRow(r);
@@ -2033,8 +2072,8 @@ static bool TestProfileDialogs() {
         dialog->findChild<QLineEdit*>("confirmPassword")->setText("my-password");
         auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
         save->click();
-        checks &= DecodePassword(delegate->load_profile()->password_encoded()) == "reset-password";
-        dialog->findChild<QLineEdit*>("currentPassword")->setText("reset-password");
+        checks &= DecodePassword(delegate->load_profile()->password_encoded()) == resetPasswordResult.toUtf8().toStdString();
+        dialog->findChild<QLineEdit*>("currentPassword")->setText(resetPasswordResult);
         save->click();
     });
     checks &= ShowProfilePasswordDialog(nullptr, workspace, id, id, false);
@@ -2057,6 +2096,7 @@ static bool TestProfileDialogs() {
         (void)level;
         checks &= event.find(created->id) == std::string::npos &&
             event.find("reset-password") == std::string::npos && event.find("my-password") == std::string::npos;
+        checks &= event.find(resetPasswordResult.toUtf8().toStdString()) == std::string::npos;
     }
     if (!missingProfileDialogAccessibleNames.isEmpty()) {
         std::cerr << "Visible profile dialog controls without accessible names:\n";
@@ -2065,6 +2105,7 @@ static bool TestProfileDialogs() {
         checks = false;
     }
     if (!checks) std::cerr << "profile dialog lifecycle failed\n";
+    QApplication::clipboard()->setText(originalClipboard);
     return checks;
 }
 

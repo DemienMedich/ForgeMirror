@@ -3,12 +3,17 @@
 #include "AppProfileMutationService.h"
 #include "AppProfileDeletionService.h"
 #include "AppTaskCompletionService.h"
+#include "AppUtils.h"
 #include <QtWidgets>
 #include <algorithm>
 
 namespace {
 QString q(const std::string& s) { return QString::fromUtf8(s.data(), int(s.size())); }
 std::string u(const QString& s) { return s.toUtf8().toStdString(); }
+void labelForAccessibility(QWidget* widget, const QString& name, const QString& description) {
+    widget->setAccessibleName(name);
+    widget->setAccessibleDescription(description);
+}
 QLabel* notice(QLayout* layout) {
     auto* label = new QLabel;
     label->setObjectName("profileNotice");
@@ -37,21 +42,103 @@ bool ShowProfilePasswordDialog(QWidget* parent, QtWorkspace& workspace, const QS
     current->setObjectName("currentPassword");
     next->setObjectName("newPassword");
     confirm->setObjectName("confirmPassword");
+    labelForAccessibility(current, QString::fromUtf8("Текущий пароль профиля"),
+        QString::fromUtf8("Введите действующий пароль профиля для смены пароля."));
+    labelForAccessibility(next, QString::fromUtf8("Новый пароль профиля"),
+        QString::fromUtf8("Пароль должен совпадать с подтверждением."));
+    labelForAccessibility(confirm, QString::fromUtf8("Подтверждение нового пароля профиля"),
+        QString::fromUtf8("Повторите новый пароль."));
     for (auto* edit : {current, next, confirm}) edit->setEchoMode(QLineEdit::Password);
-    current->setParent(&dialog);
-    if (!adminReset) form->addRow(QString::fromUtf8("Текущий пароль"), current);
-    else current->hide();
-    form->addRow(QString::fromUtf8("Новый пароль"), next);
-    form->addRow(QString::fromUtf8("Повторите пароль"), confirm);
+    for (auto* edit : {current, next, confirm}) edit->setParent(&dialog);
+    QString generatedPassword;
+    QCheckBox* resetConfirmed = nullptr;
+    QLineEdit* resetLogin = nullptr;
+    QLineEdit* resetPassword = nullptr;
+    QCheckBox* revealResetPassword = nullptr;
+    QPushButton* copyResetLogin = nullptr;
+    QPushButton* copyResetPassword = nullptr;
+    if (adminReset) {
+        current->hide();
+        next->hide();
+        confirm->hide();
+        auto& storage = *workspace.storage;
+        if (!storage.set_active_profile(u(profileId))) return false;
+        const auto profile = storage.load_profile();
+        if (!activeId.isEmpty()) storage.set_active_profile(u(activeId));
+        if (!profile) return false;
+        generatedPassword = q(GenerateRandomPassword());
+        auto* loginRow = new QWidget(&dialog);
+        auto* loginLayout = new QHBoxLayout(loginRow);
+        loginLayout->setContentsMargins(0, 0, 0, 0);
+        resetLogin = new QLineEdit(profile->login().empty() ? profileId : q(profile->login()));
+        resetLogin->setObjectName("resetProfileLogin");
+        resetLogin->setReadOnly(true);
+        labelForAccessibility(resetLogin, QString::fromUtf8("Логин профиля"),
+            QString::fromUtf8("Логин профиля, пароль которого будет сброшен."));
+        copyResetLogin = new QPushButton(QString::fromUtf8("Копировать логин"));
+        copyResetLogin->setObjectName("copyResetProfileLogin");
+        labelForAccessibility(copyResetLogin, QString::fromUtf8("Копировать логин профиля"),
+            QString::fromUtf8("Копирует логин профиля в буфер обмена."));
+        loginLayout->addWidget(resetLogin, 1);
+        loginLayout->addWidget(copyResetLogin);
+        form->addRow(QString::fromUtf8("Логин"), loginRow);
+
+        auto* passwordRow = new QWidget(&dialog);
+        auto* passwordLayout = new QHBoxLayout(passwordRow);
+        passwordLayout->setContentsMargins(0, 0, 0, 0);
+        resetPassword = new QLineEdit(generatedPassword, passwordRow);
+        resetPassword->setObjectName("resetProfileGeneratedPassword");
+        resetPassword->setReadOnly(true);
+        resetPassword->setEchoMode(QLineEdit::Password);
+        labelForAccessibility(resetPassword, QString::fromUtf8("Сгенерированный пароль профиля"),
+            QString::fromUtf8("Новый пароль, который будет сохранён после подтверждения сброса."));
+        revealResetPassword = new QCheckBox(QString::fromUtf8("Показать"), passwordRow);
+        revealResetPassword->setObjectName("revealResetProfilePassword");
+        labelForAccessibility(revealResetPassword, QString::fromUtf8("Показать новый пароль"),
+            QString::fromUtf8("Показывает сгенерированный пароль перед его сохранением."));
+        copyResetPassword = new QPushButton(QString::fromUtf8("Копировать пароль"), passwordRow);
+        copyResetPassword->setObjectName("copyResetProfilePassword");
+        copyResetPassword->setEnabled(false);
+        labelForAccessibility(copyResetPassword, QString::fromUtf8("Копировать новый пароль"),
+            QString::fromUtf8("Становится доступно после явного показа нового пароля."));
+        passwordLayout->addWidget(resetPassword, 1);
+        passwordLayout->addWidget(revealResetPassword);
+        passwordLayout->addWidget(copyResetPassword);
+        form->addRow(QString::fromUtf8("Новый пароль"), passwordRow);
+        QObject::connect(revealResetPassword, &QCheckBox::toggled, &dialog, [=](bool show) {
+            resetPassword->setEchoMode(show ? QLineEdit::Normal : QLineEdit::Password);
+            copyResetPassword->setEnabled(show);
+        });
+        QObject::connect(copyResetLogin, &QPushButton::clicked, &dialog, [=] {
+            QApplication::clipboard()->setText(resetLogin->text());
+        });
+        QObject::connect(copyResetPassword, &QPushButton::clicked, &dialog, [=] {
+            if (revealResetPassword->isChecked()) QApplication::clipboard()->setText(generatedPassword);
+        });
+        resetConfirmed = new QCheckBox(QString::fromUtf8("Подтверждаю сброс пароля"));
+        resetConfirmed->setObjectName("confirmProfilePasswordReset");
+        form->addRow(resetConfirmed);
+    } else {
+        form->addRow(QString::fromUtf8("Текущий пароль"), current);
+        form->addRow(QString::fromUtf8("Новый пароль"), next);
+        form->addRow(QString::fromUtf8("Повторите пароль"), confirm);
+    }
     auto* error = notice(form);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
+    auto* saveButton = buttons->button(QDialogButtonBox::Save);
+    saveButton->setText(adminReset ? QString::fromUtf8("Сбросить") : QString::fromUtf8("Сохранить"));
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
     form->addRow(buttons);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    bool resetSaved = false;
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (resetSaved) { dialog.accept(); return; }
         if (!canWrite(workspace, error)) return;
-        if (next->text().isEmpty() || next->text() != confirm->text()) {
+        if (adminReset && !resetConfirmed->isChecked()) {
+            error->setText(QString::fromUtf8("Подтвердите сброс пароля перед сохранением."));
+            return;
+        }
+        if (!adminReset && (next->text().isEmpty() || next->text() != confirm->text())) {
             error->setText(QString::fromUtf8("Новый пароль пуст или подтверждение не совпадает."));
             return;
         }
@@ -67,9 +154,14 @@ bool ShowProfilePasswordDialog(QWidget* parent, QtWorkspace& workspace, const QS
         }
         AppContext context{workspace.directory, storage, workspace.catalog, workspace.profileEventLogger};
         auto result = ChangeProfilePasswordWithAuditRecovery(context, u(activeId), u(profileId),
-            u(current->text()), u(next->text()), !adminReset, adminReset ? "password_reset" : "password_change");
+            adminReset ? std::string{} : u(current->text()), adminReset ? u(generatedPassword) : u(next->text()),
+            !adminReset, adminReset ? "password_reset" : "password_change");
         if (!result.ok) { error->setText(q(result.errorMessage)); return; }
-        dialog.accept();
+        if (!adminReset) { dialog.accept(); return; }
+        resetSaved = true;
+        error->setText(QString::fromUtf8("Пароль сброшен. Сохраните логин и новый пароль до закрытия окна."));
+        saveButton->setText(QString::fromUtf8("Готово"));
+        buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Закрыть"));
     });
     return dialog.exec() == QDialog::Accepted;
 }
@@ -137,10 +229,41 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     credentials->setEchoMode(QLineEdit::Password);
     credentials->hide();
     layout->addWidget(credentials);
+    QString createdLoginValue;
+    QString createdPasswordValue;
+    auto* credentialActions = new QHBoxLayout;
+    auto* copyCreatedLogin = new QPushButton(QString::fromUtf8("Копировать логин"));
+    copyCreatedLogin->setObjectName("copyCreatedProfileLogin");
+    labelForAccessibility(copyCreatedLogin, QString::fromUtf8("Копировать логин нового профиля"),
+        QString::fromUtf8("Копирует логин созданного профиля в буфер обмена."));
+    auto* copyCreatedPassword = new QPushButton(QString::fromUtf8("Копировать пароль"));
+    copyCreatedPassword->setObjectName("copyCreatedProfilePassword");
+    labelForAccessibility(copyCreatedPassword, QString::fromUtf8("Копировать пароль нового профиля"),
+        QString::fromUtf8("Становится доступно после явного показа реквизитов."));
+    copyCreatedPassword->setEnabled(false);
+    for (auto* button : {copyCreatedLogin, copyCreatedPassword}) credentialActions->addWidget(button);
+    credentialActions->addStretch();
+    auto* credentialActionsWidget = new QWidget;
+    credentialActionsWidget->setLayout(credentialActions);
+    credentialActionsWidget->hide();
+    layout->addWidget(credentialActionsWidget);
     auto* reveal = new QCheckBox(QString::fromUtf8("Показать реквизиты нового профиля"));
+    reveal->setObjectName("showCreatedProfileCredentials");
+    reveal->setAccessibleName(QString::fromUtf8("Показать реквизиты нового профиля"));
+    reveal->setAccessibleDescription(QString::fromUtf8("Показывает сгенерированные логин и пароль профиля."));
     reveal->hide();
     layout->addWidget(reveal);
-    QObject::connect(reveal, &QCheckBox::toggled, &dialog, [=](bool show) { credentials->setEchoMode(show ? QLineEdit::Normal : QLineEdit::Password); });
+    QObject::connect(reveal, &QCheckBox::toggled, &dialog, [=](bool show) {
+        credentials->setEchoMode(show ? QLineEdit::Normal : QLineEdit::Password);
+        copyCreatedPassword->setEnabled(show);
+    });
+    QObject::connect(copyCreatedLogin, &QPushButton::clicked, &dialog, [&] {
+        if (!createdLoginValue.isEmpty()) QApplication::clipboard()->setText(createdLoginValue);
+    });
+    QObject::connect(copyCreatedPassword, &QPushButton::clicked, &dialog, [&] {
+        if (reveal->isChecked() && !createdPasswordValue.isEmpty())
+            QApplication::clipboard()->setText(createdPasswordValue);
+    });
     auto* close = new QDialogButtonBox(QDialogButtonBox::Close);
     close->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
     layout->addWidget(close);
@@ -204,10 +327,13 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
             workspace.profileEventLogger);
         if (!activeId.isEmpty()) workspace.storage->set_active_profile(u(activeId));
         if (!result.ok) { status->setText(q(result.errorMessage)); return; }
+        createdLoginValue = q(result.login);
+        createdPasswordValue = q(result.password);
         reveal->setChecked(false);
-        credentials->setText(QString::fromUtf8("Логин: %1   Пароль: %2").arg(q(result.login), q(result.password)));
+        credentials->setText(QString::fromUtf8("Логин: %1   Пароль: %2").arg(createdLoginValue, createdPasswordValue));
         credentials->show();
         reveal->show();
+        credentialActionsWidget->show();
         status->setText(QString::fromUtf8("Профиль создан. Сохраните реквизиты перед закрытием окна."));
         refresh();
     });

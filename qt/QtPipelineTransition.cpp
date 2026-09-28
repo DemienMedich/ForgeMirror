@@ -30,6 +30,8 @@ bool ShowPipelineTransition(QWidget* parent, QtWorkspace& workspace, const std::
     layout->addWidget(current);
     auto* choices = new QComboBox;
     choices->setObjectName("nextStage");
+    choices->setAccessibleName(QString::fromUtf8("Следующий этап задачи"));
+    choices->setAccessibleDescription(QString::fromUtf8("Выберите доступный этап из настроенных связей текущего этапа."));
     std::set<std::string> seen;
     if (source != workspace.data.pipelineSteps.end() && task->status != 2) {
         for (const auto& id : source->nextIds) {
