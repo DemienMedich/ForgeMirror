@@ -4619,7 +4619,48 @@ static bool TestPomodoro() {
     panel.advanceSecondsForTest(1);
     if (phase->text() != QString::fromUtf8("Фокус") || !pause->isVisible()) return fail(9);
     reset->click();
+    if (phase->text() != QString::fromUtf8("Фокус") || time->text() != "30:00" || pause->isVisible()) return fail(13);
+    const int rewardsBeforeSkippedFocus = rewards;
+    panel.quickToggle(); panel.advanceSecondsForTest(1); panel.quickNext();
+    if (rewards != rewardsBeforeSkippedFocus || phase->text() != QString::fromUtf8("Перерыв") || !pause->isVisible()) return fail(14);
+    panel.quickReset();
     return phase->text() == QString::fromUtf8("Фокус") && time->text() == "30:00" && !pause->isVisible();
+}
+
+static bool TestPomodoroQuickHeader() {
+    auto fail = [](int step) { std::cerr << "Pomodoro quick header step " << step << " failed\n"; return false; };
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    QtWindow window(workspace);
+    window.show(); QApplication::processEvents();
+    auto* button = window.findChild<QToolButton*>("pomodoroQuickButton");
+    auto* menu = window.findChild<QMenu*>("pomodoroQuickMenu");
+    auto* panel = static_cast<QtPomodoro*>(window.findChild<QWidget*>("pomodoroPanel"));
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    if (!button || !menu || !panel || !navigation || !button->isVisible() ||
+        button->accessibleName() != QString::fromUtf8("Быстрое управление Pomodoro")) return fail(1);
+    QAction* toggle = nullptr; QAction* next = nullptr; QAction* reset = nullptr; QAction* openPage = nullptr;
+    for (auto* action : menu->actions()) {
+        if (action->objectName() == "pomodoroQuickToggle") toggle = action;
+        else if (action->objectName() == "pomodoroQuickNext") next = action;
+        else if (action->objectName() == "pomodoroQuickReset") reset = action;
+        else if (action->objectName() == "pomodoroOpenPage") openPage = action;
+    }
+    if (!toggle || !next || !reset || !openPage || button->text() != panel->quickSummary()) return fail(2);
+    QMetaObject::invokeMethod(menu, "aboutToShow", Qt::DirectConnection);
+    if (toggle->text() != QString::fromUtf8("Старт фокуса") || !next->isEnabled()) return fail(3);
+    toggle->trigger();
+    if (panel->quickToggleText() != QString::fromUtf8("Пауза") || button->text() != panel->quickSummary()) return fail(4);
+    panel->advanceSecondsForTest(1);
+    toggle->trigger();
+    if (panel->quickToggleText() != QString::fromUtf8("Продолжить")) return fail(5);
+    next->trigger();
+    if (panel->quickSummary().section(QStringLiteral(" · "), 0, 0) != QString::fromUtf8("Перерыв") ||
+        panel->quickToggleText() != QString::fromUtf8("Пауза")) return fail(6);
+    reset->trigger();
+    if (panel->quickSummary().section(QStringLiteral(" · "), 0, 0) != QString::fromUtf8("Фокус")) return fail(7);
+    openPage->trigger();
+    return navigation->currentRow() == 8 || fail(8);
 }
 
 static bool TestRulesEditor() {
@@ -5233,11 +5274,13 @@ static bool TestQtModuleToggleParity() {
     auto* title = window.findChild<QLabel*>("title");
     auto* achievementButton = window.findChild<QPushButton*>("showAchievements");
     auto* shortcutLauncher = window.findChild<QToolButton*>("quickShortcutLauncher");
-    if (!navigation || !title || !achievementButton || !shortcutLauncher) return false;
+    auto* pomodoroQuick = window.findChild<QToolButton*>("pomodoroQuickButton");
+    if (!navigation || !title || !achievementButton || !shortcutLauncher || !pomodoroQuick) return false;
     for (int page : {1, 4, 5, 7, 8, 11, 13, 14, 15})
         if (!navigation->item(page)->isHidden()) return false;
     if (!achievementButton->isHidden()) return false;
     if (!shortcutLauncher->isHidden()) return false;
+    if (!pomodoroQuick->isHidden()) return false;
     navigation->setCurrentRow(13);
     QApplication::processEvents();
     if (navigation->currentRow() != 0 || title->text() != QString::fromUtf8("Профиль")) return false;
@@ -5449,6 +5492,7 @@ int main(int argc, char** argv) {
     if (!TestProfileDeletionRecovery()) { std::cerr << "Profile deletion recovery failed\n"; return 1; }
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
+    if (!TestPomodoroQuickHeader()) { std::cerr << "Pomodoro quick header failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }

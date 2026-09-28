@@ -157,11 +157,11 @@ void QtPomodoro::startOrResume() {
     if (phase_ == Work && remaining_ == duration(Work)) workStartedAt_ = QDateTime::currentSecsSinceEpoch();
     running_ = true; deadline_.setRemainingTime(qint64(remaining_) * 1000); timer_->start(); refresh();
 }
-void QtPomodoro::finishInterval() {
+void QtPomodoro::finishInterval(bool awardEligible) {
     timer_->stop(); running_ = false; remaining_ = 0; awaiting_ = true;
     const auto completedPhase = phase_;
     if (phase_ == Work) {
-        if (rewardHandler_) {
+        if (awardEligible && rewardHandler_) {
             const auto result = rewardHandler_(workSeconds_ / 60, workStartedAt_);
             if (!result.isEmpty()) statusLabel_->setProperty("rewardMessage", result);
         }
@@ -194,6 +194,39 @@ void QtPomodoro::saveSettings() {
     statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Настройки сохранены.")); refresh();
 }
 void QtPomodoro::setAdministrator(bool administrator) { soundSettings_->setVisible(administrator); }
+void QtPomodoro::setQuickStateChanged(std::function<void()> handler) {
+    quickStateChanged_ = std::move(handler);
+    if (quickStateChanged_) quickStateChanged_();
+}
+QString QtPomodoro::quickSummary() const {
+    return phaseName(phase_) + QStringLiteral(" · ") + timeLabel_->text();
+}
+QString QtPomodoro::quickToggleText() const {
+    if (running_) return QString::fromUtf8("Пауза");
+    if (awaiting_) return QString::fromUtf8("Начать следующий интервал");
+    return remaining_ < duration(phase_) ? QString::fromUtf8("Продолжить") : QString::fromUtf8("Старт фокуса");
+}
+bool QtPomodoro::quickNextEnabled() const { return !autoAdvance_ || awaiting_; }
+void QtPomodoro::quickToggle() {
+    if (running_) { running_ = false; timer_->stop(); refresh(); return; }
+    if (awaiting_) { phase_ = nextPhase_; awaiting_ = false; remaining_ = duration(phase_); }
+    startOrResume();
+}
+void QtPomodoro::quickNext() {
+    if (awaiting_) {
+        phase_ = nextPhase_;
+        awaiting_ = false;
+        remaining_ = duration(phase_);
+        startOrResume();
+        return;
+    }
+    if (running_) { finishInterval(false); return; }
+    nextPhase_ = phase_ == Work ? (cycles_ >= cyclesBeforeLong_ ? LongBreak : Break) : Work;
+    phase_ = nextPhase_;
+    remaining_ = duration(phase_);
+    startOrResume();
+}
+void QtPomodoro::quickReset() { reset(); }
 void QtPomodoro::playSound(Phase completed) {
     if (!soundEnabled_->isChecked() || soundVolume_->value() <= 0) return;
     const auto relative = completed == Work ? focusSound_->currentData().toString() : breakSound_->currentData().toString();
@@ -231,4 +264,5 @@ void QtPomodoro::refresh() {
         running_ ? QString::fromUtf8("Таймер идёт") : remaining_ < total ? QString::fromUtf8("Пауза") : QString::fromUtf8("Готов к старту"));
     start_->setVisible(!running_ && !awaiting_); start_->setText(remaining_ < total ? QString::fromUtf8("Продолжить") : QString::fromUtf8("Старт фокуса"));
     pause_->setVisible(running_); next_->setVisible(awaiting_); reset_->setEnabled(running_ || awaiting_ || remaining_ < total);
+    if (quickStateChanged_) quickStateChanged_();
 }

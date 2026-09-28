@@ -3,6 +3,7 @@
 #include <QDeadlineTimer>
 #include <filesystem>
 #include <functional>
+#include <QString>
 
 class QLabel;
 class QProgressBar;
@@ -19,11 +20,18 @@ public:
         int longBreakSeconds = 15 * 60, int cyclesBeforeLong = 4);
     void setRewardHandler(std::function<QString(int, std::int64_t)> handler) { rewardHandler_ = std::move(handler); }
     void setAdministrator(bool administrator);
+    void setQuickStateChanged(std::function<void()> handler);
+    QString quickSummary() const;
+    QString quickToggleText() const;
+    bool quickNextEnabled() const;
+    void quickToggle();
+    void quickNext();
+    void quickReset();
     void advanceSecondsForTest(int seconds);
 private:
     enum Phase { Work, Break, LongBreak };
     void startOrResume();
-    void finishInterval();
+    void finishInterval(bool awardEligible = true);
     void reset();
     void refresh();
     void saveSettings();
@@ -65,4 +73,5 @@ private:
     QComboBox* breakSound_;
     QSpinBox* soundVolume_;
     QDeadlineTimer deadline_;
+    std::function<void()> quickStateChanged_;
 };

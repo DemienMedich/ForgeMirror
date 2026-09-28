@@ -186,6 +186,8 @@ private:
     QToolButton* dragHandle_;
     QToolButton* shortcutLauncher_ = nullptr;
     QMenu* shortcutMenu_ = nullptr;
+    QToolButton* pomodoroQuickButton_ = nullptr;
+    QMenu* pomodoroQuickMenu_ = nullptr;
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
     QPushButton* bulkEdit_;

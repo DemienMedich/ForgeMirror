@@ -542,6 +542,41 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         });
     });
     header->addWidget(shortcutLauncher_);
+    pomodoroQuickButton_ = new QToolButton;
+    pomodoroQuickButton_->setObjectName("pomodoroQuickButton");
+    pomodoroQuickButton_->setText(QString::fromUtf8("Фокус · 25:00"));
+    pomodoroQuickButton_->setAccessibleName(QString::fromUtf8("Быстрое управление Pomodoro"));
+    pomodoroQuickButton_->setAccessibleDescription(QString::fromUtf8("Показывает текущую фазу и оставшееся время; меню содержит старт или паузу, следующий интервал и сброс."));
+    pomodoroQuickButton_->setToolTip(pomodoroQuickButton_->accessibleDescription());
+    pomodoroQuickButton_->setPopupMode(QToolButton::InstantPopup);
+    pomodoroQuickMenu_ = new QMenu(pomodoroQuickButton_);
+    pomodoroQuickMenu_->setObjectName("pomodoroQuickMenu");
+    auto* pomodoroToggleAction = pomodoroQuickMenu_->addAction(QString::fromUtf8("Старт фокуса"));
+    pomodoroToggleAction->setObjectName("pomodoroQuickToggle");
+    connect(pomodoroToggleAction, &QAction::triggered, this, [this] {
+        static_cast<QtPomodoro*>(pomodoro_)->quickToggle();
+    });
+    auto* pomodoroNextAction = pomodoroQuickMenu_->addAction(QString::fromUtf8("Следующий интервал"));
+    pomodoroNextAction->setObjectName("pomodoroQuickNext");
+    connect(pomodoroNextAction, &QAction::triggered, this, [this] {
+        static_cast<QtPomodoro*>(pomodoro_)->quickNext();
+    });
+    auto* pomodoroResetAction = pomodoroQuickMenu_->addAction(QString::fromUtf8("Сбросить таймер"));
+    pomodoroResetAction->setObjectName("pomodoroQuickReset");
+    connect(pomodoroResetAction, &QAction::triggered, this, [this] {
+        static_cast<QtPomodoro*>(pomodoro_)->quickReset();
+    });
+    pomodoroQuickMenu_->addSeparator();
+    auto* pomodoroPageAction = pomodoroQuickMenu_->addAction(QString::fromUtf8("Открыть Pomodoro"));
+    pomodoroPageAction->setObjectName("pomodoroOpenPage");
+    connect(pomodoroPageAction, &QAction::triggered, this, [this] { navigation_->setCurrentRow(Pomodoro); });
+    connect(pomodoroQuickMenu_, &QMenu::aboutToShow, this, [this, pomodoroToggleAction, pomodoroNextAction] {
+        const auto timer = static_cast<QtPomodoro*>(pomodoro_);
+        pomodoroToggleAction->setText(timer->quickToggleText());
+        pomodoroNextAction->setEnabled(timer->quickNextEnabled());
+    });
+    pomodoroQuickButton_->setMenu(pomodoroQuickMenu_);
+    header->addWidget(pomodoroQuickButton_);
     auto* menuButton = new QToolButton;
     menuButton->setText(QString::fromUtf8("⋯"));
     menuButton->setPopupMode(QToolButton::InstantPopup);
@@ -980,6 +1015,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     content->addWidget(profileAnalytics_);
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;
+    pomodoro->setQuickStateChanged([this, pomodoro] {
+        pomodoroQuickButton_->setText(pomodoro->quickSummary());
+        pomodoroQuickMenu_->actions().front()->setText(pomodoro->quickToggleText());
+        pomodoroQuickMenu_->actions().at(1)->setEnabled(pomodoro->quickNextEnabled());
+    });
     pomodoro->setRewardHandler([this](int workMinutes, std::int64_t startedAt) -> QString {
         const auto id = u(profiles_->currentData().toString());
         if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) return QString::fromUtf8("Награда не начислена: требуется восстановление данных.");
@@ -2457,6 +2497,7 @@ void QtWindow::render() {
     storageHealthReportAction_->setVisible(admin_);
     storageCleanupAction_->setVisible(admin_);
     shortcutLauncher_->setVisible(workspace_.modules.shortcuts);
+    pomodoroQuickButton_->setVisible(workspace_.modules.pomodoro);
     navigation_->item(ModelViewerPage)->setHidden(!workspace_.modules.view3d);
     navigation_->item(ModelSettingsPage)->setHidden(!workspace_.modules.view3d || !admin_);
     navigation_->item(Tasks)->setHidden(!workspace_.modules.tasks);
