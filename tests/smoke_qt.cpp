@@ -2633,11 +2633,16 @@ static bool TestTaskEditorTransaction() {
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     AppSetTaskAuditFailureHookForTests(true);
+    AppLogLevel failedStatusLogLevel = AppLogLevel::Info;
+    std::string failedStatusLogMessage;
     const auto failedStatus = UpdateTaskStatusWithRecovery(workspace.directory, workspace.data.tasks,
-        workspace.data.taskAudit, original.id, 1, "test");
+        workspace.data.taskAudit, original.id, 1, "test",
+        [&](AppLogLevel level, const std::string& message) { failedStatusLogLevel = level; failedStatusLogMessage = message; });
     AppSetTaskAuditFailureHookForTests(false);
     if (failedStatus.ok || workspace.data.tasks.front().status != 0 ||
-        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) return false;
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction") ||
+        failedStatusLogLevel != AppLogLevel::Warning ||
+        failedStatusLogMessage != "Task status update failed or was rolled back") return false;
     for (size_t i = 0; i < files.size(); ++i) if (read(files[i]) != before[i]) return false;
     AppSetTaskAuditFailureHookForTests(true);
     const auto failedDelete = DeleteTaskWithRecovery(workspace.directory, workspace.data.tasks,
@@ -2681,6 +2686,10 @@ static bool TestTaskEditorTransaction() {
     draft.assignees = original.assignees;
     if (!edit().ok || workspace.data.tasks.front().createdAt != 123 ||
         workspace.data.tasks.front().pipelineStepId != draft.pipelineStepId) { std::cerr << "Task edit failure at " << __LINE__ << "\n"; return false; }
+    const auto successfulStatus = UpdateTaskStatusWithRecovery(workspace.directory, workspace.data.tasks,
+        workspace.data.taskAudit, original.id, 1, "test",
+        [](AppLogLevel, const std::string&) { throw std::runtime_error("observer must be isolated"); });
+    if (!successfulStatus.ok || workspace.data.tasks.front().status != 1) return false;
     // Simulate interrupted metadata editing and exercise the startup recovery format.
     const auto journal = workspace.directory / "meta/qt-xp-transaction";
     std::filesystem::create_directories(journal);

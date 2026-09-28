@@ -719,7 +719,8 @@ AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
 
 AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const std::string& taskId, int newStatus, const std::string& actor) {
+    const std::string& taskId, int newStatus, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger) {
     AppMutationResult result;
     const auto oldTasks = tasks;
     const auto oldAudit = audit;
@@ -740,6 +741,13 @@ AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& dire
             try { result.errorMessage += RecoverTaskCompletionWithNotice(directory); }
             catch (const std::exception&) { result.errorMessage += u8" Откат не завершён. Перезапустите Qt для восстановления журнала."; }
         }
+    }
+    if (eventLogger) {
+        try {
+            eventLogger(result.ok ? AppLogLevel::Info : AppLogLevel::Warning,
+                result.ok ? "Task status update committed"
+                          : "Task status update failed or was rolled back");
+        } catch (...) {}
     }
     return result;
 }

@@ -3,6 +3,7 @@
 #include "AppTaskProjectService.h"
 #include "AppProfileMutationService.h"
 #include "Profile.h"
+#include <functional>
 #include <utility>
 
 struct TaskXpShare { std::string profileId; int percent = 0; };
@@ -93,7 +94,8 @@ AppMutationResult CreateTaskWithRecovery(const std::filesystem::path& directory,
 
 AppMutationResult UpdateTaskStatusWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,
-    const std::string& taskId, int newStatus, const std::string& actor);
+    const std::string& taskId, int newStatus, const std::string& actor,
+    std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
 
 AppMutationResult DeleteTaskWithRecovery(const std::filesystem::path& directory,
     std::vector<TaskEntry>& tasks, std::vector<TaskAuditEntry>& audit,

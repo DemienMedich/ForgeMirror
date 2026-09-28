@@ -6414,12 +6414,11 @@ void QtWindow::changeStatus() {
         return;
     }
     const auto result = UpdateTaskStatusWithRecovery(workspace_.directory, workspace_.data.tasks,
-        workspace_.data.taskAudit, id, next, "admin/qt");
+        workspace_.data.taskAudit, id, next, "admin/qt",
+        [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreTaskMutation", event); });
     if (!result.ok) {
-        appendLog(AppLogLevel::Warning, "CoreTaskMutation", "Task status update failed or rolled back");
         message(result.errorMessage);
     } else {
-        appendLog(AppLogLevel::Info, "CoreTaskMutation", "Task status update committed");
         reload();
     }
 }
