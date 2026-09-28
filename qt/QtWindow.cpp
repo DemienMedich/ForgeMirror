@@ -511,6 +511,16 @@ static QIcon qtShortcutStatusIcon(QtShortcutRunState state) {
     painter.drawEllipse(QRect(2, 2, 10, 10));
     return QIcon(pixmap);
 }
+static QIcon qtStatusDotIcon(const QColor& color) {
+    QPixmap pixmap(14, 14);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    painter.drawEllipse(QRect(2, 2, 10, 10));
+    return QIcon(pixmap);
+}
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
@@ -552,6 +562,25 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* refresh = new QPushButton(QString::fromUtf8("Обновить"));
     refresh->setToolTip(QString::fromUtf8("Перечитать локальную копию данных без облачной синхронизации"));
     header->addWidget(refresh);
+    cloudQuickButton_ = new QToolButton;
+    cloudQuickButton_->setObjectName("quickCloudSync");
+    cloudQuickButton_->setText(QString::fromUtf8("Облако"));
+    cloudQuickButton_->setAccessibleName(QString::fromUtf8("Быстрая синхронизация с облаком"));
+    cloudQuickButton_->setAccessibleDescription(QString::fromUtf8(
+        "Запускает только настроенные направления загрузки и выгрузки. Стрелка открывает раздел облака."));
+    cloudQuickButton_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    cloudQuickButton_->setPopupMode(QToolButton::MenuButtonPopup);
+    auto* cloudQuickMenu = new QMenu(cloudQuickButton_);
+    cloudQuickMenu->setObjectName("quickCloudSyncMenu");
+    auto* cloudSyncNow = cloudQuickMenu->addAction(QString::fromUtf8("Синхронизировать настроенные направления"));
+    cloudSyncNow->setObjectName("quickCloudSyncNow");
+    connect(cloudSyncNow, &QAction::triggered, this, [this] { runQuickCloudSync(); });
+    auto* cloudOpenPage = cloudQuickMenu->addAction(QString::fromUtf8("Открыть раздел «Облако»"));
+    cloudOpenPage->setObjectName("quickCloudOpenPage");
+    connect(cloudOpenPage, &QAction::triggered, this, [this] { navigation_->setCurrentRow(Cloud); });
+    cloudQuickButton_->setMenu(cloudQuickMenu);
+    connect(cloudQuickButton_, &QToolButton::clicked, this, [this] { runQuickCloudSync(); });
+    header->addWidget(cloudQuickButton_);
     shortcutLauncher_ = new QToolButton;
     shortcutLauncher_->setObjectName("quickShortcutLauncher");
     shortcutLauncher_->setText(QString::fromUtf8("Ярлыки"));
@@ -721,6 +750,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     cloudAutoSyncTimer_->setInterval(60000);
     connect(cloudAutoSyncTimer_, &QTimer::timeout, this, [this] { runAutomaticCloudSync(); });
     cloudAutoSyncTimer_->start();
+    auto* cloudStatusTimer = new QTimer(this);
+    cloudStatusTimer->setObjectName("cloudQuickStatusTimer");
+    cloudStatusTimer->setInterval(2000);
+    connect(cloudStatusTimer, &QTimer::timeout, this, [this] { updateCloudQuickStatus(); });
+    cloudStatusTimer->start();
+    updateCloudQuickStatus();
     QTimer::singleShot(2500, this, [this] { checkDeadlineReminders(); checkMissedDeadlineReminders(); });
 
     auto* body = new QHBoxLayout;
@@ -2573,6 +2608,7 @@ void QtWindow::render() {
     storageHealthReportAction_->setVisible(admin_);
     storageCleanupAction_->setVisible(admin_);
     shortcutLauncher_->setVisible(workspace_.modules.shortcuts);
+    cloudQuickButton_->setVisible(workspace_.modules.cloud);
     pomodoroQuickButton_->setVisible(workspace_.modules.pomodoro);
     navigation_->item(ModelViewerPage)->setHidden(!workspace_.modules.view3d);
     navigation_->item(ModelSettingsPage)->setHidden(!workspace_.modules.view3d || !admin_);
@@ -5411,6 +5447,115 @@ void QtWindow::pullCloud() {
     if (result.sync.storageConflict) {
         QMessageBox::warning(this, QString::fromUtf8("Конфликт storage.json"), q(result.message));
     }
+}
+
+void QtWindow::updateCloudQuickStatus() {
+    if (!cloudQuickButton_) return;
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    if (lastCloudStatusScanAt_ > 0 && now >= lastCloudStatusScanAt_ && now - lastCloudStatusScanAt_ < 2) return;
+    lastCloudStatusScanAt_ = now;
+
+    QColor color = palette().color(QPalette::Disabled, QPalette::Text);
+    QString status = QString::fromUtf8("Облако отключено.");
+    if (workspace_.modules.cloud) {
+        const auto config = LoadCloudSyncConfig(workspace_.directory);
+        if (config.enabled) {
+            const auto root = ResolveCloudRootPath(config, workspace_.directory);
+            std::error_code ec;
+            if (!std::filesystem::is_directory(root, ec) || ec) {
+                color = QColor(225, 165, 65);
+                status = QString::fromUtf8("Папка облака недоступна: %1").arg(q(root.u8string()));
+            } else {
+                const auto health = InspectWorkspaceSyncHealth(workspace_.directory, workspace_.modules);
+                const auto drift = InspectCloudWorkspaceDrift(config, workspace_.directory, 0);
+                const auto manifestPath = config.manifest.empty() ? root / "meta/manifest.ini"
+                    : config.manifest.is_absolute() ? config.manifest : root / config.manifest;
+                const bool hasManifest = std::filesystem::is_regular_file(manifestPath, ec) && !ec;
+                if (!hasManifest || health.issueCount > 0 || drift.issueCount > 0) {
+                    color = QColor(225, 165, 65);
+                    status = !hasManifest ? QString::fromUtf8("В облаке не найден manifest.")
+                        : QString::fromUtf8("Найдены расхождения или проблемы sync-файлов.");
+                    if (drift.issueCount > 0)
+                        status += QString::fromUtf8("\nРасхождений: %1, конфликтов: %2.")
+                            .arg(drift.issueCount).arg(drift.conflictCount);
+                    if (health.issueCount > 0)
+                        status += QString::fromUtf8("\nПроблем sync-файлов: %1.").arg(health.issueCount);
+                    const size_t issueCount = std::min<size_t>(3, drift.issues.size());
+                    for (size_t i = 0; i < issueCount; ++i) status += QStringLiteral("\n• ") + q(drift.issues[i]);
+                    const size_t healthCount = std::min<size_t>(3, health.issues.size());
+                    for (size_t i = 0; i < healthCount; ++i) status += QStringLiteral("\n• ") + q(health.issues[i]);
+                } else {
+                    color = QColor(70, 190, 105);
+                    status = QString::fromUtf8("Локальные и облачные sync-файлы совпадают.");
+                }
+            }
+            status += QString::fromUtf8("\nНаправления: загрузка — %1, выгрузка администратора — %2.")
+                .arg(config.autoPull ? QString::fromUtf8("вкл.") : QString::fromUtf8("выкл."))
+                .arg(config.autoPush ? QString::fromUtf8("вкл.") : QString::fromUtf8("выкл."));
+            if (!admin_) status += QString::fromUtf8("\nРежим просмотра: выгрузка возможна только для кошелька открытого профиля.");
+        }
+    }
+    cloudQuickButton_->setIcon(qtStatusDotIcon(color));
+    cloudQuickButton_->setIconSize(QSize(14, 14));
+    cloudQuickButton_->setToolTip(status);
+    cloudQuickButton_->setAccessibleDescription(QString::fromUtf8("Запускает настроенные направления синхронизации. Состояние: %1")
+        .arg(status));
+}
+
+void QtWindow::runQuickCloudSync() {
+    if (!workspace_.modules.cloud) {
+        statusBar()->showMessage(QString::fromUtf8("Модуль облака выключен."), 8000);
+        return;
+    }
+    if (QApplication::activeModalWidget()) return;
+    const auto config = LoadCloudSyncConfig(workspace_.directory);
+    if (!config.enabled) {
+        statusBar()->showMessage(QString::fromUtf8("Облако отключено в настройках."), 8000);
+        return;
+    }
+    const auto pullJournal = workspace_.directory / "meta/qt-cloud-pull.json";
+    const auto pushJournal = workspace_.directory / "meta/qt-cloud-push.json";
+    if (std::filesystem::exists(pullJournal) || std::filesystem::exists(pushJournal)) {
+        message(u8"Сначала устраните незавершённую облачную транзакцию перезапуском Qt.");
+        return;
+    }
+
+    const auto profileId = u(profiles_->currentData().toString());
+    std::string walletProfile;
+    if (!admin_ && !profileId.empty() && profileSession_.isUnlocked(*workspace_.storage, profileId))
+        walletProfile = profileId;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto result = RunQtCloudQuickSync(config, workspace_.directory,
+        admin_ ? CloudRole::Admin : CloudRole::Viewer, walletProfile);
+    QApplication::restoreOverrideCursor();
+    if (!result.attempted) {
+        statusBar()->showMessage(q(result.message), 10000);
+        return;
+    }
+    if (!result.ok) {
+        appendLog(result.recoveryPending ? AppLogLevel::Error : AppLogLevel::Warning,
+            "CoreCloudTransaction", result.recoveryPending
+                ? "Quick cloud sync recovery pending" : "Quick cloud sync failed");
+        statusBar()->showMessage(q(result.message), 15000);
+        if (result.recoveryPending) {
+            setEnabled(false);
+            for (auto* timer : findChildren<QTimer*>()) timer->stop();
+            QCoreApplication::exit(1);
+            return;
+        }
+    } else {
+        appendLog(AppLogLevel::Info, "CoreCloudTransaction",
+            result.changed ? "Quick cloud sync committed" : "Quick cloud sync unchanged");
+        statusBar()->showMessage(q(result.message), 12000);
+    }
+    if (result.pullChanged) {
+        profileSession_.lock();
+        if (!reload()) return;
+    }
+    lastCloudStatusScanAt_ = 0;
+    updateCloudQuickStatus();
+    if (result.storageConflict)
+        QMessageBox::warning(this, QString::fromUtf8("Конфликт storage.json"), q(result.message));
 }
 
 void QtWindow::runAutomaticCloudSync() {

@@ -85,6 +85,8 @@ private:
     void checkMissedDeadlineReminders();
     void updateBanner();
     void pullCloud();
+    void runQuickCloudSync();
+    void updateCloudQuickStatus();
     void runAutomaticCloudSync();
     void downloadCloudRelease();
     void launchCloudRelease();
@@ -186,6 +188,7 @@ private:
     QToolButton* dragHandle_;
     QToolButton* shortcutLauncher_ = nullptr;
     QMenu* shortcutMenu_ = nullptr;
+    QToolButton* cloudQuickButton_ = nullptr;
     QToolButton* pomodoroQuickButton_ = nullptr;
     QMenu* pomodoroQuickMenu_ = nullptr;
     QPushButton* detailsToggle_;
@@ -249,6 +252,7 @@ private:
     bool appLogPersistenceWarning_ = false;
     std::int64_t lastReminderCheckAt_ = 0;
     std::int64_t lastCloudAutoSyncAt_ = 0;
+    std::int64_t lastCloudStatusScanAt_ = 0;
     QTimer* cloudAutoSyncTimer_ = nullptr;
     bool reminderStatePersistenceWarning_ = false;
     QSystemTrayIcon* trayIcon_ = nullptr;

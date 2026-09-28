@@ -747,7 +747,33 @@ static bool TestCloudAutoSync() {
     const bool success = pushed.ok && pushed.attempted && pushed.pushAttempted && !pushed.pullAttempted && pushed.changed &&
         read(cloud / "meta/tasks.json") == "[{\"id\":\"admin-local\"}]";
     if (!success) std::cerr << "auto push: " << pushed.message << " ok=" << pushed.ok << " push=" << pushed.pushAttempted << " changed=" << pushed.changed << " remote=" << read(cloud / "meta/tasks.json").toStdString() << '\n';
-    return success;
+    if (!success || !write(workspace / "meta/tasks.json", "[{\"id\":\"quick-local\"}]")) return false;
+    auto quickPull = config;
+    quickPull.autoSyncEnabled = false;
+    quickPull.autoPull = true;
+    quickPull.autoPush = false;
+    if (!write(cloud / "meta/tasks.json", "[{\"id\":\"quick-remote\"}]")) return false;
+    const auto quickPulled = RunQtCloudQuickSync(quickPull, workspace, CloudRole::Viewer);
+    if (!quickPulled.ok || !quickPulled.attempted || !quickPulled.pullAttempted ||
+        quickPulled.pushAttempted || !quickPulled.pullChanged ||
+        read(workspace / "meta/tasks.json") != "[{\"id\":\"quick-remote\"}]" ||
+        RunQtCloudAutoSync(quickPull, workspace, CloudRole::Viewer).attempted) {
+        std::cerr << "quick pull should honor direction but not require periodic auto-sync: " << quickPulled.message << '\n';
+        return false;
+    }
+    if (!write(workspace / "meta/tasks.json", "[{\"id\":\"quick-admin\"}]")) return false;
+    auto quickPush = quickPull;
+    quickPush.autoPull = false;
+    quickPush.autoPush = true;
+    const auto quickPushed = RunQtCloudQuickSync(quickPush, workspace, CloudRole::Admin);
+    if (!quickPushed.ok || !quickPushed.attempted || !quickPushed.pushAttempted ||
+        quickPushed.pullAttempted || !quickPushed.changed ||
+        read(cloud / "meta/tasks.json") != "[{\"id\":\"quick-admin\"}]" ||
+        RunQtCloudAutoSync(quickPush, workspace, CloudRole::Admin).attempted) {
+        std::cerr << "quick admin push should honor direction but not require periodic auto-sync: " << quickPushed.message << '\n';
+        return false;
+    }
+    return true;
 }
 
 static bool SubmitAdminLoginForTest(const QString& password, bool remember);
@@ -4663,6 +4689,29 @@ static bool TestPomodoroQuickHeader() {
     return navigation->currentRow() == 8 || fail(8);
 }
 
+static bool TestCloudQuickHeader() {
+    QTemporaryDir temp; if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    QtWindow window(workspace);
+    window.show(); QApplication::processEvents();
+    auto* button = window.findChild<QToolButton*>("quickCloudSync");
+    auto* menu = window.findChild<QMenu*>("quickCloudSyncMenu");
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    if (!button || !menu || !navigation || !button->isVisible() || button->icon().isNull() ||
+        button->accessibleName() != QString::fromUtf8("Быстрая синхронизация с облаком") ||
+        !button->toolTip().contains(QString::fromUtf8("Облако отключено"))) return false;
+    QAction* sync = nullptr; QAction* openCloud = nullptr;
+    for (auto* action : menu->actions()) {
+        if (action->objectName() == "quickCloudSyncNow") sync = action;
+        else if (action->objectName() == "quickCloudOpenPage") openCloud = action;
+    }
+    if (!sync || !openCloud) return false;
+    openCloud->trigger(); QApplication::processEvents();
+    if (navigation->currentRow() != 13) return false;
+    button->click(); QApplication::processEvents();
+    return window.statusBar()->currentMessage() == QString::fromUtf8("Облако отключено в настройках.");
+}
+
 static bool TestNavigationClock() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -5510,6 +5559,7 @@ int main(int argc, char** argv) {
     if (!TestPersonalWallet()) { std::cerr << "Personal wallet failed\n"; return 1; }
     if (!TestPomodoro()) { std::cerr << "Pomodoro failed\n"; return 1; }
     if (!TestPomodoroQuickHeader()) { std::cerr << "Pomodoro quick header failed\n"; return 1; }
+    if (!TestCloudQuickHeader()) { std::cerr << "Cloud quick header failed\n"; return 1; }
     if (!TestNavigationClock()) { std::cerr << "Navigation clock failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }

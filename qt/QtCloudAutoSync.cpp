@@ -20,12 +20,14 @@ QtCloudPushPreviewResult transactionalPush(const CloudSyncConfig& config,
 }
 }
 
-QtCloudAutoSyncResult RunQtCloudAutoSync(const CloudSyncConfig& config,
+static QtCloudAutoSyncResult runSync(const CloudSyncConfig& config,
     const std::filesystem::path& workspace, CloudRole role,
-    const std::string& unlockedWalletProfileId) {
+    const std::string& unlockedWalletProfileId, bool requirePeriodicSyncEnabled) {
     QtCloudAutoSyncResult result;
-    if (!config.enabled || !config.autoSyncEnabled) {
-        result.message = u8"Автосинхронизация отключена.";
+    if (!config.enabled || (requirePeriodicSyncEnabled && !config.autoSyncEnabled)) {
+        result.message = !config.enabled ? u8"Облако отключено."
+            : requirePeriodicSyncEnabled ? u8"Автосинхронизация отключена."
+                                         : u8"Настройте хотя бы одно направление синхронизации.";
         return result;
     }
 
@@ -35,7 +37,8 @@ QtCloudAutoSyncResult RunQtCloudAutoSync(const CloudSyncConfig& config,
     result.attempted = doPull || doPush || doWallet;
     if (!result.attempted) {
         result.ok = true;
-        result.message = u8"Автоматические действия синхронизации отключены.";
+        result.message = requirePeriodicSyncEnabled ? u8"Автоматические действия синхронизации отключены."
+                                                     : u8"Настройте загрузку или выгрузку в разделе «Облако».";
         return result;
     }
 
@@ -47,7 +50,7 @@ QtCloudAutoSyncResult RunQtCloudAutoSync(const CloudSyncConfig& config,
         const auto pushed = transactionalPush(config, workspace, CloudRole::Admin);
         if (!pushed.sync.ok) {
             ok = false;
-            failure = pushed.message;
+            if (failure.empty()) failure = pushed.message;
             result.recoveryPending = std::filesystem::exists(workspace / "meta/qt-cloud-push.json");
         } else changed = changed || pushed.sync.changed;
     };
@@ -56,7 +59,8 @@ QtCloudAutoSyncResult RunQtCloudAutoSync(const CloudSyncConfig& config,
         const auto pulled = RunQtCloudPullTransaction(config, workspace, role);
         if (!pulled.sync.ok) {
             ok = false;
-            failure = pulled.message;
+            if (failure.empty()) failure = pulled.message;
+            result.storageConflict = pulled.sync.storageConflict;
             result.recoveryPending = std::filesystem::exists(workspace / "meta/qt-cloud-pull.json");
         } else {
             result.pullChanged = pulled.sync.changed;
@@ -66,18 +70,31 @@ QtCloudAutoSyncResult RunQtCloudAutoSync(const CloudSyncConfig& config,
 
     // Match the stable client: admins push first when both directions are enabled.
     if (doPush && doPull) push();
-    if (ok && doPull) pull();
+    if (doPull && (ok || (!requirePeriodicSyncEnabled && !result.recoveryPending))) pull();
     if (ok && doPush && !doPull) push();
-    if (ok && doWallet) {
+    if (doWallet && (ok || (!requirePeriodicSyncEnabled && !result.recoveryPending))) {
         result.walletAttempted = true;
         const auto wallet = PushProfileWallet(config, workspace, unlockedWalletProfileId);
-        if (!wallet.ok) { ok = false; failure = wallet.message; }
+        if (!wallet.ok) { ok = false; if (failure.empty()) failure = wallet.message; }
         else changed = changed || wallet.changed;
     }
 
     result.ok = ok;
     result.changed = changed;
-    result.message = !ok ? failure : changed ? u8"Автоматическая синхронизация завершена."
-                                             : u8"Данные синхронизированы.";
+    result.message = !ok ? failure : changed
+        ? (requirePeriodicSyncEnabled ? u8"Автоматическая синхронизация завершена." : u8"Быстрая синхронизация завершена.")
+        : u8"Данные синхронизированы.";
     return result;
+}
+
+QtCloudAutoSyncResult RunQtCloudAutoSync(const CloudSyncConfig& config,
+    const std::filesystem::path& workspace, CloudRole role,
+    const std::string& unlockedWalletProfileId) {
+    return runSync(config, workspace, role, unlockedWalletProfileId, true);
+}
+
+QtCloudAutoSyncResult RunQtCloudQuickSync(const CloudSyncConfig& config,
+    const std::filesystem::path& workspace, CloudRole role,
+    const std::string& unlockedWalletProfileId) {
+    return runSync(config, workspace, role, unlockedWalletProfileId, false);
 }
