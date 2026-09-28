@@ -5080,6 +5080,44 @@ static bool TestRulesEditor() {
 }
 
 static bool TestDisplaySettings(QApplication& app) {
+    const auto originalAppFont = app.font();
+    const auto originalAppStyleSheet = app.styleSheet();
+    const auto originalBasePointSize = app.property("forgeBasePointSize");
+    QTemporaryDir accessibilityTemp;
+    if (!accessibilityTemp.isValid()) return false;
+    QtDisplaySettings largeTextSettings;
+    largeTextSettings.scalePercent = 200;
+    const auto accessibilityDirectory = std::filesystem::u8path(accessibilityTemp.path().toUtf8().constData());
+    if (!SaveQtDisplaySettings(accessibilityDirectory, largeTextSettings) ||
+        LoadQtDisplaySettings(accessibilityDirectory).scalePercent != 200) {
+        std::cerr << "200% accessibility text scale did not survive save and reload\n";
+        return false;
+    }
+    QtLayoutPreset largeTextPreset;
+    largeTextPreset.name = QString::fromUtf8("Увеличенный текст");
+    largeTextPreset.scalePercent = 200;
+    QtLayoutPreset restoredLargeTextPreset;
+    QString accessibilityError;
+    if (!SaveQtLayoutPreset(accessibilityDirectory, largeTextPreset, &accessibilityError) ||
+        !LoadQtLayoutPreset(accessibilityDirectory, largeTextPreset.name, &restoredLargeTextPreset) ||
+        restoredLargeTextPreset.scalePercent != 200) {
+        std::cerr << "200% accessibility text scale did not survive layout preset save and reload: "
+                  << accessibilityError.toUtf8().constData() << '\n';
+        return false;
+    }
+    {
+        QtWorkspace largeTextWorkspace(accessibilityDirectory);
+        QtWindow largeTextWindow(largeTextWorkspace);
+        if (!(largeTextWindow.windowState() & Qt::WindowMaximized) ||
+            !largeTextWindow.findChild<QScrollArea*>("pageContentScrollArea") ||
+            !largeTextWindow.findChild<QScrollArea*>("headerScrollArea")) {
+            std::cerr << "large text did not enable the expanded, scrollable Qt layout\n";
+            return false;
+        }
+    }
+    app.setFont(originalAppFont);
+    app.setStyleSheet(originalAppStyleSheet);
+    app.setProperty("forgeBasePointSize", originalBasePointSize);
     QTemporaryDir temp; if (!temp.isValid()) return false;
     QDir().mkpath(temp.path() + "/meta"); QFile seed(temp.path() + "/meta/ui.ini");
     if (!seed.open(QIODevice::WriteOnly) || seed.write("\xEF\xBB\xBF[other]\nunknown=kept\n\n[style]\nwindowRounding=14\nframeRounding=10\nscrollbarRounding=12\ngrabRounding=8\nwindowPadding=12 14\nframePadding=7 5\nitemSpacing=9 4\n\n[projects]\nfilter=legacy-project-query\nsortMode=3\noverdueOnly=1\nxpPendingOnly=1\n") < 0) return false; seed.close();
@@ -5450,7 +5488,7 @@ static bool TestDisplaySettings(QApplication& app) {
     const auto fixedWindowColor = app.palette().color(QPalette::Window);
     ApplyQtDisplaySettings(app, loaded);
     if (app.font().pointSizeF() <= app.property("forgeBasePointSize").toDouble() ||
-        !app.styleSheet().contains(QStringLiteral("min-height: 34px")) ||
+        !app.styleSheet().contains(QStringLiteral("min-height: 42px")) ||
         !app.styleSheet().contains(QStringLiteral("border-radius: 11px")) ||
         app.palette().color(QPalette::Window) != fixedWindowColor) return false;
     ApplyQtDisplaySettings(app, QtDisplaySettings{});

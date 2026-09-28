@@ -11,11 +11,14 @@ void ApplyQtLayoutMetrics(QApplication& app, int spacingPercent, int cornerRadiu
     double windowRounding, double frameRounding, double scrollbarRounding, double grabRounding,
     double framePaddingX, double framePaddingY, double itemSpacingX, double itemSpacingY) {
     const double factor = std::clamp(spacingPercent, 80, 120) / 100.0;
-    const int controlHeight = qRound(std::max(26.0, 18.0 + clampMetric(framePaddingY, 24.0, 0.0) * 2.0) * factor);
-    const int horizontalPadding = qRound(clampMetric(framePaddingX, 24.0, 8.0) * factor);
-    const int verticalPadding = qRound(clampMetric(framePaddingY, 24.0, 0.0) * factor);
-    const int listPaddingX = qRound(clampMetric(itemSpacingX, 32.0, 8.0) * factor);
-    const int listPaddingY = qRound(clampMetric(itemSpacingY, 32.0, 6.0) * factor);
+    const double basePointSize = app.property("forgeBasePointSize").toDouble();
+    const double textScale = basePointSize > 0.0
+        ? std::clamp(app.font().pointSizeF() / basePointSize, 0.9, 2.0) : 1.0;
+    const int controlHeight = qRound(std::max(26.0, 18.0 + clampMetric(framePaddingY, 24.0, 0.0) * 2.0) * factor * textScale);
+    const int horizontalPadding = qRound(clampMetric(framePaddingX, 24.0, 8.0) * factor * textScale);
+    const int verticalPadding = qRound(clampMetric(framePaddingY, 24.0, 0.0) * factor * textScale);
+    const int listPaddingX = qRound(clampMetric(itemSpacingX, 32.0, 8.0) * factor * textScale);
+    const int listPaddingY = qRound(clampMetric(itemSpacingY, 32.0, 6.0) * factor * textScale);
     const int radius = std::clamp(cornerRadius, 0, 12);
     const int windowRadius = qRound(clampMetric(windowRounding, 24.0, double(radius)));
     const int frameRadius = qRound(clampMetric(frameRounding, 24.0, double(radius)));

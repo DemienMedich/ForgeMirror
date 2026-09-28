@@ -537,6 +537,72 @@ static QIcon qtStatusDotIcon(const QColor& color) {
     painter.drawEllipse(QRect(2, 2, 10, 10));
     return QIcon(pixmap);
 }
+static int scaledUiMetric(int value, int scalePercent) {
+    return std::max(1, qRound(value * std::clamp(scalePercent, 90, 200) / 100.0));
+}
+static void markScaleFixedWidth(QWidget* widget, int baseWidth) {
+    widget->setProperty("qtTextScaleFixedWidth", baseWidth);
+    widget->setFixedWidth(baseWidth);
+}
+static void markScaleMaximumWidth(QWidget* widget, int baseWidth) {
+    widget->setProperty("qtTextScaleMaximumWidth", baseWidth);
+    widget->setMaximumWidth(baseWidth);
+}
+static void markScaleFixedHeight(QWidget* widget, int baseHeight) {
+    widget->setProperty("qtTextScaleFixedHeight", baseHeight);
+    widget->setFixedHeight(baseHeight);
+}
+static void markScaleMinimumHeight(QWidget* widget, int baseHeight) {
+    widget->setProperty("qtTextScaleMinimumHeight", baseHeight);
+    widget->setMinimumHeight(baseHeight);
+}
+static void markScaleMinimumWidth(QWidget* widget, int baseWidth) {
+    widget->setProperty("qtTextScaleMinimumWidth", baseWidth);
+    widget->setMinimumWidth(baseWidth);
+}
+static void markScaleFixedSize(QWidget* widget, const QSize& baseSize) {
+    widget->setProperty("qtTextScaleFixedSize", baseSize);
+    widget->setFixedSize(baseSize);
+}
+static void markScaleMaximumHeight(QWidget* widget, int baseHeight) {
+    widget->setProperty("qtTextScaleMaximumHeight", baseHeight);
+    widget->setMaximumHeight(baseHeight);
+}
+static void applyQtTextScaleMetrics(QWidget* root, int scalePercent) {
+    if (!root) return;
+    auto widgets = root->findChildren<QWidget*>();
+    widgets.prepend(root);
+    const auto scale = [scalePercent](int value) { return scaledUiMetric(value, scalePercent); };
+    for (auto* widget : widgets) {
+        bool ok = false;
+        if (!widget->property("qtTextScaleFixedWidth").isValid() &&
+            widget->minimumWidth() > 0 && widget->minimumWidth() == widget->maximumWidth())
+            widget->setProperty("qtTextScaleFixedWidth", widget->minimumWidth());
+        if (!widget->property("qtTextScaleMaximumWidth").isValid() &&
+            widget->maximumWidth() > widget->minimumWidth() && widget->maximumWidth() < 16384)
+            widget->setProperty("qtTextScaleMaximumWidth", widget->maximumWidth());
+        if (!widget->property("qtTextScaleFixedHeight").isValid() &&
+            widget->minimumHeight() > 0 && widget->minimumHeight() == widget->maximumHeight())
+            widget->setProperty("qtTextScaleFixedHeight", widget->minimumHeight());
+        if (!widget->property("qtTextScaleMaximumHeight").isValid() &&
+            widget->maximumHeight() > widget->minimumHeight() && widget->maximumHeight() < 16384)
+            widget->setProperty("qtTextScaleMaximumHeight", widget->maximumHeight());
+        int base = widget->property("qtTextScaleFixedWidth").toInt(&ok);
+        if (ok) widget->setFixedWidth(scale(base));
+        base = widget->property("qtTextScaleMaximumWidth").toInt(&ok);
+        if (ok) widget->setMaximumWidth(scale(base));
+        base = widget->property("qtTextScaleMinimumWidth").toInt(&ok);
+        if (ok) widget->setMinimumWidth(scale(base));
+        base = widget->property("qtTextScaleFixedHeight").toInt(&ok);
+        if (ok) widget->setFixedHeight(scale(base));
+        base = widget->property("qtTextScaleMinimumHeight").toInt(&ok);
+        if (ok) widget->setMinimumHeight(scale(base));
+        base = widget->property("qtTextScaleMaximumHeight").toInt(&ok);
+        if (ok) widget->setMaximumHeight(scale(base));
+        const auto baseSize = widget->property("qtTextScaleFixedSize").toSize();
+        if (baseSize.isValid()) widget->setFixedSize(scale(baseSize.width()), scale(baseSize.height()));
+    }
+}
 
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
@@ -552,6 +618,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     setMinimumSize(800, 520);
     setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
     if (displaySettings_.fullscreen) setWindowState(windowState() | Qt::WindowFullScreen);
+    else if (displaySettings_.scalePercent >= 150) setWindowState(windowState() | Qt::WindowMaximized);
     backgroundSurface_ = new QtBackgroundSurface(this);
     auto* root = backgroundSurface_;
     auto* layout = new QVBoxLayout(root);
@@ -561,7 +628,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     dragHandle_->setObjectName("windowDragHandle");
     dragHandle_->setText(QString::fromUtf8("⋮⋮"));
     dragHandle_->setToolTip(QString::fromUtf8("Перетащить окно"));
-    dragHandle_->setFixedSize(28, 28);
+    markScaleFixedSize(dragHandle_, QSize(28, 28));
     dragHandle_->setVisible(!displaySettings_.decorated);
     header->addWidget(dragHandle_);
     header->addWidget(new QLabel(QString::fromUtf8("Профиль:")));
@@ -569,6 +636,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profiles_->setObjectName("profiles");
     labelForAccessibility(profiles_, QString::fromUtf8("Выбранный профиль"),
         QString::fromUtf8("Список доступных активных профилей."));
+    profiles_->setProperty("qtTextScaleMinimumWidth", 200);
     profiles_->setMinimumWidth(200);
     header->addWidget(profiles_);
     header->addStretch();
@@ -708,7 +776,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
         dragHandle_->setVisible(!displaySettings_.decorated);
         if (trayIcon_) trayIcon_->setVisible(displaySettings_.minimizeToTray);
-        if (displaySettings_.fullscreen) showFullScreen(); else showNormal();
+        applyQtTextScaleMetrics(this, displaySettings_.scalePercent);
+        if (displaySettings_.fullscreen) showFullScreen();
+        else if (displaySettings_.scalePercent >= 150) showMaximized();
+        else showNormal();
         render();
     });
     displaySettings->setObjectName("qtDisplaySettingsAction");
@@ -751,9 +822,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         trayIcon_->setVisible(displaySettings_.minimizeToTray);
     }
     header->addWidget(menuButton);
-    layout->addLayout(header);
+    header->setSizeConstraint(QLayout::SetMinimumSize);
+    auto* headerWidget = new QWidget;
+    headerWidget->setObjectName("headerContent");
+    headerWidget->setLayout(header);
+    auto* headerScroll = new QScrollArea;
+    headerScroll->setObjectName("headerScrollArea");
+    headerScroll->setFrameShape(QFrame::NoFrame);
+    headerScroll->setWidgetResizable(true);
+    headerScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    headerScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    headerScroll->setAccessibleName(QString::fromUtf8("Быстрые действия заголовка"));
+    headerScroll->setWidget(headerWidget);
+    layout->addWidget(headerScroll);
     banner_ = new QLabel;
-    banner_->setObjectName("bannerStrip"); banner_->setAlignment(Qt::AlignCenter); banner_->setFixedHeight(28);
+    banner_->setObjectName("bannerStrip"); banner_->setAlignment(Qt::AlignCenter); markScaleMinimumHeight(banner_, 28);
     banner_->setProperty("banner", true); layout->addWidget(banner_);
     auto* bannerTimer = new QTimer(this); bannerTimer->setInterval(60000);
     connect(bannerTimer, &QTimer::timeout, this, [this] { ++bannerIndex_; updateBanner(); }); bannerTimer->start();
@@ -879,10 +962,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         const auto tooltip = navigationHotkeys[size_t(index)];
         if (!tooltip.isEmpty()) item->setToolTip(item->text() + QStringLiteral(" · ") + tooltip);
     }
-    navigation_->setFixedWidth(168);
+    markScaleFixedWidth(navigation_, 168);
     auto* navigationColumn = new QWidget;
     navigationColumn->setObjectName("navigationColumn");
-    navigationColumn->setFixedWidth(168);
+    markScaleFixedWidth(navigationColumn, 168);
     auto* navigationLayout = new QVBoxLayout(navigationColumn);
     navigationLayout->setContentsMargins(0, 0, 0, 0);
     navigationLayout->setSpacing(8);
@@ -897,6 +980,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     clockHeading->setAlignment(Qt::AlignCenter);
     clockLayout->addWidget(clockHeading);
     auto* analogClock = new QtAnalogClock;
+    analogClock->setProperty("qtTextScaleFixedSize", QSize(76, 76));
     clockLayout->addWidget(analogClock, 0, Qt::AlignHCenter);
     auto* digitalClock = new QLabel(QTime::currentTime().toString("HH:mm:ss"));
     digitalClock->setObjectName("localClockDigital");
@@ -922,7 +1006,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     toolbar->addStretch();
     primary_ = new QPushButton;
     primary_->setObjectName("primary");
-    primary_->setFixedHeight(32);
+    markScaleFixedHeight(primary_, 32);
     toolbar->addWidget(primary_);
     content->addLayout(toolbar);
     summary_ = new QLabel;
@@ -938,6 +1022,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskPipelineSummary_->setWordWrap(true);
     content->addWidget(taskPipelineSummary_);
     statisticsChart_ = new QtReportChart;
+    statisticsChart_->setProperty("qtTextScaleFixedHeight", 144);
     content->addWidget(statisticsChart_);
     modelSettings_ = LoadQtModelSettings(workspace_.directory);
     modelPage_ = new QWidget;
@@ -955,7 +1040,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelActions->addStretch();
     auto* openModelSettings = new QPushButton(QString::fromUtf8("Настройки 3D"));
     openModelSettings->setObjectName("openModelSettings");
-    openModelSettings->setFixedHeight(28);
+    markScaleFixedHeight(openModelSettings, 28);
     modelActions->addWidget(openModelSettings);
     modelLayout->addLayout(modelActions);
     content->addWidget(modelPage_, 1);
@@ -975,14 +1060,14 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelPathLayout->setContentsMargins(0, 0, 0, 0);
     modelPathLayout->addWidget(modelPath_, 1);
     auto* browseModel = new QPushButton(QString::fromUtf8("Обзор…"));
-    browseModel->setFixedHeight(28);
+    markScaleFixedHeight(browseModel, 28);
     modelPathLayout->addWidget(browseModel);
     modelYaw_ = new QSlider(Qt::Horizontal); modelYaw_->setRange(-314, 314); modelYaw_->setObjectName("modelYaw");
     modelPitch_ = new QSlider(Qt::Horizontal); modelPitch_->setRange(-157, 157); modelPitch_->setObjectName("modelPitch");
     modelZoom_ = new QSlider(Qt::Horizontal); modelZoom_->setRange(30, 300); modelZoom_->setObjectName("modelZoom");
     modelSpeed_ = new QSlider(Qt::Horizontal); modelSpeed_->setRange(0, 300); modelSpeed_->setObjectName("modelSpeed");
     modelAutoRotate_ = new QCheckBox(QString::fromUtf8("Автоматический поворот")); modelAutoRotate_->setObjectName("modelAutoRotate");
-    modelColor_ = new QPushButton; modelColor_->setObjectName("modelColor"); modelColor_->setFixedHeight(28);
+    modelColor_ = new QPushButton; modelColor_->setObjectName("modelColor"); markScaleFixedHeight(modelColor_, 28);
     modelForm->addRow(QString::fromUtf8("Модель в папке models"), modelChoice_);
     modelForm->addRow(QString::fromUtf8("Путь к OBJ / FBX"), modelPathRow);
     modelForm->addRow(QString::fromUtf8("Поворот по горизонтали"), modelYaw_);
@@ -1012,7 +1097,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     for (int i = 0; i < 5; ++i) {
         auto* metric = new QFrame;
         metric->setProperty("metric", true);
-        metric->setFixedHeight(56);
+        markScaleFixedHeight(metric, 56);
         auto* box = new QVBoxLayout(metric);
         box->setContentsMargins(12, 8, 12, 8);
         box->setSpacing(0);
@@ -1119,7 +1204,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileSkillWeightMin_->setRange(0.0, 2.0);
     profileSkillWeightMin_->setSingleStep(0.05);
     profileSkillWeightMin_->setDecimals(2);
-    profileSkillWeightMin_->setFixedWidth(82);
+    markScaleFixedWidth(profileSkillWeightMin_, 82);
     profileSkillWeightMin_->setValue(displaySettings_.profileSkillWeightMin);
     labelForAccessibility(profileSkillWeightMin_, QString::fromUtf8("Минимальный вес навыка"));
     skillFilterGrid->addWidget(profileSkillWeightMin_, 1, 1, Qt::AlignLeft);
@@ -1129,7 +1214,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileSkillWeightMax_->setRange(profileSkillWeightMin_->value(), 2.0);
     profileSkillWeightMax_->setSingleStep(0.05);
     profileSkillWeightMax_->setDecimals(2);
-    profileSkillWeightMax_->setFixedWidth(82);
+    markScaleFixedWidth(profileSkillWeightMax_, 82);
     profileSkillWeightMax_->setValue(std::max(profileSkillWeightMin_->value(), displaySettings_.profileSkillWeightMax));
     labelForAccessibility(profileSkillWeightMax_, QString::fromUtf8("Максимальный вес навыка"));
     skillFilterGrid->addWidget(profileSkillWeightMax_, 1, 3, Qt::AlignLeft);
@@ -1140,6 +1225,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     skillFilterGrid->addWidget(profileSkillFilterReset_, 2, 0, 1, 4, Qt::AlignLeft);
     content->addWidget(profileSkillFilters_);
     profileAnalytics_ = new QtProfileAnalytics;
+    profileAnalytics_->setProperty("qtTextScaleMinimumHeight", 380);
     content->addWidget(profileAnalytics_);
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;
@@ -1177,13 +1263,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     catalogProfessionFilter_ = new QComboBox;
     catalogProfessionFilter_->setObjectName("catalogProfessionFilter");
     labelForAccessibility(catalogProfessionFilter_, QString::fromUtf8("Фильтр навыков по профессии"));
-    catalogProfessionFilter_->setMaximumWidth(190);
+    markScaleMaximumWidth(catalogProfessionFilter_, 190);
     catalogProfessionFilter_->setToolTip(QString::fromUtf8("Показать навыки, связанные с выбранной профессией"));
     filters->addWidget(catalogProfessionFilter_);
     statusFilter_ = new QComboBox;
     statusFilter_->setObjectName("statusFilter");
     labelForAccessibility(statusFilter_, QString::fromUtf8("Фильтр задач по статусу"));
-    statusFilter_->setMaximumWidth(135);
+    markScaleMaximumWidth(statusFilter_, 135);
     statusFilter_->addItems({QString::fromUtf8("Все статусы"), QString::fromUtf8("Новая"),
                             QString::fromUtf8("В работе"), QString::fromUtf8("Выполнена")});
     statusFilter_->setCurrentIndex(displaySettings_.taskStatusFilter);
@@ -1191,7 +1277,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     priorityFilter_ = new QComboBox;
     priorityFilter_->setObjectName("priorityFilter");
     labelForAccessibility(priorityFilter_, QString::fromUtf8("Фильтр задач по приоритету"));
-    priorityFilter_->setMaximumWidth(150);
+    markScaleMaximumWidth(priorityFilter_, 150);
     priorityFilter_->addItems({QString::fromUtf8("Любой приоритет"), QString::fromUtf8("Низкий"),
         QString::fromUtf8("Средний"), QString::fromUtf8("Высокий"), QString::fromUtf8("Критический")});
     priorityFilter_->setCurrentIndex(displaySettings_.taskPriorityFilter);
@@ -1199,7 +1285,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     quickTaskFilter_ = new QComboBox;
     quickTaskFilter_->setObjectName("quickTaskFilter");
     labelForAccessibility(quickTaskFilter_, QString::fromUtf8("Быстрый фильтр задач"));
-    quickTaskFilter_->setMaximumWidth(155);
+    markScaleMaximumWidth(quickTaskFilter_, 155);
     quickTaskFilter_->addItems({QString::fromUtf8("Все задачи"), QString::fromUtf8("Мне назначено"),
         QString::fromUtf8("На сегодня"), QString::fromUtf8("Просрочено"), QString::fromUtf8("7 дней"),
         QString::fromUtf8("Без проекта"), QString::fromUtf8("Ждут XP"), QString::fromUtf8("Активные"),
@@ -1211,7 +1297,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskCreatedRange_ = new QComboBox;
     taskCreatedRange_->setObjectName("taskCreatedRange");
     labelForAccessibility(taskCreatedRange_, QString::fromUtf8("Фильтр задач по дате создания"));
-    taskCreatedRange_->setMaximumWidth(115);
+    markScaleMaximumWidth(taskCreatedRange_, 115);
     taskCreatedRange_->addItems({QString::fromUtf8("Созданы: всё"), QString::fromUtf8("Созданы: 7 дн."),
         QString::fromUtf8("Созданы: 30 дн."), QString::fromUtf8("Созданы: 90 дн."), QString::fromUtf8("Созданы: 365 дн.")});
     taskCreatedRange_->setCurrentIndex(displaySettings_.taskCreatedRange);
@@ -1219,24 +1305,24 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskSort_ = new QComboBox;
     taskSort_->setObjectName("taskSortMode");
     labelForAccessibility(taskSort_, QString::fromUtf8("Сортировка задач"));
-    taskSort_->setMaximumWidth(165);
+    markScaleMaximumWidth(taskSort_, 165);
     taskSort_->addItems({QString::fromUtf8("Сначала новые"), QString::fromUtf8("Ближайший дедлайн"), QString::fromUtf8("Высокий приоритет")});
     taskSort_->setCurrentIndex(displaySettings_.taskSortMode);
     filters->addWidget(taskSort_);
     taskAssigneeFilter_ = new QComboBox;
     taskAssigneeFilter_->setObjectName("taskAssigneeFilter");
     labelForAccessibility(taskAssigneeFilter_, QString::fromUtf8("Фильтр задач по исполнителю"));
-    taskAssigneeFilter_->setMaximumWidth(190);
+    markScaleMaximumWidth(taskAssigneeFilter_, 190);
     filters->addWidget(taskAssigneeFilter_);
     taskProjectFilter_ = new QComboBox;
     taskProjectFilter_->setObjectName("taskProjectFilter");
     labelForAccessibility(taskProjectFilter_, QString::fromUtf8("Фильтр задач по проекту"));
-    taskProjectFilter_->setMaximumWidth(170);
+    markScaleMaximumWidth(taskProjectFilter_, 170);
     filters->addWidget(taskProjectFilter_);
     taskPipelineFilter_ = new QComboBox;
     taskPipelineFilter_->setObjectName("taskPipelineFilter");
     labelForAccessibility(taskPipelineFilter_, QString::fromUtf8("Фильтр задач по этапу пайплайна"));
-    taskPipelineFilter_->setMaximumWidth(180);
+    markScaleMaximumWidth(taskPipelineFilter_, 180);
     filters->addWidget(taskPipelineFilter_);
     taskFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
     taskFilterReset_->setObjectName("taskFilterReset");
@@ -1246,7 +1332,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
     labelForAccessibility(reportView_, QString::fromUtf8("Группировка отчёта"));
-    reportView_->setMaximumWidth(170);
+    markScaleMaximumWidth(reportView_, 170);
     reportView_->addItems({QString::fromUtf8("По проектам"), QString::fromUtf8("По сотрудникам"),
         QString::fromUtf8("По этапам"), QString::fromUtf8("По категориям"), QString::fromUtf8("По статусам"),
         QString::fromUtf8("По приоритетам"), QString::fromUtf8("По срокам"), QString::fromUtf8("По месяцу создания")});
@@ -1255,7 +1341,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportDateRange_ = new QComboBox;
     reportDateRange_->setObjectName("reportDateRange");
     labelForAccessibility(reportDateRange_, QString::fromUtf8("Период отчёта"));
-    reportDateRange_->setMaximumWidth(180);
+    markScaleMaximumWidth(reportDateRange_, 180);
     reportDateRange_->addItems({QString::fromUtf8("Всё время"), QString::fromUtf8("30 дней"),
         QString::fromUtf8("90 дней"), QString::fromUtf8("С начала года"), QString::fromUtf8("Период…")});
     reportDateRange_->setCurrentIndex(displaySettings_.reportDateRange);
@@ -1265,20 +1351,20 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     reportCompare_->setObjectName("reportComparePrevious");
     labelForAccessibility(reportCompare_, QString::fromUtf8("Сравнить отчёт с предыдущим периодом"));
     reportCompare_->setToolTip(QString::fromUtf8("Сопоставить с равным предшествующим периодом; доступно для 30/90 дней, начала года и ручного периода"));
-    reportCompare_->setMaximumWidth(105);
+    markScaleMaximumWidth(reportCompare_, 105);
     reportCompare_->setChecked(displaySettings_.reportComparePrevious);
     filters->addWidget(reportCompare_);
     reportFrom_ = new QDateEdit(displaySettings_.reportDateFrom);
     reportFrom_->setObjectName("reportDateFrom");
     reportFrom_->setCalendarPopup(true);
     reportFrom_->setDisplayFormat("dd.MM.yyyy");
-    reportFrom_->setMaximumWidth(118);
+    markScaleMaximumWidth(reportFrom_, 118);
     labelForAccessibility(reportFrom_, QString::fromUtf8("Начало периода отчёта"));
     reportTo_ = new QDateEdit(displaySettings_.reportDateTo);
     reportTo_->setObjectName("reportDateTo");
     reportTo_->setCalendarPopup(true);
     reportTo_->setDisplayFormat("dd.MM.yyyy");
-    reportTo_->setMaximumWidth(118);
+    markScaleMaximumWidth(reportTo_, 118);
     labelForAccessibility(reportTo_, QString::fromUtf8("Конец периода отчёта"));
     reportCustomRange_ = new QWidget;
     reportCustomRange_->setObjectName("reportCustomRange");
@@ -1292,18 +1378,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     filters->addWidget(reportCustomRange_);
     projectsOverdue_ = new QCheckBox(QString::fromUtf8("Просроченные"));
     projectsOverdue_->setObjectName("projectsOverdueOnly");
-    projectsOverdue_->setMaximumWidth(120);
+    markScaleMaximumWidth(projectsOverdue_, 120);
     projectsOverdue_->setChecked(displaySettings_.projectsOverdueOnly);
     filters->addWidget(projectsOverdue_);
     projectsXpPending_ = new QCheckBox(QString::fromUtf8("Ждут XP"));
     projectsXpPending_->setObjectName("projectsXpPendingOnly");
-    projectsXpPending_->setMaximumWidth(105);
+    markScaleMaximumWidth(projectsXpPending_, 105);
     projectsXpPending_->setChecked(displaySettings_.projectsXpPendingOnly);
     filters->addWidget(projectsXpPending_);
     projectSort_ = new QComboBox;
     projectSort_->setObjectName("projectSort");
     labelForAccessibility(projectSort_, QString::fromUtf8("Сортировка проектов"));
-    projectSort_->setMaximumWidth(150);
+    markScaleMaximumWidth(projectSort_, 150);
     projectSort_->addItems({QString::fromUtf8("Название"), QString::fromUtf8("Число задач"),
         QString::fromUtf8("Просрочка"), QString::fromUtf8("Ожидают XP")});
     projectSort_->setCurrentIndex(displaySettings_.projectSortMode);
@@ -1316,7 +1402,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auditSourceFilter_ = new QComboBox;
     auditSourceFilter_->setObjectName("auditSourceFilter");
     labelForAccessibility(auditSourceFilter_, QString::fromUtf8("Источник событий аудита"));
-    auditSourceFilter_->setMaximumWidth(145);
+    markScaleMaximumWidth(auditSourceFilter_, 145);
     auditSourceFilter_->addItems({QString::fromUtf8("Все события"), QString::fromUtf8("Задачи"), QString::fromUtf8("Профили"),
         QString::fromUtf8("Приложение"), QString::fromUtf8("Хранилище"), QString::fromUtf8("Core-события")});
     auditSourceFilter_->setCurrentIndex(std::clamp(displaySettings_.auditSourceFilter, 0, 5));
@@ -1338,7 +1424,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     logSourceFilter_ = new QComboBox;
     logSourceFilter_->setObjectName("logSourceFilter");
     labelForAccessibility(logSourceFilter_, QString::fromUtf8("Источник записей журнала"));
-    logSourceFilter_->setMaximumWidth(190);
+    markScaleMaximumWidth(logSourceFilter_, 190);
     logSourceFilter_->setToolTip(QString::fromUtf8("Показывать записи выбранного источника"));
     filters->addWidget(logSourceFilter_);
     logPresetAll_ = new QPushButton(QString::fromUtf8("Все уровни"));
@@ -1475,7 +1561,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     table_->setAlternatingRowColors(true);
     table_->setShowGrid(false);
     table_->verticalHeader()->hide();
-    table_->verticalHeader()->setDefaultSectionSize(displaySettings_.compactRows ? 24 : 28);
+    table_->verticalHeader()->setDefaultSectionSize(scaledUiMetric(displaySettings_.compactRows ? 24 : 28, displaySettings_.scalePercent));
     table_->horizontalHeader()->setStretchLastSection(true);
     content->addWidget(table_, 1);
     bottomActions_ = new QWidget;
@@ -1643,13 +1729,26 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
     details_->setObjectName("details");
-    details_->setMaximumHeight(180);
+    markScaleMaximumHeight(details_, 180);
     details_->setOpenExternalLinks(false);
     details_->hide();
     content->addWidget(details_);
-    body->addLayout(content, 1);
+    auto* contentWidget = new QWidget;
+    contentWidget->setObjectName("scrollablePageContent");
+    content->setSizeConstraint(QLayout::SetMinimumSize);
+    contentWidget->setLayout(content);
+    auto* contentScroll = new QScrollArea;
+    contentScroll->setObjectName("pageContentScrollArea");
+    contentScroll->setFrameShape(QFrame::NoFrame);
+    contentScroll->setWidgetResizable(true);
+    contentScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    contentScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    contentScroll->setAccessibleName(QString::fromUtf8("Содержимое текущего раздела"));
+    contentScroll->setWidget(contentWidget);
+    body->addWidget(contentScroll, 1);
     layout->addLayout(body, 1);
     setCentralWidget(root);
+    applyQtTextScaleMetrics(this, displaySettings_.scalePercent);
     statusBar()->showMessage(QString::fromUtf8("Локальная копия · без облака · ") + q(workspace_.directory.u8string()));
     connect(statusBar(), &QStatusBar::messageChanged, this, [this](const QString& text) {
         if (text.isEmpty() || text.startsWith(QString::fromUtf8("Локальная копия · без облака ·"))) return;
@@ -2669,7 +2768,7 @@ void QtWindow::render() {
     backgroundSurface_->setBackground(workspace_.directory, displaySettings_.windowBackgrounds[size_t(page)],
         displaySettings_.backgroundAlpha, displaySettings_.backgroundTiled, displaySettings_.backgroundTileScale);
     const auto previous = selectedId();
-    table_->verticalHeader()->setDefaultSectionSize(displaySettings_.compactRows ? 24 : 28);
+    table_->verticalHeader()->setDefaultSectionSize(scaledUiMetric(displaySettings_.compactRows ? 24 : 28, displaySettings_.scalePercent));
     const auto& data = workspace_.data;
     table_->setSelectionMode(page == Tasks ? QAbstractItemView::ExtendedSelection : QAbstractItemView::SingleSelection);
     QSignalBlocker blocker(table_);

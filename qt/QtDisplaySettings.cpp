@@ -35,7 +35,7 @@ QString normalizeBackgroundPath(QString value) {
         QFileInfo(value).suffix().compare(QStringLiteral("png"), Qt::CaseInsensitive) != 0) return {};
     return value;
 }
-int normalizedScale(int value) { for (int allowed : {90, 100, 110, 125}) if (value == allowed) return value; return 100; }
+int normalizedScale(int value) { for (int allowed : {90, 100, 110, 125, 150, 175, 200}) if (value == allowed) return value; return 100; }
 int normalizedOpacity(int value) { return std::clamp(value, 60, 100); }
 double boundedMetric(double value, double maximum, double fallback) {
     return std::isfinite(value) ? std::clamp(value, 0.0, maximum) : fallback;
@@ -198,7 +198,7 @@ bool readLegacyLayoutPreset(const std::filesystem::path& directory, const QStrin
     source.beginGroup("style");
     bool ok = false;
     const double fontScale = source.value("fontScale", 1.0).toDouble(&ok);
-    if (ok && std::isfinite(fontScale)) result.scalePercent = nearestValue(int(std::lround(std::clamp(fontScale, 0.6, 2.0) * 100.0)), {90, 100, 110, 125});
+    if (ok && std::isfinite(fontScale)) result.scalePercent = nearestValue(int(std::lround(std::clamp(fontScale, 0.6, 2.0) * 100.0)), {90, 100, 110, 125, 150, 175, 200});
     const double opacity = source.value("alpha", 1.0).toDouble(&ok);
     if (ok && std::isfinite(opacity)) result.windowOpacityPercent = int(std::lround(std::clamp(opacity, 0.6, 1.0) * 100.0));
     const QString spacing = source.value("itemSpacing").toString();
@@ -765,7 +765,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     QDialog dialog(parent); dialog.setObjectName("qtDisplaySettings"); dialog.setWindowTitle(QString::fromUtf8("Настройки интерфейса Qt")); dialog.setMinimumWidth(420);
     QtDisplaySettings backgroundDraft = settings;
     auto* form = new QFormLayout(&dialog); auto* scale = new QComboBox; scale->setObjectName("qtScale");
-    for (int value : {90, 100, 110, 125}) scale->addItem(QString::number(value) + "%", value);
+    for (int value : {90, 100, 110, 125, 150, 175, 200}) scale->addItem(QString::number(value) + "%", value);
     scale->setCurrentIndex(std::max(0, scale->findData(normalizedScale(settings.scalePercent))));
     auto* opacity = new QSlider(Qt::Horizontal); opacity->setObjectName("qtWindowOpacity"); opacity->setRange(60, 100);
     opacity->setValue(normalizedOpacity(settings.windowOpacityPercent));

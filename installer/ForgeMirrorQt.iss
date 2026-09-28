@@ -46,4 +46,7 @@ Name: "{autodesktop}\ForgeMirror"; Filename: "{app}\ForgeMirrorQt.exe"; WorkingD
 Filename: "{app}\ForgeMirrorQt.exe"; Description: "Запустить ForgeMirror"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{app}\ForgeMirrorQt.exe"; Parameters: "--remove-deadline-schedule"; Flags: runhidden waituntilterminated skipifdoesntexist
+Filename: "{app}\ForgeMirrorQt.exe"; Parameters: "--remove-deadline-schedule"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveQtDeadlineSchedule"
+
+[UninstallDelete]
+Type: dirifempty; Name: "{app}"
