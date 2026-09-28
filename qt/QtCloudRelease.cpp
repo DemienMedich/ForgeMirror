@@ -1,4 +1,5 @@
 #include "QtCloudRelease.h"
+#include "AppWorkspaceStorageLock.h"
 #include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
@@ -79,6 +80,11 @@ std::optional<std::filesystem::path> QtCloudReleaseTargetPath(
 QtCloudReleaseResult DownloadQtCloudRelease(const CloudSyncConfig& config,
     const std::filesystem::path& workspace, const CloudManifest& manifest) {
     QtCloudReleaseResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи. Повторите загрузку позже.";
+        return result;
+    }
     try {
         if (!config.enabled) throw std::runtime_error("Облако отключено.");
         const auto target = QtCloudReleaseTargetPath(workspace, manifest);

@@ -669,6 +669,18 @@ static bool TestCloudPullTransaction() {
         if (!file.open(QIODevice::ReadOnly)) return QByteArray();
         return file.readAll();
     };
+#ifdef _WIN32
+    if (!write(cloud / "meta/tasks.json", "[{\"id\":\"locked\"}]")) return false;
+    const HANDLE workspaceLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return false;
+    const auto blockedPull = RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer);
+    CloseHandle(workspaceLock);
+    if (blockedPull.sync.ok || bytes(workspace / "meta/tasks.json") != "[{\"id\":\"cloud\"}]" ||
+        bytes(cloud / "meta/tasks.json") != "[{\"id\":\"locked\"}]" ||
+        std::filesystem::exists(workspace / "meta/qt-cloud-pull.json")) return false;
+    if (!write(cloud / "meta/tasks.json", "[{\"id\":\"cloud\"}]")) return false;
+#endif
     const auto identical = RunQtCloudPullTransaction(config, workspace, CloudRole::Viewer);
     if (!identical.sync.ok || identical.sync.changed || !identical.backupPath.empty()) return false;
     auto overlap = config; overlap.root = workspace;
@@ -712,6 +724,16 @@ static bool TestCloudPullTransaction() {
     auto journalBytes = QJsonDocument(QJsonObject{{"version", 2},
         {"backup", QString::fromStdWString(result.backupPath.filename().wstring())}, {"files", entries}}).toJson();
     if (!write(journal, journalBytes)) return false;
+#ifdef _WIN32
+    const HANDLE recoveryLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (recoveryLock == INVALID_HANDLE_VALUE) return false;
+    bool pullRecoveryBlocked = false;
+    try { RecoverQtCloudPull(workspace); } catch (const std::exception&) { pullRecoveryBlocked = true; }
+    CloseHandle(recoveryLock);
+    if (!pullRecoveryBlocked || bytes(workspace / "meta/tasks.json") != pulledTasks ||
+        bytes(workspace / "meta/banner.json") != pulledBanner || !std::filesystem::exists(journal)) return false;
+#endif
     {
         QtWorkspace recovered(workspace);
         if (!recovered.cloudPullRecoveryNotice) return false;
@@ -905,6 +927,14 @@ static bool TestCloudReleaseUpdate() {
     if (!write(cloud / "releases" / manifest.releaseFile, installerBytes)) return false;
     const auto target = QtCloudReleaseTargetPath(workspace, manifest);
     if (!target || *target != workspace / "meta/updates" / manifest.releaseFile) return false;
+#ifdef _WIN32
+    const HANDLE workspaceLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return false;
+    const auto blockedDownload = DownloadQtCloudRelease(config, workspace, manifest);
+    CloseHandle(workspaceLock);
+    if (blockedDownload.ok || std::filesystem::exists(*target)) return false;
+#endif
     const auto downloaded = DownloadQtCloudRelease(config, workspace, manifest);
     const auto expectedHash = QCryptographicHash::hash(installerBytes, QCryptographicHash::Sha256).toHex().toStdString();
     if (!downloaded.ok || !downloaded.changed || downloaded.path != *target || downloaded.sha256 != expectedHash ||
@@ -1339,6 +1369,16 @@ static bool TestCloudPushPreview() {
     const auto profile = qtWorkspace.storage->create_profile(Profile("Preview profile"));
     if (!profile) return false;
     const auto before = inventory(cloud);
+#ifdef _WIN32
+    const HANDLE workspaceLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return false;
+    const auto blockedPreview = PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
+    const auto blockedPush = RunQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
+    CloseHandle(workspaceLock);
+    if (blockedPreview.sync.ok || blockedPush.sync.ok || inventory(cloud) != before ||
+        std::filesystem::exists(workspace / "meta/qt-cloud-push.json")) return false;
+#endif
     const auto preview = PreviewQtCloudWorkspacePush(config, workspace, CloudRole::Admin);
     if (!preview.sync.ok || !preview.sync.changed || !preview.filesAdded || !preview.filesReplaced || !preview.filesRemoved ||
         preview.message.find("не изменялись") == std::string::npos || inventory(cloud) != before) return false;
@@ -1403,6 +1443,16 @@ static bool TestCloudPushPreview() {
     bool rejected = false;
     try { RecoverQtCloudPush(workspace); } catch (const std::exception&) { rejected = true; }
     if (!rejected || inventory(cloud) == beforeInterruptedPush || !write(pushJournal, validJournal)) return false;
+#ifdef _WIN32
+    const auto cloudWhileInterrupted = inventory(cloud);
+    const HANDLE recoveryLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (recoveryLock == INVALID_HANDLE_VALUE) return false;
+    bool pushRecoveryBlocked = false;
+    try { RecoverQtCloudPush(workspace); } catch (const std::exception&) { pushRecoveryBlocked = true; }
+    CloseHandle(recoveryLock);
+    if (!pushRecoveryBlocked || inventory(cloud) != cloudWhileInterrupted || !std::filesystem::exists(pushJournal)) return false;
+#endif
     {
         QtWorkspace recovered(workspace);
         if (!recovered.cloudPushRecoveryNotice) return false;
@@ -1652,6 +1702,22 @@ static bool TestCloudConflictResolver() {
     const auto lockedPush = PushQtCloudWorkspaceFile(workspace, "meta/tasks.json");
     CloseHandle(cloudLock);
     if (lockedPush.ok || read(cloud / "meta/tasks.json") != remote) return fail("cloud sharing lock");
+    const HANDLE workspaceLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
+        0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return false;
+    const auto workspaceLockedApply = ApplyQtCloudWorkspaceFile(workspace, cloud / "meta/tasks.json", "meta/tasks.json", "cloud");
+    const auto workspaceLockedPush = PushQtCloudWorkspaceFile(workspace, "meta/tasks.json");
+    const auto workspaceLockedPairPush = PushQtCloudWorkspaceFile(workspace, "skills.txt");
+    const auto workspaceLockedPairApply = ApplyQtCloudCatalogPair(workspace, cloud);
+    const auto workspaceLockedPairPushDirect = PushQtCloudCatalogPair(workspace);
+    const auto workspaceLockedPairRestore = RestoreQtCloudCatalogPair(workspace, localSkillsBackup->path, localProfessionsBackup->path);
+    CloseHandle(workspaceLock);
+    if (workspaceLockedApply.ok || workspaceLockedPush.ok || workspaceLockedPairPush.ok || workspaceLockedPairApply.ok ||
+        workspaceLockedPairPushDirect.ok || workspaceLockedPairRestore.ok ||
+        read(workspace / "meta/tasks.json") != local || read(cloud / "meta/tasks.json") != remote ||
+        read(workspace / "skills.txt") != localSkills || read(workspace / "meta/professions.txt") != localProfessions ||
+        read(cloud / "skills.txt") != remoteSkills || read(cloud / "meta/professions.txt") != remoteProfessions)
+        return fail("workspace write lock");
 #endif
     if (!write(cloud / "meta/tasks.json", remote)) return false;
     bool inspected = false;
@@ -1822,6 +1888,17 @@ static bool TestStorageConflictResolver() {
     StorageVaultData local; local.currencyName = "Local coin"; local.currencyCode = "LOC"; local.balance = 10; local.log.push_back({100, 10, "local", "entry"});
     StorageVaultData remote; remote.currencyName = "Cloud coin"; remote.currencyCode = "CLD"; remote.balance = 25; remote.log.push_back({200, 25, "cloud", "entry"});
     if (!SaveStorageVault(workspace, local) || !SaveStorageVault(cloud, remote) || !HasQtStorageConflict(workspace)) return fail("fixture");
+#ifdef _WIN32
+    const HANDLE workspaceLock = CreateFileW((workspace / "meta/workspace-write.lock").c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return false;
+    const auto blockedResolve = ResolveQtStorageConflict(workspace, true);
+    CloseHandle(workspaceLock);
+    if (blockedResolve.ok || std::abs(LoadStorageVault(workspace).balance - 10) > 0.001 ||
+        std::abs(LoadStorageVault(cloud).balance - 25) > 0.001 ||
+        QDir(QString::fromUtf8((workspace / "meta/updates").u8string())).entryList({"storage.*.json"}, QDir::Files).size() != 0)
+        return fail("workspace lock");
+#endif
     const auto accepted = ResolveQtStorageConflict(workspace, true);
     if (!accepted.ok || !accepted.changed || std::abs(LoadStorageVault(workspace).balance - 25) > 0.001 || HasQtStorageConflict(workspace)) return fail("accept cloud");
     QDir updates(QString::fromUtf8((workspace / "meta/updates").u8string()));

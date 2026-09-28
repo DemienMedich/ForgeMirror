@@ -1,4 +1,5 @@
 #include "QtCloudConflict.h"
+#include "AppWorkspaceStorageLock.h"
 #include "AppWorkspaceDataService.h"
 #include "CloudSync.h"
 #include <QtWidgets>
@@ -328,6 +329,11 @@ QtCloudConflictResult ApplyQtCloudWorkspaceFile(const std::filesystem::path& wor
                                                 const std::string& relative,
                                                 const std::string& sourceKind) {
     QtCloudConflictResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
     if (sourceKind == "restore" && (relative == "skills.txt" || relative == "meta/professions.txt")) {
         result.message = u8"Профессии и навыки можно восстановить только парой.";
         return result;
@@ -382,6 +388,12 @@ QtCloudConflictResult ApplyQtCloudWorkspaceFile(const std::filesystem::path& wor
 
 QtCloudConflictResult PushQtCloudWorkspaceFile(const std::filesystem::path& workspace,
                                                const std::string& relative) {
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        QtCloudConflictResult result;
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
     if (relative == "skills.txt" || relative == "meta/professions.txt")
         return PushQtCloudCatalogPair(workspace);
     QtCloudConflictResult result;
@@ -603,6 +615,12 @@ QtCloudConflictResult transferCatalogPair(const std::filesystem::path& workspace
 
 QtCloudConflictResult ApplyQtCloudCatalogPair(const std::filesystem::path& workspace,
                                               const std::filesystem::path& cloudRoot) {
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        QtCloudConflictResult result;
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
     const auto config = LoadCloudSyncConfig(workspace);
     if (!config.enabled || !samePath(cloudRoot, ResolveCloudRootPath(config, workspace))) {
         QtCloudConflictResult result;
@@ -613,6 +631,12 @@ QtCloudConflictResult ApplyQtCloudCatalogPair(const std::filesystem::path& works
 }
 
 QtCloudConflictResult PushQtCloudCatalogPair(const std::filesystem::path& workspace) {
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        QtCloudConflictResult result;
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
     const auto config = LoadCloudSyncConfig(workspace);
     if (!config.enabled) {
         QtCloudConflictResult result;
@@ -626,6 +650,11 @@ QtCloudConflictResult RestoreQtCloudCatalogPair(const std::filesystem::path& wor
                                                 const std::filesystem::path& skillsBackup,
                                                 const std::filesystem::path& professionsBackup) {
     QtCloudConflictResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
     const auto skills = ListCloudWorkspaceBackups(workspace, "skills.txt");
     const auto professions = ListCloudWorkspaceBackups(workspace, "meta/professions.txt");
     if (std::none_of(skills.begin(), skills.end(), [&](const auto& item) { return samePath(item.path, skillsBackup); }) ||

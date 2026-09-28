@@ -1,5 +1,6 @@
 #include "CloudSync.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 
 #include <algorithm>
 #include <array>
@@ -1224,6 +1225,12 @@ CloudWorkspaceResolveResult ResolveCloudWorkspaceFileVersion(const CloudSyncConf
         return result;
     }
 
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
+
     const auto localPath = storageDir / relative;
     const auto cloudPath = cloudRoot / relative;
     const auto& source = preferCloud ? cloudPath : localPath;
@@ -1319,6 +1326,12 @@ CloudWorkspaceResolveResult RestoreCloudWorkspaceBackup(const std::filesystem::p
         return result;
     }
 
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
+
     const auto backupDir = storageDir / "meta" / "updates";
     std::error_code ec;
     if (!std::filesystem::exists(backupPath, ec)) {
@@ -1404,6 +1417,8 @@ CloudSyncConfig LoadCloudSyncConfig(const std::filesystem::path& storageDir) {
 }
 
 bool SaveCloudSyncConfig(const std::filesystem::path& storageDir, const CloudSyncConfig& config) {
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     const auto path = CloudConfigPath(storageDir);
     std::ostringstream out;
     out.imbue(std::locale::classic());
@@ -1449,6 +1464,8 @@ CloudManifest LoadCloudManifest(const CloudSyncConfig& config, const std::filesy
 }
 
 bool SaveCloudManifest(const CloudSyncConfig& config, const std::filesystem::path& storageDir, const CloudManifest& manifest) {
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) return false;
     const auto path = ResolveCloudManifestPath(config, storageDir);
     CloudManifest merged = manifest;
     if (merged.notes.empty()) {
@@ -1487,6 +1504,11 @@ CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::f
         result.message = u8"В манифесте не указан файл обновления.";
         return result;
     }
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);
     std::filesystem::path releasesDir = config.releasesDir.empty() ? "releases" : config.releasesDir;
     if (!releasesDir.is_absolute()) {
@@ -1515,7 +1537,9 @@ CloudSyncResult DownloadCloudRelease(const CloudSyncConfig& config, const std::f
     return result;
 }
 
-CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role) {
+static CloudSyncResult PullCloudSnapshotImpl(const CloudSyncConfig& config,
+                                             const std::filesystem::path& storageDir,
+                                             CloudRole role) {
     CloudSyncResult result;
     if (!config.enabled) {
         result.message = u8"Облако отключено.";
@@ -1610,6 +1634,24 @@ CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config, const std::file
     return result;
 }
 
+CloudSyncResult PullCloudSnapshot(const CloudSyncConfig& config,
+                                  const std::filesystem::path& storageDir,
+                                  CloudRole role) {
+    CloudSyncResult result;
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
+        return result;
+    }
+    return PullCloudSnapshotImpl(config, storageDir, role);
+}
+
+CloudSyncResult PullCloudSnapshotToStaging(const CloudSyncConfig& config,
+                                           const std::filesystem::path& stagingDir,
+                                           CloudRole role) {
+    return PullCloudSnapshotImpl(config, stagingDir, role);
+}
+
 CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::filesystem::path& storageDir, CloudRole role) {
     CloudSyncResult result;
     if (!config.enabled) {
@@ -1618,6 +1660,11 @@ CloudSyncResult PushCloudSnapshot(const CloudSyncConfig& config, const std::file
     }
     if (role != CloudRole::Admin) {
         result.message = u8"Нет прав для выгрузки в облако.";
+        return result;
+    }
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
         return result;
     }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);
@@ -1693,6 +1740,11 @@ CloudSyncResult PushProfileWallet(const CloudSyncConfig& config, const std::file
     }
     if (profileId.empty()) {
         result.message = u8"Профиль не выбран.";
+        return result;
+    }
+    AppWorkspaceStorageWriteLock writeLock(storageDir);
+    if (!writeLock.acquired()) {
+        result.message = u8"Рабочая папка занята другой операцией записи.";
         return result;
     }
     const auto cloudRoot = ResolveCloudRoot(config, storageDir);

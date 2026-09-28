@@ -1,5 +1,6 @@
 #include "QtCloudPushPreview.h"
 #include "QtStorageConflict.h"
+#include "AppWorkspaceStorageLock.h"
 #include <QtCore>
 #include <map>
 #include <set>
@@ -112,6 +113,12 @@ void writeJournal(const fs::path& path, const QByteArray& bytes) { writeFile(pat
 QtCloudPushPreviewResult PreviewQtCloudWorkspacePush(const CloudSyncConfig& config,
     const fs::path& workspaceDirectory, CloudRole role) {
     QtCloudPushPreviewResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspaceDirectory);
+    if (!writeLock.acquired()) {
+        result.sync.ok = false;
+        result.message = u8"Рабочая папка занята другой операцией записи. Повторите предпросмотр позже.";
+        return result;
+    }
     try {
         require(config.enabled, u8"Облако отключено.");
         require(role == CloudRole::Admin, u8"Предпросмотр выгрузки доступен только администратору.");
@@ -176,6 +183,8 @@ QtCloudPushPreviewResult PreviewQtCloudWorkspacePush(const CloudSyncConfig& conf
 }
 
 bool RecoverQtCloudPush(const fs::path& workspaceDirectory) {
+    AppWorkspaceStorageWriteLock writeLock(workspaceDirectory);
+    require(writeLock.acquired(), u8"Рабочая папка занята другой операцией записи; восстановление push отложено.");
     const auto journal = workspaceDirectory / journalName;
     checkPath(journal);
     if (!fs::exists(journal)) return false;
@@ -268,6 +277,12 @@ bool RecoverQtCloudPush(const fs::path& workspaceDirectory) {
 QtCloudPushPreviewResult RunQtCloudWorkspacePush(const CloudSyncConfig& config,
     const fs::path& workspaceDirectory, CloudRole role, const QtCloudPushPreviewResult* approvedPreview) {
     QtCloudPushPreviewResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspaceDirectory);
+    if (!writeLock.acquired()) {
+        result.sync.ok = false;
+        result.message = u8"Рабочая папка занята другой операцией записи. Повторите выгрузку позже.";
+        return result;
+    }
     fs::path backup;
     bool journalCreated = false;
     try {

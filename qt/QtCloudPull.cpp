@@ -1,4 +1,5 @@
 #include "QtCloudPull.h"
+#include "AppWorkspaceStorageLock.h"
 #include <QtCore>
 #include <set>
 #include <map>
@@ -44,7 +45,13 @@ std::set<fs::path> inventory(const fs::path& root) {
     for (const auto& entry : fs::recursive_directory_iterator(root)) {
         checkPath(entry.path());
         require(entry.is_directory() || entry.is_regular_file(), u8"Pull: ожидается обычный файл.");
-        if (entry.is_regular_file()) files.insert(entry.path().lexically_relative(root));
+        if (entry.is_regular_file()) {
+            const auto relative = entry.path().lexically_relative(root);
+            // The exclusive coordination handle intentionally denies other opens on Windows.
+            // It is runtime metadata, not workspace data to stage, back up, or pull from cloud.
+            if (relative == fs::path("meta") / "workspace-write.lock") continue;
+            files.insert(relative);
+        }
     }
     return files;
 }
@@ -95,6 +102,8 @@ bool matches(const fs::path& file, bool exists, const QByteArray& expectedHash) 
 }
 
 bool RecoverQtCloudPull(const std::filesystem::path& workspace) {
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    require(writeLock.acquired(), u8"Рабочая папка занята другой операцией записи; восстановление pull отложено.");
     const auto journal = workspace / journalName;
     checkPath(journal);
     if (!fs::exists(journal)) return false;
@@ -170,6 +179,12 @@ QtCloudPullResult RunQtCloudPullTransaction(const CloudSyncConfig& config,
                                            const std::filesystem::path& workspace,
                                            CloudRole role) {
     QtCloudPullResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) {
+        result.sync.ok = false;
+        result.message = u8"Рабочая папка занята другой операцией записи. Повторите pull позже.";
+        return result;
+    }
     bool journalCreated = false;
     try {
         require(config.enabled, u8"Облако отключено.");
@@ -186,7 +201,7 @@ QtCloudPullResult RunQtCloudPullTransaction(const CloudSyncConfig& config,
         std::map<fs::path, QByteArray> originals;
         for (const auto& relative : original) originals.emplace(relative, read(stage / relative));
         auto resolved = config; resolved.root = fs::absolute(cloud);
-        result.sync = PullCloudSnapshot(resolved, stage, role);
+        result.sync = PullCloudSnapshotToStaging(resolved, stage, role);
         require(result.sync.ok, result.sync.message.c_str());
         require(!result.sync.storageConflict, u8"Конфликт storage.json: pull отменён до изменения локальных данных.");
         QJsonArray entries;

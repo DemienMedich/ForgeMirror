@@ -1610,6 +1610,24 @@ static bool TestCloudAtomicOverwrite(const std::filesystem::path& dir) {
     config.autoPush = true;
     config.autoSyncMinutes = 45;
     if (!SaveCloudSyncConfig(dir, config)) return false;
+#ifdef _WIN32
+    std::string configBeforeLock;
+    if (!ReadFile(dir / "meta" / "cloud.ini", configBeforeLock)) return false;
+    const auto workspaceLockPath = dir / "meta" / "workspace-write.lock";
+    const HANDLE workspaceLock = CreateFileW(workspaceLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+        nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) { std::cerr << "cloudOverwrite: cannot hold workspace lock\n"; return false; }
+    auto blockedConfig = config;
+    blockedConfig.autoSyncMinutes = 10;
+    const bool saveBlocked = !SaveCloudSyncConfig(dir, blockedConfig);
+    CloudManifest blockedManifest; blockedManifest.appVersion = "0.9.0";
+    const bool manifestBlocked = !SaveCloudManifest(config, dir, blockedManifest);
+    CloseHandle(workspaceLock);
+    std::string configAfterLock;
+    if (!saveBlocked || !manifestBlocked || std::filesystem::exists(dir / "cloud" / "meta" / "manifest.ini") ||
+        !ReadFile(dir / "meta" / "cloud.ini", configAfterLock) || configAfterLock != configBeforeLock)
+        return false;
+#endif
 
     const CloudSyncConfig loadedConfig = LoadCloudSyncConfig(dir);
     if (loadedConfig.autoPull != false) return false;
@@ -1648,14 +1666,32 @@ static bool TestCloudSpiritIcons(const std::filesystem::path& dir) {
     config.root = cloudRoot;
 
     if (!WriteFile(dir / "spirits" / "good.png", "local-good")) return false;
+#ifdef _WIN32
+    std::filesystem::create_directories(dir / "meta", ec);
+    if (ec) { std::cerr << "cloudSpirits: cannot create meta directory: " << ec.message() << '\n'; return false; }
+    const auto workspaceLockPath = dir / "meta" / "workspace-write.lock";
+    const HANDLE workspaceLock = CreateFileW(workspaceLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+        nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) { std::cerr << "cloudSpirits: cannot hold workspace lock\n"; return false; }
+    const CloudSyncResult blockedPush = PushCloudSnapshot(config, dir, CloudRole::Admin);
+    const CloudSyncResult blockedPull = PullCloudSnapshot(config, dir, CloudRole::Admin);
+    CloseHandle(workspaceLock);
+    if (blockedPush.ok || blockedPull.ok || std::filesystem::exists(cloudRoot / "spirits" / "good.png") ||
+        std::filesystem::exists(dir / "spirits" / "evil.png")) {
+        std::cerr << "cloudSpirits: lock rejection push=" << blockedPush.ok << " pull=" << blockedPull.ok
+            << " cloudFile=" << std::filesystem::exists(cloudRoot / "spirits" / "good.png")
+            << " localFile=" << std::filesystem::exists(dir / "spirits" / "evil.png") << '\n';
+        return false;
+    }
+#endif
     CloudSyncResult push = PushCloudSnapshot(config, dir, CloudRole::Admin);
-    if (!push.ok) return false;
-    if (!std::filesystem::exists(cloudRoot / "spirits" / "good.png", ec)) return false;
+    if (!push.ok) { std::cerr << "cloudSpirits: push failed: " << push.message << '\n'; return false; }
+    if (!std::filesystem::exists(cloudRoot / "spirits" / "good.png", ec)) { std::cerr << "cloudSpirits: pushed icon missing\n"; return false; }
 
     std::filesystem::remove(dir / "spirits" / "good.png", ec);
     if (!WriteFile(cloudRoot / "spirits" / "evil.png", "cloud-evil")) return false;
     CloudSyncResult pull = PullCloudSnapshot(config, dir, CloudRole::Admin);
-    if (!pull.ok) return false;
+    if (!pull.ok) { std::cerr << "cloudSpirits: pull failed: " << pull.message << '\n'; return false; }
     const bool ok = std::filesystem::exists(dir / "spirits" / "evil.png", ec);
     std::filesystem::remove_all(cloudRoot, ec);
     return ok;
@@ -1721,6 +1757,18 @@ static bool TestCloudDriftResolveRestore(const std::filesystem::path& dir) {
 
     const std::filesystem::path localTasksBackup = FindBackupByKind(pullTasks.backupPaths, "local");
     if (localTasksBackup.empty()) return fail("find local tasks backup");
+#ifdef _WIN32
+    const auto workspaceLockPath = dir / "meta" / "workspace-write.lock";
+    const HANDLE workspaceLock = CreateFileW(workspaceLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+        nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (workspaceLock == INVALID_HANDLE_VALUE) return false;
+    const auto blockedResolve = ResolveCloudWorkspaceFileVersion(config, dir, "meta/tasks.json", false);
+    const auto blockedRestore = RestoreCloudWorkspaceBackup(dir, "meta/tasks.json", localTasksBackup);
+    CloseHandle(workspaceLock);
+    std::string tasksWhileLocked;
+    if (blockedResolve.ok || blockedRestore.ok || !ReadFile(localTasksPath, tasksWhileLocked) ||
+        tasksWhileLocked != cloudTasksVersion) return fail("workspace lock rejected resolve and restore");
+#endif
     const CloudWorkspaceResolveResult restoreTasks =
         RestoreCloudWorkspaceBackup(dir, "meta/tasks.json", localTasksBackup);
     if (!restoreTasks.ok || !restoreTasks.changed) return fail("restore tasks backup");

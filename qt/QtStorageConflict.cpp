@@ -1,5 +1,6 @@
 #include "QtStorageConflict.h"
 #include "AppUtils.h"
+#include "AppWorkspaceStorageLock.h"
 #include "CloudSync.h"
 #include <QtWidgets>
 #include <chrono>
@@ -88,7 +89,10 @@ bool HasQtStorageConflict(const fs::path& workspace) {
 }
 
 QtStorageConflictResult ResolveQtStorageConflict(const fs::path& workspace, bool preferCloud) {
-    QtStorageConflictResult result; const auto config = LoadCloudSyncConfig(workspace); const auto root = ResolveCloudRootPath(config, workspace);
+    QtStorageConflictResult result;
+    AppWorkspaceStorageWriteLock writeLock(workspace);
+    if (!writeLock.acquired()) { result.message = u8"Рабочая папка занята другой операцией записи."; return result; }
+    const auto config = LoadCloudSyncConfig(workspace); const auto root = ResolveCloudRootPath(config, workspace);
     if (!config.enabled || !fs::is_directory(root) || overlap(root, workspace)) { result.message = u8"Облачный корень недоступен или пересекается с рабочей папкой."; return result; }
     const auto local = workspace / "meta/storage.json"; const auto cloud = root / "meta/storage.json";
     QString error; const auto localBytes = read(local, error); if (!error.isEmpty() || !validate(localBytes, error)) { result.message = error.toUtf8().toStdString(); return result; }
