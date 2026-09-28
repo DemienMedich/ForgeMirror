@@ -57,7 +57,7 @@ std::string AppGenerateProjectId(const std::vector<ProjectEntry>& projects);
 std::string AppTaskDisplayTitle(const TaskEntry& task);
 
 bool AppSaveTasks(const std::filesystem::path& storageDir, const std::vector<TaskEntry>& tasks);
-enum class AppTaskSaveStatus { Saved, Stale, Failed };
+enum class AppTaskSaveStatus { Saved, Stale, Busy, Failed };
 AppTaskSaveStatus AppSaveTasksIfUnchanged(const std::filesystem::path& storageDir,
                                           const std::vector<TaskEntry>& expectedTasks,
                                           const std::vector<TaskEntry>& updatedTasks);

@@ -65,7 +65,9 @@ AppMutationResult AppTaskWorkflowService::UpdateStatus(const std::string& taskId
         task->status = previousStatus;
         result.errorMessage = taskSaveStatus == AppTaskSaveStatus::Stale
             ? u8"Задачи изменились в другом процессе. Перезагрузите данные и повторите операцию."
-            : u8"Не удалось сохранить статус задачи.";
+            : taskSaveStatus == AppTaskSaveStatus::Busy
+                ? u8"Другая программа сейчас сохраняет задачи. Повторите операцию через несколько секунд."
+                : u8"Не удалось сохранить статус задачи.";
         return result;
     }
     if (!AppAppendTaskAudit(storageDir_, actor, taskId, "status",
@@ -116,7 +118,9 @@ AppMutationResult AppTaskWorkflowService::BulkUpdateStatus(
         }
         result.errorMessage = taskSaveStatus == AppTaskSaveStatus::Stale
             ? u8"Задачи изменились в другом процессе. Перезагрузите данные и повторите операцию."
-            : u8"Не удалось сохранить массовое изменение статуса.";
+            : taskSaveStatus == AppTaskSaveStatus::Busy
+                ? u8"Другая программа сейчас сохраняет задачи. Повторите операцию через несколько секунд."
+                : u8"Не удалось сохранить массовое изменение статуса.";
         return result;
     }
     for (const auto& previous : touched) {

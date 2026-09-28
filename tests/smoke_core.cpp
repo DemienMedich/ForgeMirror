@@ -11,6 +11,17 @@
 #include <chrono>
 #include <cmath>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#elif defined(__unix__) || defined(__APPLE__)
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#endif
+
 #include "AppProfileMutationService.h"
 #include "AppPipelineService.h"
 #include "AppRecoveryStorage.h"
@@ -218,6 +229,49 @@ static bool TestTaskMutationsRejectStaleSnapshots(const std::filesystem::path& d
     const auto retry = AppUpdateTaskText(dir, refreshed, external.id,
         "Reloaded edit", "Reloaded description", "admin");
     return retry.ok && refreshed[0].title == "Reloaded edit";
+}
+
+static bool TestTaskSavesRespectActiveLock(const std::filesystem::path& dir) {
+    TaskEntry initial;
+    initial.id = "write_lock_task";
+    initial.title = "Initial";
+    const std::vector<TaskEntry> expected{initial};
+    if (!AppSaveTasks(dir, expected)) return false;
+
+    const auto lockPath = dir / "meta" / "tasks.json.lock";
+#ifdef _WIN32
+    HANDLE lock = CreateFileW(lockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (lock == INVALID_HANDLE_VALUE) return false;
+#elif defined(__unix__) || defined(__APPLE__)
+    const int lock = ::open(lockPath.c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW);
+    if (lock < 0 || ::flock(lock, LOCK_EX | LOCK_NB) != 0) {
+        if (lock >= 0) ::close(lock);
+        return false;
+    }
+#else
+    return false;
+#endif
+
+    auto attempted = initial;
+    attempted.title = "Contending writer";
+    const std::vector<TaskEntry> updated{attempted};
+    const auto status = AppSaveTasksIfUnchanged(dir, expected, updated);
+    std::string beforeRelease;
+    const bool blocked = status == AppTaskSaveStatus::Busy && !AppSaveTasks(dir, updated) &&
+        ReadFile(dir / "meta" / "tasks.json", beforeRelease) &&
+        beforeRelease.find("\"title\":\"Initial\"") != std::string::npos &&
+        beforeRelease.find("Contending writer") == std::string::npos;
+#ifdef _WIN32
+    CloseHandle(lock);
+#elif defined(__unix__) || defined(__APPLE__)
+    ::flock(lock, LOCK_UN);
+    ::close(lock);
+#endif
+    if (!blocked || AppSaveTasksIfUnchanged(dir, expected, updated) != AppTaskSaveStatus::Saved) return false;
+    std::vector<TaskEntry> persisted;
+    return TryLoadTasksDataReadOnly(dir, persisted) && persisted.size() == 1 &&
+        persisted.front().title == "Contending writer";
 }
 
 static bool TestTasksPipelineRecovery(const std::filesystem::path& dir) {
@@ -1655,6 +1709,7 @@ int main() {
     const bool okPipelineDeleteRollback = TestPipelineDeleteCleansLinksAndRollsBack(tmp / "pipeline_delete_rollback");
     const bool okTaskText = TestTaskTextMutation(tmp / "task_text");
     const bool okTaskStaleGuard = TestTaskMutationsRejectStaleSnapshots(tmp / "task_stale_guard");
+    const bool okTaskWriteLock = TestTaskSavesRespectActiveLock(tmp / "task_write_lock");
     const bool okTaskFinalizeRollback = TestTaskFinalizeXpRollsBackWhenAuditFails(tmp / "task_finalize_rollback");
     const bool okTaskFinalizeContract = TestTaskFinalizeXpValidatesWorkflowContract(tmp / "task_finalize_contract");
     const bool okTaskXpDistribution = TestTaskXpDistributionHelpers();
@@ -1699,7 +1754,7 @@ int main() {
 
     const bool okEmptyStateLayout = TestGuiEmptyStateRegistersLayoutSize();
 
-    if (okProfile && okProfileCreateTelemetry && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
+    if (okProfile && okProfileCreateTelemetry && okSpirit && okSpiritRemoval && okRules && okTasks && okWorkspaceRecovery && okWorkspaceSaveRollback && okProjectDeleteRollback && okPipelineDeleteRollback && okTaskText && okTaskStaleGuard && okTaskWriteLock && okTaskFinalizeRollback && okTaskFinalizeContract && okTaskXpDistribution && okTaskWorkflowStatusRollback && okTeamValueReport && okGuiStack && okTaskWorkflowBoundary && okGuiScopeTotals && okPipelineGuiStack && okGuiRowStates && okCompactControlTables && okProfileTaskEmptyStates && okTasksDetailEmptyStates && okServiceEmptyStates && okProfileAdminEmptyStates && okProfileModalsEmptyStates && okProfileSectionEmptyStates && okSkillCatalogEmptyStates && okProfileSkillUtilityEmptyStates && okSemanticActionIcons && okUiSettingsEmptyStates && okUtilityEmptyStates && okProfileTaskBriefIds && okPasswordEnter && okEmptyStateLayout && okXpProjectless && okSyncHealth && okWhitelist && okVault &&
         okCloudOverwrite && okCloudSpirits && okCloudWorkspace) {
         std::cout << "smoke_core: OK\n";
         return 0;
@@ -1717,6 +1772,7 @@ int main() {
               << " pipelineDeleteRollback=" << okPipelineDeleteRollback
               << " taskText=" << okTaskText
               << " taskStaleGuard=" << okTaskStaleGuard
+              << " taskWriteLock=" << okTaskWriteLock
               << " taskFinalizeRollback=" << okTaskFinalizeRollback
               << " taskFinalizeContract=" << okTaskFinalizeContract
               << " taskXpDistribution=" << okTaskXpDistribution

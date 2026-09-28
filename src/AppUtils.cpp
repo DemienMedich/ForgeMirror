@@ -1341,7 +1341,8 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     const std::string ext = rel.extension().string();
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
-        "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "seed.merged", "gui-layout.ini", "admin.ini"
+        "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "tasks.json.lock",
+        "seed.merged", "gui-layout.ini", "admin.ini"
     };
     if (parent.empty()) {
         if (ext == ".ini") return true;
