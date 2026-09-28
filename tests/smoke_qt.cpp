@@ -1,4 +1,5 @@
 #include "QtWindow.h"
+#include "QtWorkspaceImport.h"
 #include "QtReportChart.h"
 #include "QtProfileAnalytics.h"
 #include "QtLogActivityChart.h"
@@ -5923,6 +5924,51 @@ static bool TestQtModuleToggleParity() {
     return true;
 }
 
+static bool TestWorkspaceImportSnapshot() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto root = std::filesystem::u8path(temp.path().toUtf8().constData());
+    const auto source = root / "legacy";
+    const auto destination = root / "qt" / "workspace";
+    std::filesystem::create_directories(source / "meta/nested");
+    std::filesystem::create_directories(destination.parent_path());
+    {
+        std::ofstream tasks(source / "meta/tasks.json", std::ios::binary);
+        tasks << "[{\"id\":\"task-1\",\"title\":\"preserved\"}]";
+        std::ofstream profile(source / "0001.ini", std::ios::binary);
+        profile << "[profile]\nid=0001\n";
+    }
+    const auto external = root / "outside.txt";
+    { std::ofstream file(external, std::ios::binary); file << "outside"; }
+    std::error_code symlinkError;
+    std::filesystem::create_symlink(external, source / "linked-outside.txt", symlinkError);
+    const bool hasSymlink = !symlinkError;
+    QString error;
+    if (!ImportQtWorkspaceSnapshot(source, destination, &error) || !error.isEmpty()) return false;
+    auto read = [](const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    };
+    if (read(source / "meta/tasks.json") != read(destination / "meta/tasks.json") ||
+        read(source / "0001.ini") != read(destination / "0001.ini") ||
+        (hasSymlink && std::filesystem::exists(destination / "linked-outside.txt")) ||
+        !std::filesystem::is_directory(destination / "meta/nested")) return false;
+    {
+        std::ofstream marker(destination / "user-data.txt", std::ios::binary);
+        marker << "keep";
+    }
+    if (ImportQtWorkspaceSnapshot(source, destination, &error) || error.isEmpty() ||
+        read(destination / "user-data.txt") != "keep") return false;
+    const auto overlapping = source / "child";
+    if (ImportQtWorkspaceSnapshot(source, overlapping, &error) || error.isEmpty() ||
+        std::filesystem::exists(overlapping)) return false;
+    const auto missingSource = root / "missing";
+    const auto failedDestination = root / "qt" / "failed";
+    if (ImportQtWorkspaceSnapshot(missingSource, failedDestination, &error) || error.isEmpty() ||
+        std::filesystem::exists(failedDestination)) return false;
+    return true;
+}
+
 static bool TestQtDeadlineEvaluation() {
     const std::int64_t now = 1800000000;
     TaskEntry overdue; overdue.id = "private-overdue-id"; overdue.deadlineAt = now - 1;
@@ -6152,6 +6198,7 @@ int main(int argc, char** argv) {
     if (!TestQtUiSettingsReset()) { std::cerr << "Qt UI settings reset failed\n"; return 1; }
     if (!TestVisibleQtAccessibleNames()) { std::cerr << "Qt accessible-name audit failed\n"; return 1; }
     if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
+    if (!TestWorkspaceImportSnapshot()) { std::cerr << "Workspace import snapshot failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
     if (!TestQuickShortcutLauncher()) { std::cerr << "Quick shortcut launcher failed\n"; return 1; }

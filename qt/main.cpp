@@ -2,6 +2,7 @@
 #include "QtTheme.h"
 #include "QtLogSanitization.h"
 #include "QtDeadlineAgent.h"
+#include "QtWorkspaceImport.h"
 #include <QtWidgets>
 #include <QLockFile>
 #include <filesystem>
@@ -87,10 +88,9 @@ int main(int argc, char** argv) {
                     QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::Cancel);
                 if (answer == QMessageBox::Cancel) return 0;
                 if (answer == QMessageBox::Yes) {
-                    // Stage the copy so an interrupted import never looks like a complete workspace.
-                    const auto staging = directory.parent_path() / ("import-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString());
-                    std::filesystem::copy(production, staging, std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_symlinks);
-                    std::filesystem::rename(staging, directory);
+                    QString importError;
+                    if (!ImportQtWorkspaceSnapshot(production, directory, &importError))
+                        throw std::runtime_error(importError.toUtf8().toStdString());
                 }
             }
             std::filesystem::create_directories(directory);
