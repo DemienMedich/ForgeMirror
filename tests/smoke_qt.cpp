@@ -3864,20 +3864,23 @@ static bool TestDeadlineReminders() {
     }
     QAction* about = nullptr;
     for (auto* action : window.findChildren<QAction*>())
-        if (action->text() == QString::fromUtf8("О переносе")) { about = action; break; }
+        if (action->objectName() == QStringLiteral("aboutApplicationAction")) { about = action; break; }
     if (!about) return false;
     QString aboutText;
     QTimer::singleShot(0, [&aboutText] {
         for (auto* widget : QApplication::topLevelWidgets()) {
             auto* box = qobject_cast<QMessageBox*>(widget);
-            if (!box || box->windowTitle() != QString::fromUtf8("Перенос на Qt")) continue;
+            if (!box || box->objectName() != QStringLiteral("aboutApplicationDialog")) continue;
             aboutText = box->text();
             box->accept();
         }
     });
     about->trigger();
     if (!aboutText.contains(QString::fromUtf8("облачные операции")) ||
-        !aboutText.contains(QString::fromUtf8("загрузка установщика новой версии"))) return false;
+        !aboutText.contains(QString::fromUtf8("загрузка установщика новой версии")) ||
+        !aboutText.contains(QString::fromUtf8(APP_VERSION)) ||
+        !aboutText.contains(QString::fromUtf8("Роман Рощин")) ||
+        !aboutText.contains(QString::fromUtf8("геймифицированный трекер навыков и задач"))) return false;
     return true;
 }
 

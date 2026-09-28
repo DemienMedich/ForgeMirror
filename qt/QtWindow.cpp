@@ -505,12 +505,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     displaySettings->setObjectName("qtDisplaySettingsAction");
     auto* shortcutHelp = menu->addAction(QString::fromUtf8("Горячие клавиши"), this, [this] { showShortcutHelp(); });
     shortcutHelp->setObjectName("shortcutHelpAction");
-    menu->addAction(QString::fromUtf8("О переносе"), this, [this] {
-        QMessageBox::information(this, QString::fromUtf8("Перенос на Qt"), QString::fromUtf8(
-            "Перенос ещё не завершён; это не замена стабильной версии.\n"
-            "Qt работает с отдельной копией данных. Доступны подтверждаемые облачные операции, настраиваемая автосинхронизация и загрузка установщика новой версии.\n"
-            "Список перенесённых функций и ограничений находится в qt/README.md."));
+    auto* aboutAction = menu->addAction(QString::fromUtf8("О программе"), this, [this] {
+        QMessageBox about(QMessageBox::Information, QString::fromUtf8("О программе"), QString(), QMessageBox::Ok, this);
+        about.setObjectName("aboutApplicationDialog");
+        about.setText(QString::fromUtf8(
+            "ForgeMirror — геймифицированный трекер навыков и задач.\n"
+            "Помогает фиксировать прогресс, фокусироваться на развитии и видеть динамику.\n\n"
+            "Авторы: ChatGPT, Codex, Роман Рощин\n"
+            "Версия: %1\n\n"
+            "Qt-клиент работает с отдельной копией данных; исходное рабочее место стабильной версии не изменяется.\n"
+            "Перенос ещё не завершён и не заменяет стабильную версию. Доступны подтверждаемые облачные операции, "
+            "настраиваемая автосинхронизация и загрузка установщика новой версии.\n"
+            "Список перенесённых функций и ограничений находится в qt/README.md.").arg(QString::fromUtf8(APP_VERSION)));
+        about.exec();
     });
+    aboutAction->setObjectName("aboutApplicationAction");
     menuButton->setMenu(menu);
     if (QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages()) {
         trayIcon_ = new QSystemTrayIcon(style()->standardIcon(QStyle::SP_ComputerIcon), this);
