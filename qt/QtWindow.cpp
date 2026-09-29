@@ -50,6 +50,7 @@
 #include <functional>
 #include <sstream>
 #include <stdexcept>
+#include <tuple>
 #include <unordered_map>
 #ifdef _WIN32
 #define NOMINMAX
@@ -2121,9 +2122,69 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         statusBar()->showMessage(QString::fromUtf8("Путь к папке отчётов скопирован."), 5000);
     });
     bottom->addWidget(profileExport_);
-    projectFocus_ = new QPushButton(QString::fromUtf8("Задачи проекта"));
+    projectFocus_ = new QToolButton;
     projectFocus_->setObjectName("focusProjectTasks");
+    projectFocus_->setText(QString::fromUtf8("Задачи проекта"));
+    projectFocus_->setPopupMode(QToolButton::MenuButtonPopup);
     projectFocus_->setToolTip(QString::fromUtf8("Открыть задачи выбранного проекта с проектным фильтром"));
+    auto* projectTasksMenu = new QMenu(projectFocus_);
+    projectTasksMenu->setObjectName("projectTasksMenu");
+    const std::vector<std::tuple<const char*, QString, int>> projectTaskActions = {
+        {"projectTasksAll", QString::fromUtf8("Все задачи проекта"), 0},
+        {"projectTasksActive", QString::fromUtf8("Активные задачи"), 7},
+        {"projectTasksOverdue", QString::fromUtf8("Просроченные задачи"), 3},
+        {"projectTasksXpPending", QString::fromUtf8("Задачи, ожидающие XP"), 6}
+    };
+    QAction* allProjectTasksAction = nullptr;
+    for (const auto& [objectName, label, quickFilter] : projectTaskActions) {
+        auto* action = projectTasksMenu->addAction(label);
+        action->setObjectName(QString::fromLatin1(objectName));
+        if (quickFilter == 0) allProjectTasksAction = action;
+        connect(action, &QAction::triggered, this, [this, quickFilter] {
+            if (navigation_->currentRow() != Projects || !table_->currentItem()) return;
+            const auto projectId = table_->currentItem()->data(Qt::UserRole).toString();
+            if (projectId.isEmpty() || projectId == QStringLiteral("__no_project")) return;
+            const int projectIndex = taskProjectFilter_->findData(projectId);
+            if (projectIndex < 0) return;
+            {
+                QSignalBlocker statusBlock(statusFilter_);
+                QSignalBlocker priorityBlock(priorityFilter_);
+                QSignalBlocker quickBlock(quickTaskFilter_);
+                QSignalBlocker rangeBlock(taskCreatedRange_);
+                QSignalBlocker sortBlock(taskSort_);
+                QSignalBlocker assigneeBlock(taskAssigneeFilter_);
+                QSignalBlocker pipelineBlock(taskPipelineFilter_);
+                statusFilter_->setCurrentIndex(0);
+                priorityFilter_->setCurrentIndex(0);
+                quickTaskFilter_->setCurrentIndex(quickFilter);
+                taskCreatedRange_->setCurrentIndex(0);
+                taskSort_->setCurrentIndex(0);
+                taskAssigneeFilter_->setCurrentIndex(0);
+                taskPipelineFilter_->setCurrentIndex(0);
+            }
+            search_->clear();
+            taskProjectFilter_->setCurrentIndex(projectIndex);
+            navigation_->setCurrentRow(Tasks);
+            statusBar()->showMessage(quickFilter == 0 ? QString::fromUtf8("Показаны задачи выбранного проекта.")
+                : QString::fromUtf8("Показаны задачи выбранного проекта по выбранному фильтру."), 4000);
+        });
+    }
+    projectFocus_->setMenu(projectTasksMenu);
+    projectFocus_->setDefaultAction(allProjectTasksAction);
+    connect(projectTasksMenu, &QMenu::aboutToShow, this, [this, projectTasksMenu] {
+        const auto projectId = table_->currentItem() ? table_->currentItem()->data(Qt::UserRole).toString() : QString();
+        const auto report = BuildTeamValueReport(workspace_.data.tasks, workspace_.data.projects,
+            QDateTime::currentSecsSinceEpoch());
+        const auto metric = std::find_if(report.projects.begin(), report.projects.end(), [&projectId](const auto& item) {
+            return item.id == u(projectId);
+        });
+        if (auto* active = projectTasksMenu->findChild<QAction*>(QStringLiteral("projectTasksActive")))
+            active->setEnabled(metric != report.projects.end() && metric->activeTasks > 0);
+        if (auto* overdue = projectTasksMenu->findChild<QAction*>(QStringLiteral("projectTasksOverdue")))
+            overdue->setEnabled(metric != report.projects.end() && metric->overdueTasks > 0);
+        if (auto* xpPending = projectTasksMenu->findChild<QAction*>(QStringLiteral("projectTasksXpPending")))
+            xpPending->setEnabled(metric != report.projects.end() && metric->xpPendingTasks > 0);
+    });
     bottom->addWidget(projectFocus_);
     openShortcut_ = new QPushButton(QString::fromUtf8("Открыть"));
     openShortcut_->setObjectName("openShortcut");
@@ -2586,27 +2647,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(profileHistory_, &QPushButton::clicked, this, [this] { showProfileHistory(); });
     connect(profileTxtAction, &QAction::triggered, this, [this] { exportProfileReport(false); });
     connect(profileCsvAction, &QAction::triggered, this, [this] { exportProfileReport(true); });
-    connect(projectFocus_, &QPushButton::clicked, this, [this] {
-        if (navigation_->currentRow() != Projects || !table_->currentItem()) return;
-        const auto projectId = table_->currentItem()->data(Qt::UserRole).toString();
-        if (projectId.isEmpty() || projectId == QStringLiteral("__no_project")) return;
-        const int projectIndex = taskProjectFilter_->findData(projectId);
-        if (projectIndex < 0) return;
-        {
-            QSignalBlocker statusBlock(statusFilter_);
-            QSignalBlocker priorityBlock(priorityFilter_);
-            QSignalBlocker quickBlock(quickTaskFilter_);
-            QSignalBlocker pipelineBlock(taskPipelineFilter_);
-            statusFilter_->setCurrentIndex(0);
-            priorityFilter_->setCurrentIndex(0);
-            quickTaskFilter_->setCurrentIndex(0);
-            taskPipelineFilter_->setCurrentIndex(0);
-        }
-        search_->clear();
-        taskProjectFilter_->setCurrentIndex(projectIndex);
-        navigation_->setCurrentRow(Tasks);
-        statusBar()->showMessage(QString::fromUtf8("Показаны задачи выбранного проекта."), 4000);
-    });
     for (const auto& shortcut : std::vector<std::pair<int, int>>{{Qt::Key_F1, ProfilePage},
              {Qt::Key_F2, Catalog}, {Qt::Key_F3, Pipeline}, {Qt::Key_F4, Rules}, {Qt::Key_F5, AdminProfileStats}, {Qt::Key_F6, Logs}}) {
         auto* action = new QShortcut(QKeySequence(shortcut.first), this);
@@ -4128,25 +4168,58 @@ void QtWindow::render() {
             .arg(linkColor).arg(pipelineMissingCount + pipelineUnknownCount + pipelineBranchingCount + pipelineFinalCount)
             .arg(pipelineMissingCount).arg(pipelineUnknownCount).arg(pipelineBranchingCount).arg(pipelineFinalCount));
     } else if (page == Projects) {
-        headers({QString::fromUtf8("Проект"), QString::fromUtf8("Описание"), QString::fromUtf8("Создан")});
+        headers({QString::fromUtf8("Проект"), QString::fromUtf8("Описание"), QString::fromUtf8("Задач"),
+            QString::fromUtf8("Новые"), QString::fromUtf8("В работе"), QString::fromUtf8("Готово"),
+            QString::fromUtf8("Просрочено"), QString::fromUtf8("Ждут XP")});
         const auto report = BuildTeamValueReport(data.tasks, data.projects, QDateTime::currentSecsSinceEpoch());
-        auto metrics = report.projects;
+        std::unordered_map<std::string, TeamValueProjectMetric> projectMetrics;
+        for (const auto& metric : report.projects) projectMetrics.emplace(metric.id, metric);
+        std::unordered_map<std::string, std::pair<int, int>> projectStatusCounts;
+        for (const auto& task : data.tasks) {
+            if (task.projectId.empty()) continue;
+            const int taskStatus = AppNormalizeTaskStatus(task.status);
+            auto& counts = projectStatusCounts[task.projectId];
+            if (taskStatus == 1) ++counts.second;
+            else if (taskStatus != 2) ++counts.first;
+        }
+        std::vector<const ProjectEntry*> projects;
+        projects.reserve(data.projects.size());
+        for (const auto& project : data.projects) projects.push_back(&project);
+        const auto metricsFor = [&projectMetrics](const ProjectEntry& project) {
+            const auto found = projectMetrics.find(project.id);
+            if (found != projectMetrics.end()) return found->second;
+            TeamValueProjectMetric empty;
+            empty.id = project.id;
+            empty.name = project.name;
+            return empty;
+        };
         const int sortMode = std::clamp(projectSort_->currentIndex(), 0, 3);
-        std::sort(metrics.begin(), metrics.end(), [sortMode](const auto& a, const auto& b) {
-            if (sortMode == 1 && a.totalTasks != b.totalTasks) return a.totalTasks > b.totalTasks;
-            if (sortMode == 2 && a.overdueTasks != b.overdueTasks) return a.overdueTasks > b.overdueTasks;
-            if (sortMode == 3 && a.xpPendingTasks != b.xpPendingTasks) return a.xpPendingTasks > b.xpPendingTasks;
-            return q(a.name).compare(q(b.name), Qt::CaseInsensitive) < 0;
+        std::sort(projects.begin(), projects.end(), [&](const auto* a, const auto* b) {
+            const auto left = metricsFor(*a), right = metricsFor(*b);
+            if (sortMode == 1 && left.totalTasks != right.totalTasks) return left.totalTasks > right.totalTasks;
+            if (sortMode == 2 && left.overdueTasks != right.overdueTasks) return left.overdueTasks > right.overdueTasks;
+            if (sortMode == 3 && left.xpPendingTasks != right.xpPendingTasks) return left.xpPendingTasks > right.xpPendingTasks;
+            return q(a->name).compare(q(b->name), Qt::CaseInsensitive) < 0;
         });
-        for (const auto& metric : metrics) {
-            const auto project = std::find_if(data.projects.begin(), data.projects.end(), [&metric](const auto& item) { return item.id == metric.id; });
-            if (project == data.projects.end()) continue;
+        int activeProjects = 0, activeTasks = 0, overdueProjects = 0, overdueTasks = 0;
+        int xpPendingProjects = 0, xpPendingTasks = 0;
+        for (const auto* project : projects) {
+            const auto metric = metricsFor(*project);
+            if (metric.activeTasks > 0) { ++activeProjects; activeTasks += metric.activeTasks; }
+            if (metric.overdueTasks > 0) { ++overdueProjects; overdueTasks += metric.overdueTasks; }
+            if (metric.xpPendingTasks > 0) { ++xpPendingProjects; xpPendingTasks += metric.xpPendingTasks; }
             if (projectsOverdue_->isChecked() && metric.overdueTasks == 0) continue;
             if (projectsXpPending_->isChecked() && metric.xpPendingTasks == 0) continue;
-            row(project->id, {q(project->name), q(project->description), timeText(project->createdAt)});
+            const auto counts = projectStatusCounts.find(project->id);
+            const int createdTasks = counts == projectStatusCounts.end() ? 0 : counts->second.first;
+            const int inProgressTasks = counts == projectStatusCounts.end() ? 0 : counts->second.second;
+            row(project->id, {q(project->name), q(project->description), QString::number(metric.totalTasks),
+                QString::number(createdTasks), QString::number(inProgressTasks), QString::number(metric.doneTasks),
+                QString::number(metric.overdueTasks), QString::number(metric.xpPendingTasks)});
         }
-        summary_->setText(QString::fromUtf8("Проектов: %1 · просрочка: %2 · ждут XP: %3 · показано: %4")
-            .arg(report.totalProjects).arg(report.projectsWithOverdue).arg(report.projectsWithXpPending).arg(table_->rowCount()));
+        summary_->setText(QString::fromUtf8("Проектов: %1 · активные: %2 пр. / %3 задач · просрочка: %4 пр. / %5 задач · ждут XP: %6 пр. / %7 задач · показано: %8")
+            .arg(data.projects.size()).arg(activeProjects).arg(activeTasks).arg(overdueProjects).arg(overdueTasks)
+            .arg(xpPendingProjects).arg(xpPendingTasks).arg(table_->rowCount()));
     } else if (page == Catalog) {
         headers({QString::fromUtf8("Навык"), QString::fromUtf8("Вес"), QString::fromUtf8("Описание"), QString::fromUtf8("Профессии")});
         const auto professionFilter = catalogProfessionFilter_->currentData().toString();

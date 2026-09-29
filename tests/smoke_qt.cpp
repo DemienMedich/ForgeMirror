@@ -8359,14 +8359,57 @@ int main(int argc, char** argv) {
     primary->click();
     if (LoadProjectsData(workspace.directory).size() != 1) return fail("Project form did not persist");
     const auto originalProject = LoadProjectsData(workspace.directory).front();
+    if (table->rowCount() != 1 || table->columnCount() != 8 ||
+        table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(originalProject.id))
+        return fail("Project with no tasks was omitted from the project list");
+    for (int column = 2; column < 8; ++column)
+        if (table->item(0, column)->text() != QStringLiteral("0"))
+            return fail("Empty project task metrics were not initialized to zero");
     if (!AppUpdateTaskProject(workspace.directory, workspace.data.tasks, task.id,
         originalProject.id, originalProject.name, "test").ok) return fail("Project link fixture failed");
     nav->setCurrentRow(1);
     nav->setCurrentRow(2);
-    auto* focusProject = window.findChild<QPushButton*>("focusProjectTasks");
+    if (table->rowCount() != 1 || table->item(0, 2)->text() != QStringLiteral("1") ||
+        table->item(0, 3)->text() != QStringLiteral("1"))
+        return fail("Project task totals or created count were not shown");
+    auto* focusProject = window.findChild<QToolButton*>("focusProjectTasks");
+    auto* activeProjectTasks = window.findChild<QAction*>("projectTasksActive");
+    auto* overdueProjectTasks = window.findChild<QAction*>("projectTasksOverdue");
+    auto* xpPendingProjectTasks = window.findChild<QAction*>("projectTasksXpPending");
     table->setCurrentCell(0, 0);
     table->selectRow(0);
-    if (!focusProject || !focusProject->isVisible() || !focusProject->isEnabled()) return fail("Project task focus action unavailable");
+    if (!focusProject || !focusProject->isVisible() || !focusProject->isEnabled() || !activeProjectTasks ||
+        !overdueProjectTasks || !xpPendingProjectTasks) return fail("Project task focus actions unavailable");
+    if (!QMetaObject::invokeMethod(focusProject->menu(), "aboutToShow", Qt::DirectConnection))
+        return fail("Project task menu did not provide its opening update");
+    if (!activeProjectTasks->isEnabled() || overdueProjectTasks->isEnabled() || xpPendingProjectTasks->isEnabled())
+        return fail("Project task shortcuts did not reflect the selected project's task state");
+    focusProject->menu()->hide();
+    auto* taskStatusFilter = window.findChild<QComboBox*>("statusFilter");
+    auto* taskPriorityFilter = window.findChild<QComboBox*>("priorityFilter");
+    auto* taskQuickFilter = window.findChild<QComboBox*>("quickTaskFilter");
+    auto* taskCreatedRange = window.findChild<QComboBox*>("taskCreatedRange");
+    auto* taskSort = window.findChild<QComboBox*>("taskSortMode");
+    auto* taskAssigneeFilter = window.findChild<QComboBox*>("taskAssigneeFilter");
+    auto* taskPipelineFilter = window.findChild<QComboBox*>("taskPipelineFilter");
+    if (!taskStatusFilter || !taskPriorityFilter || !taskQuickFilter || !taskCreatedRange || !taskSort ||
+        !taskAssigneeFilter || !taskPipelineFilter) return fail("Task filters needed by the project hub were missing");
+    if (taskStatusFilter->count() > 1) taskStatusFilter->setCurrentIndex(1);
+    if (taskPriorityFilter->count() > 1) taskPriorityFilter->setCurrentIndex(1);
+    if (taskQuickFilter->count() > 1) taskQuickFilter->setCurrentIndex(1);
+    if (taskCreatedRange->count() > 1) taskCreatedRange->setCurrentIndex(1);
+    if (taskSort->count() > 1) taskSort->setCurrentIndex(1);
+    if (taskAssigneeFilter->count() > 1) taskAssigneeFilter->setCurrentIndex(1);
+    if (taskPipelineFilter->count() > 1) taskPipelineFilter->setCurrentIndex(1);
+    activeProjectTasks->trigger();
+    if (nav->currentRow() != 1 || taskQuickFilter->currentIndex() != 7 || taskStatusFilter->currentIndex() != 0 ||
+        taskPriorityFilter->currentIndex() != 0 || taskCreatedRange->currentIndex() != 0 || taskSort->currentIndex() != 0 ||
+        taskAssigneeFilter->currentIndex() != 0 || taskPipelineFilter->currentIndex() != 0 ||
+        window.findChild<QComboBox*>("taskProjectFilter")->currentData().toString() != QString::fromStdString(originalProject.id))
+        return fail("Project active-task shortcut did not preserve its project filter");
+    nav->setCurrentRow(2);
+    table->setCurrentCell(0, 0);
+    table->selectRow(0);
     focusProject->click();
     if (nav->currentRow() != 1 || window.findChild<QComboBox*>("taskProjectFilter")->currentData().toString() != QString::fromStdString(originalProject.id) ||
         table->rowCount() != 1 || table->item(0, 2)->text() != QString::fromUtf8("Проект Qt"))

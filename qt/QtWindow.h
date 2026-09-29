@@ -276,7 +276,7 @@ private:
     QPushButton* walletHistory_;
     QPushButton* profileHistory_;
     QToolButton* profileExport_;
-    QPushButton* projectFocus_;
+    QToolButton* projectFocus_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
     QPushButton* cloudPushPreview_;
