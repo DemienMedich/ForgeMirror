@@ -4851,7 +4851,9 @@ static bool TestQtPipelineDetailsAndFullTextFilter() {
     PipelineStep next;
     next.id = "next"; next.stageCode = "B2"; next.branch = "Release branch"; next.title = "Next";
     next.owner = "Next owner"; next.description = "Next description";
-    workspace.data.pipelineSteps = {source, next};
+    PipelineStep autoCode;
+    autoCode.id = "auto"; autoCode.title = "Numbered stage";
+    workspace.data.pipelineSteps = {source, next, autoCode};
     QtWindow window(workspace);
     window.show(); QApplication::processEvents();
     auto* navigation = window.findChild<QListWidget*>("navigation");
@@ -4869,15 +4871,21 @@ static bool TestQtPipelineDetailsAndFullTextFilter() {
     while (otherPage < navigation->count() && (otherPage == pipelinePage || navigation->item(otherPage)->isHidden())) ++otherPage;
     if (otherPage >= navigation->count()) return fail("alternate page");
     navigation->setCurrentRow(otherPage);
-    workspace.data.pipelineSteps = {source, next};
+    workspace.data.pipelineSteps = {source, next, autoCode};
     navigation->setCurrentRow(pipelinePage);
-    if (table->rowCount() != 2 || !reset->isVisible() || !search->placeholderText().contains(QString::fromUtf8("описание"), Qt::CaseInsensitive)) {
+    auto* summary = window.findChild<QLabel*>("summary");
+    if (table->rowCount() != 3 || !reset->isVisible() || !summary || !summary->text().contains(QString::fromUtf8("веток: 3")) ||
+        table->horizontalHeaderItem(2)->text() != QString::fromUtf8("Ветка") ||
+        !search->placeholderText().contains(QString::fromUtf8("описание"), Qt::CaseInsensitive)) {
         return fail("initial rows or controls");
     }
+    search->setText(QStringLiteral("3"));
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QStringLiteral("3") ||
+        table->item(0, 0)->data(Qt::UserRole).toString() != QStringLiteral("auto")) return fail("generated stage-code search");
     search->setText(QString::fromUtf8("Source engine marker"));
     if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != QStringLiteral("source step")) return fail("full-text metadata search");
     reset->click();
-    if (!search->text().isEmpty() || table->rowCount() != 2) return fail("filter reset");
+    if (!search->text().isEmpty() || table->rowCount() != 3 || !summary->text().contains(QString::fromUtf8("показано: 3"))) return fail("filter reset");
     toggle->click();
     table->selectRow(0);
     QApplication::processEvents();
@@ -4893,7 +4901,7 @@ static bool TestQtPipelineDetailsAndFullTextFilter() {
     const bool activated = QMetaObject::invokeMethod(details, "anchorClicked", Qt::DirectConnection,
         Q_ARG(QUrl, QUrl(QStringLiteral("pipeline:next"))));
     QApplication::processEvents();
-    if (!(activated && search->text().isEmpty() && table->rowCount() == 2 && table->currentRow() == 1 &&
+    if (!(activated && search->text().isEmpty() && table->rowCount() == 3 && table->currentRow() == 1 &&
         table->item(1, 0)->data(Qt::UserRole).toString() == QStringLiteral("next") &&
         details->toPlainText().contains("Next description"))) return fail("route link navigation");
     return true;

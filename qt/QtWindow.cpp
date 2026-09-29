@@ -3707,6 +3707,7 @@ void QtWindow::render() {
                 QStringList searchableFields{q(step->stageCode), q(step->branch), q(step->title), q(step->description),
                     q(step->input), q(step->output), q(step->owner), q(step->doneCriteria), q(step->engineCheck),
                     q(step->risk), q(step->nextStageLabel), q(step->legacyNotes)};
+                searchableFields.push_back(QString::number(std::distance(workspace_.data.pipelineSteps.begin(), step) + 1));
                 for (const auto& hint : step->hints) searchableFields.push_back(q(hint));
                 searchableText = searchableFields.join(' ');
             }
@@ -4671,8 +4672,29 @@ void QtWindow::render() {
             .arg(skills.size()).arg(shown).arg(shown ? totalWeight / shown : 0.0, 0, 'f', 2)
             .arg(shown ? QStringLiteral("%1–%2").arg(minWeight, 0, 'f', 2).arg(maxWeight, 0, 'f', 2) : QString::fromUtf8("—")));
     } else if (page == Pipeline) {
-        headers({QString::fromUtf8("Этап"), QString::fromUtf8("Название"), QString::fromUtf8("Ответственный"), QString::fromUtf8("Следующий шаг")});
-        for (const auto& step : data.pipelineSteps) row(step.id, {q(step.stageCode), q(step.title), q(step.owner), q(step.nextStageLabel)});
+        headers({QString::fromUtf8("Этап"), QString::fromUtf8("Название"), QString::fromUtf8("Ветка"),
+                 QString::fromUtf8("Ответственный"), QString::fromUtf8("Следующий шаг")});
+        std::vector<std::string> branchOrder;
+        for (const auto& step : data.pipelineSteps) {
+            const auto branch = step.branch.empty() ? std::string(u8"Без группы") : step.branch;
+            if (std::find(branchOrder.begin(), branchOrder.end(), branch) == branchOrder.end()) branchOrder.push_back(branch);
+        }
+        int visibleStages = 0;
+        std::vector<std::string> visibleBranches;
+        for (const auto& branch : branchOrder) for (std::size_t index = 0; index < data.pipelineSteps.size(); ++index) {
+            const auto& step = data.pipelineSteps[index];
+            const auto stepBranch = step.branch.empty() ? std::string(u8"Без группы") : step.branch;
+            if (stepBranch != branch) continue;
+            const int rowsBefore = table_->rowCount();
+            row(step.id, {q(step.stageCode.empty() ? std::to_string(index + 1) : step.stageCode), q(step.title), q(branch),
+                          q(step.owner), q(step.nextStageLabel)});
+            if (table_->rowCount() == rowsBefore) continue;
+            ++visibleStages;
+            if (std::find(visibleBranches.begin(), visibleBranches.end(), branch) == visibleBranches.end())
+                visibleBranches.push_back(branch);
+        }
+        summary_->setText(QString::fromUtf8("Блоков: %1 · показано: %2 · веток: %3")
+            .arg(data.pipelineSteps.size()).arg(visibleStages).arg(visibleBranches.size()));
     } else if (page == Professions) {
         headers({QString::fromUtf8("Профессия"), QString::fromUtf8("Описание")});
         for (const auto& item : data.professions) row(item.id, {q(item.name), q(item.description)});
