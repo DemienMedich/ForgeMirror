@@ -8,6 +8,7 @@
 ## Verification
 
 - `build-qt.ps1 -Package -PackageDirectory package-qt-0.6.87-release` passed. `smoke_qt` passed 1/1 in 31.51 seconds; `smoke_core` reported `OK`. Coverage includes the migrated action workflows, real administrator login dialog, remember-session persistence across three fresh processes, password retention, and window startup.
+- After tightening the admin workspace assertion, another `build-qt.ps1 -Package` run passed: `smoke_qt` 1/1 in 29.98 seconds and `smoke_core: OK`. The fresh-workspace dialog path exactly matched `QtWorkspace::directory`, and the persisted setting file existed under that workspace at `meta/admin.ini`.
 - Inno Setup 6.7.3 built the actual current-user installer. Installer FileVersion and ProductVersion match `0.6.87`; its filename is derived from the canonical `VERSION`.
 - `installer/verify-qt-lifecycle.ps1 -PreviousVersion 0.6.86 -CurrentVersion 0.6.87` passed under a disposable AppId and install directory. It installed 0.6.86, updated that same installation to 0.6.87, and checked EXE/uninstall-registry versions, `--version`, and real GUI window titles/screenshots. The applications launched with `PATH` restricted to Windows system folders and Qt plugin environment variables removed, exercising the bundled `platforms/qwindows.dll` deployment.
 - Isolated uninstall exited 0, removed the app directory and uninstall registration, and left the external workspace marker byte-identical (SHA-256 `7BB6463B30F9E301FED333CDF8960CA9497B602CCD8EEB46AE42693FDEA15A4D`).

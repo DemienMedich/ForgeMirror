@@ -1193,6 +1193,7 @@ static bool TestQtAdminAuthParity() {
     if (overrideValue && *overrideValue) return true; // Host override intentionally disables persistence and rotation.
     QTemporaryDir temp; if (!temp.isValid()) return false;
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+    const auto adminSettingsPath = directory / "meta" / "admin.ini";
     QtWorkspace workspace(directory);
     if (!SetAdminPassword(directory, "old-admin-password") || !SetAdminStayLoggedIn(directory, false)) return false;
     for (int iteration = 0; iteration < 20; ++iteration) {
@@ -1241,9 +1242,11 @@ static bool TestQtAdminAuthParity() {
             if (dialog) dialog->reject();
             return;
         }
-        if (!workspaceHint->text().contains(QDir::toNativeSeparators(temp.path()))) {
+        const auto expectedWorkspaceHint = QString::fromUtf8("Рабочее место Qt: %1")
+            .arg(QDir::toNativeSeparators(QString::fromStdWString(directory.wstring())));
+        if (workspaceHint->text() != expectedWorkspaceHint) {
             std::cerr << "admin login workspace hint has unexpected path: " << workspaceHint->text().toStdString()
-                      << " expected " << QDir::toNativeSeparators(temp.path()).toStdString() << '\n';
+                      << " expected " << expectedWorkspaceHint.toStdString() << '\n';
             dialog->reject();
             return;
         }
@@ -1255,7 +1258,8 @@ static bool TestQtAdminAuthParity() {
         buttons->button(QDialogButtonBox::Ok)->click();
     });
     login->trigger();
-    if (!rememberControlSeen || !rememberStateAnnounced || !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() ||
+    if (!rememberControlSeen || !rememberStateAnnounced || !std::filesystem::is_regular_file(adminSettingsPath) ||
+        !LoadAdminStayLoggedIn(directory) || !passwordAction->isVisible() ||
         login->text() != QString::fromUtf8("Выйти из режима администратора") ||
         !login->toolTip().contains(QString::fromUtf8("отключить"))) return false;
     auto* navigation = window.findChild<QListWidget*>("navigation");

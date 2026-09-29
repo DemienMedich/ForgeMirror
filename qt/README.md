@@ -1449,3 +1449,9 @@ Verification: stage 268 closed the mapped action-level parity audit. Stage 269 r
 Version 0.6.87 packages the 18-tab functional migration and closes the action-level coverage checklist. The isolated lifecycle run updates 0.6.86 to 0.6.87, launches both versions with Qt removed from PATH, then uninstalls the current version without changing external user data. Remaining accessibility and external-writer checks are hardening, not mapped feature gaps.
 
 Verification: `.\build-qt.ps1 -Package` passed, smoke_qt 1/1, smoke_core: OK; installer lifecycle passed. Evidence and SHA-256 values are recorded in docs/releases/ForgeMirror-0.6.87.md.
+
+### Stage 270 — compare admin login workspace with persisted settings
+
+The isolated administrator-login regression now requires the dialog to display the exact `QtWorkspace` path used by the settings APIs, and verifies that `meta/admin.ini` exists at that workspace after opting into persistent login. The existing process-boundary test then checks the same workspace across fresh launches. This confirms the current source uses one path in the tested flow; it does not reproduce the user's reported restart loop. During diagnosis, the default `package-qt/ForgeMirrorQt.exe` was found to be 0.6.40 and has been rebuilt as 0.6.87.
+
+Verification: `build-qt.ps1 -Package` passed; `smoke_qt` 1/1 and `smoke_core: OK`. Native-window package smoke passed with PATH limited to Windows system directories and Qt environment overrides removed; `platforms/qwindows.dll` is present.
