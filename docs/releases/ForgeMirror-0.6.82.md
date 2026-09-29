@@ -1,0 +1,17 @@
+# ForgeMirror Qt 0.6.82 release verification
+
+- Canonical version: root `VERSION` = `0.6.82`.
+- Scope: stage 237 restores the administrator workflow for recording completed work without a planned task. The task record, audit entry and profile XP changes commit or roll back together. Both planned-task completion and standalone XP dialogs now include even participant/skill allocation shortcuts, an active-profile shortcut, profession-aware skill filtering, search and sorting by skill name, share, achievement bonus or XP.
+- Windows per-user installer: `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.82.exe`; 12,518,791 bytes; FileVersion/ProductVersion `0.6.82`; SHA-256 `AA5C82BA3C198B25BD351F3FBAC893906038376CA7921658EFD148888B762285`.
+- Packaged Qt executable: `Z:\CPP\ForgeMirror\package-qt-0.6.82-release\ForgeMirrorQt.exe`; 3,569,664 bytes; FileVersion/ProductVersion `0.6.82`; `--version` output `ForgeMirrorQt 0.6.82`; SHA-256 `51AA05A1C5862ACB67F448E7FC0743199E6374F4A17D745B2196D1747898DEF5`.
+
+## Verification
+
+- `build-qt.ps1 -Package -PackageDirectory package-qt-0.6.82-release` passed. CTest `smoke_qt` passed 1/1 in 28.63 seconds; `smoke_core` reported `OK`. Tests cover manual XP transaction success, audit-write failure rollback with exact task/audit/profile file restoration, dialog validation, allocation shortcuts, skill filtering and numeric sorting. Existing task-completion flow tests also verify the added shortcuts and the XP transaction path.
+- Packaged `ForgeMirrorQt.exe --version` exited 0 and printed `ForgeMirrorQt 0.6.82` with Qt plugin override variables cleared and only Windows system directories in `PATH`. Packaged startup with `--smoke-test --screenshot` also exited 0 in that restricted environment. Screenshot: `Z:\CPP\ForgeMirror\build-qt\release-smoke-0.6.82-final\window.png` (51,025 bytes; SHA-256 `9C34866E382BB08FE901BA87F6601EECFBE62DBEC3A9F768F11C195F527891F6`).
+- The actual Inno Setup 6.7.3 installer compiled successfully; its FileVersion and ProductVersion both report `0.6.82`.
+- Isolated install lifecycle test used temporary AppId `{81CC12C8-8C91-4BAB-A038-7F7D96FF9C03}` and per-user install path `C:\Users\mrdem\AppData\Local\Programs\ForgeMirrorQtLifecycle-b70fed68df59450196dbf47528123e6f`; production AppId and installation were not used. Version `0.6.81` installed, then `0.6.82` updated over it. The uninstall entry and installed EXE reported expected versions at both checkpoints; both startup smoke tests exited 0 with Qt removed from `PATH`. Screenshots: `Z:\CPP\ForgeMirror\build-qt\lifecycle-0.6.82-b70fed68df59450196dbf47528123e6f\installed-0.6.81.png` (51,914 bytes) and `Z:\CPP\ForgeMirror\build-qt\lifecycle-0.6.82-b70fed68df59450196dbf47528123e6f\installed-0.6.82.png` (51,996 bytes).
+- Uninstall exited 0, removed the isolated application files and uninstall entry, and preserved the external user-data marker (`4A71ED90ED064ABD58287A88FD93B4F980B61B27FC399AF32FE9A64F3E30EC34`) and workspace marker (`658F4617A670D04F955928EAD9139785523FE238E109533EA988F8E1511AFE44`) byte-for-byte.
+- `git diff --check` passed before commit. The user-edited `AgentsSkills/CONTINUITY.md` remains separate from this release.
+
+Functional migration remains an expert estimate of about 95%, not a measured code or test percentage. The action-level parity audit is still open; this checkpoint does not declare the Qt port complete. Accessibility interaction testing and external writers that bypass the shared workspace lock remain follow-up work after feature parity.

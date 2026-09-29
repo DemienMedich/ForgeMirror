@@ -8,3 +8,6 @@ class QtWorkspace;
 bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
                               const QString& taskId, const QString& activeProfileId,
                               std::function<void(AppLogLevel, const std::string&)> eventLogger = {});
+bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace,
+                        const QString& activeProfileId,
+                        std::function<void(AppLogLevel, const std::string&)> eventLogger = {});

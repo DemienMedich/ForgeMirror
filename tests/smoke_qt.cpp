@@ -332,6 +332,181 @@ static bool TestTaskCompletion() {
     return true;
 }
 
+static bool TestManualTaskXp() {
+    auto fail = [](const char* text) { std::cerr << "manualTaskXp: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.catalog.add_skill("Manual XP skill", 1.0, "Standalone XP test");
+    const auto skill = *workspace.catalog.id_for_name("Manual XP skill");
+    auto profile = workspace.storage->create_profile(Profile("Manual XP profile"));
+    if (!profile) return fail("profile fixture");
+    AppContext context{workspace.directory, *workspace.storage, workspace.catalog};
+    std::vector<std::pair<AppLogLevel, std::string>> events;
+    context.eventLogger = [&](AppLogLevel level, const std::string& event) { events.emplace_back(level, event); };
+    TaskEntry draft;
+    draft.id = "manual-xp-transaction";
+    draft.project = "Independent work";
+    draft.title = "Manual XP record";
+    draft.description = "Recorded without a planned task";
+    draft.category = 0;
+    draft.score = 10;
+    draft.status = 2;
+    TaskCompletionInput input;
+    input.taskId = draft.id;
+    input.category = 0;
+    input.score = 10;
+    input.shares = {{profile->id, 100}};
+    input.skills = {{skill, 5}};
+    input.now = 1800001000;
+    input.restoreProfileId = profile->id;
+    input.actor = "admin/qt";
+    auto readBytes = [&](const QString& path) {
+        QFile file(temp.path() + "/" + path);
+        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+    };
+    const auto profilePath = QString::fromStdString(profile->id + ".ini");
+    const auto profileBefore = readBytes(profilePath);
+    const auto tasksBefore = readBytes("meta/tasks.json");
+    const auto auditBefore = readBytes("meta/task-audit.log");
+    const bool tasksExistedBefore = std::filesystem::exists(workspace.directory / "meta/tasks.json");
+    const bool auditExistedBefore = std::filesystem::exists(workspace.directory / "meta/task-audit.log");
+    AppSetTaskAuditFailureHookForTests(true);
+    const auto failed = CreateManualTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, draft, input);
+    AppSetTaskAuditFailureHookForTests(false);
+    if (failed.ok || !workspace.data.tasks.empty() || readBytes(profilePath) != profileBefore ||
+        readBytes("meta/tasks.json") != tasksBefore || readBytes("meta/task-audit.log") != auditBefore ||
+        std::filesystem::exists(workspace.directory / "meta/tasks.json") != tasksExistedBefore ||
+        std::filesystem::exists(workspace.directory / "meta/task-audit.log") != auditExistedBefore ||
+        std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
+        return fail("failed manual award left partial profile/task/audit state");
+    if (events.size() != 1 || events.back().first != AppLogLevel::Error ||
+        events.back().second != "Manual task XP transaction failed or was rolled back")
+        return fail("manual transaction failure telemetry was not generic");
+    const auto completed = CreateManualTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, draft, input);
+    if (!completed.ok || workspace.data.tasks.size() != 1 || workspace.data.tasks.front().status != 2 ||
+        workspace.data.tasks.front().participants.size() != 1 || workspace.data.tasks.front().title != draft.title ||
+        workspace.data.taskAudit.empty() || std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction")) {
+        std::cerr << "result=" << completed.errorMessage << " tasks=" << workspace.data.tasks.size()
+                  << " audit=" << workspace.data.taskAudit.size() << " status="
+                  << (workspace.data.tasks.empty() ? -1 : workspace.data.tasks.front().status) << " participants="
+                  << (workspace.data.tasks.empty() ? -1 : int(workspace.data.tasks.front().participants.size())) << '\n';
+        return fail("manual record and XP were not committed together");
+    }
+    if (events.size() != 2 || events.back().first != AppLogLevel::Info ||
+        events.back().second != "Manual task XP transaction committed" ||
+        events.back().second.find(draft.title) != std::string::npos ||
+        events.back().second.find(profile->id) != std::string::npos)
+        return fail("manual transaction success telemetry was not privacy-safe");
+    if (!workspace.storage->set_active_profile(profile->id)) return fail("restore profile");
+    const auto awarded = workspace.storage->load_profile();
+    return awarded && awarded->total_xp() == 500 && awarded->tasks_completed() == 1;
+}
+
+static bool TestManualXpDialog() {
+    auto fail = [](const char* text) { std::cerr << "manualXpDialog: " << text << '\n'; return false; };
+    QTemporaryDir temp;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.catalog.add_skill("Manual dialog A", 1.0, "Dialog test");
+    workspace.catalog.add_skill("Manual dialog B", 1.0, "Dialog test");
+    const auto firstSkill = *workspace.catalog.id_for_name("Manual dialog A");
+    Profile alice("Dialog Alice");
+    alice.add_skill(firstSkill);
+    const auto first = workspace.storage->create_profile(alice);
+    const auto second = workspace.storage->create_profile(Profile("Dialog Bob"));
+    if (!first || !second) return fail("profile fixtures");
+    workspace.reload();
+    bool formValidated = false, shortcutActions = false, accessible = false;
+    QStringList missingNames;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog) return;
+        missingNames.append(MissingAccessibleNames(dialog));
+        auto* project = dialog->findChild<QComboBox*>("manualXpProject");
+        auto* title = dialog->findChild<QLineEdit*>("manualXpTitle");
+        auto* description = dialog->findChild<QPlainTextEdit*>("manualXpDescription");
+        auto* participants = dialog->findChild<QTableWidget*>("manualXpParticipants");
+        auto* skills = dialog->findChild<QTableWidget*>("manualXpSkills");
+        auto* save = dialog->findChild<QPushButton*>("manualXpSave");
+        auto* evenParticipants = dialog->findChild<QPushButton*>("manualXpParticipantsEven");
+        auto* onlyActive = dialog->findChild<QPushButton*>("manualXpOnlyActive");
+        auto* evenSkills = dialog->findChild<QPushButton*>("manualXpSkillsEven");
+        if (!project || !title || !description || !participants || !skills || !save ||
+            !evenParticipants || !onlyActive || !evenSkills || participants->rowCount() != 2 || skills->rowCount() != 2) {
+            dialog->reject(); return;
+        }
+        QSpinBox* activeShare = nullptr;
+        QSpinBox* otherShare = nullptr;
+        for (int row = 0; row < participants->rowCount(); ++row) {
+            auto* spin = qobject_cast<QSpinBox*>(participants->cellWidget(row, 1));
+            if (!spin) continue;
+            if (participants->item(row, 0)->text() == QStringLiteral("Dialog Alice")) activeShare = spin;
+            else otherShare = spin;
+        }
+        if (!activeShare || !otherShare) { dialog->reject(); return; }
+        otherShare->setValue(1);
+        evenParticipants->click();
+        const bool evenlySplit = activeShare->value() == 50 && otherShare->value() == 50;
+        onlyActive->click();
+        const bool selectedOnlyActive = activeShare->value() == 100 && otherShare->value() == 0;
+        const auto skillIdA = skills->item(0, 0)->data(Qt::UserRole).toString();
+        const auto skillIdB = skills->item(1, 0)->data(Qt::UserRole).toString();
+        auto ratingForSkill = [&](const QString& id) -> QSpinBox* {
+            for (int row = 0; row < skills->rowCount(); ++row)
+                if (skills->item(row, 0)->data(Qt::UserRole).toString() == id)
+                    return qobject_cast<QSpinBox*>(skills->cellWidget(row, 1));
+            return nullptr;
+        };
+        auto* ratingA = ratingForSkill(skillIdA);
+        auto* ratingB = ratingForSkill(skillIdB);
+        if (!ratingA || !ratingB) { dialog->reject(); return; }
+        ratingA->setValue(0);
+        ratingB = ratingForSkill(skillIdB);
+        if (!ratingB) { dialog->reject(); return; }
+        ratingB->setValue(5);
+        evenSkills->click();
+        const bool evenlyRated = ratingForSkill(skillIdA) && ratingForSkill(skillIdB) &&
+            ratingForSkill(skillIdA)->value() == 1 && ratingForSkill(skillIdB)->value() == 1;
+        auto* filter = dialog->findChild<QLineEdit*>("manualXpSkillFilter");
+        auto* sort = dialog->findChild<QComboBox*>("manualXpSkillSort");
+        if (!filter || !sort) { dialog->reject(); return; }
+        const auto higherSkillId = skills->item(0, 0)->data(Qt::UserRole).toString();
+        auto* higherSkillRating = ratingForSkill(higherSkillId);
+        if (!higherSkillRating) { dialog->reject(); return; }
+        higherSkillRating->setValue(2);
+        sort->setCurrentIndex(3);
+        const bool numericSortWorks = skills->item(0, 4)->text().toInt() >= skills->item(1, 4)->text().toInt();
+        filter->setText(QString::fromUtf8("no matching skill"));
+        const bool filterHidesRows = skills->isRowHidden(0) && skills->isRowHidden(1);
+        filter->clear();
+        sort->setCurrentIndex(3);
+        project->setCurrentText(QString::fromUtf8("Unplanned work"));
+        title->setText(QString::fromUtf8("Standalone dialog test"));
+        description->setPlainText(QString::fromUtf8("A manually recorded completed task"));
+        QApplication::processEvents();
+        formValidated = save->isEnabled();
+        shortcutActions = evenlySplit && selectedOnlyActive && evenlyRated && numericSortWorks && filterHidesRows;
+        accessible = missingNames.isEmpty();
+        save->click();
+    });
+    if (!ShowManualXpDialog(nullptr, workspace, QString::fromStdString(first->id)))
+        return fail("dialog cancelled or did not commit");
+    missingNames.removeDuplicates();
+    if (!formValidated || !shortcutActions) return fail("manual form fields, quick splits or skill filters failed");
+    if (!accessible || !missingNames.isEmpty()) {
+        for (const auto& name : missingNames) std::cerr << "  missing accessible name: " << name.toUtf8().constData() << '\n';
+        return fail("manual dialog accessibility audit failed");
+    }
+    const auto stored = LoadTasksData(workspace.directory);
+    if (stored.size() != 1 || stored.front().status != 2 || stored.front().title != "Standalone dialog test" ||
+        stored.front().project != "Unplanned work" || stored.front().description != "A manually recorded completed task" ||
+        stored.front().participants.size() != 1 || stored.front().participants.front().profileId != first->id ||
+        stored.front().participants.front().percent != 100)
+        return fail("manual dialog task record or participant selection was not persisted");
+    if (!workspace.storage->set_active_profile(first->id)) return fail("active profile restore");
+    const auto awarded = workspace.storage->load_profile();
+    return awarded && awarded->total_xp() > 0 && awarded->tasks_completed() == 1;
+}
+
 static bool TestBulkAwardedTaskDeletion() {
     auto fail = [](const char* text) { std::cerr << "bulkTaskDelete: " << text << '\n'; return false; };
     QTemporaryDir temp;
@@ -6634,6 +6809,8 @@ int main(int argc, char** argv) {
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
     if (!TestTaskCompletion()) return 1;
+    if (!TestManualTaskXp()) return 1;
+    if (!TestManualXpDialog()) return 1;
     if (!TestRulesReapplyRecovery()) return 1;
     if (!TestDirectXpRecovery()) return 1;
     if (!TestVaultEditor()) { std::cerr << "Vault editor failed\n"; return 1; }
@@ -8099,6 +8276,9 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("qt-test-password"); });
     login->trigger();
     nav->setCurrentRow(1);
+    auto* manualXpAction = window.findChild<QPushButton*>("manualTaskXp");
+    QApplication::processEvents();
+    if (!manualXpAction || !manualXpAction->isVisible()) return fail("standalone XP action is missing from administrator Tasks page");
     for (int i = 0; i < table->rowCount(); ++i)
         if (table->item(i, 0)->data(Qt::UserRole).toString() == "qt-smoke-task") table->selectRow(i);
     bool dialogChecks = false;
@@ -8113,7 +8293,12 @@ int main(int argc, char** argv) {
             missingTaskCompletionAccessibleNames.append(MissingAccessibleNames(dialog));
             auto* save = dialog->findChild<QPushButton*>("completeXp");
             auto* participants = dialog->findChild<QTableWidget*>("xpParticipants");
-            if (!save || !participants) { std::cerr << "Unexpected XP dialog\n"; qobject_cast<QDialog*>(dialog)->reject(); return; }
+            auto* skills = dialog->findChild<QTableWidget*>("xpSkills");
+            auto* onlyActive = dialog->findChild<QPushButton*>("xpOnlyActiveParticipant");
+            auto* evenSkills = dialog->findChild<QPushButton*>("xpSkillsEven");
+            if (!save || !participants || !skills || !onlyActive || !evenSkills) {
+                std::cerr << "Unexpected XP dialog\n"; qobject_cast<QDialog*>(dialog)->reject(); return;
+            }
             auto* share = qobject_cast<QSpinBox*>(participants->cellWidget(0, 1));
             if (!share || !save->isEnabled()) {
                 std::cerr << "XP preview: " << dialog->findChild<QLabel*>("xpSummary")->text().toUtf8().constData() << '\n';
@@ -8123,7 +8308,19 @@ int main(int argc, char** argv) {
             share->setValue(99);
             const bool rejectsBadTotal = !save->isEnabled();
             share->setValue(100);
-            dialogChecks = rejectsBadTotal && save->isEnabled();
+            onlyActive->click();
+            bool skillShortcutWorks = skills->rowCount() > 0;
+            for (int row = 0; row < skills->rowCount(); ++row) {
+                auto* rating = qobject_cast<QSpinBox*>(skills->cellWidget(row, 1));
+                if (!rating) { skillShortcutWorks = false; break; }
+                rating->setValue(0);
+            }
+            evenSkills->click();
+            for (int row = 0; row < skills->rowCount(); ++row) {
+                auto* rating = qobject_cast<QSpinBox*>(skills->cellWidget(row, 1));
+                if (!rating || rating->value() != 1) skillShortcutWorks = false;
+            }
+            dialogChecks = rejectsBadTotal && save->isEnabled() && share->value() == 100 && skillShortcutWorks;
             const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
             if (!artifacts.isEmpty()) {
                 QDir().mkpath(artifacts);

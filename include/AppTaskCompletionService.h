@@ -35,6 +35,11 @@ TaskCompletionPreview PreviewTaskCompletion(AppContext& app, const std::vector<T
                                             const TaskCompletionInput& input);
 AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& tasks,
                                      std::vector<TaskAuditEntry>& audit, const TaskCompletionInput& input);
+// Atomically create a standalone completed task record and award its XP. The
+// supplied task is the user-authored record; its participants/assignees are
+// populated from the same validated completion input as a planned task.
+AppMutationResult CreateManualTaskWithXp(AppContext& app, std::vector<TaskEntry>& tasks,
+    std::vector<TaskAuditEntry>& audit, TaskEntry task, const TaskCompletionInput& input);
 // Recover a pending Qt XP or metadata transaction before loading workspace data. Throws on failure.
 bool RecoverTaskCompletion(const std::filesystem::path& directory,
                            std::filesystem::path* preservedInterruptedFiles = nullptr);

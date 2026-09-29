@@ -220,6 +220,7 @@ private:
     QMenu* pomodoroQuickMenu_ = nullptr;
     QPushButton* detailsToggle_;
     QPushButton* changeStatus_;
+    QPushButton* manualTaskXp_ = nullptr;
     QPushButton* bulkEdit_;
     QPushButton* bulkDelete_;
     QToolButton* taskSelectionTools_;

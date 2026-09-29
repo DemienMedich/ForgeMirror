@@ -1280,3 +1280,75 @@ AppMutationResult CompleteTaskWithXp(AppContext& app, std::vector<TaskEntry>& ta
     }
     return result;
 }
+
+AppMutationResult CreateManualTaskWithXp(AppContext& app, std::vector<TaskEntry>& tasks,
+    std::vector<TaskAuditEntry>& audit, TaskEntry task, const TaskCompletionInput& input) {
+    AppMutationResult result;
+    if (task.id.empty() || task.id != input.taskId ||
+        std::any_of(tasks.begin(), tasks.end(), [&](const auto& existing) { return existing.id == task.id; })) {
+        result.errorMessage = u8"Некорректный или уже существующий идентификатор ручной записи.";
+        emitCoreEvent(app, AppLogLevel::Error, "Manual task XP transaction failed or was rolled back");
+        return result;
+    }
+    if (task.title.empty() || task.project.empty() || task.description.empty()) {
+        result.errorMessage = u8"Укажите проект, задачу и краткое описание.";
+        emitCoreEvent(app, AppLogLevel::Error, "Manual task XP transaction failed or was rolled back");
+        return result;
+    }
+
+    AppWorkspaceStorageWriteLock operationLock(app.storageDir);
+    if (!operationLock.acquired()) {
+        result.errorMessage = u8"Рабочее место сейчас изменяет другая программа. Повторите операцию позже.";
+        emitCoreEvent(app, AppLogLevel::Warning, "Manual task XP transaction failed or was rolled back");
+        return result;
+    }
+    const auto oldTasks = tasks;
+    const auto oldAudit = audit;
+    bool prepared = false;
+    try {
+        task.status = 2;
+        task.createdAt = input.now;
+        task.participants.clear();
+        task.assignees.clear();
+        task.skillIds.clear();
+        auto candidateTasks = tasks;
+        candidateTasks.push_back(task);
+        const auto preview = PreviewTaskCompletion(app, candidateTasks, input);
+        if (!preview.ok) throw std::runtime_error(preview.errorMessage);
+
+        prepareJournal(app.storageDir, preview);
+        prepared = true;
+        // Make the new draft the transaction's visible task snapshot before
+        // FinalizeXp performs its usual compare-and-write validation. The
+        // journal still contains the original bytes and will remove this draft
+        // on any failed or interrupted award.
+        if (!AppSaveTasks(app.storageDir, candidateTasks))
+            throw std::runtime_error(u8"Не удалось записать ручную запись задачи перед начислением XP.");
+        for (size_t i = 0; i < preview.updatedProfiles.size(); ++i) {
+            if (!app.storage.set_active_profile(preview.finalize.participants[i].profileId) ||
+                !app.storage.save_profile(preview.updatedProfiles[i]))
+                throw std::runtime_error(u8"Не удалось сохранить профиль участника.");
+        }
+        AppTaskWorkflowService workflow(app.storageDir, candidateTasks, &audit);
+        result = workflow.FinalizeXp(preview.finalize);
+        if (!result.ok) throw std::runtime_error(result.errorMessage);
+        tasks = std::move(candidateTasks);
+        finishJournal(app.storageDir);
+        emitCoreEvent(app, AppLogLevel::Info, "Manual task XP transaction committed");
+    } catch (const std::exception& e) {
+        result = {};
+        result.errorMessage = e.what();
+        if (prepared) {
+            tasks = oldTasks;
+            audit = oldAudit;
+            try {
+                result.errorMessage += RecoverTaskCompletionWithNotice(
+                    app.storageDir, u8"Ручное начисление XP полностью отменено.");
+            } catch (const std::exception&) {
+                result.errorMessage += u8" Откат не завершён. Журнал meta/qt-xp-transaction сохранён для восстановления при запуске.";
+            }
+        }
+        emitCoreEvent(app, AppLogLevel::Error, "Manual task XP transaction failed or was rolled back");
+    }
+    return result;
+}

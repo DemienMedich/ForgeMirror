@@ -1919,6 +1919,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     changeStatus_->setObjectName("changeStatus");
     changeStatus_->setToolTip(QString::fromUtf8("Переходы проверяются ядром. Завершение открывает распределение XP."));
     bottom->addWidget(changeStatus_);
+    manualTaskXp_ = new QPushButton(QString::fromUtf8("Добавить XP без задачи"));
+    manualTaskXp_->setObjectName("manualTaskXp");
+    manualTaskXp_->setToolTip(QString::fromUtf8("Создать запись о выполненной работе и распределить XP без заранее созданной задачи."));
+    bottom->addWidget(manualTaskXp_);
     bulkEdit_ = new QPushButton(QString::fromUtf8("Массовое изменение"));
     bulkEdit_->setObjectName("bulkTaskEdit");
     bulkEdit_->setToolTip(QString::fromUtf8("Изменить статус или приоритет нескольких выбранных задач"));
@@ -2383,6 +2387,14 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (ShowPipelineTransition(this, workspace_, u(selectedId()))) reload();
     });
     connect(changeStatus_, &QPushButton::clicked, this, [this] { changeStatus(); });
+    connect(manualTaskXp_, &QPushButton::clicked, this, [this] {
+        if (!requireAdmin()) return;
+        if (ShowManualXpDialog(this, workspace_, profiles_->currentData().toString(),
+                [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreTaskCompletion", event); })) {
+            reload();
+            statusBar()->showMessage(QString::fromUtf8("XP начислен, запись добавлена в историю задач."), 6000);
+        }
+    });
     connect(bulkEdit_, &QPushButton::clicked, this, [this] { bulkEditTasks(); });
     connect(bulkDelete_, &QPushButton::clicked, this, [this] {
         const auto selectedRows = table_->selectionModel()->selectedRows();
@@ -3309,6 +3321,8 @@ void QtWindow::render() {
     removeSpirit_->setEnabled(false);
     for (auto* value : profileValues_) value->setText(QString::fromUtf8("—"));
     changeStatus_->setVisible(page == Tasks && admin_);
+    manualTaskXp_->setVisible(page == Tasks && admin_);
+    manualTaskXp_->setEnabled(!profiles_->currentData().toString().isEmpty());
     bulkEdit_->setVisible(page == Tasks && admin_);
     bulkEdit_->setEnabled(false);
     bulkDelete_->setVisible(page == Tasks && admin_);
