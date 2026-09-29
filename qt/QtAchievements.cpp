@@ -47,6 +47,10 @@ QComboBox* iconSelector(const QtWorkspace& workspace, const QString& current = {
     return combo;
 }
 }
+QPixmap QtAchievementPreviewIcon(const QtWorkspace& workspace, const QString& relative) {
+    return achievementIcon(workspace, relative);
+}
+
 static QString MutateAchievement(QtWorkspace& workspace, const std::string& profileId,
     const QString& title, const std::string& skillId, double bonus, int days,
     int index = -1, const QByteArray* expectedFile = nullptr, bool changeDuration = true, bool revoke = false,

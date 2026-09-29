@@ -1203,6 +1203,35 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* profileOverviewLayout = new QVBoxLayout(profileOverview_);
     profileOverviewLayout->setContentsMargins(0, 0, 0, 0);
     profileOverviewLayout->setSpacing(8);
+    profileCollectionSummary_ = new QLabel(profileOverview_);
+    profileCollectionSummary_->setObjectName("profileCollectionSummary");
+    profileCollectionSummary_->setWordWrap(true);
+    profileCollectionSummary_->setAccessibleName(QString::fromUtf8("Сводка навыков и достижений профиля"));
+    profileCollectionSummary_->setAccessibleDescription(QString::fromUtf8("Количество навыков, активных достижений и общий бонус опыта."));
+    profileOverviewLayout->addWidget(profileCollectionSummary_);
+    profileAchievementPreview_ = new QWidget(profileOverview_);
+    profileAchievementPreview_->setObjectName("profileAchievementPreview");
+    auto* profileAchievementLayout = new QHBoxLayout(profileAchievementPreview_);
+    profileAchievementLayout->setContentsMargins(0, 0, 0, 0);
+    profileAchievementLayout->setSpacing(6);
+    auto* profileAchievementHeading = new QLabel(QString::fromUtf8("Последние ачивки"), profileAchievementPreview_);
+    profileAchievementHeading->setObjectName("profileAchievementHeading");
+    profileAchievementLayout->addWidget(profileAchievementHeading);
+    for (int index = 0; index < 3; ++index) {
+        profileAchievementIcons_[index] = new QLabel(profileAchievementPreview_);
+        profileAchievementIcons_[index]->setObjectName(QStringLiteral("profileRecentAchievement%1").arg(index));
+        profileAchievementIcons_[index]->setAlignment(Qt::AlignCenter);
+        profileAchievementIcons_[index]->setFixedSize(scaledUiMetric(32, displaySettings_.scalePercent), scaledUiMetric(32, displaySettings_.scalePercent));
+        profileAchievementIcons_[index]->setAccessibleName(QString::fromUtf8("Последнее достижение"));
+        profileAchievementLayout->addWidget(profileAchievementIcons_[index]);
+    }
+    profileAchievementOverflow_ = new QLabel(profileAchievementPreview_);
+    profileAchievementOverflow_->setObjectName("profileAchievementOverflow");
+    profileAchievementOverflow_->setAccessibleName(QString::fromUtf8("Остальные достижения профиля"));
+    profileAchievementLayout->addWidget(profileAchievementOverflow_);
+    profileAchievementLayout->addStretch(1);
+    profileAchievementPreview_->hide();
+    profileOverviewLayout->addWidget(profileAchievementPreview_);
     auto* stateCard = new QFrame;
     stateCard->setObjectName("profileStateCard");
     stateCard->setProperty("metric", true);
@@ -3248,7 +3277,78 @@ void QtWindow::render() {
         std::optional<Profile> profile;
         // Viewing a profile must not invoke LoadActiveProfile: that legacy helper saves on read.
         if (!id.empty() && workspace_.storage->set_active_profile(id)) profile = workspace_.storage->load_profile();
+        profileCollectionSummary_->clear();
+        profileAchievementPreview_->hide();
+        profileAchievementOverflow_->clear();
+        for (auto* icon : profileAchievementIcons_) {
+            icon->clear();
+            icon->setToolTip({});
+            icon->setAccessibleDescription({});
+            icon->setEnabled(false);
+        }
+        profileCollectionSummary_->setVisible(profile.has_value());
         if (profile) {
+            const auto skills = profile->list_skills();
+            int activeAchievements = 0;
+            double activeBonus = 0.0;
+            for (const auto& achievement : profile->achievements()) {
+                if (achievement.is_active(QDateTime::currentSecsSinceEpoch())) {
+                    ++activeAchievements;
+                    activeBonus += achievement.bonusPercent;
+                }
+            }
+            const QString bonusLabel = activeBonus > 0.0
+                ? QStringLiteral("+%1%").arg(activeBonus, 0, 'f', 1) : QStringLiteral("0%");
+            profileCollectionSummary_->setText(QString::fromUtf8("Навыков: %1 | Ачивок активных: %2 / %3 | Бонус: %4")
+                .arg(int(skills.size())).arg(activeAchievements).arg(int(profile->achievements().size())).arg(bonusLabel));
+            profileCollectionSummary_->setAccessibleDescription(profileCollectionSummary_->text());
+
+            std::vector<const Achievement*> recentAchievements;
+            recentAchievements.reserve(profile->achievements().size());
+            for (const auto& achievement : profile->achievements()) recentAchievements.push_back(&achievement);
+            std::sort(recentAchievements.begin(), recentAchievements.end(), [](const Achievement* left, const Achievement* right) {
+                if (left->awardedAt != right->awardedAt) return left->awardedAt > right->awardedAt;
+                return left->title < right->title;
+            });
+            const int shownAchievements = std::min(3, int(recentAchievements.size()));
+            for (int index = 0; index < shownAchievements; ++index) {
+                const auto& achievement = *recentAchievements[size_t(index)];
+                const bool active = achievement.is_active(QDateTime::currentSecsSinceEpoch());
+                const QString title = q(achievement.title);
+                const QString skill = q(workspace_.catalog.display_name(achievement.skill));
+                const QString skillName = skill.isEmpty() ? q(achievement.skill) : skill;
+                QString tooltip = title + QStringLiteral("\n") + skillName + QString::fromUtf8(", +%1% XP").arg(achievement.bonusPercent, 0, 'f', 1);
+                if (achievement.expiresAt == 0) {
+                    tooltip += QString::fromUtf8("\nСрок: без срока");
+                } else if (!active) {
+                    tooltip += QString::fromUtf8("\nСрок: истекла");
+                } else {
+                    tooltip += QString::fromUtf8("\nСрок до: ") + QDateTime::fromSecsSinceEpoch(achievement.expiresAt).toString("yyyy-MM-dd HH:mm");
+                    const auto remainingSeconds = std::max<std::int64_t>(0, achievement.expiresAt - QDateTime::currentSecsSinceEpoch());
+                    const auto remainingMinutes = std::max<std::int64_t>(1, (remainingSeconds + 59) / 60);
+                    if (remainingMinutes >= 1440) tooltip += QString::fromUtf8("\nОсталось: %1 дн.").arg(remainingMinutes / 1440);
+                    else if (remainingMinutes >= 60) tooltip += QString::fromUtf8("\nОсталось: %1 ч.").arg(remainingMinutes / 60);
+                    else tooltip += QString::fromUtf8("\nОсталось: %1 мин.").arg(remainingMinutes);
+                }
+                auto* icon = profileAchievementIcons_[index];
+                icon->setEnabled(active);
+                icon->setToolTip(tooltip);
+                icon->setAccessibleName(title.isEmpty() ? QString::fromUtf8("Последнее достижение") : title);
+                icon->setAccessibleDescription(tooltip);
+                const auto pixmap = QtAchievementPreviewIcon(workspace_, q(achievement.icon));
+                if (!pixmap.isNull()) {
+                    const QIcon iconState(pixmap);
+                    const auto iconSize = QSize(scaledUiMetric(32, displaySettings_.scalePercent), scaledUiMetric(32, displaySettings_.scalePercent));
+                    icon->setPixmap(iconState.pixmap(iconSize, active ? QIcon::Normal : QIcon::Disabled));
+                } else {
+                    icon->setText(QStringLiteral("?"));
+                }
+            }
+            profileAchievementOverflow_->setText(recentAchievements.size() > 3
+                ? QStringLiteral("+%1").arg(recentAchievements.size() - 3) : QString());
+            profileAchievementOverflow_->setAccessibleDescription(profileAchievementOverflow_->text().isEmpty()
+                ? QString() : QString::fromUtf8("Ещё %1 достижений").arg(recentAchievements.size() - 3));
+            profileAchievementPreview_->setVisible(workspace_.modules.achievements && profileMode != 2 && shownAchievements > 0);
             QString profession = q(profile->profession_id());
             for (const auto& item : data.professions) if (item.id == profile->profession_id()) profession = q(item.name);
             summary_->setText(q(DescribeOverallRank(*profile)) + (profession.isEmpty() ? "" : " · " + profession) +

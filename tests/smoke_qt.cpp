@@ -6706,6 +6706,32 @@ int main(int argc, char** argv) {
     profile.add_skill(*workspace.catalog.id_for_name(u8"Текстурирование"), 1, 1.2);
     profile.add_skill(*workspace.catalog.id_for_name(u8"Анимация"), 1, 0.95);
     profile.add_skill(*workspace.catalog.id_for_name(u8"Концепт-арт"), 1, 0.6);
+    const auto achievementNow = QDateTime::currentSecsSinceEpoch();
+    Achievement expiredRecentAchievement;
+    expiredRecentAchievement.title = u8"Недавно истекла";
+    expiredRecentAchievement.skill = *workspace.catalog.id_for_name(u8"Моделирование");
+    expiredRecentAchievement.bonusPercent = 99.0;
+    expiredRecentAchievement.awardedAt = achievementNow - 2 * 86400;
+    expiredRecentAchievement.expiresAt = achievementNow - 86400;
+    profile.add_achievement(expiredRecentAchievement);
+    Achievement recentActiveAchievement;
+    recentActiveAchievement.title = u8"Свежая активная";
+    recentActiveAchievement.skill = *workspace.catalog.id_for_name(u8"Текстурирование");
+    recentActiveAchievement.bonusPercent = 12.5;
+    recentActiveAchievement.awardedAt = achievementNow - 3 * 86400;
+    recentActiveAchievement.expiresAt = achievementNow + 27 * 86400;
+    profile.add_achievement(recentActiveAchievement);
+    Achievement olderActiveAchievement;
+    olderActiveAchievement.title = u8"Без срока";
+    olderActiveAchievement.skill = *workspace.catalog.id_for_name(u8"Анимация");
+    olderActiveAchievement.bonusPercent = 4.0;
+    olderActiveAchievement.awardedAt = achievementNow - 4 * 86400;
+    profile.add_achievement(olderActiveAchievement);
+    Achievement oldestActiveAchievement;
+    oldestActiveAchievement.title = u8"Старая активная";
+    oldestActiveAchievement.skill = *workspace.catalog.id_for_name(u8"Концепт-арт");
+    oldestActiveAchievement.awardedAt = achievementNow - 5 * 86400;
+    profile.add_achievement(oldestActiveAchievement);
     auto createdProfile = workspace.storage->create_profile(profile);
     if (!createdProfile) return fail("Profile creation failed");
     Profile archivedProfile(u8"Архивный профиль статистики");
@@ -6844,6 +6870,24 @@ int main(int argc, char** argv) {
         !profileBrief || profileBrief->rowCount() != 1 ||
         profileBrief->item(0, 0)->text() != QString::fromUtf8("Проверка Qt <без HTML>") || !openFocusTask)
         return fail("Profile overview state, weak-category ranking, focus signals, workload, or task preview missing");
+    auto* profileCollectionSummary = window.findChild<QLabel*>("profileCollectionSummary");
+    auto* profileAchievementPreview = window.findChild<QWidget*>("profileAchievementPreview");
+    auto* recentAchievement0 = window.findChild<QLabel*>("profileRecentAchievement0");
+    auto* recentAchievement1 = window.findChild<QLabel*>("profileRecentAchievement1");
+    auto* recentAchievementOverflow = window.findChild<QLabel*>("profileAchievementOverflow");
+    if (!profileCollectionSummary || !profileCollectionSummary->text().contains(QString::fromUtf8("Навыков: 4")) ||
+        !profileCollectionSummary->text().contains(QString::fromUtf8("Ачивок активных: 3 / 4")) ||
+        !profileCollectionSummary->text().contains(QString::fromUtf8("Бонус: +16.5%")) ||
+        !profileAchievementPreview || !profileAchievementPreview->isVisible() || !recentAchievement0 ||
+        !recentAchievement0->toolTip().contains(QString::fromUtf8("Недавно истекла")) || recentAchievement0->isEnabled() ||
+        !recentAchievement1 || !recentAchievement1->toolTip().contains(QString::fromUtf8("Свежая активная")) ||
+        !recentAchievement1->isEnabled() || !recentAchievementOverflow || recentAchievementOverflow->text() != QStringLiteral("+1"))
+        return fail(("Profile achievement preview failed: summary=" + (profileCollectionSummary ? profileCollectionSummary->text().toStdString() : "<missing>") +
+            "; preview=" + (profileAchievementPreview && profileAchievementPreview->isVisible() ? "visible" : "hidden") +
+            "; first=" + (recentAchievement0 ? recentAchievement0->toolTip().toStdString() : "<missing>") +
+            (recentAchievement0 && recentAchievement0->isEnabled() ? " [enabled]" : " [disabled]") +
+            "; second=" + (recentAchievement1 ? recentAchievement1->toolTip().toStdString() : "<missing>") +
+            "; overflow=" + (recentAchievementOverflow ? recentAchievementOverflow->text().toStdString() : "<missing>")).c_str());
     openFocusTask->click(); QApplication::processEvents();
     if (nav->currentRow() != 1 || table->rowCount() != 1 || table->currentRow() != 0 ||
         table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(task.id) ||
@@ -6852,7 +6896,8 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(0); QApplication::processEvents();
     modeOverview->click(); QApplication::processEvents();
     modeFocus->click(); QApplication::processEvents();
-    if (!table->isHidden() || !showAchievements->isHidden()) return fail("Profile focus mode did not hide details");
+    if (!table->isHidden() || !showAchievements->isHidden() || profileAchievementPreview->isVisible())
+        return fail("Profile focus mode did not hide details and the achievement preview");
     modeAnalytics->click(); QApplication::processEvents();
     if (table->isHidden() || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3)) return fail("Profile analytics mode did not restore details");
     modeTasks->click(); QApplication::processEvents();
@@ -6874,6 +6919,7 @@ int main(int argc, char** argv) {
     auto overviewFixture = workspace.storage->load_profile();
     if (!overviewFixture) return fail("Profile category fixture could not be reloaded");
     overviewFixture->set_category_best_scores({0, 0, 0, 0, 0});
+    overviewFixture->set_achievements({});
     if (!workspace.storage->save_profile(*overviewFixture)) return fail("Profile category fixture restore failed");
     if (!profileFile.open(QIODevice::ReadOnly)) return fail("Profile category fixture bytes unavailable");
     profileBytes = profileFile.readAll();

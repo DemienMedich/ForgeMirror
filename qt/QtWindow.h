@@ -158,6 +158,10 @@ private:
     QLabel* banner_;
     QWidget* profileMetrics_;
     QWidget* profileOverview_ = nullptr;
+    QLabel* profileCollectionSummary_ = nullptr;
+    QWidget* profileAchievementPreview_ = nullptr;
+    QLabel* profileAchievementIcons_[3]{};
+    QLabel* profileAchievementOverflow_ = nullptr;
     QLabel* profileStateValues_[3]{};
     QLabel* profileSignalValues_[4]{};
     QLabel* profileSignalDetails_[4]{};
