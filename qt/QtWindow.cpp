@@ -2401,7 +2401,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(modelAutoRotate_, &QCheckBox::toggled, this, modelControlChanged);
     connect(modelPath_, &QLineEdit::editingFinished, this, [this] { if (!restoringModelSettings_) loadSelectedModel(); });
     connect(modelColor_, &QPushButton::clicked, this, [this] {
-        const auto color = QColorDialog::getColor(modelSettings_.lineColor, this, QString::fromUtf8("Цвет линий"));
+        const auto color = QColorDialog::getColor(modelSettings_.lineColor, this, QString::fromUtf8("Цвет линий"),
+            QColorDialog::ShowAlphaChannel);
         if (!color.isValid()) return;
         modelSettings_.lineColor = color;
         modelColor_->setStyleSheet(QStringLiteral("background-color: %1;").arg(color.name()));

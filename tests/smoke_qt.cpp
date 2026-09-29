@@ -7476,9 +7476,10 @@ int main(int argc, char** argv) {
     auto* modelChoiceCount = window.findChild<QLabel*>("modelChoiceCount");
     auto* modelFilterReset = window.findChild<QPushButton*>("modelFilterReset");
     auto* modelChoiceRefresh = window.findChild<QPushButton*>("modelChoiceRefresh");
+    auto* modelColor = window.findChild<QPushButton*>("modelColor");
     if (!modelYaw || !primary->isVisible() || primary->text() != QString::fromUtf8("Сохранить настройки"))
         return fail("3D viewer settings controls unavailable");
-    if (!modelChoice || !modelFilter || !modelChoiceCount || !modelFilterReset || !modelChoiceRefresh)
+    if (!modelChoice || !modelFilter || !modelChoiceCount || !modelFilterReset || !modelChoiceRefresh || !modelColor)
         return fail("3D model list filter controls unavailable");
     modelChoiceRefresh->click();
     if (modelChoice->count() != 3 || modelChoiceCount->text() != QString::fromUtf8("Показано: 2 из 2"))
@@ -7499,12 +7500,23 @@ int main(int argc, char** argv) {
     modelChoiceRefresh->click();
     if (modelChoice->count() != 4 || modelChoiceCount->text() != QString::fromUtf8("Показано: 3 из 3"))
         return fail("3D model refresh did not discover a newly added model");
+    bool modelColorAlphaAvailable = false;
+    QTimer::singleShot(0, [&modelColorAlphaAvailable] {
+        auto* dialog = qobject_cast<QColorDialog*>(QApplication::activeModalWidget());
+        if (!dialog) return;
+        modelColorAlphaAvailable = dialog->options().testFlag(QColorDialog::ShowAlphaChannel);
+        dialog->setCurrentColor(QColor(70, 140, 210, 85));
+        dialog->accept();
+    });
+    modelColor->click();
+    if (!modelColorAlphaAvailable) return fail("3D line color picker did not expose alpha editing");
     modelYaw->setValue(37);
     QTimer::singleShot(0, [] {
         if (auto* message = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) message->accept();
     });
     primary->click();
-    if (std::abs(LoadQtModelSettings(workspace.directory).yaw - 0.37f) > 0.001f)
+    const auto savedModelSettings = LoadQtModelSettings(workspace.directory);
+    if (std::abs(savedModelSettings.yaw - 0.37f) > 0.001f || savedModelSettings.lineColor.alpha() != 85)
         return fail("3D viewer settings did not persist through the real page");
     QFile modelSettingsEventLog(QString::fromStdWString((workspace.directory / "meta/qt-application-log.json").wstring()));
     if (!modelSettingsEventLog.open(QIODevice::ReadOnly)) return fail("3D viewer settings event log unavailable");
