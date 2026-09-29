@@ -2175,18 +2175,21 @@ static bool TestProfileManagerFilters() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.data.vault.currencyCode = "CRN";
     workspace.data.professions.push_back({"artist", "Artist", "Visual work"});
-    auto createProfile = [&](const QString& name, const QString& login, const std::string& profession, bool archived = false) {
+    auto createProfile = [&](const QString& name, const QString& login, const std::string& profession,
+                             double wallet, bool archived = false) {
         Profile profile(name.toUtf8().toStdString());
         profile.set_login(login.toUtf8().toStdString());
         profile.set_profession_id(profession);
+        profile.set_wallet_balance(wallet);
         auto created = workspace.storage->create_profile(profile);
         if (!created || (archived && !workspace.storage->set_archived(created->id, true))) return std::string{};
         return created->id;
     };
-    const auto zuluId = createProfile(QString::fromUtf8("Zulu"), QString::fromUtf8("artist-login"), "artist");
-    const auto alphaId = createProfile(QString::fromUtf8("Alpha"), QString::fromUtf8("plain-login"), "");
-    const auto archivedId = createProfile(QString::fromUtf8("Archived artist"), QString::fromUtf8("old-login"), "artist", true);
+    const auto zuluId = createProfile(QString::fromUtf8("Zulu"), QString::fromUtf8("artist-login"), "artist", 1250.0);
+    const auto alphaId = createProfile(QString::fromUtf8("Alpha"), QString::fromUtf8("plain-login"), "", 0.0);
+    const auto archivedId = createProfile(QString::fromUtf8("Archived artist"), QString::fromUtf8("old-login"), "artist", 75.0, true);
     if (zuluId.empty() || alphaId.empty() || archivedId.empty() || !workspace.storage->set_active_profile(alphaId)) return false;
 
     bool checks = true;
@@ -2204,7 +2207,9 @@ static bool TestProfileManagerFilters() {
         auto* profession = dialog->findChild<QComboBox*>("profileProfessionFilter");
         auto* sort = dialog->findChild<QComboBox*>("profileSort");
         auto* refresh = dialog->findChild<QPushButton*>("refreshProfiles");
-        expect(table && table->columnCount() == 4 && search && archive && profession && sort && refresh, "controls");
+        expect(table && table->columnCount() == 5 && table->horizontalHeaderItem(4) &&
+            table->horizontalHeaderItem(4)->text() == QString::fromUtf8("Баланс") &&
+            search && archive && profession && sort && refresh, "controls");
         if (!checks) { dialog->reject(); return; }
         auto rowWithId = [&](const QString& id) {
             for (int row = 0; row < table->rowCount(); ++row)
@@ -2221,6 +2226,8 @@ static bool TestProfileManagerFilters() {
         search->clear();
         const int zuluRow = rowWithId(QString::fromStdString(zuluId));
         expect(zuluRow >= 0 && table->item(zuluRow, 2) && table->item(zuluRow, 2)->text() == QString::fromUtf8("Artist"), "profession column");
+        expect(zuluRow >= 0 && table->item(zuluRow, 4) && table->item(zuluRow, 4)->text() == QString::fromUtf8("1250 CRN"),
+            "wallet balance and currency");
 
         archive->setCurrentIndex(1);
         expect(table->rowCount() == 2 && rowWithId(QString::fromStdString(archivedId)) == -1, "active filter");
