@@ -5654,6 +5654,9 @@ static bool TestPomodoro() {
         if (minutes == 0 && started > 0) ++rewards;
         return QString::fromUtf8("Тестовая награда");
     });
+    panel.setRewardStatusHandler([](int minutes) {
+        return minutes < 25 ? QString::fromUtf8("фокус короче минимума") : QString::fromUtf8("начисление активно");
+    }, [] { return QString::fromUtf8("Начисление: +1 за полный фокус"); });
     panel.resize(720, 580); panel.show(); QApplication::processEvents();
     auto* start = panel.findChild<QPushButton*>("pomodoroStart");
     auto* pause = panel.findChild<QPushButton*>("pomodoroPause");
@@ -5662,7 +5665,10 @@ static bool TestPomodoro() {
     auto* time = panel.findChild<QLabel*>("pomodoroTime");
     auto* phase = panel.findChild<QLabel*>("pomodoroPhase");
     auto* cycles = panel.findChild<QLabel*>("pomodoroCycles");
-    if (!start || !pause || !next || !reset || !time || !phase || !cycles || time->text() != "00:02") return fail(1);
+    auto* rewardStatus = panel.findChild<QLabel*>("pomodoroRewardStatus");
+    if (!start || !pause || !next || !reset || !time || !phase || !cycles || !rewardStatus ||
+        time->text() != "00:02" || !rewardStatus->text().contains(QString::fromUtf8("фокус короче минимума")) ||
+        rewardStatus->toolTip() != QString::fromUtf8("Начисление: +1 за полный фокус")) return fail(1);
     panel.setAdministrator(true);
     auto* focusSound = panel.findChild<QComboBox*>("pomodoroFocusSound");
     if (!panel.findChild<QWidget*>("pomodoroSoundEnabled")->isVisible() || focusSound->findData("music/focus.mp3") < 0 ||
@@ -5689,6 +5695,7 @@ static bool TestPomodoro() {
     const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); panel.grab().save(artifacts + "/pomodoro.png"); }
     panel.findChild<QSpinBox*>("pomodoroWorkMinutes")->setValue(30);
+    if (!rewardStatus->text().contains(QString::fromUtf8("начисление активно"))) return fail(24);
     panel.findChild<QCheckBox*>("pomodoroAutoAdvance")->setChecked(true);
     panel.findChild<QPushButton*>("pomodoroSaveSettings")->click();
     QFile settings(temp.path() + "/meta/ui.ini"); if (!settings.open(QIODevice::ReadOnly)) return false;

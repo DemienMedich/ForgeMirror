@@ -170,7 +170,13 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     soundSettings_->setToolTip(QString::fromUtf8("Администраторские сигналы из папки music рабочего места или поставки data/music."));
     controlBox->addWidget(soundSettings_); soundSettings_->hide();
     auto* note = new QLabel(QString::fromUtf8("Награда возможна только за полный фокус при личном входе и по правилам хранилища."));
-    note->setWordWrap(true); controlBox->addWidget(note); controlBox->addStretch(); root->addWidget(controls, 2);
+    note->setWordWrap(true); controlBox->addWidget(note);
+    rewardStatusLabel_ = new QLabel;
+    rewardStatusLabel_->setObjectName("pomodoroRewardStatus");
+    rewardStatusLabel_->setAccessibleName(QString::fromUtf8("Статус награды Pomodoro"));
+    rewardStatusLabel_->setWordWrap(true);
+    controlBox->addWidget(rewardStatusLabel_);
+    controlBox->addStretch(); root->addWidget(controls, 2);
     timer_ = new QTimer(this); timer_->setInterval(250);
     connect(timer_, &QTimer::timeout, this, [this] {
         const auto milliseconds = deadline_.remainingTime();
@@ -181,6 +187,7 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     connect(pause_, &QPushButton::clicked, this, [this] { running_ = false; timer_->stop(); refresh(); });
     connect(reset_, &QPushButton::clicked, this, [this] { reset(); });
     connect(save, &QPushButton::clicked, this, [this] { saveSettings(); });
+    connect(workMinutes_, qOverload<int>(&QSpinBox::valueChanged), this, [this] { refreshRewardStatus(); });
     connect(refreshSounds, &QPushButton::clicked, this, [this] {
         const auto focus = focusSound_->currentData().toString();
         const auto pause = breakSound_->currentData().toString();
@@ -191,6 +198,10 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
         refresh();
     });
     connect(next_, &QPushButton::clicked, this, [this] { if (awaiting_) { phase_ = nextPhase_; awaiting_ = false; remaining_ = duration(phase_); startOrResume(); } });
+    rewardStatusTimer_ = new QTimer(this);
+    rewardStatusTimer_->setInterval(60000);
+    connect(rewardStatusTimer_, &QTimer::timeout, this, [this] { refreshRewardStatus(); });
+    rewardStatusTimer_->start();
     reset();
 }
 
@@ -241,7 +252,24 @@ void QtPomodoro::saveSettings() {
     if (!running_ && !awaiting_) remaining_ = duration(phase_);
     statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Настройки сохранены.")); refresh();
 }
-void QtPomodoro::setAdministrator(bool administrator) { soundSettings_->setVisible(administrator); }
+void QtPomodoro::setAdministrator(bool administrator) {
+    soundSettings_->setVisible(administrator);
+    refreshRewardStatus();
+}
+void QtPomodoro::setRewardStatusHandler(std::function<QString(int)> statusHandler,
+    std::function<QString()> rulesTooltipHandler) {
+    rewardStatusHandler_ = std::move(statusHandler);
+    rulesTooltipHandler_ = std::move(rulesTooltipHandler);
+    refreshRewardStatus();
+}
+void QtPomodoro::refreshRewardStatus() {
+    if (!rewardStatusLabel_) return;
+    const auto status = rewardStatusHandler_
+        ? rewardStatusHandler_(workMinutes_ ? workMinutes_->value() : workSeconds_ / 60)
+        : QString::fromUtf8("правила не загружены");
+    rewardStatusLabel_->setText(QString::fromUtf8("Монеты: ") + status);
+    rewardStatusLabel_->setToolTip(rulesTooltipHandler_ ? rulesTooltipHandler_() : QString());
+}
 void QtPomodoro::setQuickStateChanged(std::function<void()> handler) {
     quickStateChanged_ = std::move(handler);
     if (quickStateChanged_) quickStateChanged_();

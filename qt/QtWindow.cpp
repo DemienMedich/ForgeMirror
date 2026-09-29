@@ -258,6 +258,14 @@ bool pomodoroWithinWindow(const StorageVaultData& vault, std::int64_t startedAt)
     if (start == end) return false;
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
+QString pomodoroDaysLabel(int mask) {
+    static const std::array<const char*, 7> days{
+        u8"Вс", u8"Пн", u8"Вт", u8"Ср", u8"Чт", u8"Пт", u8"Сб"};
+    QStringList selected;
+    for (int day = 0; day < int(days.size()); ++day)
+        if (mask & (1 << day)) selected << QString::fromUtf8(days[size_t(day)]);
+    return selected.isEmpty() ? QString::fromUtf8("—") : selected.join(' ');
+}
 AppProfileMutationResult runWalletMutationWithAudit(
     QtWorkspace& workspace, const std::string& restoreProfileId, const std::string& profileId,
     bool includeStorageVault, const std::string& action, const std::string& details,
@@ -1611,6 +1619,29 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             return QString::fromUtf8("Награда не начислена: %1").arg(q(result.errorMessage));
         reload();
         return QString::fromUtf8("Начислено Кукоинов: +%1").arg(amount);
+    });
+    pomodoro->setRewardStatusHandler([this](int workMinutes) {
+        const auto id = u(profiles_->currentData().toString());
+        if (id.empty()) return QString::fromUtf8("нет активного профиля");
+        const auto& vault = workspace_.data.vault;
+        if (vault.pomodoroCoinsPerCycle <= 0) return QString::fromUtf8("начисление выключено");
+        const auto profile = workspace_.storage->load_profile_snapshot(id, true);
+        if (!profile) return QString::fromUtf8("профиль недоступен");
+        if (profile->password_encoded().empty()) return QString::fromUtf8("пароль не задан");
+        if (!profileSession_.isUnlocked(*workspace_.storage, id)) return QString::fromUtf8("нужен вход");
+        if (workMinutes < vault.pomodoroMinMinutes) return QString::fromUtf8("фокус короче минимума");
+        if (!pomodoroWithinWindow(vault, QDateTime::currentSecsSinceEpoch())) return QString::fromUtf8("вне расписания");
+        if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction"))
+            return QString::fromUtf8("нужно восстановить данные");
+        return QString::fromUtf8("начисление активно");
+    }, [this] {
+        const auto& vault = workspace_.data.vault;
+        return QString::fromUtf8("Начисление: +%1 за полный фокус\nМинимум: %2 мин\nОкно: %3–%4\nДни: %5")
+            .arg(vault.pomodoroCoinsPerCycle)
+            .arg(std::max(1, vault.pomodoroMinMinutes))
+            .arg(QTime(vault.pomodoroStartMinutes / 60, vault.pomodoroStartMinutes % 60).toString("HH:mm"))
+            .arg(QTime(vault.pomodoroEndMinutes / 60, vault.pomodoroEndMinutes % 60).toString("HH:mm"))
+            .arg(pomodoroDaysLabel(vault.pomodoroDaysMask));
     });
     content->addWidget(pomodoro_, 1);
     auto* filters = new QHBoxLayout;
