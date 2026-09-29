@@ -1252,6 +1252,41 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         signalGrid->addWidget(card, index / 2, index % 2);
     }
     profileOverviewLayout->addLayout(signalGrid);
+    auto* profileBalanceCard = new QFrame(profileOverview_);
+    profileBalanceCard->setObjectName("profileBalanceCard");
+    profileBalanceCard->setProperty("metric", true);
+    auto* profileBalanceLayout = new QVBoxLayout(profileBalanceCard);
+    profileBalanceLayout->setContentsMargins(10, 8, 10, 8);
+    profileBalanceLayout->setSpacing(4);
+    auto* profileBalanceHeading = new QLabel(QString::fromUtf8("Зоны перекоса"), profileBalanceCard);
+    profileBalanceHeading->setObjectName("profileBalanceHeading");
+    profileBalanceHeading->setProperty("metricValue", true);
+    profileBalanceLayout->addWidget(profileBalanceHeading);
+    profileBalanceTable_ = new QTableWidget(3, 3, profileBalanceCard);
+    profileBalanceTable_->setObjectName("profileBalanceTable");
+    profileBalanceTable_->setHorizontalHeaderLabels({QString::fromUtf8("Категория"), QString::fromUtf8("Оценка"), QString::fromUtf8("Прогресс")});
+    profileBalanceTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    profileBalanceTable_->setSelectionMode(QAbstractItemView::NoSelection);
+    profileBalanceTable_->setShowGrid(false);
+    profileBalanceTable_->verticalHeader()->hide();
+    profileBalanceTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    profileBalanceTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    profileBalanceTable_->horizontalHeader()->setStretchLastSection(true);
+    profileBalanceTable_->setMaximumHeight(scaledUiMetric(138, displaySettings_.scalePercent));
+    profileBalanceTable_->setAccessibleName(QString::fromUtf8("Три слабейшие категории профиля"));
+    profileBalanceTable_->setAccessibleDescription(QString::fromUtf8("Категории отсортированы по лучшей оценке от меньшей к большей."));
+    for (int row = 0; row < 3; ++row) {
+        profileBalanceTable_->setItem(row, 0, new QTableWidgetItem(QString::fromUtf8("—")));
+        profileBalanceTable_->setItem(row, 1, new QTableWidgetItem(QStringLiteral("0/10")));
+        profileBalanceBars_[row] = new QProgressBar(profileBalanceTable_);
+        profileBalanceBars_[row]->setObjectName(QStringLiteral("profileBalanceBar%1").arg(row));
+        profileBalanceBars_[row]->setRange(0, Profile::kMaxCategoryScore);
+        profileBalanceBars_[row]->setValue(0);
+        profileBalanceBars_[row]->setTextVisible(false);
+        profileBalanceTable_->setCellWidget(row, 2, profileBalanceBars_[row]);
+    }
+    profileBalanceLayout->addWidget(profileBalanceTable_);
+    profileOverviewLayout->addWidget(profileBalanceCard);
     profileTaskBriefCard_ = new QFrame;
     auto* profileTaskCard = profileTaskBriefCard_;
     profileTaskCard->setObjectName("profileTaskBriefCard");
@@ -3199,6 +3234,14 @@ void QtWindow::render() {
             profileSignalValues_[index]->setText(QString::fromUtf8("—"));
             profileSignalDetails_[index]->clear();
         }
+        profileBalanceTable_->setAccessibleDescription(QString::fromUtf8("Категории отсортированы по лучшей оценке от меньшей к большей."));
+        for (int row = 0; row < 3; ++row) {
+            profileBalanceTable_->item(row, 0)->setText(QString::fromUtf8("—"));
+            profileBalanceTable_->item(row, 1)->setText(QStringLiteral("0/10"));
+            profileBalanceBars_[row]->setValue(0);
+            profileBalanceBars_[row]->setAccessibleName(QString::fromUtf8("Прогресс категории не выбран"));
+            profileBalanceBars_[row]->setAccessibleDescription(QStringLiteral("0/10"));
+        }
         profileTaskBriefTable_->setRowCount(0);
         profileTaskSummary_->setText(QString::fromUtf8("Нет назначенных активных задач."));
         const auto id = u(profiles_->currentData().toString());
@@ -3256,6 +3299,27 @@ void QtWindow::render() {
                 } else diagnosticFocus = QString::fromUtf8("Поддержание формы");
             }
             profileStateValues_[2]->setText(diagnosticFocus);
+
+            std::vector<int> weakestCategories(static_cast<size_t>(Profile::kCategoryCount), 0);
+            for (int index = 0; index < Profile::kCategoryCount; ++index) weakestCategories[size_t(index)] = index;
+            std::sort(weakestCategories.begin(), weakestCategories.end(), [&](int left, int right) {
+                const int leftScore = categoryScores[size_t(left)];
+                const int rightScore = categoryScores[size_t(right)];
+                return leftScore != rightScore ? leftScore < rightScore : left < right;
+            });
+            QStringList weakestCategorySummary;
+            for (int row = 0; row < 3 && row < int(weakestCategories.size()); ++row) {
+                const int categoryIndex = weakestCategories[size_t(row)];
+                const int score = std::clamp(categoryScores[size_t(categoryIndex)], 0, Profile::kMaxCategoryScore);
+                const QString category = QString::fromUtf8(Profile::kCategoryLabels[size_t(categoryIndex)]);
+                profileBalanceTable_->item(row, 0)->setText(category);
+                profileBalanceTable_->item(row, 1)->setText(QStringLiteral("%1/%2").arg(score).arg(Profile::kMaxCategoryScore));
+                profileBalanceBars_[row]->setValue(score);
+                profileBalanceBars_[row]->setAccessibleName(QString::fromUtf8("Прогресс категории %1").arg(category));
+                profileBalanceBars_[row]->setAccessibleDescription(QStringLiteral("%1/%2 баллов").arg(score).arg(Profile::kMaxCategoryScore));
+                weakestCategorySummary << QStringLiteral("%1 %2/%3").arg(category).arg(score).arg(Profile::kMaxCategoryScore);
+            }
+            profileBalanceTable_->setAccessibleDescription(QString::fromUtf8("Три слабейшие категории: %1.").arg(weakestCategorySummary.join(QStringLiteral("; "))));
 
             QString milestoneValue, milestoneDetail;
             if (recoveryLeft > 0) {

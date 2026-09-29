@@ -6697,6 +6697,7 @@ int main(int argc, char** argv) {
     Profile profile(u8"Тестовый профиль");
     profile.set_password_encoded(EncodePassword("profile-test-password"));
     profile.set_last_task_timestamp(QDateTime::currentSecsSinceEpoch() - 5 * 86400);
+    profile.set_category_best_scores({3, 7, 2, 10, 5});
     workspace.catalog.add_skill(u8"Моделирование", 1.5, u8"Создание геометрии");
     workspace.catalog.add_skill(u8"Текстурирование", 1.2, u8"Подготовка материалов");
     workspace.catalog.add_skill(u8"Анимация", 0.95, u8"Движение персонажа");
@@ -6734,7 +6735,7 @@ int main(int argc, char** argv) {
     archivedProfileFile.close();
     QFile profileFile(temp.path() + "/" + QString::fromStdString(createdProfile->id) + ".ini");
     if (!profileFile.open(QIODevice::ReadOnly)) return fail("Cannot read profile fixture");
-    const auto profileBytes = profileFile.readAll();
+    auto profileBytes = profileFile.readAll();
     profileFile.close();
     TaskEntry task;
     task.id = "qt-smoke-task";
@@ -6826,15 +6827,23 @@ int main(int argc, char** argv) {
     auto* profileFocus = window.findChild<QLabel*>("profileSignalValue1");
     auto* profileLoad = window.findChild<QLabel*>("profileSignalValue2");
     auto* profileWeakZone = window.findChild<QLabel*>("profileSignalValue3");
+    auto* profileBalance = window.findChild<QTableWidget*>("profileBalanceTable");
+    auto* weakestCategoryBar = profileBalance ? qobject_cast<QProgressBar*>(profileBalance->cellWidget(0, 2)) : nullptr;
     auto* profileBrief = window.findChild<QTableWidget*>("profileTaskBriefTable");
     auto* openFocusTask = window.findChild<QPushButton*>("profileOverviewTaskAction0");
     if (!profileState || !profileState->text().contains(QString::fromUtf8("Рост")) ||
         !profileDiagnostic || profileDiagnostic->text().isEmpty() || !profileFocus ||
         !profileFocus->text().contains(QString::fromUtf8("Проверка Qt")) || !profileLoad ||
         !profileLoad->text().contains(QString::fromUtf8("1 активных")) || !profileWeakZone ||
-        profileWeakZone->text().isEmpty() || !profileBrief || profileBrief->rowCount() != 1 ||
+        profileWeakZone->text().isEmpty() || !profileBalance || profileBalance->rowCount() != 3 ||
+        profileBalance->item(0, 0)->text() != QString::fromUtf8(Profile::kCategoryLabels[2]) ||
+        profileBalance->item(0, 1)->text() != QStringLiteral("2/10") ||
+        !weakestCategoryBar || weakestCategoryBar->value() != 2 ||
+        profileBalance->item(1, 0)->text() != QString::fromUtf8(Profile::kCategoryLabels[0]) ||
+        profileBalance->item(1, 1)->text() != QStringLiteral("3/10") ||
+        !profileBrief || profileBrief->rowCount() != 1 ||
         profileBrief->item(0, 0)->text() != QString::fromUtf8("Проверка Qt <без HTML>") || !openFocusTask)
-        return fail("Profile overview state, focus signals, workload, weak zone, or task preview missing");
+        return fail("Profile overview state, weak-category ranking, focus signals, workload, or task preview missing");
     openFocusTask->click(); QApplication::processEvents();
     if (nav->currentRow() != 1 || table->rowCount() != 1 || table->currentRow() != 0 ||
         table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(task.id) ||
@@ -6861,6 +6870,14 @@ int main(int argc, char** argv) {
     window.findChild<QPushButton*>("taskFilterReset")->click(); QApplication::processEvents();
     modeAnalytics->click(); QApplication::processEvents();
     nav->setCurrentRow(0);
+    if (!workspace.storage->set_active_profile(createdProfile->id)) return fail("Profile category fixture restore selection failed");
+    auto overviewFixture = workspace.storage->load_profile();
+    if (!overviewFixture) return fail("Profile category fixture could not be reloaded");
+    overviewFixture->set_category_best_scores({0, 0, 0, 0, 0});
+    if (!workspace.storage->save_profile(*overviewFixture)) return fail("Profile category fixture restore failed");
+    if (!profileFile.open(QIODevice::ReadOnly)) return fail("Profile category fixture bytes unavailable");
+    profileBytes = profileFile.readAll();
+    profileFile.close();
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
     auto* shortcutHelpAction = window.findChild<QAction*>("shortcutHelpAction");

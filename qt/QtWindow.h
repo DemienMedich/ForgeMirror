@@ -36,6 +36,7 @@ class QAction;
 class QSlider;
 class QCheckBox;
 class QToolButton;
+class QProgressBar;
 class QMenu;
 class QAction;
 class QSpinBox;
@@ -160,6 +161,8 @@ private:
     QLabel* profileStateValues_[3]{};
     QLabel* profileSignalValues_[4]{};
     QLabel* profileSignalDetails_[4]{};
+    QTableWidget* profileBalanceTable_ = nullptr;
+    QProgressBar* profileBalanceBars_[3]{};
     QWidget* profileTaskBriefCard_ = nullptr;
     QLabel* profileTaskSummary_ = nullptr;
     QTableWidget* profileTaskBriefTable_ = nullptr;
