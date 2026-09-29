@@ -1379,6 +1379,28 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     labelForAccessibility(profileOverviewXp_, QString::fromUtf8("Добавить опыт выбранному профилю"));
     profileOverviewActions->addWidget(profileOverviewXp_, 2, 0);
     connect(profileOverviewXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
+    profileRankControls_ = new QWidget(profileOverview_);
+    profileRankControls_->setObjectName("profileRankControls");
+    auto* profileRankLayout = new QHBoxLayout(profileRankControls_);
+    profileRankLayout->setContentsMargins(0, 0, 0, 0);
+    profileRankLayout->setSpacing(6);
+    auto* profileRankLabel = new QLabel(QString::fromUtf8("Ранг"), profileRankControls_);
+    profileRankLayout->addWidget(profileRankLabel);
+    profileRankChoice_ = new QComboBox(profileRankControls_);
+    profileRankChoice_->setObjectName("profileRankChoice");
+    profileRankChoice_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    profileRankChoice_->setMinimumContentsLength(10);
+    for (const auto& rank : adminProfileRanks()) profileRankChoice_->addItem(rank.first, rank.second);
+    labelForAccessibility(profileRankChoice_, QString::fromUtf8("Выбираемый ранг профиля"),
+        QString::fromUtf8("При применении устанавливает уровень и опыт до следующего уровня сразу на порог ранга."));
+    profileRankLayout->addWidget(profileRankChoice_, 1);
+    profileRankApply_ = new QPushButton(QString::fromUtf8("Применить"), profileRankControls_);
+    profileRankApply_->setObjectName("profileRankApply");
+    profileRankApply_->setToolTip(QString::fromUtf8("Сохранить выбранный ранг сразу"));
+    labelForAccessibility(profileRankApply_, QString::fromUtf8("Применить выбранный ранг профиля"), profileRankApply_->toolTip());
+    profileRankLayout->addWidget(profileRankApply_);
+    profileOverviewActions->addWidget(profileRankControls_, 2, 1, 1, 2);
+    connect(profileRankApply_, &QPushButton::clicked, this, [this] { applyProfileRank(); });
     profileOverviewLayout->addLayout(profileOverviewActions);
     profileOverviewLayout->addWidget(profileTaskCard);
     content->addWidget(profileOverview_);
@@ -3171,6 +3193,8 @@ void QtWindow::render() {
     cloudReleaseButton_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
     profileOverview_->setVisible(page == ProfilePage);
+    profileRankControls_->setVisible(page == ProfilePage && admin_);
+    profileRankControls_->setEnabled(!profiles_->currentData().toString().isEmpty());
     profileTaskBriefCard_->setVisible(page == ProfilePage && workspace_.modules.tasks);
     for (int index = 0; index < 5; ++index)
         profileOverviewTaskButtons_[index]->setVisible(page == ProfilePage && workspace_.modules.tasks);
@@ -3288,6 +3312,12 @@ void QtWindow::render() {
         }
         profileCollectionSummary_->setVisible(profile.has_value());
         if (profile) {
+            const int rankIndex = adminProfileRankIndex(profile->overall_level());
+            const int rankChoice = profileRankChoice_->findData(adminProfileRanks()[size_t(rankIndex)].second);
+            if (rankChoice >= 0) {
+                const QSignalBlocker rankUpdate(profileRankChoice_);
+                profileRankChoice_->setCurrentIndex(rankChoice);
+            }
             const auto skills = profile->list_skills();
             int activeAchievements = 0;
             double activeBonus = 0.0;
@@ -4721,6 +4751,30 @@ void QtWindow::grantDirectXp() {
     const int skillXp = dialog.property("awardedSkillXp").toInt();
     reload();
     statusBar()->showMessage(QString::fromUtf8("Начислено: общий XP +%1 · навык +%2 XP").arg(globalXp).arg(skillXp), 5000);
+}
+
+void QtWindow::applyProfileRank() {
+    if (!requireAdmin() || navigation_->currentRow() != ProfilePage) return;
+    const auto profileId = u(profiles_->currentData().toString());
+    if (profileId.empty()) { message(u8"Сначала выберите профиль."); return; }
+    if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+        message(u8"Сначала завершите восстановление данных.");
+        return;
+    }
+    const auto selectedLevel = profileRankChoice_->currentData().toInt();
+    if (selectedLevel < 1) { message(u8"Выберите корректный ранг."); return; }
+    AppProfileMutationResult result;
+    {
+        AppWorkspaceStorageWriteLock writeLock(workspace_.directory);
+        if (!writeLock.acquired()) { message(u8"Хранилище занято другим клиентом. Повторите операцию позже."); return; }
+        result = AppAssignProfileLevel(*workspace_.storage, profileId, profileId, selectedLevel, selectedLevel);
+    }
+    if (!result.ok || !result.profile) {
+        message(result.errorMessage.empty() ? u8"Не удалось обновить ранг." : result.errorMessage);
+        return;
+    }
+    if (!reload()) return;
+    statusBar()->showMessage(QString::fromUtf8("Ранг обновлён."), 5000);
 }
 
 void QtWindow::adjustWallet() {

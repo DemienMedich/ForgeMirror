@@ -6795,8 +6795,9 @@ int main(int argc, char** argv) {
     auto* modeFocus = window.findChild<QPushButton*>("profileViewMode2");
     auto* modeTasks = window.findChild<QPushButton*>("profileViewMode3");
     auto* showAchievements = window.findChild<QPushButton*>("showAchievements");
+    auto* profileRankControls = window.findChild<QWidget*>("profileRankControls");
     if (!modeOverview || !modeAnalytics || !modeFocus || !modeTasks || !showAchievements || table->rowCount() != 4 ||
-        !modeAnalytics->isChecked() || table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3))
+        !profileRankControls || !modeAnalytics->isChecked() || table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || table->isRowHidden(3))
         return fail("Profile analytics mode did not show full skill list");
     auto* profileCharts = static_cast<QtProfileAnalytics*>(window.findChild<QWidget*>("profileAnalyticsCharts"));
     if (!profileCharts || !profileCharts->isVisible() || !profileCharts->axisControl()->isEnabled() ||
@@ -7049,6 +7050,9 @@ int main(int argc, char** argv) {
     if (table->rowCount() != 1 || !table->item(0, 0)->text().contains(QString::fromUtf8("Проверка Qt"))) return fail("Task loading failed");
     if (primary->isVisible() || !nav->item(9)->isHidden() || !nav->item(12)->isHidden()) return fail("Unauthenticated user can mutate data");
     if (window.findChild<QPushButton*>("advanceStage")->isVisible()) return fail("Unauthenticated pipeline transition visible");
+    nav->setCurrentRow(0); QApplication::processEvents();
+    if (profileRankControls->isVisible()) return fail("Unauthenticated profile rank controls are visible");
+    nav->setCurrentRow(1); QApplication::processEvents();
     search->setText("no-matches");
     if (table->rowCount() != 0) return fail("Search did not filter");
     search->clear();
@@ -7093,6 +7097,33 @@ int main(int argc, char** argv) {
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("qt-test-password"); });
     login->trigger();
     if (!primary->isVisible()) return fail("Admin login failed");
+    nav->setCurrentRow(0); QApplication::processEvents();
+    auto* profileRankChoice = window.findChild<QComboBox*>("profileRankChoice");
+    auto* profileRankApply = window.findChild<QPushButton*>("profileRankApply");
+    const auto profileBeforeRankChange = workspace.storage->load_profile();
+    if (!profileRankControls->isVisible() || !profileRankChoice || !profileRankApply ||
+        !profileRankChoice->isVisible() || !profileRankApply->isVisible() || !profileBeforeRankChange)
+        return fail("Administrator profile rank controls unavailable");
+    const int originalRankLevel = profileBeforeRankChange->overall_level();
+    const int originalRankProgress = profileBeforeRankChange->level_progress();
+    int expectedRankThreshold = 1;
+    for (int index = 0; index < profileRankChoice->count(); ++index) {
+        const int threshold = profileRankChoice->itemData(index).toInt();
+        if (threshold <= originalRankLevel) expectedRankThreshold = threshold;
+    }
+    if (profileRankChoice->currentData().toInt() != expectedRankThreshold)
+        return fail("Profile rank selection did not reflect the selected profile");
+    const int juniorRankIndex = profileRankChoice->findData(10);
+    if (juniorRankIndex < 0) return fail("Junior rank option missing");
+    profileRankChoice->setCurrentIndex(juniorRankIndex);
+    profileRankApply->click();
+    const auto assignedRank = workspace.storage->load_profile();
+    if (!assignedRank || assignedRank->overall_level() != 10 || assignedRank->level_progress() != 10)
+        return fail("Administrator rank assignment did not set the rank threshold");
+    const auto restoredRank = AppAssignProfileLevel(*workspace.storage, createdProfile->id, createdProfile->id,
+        originalRankLevel, originalRankProgress);
+    if (!restoredRank.ok || !workspace.storage->set_active_profile(createdProfile->id))
+        return fail("Profile rank fixture restore failed");
     workspace.modules.view3d = true;
     nav->item(15)->setHidden(false);
     if (nav->item(15)->isHidden()) return fail("3D viewer settings page unavailable to administrator");

@@ -76,6 +76,7 @@ private:
     void refreshAdminProfileStats();
     void reapplyRules();
     void grantDirectXp();
+    void applyProfileRank();
     void adjustWallet();
     void showWalletHistory();
     void showProfileHistory();
@@ -173,6 +174,9 @@ private:
     QPushButton* profileOverviewTaskButtons_[5]{};
     QPushButton* profileOverviewAnalytics_ = nullptr;
     QPushButton* profileOverviewXp_ = nullptr;
+    QWidget* profileRankControls_ = nullptr;
+    QComboBox* profileRankChoice_ = nullptr;
+    QPushButton* profileRankApply_ = nullptr;
     QWidget* profileViewModes_;
     QPushButton* profileViewModeButtons_[3];
     QWidget* profileTaskActions_;
