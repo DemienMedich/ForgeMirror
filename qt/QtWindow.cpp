@@ -3228,7 +3228,12 @@ void QtWindow::refreshModelChoices() {
 void QtWindow::loadSelectedModel() {
     modelSettings_.modelPath = modelPath_->text().trimmed();
     modelViewer_->setSettings(modelSettings_);
-    const auto result = modelViewer_->loadModel(std::filesystem::u8path(u(modelSettings_.modelPath)));
+    std::filesystem::path modelPath;
+    if (!modelSettings_.modelPath.isEmpty()) {
+        modelPath = std::filesystem::u8path(u(modelSettings_.modelPath));
+        if (modelPath.is_relative()) modelPath = workspace_.directory / modelPath;
+    }
+    const auto result = modelViewer_->loadModel(modelPath);
     modelStatus_->setText(result.ok
         ? QString::fromUtf8("%1 треугольников · %2").arg(result.triangles).arg(QFileInfo(modelSettings_.modelPath).fileName())
         : result.error);

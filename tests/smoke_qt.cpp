@@ -7531,10 +7531,15 @@ int main(int argc, char** argv) {
     if (!modelSettingsEventLogged) return fail("3D viewer settings save was not logged");
     auto* modelViewer = dynamic_cast<QtModelViewer*>(window.findChild<QWidget*>("modelViewport"));
     auto* modelAutoRotate = window.findChild<QCheckBox*>("modelAutoRotate");
+    auto* modelPath = window.findChild<QLineEdit*>("modelPath");
     auto* modelPitch = window.findChild<QSlider*>("modelPitch");
     auto* modelZoom = window.findChild<QSlider*>("modelZoom");
-    if (!modelViewer || !modelAutoRotate || !modelPitch || !modelZoom)
+    if (!modelViewer || !modelAutoRotate || !modelPath || !modelPitch || !modelZoom)
         return fail("3D viewer interaction controls unavailable");
+    modelPath->setText(QStringLiteral("models/alpha.obj"));
+    QMetaObject::invokeMethod(modelPath, "editingFinished", Qt::DirectConnection);
+    if (modelViewer->triangleCount() != 1)
+        return fail("3D viewer did not resolve a legacy workspace-relative model path");
     const int alphaModelIndex = modelChoice->findData(QStringLiteral("alpha.obj"));
     if (alphaModelIndex < 0) return fail("3D viewer interaction model fixture unavailable");
     modelChoice->setCurrentIndex(alphaModelIndex);
