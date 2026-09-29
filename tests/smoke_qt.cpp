@@ -1961,6 +1961,94 @@ static bool TestStorageConflictResolver() {
     return true;
 }
 
+static bool TestProfileManagerFilters() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    workspace.data.professions.push_back({"artist", "Artist", "Visual work"});
+    auto createProfile = [&](const QString& name, const QString& login, const std::string& profession, bool archived = false) {
+        Profile profile(name.toUtf8().toStdString());
+        profile.set_login(login.toUtf8().toStdString());
+        profile.set_profession_id(profession);
+        auto created = workspace.storage->create_profile(profile);
+        if (!created || (archived && !workspace.storage->set_archived(created->id, true))) return std::string{};
+        return created->id;
+    };
+    const auto zuluId = createProfile(QString::fromUtf8("Zulu"), QString::fromUtf8("artist-login"), "artist");
+    const auto alphaId = createProfile(QString::fromUtf8("Alpha"), QString::fromUtf8("plain-login"), "");
+    const auto archivedId = createProfile(QString::fromUtf8("Archived artist"), QString::fromUtf8("old-login"), "artist", true);
+    if (zuluId.empty() || alphaId.empty() || archivedId.empty() || !workspace.storage->set_active_profile(alphaId)) return false;
+
+    bool checks = true;
+    auto expect = [&](bool condition, const char* step) {
+        if (condition) return;
+        checks = false;
+        std::cerr << "profileManagerFilters: " << step << '\n';
+    };
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "profileManager") { checks = false; return; }
+        auto* table = dialog->findChild<QTableWidget*>("profileRecords");
+        auto* search = dialog->findChild<QLineEdit*>("profileSearch");
+        auto* archive = dialog->findChild<QComboBox*>("profileArchiveFilter");
+        auto* profession = dialog->findChild<QComboBox*>("profileProfessionFilter");
+        auto* sort = dialog->findChild<QComboBox*>("profileSort");
+        auto* refresh = dialog->findChild<QPushButton*>("refreshProfiles");
+        expect(table && table->columnCount() == 4 && search && archive && profession && sort && refresh, "controls");
+        if (!checks) { dialog->reject(); return; }
+        auto rowWithId = [&](const QString& id) {
+            for (int row = 0; row < table->rowCount(); ++row)
+                if (table->item(row, 1) && table->item(row, 1)->text() == id) return row;
+            return -1;
+        };
+        expect(table->rowCount() == 3, "initial row count");
+        expect(table->rowCount() > 0 && table->item(0, 1) &&
+            table->item(0, 1)->text() == QString::fromStdString(std::min(zuluId, std::min(alphaId, archivedId))), "id order");
+        search->setText(QString::fromUtf8("Alpha"));
+        expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(alphaId)) == 0, "name search");
+        search->setText(QString::fromStdString(zuluId));
+        expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(zuluId)) == 0, "id search");
+        search->clear();
+        const int zuluRow = rowWithId(QString::fromStdString(zuluId));
+        expect(zuluRow >= 0 && table->item(zuluRow, 2) && table->item(zuluRow, 2)->text() == QString::fromUtf8("Artist"), "profession column");
+
+        archive->setCurrentIndex(1);
+        expect(table->rowCount() == 2 && rowWithId(QString::fromStdString(archivedId)) == -1, "active filter");
+        archive->setCurrentIndex(2);
+        expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(archivedId)) == 0, "archive filter");
+        archive->setCurrentIndex(0);
+
+        profession->setCurrentIndex(profession->findData(QStringLiteral("artist")));
+        expect(profession->currentData().toString() == QStringLiteral("artist") && table->rowCount() == 2, "profession filter");
+        search->setText(QString::fromUtf8("artist-login"));
+        expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(zuluId)) == 0, "login search");
+        search->clear();
+        profession->setCurrentIndex(profession->findData(QStringLiteral("__none__")));
+        expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(alphaId)) == 0, "no profession filter");
+
+        profession->setCurrentIndex(0);
+        search->setText(QString::fromUtf8("Artist"));
+        expect(table->rowCount() == 2, "profession search");
+        search->clear();
+        sort->setCurrentIndex(1);
+        expect(table->rowCount() == 3 && table->item(0, 0)->text() == QString::fromUtf8("Alpha"), "name order");
+
+        Profile external(QString::fromUtf8("External profile").toUtf8().toStdString());
+        const auto externalProfile = workspace.storage->create_profile(external);
+        expect(bool(externalProfile), "external profile setup");
+        if (externalProfile) {
+            expect(workspace.storage->set_active_profile(alphaId), "restore active profile before refresh");
+            refresh->click();
+            expect(table->rowCount() == 4, "manual refresh");
+        }
+        if (const auto active = workspace.storage->load_profile()) expect(active->login() == "plain-login", "preserved active profile");
+        else expect(false, "active profile readable");
+        dialog->reject();
+    });
+    ShowProfileManager(nullptr, workspace, QString::fromStdString(alphaId));
+    return checks;
+}
+
 static bool TestProfileDialogs() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -2118,11 +2206,12 @@ static bool TestProfileDialogs() {
         QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
         archive->click();
         checks &= !delegate->set_active_profile(created->id);
-        manager->findChild<QCheckBox*>("showArchivedProfiles")->setChecked(true);
+        manager->findChild<QComboBox*>("profileArchiveFilter")->setCurrentIndex(2);
         select();
         checks &= !manager->findChild<QPushButton*>("editProfile")->isEnabled();
         archive->click();
         checks &= delegate->set_active_profile(created->id);
+        manager->findChild<QComboBox*>("profileArchiveFilter")->setCurrentIndex(1);
         select();
         QTimer::singleShot(0, [&] {
             auto* password = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -2179,7 +2268,7 @@ static bool TestProfileDialogs() {
         selectId(disposableId);
         QTimer::singleShot(0, [] { if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) box->button(QMessageBox::Yes)->click(); });
         archive->click();
-        manager->findChild<QCheckBox*>("showArchivedProfiles")->setChecked(true);
+        manager->findChild<QComboBox*>("profileArchiveFilter")->setCurrentIndex(2);
         selectId(disposableId);
         auto* permanentDelete = manager->findChild<QPushButton*>("deleteArchivedProfile");
         checks &= permanentDelete && permanentDelete->isEnabled();
@@ -6529,6 +6618,7 @@ int main(int argc, char** argv) {
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }
     if (!TestProjectDeletionRecovery()) { std::cerr << "Project deletion recovery failed\n"; return 1; }
+    if (!TestProfileManagerFilters()) { std::cerr << "Profile manager filters failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }

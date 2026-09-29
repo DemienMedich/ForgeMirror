@@ -175,30 +175,53 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     auto* layout = new QVBoxLayout(&dialog);
     layout->setContentsMargins(16, 16, 16, 16);
     layout->setSpacing(8);
-    auto* toolbar = new QHBoxLayout;
+    auto* filters = new QGridLayout;
     auto* search = new QLineEdit;
-    search->setPlaceholderText(QString::fromUtf8("Поиск по имени или ID"));
+    search->setPlaceholderText(QString::fromUtf8("Поиск по имени, ID, логину или профессии"));
     search->setClearButtonEnabled(true);
     search->setObjectName("profileSearch");
     search->setAccessibleName(QString::fromUtf8("Поиск профилей"));
-    search->setAccessibleDescription(QString::fromUtf8("Фильтрует профили по имени или идентификатору."));
-    auto* archived = new QCheckBox(QString::fromUtf8("Показать архив"));
-    archived->setObjectName("showArchivedProfiles");
+    search->setAccessibleDescription(QString::fromUtf8("Фильтрует по имени, идентификатору, логину или профессии."));
+    auto* archiveFilter = new QComboBox;
+    archiveFilter->setObjectName("profileArchiveFilter");
+    archiveFilter->addItems({QString::fromUtf8("Все профили"), QString::fromUtf8("Активные"), QString::fromUtf8("Архив")});
+    archiveFilter->setAccessibleName(QString::fromUtf8("Состояние профилей"));
+    auto* professionFilter = new QComboBox;
+    professionFilter->setObjectName("profileProfessionFilter");
+    professionFilter->addItem(QString::fromUtf8("Все профессии"), QString());
+    professionFilter->addItem(QString::fromUtf8("Без профессии"), QStringLiteral("__none__"));
+    for (const auto& profession : workspace.data.professions) {
+        if (profession.id.empty()) continue;
+        professionFilter->addItem(q(profession.name), q(profession.id));
+    }
+    professionFilter->setAccessibleName(QString::fromUtf8("Фильтр по профессии"));
+    auto* sort = new QComboBox;
+    sort->setObjectName("profileSort");
+    sort->addItems({QString::fromUtf8("Сортировка: ID"), QString::fromUtf8("Сортировка: имя")});
+    sort->setAccessibleName(QString::fromUtf8("Сортировка профилей"));
     auto* create = new QPushButton(QString::fromUtf8("Создать профиль"));
     create->setObjectName("createProfile");
     create->setProperty("primary", true);
     create->setFixedHeight(32);
-    toolbar->addWidget(search, 1);
-    toolbar->addWidget(archived);
-    toolbar->addWidget(create);
-    layout->addLayout(toolbar);
+    auto* refreshProfiles = new QPushButton(QString::fromUtf8("Обновить список"));
+    refreshProfiles->setObjectName("refreshProfiles");
+    filters->addWidget(search, 0, 0, 1, 3);
+    filters->addWidget(create, 0, 3);
+    filters->addWidget(archiveFilter, 1, 0);
+    filters->addWidget(professionFilter, 1, 1);
+    filters->addWidget(sort, 1, 2);
+    filters->addWidget(refreshProfiles, 1, 3);
+    layout->addLayout(filters);
     auto* table = new QTableWidget;
     table->setObjectName("profileRecords");
     table->setAccessibleName(QString::fromUtf8("Список профилей"));
-    table->setAccessibleDescription(QString::fromUtf8("Таблица профилей с идентификатором и состоянием; выберите строку для доступных действий."));
-    table->setColumnCount(3);
-    table->setHorizontalHeaderLabels({QString::fromUtf8("Профиль"), "ID", QString::fromUtf8("Состояние")});
+    table->setAccessibleDescription(QString::fromUtf8("Таблица профилей с ID, профессией и состоянием; выберите строку для доступных действий."));
+    table->setColumnCount(4);
+    table->setHorizontalHeaderLabels({QString::fromUtf8("Профиль"), "ID", QString::fromUtf8("Профессия"), QString::fromUtf8("Состояние")});
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     table->verticalHeader()->hide();
     table->verticalHeader()->setDefaultSectionSize(28);
     table->setShowGrid(false);
@@ -269,7 +292,9 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     layout->addWidget(close);
     QObject::connect(close, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     auto selected = [&]() -> std::optional<IJobStorage::ProfileInfo> {
-        auto* item = table->item(table->currentRow(), 0);
+        const int currentRow = table->currentRow();
+        if (currentRow < 0) return {};
+        auto* item = table->item(currentRow, 0);
         if (!item) return {};
         const auto id = u(item->data(Qt::UserRole).toString());
         for (const auto& p : workspace.profiles) if (p.id == id) return p;
@@ -286,34 +311,61 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     auto refresh = [&] {
         const auto previous = selected();
         workspace.profiles = workspace.storage->list_profiles();
-        std::sort(workspace.profiles.begin(), workspace.profiles.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
+        const bool sortByName = sort->currentIndex() == 1;
+        std::sort(workspace.profiles.begin(), workspace.profiles.end(), [sortByName](const auto& a, const auto& b) {
+            if (sortByName) {
+                const auto left = QString::fromUtf8(a.name.data(), int(a.name.size()));
+                const auto right = QString::fromUtf8(b.name.data(), int(b.name.size()));
+                const int compare = QString::compare(left, right, Qt::CaseInsensitive);
+                if (compare != 0) return compare < 0;
+            }
+            return a.id < b.id;
+        });
         QSignalBlocker blocker(table);
         table->setRowCount(0);
         for (const auto& p : workspace.profiles) {
-            if (p.archived && !archived->isChecked()) continue;
-            if (!(q(p.name) + " " + q(p.id)).contains(search->text(), Qt::CaseInsensitive)) continue;
+            const int archiveMode = archiveFilter->currentIndex();
+            if (archiveMode == 1 && p.archived) continue;
+            if (archiveMode == 2 && !p.archived) continue;
+            const auto snapshot = workspace.storage->load_profile_snapshot(p.id, true);
+            const std::string professionId = snapshot ? snapshot->profession_id() : std::string{};
+            const QString selectedProfession = professionFilter->currentData().toString();
+            if (selectedProfession == QStringLiteral("__none__") && !professionId.empty()) continue;
+            if (!selectedProfession.isEmpty() && selectedProfession != QStringLiteral("__none__") &&
+                selectedProfession != q(professionId)) continue;
+            QString professionName;
+            for (const auto& profession : workspace.data.professions) {
+                if (profession.id == professionId) { professionName = q(profession.name); break; }
+            }
+            if (professionName.isEmpty() && !professionId.empty()) professionName = q(professionId);
+            const QString login = snapshot && !snapshot->login().empty() ? q(snapshot->login()) : q(p.id);
+            const QString profileName = q(p.name);
+            const QString query = search->text().trimmed();
+            if (!query.isEmpty() && !(profileName + " " + q(p.id) + " " + login + " " + professionName)
+                    .contains(query, Qt::CaseInsensitive)) continue;
             int row = table->rowCount();
             table->insertRow(row);
-            table->setItem(row, 0, new QTableWidgetItem(q(p.name)));
-            table->item(row, 0)->setToolTip(q(p.name));
+            table->setItem(row, 0, new QTableWidgetItem(profileName));
+            table->item(row, 0)->setToolTip(profileName);
             table->item(row, 0)->setData(Qt::UserRole, q(p.id));
             table->setItem(row, 1, new QTableWidgetItem(q(p.id)));
             QString state = QString::fromUtf8("Архив");
             if (!p.archived) {
-                std::optional<Profile> profile;
-                if (workspace.storage->set_active_profile(p.id)) profile = workspace.storage->load_profile();
-                state = !profile ? QString::fromUtf8("Ошибка чтения") :
-                    (profile->is_blocked() ? QString::fromUtf8("Заблокирован") : QString::fromUtf8("Доступен"));
+                state = !snapshot ? QString::fromUtf8("Ошибка чтения") :
+                    (snapshot->is_blocked() ? QString::fromUtf8("Заблокирован") : QString::fromUtf8("Доступен"));
             }
-            table->setItem(row, 2, new QTableWidgetItem(state));
+            table->setItem(row, 2, new QTableWidgetItem(professionName.isEmpty() ? QString::fromUtf8("—") : professionName));
+            table->setItem(row, 3, new QTableWidgetItem(state));
             if (previous && previous->id == p.id) table->selectRow(row);
         }
-        if (!activeId.isEmpty()) workspace.storage->set_active_profile(u(activeId));
         selection();
     };
     QObject::connect(table, &QTableWidget::itemSelectionChanged, &dialog, selection);
     QObject::connect(search, &QLineEdit::textChanged, &dialog, refresh);
-    QObject::connect(archived, &QCheckBox::toggled, &dialog, refresh);
+    QObject::connect(archiveFilter, &QComboBox::currentIndexChanged, &dialog, refresh);
+    QObject::connect(professionFilter, &QComboBox::currentIndexChanged, &dialog, refresh);
+    QObject::connect(sort, &QComboBox::currentIndexChanged, &dialog, refresh);
+    QObject::connect(refreshProfiles, &QPushButton::clicked, &dialog, refresh);
     QObject::connect(create, &QPushButton::clicked, &dialog, [&] {
         if (!canWrite(workspace, status)) return;
         bool ok = false;
