@@ -163,10 +163,43 @@ bool ShowRulesEditor(QWidget* parent, QtWorkspace& workspace) {
     form->addRow(QString::fromUtf8("Линейный прирост"), levelLinear);
     form->addRow(QString::fromUtf8("Квадратичный прирост"), levelQuadratic);
     std::array<QSpinBox*, Profile::kCategoryCount> categories{};
+    std::array<QLabel*, Profile::kCategoryCount> categoryLabels{};
     for (size_t i = 0; i < categories.size(); ++i) {
         categories[i] = integerField(content, ("rulesCategory" + std::to_string(i)).c_str(), current.categoryBaseXp[i]);
-        form->addRow(QString::fromUtf8("Категория %1 · базовый XP").arg(QString::fromUtf8(Profile::kCategoryLabels[i])), categories[i]);
+        categoryLabels[i] = new QLabel(QString::fromUtf8("Категория %1 · базовый XP").arg(QString::fromUtf8(Profile::kCategoryLabels[i])), content);
+        categoryLabels[i]->setObjectName(QString::fromLatin1("rulesCategoryLabel%1").arg(int(i)));
+        categoryLabels[i]->setBuddy(categories[i]);
+        form->addRow(categoryLabels[i], categories[i]);
     }
+    auto* categoryAttention = new QLabel(content);
+    categoryAttention->setObjectName("rulesCategoryAttention");
+    categoryAttention->setWordWrap(true);
+    categoryAttention->setStyleSheet(QStringLiteral("color: palette(link); font-weight: 600;"));
+    form->addRow(categoryAttention);
+    auto refreshCategoryAttention = [&] {
+        const auto minIt = std::min_element(categories.begin(), categories.end(), [](const auto* lhs, const auto* rhs) {
+            return lhs->value() < rhs->value();
+        });
+        const int minimum = (*minIt)->value();
+        const int maximum = (*std::max_element(categories.begin(), categories.end(), [](const auto* lhs, const auto* rhs) {
+            return lhs->value() < rhs->value();
+        }))->value();
+        const bool show = categories.size() >= 2 && maximum - minimum >= 2;
+        const int minIndex = int(std::distance(categories.begin(), minIt));
+        categoryAttention->setVisible(show);
+        categoryAttention->setText(show
+            ? QString::fromUtf8("Зона внимания: категория %1 (%2 XP)")
+                .arg(QString::fromUtf8(Profile::kCategoryLabels[size_t(minIndex)])).arg(minimum)
+            : QString{});
+        for (size_t i = 0; i < categoryLabels.size(); ++i) {
+            auto font = categoryLabels[i]->font();
+            font.setBold(show && int(i) == minIndex);
+            categoryLabels[i]->setFont(font);
+        }
+    };
+    for (auto* category : categories)
+        QObject::connect(category, qOverload<int>(&QSpinBox::valueChanged), &dialog, refreshCategoryAttention);
+    refreshCategoryAttention();
     auto* focusBase = factorField(content, "rulesFocusBase", current.focusBaseBonus, 10.0);
     auto* focusExtra = factorField(content, "rulesFocusExtra", current.focusAdditionalBonus, 10.0);
     auto* repeat = factorField(content, "rulesRepeat", current.repeatRewardFactor, 1.0);

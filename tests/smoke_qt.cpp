@@ -6009,7 +6009,20 @@ static bool TestRulesEditor() {
         auto* repeat = dialog ? dialog->findChild<QDoubleSpinBox*>("rulesRepeat") : nullptr;
         auto* buttons = dialog ? dialog->findChild<QDialogButtonBox*>() : nullptr;
         auto* savePreset = dialog ? dialog->findChild<QPushButton*>("rulesSavePreset") : nullptr;
-        if (!base || !repeat || !buttons || !savePreset) { if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject(); return; }
+        auto* attention = dialog ? dialog->findChild<QLabel*>("rulesCategoryAttention") : nullptr;
+        auto* categoryLabel = dialog ? dialog->findChild<QLabel*>("rulesCategoryLabel0") : nullptr;
+        if (!base || !repeat || !buttons || !savePreset || !attention || !categoryLabel) {
+            if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject(); return;
+        }
+        for (int index = 0; index < int(Profile::kCategoryCount); ++index)
+            dialog->findChild<QSpinBox*>(QString::fromLatin1("rulesCategory%1").arg(index))->setValue(20);
+        dialog->findChild<QSpinBox*>("rulesCategory0")->setValue(18);
+        if (attention->isHidden() ||
+            !attention->text().contains(QString::fromUtf8(Profile::kCategoryLabels[0])) ||
+            !categoryLabel->font().bold()) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        dialog->findChild<QSpinBox*>("rulesCategory0")->setValue(19);
+        if (!attention->isHidden() || categoryLabel->font().bold()) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        dialog->findChild<QSpinBox*>("rulesCategory0")->setValue(18);
         base->setValue(2345); repeat->setValue(0.55);
         QTimer::singleShot(0, [] {
             auto* input = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
