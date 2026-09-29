@@ -6727,8 +6727,13 @@ int main(int argc, char** argv) {
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
     auto* shortcutHelpAction = window.findChild<QAction*>("shortcutHelpAction");
+    auto* navigateF5 = window.findChild<QShortcut*>("navigationF5");
     auto* navigateF6 = window.findChild<QShortcut*>("navigationF6");
-    if (!navigateF6 || navigateF6->property("navigationPageIndex").toInt() != 16 ||
+    if (!navigateF5 || navigateF5->property("navigationPageIndex").toInt() != 17 ||
+        nav->item(17)->text() != QString::fromUtf8("Статистика профилей") ||
+        !nav->item(17)->toolTip().contains(QStringLiteral("F5")) ||
+        nav->item(6)->toolTip().contains(QStringLiteral("F5")) ||
+        !navigateF6 || navigateF6->property("navigationPageIndex").toInt() != 16 ||
         nav->item(16)->text() != QString::fromUtf8("Логи") ||
         !nav->item(16)->toolTip().contains(QStringLiteral("F6")) ||
         nav->item(7)->toolTip().contains(QStringLiteral("F6")))
@@ -6751,6 +6756,8 @@ int main(int argc, char** argv) {
         auto* helpTable = dialog ? dialog->findChild<QTableWidget*>("shortcutHelpTable") : nullptr;
         shortcutHelpChecked = dialog && dialog->objectName() == "shortcutHelp" && helpTable && helpTable->rowCount() == 17 &&
             helpTable->item(8, 0)->text() == "Ctrl+N" && helpTable->item(13, 0)->text() == "Ctrl+/" &&
+            helpTable->item(4, 0)->text() == "F5" &&
+            helpTable->item(4, 1)->text() == QString::fromUtf8("Статистика профилей") &&
             helpTable->item(14, 0)->text() == "F10" && helpTable->item(15, 0)->text() == "Ctrl+F10" &&
             helpTable->item(5, 0)->text() == "F6" &&
             helpTable->item(5, 1)->text() == QString::fromUtf8("Логи") &&

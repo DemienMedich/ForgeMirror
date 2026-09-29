@@ -1,0 +1,18 @@
+# ForgeMirror Qt 0.6.71 release verification
+
+- Canonical version: root `VERSION` = `0.6.71`.
+- Scope: stage 226 restores the legacy F5 destination. Stable ImGui F5 opens its profile statistics dashboard; Qt now targets **Статистика профилей**, not the newer task **Статистика** reports page. Stage 225 separately restored F6 to **Логи**. Both mappings appear on the corresponding navigation rows and in shortcut help.
+- Windows installer: `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.71.exe`; 11,571,861 bytes; FileVersion/ProductVersion `0.6.71`; SHA-256 `B82935EEA1478BE00243736F493986B47A25292E2EDD178CA761D01DC3F5E506`.
+- Packaged Qt executable: `Z:\CPP\ForgeMirror\package-qt-0.6.71\ForgeMirrorQt.exe`; 3,412,992 bytes; FileVersion/ProductVersion `0.6.71`; SHA-256 `5117DA6F82B5FDF517255FEFF15C5BA2617295EED1AF4E49E7F5508DC9A9F3E7`.
+- ImGui compatibility executable, rebuilt with the same canonical version: `Z:\CPP\ForgeMirror\build-gui\Release-0.6.71\ForgeMirrorGui.exe`; 2,978,816 bytes; FileVersion/ProductVersion `0.6.71`; SHA-256 `B3F21722F8DDF52990A202E03DF1B537A214B90AEC6CE5FD835AE86F42875D95`. The existing ImGui executable in `build-gui\Release` was open in a running process, so the updated binary was built to this separate output path without stopping or replacing that process.
+- The production installer keeps AppId `{8B99E76B-4510-49D8-AE45-9DDF85EA21DC}` and per-user installation. Isolated lifecycle verification used temporary AppId `{D84158C5-6DE7-4E12-9B6B-4E2C288C1B0C}` and an installation directory under `build-qt`; production install and AppId were not used. The package contains no developer `data` directory.
+
+## Verification
+
+- `build-qt.ps1 -Package -PackageDirectory package-qt-0.6.71` passed. CTest `smoke_qt` passed 1/1 in 26.69 seconds; `smoke_core` reported `OK`. The Qt smoke verifies F5 resolves to navigation row 17 (**Статистика профилей**) and F6 to row 16 (**Логи**), with both hints absent from the new Reports and Audit pages respectively; the shortcut-help table names the same destinations.
+- With `PATH` restricted to Windows system directories and Qt plugin overrides removed, packaged `--smoke-test` exited 0 and saved `Z:\CPP\ForgeMirror\build-qt\runtime-0.6.71.png` (50,766 bytes). EXE FileVersion and ProductVersion both match the installer version.
+- The isolated lifecycle compiled the same installer script for 0.6.70 and 0.6.71 with the temporary AppId and install path. The 0.6.70 install's uninstall `DisplayVersion` and EXE ProductVersion matched, and its real-window startup smoke passed with minimal `PATH` (exit 0; screenshot 52,224 bytes). Updating in place to 0.6.71 changed the registered and EXE versions to `0.6.71`; the updated EXE startup smoke also passed (exit 0; screenshot 52,283 bytes).
+- Silent uninstall exited 0 and removed the isolated EXE and uninstall registration. External user-data marker SHA-256 remained `F85DD9FFCA9F9EF649BA060003110BECDBC923CBD193CCE1C272067CC8D6FC83`; workspace marker remained `ED56255B852E200D900CAA12FD67FD92DCF4D1D0182481A36407832C86D6F857`.
+- Installer compilation used Inno Setup 6.7.3. Production installation was not touched; `develop` and `origin/develop` remain at `7306152c603ff8007200f64e63c4188510d55588`. `git diff --check` passed before commit.
+
+Functional migration remains an expert estimate of about 90%, not a code or test percentage. Qt has surfaces for the 18 legacy workspace tabs; the action-level audit has now corrected F5 and F6, but more old actions still need direct comparison. Hands-on NVDA/JAWS testing, wider non-UI core event coverage, and older/external writers that bypass the shared lock remain follow-up items after migration parity.
