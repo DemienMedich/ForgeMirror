@@ -5228,6 +5228,47 @@ static bool TestQtTaskTableDateAndAssignees() {
     return table->rowCount() == 1 && table->item(0, 0)->data(Qt::UserRole).toString() == "table-metadata";
 }
 
+static bool TestQtTaskContextDetails() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    const auto profile = workspace.storage->create_profile(Profile(u8"Участник контекста"));
+    if (!profile) return false;
+    ProjectEntry project; project.id = "context-project"; project.name = u8"Проект контекста";
+    PipelineStep next; next.id = "context-next"; next.stageCode = "B"; next.title = u8"Проверка";
+    PipelineStep current; current.id = "context-current"; current.stageCode = "A"; current.title = u8"Разработка";
+    current.nextIds = {next.id}; current.hints = {u8"Проверить сборку", u8"Проверить журнал", u8"Передать результат", u8"Зафиксировать итог"};
+    TaskEntry task; task.id = "context-task"; task.title = u8"Собрать Qt-клиент"; task.description = u8"Описание контекста";
+    task.projectId = project.id; task.pipelineStepId = current.id; task.skillIds = {u8"Моделирование"};
+    task.participants.push_back({profile->id, 70, 8, 5, {}});
+    workspace.data.projects = {project};
+    workspace.data.pipelineSteps = {current, next};
+    workspace.data.tasks = {task};
+    if (!AppSaveProjects(directory, workspace.data.projects) ||
+        !AppSavePipelineData(directory, workspace.data.pipelineSteps) ||
+        !AppSaveTasks(directory, workspace.data.tasks)) return false;
+    workspace.reload();
+
+    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* details = window.findChild<QTextBrowser*>("details");
+    if (!navigation || !table || !details) return false;
+    navigation->setCurrentRow(1);
+    if (table->rowCount() != 1) return false;
+    table->selectRow(0); QApplication::processEvents();
+    const QString text = details->toPlainText();
+    const bool result = text.contains(QString::fromUtf8("Проект контекста")) &&
+        text.contains(QString::fromUtf8("A · Разработка")) &&
+        text.contains(QString::fromUtf8("Следующий шаг")) && text.contains(QString::fromUtf8("B · Проверка")) &&
+        text.contains(QString::fromUtf8("Моделирование")) && text.contains(QString::fromUtf8("Участник контекста")) &&
+        text.contains(QString::fromUtf8("Проверить сборку")) && text.contains(QString::fromUtf8("Ещё: 1")) &&
+        text.contains(QString::fromUtf8("8 / 5"));
+    if (!result) std::cerr << "Task context detail text: " << text.toUtf8().constData() << "\n";
+    return result;
+}
+
 static bool TestQtTaskAttentionBadges() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -6873,6 +6914,7 @@ int main(int argc, char** argv) {
     if (!TestQtTaskFilterReset()) { std::cerr << "Qt task filter reset failed\n"; return 1; }
     if (!TestQtVisibleTaskSelectionTools()) { std::cerr << "Qt visible task selection tools failed\n"; return 1; }
     if (!TestQtTaskTableDateAndAssignees()) { std::cerr << "Qt task table date and assignees failed\n"; return 1; }
+    if (!TestQtTaskContextDetails()) { std::cerr << "Qt task context details failed\n"; return 1; }
     if (!TestQtTaskAttentionBadges()) { std::cerr << "Qt task attention badges failed\n"; return 1; }
     if (!TestQtTaskFocusAndOverdueTint()) { std::cerr << "Qt task focus and overdue tint failed\n"; return 1; }
     if (!TestCatalogProfessionFilter()) { std::cerr << "Catalog profession filter failed\n"; return 1; }

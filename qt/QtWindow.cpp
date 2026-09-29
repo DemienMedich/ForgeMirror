@@ -5868,20 +5868,93 @@ void QtWindow::details() {
     if (page == Tasks) {
         for (const auto& task : workspace_.data.tasks) if (task.id == id) {
             QStringList assignees;
-            for (const auto& value : task.assignees) assignees << q(value);
+            auto addAssignee = [&](const std::string& profileId) {
+                if (profileId.empty()) return;
+                const auto found = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
+                    [&](const auto& profile) { return profile.id == profileId; });
+                const auto name = found == workspace_.profiles.end() ? q(profileId) : q(found->name);
+                if (!assignees.contains(name)) assignees << name;
+            };
+            for (const auto& value : task.assignees) addAssignee(value);
+            if (assignees.isEmpty())
+                for (const auto& participant : task.participants) addAssignee(participant.profileId);
+            QStringList skillNames;
+            for (const auto& skillId : task.skillIds) {
+                const auto name = q(workspace_.catalog.display_name(skillId));
+                if (!name.isEmpty()) skillNames << name;
+            }
+            const int shownSkills = std::min(6, int(skillNames.size()));
+            const QString skillSummary = skillNames.mid(0, shownSkills).join(QString::fromUtf8(", ")) +
+                (skillNames.size() > shownSkills ? QString::fromUtf8(" +%1").arg(skillNames.size() - shownSkills) : QString());
+            const auto project = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+                [&](const auto& item) { return !task.projectId.empty() && item.id == task.projectId; });
+            const QString projectName = project != workspace_.data.projects.end() ? q(project->name)
+                : !task.project.empty() ? q(task.project) : QString::fromUtf8("Без проекта");
+            const auto pipeline = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+                [&](const auto& item) { return !task.pipelineStepId.empty() && item.id == task.pipelineStepId; });
+            const PipelineStep* currentStep = pipeline == workspace_.data.pipelineSteps.end() ? nullptr : &*pipeline;
+            if (!currentStep && !task.pipelineStep.empty()) {
+                const auto legacyStep = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+                    [&](const auto& item) { return item.title == task.pipelineStep || item.stageCode == task.pipelineStep; });
+                if (legacyStep != workspace_.data.pipelineSteps.end()) currentStep = &*legacyStep;
+            }
+            const QString pipelineName = currentStep
+                ? q(currentStep->stageCode.empty() ? currentStep->title : currentStep->stageCode + " · " + currentStep->title)
+                : task.pipelineStep.empty() ? QString::fromUtf8("Без этапа") : q(task.pipelineStep);
+            QString nextSummary;
+            QString hintsSummary;
+            if (currentStep) {
+                if (!currentStep->nextStageLabel.empty()) {
+                    nextSummary = q(currentStep->nextStageLabel);
+                } else if (currentStep->nextIds.empty()) {
+                    nextSummary = QString::fromUtf8("Финишный handoff");
+                } else {
+                    QStringList nextNames;
+                    for (const auto& nextId : currentStep->nextIds) {
+                        const auto next = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+                            [&](const auto& item) { return item.id == nextId; });
+                        if (next == workspace_.data.pipelineSteps.end()) continue;
+                        nextNames << q(next->stageCode.empty() ? next->title : next->stageCode + " · " + next->title);
+                    }
+                    nextSummary = currentStep->nextIds.size() > 1
+                        ? QString::fromUtf8("Ветвление: %1").arg(nextNames.join(QString::fromUtf8(" | ")))
+                        : nextNames.isEmpty() ? QString::fromUtf8("Следующий этап не найден") : nextNames.front();
+                }
+                QStringList visibleHints;
+                for (int index = 0; index < std::min(3, int(currentStep->hints.size())); ++index)
+                    visibleHints << q(currentStep->hints[size_t(index)]);
+                if (currentStep->hints.size() > size_t(visibleHints.size()))
+                    visibleHints << QString::fromUtf8("Ещё: %1").arg(int(currentStep->hints.size()) - visibleHints.size());
+                hintsSummary = visibleHints.join(QString::fromUtf8("\n"));
+            }
             std::string xp;
+            int totalGlobalXp = 0;
+            int totalSkillXp = 0;
             for (const auto& participant : task.participants) {
                 const auto found = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(),
                     [&](const auto& profile) { return profile.id == participant.profileId; });
                 xp += (found == workspace_.profiles.end() ? participant.profileId : found->name) + " (" +
                     std::to_string(participant.percent) + "%): " + std::to_string(participant.globalXp) +
                     u8" XP, навыки " + std::to_string(participant.skillXp) + " XP\n";
+                totalGlobalXp += participant.globalXp;
+                totalSkillXp += participant.skillXp;
             }
-            details_->setHtml(field(QString::fromUtf8("Задача"), task.title) + field(QString::fromUtf8("Описание"), task.description)
-                + field(QString::fromUtf8("Исполнители"), u(assignees.join(", ")))
+            QString html = field(QString::fromUtf8("Задача"), task.title) + field(QString::fromUtf8("Описание"), task.description)
+                + field(QString::fromUtf8("Проект"), projectName.toUtf8().toStdString())
+                + field(QString::fromUtf8("Этап"), pipelineName.toUtf8().toStdString())
+                + field(QString::fromUtf8("Следующий шаг"), nextSummary.toUtf8().toStdString())
+                + field(QString::fromUtf8("Подсказки этапа"), hintsSummary.toUtf8().toStdString())
+                + field(QString::fromUtf8("Навыки задачи"), (skillSummary.isEmpty() ? QString::fromUtf8("Не выбраны") : skillSummary).toUtf8().toStdString())
+                + field(QString::fromUtf8("Исполнители"), (assignees.isEmpty() ? QString::fromUtf8("Не назначены") : assignees.join(", ")).toUtf8().toStdString())
                 + field(QString::fromUtf8("Категория"), Profile::kCategoryLabels[std::clamp(task.category, 0, 4)])
-                + field(QString::fromUtf8("Штраф за срок"), std::to_string(task.deadlinePenaltyPercent) + "%")
-                + (xp.empty() ? QString() : field(QString::fromUtf8("Начисленный XP"), xp)));
+                + field(QString::fromUtf8("Приоритет"), AppTaskPriorityLabel(task.priority))
+                + field(QString::fromUtf8("Срок"), timeText(task.deadlineAt).toUtf8().toStdString())
+                + field(QString::fromUtf8("Штраф за срок"), std::to_string(task.deadlinePenaltyPercent) + "%");
+            if (!task.participants.empty())
+                html += field(QString::fromUtf8("Итоговый XP: глобальный / навыки"),
+                    std::to_string(totalGlobalXp) + " / " + std::to_string(totalSkillXp));
+            if (!xp.empty()) html += field(QString::fromUtf8("Начисленный XP по участникам"), xp);
+            details_->setHtml(html);
         }
     } else if (page == Statistics && table_->currentRow() >= 0) {
         const auto targetId = selectedId();
