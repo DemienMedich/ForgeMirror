@@ -527,6 +527,9 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "taskProjectId") out.taskProjectId = value;
             else if (key == "taskPipelineStepId") out.taskPipelineStepId = value;
             else if (key == "catalogProfessionId") out.catalogProfessionId = value;
+            else if (key == "catalogSortMode") { bool ok = false; const int index = value.toInt(&ok); out.catalogSortMode = ok ? std::clamp(index, 0, 1) : 0; }
+            else if (key == "catalogGroupMode") { bool ok = false; const int index = value.toInt(&ok); out.catalogGroupMode = ok ? std::clamp(index, 0, 1) : 0; }
+            else if (key == "catalogWeightCategory") { bool ok = false; const int index = value.toInt(&ok); out.catalogWeightCategory = ok ? std::clamp(index, 0, 5) : 0; }
             else if (key == "reportView") { bool ok = false; const int index = value.toInt(&ok); out.reportView = ok ? std::clamp(index, 0, 7) : 0; }
             else if (key == "reportDateRange") { bool ok = false; const int index = value.toInt(&ok); out.reportDateRange = ok ? std::clamp(index, 0, 4) : 0; }
             else if (key == "reportComparePrevious") out.reportComparePrevious = value == "1";
@@ -611,6 +614,9 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     set("taskProjectId", projectId); set("taskPipelineStepId", pipelineId);
     auto catalogProfessionId = settings.catalogProfessionId; catalogProfessionId.remove('\r'); catalogProfessionId.remove('\n');
     set("catalogProfessionId", catalogProfessionId);
+    set("catalogSortMode", QString::number(std::clamp(settings.catalogSortMode, 0, 1)));
+    set("catalogGroupMode", QString::number(std::clamp(settings.catalogGroupMode, 0, 1)));
+    set("catalogWeightCategory", QString::number(std::clamp(settings.catalogWeightCategory, 0, 5)));
     set("reportView", QString::number(std::clamp(settings.reportView, 0, 7)));
     set("reportDateRange", QString::number(std::clamp(settings.reportDateRange, 0, 4)));
     set("reportComparePrevious", settings.reportComparePrevious ? "1" : "0");

@@ -4844,14 +4844,20 @@ static bool TestCatalogProfessionFilter() {
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
     workspace.data.professions = {{"artist", "Artist", "Art"}};
     if (!AppSaveProfessionsData(workspace.directory, workspace.data.professions) ||
-        !workspace.catalog.add_skill("Bound", 1.0, "Known profession", {}, {"artist"}) ||
-        !workspace.catalog.add_skill("Unbound", 1.0, "No profession") ||
-        !workspace.catalog.add_skill("Orphan", 1.0, "Missing profession", {}, {"removed-profession"})) return fail("fixture");
+        !workspace.catalog.add_skill("Bound", 1.4, "Known profession", {}, {"artist"}) ||
+        !workspace.catalog.add_skill("Unbound", 0.6, "No profession") ||
+        !workspace.catalog.add_skill("Orphan", 1.2, "Missing profession", {}, {"removed-profession"})) return fail("fixture");
     QtWindow window(workspace);
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* filter = window.findChild<QComboBox*>("catalogProfessionFilter");
+    auto* sort = window.findChild<QComboBox*>("catalogSortMode");
+    auto* group = window.findChild<QComboBox*>("catalogGroupMode");
+    auto* category = window.findChild<QComboBox*>("catalogWeightCategory");
+    auto* reset = window.findChild<QPushButton*>("catalogFilterReset");
+    auto* search = window.findChild<QLineEdit*>("search");
     auto* table = window.findChild<QTableWidget*>("records");
-    if (!navigation || !filter || !table) return fail("widgets");
+    auto* summary = window.findChild<QLabel*>("summary");
+    if (!navigation || !filter || !sort || !group || !category || !reset || !search || !table || !summary) return fail("widgets");
     int catalogPage = -1;
     for (int i = 0; i < navigation->count(); ++i)
         if (navigation->item(i)->text().contains(QString::fromUtf8("Навык"), Qt::CaseInsensitive)) catalogPage = i;
@@ -4864,8 +4870,38 @@ static bool TestCatalogProfessionFilter() {
     if (table->item(0, 0)->text() != "Unbound") return fail("unbound filter");
     filter->setCurrentIndex(filter->findData("removed-profession"));
     if (table->item(0, 0)->text() != "Orphan") return fail("orphan filter");
+    filter->setCurrentIndex(0);
+    category->setCurrentIndex(2);
+    if (table->rowCount() != 1 || !table->item(0, 0) || table->item(0, 0)->text() != "Orphan") return fail("weight category B filter");
+    category->setCurrentIndex(1);
+    if (table->rowCount() != 1 || !table->item(0, 0) || table->item(0, 0)->text() != "Bound") return fail("weight category A filter");
+    category->setCurrentIndex(5);
+    if (table->rowCount() != 1 || !table->item(0, 0) || table->item(0, 0)->text() != "Unbound") return fail("weight category E filter");
+    category->setCurrentIndex(0);
+    sort->setCurrentIndex(1);
+    if (table->rowCount() != 3 || table->item(0, 0)->text() != "Bound" || table->item(2, 0)->text() != "Unbound")
+        return fail("descending weight sort");
+    group->setCurrentIndex(1);
+    if (table->rowCount() != 6 || !table->item(0, 0)->text().contains("A (>=1.30)") ||
+        table->item(1, 0)->text() != "Bound" || !table->item(2, 0)->text().contains("B (1.10") ||
+        table->item(3, 0)->text() != "Orphan" || !table->item(4, 0)->text().contains("E (<0.70)") ||
+        table->item(5, 0)->text() != "Unbound" || table->item(0, 0)->flags().testFlag(Qt::ItemIsSelectable)) {
+        std::cerr << "catalog groups rows=" << table->rowCount();
+        for (int row = 0; row < table->rowCount(); ++row)
+            std::cerr << " [" << row << ":" << (table->item(row, 0) ? table->item(row, 0)->text().toUtf8().constData() : "null") << "]";
+        std::cerr << '\n';
+        return fail("category groups");
+    }
+    search->setText("Orphan");
+    if (table->rowCount() != 2 || table->item(0, 0)->text().isEmpty() || table->item(1, 0)->text() != "Orphan" ||
+        !summary->text().contains(QString::fromUtf8("показано: 1"))) return fail("search within groups and summary");
+    search->setText("no such skill");
+    if (table->rowCount() != 0) return fail("empty grouped search");
+    search->clear();
+    filter->setCurrentIndex(filter->findData("removed-profession"));
     const auto saved = LoadQtDisplaySettings(workspace.directory);
-    if (saved.catalogProfessionId != "removed-profession") return fail("persist");
+    if (saved.catalogProfessionId != "removed-profession" || saved.catalogSortMode != 1 ||
+        saved.catalogGroupMode != 1 || saved.catalogWeightCategory != 0) return fail("persist");
     QtWindow reopened(workspace);
     auto* restoredFilter = reopened.findChild<QComboBox*>("catalogProfessionFilter");
     auto* restoredNavigation = reopened.findChild<QListWidget*>("navigation");
@@ -4873,7 +4909,22 @@ static bool TestCatalogProfessionFilter() {
     if (!restoredFilter || !restoredNavigation || !restoredTable) return fail("restore widgets");
     restoredNavigation->setCurrentRow(catalogPage);
     if (restoredFilter->currentData().toString() != "removed-profession") return fail("restore selection");
-    if (restoredTable->rowCount() != 1) return fail("restore rows");
+    if (restoredTable->rowCount() != 2 || restoredTable->item(1, 0)->text() != "Orphan") return fail("restore rows");
+    auto* restoredSort = reopened.findChild<QComboBox*>("catalogSortMode");
+    auto* restoredGroup = reopened.findChild<QComboBox*>("catalogGroupMode");
+    auto* restoredCategory = reopened.findChild<QComboBox*>("catalogWeightCategory");
+    auto* restoredReset = reopened.findChild<QPushButton*>("catalogFilterReset");
+    if (!restoredSort || !restoredGroup || !restoredCategory || !restoredReset ||
+        restoredSort->currentIndex() != 1 || restoredGroup->currentIndex() != 1 || restoredCategory->currentIndex() != 0)
+        return fail("restore catalog controls");
+    restoredReset->click();
+    const auto resetSettings = LoadQtDisplaySettings(workspace.directory);
+    if (restoredSort->currentIndex() != 0 || restoredGroup->currentIndex() != 0 ||
+        restoredCategory->currentIndex() != 0 || restoredFilter->currentIndex() != 0 ||
+        reopened.findChild<QLineEdit*>("search")->text().size() != 0 || restoredTable->rowCount() != 3 ||
+        resetSettings.catalogProfessionId.size() != 0 || resetSettings.catalogSortMode != 0 ||
+        resetSettings.catalogGroupMode != 0 || resetSettings.catalogWeightCategory != 0)
+        return fail("reset catalog controls");
     return true;
 }
 
@@ -6314,7 +6365,9 @@ static bool TestDisplaySettings(QApplication& app) {
         resetProjectFilters.projectsOverdueOnly || resetProjectFilters.projectsXpPendingOnly || resetProjectFilters.projectSortMode != 2)
         return false;
     restoredNavigation->setCurrentRow(3); QApplication::processEvents();
-    if (!hasAccessibleName("catalogProfessionFilter") || !hasAccessibleName("projectFilterReset")) return false;
+    if (!hasAccessibleName("catalogProfessionFilter") || !hasAccessibleName("catalogSortMode") ||
+        !hasAccessibleName("catalogGroupMode") || !hasAccessibleName("catalogWeightCategory") ||
+        !hasAccessibleName("catalogFilterReset") || !hasAccessibleName("projectFilterReset")) return false;
     restoredNavigation->setCurrentRow(1); QApplication::processEvents();
     for (const auto* name : {"statusFilter", "priorityFilter", "quickTaskFilter", "taskCreatedRange",
             "taskSortMode", "taskAssigneeFilter", "taskProjectFilter", "taskPipelineFilter", "taskFilterReset"})

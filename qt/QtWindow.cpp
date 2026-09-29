@@ -1689,6 +1689,33 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     markScaleMaximumWidth(catalogProfessionFilter_, 190);
     catalogProfessionFilter_->setToolTip(QString::fromUtf8("Показать навыки, связанные с выбранной профессией"));
     filters->addWidget(catalogProfessionFilter_);
+    catalogSort_ = new QComboBox;
+    catalogSort_->setObjectName("catalogSortMode");
+    labelForAccessibility(catalogSort_, QString::fromUtf8("Сортировка каталога навыков"));
+    markScaleMaximumWidth(catalogSort_, 160);
+    catalogSort_->addItems({QString::fromUtf8("По названию"), QString::fromUtf8("По весу (убыв.)")});
+    catalogSort_->setCurrentIndex(std::clamp(displaySettings_.catalogSortMode, 0, 1));
+    filters->addWidget(catalogSort_);
+    catalogGroup_ = new QComboBox;
+    catalogGroup_->setObjectName("catalogGroupMode");
+    labelForAccessibility(catalogGroup_, QString::fromUtf8("Группировка каталога навыков"));
+    markScaleMaximumWidth(catalogGroup_, 170);
+    catalogGroup_->addItems({QString::fromUtf8("Без группировки"), QString::fromUtf8("По категории веса")});
+    catalogGroup_->setCurrentIndex(std::clamp(displaySettings_.catalogGroupMode, 0, 1));
+    filters->addWidget(catalogGroup_);
+    catalogWeightCategory_ = new QComboBox;
+    catalogWeightCategory_->setObjectName("catalogWeightCategory");
+    labelForAccessibility(catalogWeightCategory_, QString::fromUtf8("Фильтр каталога по категории веса"));
+    markScaleMaximumWidth(catalogWeightCategory_, 135);
+    catalogWeightCategory_->addItems({QString::fromUtf8("Все категории"), QString::fromUtf8("A (>=1.30)"),
+        QString::fromUtf8("B (1.10–1.29)"), QString::fromUtf8("C (0.90–1.09)"),
+        QString::fromUtf8("D (0.70–0.89)"), QString::fromUtf8("E (<0.70)")});
+    catalogWeightCategory_->setCurrentIndex(std::clamp(displaySettings_.catalogWeightCategory, 0, 5));
+    filters->addWidget(catalogWeightCategory_);
+    catalogFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить каталог"));
+    catalogFilterReset_->setObjectName("catalogFilterReset");
+    labelForAccessibility(catalogFilterReset_, QString::fromUtf8("Сбросить фильтры и сортировку каталога навыков"));
+    filters->addWidget(catalogFilterReset_);
     statusFilter_ = new QComboBox;
     statusFilter_->setObjectName("statusFilter");
     labelForAccessibility(statusFilter_, QString::fromUtf8("Фильтр задач по статусу"));
@@ -2373,6 +2400,23 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         render();
     });
     connect(catalogProfessionFilter_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(catalogSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(catalogGroup_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(catalogWeightCategory_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
+    connect(catalogFilterReset_, &QPushButton::clicked, this, [this] {
+        const QSignalBlocker searchBlock(search_);
+        const QSignalBlocker professionBlock(catalogProfessionFilter_);
+        const QSignalBlocker sortBlock(catalogSort_);
+        const QSignalBlocker groupBlock(catalogGroup_);
+        const QSignalBlocker categoryBlock(catalogWeightCategory_);
+        search_->clear();
+        catalogProfessionFilter_->setCurrentIndex(0);
+        catalogSort_->setCurrentIndex(0);
+        catalogGroup_->setCurrentIndex(0);
+        catalogWeightCategory_->setCurrentIndex(0);
+        saveDisplayContext();
+        render();
+    });
     connect(reportView_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportDateRange_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(reportCompare_, &QCheckBox::toggled, this, [this] { saveDisplayContext(); render(); });
@@ -3415,6 +3459,9 @@ void QtWindow::saveDisplayContext() {
     displaySettings_.taskProjectId = taskProjectFilter_->currentData().toString();
     displaySettings_.taskPipelineStepId = taskPipelineFilter_->currentData().toString();
     displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
+    displaySettings_.catalogSortMode = catalogSort_->currentIndex();
+    displaySettings_.catalogGroupMode = catalogGroup_->currentIndex();
+    displaySettings_.catalogWeightCategory = catalogWeightCategory_->currentIndex();
     displaySettings_.reportView = reportView_->currentIndex();
     displaySettings_.reportDateRange = reportDateRange_->currentIndex();
     displaySettings_.reportComparePrevious = reportCompare_->isChecked();
@@ -3663,6 +3710,10 @@ void QtWindow::render() {
     taskPipelineFilter_->setVisible(page == Tasks);
     taskFilterReset_->setVisible(page == Tasks);
     catalogProfessionFilter_->setVisible(page == Catalog);
+    catalogSort_->setVisible(page == Catalog);
+    catalogGroup_->setVisible(page == Catalog);
+    catalogWeightCategory_->setVisible(page == Catalog);
+    catalogFilterReset_->setVisible(page == Catalog);
     reportView_->setVisible(page == Statistics);
     reportDateRange_->setVisible(page == Statistics);
     reportCompare_->setVisible(page == Statistics);
@@ -4497,21 +4548,82 @@ void QtWindow::render() {
     } else if (page == Catalog) {
         headers({QString::fromUtf8("Навык"), QString::fromUtf8("Вес"), QString::fromUtf8("Описание"), QString::fromUtf8("Профессии")});
         const auto professionFilter = catalogProfessionFilter_->currentData().toString();
-        for (const auto& id : workspace_.catalog.skills()) {
+        const auto skills = workspace_.catalog.skills();
+        auto weightCategory = [](double weight) {
+            return weight >= 1.3 ? 1 : weight >= 1.1 ? 2 : weight >= 0.9 ? 3 : weight >= 0.7 ? 4 : 5;
+        };
+        std::vector<std::string> orderedSkills;
+        orderedSkills.reserve(skills.size());
+        for (const auto& id : skills) {
             const auto bindings = workspace_.catalog.professions(id);
             if (professionFilter == QStringLiteral("__none__") && !bindings.empty()) continue;
             if (!professionFilter.isEmpty() && professionFilter != QStringLiteral("__none__") &&
                 std::find(bindings.begin(), bindings.end(), u(professionFilter)) == bindings.end()) continue;
+            const int category = weightCategory(workspace_.catalog.weight(id));
+            if (catalogWeightCategory_->currentIndex() > 0 && catalogWeightCategory_->currentIndex() != category) continue;
+            orderedSkills.push_back(id);
+        }
+        const int sortMode = catalogSort_->currentIndex();
+        const int groupMode = catalogGroup_->currentIndex();
+        std::sort(orderedSkills.begin(), orderedSkills.end(), [&](const auto& left, const auto& right) {
+            const int leftCategory = weightCategory(workspace_.catalog.weight(left));
+            const int rightCategory = weightCategory(workspace_.catalog.weight(right));
+            if (groupMode == 1 && leftCategory != rightCategory) return leftCategory < rightCategory;
+            if (sortMode == 1) {
+                const auto leftWeight = workspace_.catalog.weight(left), rightWeight = workspace_.catalog.weight(right);
+                if (leftWeight != rightWeight) return leftWeight > rightWeight;
+            }
+            const int byName = QString::localeAwareCompare(q(workspace_.catalog.display_name(left)),
+                q(workspace_.catalog.display_name(right)));
+            return byName != 0 ? byName < 0 : left < right;
+        });
+        static const QStringList categoryLabels{QString::fromUtf8(""), QString::fromUtf8("A (>=1.30)"),
+            QString::fromUtf8("B (1.10–1.29)"), QString::fromUtf8("C (0.90–1.09)"),
+            QString::fromUtf8("D (0.70–0.89)"), QString::fromUtf8("E (<0.70)")};
+        int previousCategory = 0;
+        double minWeight = 0.0, maxWeight = 0.0, totalWeight = 0.0;
+        int matchedSkills = 0;
+        for (const auto& id : orderedSkills) {
+            const int category = weightCategory(workspace_.catalog.weight(id));
             QStringList names;
+            const auto bindings = workspace_.catalog.professions(id);
             for (const auto& binding : bindings) {
                 const auto found = std::find_if(data.professions.begin(), data.professions.end(), [&](const auto& p) { return p.id == binding; });
                 names << q(found == data.professions.end() ? binding : found->name);
             }
-            row(id, {q(workspace_.catalog.display_name(id)), QString::number(workspace_.catalog.weight(id)),
-                q(workspace_.catalog.description(id)), names.join(", ")});
+            const double weight = workspace_.catalog.weight(id);
+            const QString skillName = q(workspace_.catalog.display_name(id));
+            const QStringList values{skillName, QString::number(weight, 'f', 2),
+                q(workspace_.catalog.description(id)), names.join(", ")};
+            if (!skillName.contains(search_->text(), Qt::CaseInsensitive)) continue;
+            if (groupMode == 1 && category != previousCategory) {
+                const int groupRow = table_->rowCount();
+                table_->insertRow(groupRow);
+                auto* heading = new QTableWidgetItem(QString::fromUtf8("▰ %1").arg(categoryLabels[category]));
+                heading->setFlags(Qt::ItemIsEnabled);
+                heading->setBackground(palette().color(QPalette::AlternateBase));
+                heading->setToolTip(QString::fromUtf8("Группа навыков по категории веса: %1").arg(categoryLabels[category]));
+                table_->setItem(groupRow, 0, heading);
+                for (int column = 1; column < table_->columnCount(); ++column) {
+                    auto* blank = new QTableWidgetItem;
+                    blank->setFlags(Qt::ItemIsEnabled);
+                    blank->setBackground(palette().color(QPalette::AlternateBase));
+                    table_->setItem(groupRow, column, blank);
+                }
+                previousCategory = category;
+            }
+            row(id, values);
+            if (table_->rowCount() > 0 && table_->item(table_->rowCount() - 1, 0) &&
+                table_->item(table_->rowCount() - 1, 0)->data(Qt::UserRole).toString() == q(id)) {
+                if (matchedSkills++ == 0) minWeight = maxWeight = weight;
+                else { minWeight = std::min(minWeight, weight); maxWeight = std::max(maxWeight, weight); }
+                totalWeight += weight;
+            }
         }
-        summary_->setText(QString::fromUtf8("Навыков: %1 · показано: %2")
-            .arg(workspace_.catalog.skills().size()).arg(table_->rowCount()));
+        const auto shown = matchedSkills;
+        summary_->setText(QString::fromUtf8("Навыков: %1 · показано: %2 · средний вес: %3 · диапазон: %4")
+            .arg(skills.size()).arg(shown).arg(shown ? totalWeight / shown : 0.0, 0, 'f', 2)
+            .arg(shown ? QStringLiteral("%1–%2").arg(minWeight, 0, 'f', 2).arg(maxWeight, 0, 'f', 2) : QString::fromUtf8("—")));
     } else if (page == Pipeline) {
         headers({QString::fromUtf8("Этап"), QString::fromUtf8("Название"), QString::fromUtf8("Ответственный"), QString::fromUtf8("Следующий шаг")});
         for (const auto& step : data.pipelineSteps) row(step.id, {q(step.stageCode), q(step.title), q(step.owner), q(step.nextStageLabel)});
@@ -5252,7 +5364,9 @@ void QtWindow::render() {
         else if (page == Pipeline || page == Projects || page == Professions || page == Shortcuts) stretchColumn = 1;
         table_->horizontalHeader()->setSectionResizeMode(stretchColumn, QHeaderView::Stretch);
     }
-    table_->setSortingEnabled(page != Pipeline && page != Shortcuts);
+    // Catalog ordering is controlled by its persistent sort/group selectors; header sorting
+    // would otherwise replace the chosen weight/category order after each render.
+    table_->setSortingEnabled(page != Pipeline && page != Shortcuts && page != Catalog);
     int pendingProfileTaskRow = -1;
     if (page == Tasks && !pendingProfileTaskId_.empty())
         for (int index = 0; index < table_->rowCount(); ++index)

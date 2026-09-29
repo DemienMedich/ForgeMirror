@@ -47,6 +47,9 @@ struct QtDisplaySettings {
     QString taskProjectId;
     QString taskPipelineStepId;
     QString catalogProfessionId;
+    int catalogSortMode = 0;
+    int catalogGroupMode = 0;
+    int catalogWeightCategory = 0;
     int reportView = 0;
     int reportDateRange = 0;
     bool reportComparePrevious = false;

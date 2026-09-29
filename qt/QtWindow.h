@@ -138,6 +138,10 @@ private:
     QComboBox* taskProjectFilter_;
     QComboBox* taskPipelineFilter_;
     QComboBox* catalogProfessionFilter_;
+    QComboBox* catalogSort_;
+    QComboBox* catalogGroup_;
+    QComboBox* catalogWeightCategory_;
+    QPushButton* catalogFilterReset_;
     QComboBox* reportView_;
     QComboBox* reportDateRange_;
     QCheckBox* reportCompare_;
