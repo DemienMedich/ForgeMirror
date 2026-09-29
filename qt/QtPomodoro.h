@@ -38,6 +38,7 @@ private:
     void reset();
     void refresh();
     void refreshRewardStatus();
+    void refreshSoundInventory();
     void saveSettings();
     void playSound(Phase completed);
     int duration(Phase phase) const;
@@ -77,6 +78,8 @@ private:
     QSpinBox* cyclesSetting_;
     QCheckBox* autoAdvanceSetting_;
     QWidget* soundSettings_;
+    QLabel* soundDirectoryLabel_;
+    QLabel* soundAvailabilityLabel_;
     QCheckBox* soundEnabled_;
     QComboBox* focusSound_;
     QComboBox* breakSound_;

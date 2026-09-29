@@ -5850,15 +5850,20 @@ static bool TestPomodoro() {
         rewardStatus->toolTip() != QString::fromUtf8("Начисление: +1 за полный фокус")) return fail(1);
     panel.setAdministrator(true);
     auto* focusSound = panel.findChild<QComboBox*>("pomodoroFocusSound");
+    auto* soundDirectory = panel.findChild<QLabel*>("pomodoroSoundDirectory");
+    auto* soundAvailability = panel.findChild<QLabel*>("pomodoroSoundAvailability");
     if (!panel.findChild<QWidget*>("pomodoroSoundEnabled")->isVisible() || focusSound->findData("music/focus.mp3") < 0 ||
-        focusSound->findData("../outside.mp3") >= 0) return fail(12);
+        focusSound->findData("../outside.mp3") >= 0 || !soundDirectory || !soundAvailability ||
+        !soundDirectory->text().contains(QDir::toNativeSeparators(temp.path() + "/music")) ||
+        !soundAvailability->isHidden()) return fail(12);
     focusSound->setCurrentIndex(focusSound->findData("music/focus.mp3"));
     { QFile lateMusic(temp.path() + "/music/late.wav"); if (!lateMusic.open(QIODevice::WriteOnly)) return false; lateMusic.write("test"); }
     if (focusSound->findData("music/late.wav") >= 0) return fail(15);
     auto* refreshSounds = panel.findChild<QPushButton*>("pomodoroRefreshSounds");
     if (!refreshSounds || refreshSounds->accessibleName().isEmpty()) return fail(16);
     refreshSounds->click();
-    if (focusSound->findData("music/late.wav") < 0 || focusSound->currentData().toString() != "music/focus.mp3") return fail(17);
+    if (focusSound->findData("music/late.wav") < 0 || focusSound->currentData().toString() != "music/focus.mp3" ||
+        !soundAvailability->isHidden()) return fail(17);
     start->click(); panel.advanceSecondsForTest(1);
     if (time->text() != "00:01" || !pause->isVisible()) return fail(2);
     pause->click(); panel.advanceSecondsForTest(2);
@@ -5914,7 +5919,17 @@ static bool TestPomodoro() {
         2, 1, 1, 2, std::filesystem::u8path(assetRoot.path().toUtf8().toStdString()));
     packagedSounds.setAdministrator(true);
     auto* bundledSound = packagedSounds.findChild<QComboBox*>("pomodoroFocusSound");
-    if (!bundledSound || bundledSound->currentData().toString() != "music/bundled.wav") return fail(22);
+    auto* bundledSoundDirectory = packagedSounds.findChild<QLabel*>("pomodoroSoundDirectory");
+    if (!bundledSound || bundledSound->currentData().toString() != "music/bundled.wav" || !bundledSoundDirectory ||
+        !bundledSoundDirectory->text().contains(QDir::toNativeSeparators(assetRoot.path() + "/data/music"))) return fail(22);
+    QTemporaryDir emptySoundWorkspace;
+    if (!emptySoundWorkspace.isValid()) return fail(25);
+    QDir().mkpath(emptySoundWorkspace.path() + "/music");
+    QtPomodoro emptySounds(nullptr, std::filesystem::u8path(emptySoundWorkspace.path().toUtf8().toStdString()), 2, 1, 1, 2);
+    emptySounds.setAdministrator(true);
+    auto* emptySoundNotice = emptySounds.findChild<QLabel*>("pomodoroSoundAvailability");
+    if (!emptySoundNotice || emptySoundNotice->isHidden() ||
+        emptySoundNotice->text() != QString::fromUtf8("Файлы .wav/.mp3 не найдены.")) return fail(26);
 #ifdef _WIN32
     packagedSounds.quickToggle(); packagedSounds.advanceSecondsForTest(2);
     auto* packagedStatus = packagedSounds.findChild<QLabel*>("pomodoroStatus");

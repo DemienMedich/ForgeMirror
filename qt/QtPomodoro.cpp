@@ -71,6 +71,14 @@ QString selectedMusicDirectory(const std::filesystem::path& storage, const std::
     const auto local = workspaceMusicDirectory(storage);
     return !local.isEmpty() ? local : bundledMusicDirectory(assetRoot);
 }
+bool isSafeSoundFile(const QFileInfo& file);
+bool containsUsableSounds(const QString& directoryPath) {
+    if (directoryPath.isEmpty()) return false;
+    const QDir directory(directoryPath);
+    for (const auto& name : directory.entryList(QDir::Files | QDir::NoSymLinks, QDir::Name))
+        if (isSafeSoundFile(QFileInfo(directory.filePath(name)))) return true;
+    return false;
+}
 bool isSafeSoundFile(const QFileInfo& file) {
     if (file.isSymLink() || !file.isFile() || file.size() > 20 * 1024 * 1024) return false;
     const auto extension = file.suffix();
@@ -163,10 +171,19 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     soundVolume_->setValue(integer(saved, "soundVolume", 80, 0, 100));
     soundForm->addRow(soundEnabled_); soundForm->addRow(QString::fromUtf8("После фокуса"), focusSound_);
     soundForm->addRow(QString::fromUtf8("После перерыва"), breakSound_); soundForm->addRow(QString::fromUtf8("Громкость"), soundVolume_);
+    soundDirectoryLabel_ = new QLabel;
+    soundDirectoryLabel_->setObjectName("pomodoroSoundDirectory");
+    soundDirectoryLabel_->setWordWrap(true);
+    soundForm->addRow(soundDirectoryLabel_);
+    soundAvailabilityLabel_ = new QLabel(QString::fromUtf8("Файлы .wav/.mp3 не найдены."));
+    soundAvailabilityLabel_->setObjectName("pomodoroSoundAvailability");
+    soundAvailabilityLabel_->setWordWrap(true);
+    soundForm->addRow(soundAvailabilityLabel_);
     auto* refreshSounds = new QPushButton(QString::fromUtf8("Обновить список звуков"));
     refreshSounds->setObjectName("pomodoroRefreshSounds");
     refreshSounds->setAccessibleName(QString::fromUtf8("Обновить список звуков Pomodoro"));
     soundForm->addRow(QString(), refreshSounds);
+    refreshSoundInventory();
     soundSettings_->setToolTip(QString::fromUtf8("Администраторские сигналы из папки music рабочего места или поставки data/music."));
     controlBox->addWidget(soundSettings_); soundSettings_->hide();
     auto* note = new QLabel(QString::fromUtf8("Награда возможна только за полный фокус при личном входе и по правилам хранилища."));
@@ -189,11 +206,7 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     connect(save, &QPushButton::clicked, this, [this] { saveSettings(); });
     connect(workMinutes_, qOverload<int>(&QSpinBox::valueChanged), this, [this] { refreshRewardStatus(); });
     connect(refreshSounds, &QPushButton::clicked, this, [this] {
-        const auto focus = focusSound_->currentData().toString();
-        const auto pause = breakSound_->currentData().toString();
-        focusSound_->clear(); breakSound_->clear();
-        fillSounds(focusSound_, storage_, assetRoot_, focus);
-        fillSounds(breakSound_, storage_, assetRoot_, pause);
+        refreshSoundInventory();
         statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Список звуков обновлён."));
         refresh();
     });
@@ -269,6 +282,18 @@ void QtPomodoro::refreshRewardStatus() {
         : QString::fromUtf8("правила не загружены");
     rewardStatusLabel_->setText(QString::fromUtf8("Монеты: ") + status);
     rewardStatusLabel_->setToolTip(rulesTooltipHandler_ ? rulesTooltipHandler_() : QString());
+}
+void QtPomodoro::refreshSoundInventory() {
+    const auto focus = focusSound_->currentData().toString();
+    const auto pause = breakSound_->currentData().toString();
+    focusSound_->clear(); breakSound_->clear();
+    fillSounds(focusSound_, storage_, assetRoot_, focus);
+    fillSounds(breakSound_, storage_, assetRoot_, pause);
+    const auto directory = selectedMusicDirectory(storage_, assetRoot_);
+    soundDirectoryLabel_->setText(directory.isEmpty()
+        ? QString::fromUtf8("Папка сигналов не найдена.")
+        : QString::fromUtf8("Папка: %1").arg(QDir::toNativeSeparators(directory)));
+    soundAvailabilityLabel_->setVisible(!containsUsableSounds(directory));
 }
 void QtPomodoro::setQuickStateChanged(std::function<void()> handler) {
     quickStateChanged_ = std::move(handler);
