@@ -7300,15 +7300,31 @@ int main(int argc, char** argv) {
     auto* resetSkillFilters = window.findChild<QPushButton*>("profileSkillFilterReset");
     if (!sortSkills || !categorySkills || !minWeight || !maxWeight || !resetSkillFilters)
         return fail("Profile skill filters missing");
+    search->setText(QString::fromUtf8("Текстурирование")); QApplication::processEvents();
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QStringLiteral("1") ||
+        table->item(0, 1)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Текстурирование").c_str()) ||
+        !table->item(0, 1)->toolTip().contains(QString::fromUtf8("Подготовка материалов")) ||
+        !table->item(0, 1)->toolTip().contains(QString::fromUtf8("Категория веса")) ||
+        !table->item(0, 1)->toolTip().contains(QString::fromUtf8("Бонус")) ||
+        !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Навыки: 1 из 4")))
+        return fail("Profile skill search, row rank, tooltip or visible count failed");
+    search->setText(QString::fromUtf8("missing skill name")); QApplication::processEvents();
+    if (table->rowCount() != 0 || !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("по фильтру ничего не найдено")))
+        return fail("Profile skill empty-filter state failed");
+    resetSkillFilters->click(); QApplication::processEvents();
+    if (table->rowCount() != 4 || !search->text().isEmpty()) return fail("Profile skill search reset failed");
     sortSkills->setCurrentIndex(3); QApplication::processEvents();
-    if (table->item(0, 0)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Моделирование").c_str()))
+    if (table->item(0, 0)->text() != QStringLiteral("1") ||
+        table->item(0, 1)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Моделирование").c_str()))
         return fail("Profile skills weight sorting failed");
     categorySkills->setCurrentIndex(5); QApplication::processEvents();
-    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Концепт-арт").c_str()))
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QStringLiteral("1") ||
+        table->item(0, 1)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Концепт-арт").c_str()))
         return fail("Profile skill weight category filter failed");
     categorySkills->setCurrentIndex(0);
     minWeight->setValue(1.3); QApplication::processEvents();
-    if (table->rowCount() != 1 || table->item(0, 0)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Моделирование").c_str()))
+    if (table->rowCount() != 1 || table->item(0, 0)->text() != QStringLiteral("1") ||
+        table->item(0, 1)->text() != QString::fromUtf8(workspace.catalog.display_name(u8"Моделирование").c_str()))
         return fail("Profile skill weight range filter failed");
     resetSkillFilters->click(); QApplication::processEvents();
     if (table->rowCount() != 4 || sortSkills->currentIndex() != 0 || categorySkills->currentIndex() != 0 ||

@@ -3700,6 +3700,8 @@ void QtWindow::render() {
     auto row = [this](const std::string& id, const QStringList& values) {
         QString searchableText = navigation_->currentRow() == Projects && values.size() >= 2
             ? values.mid(0, 2).join(' ') : values.join(' ');
+        if (navigation_->currentRow() == ProfilePage && displaySettings_.profileViewMode == 1 && values.size() >= 5)
+            searchableText = values.size() > 5 ? values[1] : values[0];
         if (navigation_->currentRow() == Pipeline) {
             const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
                 [&id](const auto& item) { return item.id == id; });
@@ -3896,6 +3898,8 @@ void QtWindow::render() {
     } else if (page == ProfilePage) {
         if (profileMode == 3) headers({QString::fromUtf8("Задача"), QString::fromUtf8("Статус"), QString::fromUtf8("Срок"),
             QString::fromUtf8("Проект"), QString::fromUtf8("Этап процесса")});
+        else if (profileMode == 1) headers({"#", QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP",
+            QString::fromUtf8("Всего XP"), QString::fromUtf8("Вес")});
         else headers({QString::fromUtf8("Навык"), QString::fromUtf8("Уровень"), "XP", QString::fromUtf8("Всего XP"), QString::fromUtf8("Вес")});
         for (auto* value : profileStateValues_) value->setText(QString::fromUtf8("—"));
         for (int index = 0; index < 4; ++index) {
@@ -4306,6 +4310,7 @@ void QtWindow::render() {
                 if (leftXp != rightXp) return leftXp > rightXp;
                 return compareDisplayName(left, right);
             });
+            int visibleProfileSkills = 0;
             if (profileMode != 3) for (const auto& skill : profileSkills) {
                 const int weightCategory = skill.weight >= 1.3 ? 1 : skill.weight >= 1.1 ? 2 :
                     skill.weight >= 0.9 ? 3 : skill.weight >= 0.7 ? 4 : 5;
@@ -4313,9 +4318,35 @@ void QtWindow::render() {
                     skill.weight > profileSkillWeightMax_->value() ||
                     (profileSkillWeightCategory_->currentIndex() > 0 &&
                      profileSkillWeightCategory_->currentIndex() != weightCategory))) continue;
-                row(skill.name, {q(workspace_.catalog.display_name(skill.name)), QString::number(skill.level),
-                    QString::number(skill.xp), QString::number(totalSkillXp(skill)),
-                    QString::number(skill.weight, 'f', 2)});
+                QStringList values{q(workspace_.catalog.display_name(skill.name)), QString::number(skill.level),
+                    QString::number(skill.xp), QString::number(totalSkillXp(skill)), QString::number(skill.weight, 'f', 2)};
+                if (profileMode == 1) values.prepend(QString::number(visibleProfileSkills + 1));
+                const int rowIndex = table_->rowCount();
+                row(skill.name, values);
+                if (table_->rowCount() == rowIndex) continue;
+                if (profileMode == 1) {
+                    const QString name = q(workspace_.catalog.display_name(skill.name));
+                    const QString description = q(workspace_.catalog.description(skill.name));
+                    const QString category = skill.weight >= 1.3 ? QString::fromUtf8("A (>=1,30)")
+                        : skill.weight >= 1.1 ? QString::fromUtf8("B (1,10–1,29)")
+                        : skill.weight >= 0.9 ? QString::fromUtf8("C (0,90–1,09)")
+                        : skill.weight >= 0.7 ? QString::fromUtf8("D (0,70–0,89)") : QString::fromUtf8("E (<0,70)");
+                    const double bonus = std::max(0.0,
+                        (profile->skill_bonus_multiplier(skill.name, QDateTime::currentSecsSinceEpoch()) - 1.0) * 100.0);
+                    QString tooltip = QStringLiteral("<b>%1</b>").arg(name.toHtmlEscaped());
+                    if (!description.isEmpty()) tooltip += QStringLiteral("<br>%1").arg(description.toHtmlEscaped());
+                    tooltip += QString::fromUtf8("<br><br>ID: %1<br>Уровень: %2<br>XP: %3 / %4<br>Всего XP: %5<br>Вес: %6<br>Категория веса: %7")
+                        .arg(q(skill.name).toHtmlEscaped()).arg(skill.level).arg(skill.xp).arg(skill.xpToNext)
+                        .arg(totalSkillXp(skill)).arg(skill.weight, 0, 'f', 2).arg(category.toHtmlEscaped());
+                    if (bonus > 0.01) tooltip += QString::fromUtf8("<br>Бонус: +%1% XP").arg(bonus, 0, 'f', 1);
+                    if (auto* nameCell = table_->item(rowIndex, 1)) nameCell->setToolTip(tooltip);
+                }
+                ++visibleProfileSkills;
+            }
+            if (profileMode == 1) {
+                summary_->setText(summary_->text() + QString::fromUtf8(" · Навыки: %1 из %2%3")
+                    .arg(visibleProfileSkills).arg(profileSkills.size())
+                    .arg(visibleProfileSkills ? QString() : QString::fromUtf8(" · по фильтру ничего не найдено")));
             }
         } else summary_->setText(QString::fromUtf8("Нет доступного профиля. Администратор может создать его через «Управление профилями»."));
         if (profileMode != 3) for (int rowIndex = 0; rowIndex < table_->rowCount(); ++rowIndex)
