@@ -6973,8 +6973,18 @@ int main(int argc, char** argv) {
     statsView->setCurrentIndex(6);
     if (table->rowCount() != 16 || table->item(1, 0)->text() != QString::fromUtf8("Джуниор I") || table->item(1, 1)->text() != "1")
         return fail("Profile rank distribution failed");
+    auto* rankShareBar = table->findChild<QProgressBar*>("adminStatsRankBar_1");
+    if (!rankShareBar || rankShareBar->value() != 500 || rankShareBar->maximum() != 1000 ||
+        rankShareBar->accessibleName().isEmpty() || rankShareBar->width() < 80)
+        return fail("Profile rank distribution bar failed");
+    if (!statsArtifacts.isEmpty()) window.grab().save(statsArtifacts + "/admin-profile-stats-rank-bars.png");
     statsView->setCurrentIndex(7);
     if (table->rowCount() != 5 || table->item(0, 1)->text() != "5.0/10") return fail("Profile category average report failed");
+    auto* categoryAverageBar = table->findChild<QProgressBar*>("adminStatsCategoryBar_0");
+    if (!categoryAverageBar || categoryAverageBar->value() != 500 || categoryAverageBar->maximum() != 1000 ||
+        categoryAverageBar->accessibleName().isEmpty() || categoryAverageBar->width() < 80)
+        return fail("Profile category average bar failed");
+    if (!statsArtifacts.isEmpty()) window.grab().save(statsArtifacts + "/admin-profile-stats-category-bars.png");
     statsView->setCurrentIndex(0);
     const auto statsCsvPath = temp.path() + "/profile-stats.csv";
     QTimer::singleShot(0, [statsCsvPath] {

@@ -605,6 +605,33 @@ static void applyQtTextScaleMetrics(QWidget* root, int scalePercent) {
     }
 }
 
+static void setProfileStatsBarCell(QTableWidget* table, int row, int column, const QString& objectName,
+                                   const QString& accessibleName, int permille, const QString& valueText) {
+    if (!table || row < 0 || column < 0) return;
+    auto* cell = new QWidget(table);
+    cell->setObjectName(objectName + QStringLiteral("Cell"));
+    cell->setAccessibleName(accessibleName);
+    auto* layout = new QHBoxLayout(cell);
+    layout->setContentsMargins(5, 0, 5, 0);
+    layout->setSpacing(7);
+    auto* bar = new QProgressBar(cell);
+    bar->setObjectName(objectName);
+    bar->setRange(0, 1000);
+    bar->setValue(std::clamp(permille, 0, 1000));
+    bar->setTextVisible(false);
+    bar->setAccessibleName(accessibleName);
+    bar->setAccessibleDescription(valueText);
+    bar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    auto* value = new QLabel(valueText, cell);
+    value->setObjectName(objectName + QStringLiteral("Value"));
+    value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    value->setMinimumWidth(48);
+    value->setAccessibleName(accessibleName + QString::fromUtf8(" · значение"));
+    layout->addWidget(bar, 1);
+    layout->addWidget(value, 0);
+    table->setCellWidget(row, column, cell);
+}
+
 QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSession_(workspace.directory), displaySettings_(LoadQtDisplaySettings(workspace.directory)) {
     const char* adminPasswordOverride = std::getenv("FORGEMIRROR_ADMIN_PASSWORD");
     admin_ = (!adminPasswordOverride || !*adminPasswordOverride) && LoadAdminStayLoggedIn(workspace_.directory);
@@ -3524,11 +3551,16 @@ void QtWindow::render() {
             const int denominator = std::max(1, int(filtered.size()));
             for (size_t i = 0; i < counts.size(); ++i) {
                 const int index = table_->rowCount(); table_->insertRow(index);
+                const double share = double(counts[i]) * 100.0 / denominator;
                 for (int column = 0; column < 3; ++column) {
                     const QString value = column == 0 ? adminProfileRanks()[i].first : column == 1
-                        ? QString::number(counts[i]) : QString::number(double(counts[i]) * 100.0 / denominator, 'f', 1) + "%";
+                        ? QString::number(counts[i]) : QString::number(share, 'f', 1) + "%";
                     table_->setItem(index, column, new QTableWidgetItem(value));
                 }
+                setProfileStatsBarCell(table_, index, 2,
+                    QStringLiteral("adminStatsRankBar_%1").arg(i),
+                    QString::fromUtf8("Доля профилей ранга %1").arg(adminProfileRanks()[i].first),
+                    qRound(share * 10.0), QString::number(share, 'f', 1) + "%");
             }
             summary_->setText(summary_->text() + QString::fromUtf8("\nПоказано профилей после фильтров: %1").arg(filtered.size()));
         } else {
@@ -3549,6 +3581,11 @@ void QtWindow::render() {
                     QString::number(categoryCounts[i])};
                 for (int column = 0; column < values.size(); ++column)
                     table_->setItem(index, column, new QTableWidgetItem(values[column]));
+                setProfileStatsBarCell(table_, index, 1,
+                    QStringLiteral("adminStatsCategoryBar_%1").arg(i),
+                    QString::fromUtf8("Средняя оценка категории %1").arg(QString::fromUtf8(Profile::kCategoryLabels[i])),
+                    categoryCounts[i] ? qRound(averages[i] * 100.0) : 0,
+                    categoryCounts[i] ? QString::fromUtf8("%1/10").arg(averages[i], 0, 'f', 1) : QString::fromUtf8("—"));
                 if (int(i) == minIndex && maximum - minimum >= 1.0) {
                     for (int column = 0; column < table_->columnCount(); ++column) {
                         if (auto* cell = table_->item(table_->rowCount() - 1, column))
@@ -4086,11 +4123,22 @@ void QtWindow::render() {
     if (summary_->text().isEmpty()) summary_->setText(QString::fromUtf8("Записей: %1 · просмотр данных существующего ядра").arg(table_->rowCount()));
     table_->horizontalHeader()->setStretchLastSection(false);
     if (page == AdminProfileStats) {
-        constexpr int widths[] = {72, 150, 92, 62, 78, 136, 72, 72, 130};
         table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-        for (int col = 0; col < std::min(table_->columnCount(), int(std::size(widths))); ++col)
-            table_->setColumnWidth(col, widths[col]);
-        if (table_->columnCount() > 1) table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+        const int statsView = adminStatsView_->currentIndex();
+        if (statsView == 6 && table_->columnCount() == 3) {
+            table_->setColumnWidth(0, 170);
+            table_->setColumnWidth(1, 100);
+            table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+        } else if (statsView == 7 && table_->columnCount() == 3) {
+            table_->setColumnWidth(0, 170);
+            table_->setColumnWidth(2, 110);
+            table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+        } else {
+            constexpr int widths[] = {72, 150, 92, 62, 78, 136, 72, 72, 130};
+            for (int col = 0; col < std::min(table_->columnCount(), int(std::size(widths))); ++col)
+                table_->setColumnWidth(col, widths[col]);
+            if (table_->columnCount() > 1) table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+        }
     } else {
         table_->resizeColumnsToContents();
         table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
