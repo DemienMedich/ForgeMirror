@@ -32,6 +32,7 @@ struct QtDisplaySettings {
     bool minimizeToTray = false;
     bool deadlineNotificationsWhenClosed = false;
     QString lastProfileId;
+    QStringList recentProfileIds;
     int lastPage = 0;
     int profileViewMode = 1;
     int profileSkillSort = 0;

@@ -462,6 +462,8 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
         const auto line = raw.trimmed(); if (line.startsWith('[') && line.endsWith(']')) { section = line.mid(1, line.size() - 2); continue; }
         const auto key = line.section('=', 0, 0).trimmed(), value = line.section('=', 1).trimmed();
         if (section == "profile" && key == "lastProfileId") out.lastProfileId = value;
+        if (section == "profile" && key == "recent" && out.recentProfileIds.isEmpty())
+            out.recentProfileIds = value.split(',', Qt::SkipEmptyParts);
         if (section == "ui" && key == "windowDecorated") out.decorated = value != "0";
         if (section == "style") {
             if (key == "alpha") { bool ok = false; const double alpha = value.toDouble(&ok); if (ok && std::isfinite(alpha)) out.windowOpacityPercent = int(std::lround(std::clamp(alpha, 0.6, 1.0) * 100.0)); }
@@ -512,6 +514,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "backgroundTileScale") { bool ok = false; const double scale = value.toDouble(&ok); if (ok && std::isfinite(scale)) out.backgroundTileScale = std::clamp(scale, 0.25, 3.0); }
             else if (key.startsWith("windowBackground")) { bool ok = false; const int index = key.mid(QStringLiteral("windowBackground").size()).toInt(&ok); if (ok && index >= 0 && index < int(out.windowBackgrounds.size())) out.windowBackgrounds[size_t(index)] = normalizeBackgroundPath(value); }
             else if (key == "lastProfileId") out.lastProfileId = value;
+            else if (key == "recentProfileIds") out.recentProfileIds = value.split(',', Qt::SkipEmptyParts);
             else if (key == "lastPage") { bool ok = false; const int page = value.toInt(&ok); out.lastPage = ok ? std::clamp(page, 0, 17) : 0; }
             else if (key == "profileViewMode") { bool ok = false; const int index = value.toInt(&ok); out.profileViewMode = ok ? std::clamp(index, 0, 3) : 1; }
             else if (key == "profileSkillSort") { bool ok = false; const int index = value.toInt(&ok); out.profileSkillSort = ok ? std::clamp(index, 0, 3) : 0; }
@@ -593,6 +596,15 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
         set(QStringLiteral("windowBackground%1").arg(i), normalizeBackgroundPath(settings.windowBackgrounds[i]));
     auto profileId = settings.lastProfileId; profileId.remove('\r'); profileId.remove('\n');
     set("lastProfileId", profileId); set("lastPage", QString::number(std::clamp(settings.lastPage, 0, 17)));
+    QStringList recentProfileIds;
+    for (auto id : settings.recentProfileIds) {
+        id = id.trimmed();
+        id.remove(','); id.remove('\r'); id.remove('\n');
+        if (id.isEmpty() || recentProfileIds.contains(id)) continue;
+        recentProfileIds.push_back(id);
+        if (recentProfileIds.size() == 6) break;
+    }
+    set("recentProfileIds", recentProfileIds.join(','));
     set("profileViewMode", QString::number(std::clamp(settings.profileViewMode, 0, 3)));
     set("profileSkillSort", QString::number(std::clamp(settings.profileSkillSort, 0, 3)));
     set("profileSkillWeightCategory", QString::number(std::clamp(settings.profileSkillWeightCategory, 0, 5)));
@@ -663,7 +675,9 @@ bool ResetQtUiSettings(const std::filesystem::path& directory) {
     QTemporaryDir templateDirectory;
     if (!templateDirectory.isValid()) return false;
     auto display = QtDisplaySettings{};
-    display.lastProfileId = LoadQtDisplaySettings(directory).lastProfileId;
+    const auto currentSettings = LoadQtDisplaySettings(directory);
+    display.lastProfileId = currentSettings.lastProfileId;
+    display.recentProfileIds = currentSettings.recentProfileIds;
     if (!SaveQtDisplaySettings(std::filesystem::u8path(templateDirectory.path().toUtf8().constData()), display)) return false;
     if (!SaveQtModelSettings(std::filesystem::u8path(templateDirectory.path().toUtf8().constData()), QtModelSettings{})) return false;
 

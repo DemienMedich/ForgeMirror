@@ -2259,6 +2259,54 @@ static bool TestProfileManagerFilters() {
     return checks;
 }
 
+static bool TestRecentProfileShortcuts() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    auto addProfile = [&](const QString& name) {
+        Profile profile(name.toUtf8().toStdString());
+        const auto created = workspace.storage->create_profile(profile);
+        return created ? QString::fromStdString(created->id) : QString{};
+    };
+    const auto alphaId = addProfile(QString::fromUtf8("Alpha"));
+    const auto betaId = addProfile(QString::fromUtf8("Beta"));
+    if (alphaId.isEmpty() || betaId.isEmpty()) return false;
+
+    auto settings = LoadQtDisplaySettings(directory);
+    settings.lastProfileId = alphaId;
+    settings.recentProfileIds = {betaId, alphaId, QStringLiteral("deleted-profile")};
+    if (!SaveQtDisplaySettings(directory, settings)) return false;
+
+    bool checks = true;
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* button = window.findChild<QToolButton*>("recentProfiles");
+    auto* menu = window.findChild<QMenu*>("recentProfileMenu");
+    auto* profiles = window.findChild<QComboBox*>("profiles");
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto expect = [&](bool condition, const char* step) {
+        if (condition) return;
+        checks = false;
+        std::cerr << "recentProfileShortcuts: " << step << '\n';
+    };
+    expect(button && button->isEnabled() && menu && profiles && navigation, "controls and enabled menu");
+    if (!checks) return false;
+    const auto actions = menu->actions();
+    expect(actions.size() == 2 && actions[0]->data().toString() == alphaId && actions[1]->data().toString() == betaId,
+        "legacy order is pruned and current profile becomes most recent");
+    const auto pruned = LoadQtDisplaySettings(directory).recentProfileIds;
+    expect(pruned == QStringList{alphaId, betaId}, "unknown IDs removed and order persisted");
+    if (actions.size() >= 2) actions[1]->trigger();
+    expect(profiles->currentData().toString() == betaId && navigation->currentRow() == 0,
+        "recent action selects profile and opens profile page");
+    expect(LoadQtDisplaySettings(directory).recentProfileIds == QStringList{betaId, alphaId},
+        "selection updates persisted recency");
+    window.close();
+    return checks;
+}
+
 static bool TestProfileDialogs() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
@@ -6054,6 +6102,18 @@ static bool TestDisplaySettings(QApplication& app) {
     const auto originalAppFont = app.font();
     const auto originalAppStyleSheet = app.styleSheet();
     const auto originalBasePointSize = app.property("forgeBasePointSize");
+    QTemporaryDir legacyRecentTemp;
+    if (!legacyRecentTemp.isValid() || !QDir().mkpath(legacyRecentTemp.path() + "/meta")) return false;
+    QFile legacyRecentFile(legacyRecentTemp.path() + "/meta/ui.ini");
+    if (!legacyRecentFile.open(QIODevice::WriteOnly) ||
+        legacyRecentFile.write("[profile]\nrecent=legacy-a,legacy-b\n") < 0) return false;
+    legacyRecentFile.close();
+    const auto legacyRecentDirectory = std::filesystem::u8path(legacyRecentTemp.path().toUtf8().constData());
+    const auto importedRecent = LoadQtDisplaySettings(legacyRecentDirectory).recentProfileIds;
+    if (importedRecent != QStringList{QStringLiteral("legacy-a"), QStringLiteral("legacy-b")}) return false;
+    auto migratedRecent = LoadQtDisplaySettings(legacyRecentDirectory);
+    if (!SaveQtDisplaySettings(legacyRecentDirectory, migratedRecent) ||
+        LoadQtDisplaySettings(legacyRecentDirectory).recentProfileIds != importedRecent) return false;
     QTemporaryDir accessibilityTemp;
     if (!accessibilityTemp.isValid()) return false;
     QtDisplaySettings largeTextSettings;
@@ -6565,6 +6625,7 @@ static bool TestQtUiSettingsReset() {
     settings.cornerRadius = 12; settings.compactRows = true; settings.fullscreen = true; settings.decorated = false;
     settings.minimizeToTray = true; settings.deadlineNotificationsWhenClosed = true;
     settings.lastProfileId = QStringLiteral("profile-keep"); settings.lastPage = 13;
+    settings.recentProfileIds = {QStringLiteral("profile-recent-a"), QStringLiteral("profile-recent-b")};
     settings.projectFilter = QStringLiteral("reset-me-project-query");
     settings.taskQuickFilter = 8; settings.logFilter = QStringLiteral("keep-independent-state");
     settings.windowBackgrounds[0] = QStringLiteral("ui/backgrounds/keep.png");
@@ -6609,6 +6670,7 @@ static bool TestQtUiSettingsReset() {
     if (reset.scalePercent != 100 || reset.windowOpacityPercent != 100 || reset.spacingPercent != 100 ||
         reset.cornerRadius != 4 || reset.compactRows || reset.fullscreen || !reset.decorated || reset.minimizeToTray ||
         reset.deadlineNotificationsWhenClosed || reset.lastProfileId != QStringLiteral("profile-keep") ||
+        reset.recentProfileIds != QStringList{QStringLiteral("profile-recent-a"), QStringLiteral("profile-recent-b")} ||
         reset.lastPage != 0 || reset.taskQuickFilter != 0 || !reset.logFilter.isEmpty() || !reset.projectFilter.isEmpty() ||
         !reset.windowBackgrounds[0].isEmpty()) return failAt(__LINE__);
     const auto resetModel = LoadQtModelSettings(directory);
@@ -7110,6 +7172,7 @@ int main(int argc, char** argv) {
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }
     if (!TestProjectDeletionRecovery()) { std::cerr << "Project deletion recovery failed\n"; return 1; }
     if (!TestProfileManagerFilters()) { std::cerr << "Profile manager filters failed\n"; return 1; }
+    if (!TestRecentProfileShortcuts()) { std::cerr << "Recent profile shortcuts failed\n"; return 1; }
     if (!TestProfileDialogs()) return 1;
     if (!TestSkillEditor()) { std::cerr << "Skill editor failed\n"; return 1; }
     if (!TestProfessionEditor()) { std::cerr << "Profession editor failed\n"; return 1; }

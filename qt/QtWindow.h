@@ -111,6 +111,8 @@ private:
     void openProfileTasksFilter(int index);
     void openProjectTasksFilter(const QString& projectId, int quickFilter);
     void showProfessionBindings();
+    void rememberRecentProfile(const QString& profileId);
+    void updateRecentProfileMenu();
     QtWorkspace& workspace_;
     bool admin_ = false;
     QtProfileSession profileSession_;
@@ -168,6 +170,8 @@ private:
     QWidget* profileMetrics_;
     QWidget* profileOverview_ = nullptr;
     QToolButton* profileIdentityCopy_ = nullptr;
+    QToolButton* profileRecentButton_ = nullptr;
+    QMenu* profileRecentMenu_ = nullptr;
     QLabel* profileCollectionSummary_ = nullptr;
     QWidget* profileAchievementPreview_ = nullptr;
     QLabel* profileAchievementIcons_[3]{};

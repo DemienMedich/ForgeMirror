@@ -687,6 +687,16 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profiles_->setProperty("qtTextScaleMinimumWidth", 200);
     profiles_->setMinimumWidth(200);
     header->addWidget(profiles_);
+    profileRecentButton_ = new QToolButton;
+    profileRecentButton_->setObjectName("recentProfiles");
+    profileRecentButton_->setText(QString::fromUtf8("Недавние"));
+    profileRecentButton_->setAccessibleName(QString::fromUtf8("Недавно выбранные профили"));
+    profileRecentButton_->setToolTip(QString::fromUtf8("Быстро выбрать один из шести недавно открытых профилей"));
+    profileRecentButton_->setPopupMode(QToolButton::InstantPopup);
+    profileRecentMenu_ = new QMenu(profileRecentButton_);
+    profileRecentMenu_->setObjectName("recentProfileMenu");
+    profileRecentButton_->setMenu(profileRecentMenu_);
+    header->addWidget(profileRecentButton_);
     profileIdentityCopy_ = new QToolButton;
     profileIdentityCopy_->setObjectName("profileIdentityCopy");
     profileIdentityCopy_->setText(QString::fromUtf8("Копировать"));
@@ -2334,7 +2344,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         saveDisplayContext();
         render();
     });
-    connect(profiles_, &QComboBox::currentIndexChanged, this, [this] { profileSession_.lock(); saveDisplayContext(); render(); });
+    connect(profiles_, &QComboBox::currentIndexChanged, this, [this] {
+        profileSession_.lock();
+        rememberRecentProfile(profiles_->currentData().toString());
+        saveDisplayContext();
+        render();
+    });
     connect(search_, &QLineEdit::textChanged, this, [this] {
         if (navigation_->currentRow() == Logs) {
             displaySettings_.logFilter = search_->text();
@@ -3183,6 +3198,24 @@ bool QtWindow::reload() {
         const int index = profiles_->findData(preferred);
         if (index >= 0) profiles_->setCurrentIndex(index);
     }
+    const auto originalRecentIds = displaySettings_.recentProfileIds;
+    QStringList availableRecentIds;
+    for (const auto& profileId : originalRecentIds) {
+        const auto exists = std::any_of(workspace_.profiles.begin(), workspace_.profiles.end(), [&](const auto& profile) {
+            return q(profile.id) == profileId;
+        });
+        if (exists && !availableRecentIds.contains(profileId)) availableRecentIds.push_back(profileId);
+        if (availableRecentIds.size() == 6) break;
+    }
+    displaySettings_.recentProfileIds = availableRecentIds;
+    const auto currentProfileId = profiles_->currentData().toString();
+    if (!currentProfileId.isEmpty()) {
+        displaySettings_.lastProfileId = currentProfileId;
+        rememberRecentProfile(currentProfileId);
+    }
+    updateRecentProfileMenu();
+    if (displaySettings_.recentProfileIds != originalRecentIds)
+        SaveQtDisplaySettings(workspace_.directory, displaySettings_);
     profileIdentityCopy_->setEnabled(profiles_->currentIndex() >= 0);
     refreshTaskFilterChoices();
     refreshCatalogProfessionChoices();
@@ -3208,6 +3241,52 @@ bool QtWindow::reload() {
 QString QtWindow::selectedId() const {
     const auto* item = table_->item(table_->currentRow(), 0);
     return item ? item->data(Qt::UserRole).toString() : QString();
+}
+
+void QtWindow::rememberRecentProfile(const QString& profileId) {
+    if (profileId.isEmpty()) return;
+    displaySettings_.recentProfileIds.removeAll(profileId);
+    displaySettings_.recentProfileIds.prepend(profileId);
+    while (displaySettings_.recentProfileIds.size() > 6) displaySettings_.recentProfileIds.removeLast();
+    updateRecentProfileMenu();
+}
+
+void QtWindow::updateRecentProfileMenu() {
+    if (!profileRecentMenu_ || !profileRecentButton_) return;
+    profileRecentMenu_->clear();
+    int availableActions = 0;
+    for (const auto& profileId : displaySettings_.recentProfileIds) {
+        const int comboIndex = profiles_->findData(profileId);
+        QString label;
+        bool archived = false;
+        if (comboIndex >= 0) {
+            label = profiles_->itemText(comboIndex);
+        } else {
+            const auto it = std::find_if(workspace_.profiles.begin(), workspace_.profiles.end(), [&](const auto& profile) {
+                return q(profile.id) == profileId;
+            });
+            if (it == workspace_.profiles.end()) continue;
+            label = q(it->name);
+            archived = it->archived;
+        }
+        auto* action = profileRecentMenu_->addAction(archived
+            ? QString::fromUtf8("%1 · архив").arg(label) : label);
+        action->setObjectName(QStringLiteral("recentProfileAction%1").arg(availableActions++));
+        action->setData(profileId);
+        action->setEnabled(!archived && comboIndex >= 0);
+        action->setToolTip(QString::fromUtf8("Профиль ID: %1").arg(profileId));
+        connect(action, &QAction::triggered, this, [this, profileId] {
+            const int index = profiles_->findData(profileId);
+            if (index < 0) return;
+            profiles_->setCurrentIndex(index);
+            navigation_->setCurrentRow(ProfilePage);
+        });
+    }
+    if (profileRecentMenu_->actions().isEmpty()) {
+        auto* empty = profileRecentMenu_->addAction(QString::fromUtf8("Недавних профилей нет"));
+        empty->setEnabled(false);
+    }
+    profileRecentButton_->setEnabled(availableActions > 0);
 }
 
 void QtWindow::showProfessionBindings() {
