@@ -7262,6 +7262,15 @@ int main(int argc, char** argv) {
     auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
     if (!displayAction) return fail("Display settings action missing");
     auto* shortcutHelpAction = window.findChild<QAction*>("shortcutHelpAction");
+    const std::vector<std::pair<const char*, int>> legacyNavigationShortcuts = {
+        {"navigationF1", 0}, {"navigationF2", 3}, {"navigationF3", 4},
+        {"navigationF4", 9}, {"navigationF5", 17}, {"navigationF6", 16}
+    };
+    for (const auto& expected : legacyNavigationShortcuts) {
+        const auto* shortcut = window.findChild<QShortcut*>(expected.first);
+        if (!shortcut || shortcut->property("navigationPageIndex").toInt() != expected.second)
+            return fail("Legacy F-key navigation mapping missing or incorrect");
+    }
     auto* navigateF5 = window.findChild<QShortcut*>("navigationF5");
     auto* navigateF6 = window.findChild<QShortcut*>("navigationF6");
     if (!navigateF5 || navigateF5->property("navigationPageIndex").toInt() != 17 ||
