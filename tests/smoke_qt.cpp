@@ -1426,8 +1426,29 @@ static bool TestQtAdminAuthAcrossProcesses() {
         }
         return true;
     };
+    auto verifyUnknownOptionIsRejected = [&] {
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        process.start(executable, {QStringLiteral("--not-a-real-option")});
+        if (!process.waitForStarted(5000) || !process.waitForFinished(5000)) {
+            process.kill(); process.waitForFinished(2000);
+            std::cerr << "Unknown Qt CLI option did not exit\n";
+            return false;
+        }
+        const auto output = process.readAllStandardOutput() + process.readAllStandardError();
+        if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 2 ||
+            !output.contains("not-a-real-option")) {
+            std::cerr << "Unknown Qt CLI option was not rejected cleanly: exit=" << process.exitCode()
+                      << " output=" << output.toStdString() << '\n';
+            return false;
+        }
+        return true;
+    };
     if (!verifyInformationalOption(QStringLiteral("--version"), QByteArray(APP_VERSION)) ||
+        !verifyInformationalOption(QStringLiteral("-v"), QByteArray(APP_VERSION)) ||
         !verifyInformationalOption(QStringLiteral("--help"), QByteArray("--storage-dir")) ||
+        !verifyInformationalOption(QStringLiteral("-h"), QByteArray("--storage-dir")) ||
+        !verifyUnknownOptionIsRejected() ||
         QDir(isolatedLocalData + QStringLiteral("/Pharos/ForgeMirrorQt/workspace")).exists()) return false;
 
     for (int launch = 1; launch <= 3; ++launch) {

@@ -7,7 +7,6 @@
 #include <QLockFile>
 #include <filesystem>
 #include <iostream>
-#include <cstring>
 
 namespace {
 std::filesystem::path path(const QString& value) { return std::filesystem::u8path(value.toUtf8().constData()); }
@@ -28,10 +27,6 @@ void qtRuntimeMessageHandler(QtMsgType type, const QMessageLogContext& context, 
 }
 
 int main(int argc, char** argv) {
-    if (argc == 2 && (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-v") == 0)) {
-        std::cout << "ForgeMirrorQt " << APP_VERSION << '\n';
-        return 0;
-    }
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName("ForgeMirrorQt");
     QCoreApplication::setOrganizationName("Pharos");
@@ -46,11 +41,15 @@ int main(int argc, char** argv) {
     parser.addOption({"screenshot", "Save the Qt window as PNG before smoke-test exit.", "path"});
     parser.addOption({"deadline-agent", "One-shot deadline notifier used by the opt-in Windows schedule."});
     parser.addOption({"remove-deadline-schedule", "Remove this installation's opt-in Windows deadline schedule."});
-    parser.process(app);
-    // QCommandLineParser schedules QCoreApplication::exit() for these built-in
-    // options. Because this GUI entry point starts the event loop later, return
-    // now so informational CLI requests never construct the workspace/window.
-    if (parser.isSet(helpOption) || parser.isSet(versionOption)) return 0;
+    // Parse without process(): process() defers handling the built-in help and
+    // version options until the event loop, which this GUI entry point must not
+    // start before opening the workspace. Explicitly show them here instead.
+    if (!parser.parse(app.arguments())) {
+        std::cerr << parser.errorText().toUtf8().constData() << '\n';
+        return 2;
+    }
+    if (parser.isSet(helpOption)) parser.showHelp(0);
+    if (parser.isSet(versionOption)) parser.showVersion();
     if (parser.isSet("remove-deadline-schedule"))
         return ConfigureQtDeadlineSchedule(false, nullptr) ? 0 : 1;
     try {
