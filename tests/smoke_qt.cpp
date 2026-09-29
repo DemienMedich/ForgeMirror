@@ -3262,7 +3262,9 @@ static bool TestQtStorageHealthReport() {
     QApplication::processEvents();
     auto* reportAction = window.findChild<QAction*>("storageHealthReport");
     auto* cleanupAction = window.findChild<QAction*>("storageCleanup");
-    if (!reportAction || !cleanupAction || reportAction->isVisible() || cleanupAction->isVisible()) return fail("admin-only actions missing or visible without admin");
+    auto* legacyDataCopy = window.findChild<QAction*>("legacyDataPathCopy");
+    if (!reportAction || !cleanupAction || !legacyDataCopy || reportAction->isVisible() || cleanupAction->isVisible() ||
+        legacyDataCopy->isVisible()) return fail("admin-only actions missing or visible without admin");
     QAction* adminAction = nullptr;
     for (auto* action : window.findChildren<QAction*>())
         if (action->objectName() == QStringLiteral("adminLoginAction")) adminAction = action;
@@ -3280,6 +3282,16 @@ static bool TestQtStorageHealthReport() {
     });
     adminAction->trigger();
     if (!reportAction->isVisible() || !cleanupAction->isVisible()) return fail("admin authentication");
+    const bool legacyDataAvailable = HasProjectSeedData();
+    if (legacyDataCopy->isVisible() != legacyDataAvailable) return fail("legacy data path action visibility");
+    if (legacyDataAvailable) {
+        legacyDataCopy->trigger();
+        const auto expectedLegacyDataPath = QDir::toNativeSeparators(
+            QString::fromStdWString(ProjectSeedDataDir().wstring()));
+        if (QApplication::clipboard()->text() != expectedLegacyDataPath ||
+            !window.statusBar()->currentMessage().contains(QString::fromUtf8("Путь к данным стабильной версии скопирован")))
+            return fail("legacy data path was not copied");
+    }
     std::filesystem::create_directories(workspacePath / "meta");
     std::filesystem::create_directories(cloudPath / "meta");
     const auto localTasks = workspacePath / "meta" / "tasks.json";

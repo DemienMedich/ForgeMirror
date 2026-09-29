@@ -32,6 +32,7 @@
 #include "AppPipelineService.h"
 #include "AppTaskWorkflowService.h"
 #include "AppTeamValueReportService.h"
+#include "AppUtils.h"
 #include "AppProfileMutationService.h"
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
@@ -841,6 +842,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     storageCleanupAction_->setObjectName("storageCleanup");
     storageCleanupAction_->setToolTip(QString::fromUtf8("Показать точный список Qt-копии; удалить можно только отмеченные элементы после подтверждения"));
     connect(storageCleanupAction_, &QAction::triggered, this, [this] { cleanupStrayStorage(); });
+    const auto legacyDataDirectory = ProjectSeedDataDir();
+    legacyDataPathCopy_ = menu->addAction(QString::fromUtf8("Копировать путь к данным стабильной версии"));
+    legacyDataPathCopy_->setObjectName("legacyDataPathCopy");
+    legacyDataPathCopy_->setToolTip(QString::fromUtf8("Путь к исходной проектной папке data/; Qt не изменяет её."));
+    legacyDataPathCopy_->setProperty("legacyDataAvailable", HasProjectSeedData());
+    connect(legacyDataPathCopy_, &QAction::triggered, this, [this, legacyDataDirectory] {
+        if (!HasProjectSeedData()) {
+            statusBar()->showMessage(QString::fromUtf8("Данные стабильной версии больше не обнаружены."), 5000);
+            render();
+            return;
+        }
+        const auto path = QDir::toNativeSeparators(q(legacyDataDirectory.u8string()));
+        QApplication::clipboard()->setText(path);
+        statusBar()->showMessage(QString::fromUtf8("Путь к данным стабильной версии скопирован."), 5000);
+    });
     auto* windowMenu = menu->addMenu(QString::fromUtf8("Окно"));
     windowMenu->setObjectName("windowMenu");
     windowFullscreenAction_ = windowMenu->addAction(QString::fromUtf8("Во весь экран (F11)"));
@@ -3124,6 +3140,7 @@ void QtWindow::render() {
     ownPasswordAction_->setEnabled(unlocked);
     storageHealthReportAction_->setVisible(admin_);
     storageCleanupAction_->setVisible(admin_);
+    legacyDataPathCopy_->setVisible(admin_ && legacyDataPathCopy_->property("legacyDataAvailable").toBool());
     shortcutLauncher_->setVisible(workspace_.modules.shortcuts);
     cloudQuickButton_->setVisible(workspace_.modules.cloud);
     pomodoroQuickButton_->setVisible(workspace_.modules.pomodoro);

@@ -116,6 +116,7 @@ private:
     QAction* profileAccessAction_;
     QAction* adminLoginAction_ = nullptr;
     QAction* adminPasswordAction_;
+    QAction* legacyDataPathCopy_ = nullptr;
     QAction* ownPasswordAction_;
     QAction* windowFullscreenAction_ = nullptr;
     QAction* windowDecoratedAction_ = nullptr;
