@@ -2207,8 +2207,9 @@ static bool TestProfileManagerFilters() {
         auto* profession = dialog->findChild<QComboBox*>("profileProfessionFilter");
         auto* sort = dialog->findChild<QComboBox*>("profileSort");
         auto* refresh = dialog->findChild<QPushButton*>("refreshProfiles");
-        expect(table && table->columnCount() == 5 && table->horizontalHeaderItem(4) &&
-            table->horizontalHeaderItem(4)->text() == QString::fromUtf8("Баланс") &&
+        expect(table && table->columnCount() == 6 && table->horizontalHeaderItem(2) &&
+            table->horizontalHeaderItem(2)->text() == QString::fromUtf8("Логин") &&
+            table->horizontalHeaderItem(5) && table->horizontalHeaderItem(5)->text() == QString::fromUtf8("Баланс") &&
             search && archive && profession && sort && refresh, "controls");
         if (!checks) { dialog->reject(); return; }
         auto rowWithId = [&](const QString& id) {
@@ -2225,8 +2226,9 @@ static bool TestProfileManagerFilters() {
         expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(zuluId)) == 0, "id search");
         search->clear();
         const int zuluRow = rowWithId(QString::fromStdString(zuluId));
-        expect(zuluRow >= 0 && table->item(zuluRow, 2) && table->item(zuluRow, 2)->text() == QString::fromUtf8("Artist"), "profession column");
-        expect(zuluRow >= 0 && table->item(zuluRow, 4) && table->item(zuluRow, 4)->text() == QString::fromUtf8("1250 CRN"),
+        expect(zuluRow >= 0 && table->item(zuluRow, 2) && table->item(zuluRow, 2)->text() == QString::fromUtf8("artist-login"), "login column");
+        expect(zuluRow >= 0 && table->item(zuluRow, 3) && table->item(zuluRow, 3)->text() == QString::fromUtf8("Artist"), "profession column");
+        expect(zuluRow >= 0 && table->item(zuluRow, 5) && table->item(zuluRow, 5)->text() == QString::fromUtf8("1250 CRN"),
             "wallet balance and currency");
 
         archive->setCurrentIndex(1);

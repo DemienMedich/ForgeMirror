@@ -215,15 +215,16 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     auto* table = new QTableWidget;
     table->setObjectName("profileRecords");
     table->setAccessibleName(QString::fromUtf8("Список профилей"));
-    table->setAccessibleDescription(QString::fromUtf8("Таблица профилей с ID, профессией и состоянием; выберите строку для доступных действий."));
-    table->setColumnCount(5);
-    table->setHorizontalHeaderLabels({QString::fromUtf8("Профиль"), "ID", QString::fromUtf8("Профессия"),
-        QString::fromUtf8("Состояние"), QString::fromUtf8("Баланс")});
+    table->setAccessibleDescription(QString::fromUtf8("Таблица профилей с ID, логином, профессией и состоянием; выберите строку для доступных действий."));
+    table->setColumnCount(6);
+    table->setHorizontalHeaderLabels({QString::fromUtf8("Профиль"), "ID", QString::fromUtf8("Логин"),
+        QString::fromUtf8("Профессия"), QString::fromUtf8("Состояние"), QString::fromUtf8("Баланс")});
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
     table->verticalHeader()->hide();
     table->verticalHeader()->setDefaultSectionSize(28);
     table->setShowGrid(false);
@@ -351,13 +352,14 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
             table->item(row, 0)->setToolTip(profileName);
             table->item(row, 0)->setData(Qt::UserRole, q(p.id));
             table->setItem(row, 1, new QTableWidgetItem(q(p.id)));
+            table->setItem(row, 2, new QTableWidgetItem(login));
             QString state = QString::fromUtf8("Архив");
             if (!p.archived) {
                 state = !snapshot ? QString::fromUtf8("Ошибка чтения") :
                     (snapshot->is_blocked() ? QString::fromUtf8("Заблокирован") : QString::fromUtf8("Доступен"));
             }
-            table->setItem(row, 2, new QTableWidgetItem(professionName.isEmpty() ? QString::fromUtf8("—") : professionName));
-            table->setItem(row, 3, new QTableWidgetItem(state));
+            table->setItem(row, 3, new QTableWidgetItem(professionName.isEmpty() ? QString::fromUtf8("—") : professionName));
+            table->setItem(row, 4, new QTableWidgetItem(state));
             std::string currencyCode = workspace.data.vault.currencyCode.empty()
                 ? workspace.data.vault.currencyName : workspace.data.vault.currencyCode;
             if (currencyCode.empty()) currencyCode = "KUK";
@@ -366,7 +368,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
                 ? QString::number(snapshot->wallet_balance(), 'f', 0) + " " + currency
                 : QString::fromUtf8("—"));
             balance->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            table->setItem(row, 4, balance);
+            table->setItem(row, 5, balance);
             if (previous && previous->id == p.id) table->selectRow(row);
         }
         selection();
