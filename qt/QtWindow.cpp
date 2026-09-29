@@ -677,6 +677,45 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profiles_->setProperty("qtTextScaleMinimumWidth", 200);
     profiles_->setMinimumWidth(200);
     header->addWidget(profiles_);
+    profileIdentityCopy_ = new QToolButton;
+    profileIdentityCopy_->setObjectName("profileIdentityCopy");
+    profileIdentityCopy_->setText(QString::fromUtf8("Копировать"));
+    profileIdentityCopy_->setAccessibleName(QString::fromUtf8("Копировать данные выбранного профиля"));
+    profileIdentityCopy_->setToolTip(QString::fromUtf8("Скопировать имя, ID или логин выбранного профиля"));
+    profileIdentityCopy_->setPopupMode(QToolButton::InstantPopup);
+    auto* profileCopyMenu = new QMenu(profileIdentityCopy_);
+    profileCopyMenu->setObjectName("profileIdentityCopyMenu");
+    const auto copyProfileField = [this](const QString& field) {
+        const auto id = u(profiles_->currentData().toString());
+        if (id.empty()) return;
+        const auto profile = workspace_.storage->load_profile_snapshot(id, true);
+        if (!profile) {
+            statusBar()->showMessage(QString::fromUtf8("Не удалось прочитать выбранный профиль."), 5000);
+            return;
+        }
+        const QString value = field == QStringLiteral("name") ? q(profile->name())
+            : field == QStringLiteral("login") ? q(profile->login().empty() ? id : profile->login())
+            : q(id);
+        QApplication::clipboard()->setText(value);
+        const QString fieldLabel = field == QStringLiteral("name") ? QString::fromUtf8("Имя")
+            : field == QStringLiteral("login") ? QString::fromUtf8("Логин") : QStringLiteral("ID");
+        statusBar()->showMessage(QString::fromUtf8("%1 профиля скопировано.").arg(fieldLabel), 5000);
+    };
+    const std::array<std::pair<const char*, const char*>, 3> identityFields{{
+        {"profileIdentityCopyName", "name"}, {"profileIdentityCopyId", "id"}, {"profileIdentityCopyLogin", "login"}}};
+    for (const auto& [objectName, field] : identityFields) {
+        auto* action = profileCopyMenu->addAction(field == std::string("name") ? QString::fromUtf8("Копировать имя")
+            : field == std::string("id") ? QString::fromUtf8("Копировать ID") : QString::fromUtf8("Копировать логин"));
+        action->setObjectName(objectName);
+        connect(action, &QAction::triggered, this, [copyProfileField, field] {
+            copyProfileField(QString::fromUtf8(field));
+        });
+    }
+    profileIdentityCopy_->setMenu(profileCopyMenu);
+    profileIdentityCopy_->setEnabled(profiles_->currentIndex() >= 0);
+    connect(profiles_, &QComboBox::currentIndexChanged, profileIdentityCopy_,
+        [this](int index) { profileIdentityCopy_->setEnabled(index >= 0); });
+    header->addWidget(profileIdentityCopy_);
     header->addStretch();
     mode_ = new QLabel;
     header->addWidget(mode_);
@@ -2886,6 +2925,7 @@ bool QtWindow::reload() {
         const int index = profiles_->findData(preferred);
         if (index >= 0) profiles_->setCurrentIndex(index);
     }
+    profileIdentityCopy_->setEnabled(profiles_->currentIndex() >= 0);
     refreshTaskFilterChoices();
     refreshCatalogProfessionChoices();
     const int page = std::clamp(displaySettings_.lastPage, 0, navigation_->count() - 1);

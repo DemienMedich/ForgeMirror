@@ -6695,6 +6695,7 @@ int main(int argc, char** argv) {
     if (!temp.isValid()) return fail("Temporary directory unavailable");
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
     Profile profile(u8"Тестовый профиль");
+    profile.set_login("test-profile-login");
     profile.set_password_encoded(EncodePassword("profile-test-password"));
     profile.set_last_task_timestamp(QDateTime::currentSecsSinceEpoch() - 5 * 86400);
     profile.set_category_best_scores({3, 7, 2, 10, 5});
@@ -7250,6 +7251,23 @@ int main(int argc, char** argv) {
         !savedStatsSettings.adminStatsSearch.isEmpty())
         return fail("Profile statistics filters were not persisted");
     nav->setCurrentRow(0);
+    auto* profileIdentityButton = window.findChild<QToolButton*>("profileIdentityCopy");
+    auto* copyProfileName = window.findChild<QAction*>("profileIdentityCopyName");
+    auto* copyProfileId = window.findChild<QAction*>("profileIdentityCopyId");
+    auto* copyProfileLogin = window.findChild<QAction*>("profileIdentityCopyLogin");
+    if (!profileIdentityButton || !profileIdentityButton->isEnabled() || !copyProfileName || !copyProfileId || !copyProfileLogin)
+        return fail("Selected-profile identity copy actions unavailable");
+    copyProfileName->trigger();
+    if (QApplication::clipboard()->text() != QString::fromUtf8("Тестовый профиль") ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Имя профиля скопировано")))
+        return fail("Profile name was not copied");
+    copyProfileId->trigger();
+    if (QApplication::clipboard()->text() != QString::fromStdString(createdProfile->id))
+        return fail("Profile ID was not copied");
+    copyProfileLogin->trigger();
+    if (QApplication::clipboard()->text() != QStringLiteral("test-profile-login") ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Логин профиля скопирован")))
+        return fail("Profile login was not copied");
     auto* profileReportMenu = window.findChild<QToolButton*>("profileReportExport");
     auto* copyProfileReportPath = window.findChild<QAction*>("profileReportCopyPath");
     if (!profileReportMenu || !profileReportMenu->isVisible() || !window.findChild<QAction*>("profileReportTxt") ||
