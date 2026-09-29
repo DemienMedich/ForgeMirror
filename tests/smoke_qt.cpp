@@ -6841,6 +6841,66 @@ static bool TestQtLogSourceSanitizationAndRetention() {
     return true;
 }
 
+static bool TestQtRecentProfileActions() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    Profile profile(u8"Профиль ленты XP");
+    const auto profileInfo = workspace.storage->create_profile(profile);
+    if (!profileInfo || !workspace.storage->set_active_profile(profileInfo->id)) return false;
+
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    std::vector<TaskEntry> tasks;
+    auto addAction = [&](std::string id, std::string title, int secondsAgo, std::string participantId,
+                         int globalXp, int skillXp) {
+        TaskEntry task;
+        task.id = std::move(id);
+        task.title = std::move(title);
+        task.createdAt = now - secondsAgo;
+        task.status = 2;
+        task.participants.push_back({std::move(participantId), 100, globalXp, skillXp, {}});
+        tasks.push_back(std::move(task));
+    };
+    addAction("recent-xp-1", u8"Скрытое начисление", 200, profileInfo->id, 12, 24);
+    addAction("recent-xp-2", u8"Самое новое начисление", 300, profileInfo->id, 8, 16);
+    addAction("recent-xp-3", u8"Третье начисление", 400, profileInfo->id, 4, 8);
+    addAction("recent-xp-4", u8"Второе начисление", 500, profileInfo->id, 2, 4);
+    addAction("recent-xp-other", u8"Чужое начисление", 5, "other-profile-id", 100, 200);
+    if (!AppSaveTasks(workspace.directory, tasks)) return false;
+
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* profiles = window.findChild<QComboBox*>("profiles");
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* card = window.findChild<QWidget*>("profileRecentActionsCard");
+    auto* summary = window.findChild<QLabel*>("profileRecentActionsSummary");
+    if (!profiles || !navigation || !card || !summary) return false;
+    const int profileIndex = profiles->findData(QString::fromStdString(profileInfo->id));
+    if (profileIndex < 0) return false;
+    profiles->setCurrentIndex(profileIndex);
+    workspace.data.taskAudit = {
+        {now - 80, "test", "recent-xp-1", "participants", "", "awarded"},
+        {now - 10, "test", "recent-xp-2", "participants", "", "awarded"},
+        {now - 60, "test", "recent-xp-3", "participants", "", "awarded"},
+        {now - 30, "test", "recent-xp-4", "participants", "", "awarded"}};
+    navigation->setCurrentRow(1);
+    QApplication::processEvents();
+    navigation->setCurrentRow(0);
+    QApplication::processEvents();
+
+    const QString text = summary->text();
+    const bool ordered = text.indexOf(QString::fromUtf8("Самое новое начисление")) <
+            text.indexOf(QString::fromUtf8("Второе начисление")) &&
+        text.indexOf(QString::fromUtf8("Второе начисление")) < text.indexOf(QString::fromUtf8("Третье начисление"));
+    return !card->isHidden() && ordered &&
+        !text.contains(QString::fromUtf8("Скрытое начисление")) &&
+        !text.contains(QString::fromUtf8("Чужое начисление")) &&
+        text.contains(QString::fromUtf8("+8 глобального / +16 навыкового XP")) &&
+        text.contains(QString::fromUtf8("+1 в истории")) &&
+        summary->accessibleDescription().contains(QString::fromUtf8("3 из 4"));
+}
+
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     ApplyQtTheme(app);
@@ -8481,6 +8541,7 @@ int main(int argc, char** argv) {
             std::cerr << "  " << failure.toUtf8().constData() << '\n';
         return 1;
     }
+    if (!TestQtRecentProfileActions()) return fail("Recent profile XP feed failed filtering, ordering, details, or overflow summary");
     std::cout << "smoke_qt: OK; accessible dialogs audited: " << g_dialogAccessibilityAudits << '\n';
     return 0;
 }

@@ -173,6 +173,8 @@ private:
     QWidget* profileTaskBriefCard_ = nullptr;
     QLabel* profileTaskSummary_ = nullptr;
     QTableWidget* profileTaskBriefTable_ = nullptr;
+    QWidget* profileRecentActionsCard_ = nullptr;
+    QLabel* profileRecentActionsSummary_ = nullptr;
     QPushButton* profileOverviewTaskButtons_[5]{};
     QPushButton* profileOverviewAnalytics_ = nullptr;
     QPushButton* profileOverviewXp_ = nullptr;

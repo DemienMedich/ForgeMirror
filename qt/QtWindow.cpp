@@ -1397,6 +1397,22 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileTaskBriefTable_->setAccessibleName(QString::fromUtf8("Ближайшие активные задачи профиля"));
     profileTaskBriefTable_->setAccessibleDescription(QString::fromUtf8("До четырёх назначенных задач, отсортированных по срочности. Двойной щелчок откроет задачу."));
     taskBriefLayout->addWidget(profileTaskBriefTable_);
+    profileRecentActionsCard_ = new QFrame;
+    profileRecentActionsCard_->setObjectName("profileRecentActionsCard");
+    profileRecentActionsCard_->setProperty("metric", true);
+    auto* recentActionsLayout = new QVBoxLayout(profileRecentActionsCard_);
+    recentActionsLayout->setContentsMargins(10, 8, 10, 8);
+    recentActionsLayout->setSpacing(5);
+    auto* recentActionsTitle = new QLabel(QString::fromUtf8("Последние действия"), profileRecentActionsCard_);
+    recentActionsTitle->setProperty("metricValue", true);
+    recentActionsTitle->setObjectName("profileRecentActionsTitle");
+    recentActionsLayout->addWidget(recentActionsTitle);
+    profileRecentActionsSummary_ = new QLabel(QString::fromUtf8("Пока нет начислений по задачам."), profileRecentActionsCard_);
+    profileRecentActionsSummary_->setObjectName("profileRecentActionsSummary");
+    profileRecentActionsSummary_->setWordWrap(true);
+    labelForAccessibility(profileRecentActionsSummary_, QString::fromUtf8("Последние начисления опыта профиля"),
+        QString::fromUtf8("Показывает до трёх последних записанных начислений XP по задачам. Полная история доступна в истории профиля."));
+    recentActionsLayout->addWidget(profileRecentActionsSummary_);
     auto* profileOverviewActions = new QGridLayout;
     profileOverviewActions->setContentsMargins(0, 0, 0, 0);
     profileOverviewActions->setHorizontalSpacing(6);
@@ -1458,6 +1474,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(profileRankApply_, &QPushButton::clicked, this, [this] { applyProfileRank(); });
     profileOverviewLayout->addLayout(profileOverviewActions);
     profileOverviewLayout->addWidget(profileTaskCard);
+    profileOverviewLayout->addWidget(profileRecentActionsCard_);
     content->addWidget(profileOverview_);
     connect(profileTaskBriefTable_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
         if (row < 0 || row >= profileTaskBriefTable_->rowCount()) return;
@@ -2021,7 +2038,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     bottom->addWidget(walletHistory_);
     profileHistory_ = new QPushButton(QString::fromUtf8("История профиля"));
     profileHistory_->setObjectName("profileActivityHistory");
-    profileHistory_->setToolTip(QString::fromUtf8("События из локального аудита профилей; без истории задач и XP"));
+    profileHistory_->setToolTip(QString::fromUtf8("История профиля, включая связанные задачи и начисления XP"));
     bottom->addWidget(profileHistory_);
     profileExport_ = new QToolButton;
     profileExport_->setObjectName("profileReportExport");
@@ -3273,6 +3290,7 @@ void QtWindow::render() {
     profileRankControls_->setVisible(page == ProfilePage && admin_);
     profileRankControls_->setEnabled(!profiles_->currentData().toString().isEmpty());
     profileTaskBriefCard_->setVisible(page == ProfilePage && workspace_.modules.tasks);
+    profileRecentActionsCard_->setVisible(page == ProfilePage && workspace_.modules.tasks);
     for (int index = 0; index < 5; ++index)
         profileOverviewTaskButtons_[index]->setVisible(page == ProfilePage && workspace_.modules.tasks);
     profileOverviewTaskButtons_[0]->setEnabled(profileTaskBriefTable_->rowCount() > 0);
@@ -3376,6 +3394,8 @@ void QtWindow::render() {
         }
         profileTaskBriefTable_->setRowCount(0);
         profileTaskSummary_->setText(QString::fromUtf8("Нет назначенных активных задач."));
+        profileRecentActionsSummary_->setText(QString::fromUtf8("Пока нет начислений по задачам."));
+        profileRecentActionsSummary_->setAccessibleDescription(QString::fromUtf8("Пока нет сохранённых начислений XP по задачам для выбранного профиля."));
         const auto id = u(profiles_->currentData().toString());
         std::optional<Profile> profile;
         // Viewing a profile must not invoke LoadActiveProfile: that legacy helper saves on read.
@@ -3645,6 +3665,53 @@ void QtWindow::render() {
             profileOverviewTaskButtons_[2]->setEnabled(activeTasks > 0);
             profileOverviewTaskButtons_[3]->setEnabled(overdueTasks > 0);
             profileOverviewTaskButtons_[4]->setEnabled(xpPendingTasks > 0);
+
+            struct RecentProfileXpAction {
+                std::int64_t timestamp = 0;
+                const TaskEntry* task = nullptr;
+                const TaskParticipant* participant = nullptr;
+            };
+            std::vector<RecentProfileXpAction> recentXpActions;
+            if (workspace_.modules.tasks) {
+                std::unordered_map<std::string, std::int64_t> latestParticipantAudit;
+                for (const auto& audit : data.taskAudit) {
+                    if (audit.field != "participants") continue;
+                    auto& timestamp = latestParticipantAudit[audit.taskId];
+                    timestamp = std::max(timestamp, audit.timestamp);
+                }
+                for (const auto& task : data.tasks) {
+                    const auto participant = std::find_if(task.participants.begin(), task.participants.end(), [&](const auto& item) {
+                        return item.profileId == id;
+                    });
+                    if (participant == task.participants.end() || (participant->globalXp <= 0 && participant->skillXp <= 0)) continue;
+                    const auto audit = latestParticipantAudit.find(task.id);
+                    const std::int64_t timestamp = audit != latestParticipantAudit.end() && audit->second > 0
+                        ? audit->second : task.createdAt;
+                    recentXpActions.push_back({timestamp, &task, &*participant});
+                }
+            }
+            std::stable_sort(recentXpActions.begin(), recentXpActions.end(), [](const auto& left, const auto& right) {
+                if (left.timestamp != right.timestamp) return left.timestamp > right.timestamp;
+                return left.task->id < right.task->id;
+            });
+            QStringList recentXpLines;
+            const int shownXpActions = std::min(3, int(recentXpActions.size()));
+            for (int index = 0; index < shownXpActions; ++index) {
+                const auto& action = recentXpActions[size_t(index)];
+                recentXpLines << QStringLiteral("%1 · %2 · +%3 глобального / +%4 навыкового XP")
+                    .arg(action.timestamp > 0 ? QDateTime::fromSecsSinceEpoch(action.timestamp).toString("dd.MM.yyyy HH:mm")
+                                              : QString::fromUtf8("Без даты"))
+                    .arg(q(AppTaskDisplayTitle(*action.task)))
+                    .arg(action.participant->globalXp)
+                    .arg(action.participant->skillXp);
+            }
+            if (recentXpLines.isEmpty()) recentXpLines << QString::fromUtf8("Пока нет начислений по задачам.");
+            else if (recentXpActions.size() > size_t(shownXpActions))
+                recentXpLines << QString::fromUtf8("+%1 в истории").arg(int(recentXpActions.size()) - shownXpActions);
+            const QString recentXpText = recentXpLines.join(QLatin1Char('\n'));
+            profileRecentActionsSummary_->setText(recentXpText);
+            profileRecentActionsSummary_->setAccessibleDescription(QString::fromUtf8("Показано %1 из %2 сохранённых начислений XP по задачам для выбранного профиля.")
+                .arg(shownXpActions).arg(qulonglong(recentXpActions.size())));
             if (profileMode == 3) {
                 const auto now = QDateTime::currentSecsSinceEpoch();
                 int active = 0, overdue = 0, xpPending = 0;
