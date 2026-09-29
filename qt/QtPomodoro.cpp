@@ -51,25 +51,57 @@ bool writePomodoro(const std::filesystem::path& storage, const QMap<QString, QSt
 int integer(const QMap<QString, QString>& values, const QString& key, int fallback, int low, int high) {
     bool ok = false; const int value = values.value(key).toInt(&ok); return std::clamp(ok ? value : fallback, low, high);
 }
-QString soundPath(const std::filesystem::path& storage, const QString& relative) {
+QString bundledMusicDirectory(const std::filesystem::path& assetRoot) {
+    QDir search(QString::fromUtf8(assetRoot.u8string()));
+    if (!search.exists()) return {};
+    for (int depth = 0; depth < 6; ++depth) {
+        const QFileInfo candidate(search.filePath(QStringLiteral("data/music")));
+        if (candidate.exists() && candidate.isDir() && !candidate.isSymLink())
+            return candidate.absoluteFilePath();
+        if (!search.cdUp()) break;
+    }
+    return {};
+}
+QString workspaceMusicDirectory(const std::filesystem::path& storage) {
+    const QFileInfo candidate(QString::fromUtf8((storage / "music").u8string()));
+    return candidate.exists() && candidate.isDir() && !candidate.isSymLink()
+        ? candidate.absoluteFilePath() : QString();
+}
+QString selectedMusicDirectory(const std::filesystem::path& storage, const std::filesystem::path& assetRoot) {
+    const auto local = workspaceMusicDirectory(storage);
+    return !local.isEmpty() ? local : bundledMusicDirectory(assetRoot);
+}
+bool isSafeSoundFile(const QFileInfo& file) {
+    if (file.isSymLink() || !file.isFile() || file.size() > 20 * 1024 * 1024) return false;
+    const auto extension = file.suffix();
+    return !extension.compare("wav", Qt::CaseInsensitive) || !extension.compare("mp3", Qt::CaseInsensitive);
+}
+QString soundPath(const std::filesystem::path& storage, const std::filesystem::path& assetRoot, const QString& relative) {
     if (relative.isEmpty()) return {};
     const QString prefix = "music/";
     if (!relative.startsWith(prefix)) return {};
     const auto name = relative.mid(prefix.size());
     if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains(':') || name.contains('"')) return {};
-    const auto extension = QFileInfo(name).suffix();
-    if (extension.compare("wav", Qt::CaseInsensitive) && extension.compare("mp3", Qt::CaseInsensitive)) return {};
-    const auto root = QString::fromUtf8(storage.u8string());
-    const QFileInfo directory(root + "/music"), file(directory.filePath() + "/" + name);
-    if (directory.isSymLink() || file.isSymLink() || !file.isFile() || file.size() > 20 * 1024 * 1024) return {};
-    return file.absoluteFilePath();
+    const auto localDirectory = workspaceMusicDirectory(storage);
+    const auto bundledDirectory = bundledMusicDirectory(assetRoot);
+    for (const auto& directory : {localDirectory, bundledDirectory}) {
+        if (directory.isEmpty()) continue;
+        const QFileInfo file(QDir(directory).filePath(name));
+        if (isSafeSoundFile(file)) return file.absoluteFilePath();
+    }
+    return {};
 }
-void fillSounds(QComboBox* combo, const std::filesystem::path& storage, const QString& current) {
+void fillSounds(QComboBox* combo, const std::filesystem::path& storage,
+    const std::filesystem::path& assetRoot, const QString& current) {
     combo->addItem(QString::fromUtf8("Системный сигнал"), QString());
-    const QDir directory(QString::fromUtf8((storage / "music").u8string()));
-    for (const auto& name : directory.entryList({"*.wav", "*.WAV", "*.mp3", "*.MP3"}, QDir::Files | QDir::NoSymLinks, QDir::Name)) {
-        const auto relative = "music/" + name;
-        if (!soundPath(storage, relative).isEmpty()) combo->addItem(name, relative);
+    const auto path = selectedMusicDirectory(storage, assetRoot);
+    if (!path.isEmpty()) {
+        const QDir directory(path);
+        for (const auto& name : directory.entryList(QDir::Files | QDir::NoSymLinks, QDir::Name)) {
+            if (!isSafeSoundFile(QFileInfo(directory.filePath(name)))) continue;
+            const auto relative = "music/" + name;
+            if (!soundPath(storage, assetRoot, relative).isEmpty()) combo->addItem(name, relative);
+        }
     }
     if (current.startsWith("music/") && combo->findData(current) < 0)
         combo->addItem(QString::fromUtf8("Недоступен: ") + QFileInfo(current).fileName(), current);
@@ -78,7 +110,9 @@ void fillSounds(QComboBox* combo, const std::filesystem::path& storage, const QS
 }
 
 QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workSeconds, int breakSeconds,
-    int longBreakSeconds, int cyclesBeforeLong) : QWidget(parent), storage_(std::move(storage)),
+    int longBreakSeconds, int cyclesBeforeLong, std::filesystem::path assetRoot)
+    : QWidget(parent), storage_(std::move(storage)),
+    assetRoot_(assetRoot.empty() ? std::filesystem::u8path(QCoreApplication::applicationDirPath().toUtf8().toStdString()) : std::move(assetRoot)),
     workSeconds_(std::max(1, workSeconds)), breakSeconds_(std::max(1, breakSeconds)),
     longBreakSeconds_(std::max(1, longBreakSeconds)), cyclesBeforeLong_(std::max(1, cyclesBeforeLong)) {
     setObjectName("pomodoroPanel");
@@ -123,12 +157,17 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     soundEnabled_->setChecked(!saved.contains("soundEnabled") || saved.value("soundEnabled") == "1");
     focusSound_ = new QComboBox; focusSound_->setObjectName("pomodoroFocusSound");
     breakSound_ = new QComboBox; breakSound_->setObjectName("pomodoroBreakSound");
-    fillSounds(focusSound_, storage_, saved.value("soundFocus")); fillSounds(breakSound_, storage_, saved.value("soundBreak"));
+    fillSounds(focusSound_, storage_, assetRoot_, saved.value("soundFocus"));
+    fillSounds(breakSound_, storage_, assetRoot_, saved.value("soundBreak"));
     soundVolume_ = new QSpinBox; soundVolume_->setObjectName("pomodoroSoundVolume"); soundVolume_->setRange(0, 100); soundVolume_->setSuffix(" %");
     soundVolume_->setValue(integer(saved, "soundVolume", 80, 0, 100));
     soundForm->addRow(soundEnabled_); soundForm->addRow(QString::fromUtf8("После фокуса"), focusSound_);
     soundForm->addRow(QString::fromUtf8("После перерыва"), breakSound_); soundForm->addRow(QString::fromUtf8("Громкость"), soundVolume_);
-    soundSettings_->setToolTip(QString::fromUtf8("Администраторские сигналы из локальной папки music."));
+    auto* refreshSounds = new QPushButton(QString::fromUtf8("Обновить список звуков"));
+    refreshSounds->setObjectName("pomodoroRefreshSounds");
+    refreshSounds->setAccessibleName(QString::fromUtf8("Обновить список звуков Pomodoro"));
+    soundForm->addRow(QString(), refreshSounds);
+    soundSettings_->setToolTip(QString::fromUtf8("Администраторские сигналы из папки music рабочего места или поставки data/music."));
     controlBox->addWidget(soundSettings_); soundSettings_->hide();
     auto* note = new QLabel(QString::fromUtf8("Награда возможна только за полный фокус при личном входе и по правилам хранилища."));
     note->setWordWrap(true); controlBox->addWidget(note); controlBox->addStretch(); root->addWidget(controls, 2);
@@ -142,6 +181,15 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     connect(pause_, &QPushButton::clicked, this, [this] { running_ = false; timer_->stop(); refresh(); });
     connect(reset_, &QPushButton::clicked, this, [this] { reset(); });
     connect(save, &QPushButton::clicked, this, [this] { saveSettings(); });
+    connect(refreshSounds, &QPushButton::clicked, this, [this] {
+        const auto focus = focusSound_->currentData().toString();
+        const auto pause = breakSound_->currentData().toString();
+        focusSound_->clear(); breakSound_->clear();
+        fillSounds(focusSound_, storage_, assetRoot_, focus);
+        fillSounds(breakSound_, storage_, assetRoot_, pause);
+        statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Список звуков обновлён."));
+        refresh();
+    });
     connect(next_, &QPushButton::clicked, this, [this] { if (awaiting_) { phase_ = nextPhase_; awaiting_ = false; remaining_ = duration(phase_); startOrResume(); } });
     reset();
 }
@@ -231,7 +279,7 @@ void QtPomodoro::playSound(Phase completed) {
     if (!soundEnabled_->isChecked() || soundVolume_->value() <= 0) return;
     const auto relative = completed == Work ? focusSound_->currentData().toString() : breakSound_->currentData().toString();
     if (relative.isEmpty()) { QApplication::beep(); return; }
-    const auto path = soundPath(storage_, relative);
+    const auto path = soundPath(storage_, assetRoot_, relative);
     if (path.isEmpty()) { statusLabel_->setProperty("rewardMessage", QString::fromUtf8("Сигнал не найден; интервал завершён.")); return; }
 #ifdef _WIN32
     mciSendStringW(L"close forgemirror_qt_pomodoro", nullptr, 0, nullptr);

@@ -5405,6 +5405,12 @@ static bool TestPomodoro() {
     if (!panel.findChild<QWidget*>("pomodoroSoundEnabled")->isVisible() || focusSound->findData("music/focus.mp3") < 0 ||
         focusSound->findData("../outside.mp3") >= 0) return fail(12);
     focusSound->setCurrentIndex(focusSound->findData("music/focus.mp3"));
+    { QFile lateMusic(temp.path() + "/music/late.wav"); if (!lateMusic.open(QIODevice::WriteOnly)) return false; lateMusic.write("test"); }
+    if (focusSound->findData("music/late.wav") >= 0) return fail(15);
+    auto* refreshSounds = panel.findChild<QPushButton*>("pomodoroRefreshSounds");
+    if (!refreshSounds || refreshSounds->accessibleName().isEmpty()) return fail(16);
+    refreshSounds->click();
+    if (focusSound->findData("music/late.wav") < 0 || focusSound->currentData().toString() != "music/focus.mp3") return fail(17);
     start->click(); panel.advanceSecondsForTest(1);
     if (time->text() != "00:01" || !pause->isVisible()) return fail(2);
     pause->click(); panel.advanceSecondsForTest(2);
@@ -5445,7 +5451,27 @@ static bool TestPomodoro() {
     panel.quickToggle(); panel.advanceSecondsForTest(1); panel.quickNext();
     if (rewards != rewardsBeforeSkippedFocus || phase->text() != QString::fromUtf8("Перерыв") || !pause->isVisible()) return fail(14);
     panel.quickReset();
-    return phase->text() == QString::fromUtf8("Фокус") && time->text() == "30:00" && !pause->isVisible();
+    if (phase->text() != QString::fromUtf8("Фокус") || time->text() != "30:00" || pause->isVisible()) return fail(18);
+
+    QTemporaryDir assetRoot, fallbackStorage;
+    if (!assetRoot.isValid() || !fallbackStorage.isValid()) return fail(19);
+    QDir().mkpath(assetRoot.path() + "/data/music");
+    QDir().mkpath(fallbackStorage.path() + "/meta");
+    { QFile music(assetRoot.path() + "/data/music/bundled.wav");
+      if (!music.open(QIODevice::WriteOnly)) return fail(20); music.write("invalid wave"); }
+    { QFile config(fallbackStorage.path() + "/meta/ui.ini");
+      if (!config.open(QIODevice::WriteOnly) || config.write("[pomodoro]\nsoundFocus=music/bundled.wav\n") < 0) return fail(21); }
+    QtPomodoro packagedSounds(nullptr, std::filesystem::u8path(fallbackStorage.path().toUtf8().toStdString()),
+        2, 1, 1, 2, std::filesystem::u8path(assetRoot.path().toUtf8().toStdString()));
+    packagedSounds.setAdministrator(true);
+    auto* bundledSound = packagedSounds.findChild<QComboBox*>("pomodoroFocusSound");
+    if (!bundledSound || bundledSound->currentData().toString() != "music/bundled.wav") return fail(22);
+#ifdef _WIN32
+    packagedSounds.quickToggle(); packagedSounds.advanceSecondsForTest(2);
+    auto* packagedStatus = packagedSounds.findChild<QLabel*>("pomodoroStatus");
+    if (!packagedStatus || !packagedStatus->text().contains(QString::fromUtf8("Не удалось воспроизвести сигнал"))) return fail(23);
+#endif
+    return true;
 }
 
 static bool TestPomodoroQuickHeader() {

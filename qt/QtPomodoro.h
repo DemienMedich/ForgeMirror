@@ -17,7 +17,8 @@ class QtPomodoro : public QWidget {
 public:
     explicit QtPomodoro(QWidget* parent = nullptr, std::filesystem::path storage = {},
         int workSeconds = 25 * 60, int breakSeconds = 5 * 60,
-        int longBreakSeconds = 15 * 60, int cyclesBeforeLong = 4);
+        int longBreakSeconds = 15 * 60, int cyclesBeforeLong = 4,
+        std::filesystem::path assetRoot = {});
     void setRewardHandler(std::function<QString(int, std::int64_t)> handler) { rewardHandler_ = std::move(handler); }
     void setAdministrator(bool administrator);
     void setQuickStateChanged(std::function<void()> handler);
@@ -61,6 +62,7 @@ private:
     bool autoAdvance_ = false;
     std::int64_t workStartedAt_ = 0;
     std::filesystem::path storage_;
+    std::filesystem::path assetRoot_;
     std::function<QString(int, std::int64_t)> rewardHandler_;
     QSpinBox* workMinutes_;
     QSpinBox* breakMinutes_;

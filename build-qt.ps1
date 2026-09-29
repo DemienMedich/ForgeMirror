@@ -31,5 +31,11 @@ if ($Package) {
     if (Test-Path -LiteralPath $runtime) {
         Get-ChildItem -LiteralPath $runtime -Filter '*.dll' | Copy-Item -Destination $output -Force
     }
+    $musicSource = Join-Path $repo 'data\music'
+    if (Test-Path -LiteralPath $musicSource -PathType Container) {
+        $assetDirectory = Join-Path $output 'data'
+        New-Item -ItemType Directory -Force -Path $assetDirectory | Out-Null
+        Copy-Item -LiteralPath $musicSource -Destination $assetDirectory -Recurse -Force
+    }
     Write-Host "Qt package: $output\ForgeMirrorQt.exe"
 }
