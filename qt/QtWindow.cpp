@@ -2144,29 +2144,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             if (navigation_->currentRow() != Projects || !table_->currentItem()) return;
             const auto projectId = table_->currentItem()->data(Qt::UserRole).toString();
             if (projectId.isEmpty() || projectId == QStringLiteral("__no_project")) return;
-            const int projectIndex = taskProjectFilter_->findData(projectId);
-            if (projectIndex < 0) return;
-            {
-                QSignalBlocker statusBlock(statusFilter_);
-                QSignalBlocker priorityBlock(priorityFilter_);
-                QSignalBlocker quickBlock(quickTaskFilter_);
-                QSignalBlocker rangeBlock(taskCreatedRange_);
-                QSignalBlocker sortBlock(taskSort_);
-                QSignalBlocker assigneeBlock(taskAssigneeFilter_);
-                QSignalBlocker pipelineBlock(taskPipelineFilter_);
-                statusFilter_->setCurrentIndex(0);
-                priorityFilter_->setCurrentIndex(0);
-                quickTaskFilter_->setCurrentIndex(quickFilter);
-                taskCreatedRange_->setCurrentIndex(0);
-                taskSort_->setCurrentIndex(0);
-                taskAssigneeFilter_->setCurrentIndex(0);
-                taskPipelineFilter_->setCurrentIndex(0);
-            }
-            search_->clear();
-            taskProjectFilter_->setCurrentIndex(projectIndex);
-            navigation_->setCurrentRow(Tasks);
-            statusBar()->showMessage(quickFilter == 0 ? QString::fromUtf8("Показаны задачи выбранного проекта.")
-                : QString::fromUtf8("Показаны задачи выбранного проекта по выбранному фильтру."), 4000);
+            openProjectTasksFilter(projectId, quickFilter);
         });
     }
     projectFocus_->setMenu(projectTasksMenu);
@@ -2186,6 +2164,51 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             xpPending->setEnabled(metric != report.projects.end() && metric->xpPendingTasks > 0);
     });
     bottom->addWidget(projectFocus_);
+    projectPortfolioTasks_ = new QToolButton;
+    projectPortfolioTasks_->setObjectName("projectPortfolioTasks");
+    projectPortfolioTasks_->setText(QString::fromUtf8("Задачи проектов"));
+    projectPortfolioTasks_->setPopupMode(QToolButton::InstantPopup);
+    projectPortfolioTasks_->setToolTip(QString::fromUtf8("Открыть общие задачи портфеля проектов по выбранному фильтру"));
+    auto* projectPortfolioTasksMenu = new QMenu(projectPortfolioTasks_);
+    projectPortfolioTasksMenu->setObjectName("projectPortfolioTasksMenu");
+    const std::vector<std::tuple<const char*, QString, int>> portfolioTaskActions = {
+        {"portfolioTasksAll", QString::fromUtf8("Все задачи проектов"), 0},
+        {"portfolioTasksActive", QString::fromUtf8("Активные задачи"), 7},
+        {"portfolioTasksOverdue", QString::fromUtf8("Просроченные задачи"), 3},
+        {"portfolioTasksXpPending", QString::fromUtf8("Задачи, ожидающие XP"), 6}
+    };
+    for (const auto& [objectName, label, quickFilter] : portfolioTaskActions) {
+        auto* action = projectPortfolioTasksMenu->addAction(label);
+        action->setObjectName(QString::fromLatin1(objectName));
+        connect(action, &QAction::triggered, this, [this, quickFilter] {
+            openProjectTasksFilter(QString(), quickFilter);
+        });
+    }
+    connect(projectPortfolioTasksMenu, &QMenu::aboutToShow, this, [this, projectPortfolioTasksMenu] {
+        const auto report = BuildTeamValueReport(workspace_.data.tasks, workspace_.data.projects,
+            QDateTime::currentSecsSinceEpoch());
+        int activeTasks = 0;
+        int overdueTasks = 0;
+        int xpPendingTasks = 0;
+        for (const auto& metric : report.projects) {
+            const bool storedProject = std::any_of(workspace_.data.projects.begin(), workspace_.data.projects.end(),
+                [&metric](const auto& project) { return project.id == metric.id; });
+            if (!storedProject) continue;
+            activeTasks += metric.activeTasks;
+            overdueTasks += metric.overdueTasks;
+            xpPendingTasks += metric.xpPendingTasks;
+        }
+        if (auto* all = projectPortfolioTasksMenu->findChild<QAction*>(QStringLiteral("portfolioTasksAll")))
+            all->setEnabled(workspace_.modules.tasks);
+        if (auto* active = projectPortfolioTasksMenu->findChild<QAction*>(QStringLiteral("portfolioTasksActive")))
+            active->setEnabled(workspace_.modules.tasks && activeTasks > 0);
+        if (auto* overdue = projectPortfolioTasksMenu->findChild<QAction*>(QStringLiteral("portfolioTasksOverdue")))
+            overdue->setEnabled(workspace_.modules.tasks && overdueTasks > 0);
+        if (auto* xpPending = projectPortfolioTasksMenu->findChild<QAction*>(QStringLiteral("portfolioTasksXpPending")))
+            xpPending->setEnabled(workspace_.modules.tasks && xpPendingTasks > 0);
+    });
+    projectPortfolioTasks_->setMenu(projectPortfolioTasksMenu);
+    bottom->addWidget(projectPortfolioTasks_);
     openShortcut_ = new QPushButton(QString::fromUtf8("Открыть"));
     openShortcut_->setObjectName("openShortcut");
     openShortcut_->setToolTip(QString::fromUtf8("Открыть выбранный локальный файл через Windows"));
@@ -3126,6 +3149,27 @@ void QtWindow::openProfileTasksFilter(int index) {
     navigation_->setCurrentRow(Tasks);
 }
 
+void QtWindow::openProjectTasksFilter(const QString& projectId, int quickFilter) {
+    if (navigation_->currentRow() != Projects || !workspace_.modules.tasks) return;
+    const int projectIndex = projectId.isEmpty() ? 0 : taskProjectFilter_->findData(projectId);
+    if (projectIndex < 0) return;
+    const auto set = [](QWidget* widget, auto action) { const QSignalBlocker blocker(widget); action(); };
+    set(search_, [this] { search_->clear(); });
+    set(statusFilter_, [this] { statusFilter_->setCurrentIndex(0); });
+    set(priorityFilter_, [this] { priorityFilter_->setCurrentIndex(0); });
+    set(quickTaskFilter_, [this, quickFilter] { quickTaskFilter_->setCurrentIndex(quickFilter); });
+    set(taskCreatedRange_, [this] { taskCreatedRange_->setCurrentIndex(0); });
+    set(taskSort_, [this] { taskSort_->setCurrentIndex(0); });
+    set(taskAssigneeFilter_, [this] { taskAssigneeFilter_->setCurrentIndex(0); });
+    set(taskProjectFilter_, [this, projectIndex] { taskProjectFilter_->setCurrentIndex(projectIndex); });
+    set(taskPipelineFilter_, [this] { taskPipelineFilter_->setCurrentIndex(0); });
+    navigation_->setCurrentRow(Tasks);
+    statusBar()->showMessage(projectId.isEmpty()
+        ? QString::fromUtf8("Показаны задачи портфеля проектов по выбранному фильтру.")
+        : quickFilter == 0 ? QString::fromUtf8("Показаны задачи выбранного проекта.")
+        : QString::fromUtf8("Показаны задачи выбранного проекта по выбранному фильтру."), 4000);
+}
+
 void QtWindow::saveDisplayContext() {
     const auto profileId = profiles_->currentData().toString();
     if (!profileId.isEmpty()) displaySettings_.lastProfileId = profileId;
@@ -3478,6 +3522,8 @@ void QtWindow::render() {
     profileExport_->setVisible(page == ProfilePage && admin_);
     profileExport_->setEnabled(!profiles_->currentData().toString().isEmpty());
     projectFocus_->setVisible(page == Projects);
+    projectPortfolioTasks_->setVisible(page == Projects);
+    projectPortfolioTasks_->setEnabled(workspace_.modules.tasks);
     const bool projectSelected = page == Projects && table_->currentItem() &&
         !table_->currentItem()->data(Qt::UserRole).toString().isEmpty() &&
         table_->currentItem()->data(Qt::UserRole).toString() != QStringLiteral("__no_project");

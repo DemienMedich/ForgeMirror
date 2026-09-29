@@ -109,6 +109,7 @@ private:
     bool saveAppLogs();
     QString selectedId() const;
     void openProfileTasksFilter(int index);
+    void openProjectTasksFilter(const QString& projectId, int quickFilter);
     QtWorkspace& workspace_;
     bool admin_ = false;
     QtProfileSession profileSession_;
@@ -277,6 +278,7 @@ private:
     QPushButton* profileHistory_;
     QToolButton* profileExport_;
     QToolButton* projectFocus_;
+    QToolButton* projectPortfolioTasks_;
     QPushButton* openShortcut_;
     QPushButton* cloudPull_;
     QPushButton* cloudPushPreview_;

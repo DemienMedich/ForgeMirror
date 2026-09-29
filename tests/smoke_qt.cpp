@@ -8376,10 +8376,21 @@ int main(int argc, char** argv) {
     auto* activeProjectTasks = window.findChild<QAction*>("projectTasksActive");
     auto* overdueProjectTasks = window.findChild<QAction*>("projectTasksOverdue");
     auto* xpPendingProjectTasks = window.findChild<QAction*>("projectTasksXpPending");
+    auto* portfolioTasks = window.findChild<QToolButton*>("projectPortfolioTasks");
+    auto* activePortfolioTasks = window.findChild<QAction*>("portfolioTasksActive");
+    auto* overduePortfolioTasks = window.findChild<QAction*>("portfolioTasksOverdue");
+    auto* xpPendingPortfolioTasks = window.findChild<QAction*>("portfolioTasksXpPending");
     table->setCurrentCell(0, 0);
     table->selectRow(0);
     if (!focusProject || !focusProject->isVisible() || !focusProject->isEnabled() || !activeProjectTasks ||
-        !overdueProjectTasks || !xpPendingProjectTasks) return fail("Project task focus actions unavailable");
+        !overdueProjectTasks || !xpPendingProjectTasks || !portfolioTasks || !portfolioTasks->isVisible() ||
+        !activePortfolioTasks || !overduePortfolioTasks || !xpPendingPortfolioTasks)
+        return fail("Project task focus actions unavailable");
+    if (!QMetaObject::invokeMethod(portfolioTasks->menu(), "aboutToShow", Qt::DirectConnection))
+        return fail("Portfolio task menu did not provide its opening update");
+    if (!activePortfolioTasks->isEnabled() || overduePortfolioTasks->isEnabled() || xpPendingPortfolioTasks->isEnabled())
+        return fail("Portfolio task shortcuts did not reflect aggregate task state");
+    portfolioTasks->menu()->hide();
     if (!QMetaObject::invokeMethod(focusProject->menu(), "aboutToShow", Qt::DirectConnection))
         return fail("Project task menu did not provide its opening update");
     if (!activeProjectTasks->isEnabled() || overdueProjectTasks->isEnabled() || xpPendingProjectTasks->isEnabled())
@@ -8401,11 +8412,23 @@ int main(int argc, char** argv) {
     if (taskSort->count() > 1) taskSort->setCurrentIndex(1);
     if (taskAssigneeFilter->count() > 1) taskAssigneeFilter->setCurrentIndex(1);
     if (taskPipelineFilter->count() > 1) taskPipelineFilter->setCurrentIndex(1);
+    auto* taskProjectFilter = window.findChild<QComboBox*>("taskProjectFilter");
+    if (!taskProjectFilter) return fail("Project task filter was missing");
+    taskProjectFilter->setCurrentIndex(taskProjectFilter->findData(QString::fromStdString(originalProject.id)));
+    activePortfolioTasks->trigger();
+    if (nav->currentRow() != 1 || taskQuickFilter->currentIndex() != 7 || taskStatusFilter->currentIndex() != 0 ||
+        taskPriorityFilter->currentIndex() != 0 || taskCreatedRange->currentIndex() != 0 || taskSort->currentIndex() != 0 ||
+        taskAssigneeFilter->currentIndex() != 0 || taskPipelineFilter->currentIndex() != 0 ||
+        taskProjectFilter->currentIndex() != 0)
+        return fail("Portfolio active-task shortcut did not reset filters to the project portfolio");
+    nav->setCurrentRow(2);
+    table->setCurrentCell(0, 0);
+    table->selectRow(0);
     activeProjectTasks->trigger();
     if (nav->currentRow() != 1 || taskQuickFilter->currentIndex() != 7 || taskStatusFilter->currentIndex() != 0 ||
         taskPriorityFilter->currentIndex() != 0 || taskCreatedRange->currentIndex() != 0 || taskSort->currentIndex() != 0 ||
         taskAssigneeFilter->currentIndex() != 0 || taskPipelineFilter->currentIndex() != 0 ||
-        window.findChild<QComboBox*>("taskProjectFilter")->currentData().toString() != QString::fromStdString(originalProject.id))
+        taskProjectFilter->currentData().toString() != QString::fromStdString(originalProject.id))
         return fail("Project active-task shortcut did not preserve its project filter");
     nav->setCurrentRow(2);
     table->setCurrentCell(0, 0);
