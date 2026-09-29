@@ -1974,7 +1974,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileTxtAction->setObjectName("profileReportTxt");
     auto* profileCsvAction = profileExportMenu->addAction(QString::fromUtf8("В CSV…"));
     profileCsvAction->setObjectName("profileReportCsv");
+    auto* profileCopyPathAction = profileExportMenu->addAction(QString::fromUtf8("Копировать путь к папке отчётов"));
+    profileCopyPathAction->setObjectName("profileReportCopyPath");
+    const auto profileReportDirectory = QDir::toNativeSeparators(q((workspace_.directory / "meta" / "reports").u8string()));
+    profileCopyPathAction->setToolTip(profileReportDirectory);
     profileExport_->setMenu(profileExportMenu);
+    connect(profileCopyPathAction, &QAction::triggered, this, [this, profileReportDirectory] {
+        QApplication::clipboard()->setText(profileReportDirectory);
+        statusBar()->showMessage(QString::fromUtf8("Путь к папке отчётов скопирован."), 5000);
+    });
     bottom->addWidget(profileExport_);
     projectFocus_ = new QPushButton(QString::fromUtf8("Задачи проекта"));
     projectFocus_->setObjectName("focusProjectTasks");

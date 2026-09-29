@@ -7251,8 +7251,16 @@ int main(int argc, char** argv) {
         return fail("Profile statistics filters were not persisted");
     nav->setCurrentRow(0);
     auto* profileReportMenu = window.findChild<QToolButton*>("profileReportExport");
+    auto* copyProfileReportPath = window.findChild<QAction*>("profileReportCopyPath");
     if (!profileReportMenu || !profileReportMenu->isVisible() || !window.findChild<QAction*>("profileReportTxt") ||
-        !window.findChild<QAction*>("profileReportCsv")) return fail("Personal profile report export actions unavailable");
+        !window.findChild<QAction*>("profileReportCsv") || !copyProfileReportPath)
+        return fail("Personal profile report export actions unavailable");
+    copyProfileReportPath->trigger();
+    const auto expectedProfileReportDirectory = QDir::toNativeSeparators(
+        QString::fromStdWString((workspace.directory / "meta" / "reports").wstring()));
+    if (QApplication::clipboard()->text() != expectedProfileReportDirectory ||
+        !window.statusBar()->currentMessage().contains(QString::fromUtf8("Путь к папке отчётов скопирован")))
+        return fail("Profile report directory path was not copied to the clipboard");
     auto* directXp = window.findChild<QPushButton*>("directXp");
     if (!directXp || !directXp->isVisible() || !directXp->isEnabled()) return fail("Direct XP action unavailable");
     workspace.storage->set_active_profile(createdProfile->id);
