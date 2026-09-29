@@ -6821,6 +6821,27 @@ int main(int argc, char** argv) {
     modeOverview->click(); QApplication::processEvents();
     if (table->isRowHidden(0) || table->isRowHidden(1) || table->isRowHidden(2) || !table->isRowHidden(3) || showAchievements->isHidden())
         return fail("Profile overview mode did not keep only leading skills and achievement action");
+    auto* profileState = window.findChild<QLabel*>("profileStateValue0");
+    auto* profileDiagnostic = window.findChild<QLabel*>("profileStateValue2");
+    auto* profileFocus = window.findChild<QLabel*>("profileSignalValue1");
+    auto* profileLoad = window.findChild<QLabel*>("profileSignalValue2");
+    auto* profileWeakZone = window.findChild<QLabel*>("profileSignalValue3");
+    auto* profileBrief = window.findChild<QTableWidget*>("profileTaskBriefTable");
+    auto* openFocusTask = window.findChild<QPushButton*>("profileOverviewTaskAction0");
+    if (!profileState || !profileState->text().contains(QString::fromUtf8("Рост")) ||
+        !profileDiagnostic || profileDiagnostic->text().isEmpty() || !profileFocus ||
+        !profileFocus->text().contains(QString::fromUtf8("Проверка Qt")) || !profileLoad ||
+        !profileLoad->text().contains(QString::fromUtf8("1 активных")) || !profileWeakZone ||
+        profileWeakZone->text().isEmpty() || !profileBrief || profileBrief->rowCount() != 1 ||
+        profileBrief->item(0, 0)->text() != QString::fromUtf8("Проверка Qt <без HTML>") || !openFocusTask)
+        return fail("Profile overview state, focus signals, workload, weak zone, or task preview missing");
+    openFocusTask->click(); QApplication::processEvents();
+    if (nav->currentRow() != 1 || table->rowCount() != 1 || table->currentRow() != 0 ||
+        table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(task.id) ||
+        window.findChild<QComboBox*>("taskAssigneeFilter")->currentData().toString() != QString::fromStdString(createdProfile->id))
+        return fail("Profile overview focus action did not open the matching assigned task");
+    nav->setCurrentRow(0); QApplication::processEvents();
+    modeOverview->click(); QApplication::processEvents();
     modeFocus->click(); QApplication::processEvents();
     if (!table->isHidden() || !showAchievements->isHidden()) return fail("Profile focus mode did not hide details");
     modeAnalytics->click(); QApplication::processEvents();

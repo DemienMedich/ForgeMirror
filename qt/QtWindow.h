@@ -105,6 +105,7 @@ private:
     void loadAppLogs();
     bool saveAppLogs();
     QString selectedId() const;
+    void openProfileTasksFilter(int index);
     QtWorkspace& workspace_;
     bool admin_ = false;
     QtProfileSession profileSession_;
@@ -155,6 +156,16 @@ private:
     QLabel* mode_;
     QLabel* banner_;
     QWidget* profileMetrics_;
+    QWidget* profileOverview_ = nullptr;
+    QLabel* profileStateValues_[3]{};
+    QLabel* profileSignalValues_[4]{};
+    QLabel* profileSignalDetails_[4]{};
+    QWidget* profileTaskBriefCard_ = nullptr;
+    QLabel* profileTaskSummary_ = nullptr;
+    QTableWidget* profileTaskBriefTable_ = nullptr;
+    QPushButton* profileOverviewTaskButtons_[5]{};
+    QPushButton* profileOverviewAnalytics_ = nullptr;
+    QPushButton* profileOverviewXp_ = nullptr;
     QWidget* profileViewModes_;
     QPushButton* profileViewModeButtons_[3];
     QWidget* profileTaskActions_;
@@ -184,6 +195,7 @@ private:
     QTimer* modelTimer_;
     bool restoringModelSettings_ = false;
     QLabel* profileValues_[5];
+    std::string pendingProfileTaskId_;
     QTableWidget* table_;
     QTextBrowser* details_;
     QPushButton* primary_;
