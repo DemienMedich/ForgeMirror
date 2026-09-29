@@ -2207,10 +2207,11 @@ static bool TestProfileManagerFilters() {
         auto* profession = dialog->findChild<QComboBox*>("profileProfessionFilter");
         auto* sort = dialog->findChild<QComboBox*>("profileSort");
         auto* refresh = dialog->findChild<QPushButton*>("refreshProfiles");
+        auto* profileCount = dialog->findChild<QLabel*>("profileListSummary");
         expect(table && table->columnCount() == 6 && table->horizontalHeaderItem(2) &&
             table->horizontalHeaderItem(2)->text() == QString::fromUtf8("Логин") &&
             table->horizontalHeaderItem(5) && table->horizontalHeaderItem(5)->text() == QString::fromUtf8("Баланс") &&
-            search && archive && profession && sort && refresh, "controls");
+            search && archive && profession && sort && refresh && profileCount, "controls");
         if (!checks) { dialog->reject(); return; }
         auto rowWithId = [&](const QString& id) {
             for (int row = 0; row < table->rowCount(); ++row)
@@ -2218,10 +2219,12 @@ static bool TestProfileManagerFilters() {
             return -1;
         };
         expect(table->rowCount() == 3, "initial row count");
+        expect(profileCount->text() == QString::fromUtf8("Показано: 3 из 3"), "initial visible count");
         expect(table->rowCount() > 0 && table->item(0, 1) &&
             table->item(0, 1)->text() == QString::fromStdString(std::min(zuluId, std::min(alphaId, archivedId))), "id order");
         search->setText(QString::fromUtf8("Alpha"));
         expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(alphaId)) == 0, "name search");
+        expect(profileCount->text() == QString::fromUtf8("Показано: 1 из 3"), "search visible count");
         search->setText(QString::fromStdString(zuluId));
         expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(zuluId)) == 0, "id search");
         search->clear();
@@ -2233,6 +2236,7 @@ static bool TestProfileManagerFilters() {
 
         archive->setCurrentIndex(1);
         expect(table->rowCount() == 2 && rowWithId(QString::fromStdString(archivedId)) == -1, "active filter");
+        expect(profileCount->text() == QString::fromUtf8("Показано: 2 из 3"), "archive filter visible count");
         archive->setCurrentIndex(2);
         expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(archivedId)) == 0, "archive filter");
         archive->setCurrentIndex(0);
@@ -2259,6 +2263,7 @@ static bool TestProfileManagerFilters() {
             expect(workspace.storage->set_active_profile(alphaId), "restore active profile before refresh");
             refresh->click();
             expect(table->rowCount() == 4, "manual refresh");
+            expect(profileCount->text() == QString::fromUtf8("Показано: 4 из 4"), "refresh visible count");
         }
         if (const auto active = workspace.storage->load_profile()) expect(active->login() == "plain-login", "preserved active profile");
         else expect(false, "active profile readable");

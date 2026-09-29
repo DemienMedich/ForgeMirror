@@ -212,6 +212,11 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     filters->addWidget(sort, 1, 2);
     filters->addWidget(refreshProfiles, 1, 3);
     layout->addLayout(filters);
+    auto* profileCount = new QLabel;
+    profileCount->setObjectName("profileListSummary");
+    profileCount->setAccessibleName(QString::fromUtf8("Количество отображаемых профилей"));
+    profileCount->setAccessibleDescription(QString::fromUtf8("Число профилей, прошедших поиск и фильтры, из общего числа профилей."));
+    layout->addWidget(profileCount);
     auto* table = new QTableWidget;
     table->setObjectName("profileRecords");
     table->setAccessibleName(QString::fromUtf8("Список профилей"));
@@ -371,6 +376,8 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
             table->setItem(row, 5, balance);
             if (previous && previous->id == p.id) table->selectRow(row);
         }
+        profileCount->setText(QString::fromUtf8("Показано: %1 из %2")
+            .arg(table->rowCount()).arg(workspace.profiles.size()));
         selection();
     };
     QObject::connect(table, &QTableWidget::itemSelectionChanged, &dialog, selection);
