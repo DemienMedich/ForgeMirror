@@ -1204,8 +1204,29 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelForm->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
     modelChoice_ = new QComboBox;
     modelChoice_->setObjectName("modelChoice");
-    modelChoice_->addItem(QString::fromUtf8("Не выбрана"), QString());
-    for (const auto& name : ListQtModels(workspace_.directory)) modelChoice_->addItem(name, name);
+    modelFilter_ = new QLineEdit;
+    modelFilter_->setObjectName("modelFilter");
+    modelFilter_->setPlaceholderText(QString::fromUtf8("Фильтр моделей"));
+    modelFilter_->setClearButtonEnabled(true);
+    labelForAccessibility(modelFilter_, QString::fromUtf8("Фильтр моделей"),
+        QString::fromUtf8("Поиск по имени файлов OBJ и FBX в папке models."));
+    modelFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтр"));
+    modelFilterReset_->setObjectName("modelFilterReset");
+    labelForAccessibility(modelFilterReset_, QString::fromUtf8("Сбросить фильтр моделей"));
+    modelChoiceRefresh_ = new QPushButton(QString::fromUtf8("Обновить список"));
+    modelChoiceRefresh_->setObjectName("modelChoiceRefresh");
+    labelForAccessibility(modelChoiceRefresh_, QString::fromUtf8("Обновить список моделей"));
+    auto* modelFilterRow = new QWidget;
+    auto* modelFilterLayout = new QHBoxLayout(modelFilterRow);
+    modelFilterLayout->setContentsMargins(0, 0, 0, 0);
+    modelFilterLayout->addWidget(modelFilter_, 1);
+    modelFilterLayout->addWidget(modelFilterReset_);
+    modelFilterLayout->addWidget(modelChoiceRefresh_);
+    modelChoiceCount_ = new QLabel;
+    modelChoiceCount_->setObjectName("modelChoiceCount");
+    modelChoiceCount_->setAccessibleName(QString::fromUtf8("Количество моделей по фильтру"));
+    modelForm->addRow(QString::fromUtf8("Фильтр моделей"), modelFilterRow);
+    modelForm->addRow(QString(), modelChoiceCount_);
     modelPath_ = new QLineEdit;
     modelPath_->setObjectName("modelPath");
     auto* modelPathRow = new QWidget;
@@ -2372,6 +2393,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         modelPath_->setText(name.isEmpty() ? QString() : q((workspace_.directory / "models" / u(name)).u8string()));
         loadSelectedModel();
     });
+    connect(modelFilter_, &QLineEdit::textChanged, this, [this] { rebuildModelChoices(); });
+    connect(modelFilterReset_, &QPushButton::clicked, modelFilter_, &QLineEdit::clear);
+    connect(modelChoiceRefresh_, &QPushButton::clicked, this, [this] { refreshModelChoices(); });
     auto modelControlChanged = [this] { if (!restoringModelSettings_) updateModelSettingsFromControls(); };
     for (auto* slider : {modelYaw_, modelPitch_, modelZoom_, modelSpeed_}) connect(slider, &QSlider::valueChanged, this, modelControlChanged);
     connect(modelAutoRotate_, &QCheckBox::toggled, this, modelControlChanged);
@@ -2384,6 +2408,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         modelViewer_->setSettings(modelSettings_);
     });
     modelPath_->setText(modelSettings_.modelPath);
+    refreshModelChoices();
     loadSelectedModel();
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
@@ -3153,6 +3178,37 @@ void QtWindow::refreshCatalogProfessionChoices() {
     const int index = catalogProfessionFilter_->findData(selected);
     catalogProfessionFilter_->setCurrentIndex(index >= 0 ? index : 0);
     displaySettings_.catalogProfessionId = catalogProfessionFilter_->currentData().toString();
+}
+
+void QtWindow::rebuildModelChoices() {
+    if (!modelChoice_ || !modelFilter_) return;
+    const QString selectedName = QFileInfo(modelPath_->text().trimmed()).fileName();
+    const QString query = modelFilter_->text().trimmed();
+    QSignalBlocker blocker(modelChoice_);
+    modelChoice_->clear();
+    modelChoice_->addItem(QString::fromUtf8("Не выбрана"), QString());
+    int selectedIndex = selectedName.isEmpty() ? 0 : -1;
+    int visibleCount = 0;
+    for (const auto& name : modelNames_) {
+        if (!query.isEmpty() && !name.contains(query, Qt::CaseInsensitive)) continue;
+        modelChoice_->addItem(name, name);
+        ++visibleCount;
+        if (name.compare(selectedName, Qt::CaseInsensitive) == 0)
+            selectedIndex = modelChoice_->count() - 1;
+    }
+    modelChoice_->setCurrentIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    if (modelNames_.empty()) {
+        modelChoiceCount_->setText(QString::fromUtf8("Нет моделей в папке models."));
+    } else if (visibleCount == 0 && !query.isEmpty()) {
+        modelChoiceCount_->setText(QString::fromUtf8("Нет моделей по фильтру · 0 из %1").arg(modelNames_.size()));
+    } else {
+        modelChoiceCount_->setText(QString::fromUtf8("Показано: %1 из %2").arg(visibleCount).arg(modelNames_.size()));
+    }
+}
+
+void QtWindow::refreshModelChoices() {
+    modelNames_ = ListQtModels(workspace_.directory);
+    rebuildModelChoices();
 }
 
 void QtWindow::loadSelectedModel() {

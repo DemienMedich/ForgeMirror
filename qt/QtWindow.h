@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 struct QtAdminProfileStatsRow {
     std::string id;
@@ -199,7 +200,12 @@ private:
     QtModelViewer* modelViewer_;
     QtModelSettings modelSettings_;
     QComboBox* modelChoice_;
+    QLineEdit* modelFilter_;
     QLineEdit* modelPath_;
+    QLabel* modelChoiceCount_;
+    QPushButton* modelFilterReset_;
+    QPushButton* modelChoiceRefresh_;
+    std::vector<QString> modelNames_;
     QSlider* modelYaw_;
     QSlider* modelPitch_;
     QSlider* modelZoom_;
@@ -209,6 +215,8 @@ private:
     QLabel* modelStatus_;
     QTimer* modelTimer_;
     bool restoringModelSettings_ = false;
+    void rebuildModelChoices();
+    void refreshModelChoices();
     QLabel* profileValues_[5];
     std::string pendingProfileTaskId_;
     QTableWidget* table_;

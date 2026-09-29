@@ -7461,10 +7461,44 @@ int main(int argc, char** argv) {
     workspace.modules.view3d = true;
     nav->item(15)->setHidden(false);
     if (nav->item(15)->isHidden()) return fail("3D viewer settings page unavailable to administrator");
+    const auto modelDirectory = workspace.directory / "models";
+    std::filesystem::create_directories(modelDirectory);
+    const std::string modelFixture = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    for (const auto* name : {"alpha.obj", "beta.obj"}) {
+        std::ofstream model(modelDirectory / name, std::ios::binary);
+        model << modelFixture;
+        if (!model) return fail("3D model filter fixture could not be created");
+    }
     nav->setCurrentRow(15);
     auto* modelYaw = window.findChild<QSlider*>("modelYaw");
+    auto* modelChoice = window.findChild<QComboBox*>("modelChoice");
+    auto* modelFilter = window.findChild<QLineEdit*>("modelFilter");
+    auto* modelChoiceCount = window.findChild<QLabel*>("modelChoiceCount");
+    auto* modelFilterReset = window.findChild<QPushButton*>("modelFilterReset");
+    auto* modelChoiceRefresh = window.findChild<QPushButton*>("modelChoiceRefresh");
     if (!modelYaw || !primary->isVisible() || primary->text() != QString::fromUtf8("Сохранить настройки"))
         return fail("3D viewer settings controls unavailable");
+    if (!modelChoice || !modelFilter || !modelChoiceCount || !modelFilterReset || !modelChoiceRefresh)
+        return fail("3D model list filter controls unavailable");
+    modelChoiceRefresh->click();
+    if (modelChoice->count() != 3 || modelChoiceCount->text() != QString::fromUtf8("Показано: 2 из 2"))
+        return fail("3D model list did not initialize with its count");
+    modelFilter->setText(QStringLiteral("alpha"));
+    if (modelChoice->count() != 2 || modelChoice->itemText(1) != QStringLiteral("alpha.obj") ||
+        modelChoiceCount->text() != QString::fromUtf8("Показано: 1 из 2"))
+        return fail("3D model filename filter did not narrow the list");
+    modelFilterReset->click();
+    if (!modelFilter->text().isEmpty() || modelChoice->count() != 3 ||
+        modelChoiceCount->text() != QString::fromUtf8("Показано: 2 из 2"))
+        return fail("3D model filter reset did not restore the full list");
+    {
+        std::ofstream model(modelDirectory / "gamma.obj", std::ios::binary);
+        model << modelFixture;
+        if (!model) return fail("3D model refresh fixture could not be created");
+    }
+    modelChoiceRefresh->click();
+    if (modelChoice->count() != 4 || modelChoiceCount->text() != QString::fromUtf8("Показано: 3 из 3"))
+        return fail("3D model refresh did not discover a newly added model");
     modelYaw->setValue(37);
     QTimer::singleShot(0, [] {
         if (auto* message = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) message->accept();
