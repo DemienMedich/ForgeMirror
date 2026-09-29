@@ -2399,7 +2399,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(modelChoice_, &QComboBox::currentIndexChanged, this, [this] {
         if (restoringModelSettings_) return;
         const auto name = modelChoice_->currentData().toString();
-        modelPath_->setText(name.isEmpty() ? QString() : q((workspace_.directory / "models" / u(name)).u8string()));
+        modelPath_->setText(name.isEmpty() ? QString() : QStringLiteral("models/%1").arg(name));
         loadSelectedModel();
     });
     connect(modelFilter_, &QLineEdit::textChanged, this, [this] { rebuildModelChoices(); });

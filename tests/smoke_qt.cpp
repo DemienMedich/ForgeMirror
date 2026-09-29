@@ -7564,10 +7564,11 @@ int main(int argc, char** argv) {
     });
     primary->click();
     const auto interactedModelSettings = LoadQtModelSettings(workspace.directory);
-    if (interactedModelSettings.autoRotate || std::abs(interactedModelSettings.yaw - modelYaw->value() / 100.0f) > 0.001f ||
+    if (interactedModelSettings.modelPath != QStringLiteral("models/alpha.obj") || interactedModelSettings.autoRotate ||
+        std::abs(interactedModelSettings.yaw - modelYaw->value() / 100.0f) > 0.001f ||
         std::abs(interactedModelSettings.pitch - modelPitch->value() / 100.0f) > 0.001f ||
         std::abs(interactedModelSettings.zoom - modelZoom->value() / 100.0f) > 0.001f)
-        return fail("3D viewport interaction values did not persist from settings");
+        return fail("3D model path or viewport interaction values did not persist from settings");
     nav->setCurrentRow(0);
     nav->setCurrentRow(17);
     QApplication::processEvents();
