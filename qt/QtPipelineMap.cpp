@@ -61,18 +61,53 @@ protected:
     }
 };
 
-QString describe(const PipelineNode* node) {
+QString describe(const PipelineNode* node, const std::vector<PipelineStep>& steps) {
     if (!node) return QString::fromUtf8("Выберите этап на карте, чтобы увидеть описание и допустимые переходы.");
     const auto& step = node->step();
     if (node->missing()) return QString::fromUtf8("<b>Связь на отсутствующий этап</b><br>%1").arg(q(step.id).toHtmlEscaped());
+    auto field = [](const QString& label, const std::string& value) {
+        return QStringLiteral("<p><b>%1</b><br>%2</p>").arg(label.toHtmlEscaped(), q(value).toHtmlEscaped().replace('\n', "<br>"));
+    };
+    auto stageLabel = [](const PipelineStep& value) {
+        const QString code = q(value.stageCode).isEmpty() ? QString::fromUtf8("без кода") : q(value.stageCode);
+        return code + QString::fromUtf8(" · ") + q(value.title);
+    };
+    const QString title = stageLabel(step).toHtmlEscaped();
+    QString html = QStringLiteral("<h3>%1</h3>").arg(title);
+    html += field(QString::fromUtf8("Ветка"), step.branch.empty() ? std::string(u8"Общая") : step.branch);
+    html += field(QString::fromUtf8("Ответственный"), step.owner);
+    html += field(QString::fromUtf8("Вход"), step.input);
+    html += field(QString::fromUtf8("Выход"), step.output);
+    html += field(QString::fromUtf8("Критерий готовности"), step.doneCriteria);
+    html += field(QString::fromUtf8("Следующий этап"), step.nextStageLabel);
+    html += field(QString::fromUtf8("Описание"), step.description);
+    html += QStringLiteral("<h4>Подсказки</h4>");
+    if (step.hints.empty()) html += QString::fromUtf8("<p>Подсказки не заданы.</p>");
+    else {
+        html += QStringLiteral("<ul>");
+        for (const auto& hint : step.hints)
+            html += QStringLiteral("<li>%1</li>").arg(q(hint).toHtmlEscaped().replace('\n', "<br>"));
+        html += QStringLiteral("</ul>");
+    }
+    html += field(QString::fromUtf8("Проверка в движке"), step.engineCheck);
+    html += field(QString::fromUtf8("Риски и возвраты"), step.risk);
+    html += field(QString::fromUtf8("Практика Forge Mirror"), step.legacyNotes);
+    html += QStringLiteral("<h4>Путь</h4>");
+    QStringList incoming;
+    for (const auto& source : steps)
+        if (std::find(source.nextIds.begin(), source.nextIds.end(), step.id) != source.nextIds.end())
+            incoming.push_back(stageLabel(source).toHtmlEscaped());
+    html += QString::fromUtf8("<p><b>Приходит из</b><br>") + (incoming.isEmpty()
+        ? QString::fromUtf8("Стартовая точка пайплайна.") : incoming.join(QStringLiteral(", "))) + QStringLiteral("</p>");
     QStringList targets;
-    for (const auto& id : step.nextIds) targets << q(id).toHtmlEscaped();
-    return QString::fromUtf8("<b>%1 · %2</b><br>Ветка: %3<br>Ответственный: %4<br><br>%5<br><br><b>Переходы:</b> %6")
-        .arg(q(step.stageCode).toHtmlEscaped(), q(step.title).toHtmlEscaped(),
-             q(step.branch).toHtmlEscaped().isEmpty() ? QString::fromUtf8("Общая") : q(step.branch).toHtmlEscaped(),
-             q(step.owner).toHtmlEscaped().isEmpty() ? QString::fromUtf8("—") : q(step.owner).toHtmlEscaped(),
-             q(step.description).toHtmlEscaped().replace('\n', "<br>"),
-             targets.isEmpty() ? QString::fromUtf8("нет · конечный этап") : targets.join(QString::fromUtf8(", ")));
+    for (const auto& id : step.nextIds) {
+        const auto target = std::find_if(steps.begin(), steps.end(), [&](const auto& value) { return value.id == id; });
+        targets.push_back(target == steps.end() ? QString::fromUtf8("Не найден: %1").arg(q(id).toHtmlEscaped())
+                                                : stageLabel(*target).toHtmlEscaped());
+    }
+    html += QString::fromUtf8("<p><b>Переходы</b><br>") + (targets.isEmpty()
+        ? QString::fromUtf8("Нет · конечный этап") : targets.join(QStringLiteral(", "))) + QStringLiteral("</p>");
+    return html;
 }
 
 QPointF edgePoint(const QPointF& origin, const QPointF& target, qreal offset) {
@@ -105,7 +140,8 @@ bool ShowQtPipelineMap(QWidget* parent, const std::vector<PipelineStep>& steps) 
     layout->addWidget(view, 1);
     auto* details = new QTextBrowser;
     details->setObjectName("pipelineMapDetails");
-    details->setMaximumHeight(105);
+    details->setAccessibleName(QString::fromUtf8("Подробности выбранного этапа карты пайплайна"));
+    details->setMaximumHeight(260);
     details->setOpenExternalLinks(false);
     layout->addWidget(details);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
@@ -196,9 +232,9 @@ bool ShowQtPipelineMap(QWidget* parent, const std::vector<PipelineStep>& steps) 
     scene->setSceneRect(0, 0, maxX, std::max<qreal>(240, sceneHeight));
     summary->setText(QString::fromUtf8("Этапов: %1 · переходов: %2 · недоступных связей: %3 · масштаб: Ctrl + колесо")
         .arg(steps.size()).arg(transitionCount).arg(missingIds.size()));
-    QObject::connect(scene, &QGraphicsScene::selectionChanged, &dialog, [scene, details] {
+    QObject::connect(scene, &QGraphicsScene::selectionChanged, &dialog, [scene, details, &steps] {
         const auto selected = scene->selectedItems();
-        details->setHtml(selected.isEmpty() ? describe(nullptr) : describe(dynamic_cast<PipelineNode*>(selected.front())));
+        details->setHtml(selected.isEmpty() ? describe(nullptr, steps) : describe(dynamic_cast<PipelineNode*>(selected.front()), steps));
     });
     if (!steps.empty()) {
         for (const auto& step : steps) {
@@ -206,7 +242,7 @@ bool ShowQtPipelineMap(QWidget* parent, const std::vector<PipelineStep>& steps) 
             if (node != nodes.end()) { node->second->setSelected(true); break; }
         }
     }
-    details->setHtml(steps.empty() ? QString::fromUtf8("Пайплайн пуст.") : describe(dynamic_cast<PipelineNode*>(scene->selectedItems().value(0))));
+    details->setHtml(steps.empty() ? QString::fromUtf8("Пайплайн пуст.") : describe(dynamic_cast<PipelineNode*>(scene->selectedItems().value(0)), steps));
     dialog.exec();
     return true;
 }

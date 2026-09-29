@@ -4813,7 +4813,11 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
 
 static bool TestPipelineMap() {
     PipelineStep start; start.id = "start"; start.stageCode = "A"; start.title = "Start"; start.branch = "Main"; start.description = "Entry point"; start.nextIds = {"left", "right"};
-    PipelineStep left; left.id = "left"; left.stageCode = "B1"; left.title = "Left branch"; left.branch = "Left"; left.owner = "Artist"; left.nextIds = {"removed-step"};
+    PipelineStep left; left.id = "left"; left.stageCode = "B1"; left.title = "Left branch"; left.branch = "Left"; left.owner = "Artist";
+    left.description = "Entry <mesh> & review"; left.input = "Source asset"; left.output = "Checked mesh";
+    left.doneCriteria = "No open edges"; left.nextStageLabel = "Manual handoff"; left.engineCheck = "Run validation";
+    left.risk = "Scale mismatch"; left.legacyNotes = "Keep pivot"; left.hints = {"Check normals", "Review materials"};
+    left.nextIds = {"removed-step"};
     PipelineStep right; right.id = "right"; right.stageCode = "B2"; right.title = "Right branch"; right.branch = "Right";
     bool inspected = false;
     QTimer::singleShot(0, [&] {
@@ -4825,7 +4829,13 @@ static bool TestPipelineMap() {
         view->scene()->clearSelection();
         for (auto* item : view->scene()->items()) if (item->data(Qt::UserRole).toString() == "left") item->setSelected(true);
         inspected = summary->text().contains(QString::fromUtf8("Этапов: 3 · переходов: 3 · недоступных связей: 1")) &&
-            details->toPlainText().contains("Left branch") && details->toPlainText().contains("removed-step");
+            details->toPlainText().contains("Left branch") && details->toPlainText().contains("removed-step") &&
+            details->toPlainText().contains("Artist") && details->toPlainText().contains("Source asset") &&
+            details->toPlainText().contains("Checked mesh") && details->toPlainText().contains("No open edges") &&
+            details->toPlainText().contains("Manual handoff") && details->toPlainText().contains("Run validation") &&
+            details->toPlainText().contains("Scale mismatch") && details->toPlainText().contains("Keep pivot") &&
+            details->toPlainText().contains("Check normals") && details->toPlainText().contains("Review materials") &&
+            details->toPlainText().contains("Entry <mesh> & review") && details->toPlainText().contains("A · Start");
         const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
         if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/pipeline-map.png"); }
         dialog->reject();
