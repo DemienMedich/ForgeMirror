@@ -4837,6 +4837,68 @@ static bool TestPipelineMap() {
     return true;
 }
 
+static bool TestQtPipelineDetailsAndFullTextFilter() {
+    auto fail = [](const char* label) { std::cerr << "qtPipelineDetails: " << label << '\n'; return false; };
+    QTemporaryDir temp;
+    if (!temp.isValid()) return fail("temp");
+    QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    PipelineStep source;
+    source.id = "source step"; source.stageCode = "A1"; source.branch = "Main branch"; source.title = "Source";
+    source.description = "Source description"; source.input = "Source input"; source.output = "Source output";
+    source.owner = "Source owner"; source.doneCriteria = "Source ready"; source.engineCheck = "Source engine marker";
+    source.risk = "Source risks"; source.nextStageLabel = "Handoff label"; source.legacyNotes = "Legacy practice";
+    source.hints = {"First hint", "Second hint"}; source.nextIds = {"next"};
+    PipelineStep next;
+    next.id = "next"; next.stageCode = "B2"; next.branch = "Release branch"; next.title = "Next";
+    next.owner = "Next owner"; next.description = "Next description";
+    workspace.data.pipelineSteps = {source, next};
+    QtWindow window(workspace);
+    window.show(); QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* search = window.findChild<QLineEdit*>("search");
+    auto* reset = window.findChild<QPushButton*>("pipelineFilterReset");
+    auto* table = window.findChild<QTableWidget*>("records");
+    auto* details = window.findChild<QTextBrowser*>("details");
+    auto* toggle = window.findChild<QPushButton*>("detailsToggle");
+    if (!navigation || !search || !reset || !table || !details || !toggle) return fail("widgets");
+    int pipelinePage = -1;
+    for (int index = 0; index < navigation->count(); ++index)
+        if (navigation->item(index)->text().contains(QString::fromUtf8("Пайплайн"), Qt::CaseInsensitive)) pipelinePage = index;
+    if (pipelinePage < 0) return fail("page");
+    int otherPage = 0;
+    while (otherPage < navigation->count() && (otherPage == pipelinePage || navigation->item(otherPage)->isHidden())) ++otherPage;
+    if (otherPage >= navigation->count()) return fail("alternate page");
+    navigation->setCurrentRow(otherPage);
+    workspace.data.pipelineSteps = {source, next};
+    navigation->setCurrentRow(pipelinePage);
+    if (table->rowCount() != 2 || !reset->isVisible() || !search->placeholderText().contains(QString::fromUtf8("описание"), Qt::CaseInsensitive)) {
+        return fail("initial rows or controls");
+    }
+    search->setText(QString::fromUtf8("Source engine marker"));
+    if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != QStringLiteral("source step")) return fail("full-text metadata search");
+    reset->click();
+    if (!search->text().isEmpty() || table->rowCount() != 2) return fail("filter reset");
+    toggle->click();
+    table->selectRow(0);
+    QApplication::processEvents();
+    const auto plain = details->toPlainText();
+    const auto html = details->toHtml();
+    if (!toggle->isChecked() || !details->isVisible() || !toggle->text().contains(QString::fromUtf8("этап"), Qt::CaseInsensitive) ||
+        !plain.contains("Main branch") || !plain.contains("Source owner") || !plain.contains("Source input") ||
+        !plain.contains("Source output") || !plain.contains("Source ready") || !plain.contains("Handoff label") ||
+        !plain.contains("Source description") || !plain.contains("First hint") || !plain.contains("Second hint") ||
+        !plain.contains("Source engine marker") || !plain.contains("Source risks") || !plain.contains("Legacy practice") ||
+        !plain.contains("Next") || !html.contains("href=\"pipeline:next\"")) return fail("details content or encoded link");
+    search->setText(QString::fromUtf8("Source engine marker"));
+    const bool activated = QMetaObject::invokeMethod(details, "anchorClicked", Qt::DirectConnection,
+        Q_ARG(QUrl, QUrl(QStringLiteral("pipeline:next"))));
+    QApplication::processEvents();
+    if (!(activated && search->text().isEmpty() && table->rowCount() == 2 && table->currentRow() == 1 &&
+        table->item(1, 0)->data(Qt::UserRole).toString() == QStringLiteral("next") &&
+        details->toPlainText().contains("Next description"))) return fail("route link navigation");
+    return true;
+}
+
 static bool TestCatalogProfessionFilter() {
     auto fail = [](const char* step) { std::cerr << "catalogProfessionFilter: " << step << '\n'; return false; };
     QTemporaryDir temp;
@@ -7061,6 +7123,7 @@ int main(int argc, char** argv) {
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
     if (!TestStatisticsTrendBeyondAuditPageLimit()) { std::cerr << "Statistics trend audit history failed\n"; return 1; }
     if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
+    if (!TestQtPipelineDetailsAndFullTextFilter()) { std::cerr << "Qt pipeline detail/filter parity failed\n"; return 1; }
     if (!TestDeadlineReminders()) { std::cerr << "Deadline reminders failed\n"; return 1; }
     if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }
     if (!TestQtTaskCreationRangeAndSorting()) { std::cerr << "Qt task creation range and sorting failed\n"; return 1; }

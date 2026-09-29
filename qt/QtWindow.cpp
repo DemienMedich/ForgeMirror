@@ -1779,6 +1779,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     labelForAccessibility(taskFilterReset_, QString::fromUtf8("Сбросить фильтры задач"));
     taskFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск и вернуть фильтры задач к значениям по умолчанию"));
     filters->addWidget(taskFilterReset_);
+    pipelineFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтр"));
+    pipelineFilterReset_->setObjectName("pipelineFilterReset");
+    labelForAccessibility(pipelineFilterReset_, QString::fromUtf8("Сбросить фильтр пайплайна"));
+    pipelineFilterReset_->setToolTip(QString::fromUtf8("Очистить поиск по этапам, веткам и их описаниям"));
+    filters->addWidget(pipelineFilterReset_);
     reportView_ = new QComboBox;
     reportView_->setObjectName("reportView");
     labelForAccessibility(reportView_, QString::fromUtf8("Группировка отчёта"));
@@ -2340,6 +2345,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         }
         render();
     });
+    connect(pipelineFilterReset_, &QPushButton::clicked, search_, &QLineEdit::clear);
     connect(profileSkillSort_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(profileSkillWeightCategory_, &QComboBox::currentIndexChanged, this, [this] { saveDisplayContext(); render(); });
     connect(profileSkillWeightMin_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
@@ -2521,6 +2527,29 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         }
     });
     connect(detailsToggle_, &QPushButton::toggled, details_, &QWidget::setVisible);
+    connect(details_, &QTextBrowser::anchorClicked, this, [this](const QUrl& url) {
+        if (navigation_->currentRow() != Pipeline || url.scheme() != QStringLiteral("pipeline")) return;
+        const QString encoded = url.toString(QUrl::FullyEncoded);
+        const auto prefix = QStringLiteral("pipeline:");
+        if (!encoded.startsWith(prefix)) return;
+        const auto stageId = QUrl::fromPercentEncoding(encoded.mid(prefix.size()).toUtf8());
+        if (stageId.isEmpty()) return;
+        auto findStageRow = [this, &stageId] {
+            for (int row = 0; row < table_->rowCount(); ++row)
+                if (table_->item(row, 0) && table_->item(row, 0)->data(Qt::UserRole).toString() == stageId) return row;
+            return -1;
+        };
+        int row = findStageRow();
+        if (row < 0 && !search_->text().isEmpty()) {
+            search_->clear();
+            row = findStageRow();
+            statusBar()->showMessage(QString::fromUtf8("Фильтр очищен, чтобы показать выбранный этап."), 5000);
+        }
+        if (row < 0) return;
+        if (!detailsToggle_->isChecked()) detailsToggle_->setChecked(true);
+        table_->selectRow(row);
+        table_->scrollToItem(table_->item(row, 0), QAbstractItemView::PositionAtCenter);
+    });
     connect(primary_, &QPushButton::clicked, this, [this] { if (navigation_->currentRow() == ModelSettingsPage) saveModelSettings(); else createEntry(); });
     connect(openModelSettings, &QPushButton::clicked, this, [this] { navigation_->setCurrentRow(ModelSettingsPage); });
     connect(browseModel, &QPushButton::clicked, this, [this] {
@@ -3669,8 +3698,19 @@ void QtWindow::render() {
         for (int column = 0; column < labels.size(); ++column) table_->setColumnHidden(column, false);
     };
     auto row = [this](const std::string& id, const QStringList& values) {
-        const auto searchableText = navigation_->currentRow() == Projects && values.size() >= 2
+        QString searchableText = navigation_->currentRow() == Projects && values.size() >= 2
             ? values.mid(0, 2).join(' ') : values.join(' ');
+        if (navigation_->currentRow() == Pipeline) {
+            const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+                [&id](const auto& item) { return item.id == id; });
+            if (step != workspace_.data.pipelineSteps.end()) {
+                QStringList searchableFields{q(step->stageCode), q(step->branch), q(step->title), q(step->description),
+                    q(step->input), q(step->output), q(step->owner), q(step->doneCriteria), q(step->engineCheck),
+                    q(step->risk), q(step->nextStageLabel), q(step->legacyNotes)};
+                for (const auto& hint : step->hints) searchableFields.push_back(q(hint));
+                searchableText = searchableFields.join(' ');
+            }
+        }
         if (!searchableText.contains(search_->text(), Qt::CaseInsensitive)) return;
         int index = table_->rowCount();
         table_->insertRow(index);
@@ -3693,7 +3733,12 @@ void QtWindow::render() {
     search_->setVisible(!timerPage && !modelPage && page != AdminProfileStats);
     table_->setVisible(!timerPage && !modelPage);
     bottomActions_->setVisible(!timerPage && !modelPage);
-    const bool hasDetails = page == Tasks || page == Statistics;
+    const bool hasDetails = page == Tasks || page == Statistics || page == Pipeline;
+    detailsToggle_->setText(page == Pipeline ? QString::fromUtf8("Подробности этапа") : QString::fromUtf8("Подробности"));
+    search_->setPlaceholderText(page == Pipeline
+        ? QString::fromUtf8("Название, код, ветка, описание, контроль…")
+        : QString::fromUtf8("Поиск по текущему разделу…"));
+    markScaleMaximumHeight(details_, page == Pipeline ? 300 : 180);
     detailsToggle_->setVisible(hasDetails);
     details_->setVisible(hasDetails && detailsToggle_->isChecked());
     pomodoro_->setVisible(timerPage);
@@ -3709,6 +3754,7 @@ void QtWindow::render() {
     taskProjectFilter_->setVisible(page == Tasks);
     taskPipelineFilter_->setVisible(page == Tasks);
     taskFilterReset_->setVisible(page == Tasks);
+    pipelineFilterReset_->setVisible(page == Pipeline);
     catalogProfessionFilter_->setVisible(page == Catalog);
     catalogSort_->setVisible(page == Catalog);
     catalogGroup_->setVisible(page == Catalog);
@@ -6739,10 +6785,54 @@ void QtWindow::details() {
         }
         details_->setHtml(html);
     } else if (page == Pipeline) {
-        for (const auto& step : workspace_.data.pipelineSteps) if (step.id == id)
-            details_->setHtml(field(QString::fromUtf8("Описание"), step.description) + field(QString::fromUtf8("Вход"), step.input)
-                + field(QString::fromUtf8("Выход"), step.output) + field(QString::fromUtf8("Готово, когда"), step.doneCriteria)
-                + field(QString::fromUtf8("Риск"), step.risk));
+        const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+            [&](const auto& item) { return item.id == id; });
+        if (step == workspace_.data.pipelineSteps.end()) return;
+        const QString displayName = q((step->stageCode.empty() ? std::string() : step->stageCode + " · ") + step->title);
+        QString html = QStringLiteral("<h3>%1</h3>").arg(displayName.toHtmlEscaped());
+        html += field(QString::fromUtf8("Ветка"), step->branch);
+        html += field(QString::fromUtf8("Ответственный"), step->owner);
+        html += field(QString::fromUtf8("Вход"), step->input);
+        html += field(QString::fromUtf8("Выход"), step->output);
+        html += field(QString::fromUtf8("Критерий готовности"), step->doneCriteria);
+        html += field(QString::fromUtf8("Следующий этап"), step->nextStageLabel);
+        html += field(QString::fromUtf8("Описание"), step->description);
+        html += QStringLiteral("<h4>Подсказки</h4>");
+        if (step->hints.empty()) html += QString::fromUtf8("<p>Для этого этапа подсказки пока не заданы.</p>");
+        else {
+            html += QStringLiteral("<ul>");
+            for (const auto& hint : step->hints)
+                html += QStringLiteral("<li>%1</li>").arg(q(hint).toHtmlEscaped().replace('\n', QStringLiteral("<br>")));
+            html += QStringLiteral("</ul>");
+        }
+        html += field(QString::fromUtf8("Проверка в движке"), step->engineCheck);
+        html += field(QString::fromUtf8("Риски и возвраты"), step->risk);
+        html += field(QString::fromUtf8("Практика Forge Mirror"), step->legacyNotes);
+        html += QStringLiteral("<h4>Путь</h4>");
+        auto linkFor = [](const PipelineStep& target) {
+            const QString href = QString::fromLatin1(QUrl::toPercentEncoding(q(target.id)));
+            const QString label = q((target.stageCode.empty() ? std::string() : target.stageCode + " · ") + target.title).toHtmlEscaped();
+            return QStringLiteral("<a href=\"pipeline:%1\">%2</a>").arg(href, label);
+        };
+        QStringList incoming;
+        for (const auto& source : workspace_.data.pipelineSteps)
+            if (std::find(source.nextIds.begin(), source.nextIds.end(), step->id) != source.nextIds.end())
+                incoming.push_back(linkFor(source));
+        html += QString::fromUtf8("<p><b>Приходит из</b><br>") + (incoming.isEmpty()
+            ? QString::fromUtf8("Стартовая точка пайплайна.") : incoming.join(QStringLiteral(", "))) + QStringLiteral("</p>");
+        if (step->nextIds.empty()) html += QString::fromUtf8("<p><b>Ведёт к</b><br>Финальная точка пайплайна.</p>");
+        else {
+            html += QString::fromUtf8("<p><b>Ведёт к</b><br>");
+            QStringList outgoing;
+            for (const auto& targetId : step->nextIds) {
+                const auto target = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
+                    [&](const auto& item) { return item.id == targetId; });
+                outgoing.push_back(target == workspace_.data.pipelineSteps.end()
+                    ? QString::fromUtf8("Не найден этап: %1").arg(q(targetId).toHtmlEscaped()) : linkFor(*target));
+            }
+            html += outgoing.join(QStringLiteral(", ")) + QStringLiteral("</p>");
+        }
+        details_->setHtml(html);
     } else if (table_->currentRow() >= 0) {
         QString html;
         for (int col = 0; col < table_->columnCount(); ++col)
