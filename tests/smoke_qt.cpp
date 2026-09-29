@@ -2198,6 +2198,7 @@ static bool TestProfileManagerFilters() {
         checks = false;
         std::cerr << "profileManagerFilters: " << step << '\n';
     };
+    QString openedProfileId;
     QTimer::singleShot(0, [&] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if (!dialog || dialog->objectName() != "profileManager") { checks = false; return; }
@@ -2239,6 +2240,9 @@ static bool TestProfileManagerFilters() {
         expect(profileCount->text() == QString::fromUtf8("Показано: 2 из 3"), "archive filter visible count");
         archive->setCurrentIndex(2);
         expect(table->rowCount() == 1 && rowWithId(QString::fromStdString(archivedId)) == 0, "archive filter");
+        auto* openArchived = dialog->findChild<QPushButton*>("openManagedProfile");
+        table->selectRow(0);
+        expect(openArchived && !openArchived->isEnabled(), "archived profile cannot be opened");
         archive->setCurrentIndex(0);
 
         profession->setCurrentIndex(profession->findData(QStringLiteral("artist")));
@@ -2265,12 +2269,17 @@ static bool TestProfileManagerFilters() {
             expect(table->rowCount() == 4, "manual refresh");
             expect(profileCount->text() == QString::fromUtf8("Показано: 4 из 4"), "refresh visible count");
         }
-        if (const auto active = workspace.storage->load_profile()) expect(active->login() == "plain-login", "preserved active profile");
-        else expect(false, "active profile readable");
-        dialog->reject();
+        const int openRow = rowWithId(QString::fromStdString(zuluId));
+        auto* openProfile = dialog->findChild<QPushButton*>("openManagedProfile");
+        table->selectRow(openRow);
+        expect(openProfile && openProfile->isEnabled(), "active profile open action");
+        if (openProfile && openProfile->isEnabled()) openProfile->click();
+        else dialog->reject();
     });
-    ShowProfileManager(nullptr, workspace, QString::fromStdString(alphaId));
-    return checks;
+    openedProfileId = ShowProfileManager(nullptr, workspace, QString::fromStdString(alphaId));
+    const auto activeAfterDialog = workspace.storage->load_profile();
+    return checks && openedProfileId == QString::fromStdString(zuluId) &&
+        activeAfterDialog && activeAfterDialog->login() == "plain-login";
 }
 
 static bool TestRecentProfileShortcuts() {

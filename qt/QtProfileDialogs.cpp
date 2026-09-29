@@ -166,7 +166,7 @@ bool ShowProfilePasswordDialog(QWidget* parent, QtWorkspace& workspace, const QS
     return dialog.exec() == QDialog::Accepted;
 }
 
-void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& activeId) {
+QString ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& activeId) {
     QDialog dialog(parent);
     dialog.setObjectName("profileManager");
     dialog.setWindowTitle(QString::fromUtf8("Управление профилями"));
@@ -239,6 +239,10 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     layout->addWidget(table, 1);
     auto* actions = new QHBoxLayout;
+    auto* openProfile = new QPushButton(QString::fromUtf8("Открыть профиль"));
+    openProfile->setObjectName("openManagedProfile");
+    labelForAccessibility(openProfile, QString::fromUtf8("Открыть выбранный профиль"),
+        QString::fromUtf8("Переключает рабочую страницу на выбранный активный профиль без изменения его данных."));
     auto* edit = new QPushButton(QString::fromUtf8("Редактировать"));
     edit->setObjectName("editProfile");
     auto* archive = new QPushButton(QString::fromUtf8("В архив"));
@@ -250,7 +254,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     remove->setToolTip(QString::fromUtf8("Только пустой архивный профиль без задач и прогресса"));
     archive->setMinimumWidth(104);
     remove->setMinimumWidth(128);
-    for (auto* button : {edit, archive, password, remove}) actions->addWidget(button);
+    for (auto* button : {openProfile, edit, archive, password, remove}) actions->addWidget(button);
     actions->addStretch();
     layout->addLayout(actions);
     auto* status = notice(layout);
@@ -284,6 +288,7 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     reveal->setAccessibleDescription(QString::fromUtf8("Показывает сгенерированные логин и пароль профиля."));
     reveal->hide();
     layout->addWidget(reveal);
+    QString openedProfileId;
     QObject::connect(reveal, &QCheckBox::toggled, &dialog, [=](bool show) {
         credentials->setEchoMode(show ? QLineEdit::Normal : QLineEdit::Password);
         copyCreatedPassword->setEnabled(show);
@@ -310,12 +315,19 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     };
     auto selection = [&] {
         const auto info = selected();
+        openProfile->setEnabled(info && !info->archived);
         edit->setEnabled(info && !info->archived);
         password->setEnabled(info && !info->archived);
         archive->setEnabled(bool(info));
         remove->setEnabled(info && info->archived);
         archive->setText(info && info->archived ? QString::fromUtf8("Восстановить") : QString::fromUtf8("В архив"));
     };
+    QObject::connect(openProfile, &QPushButton::clicked, &dialog, [&] {
+        const auto info = selected();
+        if (!info || info->archived) return;
+        openedProfileId = q(info->id);
+        dialog.accept();
+    });
     auto refresh = [&] {
         const auto previous = selected();
         workspace.profiles = workspace.storage->list_profiles();
@@ -544,4 +556,5 @@ void ShowProfileManager(QWidget* parent, QtWorkspace& workspace, const QString& 
     refresh();
     dialog.exec();
     if (!activeId.isEmpty()) workspace.storage->set_active_profile(u(activeId));
+    return openedProfileId;
 }

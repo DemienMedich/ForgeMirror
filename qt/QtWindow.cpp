@@ -7068,7 +7068,11 @@ void QtWindow::createEntry(bool edit) {
         return;
     }
     if (navigation_->currentRow() == ProfilePage) {
-        ShowProfileManager(this, workspace_, profiles_->currentData().toString());
+        const auto openedProfile = ShowProfileManager(this, workspace_, profiles_->currentData().toString());
+        if (!openedProfile.isEmpty()) {
+            const int index = profiles_->findData(openedProfile);
+            if (index >= 0) profiles_->setCurrentIndex(index);
+        }
         reload();
         return;
     }
