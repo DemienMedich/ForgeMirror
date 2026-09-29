@@ -1242,6 +1242,15 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelSpeed_ = new QSlider(Qt::Horizontal); modelSpeed_->setRange(0, 300); modelSpeed_->setObjectName("modelSpeed");
     modelAutoRotate_ = new QCheckBox(QString::fromUtf8("Автоматический поворот")); modelAutoRotate_->setObjectName("modelAutoRotate");
     modelColor_ = new QPushButton; modelColor_->setObjectName("modelColor"); markScaleFixedHeight(modelColor_, 28);
+    modelViewer_->setInteractionHandler([this](const QtModelSettings& settings) {
+        modelSettings_ = settings;
+        restoringModelSettings_ = true;
+        modelYaw_->setValue(qRound(modelSettings_.yaw * 100));
+        modelPitch_->setValue(qRound(modelSettings_.pitch * 100));
+        modelZoom_->setValue(qRound(modelSettings_.zoom * 100));
+        modelAutoRotate_->setChecked(modelSettings_.autoRotate);
+        restoringModelSettings_ = false;
+    });
     modelForm->addRow(QString::fromUtf8("Модель в папке models"), modelChoice_);
     modelForm->addRow(QString::fromUtf8("Путь к OBJ / FBX"), modelPathRow);
     modelForm->addRow(QString::fromUtf8("Поворот по горизонтали"), modelYaw_);
@@ -2411,6 +2420,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelPath_->setText(modelSettings_.modelPath);
     refreshModelChoices();
     loadSelectedModel();
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
+        if (!SaveQtModelSettings(workspace_.directory, modelSettings_))
+            appendLog(AppLogLevel::Error, "ModelSettings", "3D viewer settings could not be saved on exit");
+    });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });

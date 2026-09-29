@@ -2,6 +2,7 @@
 #include <QColor>
 #include <QWidget>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,7 @@ public:
     void setModelPath(const std::filesystem::path& path);
     QtModelLoadResult loadModel(const std::filesystem::path& path);
     void setSettings(const QtModelSettings& settings);
+    void setInteractionHandler(std::function<void(const QtModelSettings&)> handler);
     const QtModelSettings& settings() const { return settings_; }
     int triangleCount() const { return int(triangles_.size()); }
 protected:
@@ -43,6 +45,7 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 private:
     QtModelSettings settings_;
+    std::function<void(const QtModelSettings&)> interactionHandler_;
     std::vector<Triangle> triangles_;
     Point3 minimum_{}, maximum_{};
     bool valid_ = false;

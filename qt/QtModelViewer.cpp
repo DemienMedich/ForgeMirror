@@ -170,6 +170,9 @@ QtModelLoadResult QtModelViewer::loadModel(const fs::path& path) {
 }
 
 void QtModelViewer::setSettings(const QtModelSettings& settings) { settings_ = settings; update(); }
+void QtModelViewer::setInteractionHandler(std::function<void(const QtModelSettings&)> handler) {
+    interactionHandler_ = std::move(handler);
+}
 
 void QtModelViewer::paintEvent(QPaintEvent*) {
     QPainter painter(this); painter.setRenderHint(QPainter::Antialiasing);
@@ -187,6 +190,21 @@ void QtModelViewer::paintEvent(QPaintEvent*) {
     for (const auto& tri : triangles_) { const auto a=project(tri.a),b=project(tri.b),c=project(tri.c);painter.drawLine(a,b);painter.drawLine(b,c);painter.drawLine(c,a); }
 }
 void QtModelViewer::mousePressEvent(QMouseEvent* event) { if (event->button()==Qt::LeftButton) { dragging_=true;lastMouse_=event->pos();setCursor(Qt::ClosedHandCursor);event->accept();return;} QWidget::mousePressEvent(event); }
-void QtModelViewer::mouseMoveEvent(QMouseEvent* event) { if (dragging_) { const auto delta=event->pos()-lastMouse_;lastMouse_=event->pos();settings_.yaw+=delta.x()*.01f;settings_.pitch=std::clamp(settings_.pitch+delta.y()*.01f,-1.57f,1.57f);settings_.autoRotate=false;update();event->accept();return;} QWidget::mouseMoveEvent(event); }
+void QtModelViewer::mouseMoveEvent(QMouseEvent* event) {
+    if (!dragging_) { QWidget::mouseMoveEvent(event); return; }
+    const auto delta = event->pos() - lastMouse_;
+    lastMouse_ = event->pos();
+    settings_.yaw += delta.x() * .01f;
+    settings_.pitch = std::clamp(settings_.pitch + delta.y() * .01f, -1.57f, 1.57f);
+    settings_.autoRotate = false;
+    update();
+    if (interactionHandler_) interactionHandler_(settings_);
+    event->accept();
+}
 void QtModelViewer::mouseReleaseEvent(QMouseEvent* event) { if (event->button()==Qt::LeftButton && dragging_) { dragging_=false;unsetCursor();event->accept();return;} QWidget::mouseReleaseEvent(event); }
-void QtModelViewer::wheelEvent(QWheelEvent* event) { settings_.zoom=std::clamp(settings_.zoom+event->angleDelta().y()/1200.0f,.3f,3.0f);update();event->accept(); }
+void QtModelViewer::wheelEvent(QWheelEvent* event) {
+    settings_.zoom = std::clamp(settings_.zoom + event->angleDelta().y() / 1200.0f, .3f, 3.0f);
+    update();
+    if (interactionHandler_) interactionHandler_(settings_);
+    event->accept();
+}

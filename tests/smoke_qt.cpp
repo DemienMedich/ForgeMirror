@@ -7529,6 +7529,40 @@ int main(int argc, char** argv) {
                 entry.value("message").toString() == QStringLiteral("3D viewer settings saved");
         });
     if (!modelSettingsEventLogged) return fail("3D viewer settings save was not logged");
+    auto* modelViewer = dynamic_cast<QtModelViewer*>(window.findChild<QWidget*>("modelViewport"));
+    auto* modelAutoRotate = window.findChild<QCheckBox*>("modelAutoRotate");
+    auto* modelPitch = window.findChild<QSlider*>("modelPitch");
+    auto* modelZoom = window.findChild<QSlider*>("modelZoom");
+    if (!modelViewer || !modelAutoRotate || !modelPitch || !modelZoom)
+        return fail("3D viewer interaction controls unavailable");
+    const int alphaModelIndex = modelChoice->findData(QStringLiteral("alpha.obj"));
+    if (alphaModelIndex < 0) return fail("3D viewer interaction model fixture unavailable");
+    modelChoice->setCurrentIndex(alphaModelIndex);
+    nav->setCurrentRow(14);
+    QApplication::processEvents();
+    const QPoint dragStart = modelViewer->rect().center();
+    QTest::mousePress(modelViewer, Qt::LeftButton, Qt::NoModifier, dragStart);
+    QTest::mouseMove(modelViewer, dragStart + QPoint(24, 12), 10);
+    QTest::mouseRelease(modelViewer, Qt::LeftButton, Qt::NoModifier, dragStart + QPoint(24, 12));
+    const QPoint wheelPoint = modelViewer->rect().center();
+    QWheelEvent modelWheel(QPointF(wheelPoint), QPointF(modelViewer->mapToGlobal(wheelPoint)), QPoint(), QPoint(0, 120),
+        Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false);
+    QApplication::sendEvent(modelViewer, &modelWheel);
+    QApplication::processEvents();
+    if (modelViewer->settings().autoRotate || modelAutoRotate->isChecked() || modelYaw->value() <= 37 ||
+        modelPitch->value() <= 0 || modelZoom->value() <= 100)
+        return fail("3D viewport drag and zoom were not synchronized to its settings");
+    nav->setCurrentRow(15);
+    QApplication::processEvents();
+    QTimer::singleShot(0, [] {
+        if (auto* message = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) message->accept();
+    });
+    primary->click();
+    const auto interactedModelSettings = LoadQtModelSettings(workspace.directory);
+    if (interactedModelSettings.autoRotate || std::abs(interactedModelSettings.yaw - modelYaw->value() / 100.0f) > 0.001f ||
+        std::abs(interactedModelSettings.pitch - modelPitch->value() / 100.0f) > 0.001f ||
+        std::abs(interactedModelSettings.zoom - modelZoom->value() / 100.0f) > 0.001f)
+        return fail("3D viewport interaction values did not persist from settings");
     nav->setCurrentRow(0);
     nav->setCurrentRow(17);
     QApplication::processEvents();
