@@ -2062,13 +2062,27 @@ static bool TestCloudConflictResolver() {
     auto* route = window.findChild<QPushButton*>("cloudResolve");
     if (!route || !route->isVisible() || !route->isEnabled() || route->height() < 40) return fail("window route");
     bool routeOpened = false;
-    QTimer::singleShot(0, [&] {
-        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
-        routeOpened = dialog && dialog->objectName() == "cloudConflictResolver";
-        if (dialog) dialog->reject();
-    });
-    route->click();
-    if (!routeOpened) return fail("window route dialog");
+    const auto tasksBeforeModuleJump = read(workspace / "meta/tasks.json");
+    const auto pipelineBeforeModuleJump = read(workspace / "meta/pipeline.json");
+    auto verifyModuleJump = [&](const char* actionName, int expectedPage) {
+        routeOpened = false;
+        nav->setCurrentRow(13);
+        QTimer::singleShot(0, [&, actionName] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            routeOpened = dialog && dialog->objectName() == "cloudConflictResolver";
+            auto* openModule = dialog ? dialog->findChild<QPushButton*>(actionName) : nullptr;
+            if (openModule) openModule->click();
+            else if (dialog) dialog->reject();
+        });
+        route->click();
+        QApplication::processEvents();
+        return routeOpened && nav->currentRow() == expectedPage;
+    };
+    if (!verifyModuleJump("openTasksModule", 1) ||
+        read(workspace / "meta/tasks.json") != tasksBeforeModuleJump ||
+        !verifyModuleJump("openPipelineModule", 4) ||
+        read(workspace / "meta/pipeline.json") != pipelineBeforeModuleJump)
+        return fail("open module from cloud conflict");
     window.close();
     return true;
 }

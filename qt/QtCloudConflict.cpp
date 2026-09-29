@@ -709,7 +709,9 @@ QtCloudConflictResult RestoreQtCloudCatalogPair(const std::filesystem::path& wor
     return result;
 }
 
-bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& workspace) {
+bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& workspace,
+                               std::function<void(const std::string&)> openModule,
+                               bool tasksModuleEnabled, bool pipelineModuleEnabled) {
     const auto config = LoadCloudSyncConfig(workspace);
     const auto root = ResolveCloudRootPath(config, workspace);
     QDialog dialog(parent); dialog.setObjectName("cloudConflictResolver");
@@ -719,6 +721,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
     intro->setWordWrap(true); intro->setProperty("warning", true); layout->addWidget(intro);
     auto* tabs = new QTabWidget; tabs->setObjectName("cloudConflictTabs"); layout->addWidget(tabs, 1);
     bool changed = false;
+    std::string requestedModule;
     auto addFileTab = [&](const std::string& relative) {
         auto* page = new QWidget; auto* box = new QVBoxLayout(page); box->setContentsMargins(12, 12, 12, 12); box->setSpacing(10);
         const bool catalogPair = relative == "skills.txt" || relative == "meta/professions.txt";
@@ -740,6 +743,21 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         comparison->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
         comparison->setTextElideMode(Qt::ElideMiddle); comparison->setMaximumHeight(118); box->addWidget(comparison);
         auto* actions = new QHBoxLayout; actions->setSpacing(8);
+        const bool canOpenModule = (relative == "meta/tasks.json" && tasksModuleEnabled) ||
+            (relative == "meta/pipeline.json" && pipelineModuleEnabled);
+        if (canOpenModule) {
+            auto* openModuleButton = new QPushButton(QString::fromUtf8("Открыть модуль"));
+            openModuleButton->setObjectName(relative == "meta/tasks.json" ? "openTasksModule" : "openPipelineModule");
+            openModuleButton->setAccessibleName(relative == "meta/tasks.json"
+                ? QString::fromUtf8("Открыть модуль задач") : QString::fromUtf8("Открыть модуль пайплайна"));
+            openModuleButton->setToolTip(QString::fromUtf8("Перейти к модулю, не изменяя локальные и облачные файлы."));
+            openModuleButton->setStyleSheet("min-height: 40px; max-height: 40px;");
+            actions->addWidget(openModuleButton);
+            QObject::connect(openModuleButton, &QPushButton::clicked, &dialog, [&, relative] {
+                requestedModule = relative;
+                dialog.reject();
+            });
+        }
         auto* apply = new QPushButton(QString::fromUtf8("Принять из облака")); apply->setObjectName(objectName(relative, "ApplyCloud"));
         apply->setProperty("primary", true); apply->setStyleSheet("min-height: 40px; max-height: 40px;"); apply->setEnabled(std::filesystem::is_regular_file(cloud)); actions->addWidget(apply);
         auto* push = new QPushButton(QString::fromUtf8("Отправить локальную")); push->setObjectName(objectName(relative, "PushCloud"));
@@ -832,5 +850,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
     addFileTab("meta/gameplay.ini"); addFileTab("meta/professions.txt"); addFileTab("skills.txt");
     auto* close = new QPushButton(QString::fromUtf8("Закрыть")); close->setMinimumWidth(120); close->setStyleSheet("min-height: 40px; max-height: 40px;"); layout->addWidget(close, 0, Qt::AlignRight);
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
-    dialog.exec(); return changed;
+    dialog.exec();
+    if (!requestedModule.empty() && openModule) openModule(requestedModule);
+    return changed;
 }

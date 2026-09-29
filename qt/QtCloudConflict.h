@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -30,4 +31,6 @@ QtCloudConflictResult RestoreQtCloudCatalogPair(const std::filesystem::path& wor
                                                  const std::filesystem::path& skillsBackup,
                                                  const std::filesystem::path& professionsBackup);
 
-bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& workspaceDirectory);
+bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& workspaceDirectory,
+                               std::function<void(const std::string&)> openModule = {},
+                               bool tasksModuleEnabled = false, bool pipelineModuleEnabled = false);

@@ -6742,7 +6742,10 @@ void QtWindow::launchCloudRelease() {
 
 void QtWindow::resolveCloudConflict() {
     if (!workspace_.modules.cloud) return;
-    if (!ShowCloudConflictResolver(this, workspace_.directory)) return;
+    if (!ShowCloudConflictResolver(this, workspace_.directory, [this](const std::string& relativePath) {
+            if (relativePath == "meta/tasks.json") navigation_->setCurrentRow(Tasks);
+            else if (relativePath == "meta/pipeline.json") navigation_->setCurrentRow(Pipeline);
+        }, workspace_.modules.tasks, workspace_.modules.pipeline)) return;
     profileSession_.lock();
     if (reload()) statusBar()->showMessage(QString::fromUtf8("Локальная версия обновлена; облако не изменялось."), 15000);
 }

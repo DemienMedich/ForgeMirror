@@ -1,0 +1,17 @@
+# ForgeMirror Qt 0.6.85 release verification
+
+- Canonical version: root `VERSION` = `0.6.85`.
+- Scope: stage 240 restores navigation from cloud file comparison to Tasks and Pipeline without modifying either version. The `--version` switch exits before GUI startup and prints the canonical version.
+- Windows per-user installer: `Z:\CPP\ForgeMirror\dist\ForgeMirrorSetup_0.6.85.exe`; 12,527,463 bytes; FileVersion/ProductVersion `0.6.85`; SHA-256 `BCC02EB560088E5657D7B65D18D12ADCB79DAF7EFE41E1F5B926C32D9ABA793D`.
+- Packaged Qt executable: `Z:\CPP\ForgeMirror\package-qt-0.6.85-release\ForgeMirrorQt.exe`; 3,598,848 bytes; FileVersion/ProductVersion `0.6.85`; `--version` output `ForgeMirrorQt 0.6.85`; SHA-256 `CA14CCF6036560CD3C412D4FE8C36AAA5829969975B379DAE538E7CCF4992D5C`.
+
+## Verification
+
+- `build-qt.ps1 -Package -PackageDirectory package-qt-0.6.85-release` passed. `smoke_qt` passed 1/1 in 29.17 seconds and `smoke_core` reported `OK`. The new conflict-navigation checks open both target pages and compare task/pipeline files byte-for-byte before and after navigation.
+- Packaged `--version` ran with Qt removed from `PATH`, exited 0, and wrote exactly `ForgeMirrorQt 0.6.85` to standard output. The packaged real-window smoke also ran with the restricted Windows `PATH`, exited 0, and showed the title `ForgeMirror · Qt migration · 0.6.85`. Screenshot: `Z:\CPP\ForgeMirror\build-qt\release-smoke-0.6.85\window.png` (50,739 bytes; SHA-256 `379E961BED786F51AC69983A5FE98FF1991BADE5D675D67FA7E9CE866BE765C1`).
+- Inno Setup 6.7.3 compiled the per-user installer. Its FileVersion and ProductVersion both match `0.6.85`.
+- `installer/verify-qt-lifecycle.ps1 -PreviousVersion 0.6.84 -CurrentVersion 0.6.85` passed in a disposable installation using test-only AppId `{65C427E1-2B66-4C63-9351-3C518256EC19}` and path `C:\Users\mrdem\AppData\Local\Programs\ForgeMirrorQtLifecycle-65C427E12B664C6393513C518256EC19`. It installed 0.6.84, updated that install to 0.6.85, then verified the version command, registry DisplayVersion and real-window title/smoke at both versions with Qt removed from `PATH`. Isolated uninstall exited 0 and removed the install directory and uninstall registration. The external workspace marker remained unchanged (SHA-256 `7BB6463B30F9E301FED333CDF8960CA9497B602CCD8EEB46AE42693FDEA15A4D`).
+- Lifecycle screenshots: 0.6.84 `Z:\CPP\ForgeMirror\build-qt\lifecycle-0.6.85-65C427E12B664C6393513C518256EC19\installed-0.6.84.png` (52,498 bytes; SHA-256 `B4B3E85D1D2D78E726C8C15638D118A0C60609BD5B3E454F74714E15BEB3DB58`) and 0.6.85 `...\installed-0.6.85.png` (52,665 bytes; SHA-256 `8A62E32E6E19A9BD290038A473695EDB8CB1A590D6711A3979F5CB00249DAE2A`). Test installer builds were 0.6.84 (12,527,517 bytes; SHA-256 `08DC0AAAFD2BA94679D43BFE42B1C00B19595A42361116F6B7D64288FFEAE7E4`) and 0.6.85 (12,527,535 bytes; SHA-256 `FFAB69B8CF5B423B37B789C27385D2154457F66CA9AE4B0CDC2B23E8EA70D2F3`). Test shortcuts used a unique name and were removed; the production AppId and installation were not touched.
+- `git diff --check` passed before commit. The user-edited `AgentsSkills/CONTINUITY.md` remains separate from this release.
+
+Functional migration remains an expert estimate of about 95%, not a measured code or test percentage. The action-level parity audit remains open; this checkpoint does not declare the Qt port complete. Accessibility interaction testing and writes by older clients that bypass the shared workspace lock remain follow-up work.

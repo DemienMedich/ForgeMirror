@@ -7,6 +7,7 @@
 #include <QLockFile>
 #include <filesystem>
 #include <iostream>
+#include <cstring>
 
 namespace {
 std::filesystem::path path(const QString& value) { return std::filesystem::u8path(value.toUtf8().constData()); }
@@ -27,6 +28,10 @@ void qtRuntimeMessageHandler(QtMsgType type, const QMessageLogContext& context, 
 }
 
 int main(int argc, char** argv) {
+    if (argc == 2 && (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-v") == 0)) {
+        std::cout << "ForgeMirrorQt " << APP_VERSION << '\n';
+        return 0;
+    }
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName("ForgeMirrorQt");
     QCoreApplication::setOrganizationName("Pharos");
