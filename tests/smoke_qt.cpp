@@ -5295,10 +5295,14 @@ static bool TestQtTaskInlineProjectCreation() {
         auto* createProject = dialog->findChild<QPushButton*>("createProjectInline");
         auto* projectPanel = dialog->findChild<QGroupBox*>("inlineProjectPanel");
         auto* project = dialog->findChild<QComboBox*>("taskProject");
+        auto* priority = dialog->findChild<QComboBox*>("taskPriority");
         auto* taskName = dialog->findChild<QLineEdit*>("entryTitle");
         auto* saveTask = dialog->findChild<QDialogButtonBox*>();
-        if (!createProject || !projectPanel || !project || !taskName || !saveTask) { dialog->reject(); return; }
+        if (!createProject || !projectPanel || !project || !priority || !taskName || !saveTask ||
+            priority->count() != 4 || priority->itemText(3) != QString::fromUtf8("Критический") ||
+            priority->itemData(3).toInt() != 3) { dialog->reject(); return; }
         taskName->setText(QString::fromUtf8("Задача с новым проектом"));
+        priority->setCurrentIndex(3);
         createProject->click();
         auto* projectName = dialog->findChild<QLineEdit*>("inlineProjectName");
         auto* projectDescription = dialog->findChild<QPlainTextEdit*>("inlineProjectDescription");
@@ -5316,6 +5320,7 @@ static bool TestQtTaskInlineProjectCreation() {
     const auto tasks = LoadTasksData(directory);
     if (projects.size() != 1 || tasks.size() != 1 || inlineProjectId.isEmpty() ||
         tasks.front().projectId != inlineProjectId.toStdString() ||
+        tasks.front().priority != 3 ||
         tasks.front().project != u8"Проект из задачи" ||
         projects.front().id != inlineProjectId.toStdString() ||
         projects.front().description != u8"Создан внутри формы задачи") return false;

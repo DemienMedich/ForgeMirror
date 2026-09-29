@@ -7129,7 +7129,7 @@ void QtWindow::createEntry(bool edit) {
     if (!projectMode) {
         project->addItem(QString::fromUtf8("Без проекта"), "");
         for (const auto& item : workspace_.data.projects) project->addItem(q(item.name), q(item.id));
-        for (int i = 0; i < 3; ++i) priority->addItem(q(AppTaskPriorityLabel(i)), i);
+        for (int i = 0; i < 4; ++i) priority->addItem(q(AppTaskPriorityLabel(i)), i);
         priority->setCurrentIndex(1);
         for (auto label : Profile::kCategoryLabels) category->addItem(label);
         pipeline->addItem(QString::fromUtf8("Без этапа"), "");
