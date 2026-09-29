@@ -7140,6 +7140,99 @@ void QtWindow::createEntry(bool edit) {
         connect(hasDeadline, &QCheckBox::toggled, deadline, &QWidget::setEnabled);
         penalty->setRange(0, 100);
         penalty->setSuffix(" %");
+        if (!edit) {
+            auto* createProjectInline = new QPushButton(QString::fromUtf8("Создать проект…"));
+            createProjectInline->setObjectName("createProjectInline");
+            labelForAccessibility(createProjectInline, QString::fromUtf8("Создать проект из задачи"),
+                QString::fromUtf8("Откроет поля нового проекта, не закрывая форму задачи."));
+            auto* projectControls = new QWidget(&dialog);
+            auto* projectControlsLayout = new QHBoxLayout(projectControls);
+            projectControlsLayout->setContentsMargins(0, 0, 0, 0);
+            projectControlsLayout->addWidget(project, 1);
+            projectControlsLayout->addWidget(createProjectInline);
+            form->addRow(QString::fromUtf8("Проект"), projectControls);
+            auto* noProjects = new QLabel(QString::fromUtf8("Проектов пока нет. Создайте первый прямо из этой формы."));
+            noProjects->setObjectName("taskNoProjectsHint");
+            noProjects->setWordWrap(true);
+            noProjects->setVisible(workspace_.data.projects.empty());
+            form->addRow(noProjects);
+            auto* inlineProject = new QGroupBox(QString::fromUtf8("Новый проект"), &dialog);
+            inlineProject->setObjectName("inlineProjectPanel");
+            auto* inlineForm = new QFormLayout(inlineProject);
+            auto* inlineName = new QLineEdit;
+            inlineName->setObjectName("inlineProjectName");
+            labelForAccessibility(inlineName, QString::fromUtf8("Название нового проекта"));
+            auto* inlineDescription = new QPlainTextEdit;
+            inlineDescription->setObjectName("inlineProjectDescription");
+            inlineDescription->setMaximumHeight(72);
+            labelForAccessibility(inlineDescription, QString::fromUtf8("Описание нового проекта"));
+            auto* inlineNotice = new QLabel;
+            inlineNotice->setObjectName("inlineProjectNotice");
+            inlineNotice->setWordWrap(true);
+            auto* inlineActions = new QHBoxLayout;
+            auto* saveInlineProject = new QPushButton(QString::fromUtf8("Сохранить и выбрать"));
+            saveInlineProject->setObjectName("saveInlineProject");
+            saveInlineProject->setProperty("primary", true);
+            labelForAccessibility(saveInlineProject, QString::fromUtf8("Сохранить проект и выбрать его для задачи"));
+            auto* cancelInlineProject = new QPushButton(QString::fromUtf8("Отмена"));
+            cancelInlineProject->setObjectName("cancelInlineProject");
+            inlineActions->addWidget(saveInlineProject);
+            inlineActions->addWidget(cancelInlineProject);
+            inlineActions->addStretch();
+            inlineForm->addRow(QString::fromUtf8("Название"), inlineName);
+            inlineForm->addRow(QString::fromUtf8("Описание"), inlineDescription);
+            inlineForm->addRow(inlineNotice);
+            inlineForm->addRow(inlineActions);
+            inlineProject->hide();
+            form->addRow(inlineProject);
+            connect(createProjectInline, &QPushButton::clicked, &dialog, [=] {
+                inlineProject->setVisible(!inlineProject->isVisible());
+                if (inlineProject->isVisible()) inlineName->setFocus();
+                else { inlineName->clear(); inlineDescription->clear(); inlineNotice->clear(); }
+            });
+            connect(cancelInlineProject, &QPushButton::clicked, &dialog, [=] {
+                inlineProject->hide();
+                inlineName->clear(); inlineDescription->clear(); inlineNotice->clear();
+            });
+            connect(saveInlineProject, &QPushButton::clicked, &dialog, [&, inlineName, inlineDescription, inlineNotice,
+                                                                         project, inlineProject, noProjects] {
+                const QString candidateName = inlineName->text().trimmed();
+                if (candidateName.isEmpty()) {
+                    inlineNotice->setText(QString::fromUtf8("Введите название проекта."));
+                    inlineName->setFocus();
+                    return;
+                }
+                const auto saved = AppSaveProjectEntry(workspace_.directory, workspace_.data.projects, -1,
+                    u(candidateName), u(inlineDescription->toPlainText()));
+                if (!saved.ok) {
+                    appendLog(AppLogLevel::Warning, "CoreCatalogMutation", "Project creation failed or rolled back");
+                    inlineNotice->setText(q(saved.errorMessage));
+                    return;
+                }
+                if (saved.projectIndex < 0 || saved.projectIndex >= int(workspace_.data.projects.size())) {
+                    inlineNotice->setText(QString::fromUtf8("Проект сохранён, но не удалось обновить его выбор."));
+                    return;
+                }
+                const auto& createdProject = workspace_.data.projects[size_t(saved.projectIndex)];
+                const QString projectId = q(createdProject.id);
+                const QString projectName = q(createdProject.name);
+                int projectIndex = project->findData(projectId);
+                if (projectIndex < 0) {
+                    project->addItem(projectName, projectId);
+                    projectIndex = project->count() - 1;
+                }
+                project->setCurrentIndex(projectIndex);
+                noProjects->hide();
+                inlineProject->hide();
+                inlineName->clear(); inlineDescription->clear(); inlineNotice->clear();
+                appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Project creation committed");
+                refreshTaskFilterChoices();
+                render();
+                statusBar()->showMessage(QString::fromUtf8("Проект создан и выбран для задачи."), 5000);
+            });
+        } else {
+            form->addRow(QString::fromUtf8("Проект"), project);
+        }
         for (const auto& info : workspace_.profiles) if (!info.archived) {
             auto* item = new QListWidgetItem(q(info.name), assignees);
             item->setData(Qt::UserRole, q(info.id));
@@ -7189,7 +7282,6 @@ void QtWindow::createEntry(bool edit) {
         }
         assignees->setMaximumHeight(96);
         skills->setMaximumHeight(96);
-        form->addRow(QString::fromUtf8("Проект"), project);
         form->addRow(QString::fromUtf8("Приоритет"), priority);
         form->addRow(QString::fromUtf8("Категория"), category);
         form->addRow(QString::fromUtf8("Этап"), pipeline);
