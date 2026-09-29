@@ -2025,6 +2025,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     editEntry_ = new QPushButton(QString::fromUtf8("Редактировать"));
     editEntry_->setObjectName("editEntry");
     bottom->addWidget(editEntry_);
+    professionBindings_ = new QPushButton(QString::fromUtf8("Профили и навыки"));
+    professionBindings_->setObjectName("professionBindings");
+    professionBindings_->setToolTip(QString::fromUtf8("Назначить выбранную профессию профилям и навыкам"));
+    labelForAccessibility(professionBindings_, QString::fromUtf8("Профили и навыки профессии"),
+        QString::fromUtf8("Открывает список профилей и навыков с привязками к выбранной профессии."));
+    bottom->addWidget(professionBindings_);
     deleteEntry_ = new QPushButton(QString::fromUtf8("Удалить"));
     deleteEntry_->setObjectName("deleteEntry");
     deleteEntry_->setToolTip(QString::fromUtf8("Удалить выбранную запись с проверкой связей"));
@@ -2509,6 +2515,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             appendLog(AppLogLevel::Error, "ModelSettings", "3D viewer settings could not be saved on exit");
     });
     connect(editEntry_, &QPushButton::clicked, this, [this] { createEntry(true); });
+    connect(professionBindings_, &QPushButton::clicked, this, [this] { showProfessionBindings(); });
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });
     connect(moveDown_, &QPushButton::clicked, this, [this] { movePipeline(1); });
@@ -3130,6 +3137,226 @@ QString QtWindow::selectedId() const {
     return item ? item->data(Qt::UserRole).toString() : QString();
 }
 
+void QtWindow::showProfessionBindings() {
+    if (!requireAdmin() || navigation_->currentRow() != Professions) return;
+    const auto professionId = u(selectedId());
+    const auto professionCount = std::count_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+        [&professionId](const auto& item) { return item.id == professionId; });
+    if (professionId.empty() || professionCount != 1) {
+        message(u8"Выберите профессию с уникальным ID.");
+        return;
+    }
+    auto profession = std::find_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+        [&professionId](const auto& item) { return item.id == professionId; });
+
+    QDialog dialog(this);
+    dialog.setObjectName("professionBindingsDialog");
+    dialog.setWindowTitle(QString::fromUtf8("Связи профессии · %1").arg(q(profession->name)));
+    dialog.resize(760, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* hint = new QLabel(QString::fromUtf8(
+        "Отметьте активные профили и навыки, связанные с выбранной профессией. Изменения сохраняются сразу."));
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+    auto* tabs = new QTabWidget;
+    tabs->setObjectName("professionBindingsTabs");
+    auto* profileTable = new QTableWidget;
+    profileTable->setObjectName("professionProfiles");
+    profileTable->setColumnCount(3);
+    profileTable->setHorizontalHeaderLabels({QString::fromUtf8("Профиль"), QString::fromUtf8("Текущая профессия"),
+        QString::fromUtf8("Назначить")});
+    profileTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    profileTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    profileTable->setAlternatingRowColors(true);
+    profileTable->verticalHeader()->hide();
+    profileTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    profileTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    profileTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    labelForAccessibility(profileTable, QString::fromUtf8("Профили профессии"),
+        QString::fromUtf8("Активные профили можно назначить выбранной профессии или снять назначение. Архивные профили доступны только для просмотра."));
+    tabs->addTab(profileTable, QString::fromUtf8("Профили"));
+    auto* skillTable = new QTableWidget;
+    skillTable->setObjectName("professionSkills");
+    skillTable->setColumnCount(2);
+    skillTable->setHorizontalHeaderLabels({QString::fromUtf8("Навык"), QString::fromUtf8("Связан")});
+    skillTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    skillTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    skillTable->setAlternatingRowColors(true);
+    skillTable->verticalHeader()->hide();
+    skillTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    skillTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    labelForAccessibility(skillTable, QString::fromUtf8("Навыки профессии"),
+        QString::fromUtf8("Отметьте навыки, доступные выбранной профессии."));
+    tabs->addTab(skillTable, QString::fromUtf8("Навыки"));
+    layout->addWidget(tabs, 1);
+    auto* notice = new QLabel;
+    notice->setObjectName("professionBindingsNotice");
+    notice->setWordWrap(true);
+    layout->addWidget(notice);
+    auto* footer = new QHBoxLayout;
+    auto* refresh = new QPushButton(QString::fromUtf8("Обновить списки"));
+    refresh->setObjectName("professionBindingsRefresh");
+    labelForAccessibility(refresh, QString::fromUtf8("Обновить профили и навыки профессии"));
+    footer->addWidget(refresh);
+    footer->addStretch();
+    auto* close = new QPushButton(QString::fromUtf8("Закрыть"));
+    close->setObjectName("professionBindingsClose");
+    close->setProperty("primary", true);
+    footer->addWidget(close);
+    layout->addLayout(footer);
+
+    auto populate = [&] {
+        const QSignalBlocker profileBlock(profileTable);
+        const QSignalBlocker skillBlock(skillTable);
+        const auto matches = std::count_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+            [&professionId](const auto& item) { return item.id == professionId; });
+        if (matches != 1) {
+            profileTable->setRowCount(0);
+            skillTable->setRowCount(0);
+            notice->setText(QString::fromUtf8("Профессия была изменена или удалена. Обновите данные."));
+            profileTable->setEnabled(false);
+            skillTable->setEnabled(false);
+            return;
+        }
+        profession = std::find_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+            [&professionId](const auto& item) { return item.id == professionId; });
+        dialog.setWindowTitle(QString::fromUtf8("Связи профессии · %1").arg(q(profession->name)));
+        profileTable->setEnabled(true);
+        skillTable->setEnabled(true);
+        profileTable->setRowCount(0);
+        for (const auto& info : workspace_.profiles) {
+            const auto profile = workspace_.storage->load_profile_snapshot(info.id, true);
+            const QString assignedProfession = profile ? q(profile->profession_id()) : QString();
+            const auto assigned = profile ? std::find_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+                [&](const auto& item) { return item.id == profile->profession_id(); }) : workspace_.data.professions.end();
+            const QString status = !profile ? QString::fromUtf8("Не удалось прочитать")
+                : info.archived ? QString::fromUtf8("Архив")
+                : assignedProfession.isEmpty() ? QString::fromUtf8("Без профессии")
+                : assigned != workspace_.data.professions.end() ? q(assigned->name) : assignedProfession;
+            const int row = profileTable->rowCount();
+            profileTable->insertRow(row);
+            auto* name = new QTableWidgetItem(q(info.name));
+            name->setData(Qt::UserRole, q(info.id));
+            auto* state = new QTableWidgetItem(status);
+            auto* check = new QTableWidgetItem;
+            check->setData(Qt::UserRole, q(info.id));
+            check->setData(Qt::UserRole + 1, assignedProfession);
+            check->setCheckState(profile && assignedProfession == q(professionId) ? Qt::Checked : Qt::Unchecked);
+            check->setTextAlignment(Qt::AlignCenter);
+            check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+            if (info.archived || !profile) {
+                check->setFlags(Qt::ItemIsSelectable);
+                check->setToolTip(info.archived ? QString::fromUtf8("Архивный профиль доступен только для просмотра.")
+                    : QString::fromUtf8("Профиль не удалось прочитать."));
+            }
+            profileTable->setItem(row, 0, name);
+            profileTable->setItem(row, 1, state);
+            profileTable->setItem(row, 2, check);
+        }
+        skillTable->setRowCount(0);
+        for (const auto& skillId : workspace_.catalog.skills()) {
+            const int row = skillTable->rowCount();
+            skillTable->insertRow(row);
+            auto* name = new QTableWidgetItem(q(workspace_.catalog.display_name(skillId)));
+            name->setData(Qt::UserRole, q(skillId));
+            auto* check = new QTableWidgetItem;
+            check->setData(Qt::UserRole, q(skillId));
+            check->setCheckState(workspace_.catalog.has_profession(skillId, professionId) ? Qt::Checked : Qt::Unchecked);
+            check->setTextAlignment(Qt::AlignCenter);
+            check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+            skillTable->setItem(row, 0, name);
+            skillTable->setItem(row, 1, check);
+        }
+        notice->clear();
+    };
+    populate();
+    connect(refresh, &QPushButton::clicked, &dialog, [this, &populate, notice] {
+        try {
+            workspace_.reload();
+            populate();
+        } catch (const std::exception& error) {
+            notice->setText(q(error.what()));
+        }
+    });
+    connect(profileTable, &QTableWidget::itemChanged, &dialog, [this, &dialog, profileTable, notice, populate, professionId](QTableWidgetItem* item) {
+        if (!item || item->column() != 2) return;
+        const auto profileId = u(item->data(Qt::UserRole).toString());
+        const auto expectedProfession = u(item->data(Qt::UserRole + 1).toString());
+        const auto selectedProfessionId = professionId;
+        const auto restoreId = u(profiles_->currentData().toString());
+        QString error;
+        AppProfessionMutationResult result;
+        {
+            AppWorkspaceStorageWriteLock writeLock(workspace_.directory);
+            if (!writeLock.acquired()) {
+                error = QString::fromUtf8("Рабочее место изменяет другая программа. Повторите позже.");
+            } else if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+                error = QString::fromUtf8("Сначала завершите восстановление данных через обновление.");
+            } else {
+                const auto listed = workspace_.storage->list_profiles();
+                const auto currentInfo = std::find_if(listed.begin(), listed.end(), [&](const auto& info) { return info.id == profileId; });
+                const auto current = workspace_.storage->load_profile_snapshot(profileId, true);
+                if (currentInfo == listed.end() || currentInfo->archived || !current) {
+                    error = QString::fromUtf8("Активный профиль больше не доступен. Обновите список.");
+                } else if (current->profession_id() != expectedProfession) {
+                    error = QString::fromUtf8("Профиль изменился в другой программе. Обновите список.");
+                } else {
+                    const auto targetProfession = item->checkState() == Qt::Checked ? selectedProfessionId : std::string();
+                    result = AppAssignProfessionToProfile(*workspace_.storage, restoreId.empty() ? profileId : restoreId,
+                        profileId, targetProfession);
+                    if (!result.ok) error = q(result.errorMessage);
+                }
+            }
+        }
+        if (!error.isEmpty()) {
+            try { workspace_.reload(); populate(); notice->setText(error); }
+            catch (const std::exception& exception) { notice->setText(q(exception.what())); }
+            return;
+        }
+        if (result.changed) appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Profile profession assignment committed");
+        workspace_.profiles = workspace_.storage->list_profiles();
+        std::sort(workspace_.profiles.begin(), workspace_.profiles.end(),
+            [](const auto& left, const auto& right) { return left.id < right.id; });
+        populate();
+        notice->setText(result.changed ? QString::fromUtf8("Профессия профиля обновлена.")
+            : QString::fromUtf8("Назначение уже соответствовало выбранному состоянию."));
+    });
+    connect(skillTable, &QTableWidget::itemChanged, &dialog, [this, skillTable, notice, populate, professionId](QTableWidgetItem* item) {
+        if (!item || item->column() != 1) return;
+        if (std::filesystem::exists(workspace_.directory / "meta/qt-xp-transaction")) {
+            populate();
+            notice->setText(QString::fromUtf8("Сначала завершите восстановление данных через обновление."));
+            return;
+        }
+        const auto skillId = u(item->data(Qt::UserRole).toString());
+        if (!workspace_.catalog.contains_id(skillId)) {
+            populate();
+            notice->setText(QString::fromUtf8("Навык больше не существует. Обновите списки."));
+            return;
+        }
+        auto bindings = workspace_.catalog.professions(skillId);
+        const auto selectedProfessionId = professionId;
+        const bool checked = item->checkState() == Qt::Checked;
+        const auto found = std::find(bindings.begin(), bindings.end(), selectedProfessionId);
+        if (checked && found == bindings.end()) bindings.push_back(selectedProfessionId);
+        if (!checked) bindings.erase(std::remove(bindings.begin(), bindings.end(), selectedProfessionId), bindings.end());
+        const auto error = SaveQtSkill(workspace_, skillId, q(workspace_.catalog.display_name(skillId)),
+            workspace_.catalog.weight(skillId), q(workspace_.catalog.description(skillId)),
+            q(workspace_.catalog.category(skillId)), bindings);
+        if (!error.isEmpty()) {
+            try { workspace_.reload(); populate(); notice->setText(error); }
+            catch (const std::exception& exception) { notice->setText(q(exception.what())); }
+            return;
+        }
+        appendLog(AppLogLevel::Info, "CoreCatalogMutation", "Skill profession assignment committed");
+        populate();
+        notice->setText(QString::fromUtf8("Связь навыка с профессией обновлена."));
+    });
+    connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    dialog.exec();
+    reload();
+}
+
 void QtWindow::openProfileTasksFilter(int index) {
     const auto id = profiles_->currentData().toString();
     if (id.isEmpty() || !workspace_.modules.tasks) return;
@@ -3465,6 +3692,7 @@ void QtWindow::render() {
         (page == Projects ? QString::fromUtf8("Создать проект") :
          page == Catalog ? QString::fromUtf8("Создать навык") : page == Pipeline ? QString::fromUtf8("Создать этап") : page == Professions ? QString::fromUtf8("Создать профессию") : page == Rules ? QString::fromUtf8("Изменить правила") : page == Vault ? QString::fromUtf8("Настройки хранилища") : page == Shortcuts ? QString::fromUtf8("Добавить ярлык") : page == Banner ? QString::fromUtf8("Добавить фразу") : page == Cloud ? QString::fromUtf8("Настроить облако") : page == ModelSettingsPage ? QString::fromUtf8("Сохранить настройки") : QString::fromUtf8("Создать задачу")));
     editEntry_->setVisible(admin_ && (page == Projects || page == Catalog || page == Tasks || page == Pipeline || page == Professions || page == Banner));
+    professionBindings_->setVisible(admin_ && page == Professions);
     deleteEntry_->setVisible(page == Shortcuts || (admin_ && (page == Tasks || page == Projects || page == Catalog || page == Pipeline || page == Professions || page == Banner)));
     moveUp_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
     moveDown_->setVisible(page == Shortcuts || (admin_ && page == Pipeline));
@@ -6137,6 +6365,11 @@ void QtWindow::details() {
     openShortcut_->setEnabled(false);
     advanceStage_->setEnabled(!id.empty());
     const int page = navigation_->currentRow();
+    if (professionBindings_) {
+        professionBindings_->setEnabled(page == Professions && admin_ && !id.empty() &&
+            std::count_if(workspace_.data.professions.begin(), workspace_.data.professions.end(),
+                [&id](const auto& item) { return item.id == id; }) == 1);
+    }
     if (page == Pipeline) {
         const auto step = std::find_if(workspace_.data.pipelineSteps.begin(), workspace_.data.pipelineSteps.end(),
             [&](const auto& item) { return item.id == id; });

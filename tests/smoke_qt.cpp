@@ -8232,6 +8232,39 @@ int main(int argc, char** argv) {
     });
     primary->click();
     if (LoadProfessionsData(workspace.directory).size() != 1) return fail("Profession entry point failed");
+    const auto qtProfession = LoadProfessionsData(workspace.directory).front();
+    const auto professionMember = workspace.storage->create_profile(Profile("Qt profession member"));
+    if (!professionMember || !workspace.catalog.add_skill("Qt profession skill", 1.0, "Bound from profession page"))
+        return fail("Profession bindings fixture failed");
+    const auto professionSkillId = workspace.catalog.id_for_name("Qt profession skill");
+    if (!professionSkillId) return fail("Profession binding skill ID failed");
+    workspace.reload();
+    table->selectRow(0);
+    auto* professionBindings = window.findChild<QPushButton*>("professionBindings");
+    if (!professionBindings || !professionBindings->isVisible() || !professionBindings->isEnabled())
+        return fail("Profession bindings action unavailable");
+    bool bindingsDialogChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        auto* profileTable = dialog ? dialog->findChild<QTableWidget*>("professionProfiles") : nullptr;
+        auto* skillTable = dialog ? dialog->findChild<QTableWidget*>("professionSkills") : nullptr;
+        if (!dialog || !profileTable || !skillTable) { if (dialog) dialog->reject(); return; }
+        int memberRow = -1, skillRow = -1;
+        for (int row = 0; row < profileTable->rowCount(); ++row)
+            if (profileTable->item(row, 2)->data(Qt::UserRole).toString() == QString::fromStdString(professionMember->id)) memberRow = row;
+        for (int row = 0; row < skillTable->rowCount(); ++row)
+            if (skillTable->item(row, 1)->data(Qt::UserRole).toString() == QString::fromStdString(*professionSkillId)) skillRow = row;
+        if (memberRow < 0 || skillRow < 0) { dialog->reject(); return; }
+        profileTable->item(memberRow, 2)->setCheckState(Qt::Checked);
+        skillTable->item(skillRow, 1)->setCheckState(Qt::Checked);
+        bindingsDialogChecked = true;
+        dialog->findChild<QPushButton*>("professionBindingsClose")->click();
+    });
+    professionBindings->click();
+    const auto assignedMember = workspace.storage->load_profile_snapshot(professionMember->id, true);
+    if (!bindingsDialogChecked || !assignedMember || assignedMember->profession_id() != qtProfession.id ||
+        !workspace.catalog.has_profession(*professionSkillId, qtProfession.id))
+        return fail("Profession page did not save profile and skill assignments");
     table->selectRow(0);
     auto* deleteProfession = window.findChild<QPushButton*>("deleteEntry");
     if (!deleteProfession || !deleteProfession->isVisible() || !deleteProfession->isEnabled())
@@ -8243,7 +8276,10 @@ int main(int argc, char** argv) {
         if (confirm) confirm->button(QMessageBox::Yes)->click();
     });
     deleteProfession->click();
+    const auto clearedProfessionMember = workspace.storage->load_profile_snapshot(professionMember->id, true);
     if (!LoadProfessionsData(workspace.directory).empty() ||
+        workspace.catalog.has_profession(*professionSkillId, qtProfession.id) ||
+        !clearedProfessionMember || !clearedProfessionMember->profession_id().empty() ||
         std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"))
         return fail("Profession delete entry point failed");
     if (!workspace.catalog.add_skill("Qt disposable", 1.0, "Delete entry point"))

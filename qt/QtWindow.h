@@ -110,6 +110,7 @@ private:
     QString selectedId() const;
     void openProfileTasksFilter(int index);
     void openProjectTasksFilter(const QString& projectId, int quickFilter);
+    void showProfessionBindings();
     QtWorkspace& workspace_;
     bool admin_ = false;
     QtProfileSession profileSession_;
@@ -236,6 +237,7 @@ private:
     QPushButton* bulkDelete_;
     QToolButton* taskSelectionTools_;
     QPushButton* editEntry_;
+    QPushButton* professionBindings_ = nullptr;
     QPushButton* deleteEntry_;
     QPushButton* moveUp_;
     QPushButton* moveDown_;
