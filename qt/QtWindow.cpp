@@ -7105,6 +7105,7 @@ void QtWindow::createEntry(bool edit) {
     form->addRow(QString::fromUtf8("Описание"), description);
     auto* project = new QComboBox;
     auto* priority = new QComboBox;
+    auto* status = new QComboBox;
     auto* category = new QComboBox;
     auto* pipeline = new QComboBox;
     auto* deadline = new QDateTimeEdit(QDateTime::currentDateTime().addDays(1));
@@ -7114,6 +7115,7 @@ void QtWindow::createEntry(bool edit) {
     auto* penalty = new QSpinBox;
     project->setObjectName("taskProject");
     priority->setObjectName("taskPriority");
+    status->setObjectName("taskStatus");
     category->setObjectName("taskCategory");
     pipeline->setObjectName("taskPipeline");
     deadline->setObjectName("taskDeadline");
@@ -7122,7 +7124,7 @@ void QtWindow::createEntry(bool edit) {
     skills->setObjectName("taskSkills");
     penalty->setObjectName("taskPenalty");
     // Parent optional controls to the dialog even in the project-only form.
-    for (QWidget* control : std::initializer_list<QWidget*>{project, priority, category, pipeline, deadline, hasDeadline, assignees, skills, penalty}) {
+    for (QWidget* control : std::initializer_list<QWidget*>{project, priority, status, category, pipeline, deadline, hasDeadline, assignees, skills, penalty}) {
         control->setParent(&dialog);
         control->setVisible(!projectMode);
     }
@@ -7131,6 +7133,8 @@ void QtWindow::createEntry(bool edit) {
         for (const auto& item : workspace_.data.projects) project->addItem(q(item.name), q(item.id));
         for (int i = 0; i < 4; ++i) priority->addItem(q(AppTaskPriorityLabel(i)), i);
         priority->setCurrentIndex(1);
+        status->setVisible(!edit);
+        if (!edit) for (int i = 0; i < 3; ++i) status->addItem(q(AppTaskStatusLabel(i)), i);
         for (auto label : Profile::kCategoryLabels) category->addItem(label);
         pipeline->addItem(QString::fromUtf8("Без этапа"), "");
         for (const auto& step : workspace_.data.pipelineSteps) pipeline->addItem(q(step.title), q(step.id));
@@ -7283,6 +7287,7 @@ void QtWindow::createEntry(bool edit) {
         assignees->setMaximumHeight(96);
         skills->setMaximumHeight(96);
         form->addRow(QString::fromUtf8("Приоритет"), priority);
+        if (!edit) form->addRow(QString::fromUtf8("Статус"), status);
         form->addRow(QString::fromUtf8("Категория"), category);
         form->addRow(QString::fromUtf8("Этап"), pipeline);
         form->addRow(hasDeadline, deadline);
@@ -7300,6 +7305,7 @@ void QtWindow::createEntry(bool edit) {
     buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
     form->addRow(buttons);
+    std::string createdTaskPendingCompletion;
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
         if (name->text().trimmed().isEmpty()) { name->setFocus(); return; }
@@ -7326,6 +7332,7 @@ void QtWindow::createEntry(bool edit) {
             task.projectId = u(project->currentData().toString());
             task.project = project->currentIndex() > 0 ? u(project->currentText()) : std::string();
             task.priority = priority->currentData().toInt();
+            if (!edit) task.status = status->currentData().toInt();
             task.category = category->currentIndex();
             task.pipelineStepId = u(pipeline->currentData().toString());
             task.pipelineStep = pipeline->currentIndex() > 0 ? u(pipeline->currentText()) : std::string();
@@ -7352,10 +7359,18 @@ void QtWindow::createEntry(bool edit) {
             if (!result.ok) {
                 message(result.errorMessage); return;
             }
+            if (!edit && task.status == 2) createdTaskPendingCompletion = task.id;
         }
         dialog.accept();
     });
-    if (dialog.exec() == QDialog::Accepted) reload();
+    if (dialog.exec() == QDialog::Accepted) {
+        reload();
+        if (!createdTaskPendingCompletion.empty()) {
+            ShowTaskCompletionDialog(this, workspace_, q(createdTaskPendingCompletion), profiles_->currentData().toString(),
+                [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreTaskCompletion", event); });
+            reload();
+        }
+    }
 }
 
 void QtWindow::previewCloudPush() {

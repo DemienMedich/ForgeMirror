@@ -5296,13 +5296,18 @@ static bool TestQtTaskInlineProjectCreation() {
         auto* projectPanel = dialog->findChild<QGroupBox*>("inlineProjectPanel");
         auto* project = dialog->findChild<QComboBox*>("taskProject");
         auto* priority = dialog->findChild<QComboBox*>("taskPriority");
+        auto* status = dialog->findChild<QComboBox*>("taskStatus");
         auto* taskName = dialog->findChild<QLineEdit*>("entryTitle");
         auto* saveTask = dialog->findChild<QDialogButtonBox*>();
-        if (!createProject || !projectPanel || !project || !priority || !taskName || !saveTask ||
+        if (!createProject || !projectPanel || !project || !priority || !status || !taskName || !saveTask ||
             priority->count() != 4 || priority->itemText(3) != QString::fromUtf8("Критический") ||
-            priority->itemData(3).toInt() != 3) { dialog->reject(); return; }
+            priority->itemData(3).toInt() != 3 || status->count() != 3 ||
+            status->itemText(2) != QString::fromUtf8("Выполнена") || status->itemData(2).toInt() != 2) {
+            dialog->reject(); return;
+        }
         taskName->setText(QString::fromUtf8("Задача с новым проектом"));
         priority->setCurrentIndex(3);
+        status->setCurrentIndex(status->findData(1));
         createProject->click();
         auto* projectName = dialog->findChild<QLineEdit*>("inlineProjectName");
         auto* projectDescription = dialog->findChild<QPlainTextEdit*>("inlineProjectDescription");
@@ -5321,6 +5326,7 @@ static bool TestQtTaskInlineProjectCreation() {
     if (projects.size() != 1 || tasks.size() != 1 || inlineProjectId.isEmpty() ||
         tasks.front().projectId != inlineProjectId.toStdString() ||
         tasks.front().priority != 3 ||
+        tasks.front().status != 1 ||
         tasks.front().project != u8"Проект из задачи" ||
         projects.front().id != inlineProjectId.toStdString() ||
         projects.front().description != u8"Создан внутри формы задачи") return false;
@@ -5352,6 +5358,50 @@ static bool TestQtTaskInlineProjectCreation() {
         std::any_of(projectsAfterCancel.begin(), projectsAfterCancel.end(), [&](const auto& item) {
             return item.id == keptProjectId.toStdString();
         }) && projectFilter->findData(keptProjectId) >= 0;
+}
+
+static bool TestQtTaskCreationCompletionHandoff() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+    QtWorkspace workspace(directory);
+    if (!SetAdminPassword(directory, "task-status-test-password") || !SetAdminStayLoggedIn(directory, true)) return false;
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* primary = window.findChild<QPushButton*>("primary");
+    if (!navigation || !primary) return false;
+    navigation->setCurrentRow(1);
+    bool completionPromptShown = false;
+    QTimer::singleShot(0, [&window, &completionPromptShown] {
+        auto* editor = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!editor || editor->objectName() != "taskEditor") { if (editor) editor->reject(); return; }
+        auto* status = editor->findChild<QComboBox*>("taskStatus");
+        auto* title = editor->findChild<QLineEdit*>("entryTitle");
+        auto* buttons = editor->findChild<QDialogButtonBox*>();
+        if (!status || status->count() != 3 || !title || !buttons || status->findData(2) < 0) {
+            editor->reject(); return;
+        }
+        title->setText(QString::fromUtf8("Новая выполненная задача"));
+        status->setCurrentIndex(status->findData(2));
+        auto* watcher = new QTimer(&window);
+        watcher->setInterval(5);
+        QObject::connect(watcher, &QTimer::timeout, watcher, [watcher, &completionPromptShown] {
+            auto* completion = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (completion && completion->objectName() == "taskCompletionDialog") {
+                completionPromptShown = true;
+                completion->reject();
+                watcher->stop();
+                watcher->deleteLater();
+            }
+        });
+        watcher->start();
+        buttons->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    const auto tasks = LoadTasksData(directory);
+    return completionPromptShown && tasks.size() == 1 && tasks.front().status == 2 && tasks.front().participants.empty();
 }
 
 static bool TestQtTaskAssigneeProfileFilter() {
@@ -7380,6 +7430,7 @@ int main(int argc, char** argv) {
     if (!TestTaskActionNeededQuickFilter()) { std::cerr << "Task action-needed quick filter failed\n"; return 1; }
     if (!TestQtTaskCreationRangeAndSorting()) { std::cerr << "Qt task creation range and sorting failed\n"; return 1; }
     if (!TestQtTaskInlineProjectCreation()) { std::cerr << "Qt inline project creation failed\n"; return 1; }
+    if (!TestQtTaskCreationCompletionHandoff()) { std::cerr << "Qt task creation status/completion handoff failed\n"; return 1; }
     if (!TestQtTaskAssigneeProfileFilter()) { std::cerr << "Qt task assignee profile filter failed\n"; return 1; }
     if (!TestQtVisibleTaskExports()) { std::cerr << "Qt visible task export failed\n"; return 1; }
     if (!TestQtTaskFilterReset()) { std::cerr << "Qt task filter reset failed\n"; return 1; }
