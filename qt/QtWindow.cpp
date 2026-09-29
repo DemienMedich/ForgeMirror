@@ -6982,12 +6982,21 @@ void QtWindow::createEntry(bool edit) {
         if (edit) return;
         QDialog dialog(this); dialog.setObjectName("shortcutEditor"); dialog.setWindowTitle(QString::fromUtf8("Добавить ярлык")); dialog.setMinimumWidth(520);
         auto* form = new QFormLayout(&dialog);
-        auto* hint = new QLabel(QString::fromUtf8("Выберите существующий локальный файл. ForgeMirror хранит только название и путь, сам файл не копируется."));
+        auto* hint = new QLabel(QString::fromUtf8("Добавьте существующий файл или папку. ForgeMirror хранит только название и путь, сам объект не копируется."));
         hint->setWordWrap(true); form->addRow(hint);
         auto* label = new QLineEdit; label->setObjectName("shortcutLabel"); label->setMaxLength(96);
-        auto* path = new QLineEdit; path->setObjectName("shortcutPath"); path->setReadOnly(true);
+        labelForAccessibility(label, QString::fromUtf8("Название ярлыка"), QString::fromUtf8("Короткое имя для быстрого запуска."));
+        auto* path = new QLineEdit; path->setObjectName("shortcutPath");
+        labelForAccessibility(path, QString::fromUtf8("Путь к файлу или папке ярлыка"),
+            QString::fromUtf8("Введите существующий путь или выберите файл либо папку."));
         auto* browse = new QPushButton(QString::fromUtf8("Выбрать файл…")); browse->setObjectName("shortcutBrowse");
-        form->addRow(QString::fromUtf8("Название"), label); form->addRow(QString::fromUtf8("Путь"), path); form->addRow(browse);
+        labelForAccessibility(browse, QString::fromUtf8("Выбрать файл ярлыка"), QString::fromUtf8("Выбирает существующий локальный файл."));
+        auto* browseFolder = new QPushButton(QString::fromUtf8("Выбрать папку…")); browseFolder->setObjectName("shortcutBrowseFolder");
+        labelForAccessibility(browseFolder, QString::fromUtf8("Выбрать папку ярлыка"), QString::fromUtf8("Выбирает существующую локальную папку."));
+        auto* pathActions = new QHBoxLayout;
+        pathActions->addWidget(browse); pathActions->addWidget(browseFolder); pathActions->addStretch();
+        auto* pathActionsWidget = new QWidget(&dialog); pathActionsWidget->setLayout(pathActions);
+        form->addRow(QString::fromUtf8("Название"), label); form->addRow(QString::fromUtf8("Путь"), path); form->addRow(pathActionsWidget);
         auto* notice = new QLabel; notice->setObjectName("shortcutNotice"); notice->setWordWrap(true); form->addRow(notice);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
         buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Добавить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
@@ -6996,6 +7005,14 @@ void QtWindow::createEntry(bool edit) {
             QFileDialog picker(&dialog, QString::fromUtf8("Выберите файл ярлыка")); picker.setOption(QFileDialog::DontUseNativeDialog);
             picker.setFileMode(QFileDialog::ExistingFile);
             if (picker.exec() == QDialog::Accepted && !picker.selectedFiles().isEmpty()) path->setText(QDir::toNativeSeparators(picker.selectedFiles().front()));
+        });
+        connect(browseFolder, &QPushButton::clicked, &dialog, [&] {
+            QFileDialog picker(&dialog, QString::fromUtf8("Выберите папку ярлыка"));
+            picker.setOption(QFileDialog::DontUseNativeDialog);
+            picker.setOption(QFileDialog::ShowDirsOnly);
+            picker.setFileMode(QFileDialog::Directory);
+            if (picker.exec() == QDialog::Accepted && !picker.selectedFiles().isEmpty())
+                path->setText(QDir::toNativeSeparators(picker.selectedFiles().front()));
         });
         connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
         connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {

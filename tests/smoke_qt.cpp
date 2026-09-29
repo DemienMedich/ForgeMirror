@@ -6924,6 +6924,45 @@ static bool TestShortcutPersistence() {
     return before == after;
 }
 
+static bool TestShortcutFolderEditor() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    const auto folder = directory / "Project folder shortcut";
+    std::filesystem::create_directories(folder);
+    QtWorkspace workspace(directory);
+    QtWindow window(workspace);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* primary = window.findChild<QPushButton*>("primary");
+    if (!navigation || !primary) return false;
+    navigation->setCurrentRow(11);
+    QApplication::processEvents();
+    bool checks = true;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "shortcutEditor") { checks = false; return; }
+        auto* label = dialog->findChild<QLineEdit*>("shortcutLabel");
+        auto* path = dialog->findChild<QLineEdit*>("shortcutPath");
+        auto* browseFolder = dialog->findChild<QPushButton*>("shortcutBrowseFolder");
+        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+        if (!label || !path || !browseFolder || !buttons || path->isReadOnly() || browseFolder->accessibleName().isEmpty()) {
+            checks = false;
+            dialog->reject();
+            return;
+        }
+        label->setText(QString::fromUtf8("Папка проекта"));
+        path->setText(QDir::toNativeSeparators(QString::fromStdWString(folder.wstring())));
+        buttons->button(QDialogButtonBox::Save)->click();
+    });
+    primary->click();
+    const auto created = LoadShortcutsData(directory);
+    checks &= created.size() == 1 && std::filesystem::equivalent(std::filesystem::u8path(created.front().path), folder);
+    window.close();
+    return checks;
+}
+
 static bool TestQuickShortcutLauncher() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
@@ -7196,6 +7235,7 @@ int main(int argc, char** argv) {
     if (!TestWorkspaceImportSnapshot()) { std::cerr << "Workspace import snapshot failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
     if (!TestShortcutPersistence()) { std::cerr << "Shortcut persistence failed\n"; return 1; }
+    if (!TestShortcutFolderEditor()) { std::cerr << "Shortcut folder editor failed\n"; return 1; }
     if (!TestQuickShortcutLauncher()) { std::cerr << "Quick shortcut launcher failed\n"; return 1; }
     if (!TestReportExport()) { std::cerr << "Report export failed\n"; return 1; }
     if (!TestProfileReportExport()) { std::cerr << "Profile report export failed\n"; return 1; }
