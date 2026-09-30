@@ -90,6 +90,17 @@ bool ShowPipelineEditor(QWidget* parent, QtWorkspace& workspace, const std::stri
     notice->setTextFormat(Qt::PlainText);
     notice->setWordWrap(true);
     layout->addWidget(notice);
+    auto* stageTitle = lines["stageTitle"];
+    const QString titleDescription = QString::fromUtf8("Обязательное название этапа.");
+    const QString titleError = QString::fromUtf8("Название этапа обязательно.");
+    stageTitle->setAccessibleName(QString::fromUtf8("Название этапа"));
+    stageTitle->setAccessibleDescription(titleDescription);
+    QObject::connect(stageTitle, &QLineEdit::textChanged, &dialog, [stageTitle, notice, titleDescription, titleError](const QString& value) {
+        if (!stageTitle->property("validationFailed").toBool() || value.trimmed().isEmpty()) return;
+        stageTitle->setProperty("validationFailed", false);
+        stageTitle->setAccessibleDescription(titleDescription);
+        if (notice->text() == titleError) notice->clear();
+    });
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
@@ -102,7 +113,15 @@ bool ShowPipelineEditor(QWidget* parent, QtWorkspace& workspace, const std::stri
         }
         PipelineStep draft = original;
         draft.title = u(lines["stageTitle"]->text().trimmed());
-        if (draft.title.empty()) { notice->setText(QString::fromUtf8("Название этапа обязательно.")); tabs->setCurrentIndex(0); return; }
+        if (draft.title.empty()) {
+            notice->setText(titleError);
+            tabs->setCurrentIndex(0);
+            stageTitle->setProperty("validationFailed", true);
+            stageTitle->setAccessibleDescription(titleError);
+            stageTitle->setFocus(Qt::OtherFocusReason);
+            stageTitle->selectAll();
+            return;
+        }
         draft.stageCode = u(lines["stageCode"]->text());
         draft.branch = u(lines["stageBranch"]->text());
         draft.owner = u(lines["stageOwner"]->text());

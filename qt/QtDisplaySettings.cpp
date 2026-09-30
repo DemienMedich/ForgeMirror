@@ -1,4 +1,6 @@
 #include "QtDisplaySettings.h"
+#include "QtDisclosureButton.h"
+#include "QtScrollableDialog.h"
 #include "QtDeadlineAgent.h"
 #include "QtModelViewer.h"
 #include "QtTheme.h"
@@ -788,9 +790,10 @@ void ApplyQtDisplaySettings(QApplication& app, const QtDisplaySettings& settings
         settings.framePaddingX, settings.framePaddingY, settings.itemSpacingX, settings.itemSpacingY);
 }
 bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings) {
-    QDialog dialog(parent); dialog.setObjectName("qtDisplaySettings"); dialog.setWindowTitle(QString::fromUtf8("Настройки интерфейса Qt")); dialog.setMinimumWidth(420);
+    QtScrollableDialog dialog(parent); dialog.setObjectName("qtDisplaySettings"); dialog.setWindowTitle(QString::fromUtf8("Настройки интерфейса Qt"));
     QtDisplaySettings backgroundDraft = settings;
-    auto* form = new QFormLayout(&dialog); auto* scale = new QComboBox; scale->setObjectName("qtScale");
+    auto* form = dialog.formLayout(); auto* scale = new QComboBox; scale->setObjectName("qtScale");
+    scale->setAccessibleName(QString::fromUtf8("Масштаб текста интерфейса"));
     for (int value : {90, 100, 110, 125, 150, 175, 200}) scale->addItem(QString::number(value) + "%", value);
     scale->setCurrentIndex(std::max(0, scale->findData(normalizedScale(settings.scalePercent))));
     auto* opacity = new QSlider(Qt::Horizontal); opacity->setObjectName("qtWindowOpacity"); opacity->setRange(60, 100);
@@ -802,9 +805,12 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     auto* opacityRow = new QWidget; auto* opacityLayout = new QHBoxLayout(opacityRow); opacityLayout->setContentsMargins(0, 0, 0, 0);
     opacityLayout->addWidget(opacity, 1); opacityLayout->addWidget(opacityValue);
     auto* spacing = new QComboBox; spacing->setObjectName("qtSpacing");
+    spacing->setAccessibleName(QString::fromUtf8("Интервалы интерфейса"));
     for (int value : {80, 90, 100, 110, 120}) spacing->addItem(QString::number(value) + "%", value);
     spacing->setCurrentIndex(std::max(0, spacing->findData(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))));
     auto* rounding = new QComboBox; rounding->setObjectName("qtCornerRadius");
+    rounding->setAccessibleName(QString::fromUtf8("Скругление карточек и акцентных кнопок"));
+    rounding->setToolTip(rounding->accessibleName());
     for (int value : {0, 4, 8, 12}) rounding->addItem(QString::number(value) + QString::fromUtf8(" px"), value);
     rounding->setCurrentIndex(std::max(0, rounding->findData(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))));
     std::array<QDoubleSpinBox*, 10> geometry{};
@@ -818,6 +824,12 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         QString::fromUtf8("Отступ окна по горизонтали"), QString::fromUtf8("Отступ окна по вертикали"),
         QString::fromUtf8("Внутренний отступ по горизонтали"), QString::fromUtf8("Внутренний отступ по вертикали"),
         QString::fromUtf8("Интервал по горизонтали"), QString::fromUtf8("Интервал по вертикали")}};
+    const std::array<QString, 10> geometryShortLabels{{
+        QString::fromUtf8("Окно: скругление"), QString::fromUtf8("Элементы: скругление"),
+        QString::fromUtf8("Прокрутка: скругление"), QString::fromUtf8("Ползунок: скругление"),
+        QString::fromUtf8("Окно: отступ X"), QString::fromUtf8("Окно: отступ Y"),
+        QString::fromUtf8("Элементы: отступ X"), QString::fromUtf8("Элементы: отступ Y"),
+        QString::fromUtf8("Интервал X"), QString::fromUtf8("Интервал Y")}};
     const std::array<double, 10> geometryValues{{settings.windowRounding, settings.frameRounding,
         settings.scrollbarRounding, settings.grabRounding, settings.windowPaddingX, settings.windowPaddingY,
         settings.framePaddingX, settings.framePaddingY, settings.itemSpacingX, settings.itemSpacingY}};
@@ -831,6 +843,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         spin->setSuffix(QString::fromUtf8(" px"));
         spin->setValue(boundedMetric(geometryValues[i], geometryMax[i], 0.0));
         spin->setAccessibleName(geometryLabels[i]);
+        spin->setToolTip(geometryLabels[i]);
         geometry[i] = spin;
     }
     QObject::connect(rounding, &QComboBox::currentIndexChanged, &dialog, [geometry, rounding](int) {
@@ -838,17 +851,23 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         geometry[0]->setValue(commonRadius);
         geometry[1]->setValue(commonRadius);
     });
-    auto* geometryToggle = new QToolButton;
+    auto* geometryToggle = new QtDisclosureButton;
     geometryToggle->setObjectName("qtAdvancedGeometryToggle");
-    geometryToggle->setText(QString::fromUtf8("Подробная геометрия интерфейса"));
-    geometryToggle->setCheckable(true);
-    geometryToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    geometryToggle->setText(QString::fromUtf8("Размеры и отступы"));
+    geometryToggle->setAccessibleName(QString::fromUtf8("Подробная геометрия интерфейса"));
+    geometryToggle->setToolTip(QString::fromUtf8("Точная настройка скруглений, внутренних отступов и интервалов."));
     auto* geometryGroup = new QGroupBox(QString::fromUtf8("Параметры геометрии"));
     geometryGroup->setObjectName("qtAdvancedGeometry");
     auto* geometryForm = new QFormLayout(geometryGroup);
-    for (size_t i = 0; i < geometry.size(); ++i) geometryForm->addRow(geometryLabels[i], geometry[i]);
+    geometryForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    geometryForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    for (size_t i = 0; i < geometry.size(); ++i) geometryForm->addRow(geometryShortLabels[i], geometry[i]);
     geometryGroup->setVisible(false);
-    QObject::connect(geometryToggle, &QToolButton::toggled, geometryGroup, &QWidget::setVisible);
+    QObject::connect(geometryToggle, &QToolButton::toggled, geometryGroup, [geometryToggle, geometryGroup](bool expanded) {
+        geometryGroup->setVisible(expanded);
+        geometryToggle->setAccessibleDescription(expanded ? QString::fromUtf8("Развёрнуто") : QString::fromUtf8("Свёрнуто"));
+    });
+    geometryToggle->setAccessibleDescription(QString::fromUtf8("Свёрнуто"));
     auto applyGeometry = [geometry](const QtLayoutPreset& preset) {
         const std::array<double, 10> values{{preset.windowRounding, preset.frameRounding,
             preset.scrollbarRounding, preset.grabRounding, preset.windowPaddingX, preset.windowPaddingY,
@@ -862,20 +881,35 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         preset.framePaddingX = geometry[6]->value(); preset.framePaddingY = geometry[7]->value();
         preset.itemSpacingX = geometry[8]->value(); preset.itemSpacingY = geometry[9]->value();
     };
-    auto* compact = new QCheckBox(QString::fromUtf8("Компактные строки таблиц")); compact->setObjectName("qtCompactRows"); compact->setChecked(settings.compactRows);
-    auto* motion = new QCheckBox(QString::fromUtf8("Плавные переходы навигации")); motion->setObjectName("qtMotionEnabled"); motion->setChecked(settings.motionEnabled);
-    motion->setAccessibleName(QString::fromUtf8("Плавные переходы навигации"));
-    motion->setToolTip(QString::fromUtf8("Коротко перемещает маркер активного раздела. Учитывает системное отключение анимации Windows."));
-    auto* fullscreen = new QCheckBox(QString::fromUtf8("Полноэкранный режим (F11)")); fullscreen->setObjectName("qtFullscreen"); fullscreen->setChecked(settings.fullscreen);
-    auto* decorated = new QCheckBox(QString::fromUtf8("Показывать рамку окна")); decorated->setObjectName("qtDecorated"); decorated->setChecked(settings.decorated);
-    auto* tray = new QCheckBox(QString::fromUtf8("При закрытии сворачивать в трей и продолжать напоминания"));
+    auto* compact = new QCheckBox(QString::fromUtf8("Компактные строки")); compact->setObjectName("qtCompactRows"); compact->setChecked(settings.compactRows);
+    compact->setAccessibleName(QString::fromUtf8("Компактные строки таблиц"));
+    compact->setToolTip(QString::fromUtf8("Уменьшает высоту строк таблиц без изменения масштаба текста."));
+    auto* motion = new QCheckBox(QString::fromUtf8("Плавные переходы интерфейса")); motion->setObjectName("qtMotionEnabled"); motion->setChecked(settings.motionEnabled);
+    motion->setAccessibleName(QString::fromUtf8("Плавные переходы интерфейса"));
+    motion->setToolTip(QString::fromUtf8("Коротко перемещает маркер активного раздела и поворачивает стрелки раскрытия. Учитывает системное отключение анимации Windows."));
+    const auto motionAllowed = [motion] {
+        QtDisplaySettings preview;
+        preview.motionEnabled = motion->isChecked();
+        return IsQtMotionAllowed(preview);
+    };
+    geometryToggle->setMotionPolicy(motionAllowed);
+    QObject::connect(motion, &QCheckBox::toggled, geometryToggle, [geometryToggle] { geometryToggle->snapToState(); });
+    auto* fullscreen = new QCheckBox(QString::fromUtf8("Полный экран (F11)")); fullscreen->setObjectName("qtFullscreen"); fullscreen->setChecked(settings.fullscreen);
+    fullscreen->setAccessibleName(QString::fromUtf8("Полноэкранный режим (F11)"));
+    fullscreen->setToolTip(QString::fromUtf8("Открывает главное окно на весь экран. F11 переключает режим."));
+    auto* decorated = new QCheckBox(QString::fromUtf8("Рамка окна")); decorated->setObjectName("qtDecorated"); decorated->setChecked(settings.decorated);
+    decorated->setAccessibleName(QString::fromUtf8("Показывать рамку окна"));
+    decorated->setToolTip(QString::fromUtf8("Показывает системную рамку и заголовок главного окна."));
+    auto* tray = new QCheckBox(QString::fromUtf8("Закрытие в трей"));
     tray->setObjectName("qtMinimizeToTray");
+    tray->setAccessibleName(QString::fromUtf8("При закрытии сворачивать в трей и продолжать напоминания"));
     tray->setChecked(settings.minimizeToTray);
     tray->setEnabled(QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages());
     tray->setToolTip(tray->isEnabled() ? QString::fromUtf8("Окно скроется, но приложение останется запущенным. Выход доступен из меню значка в трее.")
         : QString::fromUtf8("Системный трей недоступен в этой среде."));
-    auto* background = new QCheckBox(QString::fromUtf8("Напоминать о дедлайнах, когда программа закрыта"));
+    auto* background = new QCheckBox(QString::fromUtf8("Дедлайны вне программы"));
     background->setObjectName("qtDeadlineNotificationsWhenClosed");
+    background->setAccessibleName(QString::fromUtf8("Напоминать о дедлайнах, когда программа закрыта"));
     background->setChecked(settings.deadlineNotificationsWhenClosed);
     const auto defaultWorkspace = QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QStringLiteral("/workspace"));
     const auto selectedWorkspace = QDir::cleanPath(QString::fromStdWString(directory.wstring()));
@@ -893,12 +927,16 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     builtInPreset->setObjectName("qtBuiltInLayoutPreset");
     builtInPreset->setAccessibleName(QString::fromUtf8("Быстрая раскладка интерфейса"));
     builtInPreset->setAccessibleDescription(QString::fromUtf8("Выберите готовую раскладку, затем примените её отдельной кнопкой. Палитра не меняется."));
+    builtInPreset->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    builtInPreset->setMinimumContentsLength(8);
     builtInPreset->addItems({QString::fromUtf8("Минимализм"), QString::fromUtf8("Презентация"), QString::fromUtf8("Компактный")});
-    auto* applyBuiltInPreset = new QPushButton(QString::fromUtf8("Применить раскладку"));
+    auto* applyBuiltInPreset = new QPushButton(QString::fromUtf8("Применить"));
     applyBuiltInPreset->setObjectName("qtBuiltInLayoutPresetApply");
+    applyBuiltInPreset->setAccessibleName(QString::fromUtf8("Применить быструю раскладку интерфейса"));
+    applyBuiltInPreset->setToolTip(QString::fromUtf8("Меняет поля этой формы. Нажмите «Сохранить», чтобы оставить раскладку после перезапуска."));
     auto* backgroundsButton = new QPushButton;
     backgroundsButton->setObjectName("qtBackgroundSettingsButton");
-    backgroundsButton->setMinimumHeight(40);
+    backgroundsButton->setAccessibleName(QString::fromUtf8("Фоны разделов интерфейса"));
     auto updateBackgroundsButton = [backgroundsButton, &backgroundDraft] {
         const auto count = std::count_if(backgroundDraft.windowBackgrounds.begin(), backgroundDraft.windowBackgrounds.end(),
             [](const QString& path) { return !normalizeBackgroundPath(path).isEmpty(); });
@@ -909,6 +947,8 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         if (ShowQtBackgroundSettings(&dialog, directory, backgroundDraft)) updateBackgroundsButton();
     });
     auto* presets = new QComboBox; presets->setObjectName("qtLayoutPresetList");
+    presets->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    presets->setMinimumContentsLength(8);
     auto refreshPresets = [directory, presets] {
         const auto selected = presets->currentData().toString();
         presets->clear();
@@ -919,27 +959,56 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     refreshPresets();
     auto* presetName = new QLineEdit; presetName->setObjectName("qtLayoutPresetName");
     presetName->setAccessibleName(QString::fromUtf8("Имя пользовательского пресета компоновки"));
+    presetName->setPlaceholderText(QString::fromUtf8("Название пресета"));
     presetName->setMaxLength(40);
     auto* applyPreset = new QPushButton(QString::fromUtf8("Загрузить"));
     applyPreset->setObjectName("qtLayoutPresetApply");
     auto* savePreset = new QPushButton(QString::fromUtf8("Сохранить пресет"));
     savePreset->setObjectName("qtLayoutPresetSave");
-    auto* deletePreset = new QPushButton(QString::fromUtf8("Удалить Qt-пресет"));
+    auto* deletePreset = new QPushButton;
     deletePreset->setObjectName("qtLayoutPresetDelete");
+    deletePreset->setIcon(CreateQtActionIcon(QtActionIcon::Delete, dialog.palette()));
+    deletePreset->setIconSize(QSize(dialog.scaledMetric(16), dialog.scaledMetric(16)));
+    deletePreset->setFixedSize(dialog.scaledMetric(32), dialog.scaledMetric(32));
+    deletePreset->setStyleSheet(QStringLiteral("QPushButton { padding: 0; min-width: 0; min-height: 0; }"));
     presets->setAccessibleName(QString::fromUtf8("Выбрать или импортировать пресет компоновки"));
     applyPreset->setAccessibleName(QString::fromUtf8("Применить выбранный пресет компоновки"));
     savePreset->setAccessibleName(QString::fromUtf8("Сохранить или обновить Qt-пресет компоновки"));
     deletePreset->setAccessibleName(QString::fromUtf8("Удалить выбранный Qt-пресет"));
+    deletePreset->setToolTip(deletePreset->accessibleName());
+    savePreset->setToolTip(QString::fromUtf8("Сохраняет пресет сразу. Отмена настроек не удаляет сохранённый пресет."));
     presets->setToolTip(QString::fromUtf8("Старые пресеты доступны только для чтения. Палитра и параметры профиля не импортируются; старые PNG-фоны разделов доступны отдельно."));
-    auto* presetRow = new QWidget;
-    auto* presetRowLayout = new QHBoxLayout(presetRow);
-    presetRowLayout->setContentsMargins(0, 0, 0, 0);
-    presetRowLayout->addWidget(presets, 1); presetRowLayout->addWidget(applyPreset); presetRowLayout->addWidget(deletePreset);
-    auto* presetNameRow = new QWidget;
-    auto* presetNameLayout = new QHBoxLayout(presetNameRow);
-    presetNameLayout->setContentsMargins(0, 0, 0, 0);
-    presetNameLayout->addWidget(presetName, 1); presetNameLayout->addWidget(savePreset);
+    auto* presetRow = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    presetRow->addWidget(presets, 1); presetRow->addWidget(applyPreset); presetRow->addWidget(deletePreset);
+    auto* presetNameRow = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    presetNameRow->addWidget(presetName, 1); presetNameRow->addWidget(savePreset);
+    auto* presetsToggle = new QtDisclosureButton(nullptr, motionAllowed);
+    presetsToggle->setObjectName("qtLayoutPresetsToggle");
+    presetsToggle->setText(QString::fromUtf8("Пресеты компоновки"));
+    presetsToggle->setAccessibleName(QString::fromUtf8("Пользовательские и импортированные пресеты компоновки"));
+    presetsToggle->setAccessibleDescription(QString::fromUtf8("Свёрнуто"));
+    presetsToggle->setToolTip(QString::fromUtf8("Загрузка, сохранение и удаление пресетов. Старые пресеты доступны только для чтения."));
+    auto* presetsGroup = new QWidget;
+    presetsGroup->setObjectName("qtLayoutPresets");
+    auto* presetsForm = new QFormLayout(presetsGroup);
+    presetsForm->setContentsMargins(0, 0, 0, 0);
+    presetsForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    presetsForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    presetsForm->addRow(QString::fromUtf8("Выбор пресета"), presetRow);
+    presetsForm->addRow(QString::fromUtf8("Имя пресета"), presetNameRow);
+    presetsGroup->setVisible(false);
+    QObject::connect(presetsToggle, &QToolButton::toggled, presetsGroup, [presetsToggle, presetsGroup](bool expanded) {
+        presetsGroup->setVisible(expanded);
+        presetsToggle->setAccessibleDescription(expanded ? QString::fromUtf8("Развёрнуто") : QString::fromUtf8("Свёрнуто"));
+    });
+    QObject::connect(motion, &QCheckBox::toggled, presetsToggle, [presetsToggle] { presetsToggle->snapToState(); });
+    for (auto* button : {applyBuiltInPreset, backgroundsButton, applyPreset, savePreset, deletePreset}) {
+        button->setAutoDefault(false);
+        if (button != deletePreset) button->setMinimumHeight(dialog.scaledMetric(26));
+    }
     auto* notice = new QLabel; notice->setObjectName("qtSettingsNotice"); notice->setWordWrap(true);
+    notice->setTextFormat(Qt::PlainText);
+    notice->setAccessibleName(QString::fromUtf8("Результат изменения настроек интерфейса"));
     QString presetError;
     QObject::connect(applyBuiltInPreset, &QPushButton::clicked, &dialog,
         [builtInPreset, scale, opacity, spacing, rounding, compact, decorated, &backgroundDraft, updateBackgroundsButton, notice, readGeometry, applyGeometry] {
@@ -971,21 +1040,19 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
             notice->setText(QString::fromUtf8("Раскладка применена; палитра интерфейса не меняется. Сохраните настройки, чтобы оставить её после перезапуска."));
         });
     form->addRow(QString::fromUtf8("Масштаб текста"), scale);
-    form->addRow(QString::fromUtf8("Прозрачность окна"), opacityRow);
-    form->addRow(QString::fromUtf8("Интервалы интерфейса"), spacing);
-    form->addRow(QString::fromUtf8("Скругление карточек и акцентных кнопок"), rounding);
+    form->addRow(QString::fromUtf8("Непрозрачность"), opacityRow);
+    form->addRow(QString::fromUtf8("Интервалы"), spacing);
+    form->addRow(QString::fromUtf8("Скругление"), rounding);
+    form->addRow(compact); form->addRow(motion); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
+    form->addRow(backgroundsButton);
+    auto* builtInPresetRow = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    builtInPresetRow->addWidget(builtInPreset, 1);
+    builtInPresetRow->addWidget(applyBuiltInPreset);
+    form->addRow(QString::fromUtf8("Быстрая раскладка"), builtInPresetRow);
     form->addRow(geometryToggle);
     form->addRow(geometryGroup);
-    form->addRow(compact); form->addRow(motion); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
-    form->addRow(QString(), backgroundsButton);
-    auto* builtInPresetRow = new QWidget;
-    auto* builtInPresetLayout = new QHBoxLayout(builtInPresetRow);
-    builtInPresetLayout->setContentsMargins(0, 0, 0, 0);
-    builtInPresetLayout->addWidget(builtInPreset, 1);
-    builtInPresetLayout->addWidget(applyBuiltInPreset);
-    form->addRow(QString::fromUtf8("Быстрая раскладка"), builtInPresetRow);
-    form->addRow(QString(), presetRow);
-    form->addRow(QString::fromUtf8("Новый/обновляемый пресет"), presetNameRow);
+    form->addRow(presetsToggle);
+    form->addRow(presetsGroup);
     QObject::connect(applyPreset, &QPushButton::clicked, &dialog, [&, applyGeometry] {
         QtLayoutPreset preset;
         if (!LoadQtLayoutPreset(directory, presets->currentData().toString(), &preset)) return;
@@ -1044,9 +1111,28 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     });
     deletePreset->setEnabled(IsQtLayoutPresetDeletable(directory, presets->currentData().toString()));
     auto* hint = new QLabel(QString::fromUtf8("Цветовая схема зафиксирована для миграции и здесь не меняется. Старые пресеты доступны только для чтения; они переносят компоновку и фоны окон, не меняя палитру и данные профилей."));
-    hint->setWordWrap(true); form->addRow(hint);
-    form->addRow(notice);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel); buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true); buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
+    hint->setObjectName("qtLayoutPresetHint");
+    hint->setWordWrap(true); presetsForm->addRow(hint);
+    dialog.footerLayout()->addWidget(notice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    auto* saveButton = buttons->button(QDialogButtonBox::Save);
+    auto* cancelButton = buttons->button(QDialogButtonBox::Cancel);
+    saveButton->setText(QString::fromUtf8("Сохранить"));
+    saveButton->setProperty("primary", true);
+    saveButton->setMinimumHeight(dialog.scaledMetric(32));
+    saveButton->setDefault(true);
+    saveButton->setAutoDefault(true);
+    cancelButton->setText(QString::fromUtf8("Отмена"));
+    cancelButton->setMinimumHeight(dialog.scaledMetric(32));
+    cancelButton->setAutoDefault(false);
+    dialog.footerLayout()->addWidget(buttons);
+    QWidget* previous = scale;
+    auto addTabStop = [&previous](QWidget* next) { QWidget::setTabOrder(previous, next); previous = next; };
+    for (QWidget* field : std::array<QWidget*, 13>{{opacity, spacing, rounding, compact, motion, fullscreen, decorated,
+        tray, background, backgroundsButton, builtInPreset, applyBuiltInPreset, geometryToggle}}) addTabStop(field);
+    for (auto* spin : geometry) addTabStop(spin);
+    for (QWidget* field : std::array<QWidget*, 8>{{presetsToggle, presets, applyPreset, deletePreset,
+        presetName, savePreset, saveButton, cancelButton}}) addTabStop(field);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&, readGeometry] {
         auto next = settings; next.scalePercent = scale->currentData().toInt(); next.windowOpacityPercent = opacity->value(); next.spacingPercent = spacing->currentData().toInt();

@@ -52,6 +52,7 @@ class QEvent;
 class QTimer;
 class QPropertyAnimation;
 class QtBackgroundSurface;
+class QScrollArea;
 
 class QtWindow : public QMainWindow {
 public:
@@ -104,7 +105,10 @@ private:
     void updateModelSettingsFromControls();
     void saveDisplayContext();
     void updateNavigationIndicator(bool animate);
+    void updateResponsiveShell();
+    void updateResponsiveHeader();
     void updateProjectColumnLayout();
+    void updatePipelineColumnLayout();
     void updateProfileTaskColumnLayout();
     void refreshTaskFilterChoices();
     void refreshCatalogProfessionChoices();
@@ -134,6 +138,15 @@ private:
     QAction* storageHealthReportAction_;
     QAction* storageCleanupAction_;
     QComboBox* profiles_;
+    QWidget* headerContent_ = nullptr;
+    QScrollArea* headerScroll_ = nullptr;
+    QLabel* headerProfileLabel_ = nullptr;
+    QPushButton* headerRefresh_ = nullptr;
+    QToolButton* headerOverflowButton_ = nullptr;
+    QMenu* headerOverflowMenu_ = nullptr;
+    std::array<QAction*, 6> headerFoldedActions_{};
+    QAction* headerFoldedSeparator_ = nullptr;
+    bool headerLayoutUpdating_ = false;
     QListWidget* navigation_;
     QWidget* navigationIndicator_ = nullptr;
     QPropertyAnimation* navigationIndicatorAnimation_ = nullptr;

@@ -44,6 +44,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtWidgets>
+#include "QtDisclosureButton.h"
 #include <QPointer>
 #include <QPropertyAnimation>
 #include <algorithm>
@@ -154,11 +155,11 @@ private:
         auto placeRow = [&](bool place) {
             if (row.isEmpty()) return;
             const int rowCount = int(row.size());
-            const int gaps = horizontalSpacing_ * std::max(0, rowCount - 1);
-            const int baseWidth = rowWidth - (row.isEmpty() ? 0 : horizontalSpacing_);
-            const int availableWidth = std::max(baseWidth, area.width() - gaps);
-            const int extraPerItem = stretchRows_ ? std::max(0, availableWidth - baseWidth) / rowCount : 0;
-            const int extraRemainder = stretchRows_ ? std::max(0, availableWidth - baseWidth) % rowCount : 0;
+            // rowWidth already includes exactly N-1 gaps. Subtracting a gap
+            // again gave a lone stretched item eight pixels beyond its row.
+            const int extra = stretchRows_ ? std::max(0, area.width() - rowWidth) : 0;
+            const int extraPerItem = extra / rowCount;
+            const int extraRemainder = extra % rowCount;
             int x = area.x();
             for (int index = 0; index < row.size(); ++index) {
                 auto* item = row[index];
@@ -196,6 +197,20 @@ private:
 
 // The viewport decides the breakpoint, so a child's old minimum width cannot
 // keep a compact page stuck in its wide layout.
+class QtNavigationDelegate final : public QStyledItemDelegate {
+public:
+    explicit QtNavigationDelegate(QListWidget* view) : QStyledItemDelegate(view), view_(view) {}
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        QStyleOptionViewItem wrapped(option);
+        initStyleOption(&wrapped, index);
+        wrapped.features |= QStyleOptionViewItem::WrapText;
+        wrapped.rect.setWidth(view_->viewport()->width());
+        return QStyledItemDelegate::sizeHint(wrapped, index);
+    }
+private:
+    QListWidget* view_;
+};
+
 class QtProfileMainColumns final : public QWidget {
 public:
     explicit QtProfileMainColumns(QWidget* parent = nullptr) : QWidget(parent) {
@@ -835,13 +850,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     markScaleFixedSize(dragHandle_, QSize(28, 28));
     dragHandle_->setVisible(!displaySettings_.decorated);
     header->addWidget(dragHandle_);
-    header->addWidget(new QLabel(QString::fromUtf8("Профиль:")));
+    headerProfileLabel_ = new QLabel(QString::fromUtf8("Профиль:"));
+    headerProfileLabel_->setObjectName("headerProfileLabel");
+    header->addWidget(headerProfileLabel_);
     profiles_ = new QComboBox;
     profiles_->setObjectName("profiles");
     labelForAccessibility(profiles_, QString::fromUtf8("Выбранный профиль"),
         QString::fromUtf8("Список доступных активных профилей."));
     profiles_->setProperty("qtTextScaleMinimumWidth", 160);
     profiles_->setMinimumWidth(160);
+    profiles_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    profiles_->setMinimumContentsLength(10);
+    connect(profiles_, &QComboBox::currentTextChanged, this, [this](const QString& text) {
+        profiles_->setToolTip(text.isEmpty() ? QString::fromUtf8("Профиль не выбран")
+            : QString::fromUtf8("%1\nID: %2").arg(text, profiles_->currentData().toString()));
+    });
     header->addWidget(profiles_);
     const auto drawHeaderIcon = [](int kind) {
         QPixmap pixmap(20, 20);
@@ -926,8 +949,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(profileIdentityCopy_);
     header->addStretch();
     mode_ = new QLabel;
+    mode_->setObjectName("headerAccessMode");
     header->addWidget(mode_);
     auto* refresh = new QPushButton;
+    headerRefresh_ = refresh;
     refresh->setObjectName("quickRefresh");
     refresh->setIcon(drawHeaderIcon(1));
     refresh->setIconSize(QSize(18, 18));
@@ -1000,7 +1025,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     pomodoroQuickButton_->setAccessibleName(QString::fromUtf8("Быстрое управление Pomodoro"));
     pomodoroQuickButton_->setAccessibleDescription(QString::fromUtf8("Показывает текущую фазу и оставшееся время; меню содержит старт или паузу, следующий интервал и сброс."));
     pomodoroQuickButton_->setToolTip(pomodoroQuickButton_->accessibleDescription());
-    pomodoroQuickButton_->setFixedWidth(scaledUiMetric(88, displaySettings_.scalePercent));
+    markScaleFixedWidth(pomodoroQuickButton_, 88);
     pomodoroQuickButton_->setPopupMode(QToolButton::InstantPopup);
     pomodoroQuickMenu_ = new QMenu(pomodoroQuickButton_);
     pomodoroQuickMenu_->setObjectName("pomodoroQuickMenu");
@@ -1031,11 +1056,40 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     pomodoroQuickButton_->setMenu(pomodoroQuickMenu_);
     header->addWidget(pomodoroQuickButton_);
     auto* menuButton = new QToolButton;
+    headerOverflowButton_ = menuButton;
+    menuButton->setObjectName("headerOverflowButton");
     menuButton->setText(QString::fromUtf8("⋯"));
     menuButton->setAccessibleName(QString::fromUtf8("Дополнительные действия"));
     markScaleFixedSize(menuButton, QSize(32, 32));
     menuButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(menuButton);
+    headerOverflowMenu_ = menu;
+    menu->setObjectName("headerOverflowMenu");
+    // Share the existing menus/actions. A folded command keeps its original
+    // handler, state and accessible text rather than acquiring a second path.
+    profileCopyMenu->setTitle(QString::fromUtf8("Данные профиля"));
+    profileRecentMenu_->setTitle(QString::fromUtf8("Недавние профили"));
+    shortcutMenu_->setTitle(QString::fromUtf8("Быстрый запуск"));
+    cloudQuickMenu->setTitle(QString::fromUtf8("Облако"));
+    pomodoroQuickMenu_->setTitle(QString::fromUtf8("Pomodoro"));
+    headerFoldedActions_[0] = menu->addMenu(profileCopyMenu);
+    headerFoldedActions_[1] = menu->addMenu(profileRecentMenu_);
+    headerFoldedActions_[2] = menu->addMenu(shortcutMenu_);
+    headerFoldedActions_[3] = menu->addMenu(cloudQuickMenu);
+    headerFoldedActions_[4] = menu->addAction(QString::fromUtf8("Обновить данные"), refresh, &QPushButton::click);
+    headerFoldedActions_[5] = menu->addMenu(pomodoroQuickMenu_);
+    const std::array<const char*, 6> foldedActionNames = {
+        "headerOverflowProfileCopy", "headerOverflowRecentProfiles", "headerOverflowShortcuts",
+        "headerOverflowCloud", "headerOverflowRefresh", "headerOverflowPomodoro"
+    };
+    for (size_t index = 0; index < headerFoldedActions_.size(); ++index) {
+        headerFoldedActions_[index]->setObjectName(QString::fromLatin1(foldedActionNames[index]));
+        headerFoldedActions_[index]->setVisible(false);
+    }
+    headerFoldedSeparator_ = menu->addSeparator();
+    headerFoldedSeparator_->setObjectName("headerOverflowFoldedSeparator");
+    headerFoldedSeparator_->setVisible(false);
+    connect(menu, &QMenu::aboutToShow, this, [this] { updateResponsiveHeader(); });
     adminLoginAction_ = menu->addAction(QString::fromUtf8("Войти как администратор"), this, [this] { authenticate(); });
     adminLoginAction_->setObjectName("adminLoginAction");
     adminPasswordAction_ = menu->addAction(QString::fromUtf8("Сменить пароль администратора…"), this, [this] { changeAdminPassword(); });
@@ -1132,6 +1186,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         appendLog(AppLogLevel::Info, "InterfaceSettings", "Qt display settings saved");
         ApplyQtDisplaySettings(*qApp, displaySettings_);
         updateNavigationIndicator(false);
+        for (auto* button : findChildren<QToolButton*>())
+            if (auto* disclosure = dynamic_cast<QtDisclosureButton*>(button)) disclosure->snapToState();
         applyQtWindowLayoutGeometry(backgroundSurface_, displaySettings_);
         setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
@@ -1144,6 +1200,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         }
         if (trayIcon_) trayIcon_->setVisible(displaySettings_.minimizeToTray);
         applyQtTextScaleMetrics(this, displaySettings_.scalePercent);
+        updateResponsiveShell();
         if (displaySettings_.fullscreen) showFullScreen();
         else if (displaySettings_.scalePercent >= 150) showMaximized();
         else showNormal();
@@ -1191,9 +1248,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(menuButton);
     header->setSizeConstraint(QLayout::SetMinimumSize);
     auto* headerWidget = new QWidget;
+    headerContent_ = headerWidget;
     headerWidget->setObjectName("headerContent");
     headerWidget->setLayout(header);
     auto* headerScroll = new QScrollArea;
+    headerScroll_ = headerScroll;
     headerScroll->setObjectName("headerScrollArea");
     headerScroll->setFrameShape(QFrame::NoFrame);
     headerScroll->setWidgetResizable(true);
@@ -1232,6 +1291,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->setAccessibleName(QString::fromUtf8("Разделы ForgeMirror"));
     navigation_->setAccessibleDescription(QString::fromUtf8("Переключение между модулями программы. Скрытые пункты недоступны в текущем режиме."));
     navigation_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    navigation_->setWordWrap(true);
+    navigation_->setTextElideMode(Qt::ElideNone);
+    navigation_->setResizeMode(QListView::Adjust);
+    navigation_->setItemDelegate(new QtNavigationDelegate(navigation_));
     navigation_->addItems({QString::fromUtf8("Профиль"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки"), QString::fromUtf8("Пайплайн"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика"), QString::fromUtf8("Аудит"),
@@ -1338,7 +1401,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         item->setIcon(icon);
         item->setData(Qt::AccessibleTextRole, item->text());
         const auto tooltip = navigationHotkeys[size_t(index)];
-        if (!tooltip.isEmpty()) item->setToolTip(item->text() + QStringLiteral(" · ") + tooltip);
+        item->setToolTip(item->text() + (tooltip.isEmpty() ? QString() : QStringLiteral(" · ") + tooltip));
     }
     markScaleFixedWidth(navigation_, 208);
     auto* navigationColumn = new QWidget;
@@ -1588,7 +1651,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         profileAchievementIcons_[index] = new QLabel(profileAchievementPreview_);
         profileAchievementIcons_[index]->setObjectName(QStringLiteral("profileRecentAchievement%1").arg(index));
         profileAchievementIcons_[index]->setAlignment(Qt::AlignCenter);
-        profileAchievementIcons_[index]->setFixedSize(scaledUiMetric(32, displaySettings_.scalePercent), scaledUiMetric(32, displaySettings_.scalePercent));
+        markScaleFixedSize(profileAchievementIcons_[index], QSize(32, 32));
         profileAchievementIcons_[index]->setAccessibleName(QString::fromUtf8("Последнее достижение"));
         profileAchievementLayout->addWidget(profileAchievementIcons_[index]);
     }
@@ -1683,7 +1746,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileBalanceTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     profileBalanceTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     profileBalanceTable_->horizontalHeader()->setStretchLastSection(true);
-    profileBalanceTable_->setMaximumHeight(scaledUiMetric(138, displaySettings_.scalePercent));
+    markScaleMaximumHeight(profileBalanceTable_, 138);
     profileBalanceTable_->setAccessibleName(QString::fromUtf8("Три слабейшие категории профиля"));
     profileBalanceTable_->setAccessibleDescription(QString::fromUtf8("Категории отсортированы по лучшей оценке от меньшей к большей."));
     for (int row = 0; row < 3; ++row) {
@@ -1728,7 +1791,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileTaskBriefTable_->verticalHeader()->hide();
     profileTaskBriefTable_->horizontalHeader()->setStretchLastSection(false);
     profileTaskBriefTable_->viewport()->installEventFilter(this);
-    profileTaskBriefTable_->setMaximumHeight(scaledUiMetric(160, displaySettings_.scalePercent));
+    markScaleMaximumHeight(profileTaskBriefTable_, 160);
     profileTaskBriefTable_->setAccessibleName(QString::fromUtf8("Ближайшие активные задачи профиля"));
     profileTaskBriefTable_->setAccessibleDescription(QString::fromUtf8("До четырёх назначенных задач, отсортированных по срочности. Двойной щелчок откроет задачу."));
     taskBriefLayout->addWidget(profileTaskBriefTable_);
@@ -1819,12 +1882,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileMain->addColumn(profileWork, 3);
     profileMain->addColumn(profileContext, 2);
     profileOverviewLayout->addWidget(profileMain);
-    auto* diagnosticsToggle = new QToolButton(profileOverview_);
+    auto* diagnosticsToggle = new QtDisclosureButton(profileOverview_, [this] { return IsQtMotionAllowed(displaySettings_); });
     diagnosticsToggle->setObjectName("profileDiagnosticsToggle");
-    diagnosticsToggle->setText(QString::fromUtf8("Диагностика и последние действия"));
+    diagnosticsToggle->setText(QString::fromUtf8("Диагностика"));
     diagnosticsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     diagnosticsToggle->setCheckable(true);
-    diagnosticsToggle->setIcon(CreateQtActionIcon(QtActionIcon::ChevronRight, palette()));
     diagnosticsToggle->setToolTip(QString::fromUtf8("Показать состояние, слабую зону и последние начисления XP"));
     diagnosticsToggle->setAccessibleName(QString::fromUtf8("Подробности профиля"));
     markScaleFixedHeight(diagnosticsToggle, 26);
@@ -1834,7 +1896,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileOverviewLayout->addWidget(profileDiagnostics);
     connect(diagnosticsToggle, &QToolButton::toggled, this, [this, diagnosticsToggle, profileDiagnostics](bool expanded) {
         profileDiagnostics->setVisible(expanded);
-        diagnosticsToggle->setIcon(CreateQtActionIcon(expanded ? QtActionIcon::ChevronDown : QtActionIcon::ChevronRight, palette()));
         diagnosticsToggle->setAccessibleDescription(expanded ? QString::fromUtf8("Подробности раскрыты") : QString::fromUtf8("Подробности свёрнуты"));
     });
     content->addWidget(profileOverview_);
@@ -1847,9 +1908,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     profileViewModes_ = new QWidget;
     profileViewModes_->setObjectName("profileViewModes");
-    auto* profileModesLayout = new QHBoxLayout(profileViewModes_);
+    auto* profileModesLayout = new QtFlowLayout(profileViewModes_, 6, 4);
+    auto profileModesPolicy = profileViewModes_->sizePolicy();
+    profileModesPolicy.setHeightForWidth(true);
+    profileViewModes_->setSizePolicy(profileModesPolicy);
     profileModesLayout->setContentsMargins(0, 0, 0, 0);
-    profileModesLayout->setSpacing(6);
     profileModesLayout->addWidget(new QLabel(QString::fromUtf8("Режим:")));
     const QStringList profileModeNames = {QString::fromUtf8("Обзор"), QString::fromUtf8("Аналитика"), QString::fromUtf8("Фокус")};
     const QStringList profileModeTips = {QString::fromUtf8("Краткая сводка и три ведущих навыка."),
@@ -1867,7 +1930,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             render();
         });
     }
-    profileModesLayout->addStretch();
     content->insertWidget(content->indexOf(profileMetrics_), profileViewModes_);
     content->addWidget(profileRankControls_);
     auto* taskModeButton = new QPushButton(QString::fromUtf8("Задачи"));
@@ -1875,7 +1937,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskModeButton->setCheckable(true);
     taskModeButton->setToolTip(QString::fromUtf8("Назначенные задачи, приоритет по сроку и сводка XP."));
     labelForAccessibility(taskModeButton, QString::fromUtf8("Режим профиля: Задачи"), taskModeButton->toolTip());
-    profileModesLayout->insertWidget(4, taskModeButton);
+    profileModesLayout->addWidget(taskModeButton);
     connect(taskModeButton, &QPushButton::clicked, this, [this] {
         displaySettings_.profileViewMode = 3;
         saveDisplayContext();
@@ -2711,6 +2773,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     layout->addLayout(body, 1);
     setCentralWidget(root);
     applyQtTextScaleMetrics(this, displaySettings_.scalePercent);
+    root->installEventFilter(this);
+    updateResponsiveShell();
     statusBar()->showMessage(QString::fromUtf8("Локальная копия · без облака · ") + q(workspace_.directory.u8string()));
     connect(statusBar(), &QStatusBar::messageChanged, this, [this](const QString& text) {
         if (text.isEmpty() || text.startsWith(QString::fromUtf8("Локальная копия · без облака ·"))) return;
@@ -3006,7 +3070,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     connect(deleteEntry_, &QPushButton::clicked, this, [this] { deleteEntry(); });
     connect(moveUp_, &QPushButton::clicked, this, [this] { movePipeline(-1); });
     connect(moveDown_, &QPushButton::clicked, this, [this] { movePipeline(1); });
-    connect(pipelineMap_, &QPushButton::clicked, this, [this] { ShowQtPipelineMap(this, workspace_.data.pipelineSteps); });
+    connect(pipelineMap_, &QPushButton::clicked, this, [this] {
+        ShowQtPipelineMap(this, workspace_.data.pipelineSteps, u(selectedId()), [this] { return IsQtMotionAllowed(displaySettings_); });
+    });
     connect(openShortcut_, &QPushButton::clicked, this, [this] {
         if (navigation_->currentRow() != Shortcuts) return;
         const auto found = std::find_if(workspace_.data.shortcuts.begin(), workspace_.data.shortcuts.end(),
@@ -3982,13 +4048,113 @@ void QtWindow::updateNavigationIndicator(bool animate) {
 }
 
 bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == centralWidget() && event->type() == QEvent::Resize) updateResponsiveShell();
     if (navigation_ && watched == navigation_->viewport() && event->type() == QEvent::Resize)
         updateNavigationIndicator(false);
-    if (table_ && watched == table_->viewport() && event->type() == QEvent::Resize)
+    if (table_ && watched == table_->viewport() && event->type() == QEvent::Resize) {
         updateProjectColumnLayout();
+        updatePipelineColumnLayout();
+    }
     if (profileTaskBriefTable_ && watched == profileTaskBriefTable_->viewport() && event->type() == QEvent::Resize)
         updateProfileTaskColumnLayout();
     return QMainWindow::eventFilter(watched, event);
+}
+
+void QtWindow::updateResponsiveHeader() {
+    if (!headerContent_ || !headerScroll_ || !headerOverflowButton_ || !centralWidget() ||
+        !centralWidget()->layout() || !headerContent_->layout() || headerLayoutUpdating_) return;
+    const QScopedValueRollback<bool> updating(headerLayoutUpdating_, true);
+    auto* headerLayout = headerContent_->layout();
+    const auto rootMargins = centralWidget()->layout()->contentsMargins();
+    // The root's current width is authoritative even before its resize event
+    // has propagated to the scroll viewport. Never measure an oversized child.
+    const int availableWidth = std::max(0, centralWidget()->contentsRect().width() -
+        rootMargins.left() - rootMargins.right() - 2 * headerScroll_->frameWidth());
+    if (availableWidth <= 0) return;
+    const QString profileText = profiles_->currentText();
+    profiles_->setToolTip(profileText.isEmpty() ? QString::fromUtf8("Профиль не выбран")
+        : QString::fromUtf8("%1\nID: %2").arg(profileText, profiles_->currentData().toString()));
+
+    struct HeaderCandidate {
+        QWidget* widget;
+        QAction* action;
+        bool eligible;
+        bool folded = false;
+    };
+    std::array<HeaderCandidate, 6> candidates{{
+        {profileIdentityCopy_, headerFoldedActions_[0], true},
+        {profileRecentButton_, headerFoldedActions_[1], true},
+        {shortcutLauncher_, headerFoldedActions_[2], workspace_.modules.shortcuts},
+        {cloudQuickButton_, headerFoldedActions_[3], workspace_.modules.cloud},
+        {headerRefresh_, headerFoldedActions_[4], true},
+        {pomodoroQuickButton_, headerFoldedActions_[5], workspace_.modules.pomodoro}
+    }};
+    // Compute the final mask before applying it. Restoring and hiding controls
+    // at every refresh would create unnecessary accessibility/focus churn.
+    const auto requiredWidgetWidth = [](QWidget* widget) {
+        return widget->sizeHint().expandedTo(widget->minimumSizeHint())
+            .expandedTo(widget->minimumSize()).boundedTo(widget->maximumSize()).width();
+    };
+    bool showProfileLabel = true;
+    const auto requiredWidth = [&] {
+        const auto margins = headerLayout->contentsMargins();
+        int result = margins.left() + margins.right();
+        int visibleWidgets = 0;
+        const auto include = [&](QWidget* widget, bool visible) {
+            if (!widget || !visible) return;
+            result += requiredWidgetWidth(widget);
+            ++visibleWidgets;
+        };
+        include(dragHandle_, !displaySettings_.decorated);
+        include(headerProfileLabel_, showProfileLabel);
+        include(profiles_, true);
+        include(mode_, true);
+        include(headerOverflowButton_, true);
+        for (const auto& candidate : candidates)
+            include(candidate.widget, candidate.eligible && !candidate.folded);
+        return result + std::max(0, visibleWidgets - 1) * std::max(0, headerLayout->spacing());
+    };
+    if (requiredWidth() > availableWidth) showProfileLabel = false;
+    for (auto& candidate : candidates) {
+        if (requiredWidth() <= availableWidth) break;
+        if (candidate.eligible) candidate.folded = true;
+    }
+
+    const QPointer<QWidget> previousFocus = QApplication::focusWidget();
+    bool foldedFocus = false;
+    bool anyFolded = false;
+    headerProfileLabel_->setVisible(showProfileLabel);
+    for (auto& candidate : candidates) {
+        const bool visible = candidate.eligible && !candidate.folded;
+        if (previousFocus && !visible && (previousFocus == candidate.widget ||
+            candidate.widget->isAncestorOf(previousFocus))) foldedFocus = true;
+        candidate.widget->setVisible(visible);
+        candidate.widget->setProperty("headerResponsiveFolded", candidate.eligible && candidate.folded);
+        candidate.action->setVisible(candidate.eligible && candidate.folded);
+        candidate.action->setEnabled(candidate.widget->isEnabled());
+        anyFolded |= candidate.eligible && candidate.folded;
+    }
+    headerFoldedActions_[5]->setText(QString::fromUtf8("Pomodoro · %1").arg(pomodoroQuickButton_->text()));
+    headerFoldedActions_[5]->setToolTip(pomodoroQuickButton_->toolTip());
+    headerFoldedSeparator_->setVisible(anyFolded);
+    if (foldedFocus) headerOverflowButton_->setFocus(Qt::OtherFocusReason);
+    headerContent_->setProperty("headerRequiredWidth", requiredWidth());
+    headerContent_->setProperty("headerAvailableWidth", availableWidth);
+    headerLayout->invalidate();
+    headerLayout->activate();
+}
+
+void QtWindow::updateResponsiveShell() {
+    updateResponsiveHeader();
+    auto* column = findChild<QWidget*>("navigationColumn");
+    if (!column || !navigation_) return;
+    // Text scales, but a navigation column must not consume half a restored
+    // window. Keep native labels, wrapping and full accessible/tool-tip names.
+    const int targetWidth = std::min(scaledUiMetric(208, displaySettings_.scalePercent), std::max(168, width() / 4));
+    column->setFixedWidth(targetWidth);
+    navigation_->setFixedWidth(targetWidth);
+    if (auto* clock = findChild<QWidget*>("localClockCard"))
+        clock->setVisible(height() >= scaledUiMetric(480, displaySettings_.scalePercent));
 }
 
 void QtWindow::updateProfileTaskColumnLayout() {
@@ -4017,7 +4183,7 @@ void QtWindow::updateProjectColumnLayout() {
     const int width = table_->viewport()->width();
     table_->setColumnHidden(1, width < scaledUiMetric(720, displaySettings_.scalePercent));
     for (int column : {3, 4, 5})
-        table_->setColumnHidden(column, width < scaledUiMetric(560, displaySettings_.scalePercent));
+        table_->setColumnHidden(column, width < scaledUiMetric(640, displaySettings_.scalePercent));
     table_->setColumnHidden(2, width < scaledUiMetric(440, displaySettings_.scalePercent));
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
@@ -4030,6 +4196,33 @@ void QtWindow::updateProjectColumnLayout() {
     table_->setAccessibleDescription(QString::fromUtf8(
         "Проекты и рабочие сигналы. Описание и вторичные счётчики скрываются в узком окне; все данные выбранного проекта доступны в подробностях."));
     table_->setProperty("projectColumnLayoutUpdating", false);
+}
+
+void QtWindow::updatePipelineColumnLayout() {
+    if (!navigation_ || navigation_->currentRow() != Pipeline || !table_ || table_->columnCount() != 5 ||
+        table_->property("pipelineColumnLayoutUpdating").toBool()) return;
+    table_->setProperty("pipelineColumnLayoutUpdating", true);
+    const int width = table_->viewport()->width();
+    for (int column : {2, 3, 4})
+        table_->setColumnHidden(column, width < scaledUiMetric(column == 2 ? 640 : 920, displaySettings_.scalePercent));
+    auto* header = table_->horizontalHeader();
+    header->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(1, QHeaderView::Stretch);
+    for (int column : {2, 3, 4}) {
+        header->setSectionResizeMode(column, QHeaderView::Fixed);
+        table_->setColumnWidth(column, scaledUiMetric(column == 2 ? 144 : 152, displaySettings_.scalePercent));
+    }
+    for (int row = 0; row < table_->rowCount(); ++row) {
+        auto* title = table_->item(row, 1);
+        if (!title) continue;
+        QStringList context;
+        for (int column = 0; column < table_->columnCount(); ++column)
+            if (auto* item = table_->item(row, column)) context << item->text();
+        title->setToolTip(context.join(QStringLiteral("\n")));
+        title->setData(Qt::AccessibleTextRole, title->text());
+        title->setData(Qt::AccessibleDescriptionRole, context.join(QString::fromUtf8(" · ")));
+    }
+    table_->setProperty("pipelineColumnLayoutUpdating", false);
 }
 
 void QtWindow::saveDisplayContext() {
@@ -5292,24 +5485,20 @@ void QtWindow::render() {
     } else if (page == Pipeline) {
         headers({QString::fromUtf8("Этап"), QString::fromUtf8("Название"), QString::fromUtf8("Ветка"),
                  QString::fromUtf8("Ответственный"), QString::fromUtf8("Следующий шаг")});
-        std::vector<std::string> branchOrder;
-        for (const auto& step : data.pipelineSteps) {
-            const auto branch = step.branch.empty() ? std::string(u8"Без группы") : step.branch;
-            if (std::find(branchOrder.begin(), branchOrder.end(), branch) == branchOrder.end()) branchOrder.push_back(branch);
-        }
         int visibleStages = 0;
         std::vector<std::string> visibleBranches;
-        for (const auto& branch : branchOrder) for (std::size_t index = 0; index < data.pipelineSteps.size(); ++index) {
+        // The displayed order is the persisted order used by Move Up/Down.
+        // Branch remains context, not a second hidden ordering rule.
+        for (std::size_t index = 0; index < data.pipelineSteps.size(); ++index) {
             const auto& step = data.pipelineSteps[index];
             const auto stepBranch = step.branch.empty() ? std::string(u8"Без группы") : step.branch;
-            if (stepBranch != branch) continue;
             const int rowsBefore = table_->rowCount();
-            row(step.id, {q(step.stageCode.empty() ? std::to_string(index + 1) : step.stageCode), q(step.title), q(branch),
+            row(step.id, {q(step.stageCode.empty() ? std::to_string(index + 1) : step.stageCode), q(step.title), q(stepBranch),
                           q(step.owner), q(step.nextStageLabel)});
             if (table_->rowCount() == rowsBefore) continue;
             ++visibleStages;
-            if (std::find(visibleBranches.begin(), visibleBranches.end(), branch) == visibleBranches.end())
-                visibleBranches.push_back(branch);
+            if (std::find(visibleBranches.begin(), visibleBranches.end(), stepBranch) == visibleBranches.end())
+                visibleBranches.push_back(stepBranch);
         }
         summary_->setText(QString::fromUtf8("Блоков: %1 · показано: %2 · веток: %3")
             .arg(data.pipelineSteps.size()).arg(visibleStages).arg(visibleBranches.size()));
@@ -6073,6 +6262,7 @@ void QtWindow::render() {
         for (int col = 0; col < table_->columnCount(); ++col) table_->setColumnWidth(col, widths[col]);
     }
     if (page == Projects) updateProjectColumnLayout();
+    if (page == Pipeline) updatePipelineColumnLayout();
     QStringList accessibleColumns;
     for (int col = 0; col < table_->columnCount(); ++col)
         if (!table_->isColumnHidden(col) && table_->horizontalHeaderItem(col))
@@ -6081,6 +6271,8 @@ void QtWindow::render() {
         .arg(table_->rowCount()).arg(accessibleColumns.join(QString::fromUtf8(", "))));
     if (page == Projects) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
         " Описание и вторичные счётчики в узком окне доступны в подробностях выбранного проекта."));
+    if (page == Pipeline) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
+        " Порядок совпадает с сохранённым порядком этапов. Ветка, ответственный и следующий шаг в узком окне доступны в подробностях."));
     // Give free width to readable content instead of stretching the final numeric column.
     if (page != AdminProfileStats) {
         int stretchColumn = 0;
@@ -6123,6 +6315,7 @@ void QtWindow::render() {
         table_->hide();
     }
     details();
+    updateResponsiveHeader();
 }
 
 void QtWindow::reapplyRules() {

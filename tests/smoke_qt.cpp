@@ -31,6 +31,7 @@
 #include "QtPipelineEditor.h"
 #include "QtPipelineTransition.h"
 #include "QtPipelineMap.h"
+#include "QtDisclosureButton.h"
 #include "QtPomodoro.h"
 #include "QtCommandHelpDialog.h"
 #include "AppPipelineService.h"
@@ -3169,9 +3170,16 @@ static bool TestPipelineEditor() {
         auto* dialog = QApplication::activeModalWidget();
         auto* title = dialog->findChild<QLineEdit*>("stageTitle");
         auto* save = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+        auto* tabs = dialog->findChild<QTabWidget*>("pipelineTabs");
+        tabs->setCurrentIndex(2);
         title->clear();
         save->click();
-        checked = !dialog->findChild<QLabel*>("pipelineNotice")->text().isEmpty() && read() == before;
+        QApplication::processEvents();
+        checked = !dialog->findChild<QLabel*>("pipelineNotice")->text().isEmpty() && read() == before &&
+            tabs->currentIndex() == 0 && title->hasFocus() && !title->accessibleDescription().isEmpty();
+        if (!checked) std::cerr << "Pipeline validation: tab=" << tabs->currentIndex()
+            << " focus=" << title->hasFocus() << " field=" << (dialog->focusWidget() == title)
+            << " unchanged=" << (read() == before) << '\n';
         title->setText(QString::fromUtf8("Проверка геометрии"));
         dialog->findChild<QPlainTextEdit*>("stageDone")->setPlainText(QString::fromUtf8("Нет самопересечений\nМасштаб проверен"));
         AppSetRecoveryPrimaryWriteFailureForTests(true);
@@ -4888,7 +4896,106 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
     return chart->accessibleDescription().count(QString::fromUtf8("Завершения по месяцам")) == 1;
 }
 
+static bool TestUiPipelineMapScaling(QApplication& app) {
+    const auto originalFont = app.font();
+    const auto originalStyle = app.styleSheet();
+    const auto originalBase = app.property("forgeBasePointSize");
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty() && !QDir().mkpath(artifacts)) return false;
+    std::vector<PipelineStep> steps;
+    for (int index = 0; index < 21; ++index) {
+        PipelineStep step;
+        step.id = "audit-" + std::to_string(index);
+        step.stageCode = "P" + std::to_string(index + 1);
+        step.title = QString::fromUtf8("Подготовка и проверка длинного названия этапа %1").arg(index + 1).toUtf8().toStdString();
+        step.branch = QString::fromUtf8("Ветка параллельной разработки %1").arg(index % 3 + 1).toUtf8().toStdString();
+        step.owner = QString::fromUtf8("Ответственный за проверку материалов").toUtf8().toStdString();
+        step.input = "Source asset"; step.output = "Checked mesh"; step.doneCriteria = "No open edges";
+        step.description = "Long details remain available without taking the whole map.";
+        step.risk = "Scale mismatch"; step.hints = {"Check normals", "Review materials"};
+        if (index < 20) step.nextIds = {"audit-" + std::to_string(index + 1)};
+        else step.nextIds = {step.id, "missing-audit-stage"};
+        steps.push_back(std::move(step));
+    }
+    bool checked = true;
+    for (int scale : {100, 200}) {
+        QtDisplaySettings draft; draft.scalePercent = scale; draft.motionEnabled = false;
+        ApplyQtDisplaySettings(app, draft);
+        for (const QSize size : (scale == 100 ? QList<QSize>{QSize(1040, 740), QSize(720, 520)} : QList<QSize>{QSize(720, 520)})) {
+            QTimer::singleShot(0, [&] {
+                auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+                auto* view = dialog ? dialog->findChild<QGraphicsView*>("pipelineMapView") : nullptr;
+                if (!dialog || !view || !view->scene()) { checked = false; if (dialog) dialog->reject(); return; }
+                dialog->resize(size); QApplication::processEvents();
+                QApplication::processEvents();
+                const auto stem = QStringLiteral("/pipeline-map-%1-%2").arg(scale).arg(size.width());
+                if (!artifacts.isEmpty()) checked &= dialog->grab().save(artifacts + stem + ".png");
+                const auto visible = view->mapToScene(view->viewport()->rect()).boundingRect();
+                bool selectionVisible = false;
+                bool fullSelectionVisible = false;
+                for (auto* item : view->scene()->selectedItems()) {
+                    if (item->data(Qt::UserRole).toString() != "audit-20") continue;
+                    const auto bounds = item->sceneBoundingRect();
+                    selectionVisible = visible.contains(bounds.center());
+                    fullSelectionVisible = visible.contains(bounds);
+                    if (bounds.width() <= visible.width() && bounds.height() <= visible.height())
+                        checked &= fullSelectionVisible;
+                }
+                auto* toggle = dialog->findChild<QToolButton*>("pipelineMapDetailsToggle");
+                auto* details = dialog->findChild<QTextBrowser*>("pipelineMapDetails");
+                checked &= selectionVisible && toggle && details && !toggle->isChecked() && !details->isVisible();
+                if (toggle && details) {
+                    toggle->setChecked(true); QApplication::processEvents();
+                    checked &= details->isVisible() && details->toPlainText().contains("Source asset") &&
+                        details->toPlainText().contains("Checked mesh") && details->toPlainText().contains("Check normals") &&
+                        details->toPlainText().contains("missing-audit-stage");
+                    if (!artifacts.isEmpty()) checked &= dialog->grab().save(artifacts + stem + "-expanded.png");
+                }
+                auto* choice = dialog->findChild<QComboBox*>("pipelineMapStageChoice");
+                auto* zoomIn = dialog->findChild<QToolButton*>("pipelineMapZoomIn");
+                auto* zoomOut = dialog->findChild<QToolButton*>("pipelineMapZoomOut");
+                auto* reset = dialog->findChild<QToolButton*>("pipelineMapZoomReset");
+                checked &= choice && zoomIn && zoomOut && reset && choice->currentData().toString() == "audit-20";
+                if (choice && zoomIn && zoomOut && reset) {
+                    const auto expectedIcon = QSize(scale * 18 / 100, scale * 18 / 100);
+                    checked &= zoomIn->iconSize() == expectedIcon;
+                    if (zoomIn->iconSize() != expectedIcon) std::cerr << "Map icon scale mismatch: " << scale << '\n';
+                    view->horizontalScrollBar()->setValue(0);
+                    const auto panValue = view->horizontalScrollBar()->value();
+                    QApplication::processEvents(); QApplication::processEvents();
+                    checked &= view->horizontalScrollBar()->value() == panValue;
+                    if (view->horizontalScrollBar()->value() != panValue) std::cerr << "Map changed manual pan without a modal resize\n";
+                    choice->setCurrentIndex(choice->findData("audit-0"));
+                    choice->setFocus(); QTest::keyClick(choice, Qt::Key_Down);
+                    checked &= choice->currentData().toString() == "audit-1";
+                    view->setFocus(); QTest::keyClick(view, Qt::Key_Up);
+                    checked &= choice->currentData().toString() == "audit-0";
+                    for (int index = 0; index < 40; ++index) zoomIn->click();
+                    checked &= view->property("pipelineMapZoomPercent").toInt() == 300 && !zoomIn->isEnabled();
+                    for (int index = 0; index < 60; ++index) zoomOut->click();
+                    checked &= view->property("pipelineMapZoomPercent").toInt() == 5 && !zoomOut->isEnabled();
+                    reset->click();
+                    checked &= view->property("pipelineMapZoomPercent").toInt() == 100;
+                }
+                checked &= dialog->width() == size.width() && dialog->height() == size.height();
+                // The offscreen virtual monitor is only 800px wide; it cannot
+                // establish native monitor containment for the 1040px case.
+                if (QGuiApplication::platformName() == "windows")
+                    checked &= dialog->screen()->availableGeometry().contains(dialog->frameGeometry());
+                std::cout << "pipeline-map " << scale << " requested=" << size.width() << 'x' << size.height()
+                    << " actual=" << dialog->width() << 'x' << dialog->height()
+                    << " selectedVisible=" << selectionVisible << " fullSelectedVisible=" << fullSelectionVisible << '\n';
+                dialog->reject();
+            });
+            if (!ShowQtPipelineMap(nullptr, steps, "audit-20")) checked = false;
+        }
+    }
+    app.setFont(originalFont); app.setStyleSheet(originalStyle); app.setProperty("forgeBasePointSize", originalBase);
+    return checked;
+}
+
 static bool TestPipelineMap() {
+    if (!TestUiPipelineMapScaling(*qApp)) { std::cerr << "pipelineMap: scaled selected-stage context failed\n"; return false; }
     PipelineStep start; start.id = "start"; start.stageCode = "A"; start.title = "Start"; start.branch = "Main"; start.description = "Entry point"; start.nextIds = {"left", "right"};
     PipelineStep left; left.id = "left"; left.stageCode = "B1"; left.title = "Left branch"; left.branch = "Left"; left.owner = "Artist";
     left.description = "Entry <mesh> & review"; left.input = "Source asset"; left.output = "Checked mesh";
@@ -4929,6 +5036,7 @@ static bool TestQtPipelineDetailsAndFullTextFilter() {
     QTemporaryDir temp;
     if (!temp.isValid()) return fail("temp");
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
+    if (!SetAdminPassword(workspace.directory, "pipeline-ui-order-fixture") || !SetAdminStayLoggedIn(workspace.directory, true)) return fail("admin fixture");
     PipelineStep source;
     source.id = "source step"; source.stageCode = "A1"; source.branch = "Main branch"; source.title = "Source";
     source.description = "Source description"; source.input = "Source input"; source.output = "Source output";
@@ -4991,6 +5099,35 @@ static bool TestQtPipelineDetailsAndFullTextFilter() {
     if (!(activated && search->text().isEmpty() && table->rowCount() == 3 && table->currentRow() == 1 &&
         table->item(1, 0)->data(Qt::UserRole).toString() == QStringLiteral("next") &&
         details->toPlainText().contains("Next description"))) return fail("route link navigation");
+    PipelineStep a1; a1.id = "a1"; a1.title = "First A"; a1.branch = "A"; a1.nextIds = {"a2"};
+    PipelineStep b1; b1.id = "b1"; b1.title = "First B"; b1.branch = "B";
+    PipelineStep a2; a2.id = "a2"; a2.title = "Second A"; a2.branch = "A";
+    const std::vector<PipelineStep> ordered{a1, b1, a2};
+    workspace.data.pipelineSteps = MergeLoadedPipelineWithDefaults(ordered);
+    if (!AppSavePipelineData(workspace.directory, workspace.data.pipelineSteps))
+        return fail("interleaved order fixture");
+    const auto firstCustom = std::find_if(workspace.data.pipelineSteps.begin(), workspace.data.pipelineSteps.end(),
+        [](const auto& step) { return step.id == "a1"; });
+    if (firstCustom == workspace.data.pipelineSteps.end()) return fail("normalized custom fixture");
+    const int fixtureOffset = int(std::distance(workspace.data.pipelineSteps.begin(), firstCustom));
+    navigation->setCurrentRow(otherPage); navigation->setCurrentRow(pipelinePage);
+    auto tableIds = [&] {
+        QStringList ids;
+        for (int row = 0; row < table->rowCount(); ++row) ids << table->item(row, 0)->data(Qt::UserRole).toString();
+        return ids;
+    };
+    if (tableIds().mid(fixtureOffset, 3) != QStringList{"a1", "b1", "a2"}) return fail("display must use persisted order across branches");
+    table->selectRow(fixtureOffset + 2);
+    auto* moveUp = window.findChild<QPushButton*>("movePipelineUp");
+    auto* moveDown = window.findChild<QPushButton*>("movePipelineDown");
+    if (!moveUp || !moveDown || !moveUp->isEnabled()) return fail("interleaved reorder controls");
+    moveUp->click();
+    const auto savedOrder = LoadPipelineData(workspace.directory);
+    if (tableIds().mid(fixtureOffset, 3) != QStringList{"a1", "a2", "b1"} || table->currentRow() != fixtureOffset + 1 ||
+        savedOrder.size() < size_t(fixtureOffset + 3) || savedOrder[size_t(fixtureOffset + 1)].id != "a2" ||
+        savedOrder[size_t(fixtureOffset)].nextIds != a1.nextIds) return fail("visible move-up or stable link");
+    moveDown->click();
+    if (tableIds().mid(fixtureOffset, 3) != QStringList{"a1", "b1", "a2"} || table->currentRow() != fixtureOffset + 2) return fail("visible move-down");
     return true;
 }
 
@@ -6303,6 +6440,87 @@ static bool TestDisplaySettings(QApplication& app) {
     const auto originalAppFont = app.font();
     const auto originalAppStyleSheet = app.styleSheet();
     const auto originalBasePointSize = app.property("forgeBasePointSize");
+    {
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty() && !QDir().mkpath(artifacts)) return false;
+        QTemporaryDir temp; if (!temp.isValid()) return false;
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+        bool checks = true;
+        for (int scalePercent : {90, 100, 150, 200}) {
+            QtDisplaySettings draft; draft.scalePercent = scalePercent;
+            ApplyQtDisplaySettings(app, draft);
+            QTimer::singleShot(0, [&] {
+                auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+                if (!dialog || dialog->objectName() != "qtDisplaySettings") { checks = false; if (dialog) dialog->reject(); return; }
+                dialog->resize(640, 520);
+                auto* toggle = dialog->findChild<QToolButton*>("qtAdvancedGeometryToggle");
+                auto* box = dialog->findChild<QDialogButtonBox*>();
+                if (!toggle || !box) { checks = false; dialog->reject(); return; }
+                for (bool expanded : {false, true}) {
+                    toggle->setChecked(expanded); QApplication::processEvents();
+                    const auto suffix = expanded ? "expanded" : "collapsed";
+                    const auto stem = QStringLiteral("/display-dialog-%1-%2").arg(scalePercent).arg(suffix);
+                    if (!artifacts.isEmpty()) checks &= dialog->grab().save(artifacts + stem + ".png");
+                    auto* save = box->button(QDialogButtonBox::Save);
+                    const QRect footer(save->mapTo(dialog, QPoint()), save->size());
+                    const auto screen = dialog->screen()->availableGeometry();
+                    auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+                    checks &= screen.contains(dialog->frameGeometry()) && dialog->rect().contains(footer) &&
+                        save->isVisible() && scroll && scroll->horizontalScrollBar()->maximum() == 0;
+                    std::cout << "display-dialog " << scalePercent << ' ' << suffix
+                        << " actual=" << dialog->width() << 'x' << dialog->height()
+                        << " minHint=" << dialog->minimumSizeHint().width() << 'x' << dialog->minimumSizeHint().height()
+                        << " frameFitsScreen=" << screen.contains(dialog->frameGeometry())
+                        << " footerFitsDialog=" << dialog->rect().contains(footer) << '\n';
+                }
+                auto* presets = dialog->findChild<QToolButton*>("qtLayoutPresetsToggle");
+                auto* presetSave = dialog->findChild<QPushButton*>("qtLayoutPresetSave");
+                auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+                checks &= presets && presetSave && scroll;
+                if (presets && presetSave && scroll) {
+                    presets->setChecked(true); QApplication::processEvents();
+                    for (const char* id : {"qtBuiltInLayoutPreset", "qtBuiltInLayoutPresetApply",
+                        "qtLayoutPresetList", "qtLayoutPresetApply", "qtLayoutPresetDelete",
+                        "qtLayoutPresetName", "qtLayoutPresetSave"}) {
+                        auto* child = dialog->findChild<QWidget*>(QString::fromLatin1(id));
+                        auto* row = child ? child->parentWidget() : nullptr;
+                        const bool contained = row && row->rect().contains(QRect(child->mapTo(row, QPoint()), child->size()));
+                        checks &= contained;
+                        if (!contained) std::cerr << "Settings preset control clipped at " << scalePercent << ": " << id << '\n';
+                    }
+                    scroll->ensureWidgetVisible(presetSave); QApplication::processEvents();
+                    checks &= presetSave->isVisible() && scroll->horizontalScrollBar()->maximum() == 0 &&
+                        scroll->viewport()->rect().contains(QRect(presetSave->mapTo(scroll->viewport(), QPoint()), presetSave->size()));
+                    auto* save = box->button(QDialogButtonBox::Save);
+                    checks &= dialog->screen()->availableGeometry().contains(dialog->frameGeometry()) &&
+                        dialog->rect().contains(QRect(save->mapTo(dialog, QPoint()), save->size()));
+                    if (!artifacts.isEmpty()) checks &= dialog->grab().save(artifacts +
+                        QStringLiteral("/display-dialog-%1-presets-bottom.png").arg(scalePercent));
+                    auto* group = dialog->findChild<QWidget*>("qtLayoutPresets");
+                    auto* hint = dialog->findChild<QLabel*>("qtLayoutPresetHint");
+                    const bool fullHint = group && hint && hint->wordWrap() &&
+                        scroll->widget()->rect().contains(group->geometry()) && group->rect().contains(hint->geometry()) &&
+                        hint->height() >= hint->heightForWidth(hint->width());
+                    checks &= fullHint;
+                    if (!fullHint) std::cerr << "Settings preset hint clipped at " << scalePercent << '\n';
+                    if (hint) {
+                        scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
+                        QApplication::processEvents();
+                        if (!artifacts.isEmpty()) checks &= dialog->grab().save(artifacts +
+                            QStringLiteral("/display-dialog-%1-hint-bottom.png").arg(scalePercent));
+                    }
+                }
+                int primaryButtons = 0;
+                for (auto* button : dialog->findChildren<QPushButton*>()) primaryButtons += button->property("primary").toBool();
+                checks &= primaryButtons == 1;
+                dialog->reject();
+            });
+            if (ShowQtDisplaySettings(nullptr, directory, draft)) checks = false;
+        }
+        app.setFont(originalAppFont); app.setStyleSheet(originalAppStyleSheet); app.setProperty("forgeBasePointSize", originalBasePointSize);
+        if (!checks) { std::cerr << "Display settings must fit the screen with a persistent footer at every tested scale\n"; return false; }
+        if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISPLAY_DIALOG")) return true;
+    }
     QtDisplaySettings disabledMotion;
     disabledMotion.motionEnabled = false;
     if (IsQtMotionAllowed(disabledMotion)) return false;
@@ -6497,6 +6715,9 @@ static bool TestDisplaySettings(QApplication& app) {
             qobject_cast<QDialog*>(dialog)->reject(); return;
         }
         geometryToggle->click();
+        auto* presetsToggle = dialog->findChild<QToolButton*>("qtLayoutPresetsToggle");
+        if (!presetsToggle) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        presetsToggle->setChecked(true);
         QApplication::processEvents();
         missingDialogAccessibleNames.append(MissingAccessibleNames(dialog));
         auto* windowRounding = dialog->findChild<QDoubleSpinBox*>("qtWindowRounding");
@@ -7138,18 +7359,91 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
     if (!prepared) return false;
 
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    int auditScale = 100;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SCALE")) {
+        auditScale = qEnvironmentVariableIntValue("FORGEMIRROR_UI_AUDIT_SCALE");
+        if (auditScale != 90 && auditScale != 100 && auditScale != 110 && auditScale != 125 &&
+            auditScale != 150 && auditScale != 175 && auditScale != 200) return false;
+        auto scaleSettings = LoadQtDisplaySettings(directory);
+        scaleSettings.scalePercent = auditScale;
+        scaleSettings.motionEnabled = false;
+        if (!SaveQtDisplaySettings(directory, scaleSettings)) return false;
+    }
     QtWorkspace workspace(directory);
     // The optional 3D module is disabled by default. Enable it only in this
     // fixture so the matrix visits its actual pages rather than falling back
     // to Profile when a hidden navigation item is selected.
     workspace.modules.view3d = true;
     QtWindow window(workspace);
+    window.setWindowState(Qt::WindowNoState);
     window.resize(800, 520);
     window.show();
     QApplication::processEvents();
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* pageScroll = window.findChild<QScrollArea*>("pageContentScrollArea");
     if (!navigation || !pageScroll || navigation->count() != 18) return false;
+    auto* headerScroll = window.findChild<QScrollArea*>("headerScrollArea");
+    auto* headerContent = window.findChild<QWidget*>("headerContent");
+    if (!headerScroll || !headerContent || headerScroll->horizontalScrollBar()->maximum() != 0 ||
+        headerContent->property("headerRequiredWidth").toInt() > headerContent->property("headerAvailableWidth").toInt()) {
+        std::cerr << "Header did not fold secondary actions within the available width\n";
+        return false;
+    }
+    const std::array<std::pair<const char*, const char*>, 6> foldedActions{{
+        {"profileIdentityCopy", "headerOverflowProfileCopy"}, {"recentProfiles", "headerOverflowRecentProfiles"},
+        {"quickShortcutLauncher", "headerOverflowShortcuts"}, {"quickCloudSync", "headerOverflowCloud"},
+        {"quickRefresh", "headerOverflowRefresh"}, {"pomodoroQuickButton", "headerOverflowPomodoro"}}};
+    auto* overflow = window.findChild<QToolButton*>("headerOverflowButton");
+    auto* overflowMenu = window.findChild<QMenu*>("headerOverflowMenu");
+    if (!overflow || !overflowMenu || overflow->menu() != overflowMenu ||
+        !overflow->isVisible() || !overflow->isEnabled()) return false;
+    for (const auto& [widgetName, actionName] : foldedActions) {
+        auto* widget = window.findChild<QWidget*>(widgetName);
+        auto* action = window.findChild<QAction*>(actionName);
+        if (!widget || !action || action->isVisible() != widget->property("headerResponsiveFolded").toBool() ||
+            (action->isVisible() && (widget->isVisible() || action->text().isEmpty()))) return false;
+        if (auto* button = qobject_cast<QToolButton*>(widget)) {
+            if (!button->menu() || action->menu() != button->menu() ||
+                action != button->menu()->menuAction() || !overflowMenu->actions().contains(action)) return false;
+        }
+    }
+    bool popupObserved = false;
+    QTimer popupProbe;
+    popupProbe.setSingleShot(true);
+    QObject::connect(&popupProbe, &QTimer::timeout, &window, [&] {
+        popupObserved = overflowMenu->isVisible() && QApplication::activePopupWidget() == overflowMenu;
+        overflowMenu->close();
+    });
+    const auto openConnection = QObject::connect(overflowMenu, &QMenu::aboutToShow, &window,
+        [&] { popupProbe.start(0); });
+    QTest::mouseClick(overflow, Qt::LeftButton);
+    QApplication::processEvents();
+    QObject::disconnect(openConnection);
+    popupProbe.stop();
+    if (!popupObserved || overflowMenu->isVisible()) {
+        std::cerr << "Responsive header overflow did not open through its visible button\n";
+        return false;
+    }
+    if (auditScale == 100) {
+        window.resize(1120, 720);
+        QApplication::processEvents(); QApplication::processEvents();
+        const std::array<bool, 6> eligible{{true, true, workspace.modules.shortcuts,
+            workspace.modules.cloud, true, workspace.modules.pomodoro}};
+        for (size_t index = 0; index < foldedActions.size(); ++index) {
+            auto* widget = window.findChild<QWidget*>(foldedActions[index].first);
+            auto* action = window.findChild<QAction*>(foldedActions[index].second);
+            if (!widget || !action || widget->isVisible() != eligible[index] ||
+                widget->property("headerResponsiveFolded").toBool() || action->isVisible()) {
+                std::cerr << "Wide header did not restore action: " << foldedActions[index].first << '\n';
+                return false;
+            }
+        }
+        window.resize(800, 520);
+        QApplication::processEvents(); QApplication::processEvents();
+    }
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SCALE"))
+        std::cout << "Scale audit: " << auditScale << "% window=" << window.width() << 'x' << window.height()
+            << " viewport=" << pageScroll->viewport()->width() << " minimum=" << window.minimumSizeHint().width() << '\n';
     auto* records = window.findChild<QTableWidget*>("records");
     auto* search = window.findChild<QLineEdit*>("search");
     auto* emptyState = window.findChild<QWidget*>("listEmptyState");
@@ -7327,7 +7621,61 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
     return true;
 }
 
+static bool TestDisclosureMotionContract() {
+    QWidget host;
+    auto* layout = new QVBoxLayout(&host);
+    bool motionAllowed = true;
+    auto* button = new QtDisclosureButton(&host, [&] { return motionAllowed; });
+    button->setText(QString::fromUtf8("Подробности"));
+    button->setAccessibleName(QString::fromUtf8("Показать подробности"));
+    auto* content = new QLabel(QString::fromUtf8("Подробности доступны сразу"), &host);
+    content->hide();
+    layout->addWidget(button, 0, Qt::AlignTop); layout->addWidget(content); layout->addStretch();
+    QObject::connect(button, &QToolButton::toggled, &host, [=](bool expanded) {
+        content->setVisible(expanded);
+        button->setAccessibleDescription(expanded ? "expanded" : "collapsed");
+    });
+    host.resize(320, 180); host.show(); QApplication::processEvents();
+    auto* animation = button->indicatorAnimation();
+    if (!animation || animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 0) return false;
+    button->setFocus();
+    host.activateWindow(); QApplication::processEvents();
+    QTest::keyClick(button, Qt::Key_Space);
+    if (!button->isChecked() || !content->isVisible() || !button->hasFocus() ||
+        button->accessibleDescription() != "expanded" || animation->state() != QAbstractAnimation::Running) return false;
+    const auto geometry = button->geometry();
+    const auto hint = button->sizeHint();
+    QTest::qWait(60);
+    if (button->indicatorAngle() <= 0) return false; // Real event-loop progress, including an already-finished transition.
+    animation->setCurrentTime(60); // Deterministic reversal point even if a loaded host delayed the real-time sample.
+    const qreal intermediate = button->indicatorAngle();
+    if (intermediate <= 0 || intermediate >= 90) return false;
+    button->setChecked(false);
+    if (content->isVisible() || button->accessibleDescription() != "collapsed" ||
+        std::abs(button->indicatorAngle() - intermediate) > 0.001 || animation->duration() > 150) return false;
+    animation->setCurrentTime(animation->duration());
+    if (button->indicatorAngle() != 0 || animation->state() != QAbstractAnimation::Stopped ||
+        button->geometry() != geometry || button->sizeHint() != hint) return false;
+    for (int index = 0; index < 8; ++index) {
+        button->setChecked((index % 2) == 0);
+        if (animation->state() == QAbstractAnimation::Running) animation->setCurrentTime(std::min(20, animation->duration()));
+    }
+    button->setChecked(true); motionAllowed = false;
+    animation->setCurrentTime(std::min(60, animation->duration()));
+    if (animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 90 || !content->isVisible()) return false;
+    button->setChecked(false);
+    if (animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 0) return false;
+    motionAllowed = true; button->setChecked(true); button->hide();
+    if (animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 90) return false;
+    button->show(); button->setChecked(false); button->setEnabled(false);
+    return animation->state() == QAbstractAnimation::Stopped && button->indicatorAngle() == 0;
+}
+
 static bool TestNavigationVisualContract() {
+    if (!TestDisclosureMotionContract()) {
+        std::cerr << "Disclosure motion lost immediate state, reversal, geometry, or reduced-motion policy\n";
+        return false;
+    }
     // The common control style must retain a visible selected state after it
     // replaces the platform's default button background.
     QPushButton stateProbe;
@@ -8047,6 +8395,14 @@ int main(int argc, char** argv) {
         return TestQtAllPagesFitAtMinimumWidth() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_COMMAND_HELP"))
         return TestQtCommandHelpDialogLayout() && TestQtCommandHelpProcess() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISPLAY_DIALOG"))
+        return TestDisplaySettings(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PIPELINE_MAP"))
+        return TestUiPipelineMapScaling(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PIPELINE_EDITOR"))
+        return TestPipelineEditor() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
+        return TestDisclosureMotionContract() ? 0 : 1;
     if (!qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_WORKSPACE").trimmed().isEmpty())
         return PrepareUiVisualAuditWorkspace() ? 0 : 1;
     if (!TestQtCommandHelpDialogLayout() || !TestQtCommandHelpProcess()) {

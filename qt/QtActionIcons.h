@@ -23,13 +23,18 @@ enum class QtActionIcon {
 };
 
 // Shared compact action symbols; colors follow the caller's palette and icon state.
-inline QIcon CreateQtActionIcon(QtActionIcon action, const QPalette& palette) {
-    const auto render = [action](const QColor& color, int size) {
+inline QIcon CreateQtActionIcon(QtActionIcon action, const QPalette& palette, qreal rotationDegrees = 0.0) {
+    const auto render = [action, rotationDegrees](const QColor& color, int size) {
         QPixmap pixmap(size, size);
         pixmap.fill(Qt::transparent);
         QPainter painter(&pixmap);
         painter.setRenderHint(QPainter::Antialiasing, true);
         painter.scale(size / 20.0, size / 20.0);
+        if (!qFuzzyIsNull(rotationDegrees)) {
+            painter.translate(10.0, 10.0);
+            painter.rotate(rotationDegrees);
+            painter.translate(-10.0, -10.0);
+        }
         painter.setBrush(Qt::NoBrush);
         painter.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         QPainterPath path;
@@ -174,4 +179,10 @@ inline QIcon CreateQtActionIcon(QtActionIcon action, const QPalette& palette) {
         icon.addPixmap(selected, QIcon::Selected, QIcon::On);
     }
     return icon;
+}
+
+// Rotate the existing chevron path before rasterization, preserving every icon
+// mode and resolution instead of transforming a single low-resolution pixmap.
+inline QIcon CreateQtDisclosureIcon(qreal angle, const QPalette& palette) {
+    return CreateQtActionIcon(QtActionIcon::ChevronRight, palette, angle);
 }
