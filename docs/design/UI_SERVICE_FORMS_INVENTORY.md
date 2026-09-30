@@ -1,6 +1,6 @@
 # Служебные формы: конечный inventory
 
-Срез исходников 30.09.2026, следующий комплексный проход после графиков и XP. Это **семь уже существующих семейств**, а не новые модули или расширение [матрицы приёмки](UI_ACCEPTANCE_MATRIX.md). Статус всех строк здесь — UNREVIEWED по полной визуальной приёмке, пока нет отдельного результата.
+Срез исходников 30.09.2026, комплексный проход после проверенного checkpoint графиков и XP **0.6.93**. Это **семь уже существующих семейств**, а не новые модули или расширение [матрицы приёмки](UI_ACCEPTANCE_MATRIX.md). Checkpoint **0.6.94** принят только для четырёх редакторов и перечисленных вложенных окон: финальные native / suite / отдельная поставка прошли. Это не закрывает целые семейства; прочие варианты ниже остаются UNREVIEWED.
 
 | Семейство | Реальные варианты | Естественный существующий regression fit |
 | --- | --- | --- |
@@ -11,6 +11,19 @@
 | Облачные решения | `QtCloudSettings.cpp`: enabled/autosync, длинный/пустой/пересекающийся root, picker, ошибка записи. UI push-preview / pull-confirm / update-confirm — в `QtWindow.cpp`; одноимённые CloudPull/PushPreview/Release cpp главным образом backend | `TestCloudSettings`, `TestCloudPushPreview`, `TestCloudPullTransaction`, `TestCloudReleaseUpdate`, `TestCloudQuickHeader`; backend PASS не заменяет проверку decision boxes |
 | Конфликты | `QtCloudConflict.cpp`: семь существующих tabs; local/cloud/missing; empty/populated snapshots; apply/push/restore confirmations; переход tasks/pipeline. `QtStorageConflict.cpp`: cloud/local и Cancel-default confirmation | `TestCloudConflictResolver`, `TestStorageConflictResolver`; сохранить fixture/ID/rollback assertions |
 | История, экспорт, диагностика и общие решения | `QtWindow.cpp`: история событий / XP, фильтры/no-match, wallet history, cleanup inventory, существующие CSV/report exports, удаления/bulk-delete/пересчёт/clear-log и сообщения ошибок. Startup import Yes/No/Cancel — `qt/main.cpp`; `QtWorkspaceImport.cpp` — backend | `TestPersonalWallet`, `TestQtStorageHealthReport`, `TestQtVisibleTaskExports`, существующие export/deletion/recovery drivers, `TestWorkspaceImportSnapshot` |
+
+## Scoped checkpoint 0.6.94 — PASS в указанном объёме
+
+| Затронутый scope | Финальное native evidence / остаток |
+| --- | --- |
+| Правила | PASS: основная форма с пустой, наполненной и повреждённой history fixture — семь масштабов, узкая / рабочая ширина / обратный переход, glyph/bounds/default/footer и сохранённый draft. Вложенные preset name с ошибкой и история трёх состояний — 100/200%, локальные Return / Cancel / Close. Полный функциональный suite прошёл; остальные preset/save/error состояния не получают визуальный PASS автоматически |
+| Настройки хранилища | PASS: семь масштабов, читаемые checkbox / числовые controls, пустая валюта и отсутствие дней, адресная ошибка и draft / Cancel byte equality. Начисление / списание / превышение баланса и история кошелька из `QtWindow.cpp` не входят |
+| Баннер | PASS: create/edit с multiline текстом — семь масштабов, постоянный footer, required-field focus, Return добавляет строку, draft переживает изменение ширины, Cancel / Escape сохраняют байты. Stale/locked tests в полном suite сохранены; это не визуальная приёмка всех error states |
+| Облачные настройки | PASS: семь масштабов, длинный / пустой / пересекающийся root, native короткие checkbox captions и полный видимый warning, footer/default/Tab/draft/Cancel, измеряемый компактный gap stacked path-row. Реальный Qt picker с `DontUseNativeDialog` — 100/200%, screen bounds, readable commands, локальный Cancel Return, root / parent draft не меняются. Текущая шрифтовая раскладка повторно проверена после промежуточных glyph-отказов. Preview / pull / update и conflict resolver не входят |
+
+Доказательства и пределы: [UI_SERVICE_EDITORS_AUDIT.md](visual-audit/2026-09-30/UI_SERVICE_EDITORS_AUDIT.md). Исходные UI/Core libraries и все затронутые исходники **0.6.93** сохранены отдельно до правок; финальный native run `build-qt/native-service-accepted-0.6.94` после текущих исправлений завершился exit 0 с пустым stderr. На семи масштабах проверены **245 main-layout состояний**, **10 вложенных контекстов** и **10 Escape cancellations**; сохранены **52 PNG**, не 52 отдельные полные функциональные проверки. Full Qt **1/1 PASS, 49,19 с** (49,34 с суммарно) / **216 доступных диалогов**, core OK. Это scoped proof, не новая общая 18×7 page-приёмка. Приёмка оставшихся значков / hover, timed motion / системной политики и остальных страниц остаётся в общей матрице.
+
+Поставка **0.6.94** подтверждена отдельно: свежий 31-файловый пакет, clean-PATH normal / help / version exit 0 / пустой stderr, qwindows.dll; настоящий `dist/ForgeMirrorSetup_0.6.94.exe` собран. Эквивалентный disposable-AppId install .93 → update .94 → uninstall прошёл, test-каталог / HKCU удалены, внешний marker не изменился. Это не byte-identical release Setup и не обновление пользовательской .87. [Точный Setup, SHA и lifecycle](../releases/ForgeMirror-0.6.94.md).
 
 ## Общий UI-гейт
 

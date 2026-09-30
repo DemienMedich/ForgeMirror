@@ -8,6 +8,7 @@
 #include "AppTaskCompletionService.h"
 #include "AppRecoveryStorage.h"
 #include "QtTaskCompletionDialog.h"
+#include "QtScrollableDialog.h"
 #include "QtTheme.h"
 #include "QtProfileDialogs.h"
 #include "QtAchievements.h"
@@ -3889,6 +3890,435 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
     }
     QApplication::clipboard()->setText(clipboardBefore);
     app.setFont(originalFont); app.setStyleSheet(originalStyle); app.setProperty("forgeBasePointSize", originalBase);
+    return checked;
+}
+
+static bool TestQtServiceEditorLayout(QApplication& app) {
+    struct Restore {
+        QFont font = qApp->font();
+        QString stylesheet = qApp->styleSheet();
+        QVariant base = qApp->property("forgeBasePointSize");
+        GameplayConfig rules = GetGameplayConfig();
+        ~Restore() {
+            qApp->setFont(font); qApp->setStyleSheet(stylesheet);
+            qApp->setProperty("forgeBasePointSize", base); SetGameplayConfig(rules);
+        }
+    } restore;
+    bool checked = true;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty() && !QDir().mkpath(artifacts)) return false;
+    auto record = [&](bool okay, const QString& context) {
+        checked &= okay;
+        if (!okay) std::cerr << "Service editor layout: " << context.toStdString() << '\n';
+    };
+    auto settle = [] { QApplication::processEvents(); QApplication::processEvents(); };
+    auto capture = [&](QDialog* dialog, const QString& stem, int scale) {
+        if (!artifacts.isEmpty() && (scale == 100 || scale == 200))
+            record(dialog->grab().save(artifacts + '/' + stem + ".png"), stem + " capture");
+    };
+    auto snapshot = [](const QString& root) {
+        QMap<QString, QByteArray> result;
+        QDirIterator files(root, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+        while (files.hasNext()) {
+            QFile file(files.next());
+            if (!file.open(QIODevice::ReadOnly)) return QMap<QString, QByteArray>{{"read-error", {}}};
+            result.insert(QDir(root).relativeFilePath(file.fileName()), file.readAll());
+        }
+        return result;
+    };
+    auto inspect = [&](QDialog* dialog, const QString& stem, QSize requested) {
+        auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+        auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+        auto* box = dialog->findChild<QDialogButtonBox*>();
+        auto* save = box ? box->button(QDialogButtonBox::Save) : nullptr;
+        auto* cancel = box ? box->button(QDialogButtonBox::Cancel) : nullptr;
+        record(scroll && scroll->widget() && footer && box && save && cancel, stem + " actual hooks");
+        if (!scroll || !scroll->widget() || !footer || !save || !cancel) return;
+        record(dialog->size() == requested.boundedTo(dialog->maximumSize()), stem + " bounded size");
+        auto* body = scroll->widget();
+        record(body->width() <= scroll->viewport()->width() && scroll->horizontalScrollBar()->maximum() == 0,
+            stem + " no outer horizontal overflow");
+        record(save->isDefault() && save->property("primary").toBool() && !cancel->autoDefault(),
+            stem + " primary default / local Cancel");
+        int primaries = 0, defaults = 0;
+        for (auto* button : dialog->findChildren<QPushButton*>()) {
+            if (!button->isVisible()) continue;
+            primaries += button->property("primary").toBool(); defaults += button->isDefault();
+            record(button->width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(),
+                stem + " intrinsic command " + button->objectName());
+            if (footer->isAncestorOf(button))
+                record(dialog->rect().contains(QRect(button->mapTo(dialog, QPoint()), button->size())),
+                    stem + " footer command " + button->objectName());
+        }
+        record(primaries == 1 && defaults == 1, stem + " exactly one primary and default");
+        if (auto* pathRow = dialog->findChild<QWidget*>("cloudRootRow")) {
+            auto* row = qobject_cast<QBoxLayout*>(pathRow->layout());
+            auto* root = dialog->findChild<QLineEdit*>("cloudRoot");
+            auto* browse = dialog->findChild<QPushButton*>("cloudBrowse");
+            if (row && root && browse && row->direction() == QBoxLayout::TopToBottom) {
+                const int gap = browse->y() - root->geometry().bottom() - 1;
+                record(gap >= row->spacing() && gap <= row->spacing() + 1, stem + " stacked path keeps compact measured gap");
+            }
+        }
+        const QImage primaryImage = save->grab().toImage();
+        int accentPixels = 0;
+        for (int y = 0; y < primaryImage.height(); ++y) for (int x = 0; x < primaryImage.width(); ++x) {
+            const auto color = primaryImage.pixelColor(x, y);
+            accentPixels += color == QColor("#7554ad") || color == QColor("#8764bf");
+        }
+        record(accentPixels > primaryImage.width() * primaryImage.height() / 4, stem + " actual painted primary");
+        for (auto* child : body->findChildren<QWidget*>()) {
+            auto* flow = dynamic_cast<QtDialogFlowRow*>(child);
+            if (!flow || !flow->isVisible()) continue;
+            QList<QRect> regions;
+            for (auto* command : flow->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
+                if (!command->isVisible()) continue;
+                const QRect region(command->pos(), command->size());
+                record(flow->rect().contains(region), stem + " flow child contained " + command->objectName());
+                for (const auto& previous : regions) record(!region.intersects(previous), stem + " flow commands do not overlap");
+                regions.push_back(region);
+            }
+            record(flow->height() >= flow->heightForWidth(flow->width()), stem + " actual flow HFW height");
+        }
+        for (auto* control : body->findChildren<QWidget*>()) {
+            if (!control->isVisible() || control->isWindow()) continue;
+            if (qobject_cast<QLabel*>(control) || qobject_cast<QAbstractSpinBox*>(control) ||
+                qobject_cast<QCheckBox*>(control) || qobject_cast<QPushButton*>(control) ||
+                qobject_cast<QLineEdit*>(control) || qobject_cast<QComboBox*>(control)) {
+                record(body->rect().contains(QRect(control->mapTo(body, QPoint()), control->size())),
+                    stem + " body bounds " + control->objectName());
+            }
+            if (auto* label = qobject_cast<QLabel*>(control); label && !label->text().isEmpty()) {
+                if (label->wordWrap())
+                    record(label->height() >= label->heightForWidth(label->width()), stem + " wrapped glyph height " + label->objectName());
+                else
+                    record(QFontMetrics(label->font()).horizontalAdvance(label->text()) <= label->contentsRect().width(),
+                        stem + " full label width " + label->objectName());
+            }
+            if (auto* check = qobject_cast<QCheckBox*>(control)) {
+                if (check->width() < check->sizeHint().width() || check->height() < check->sizeHint().height())
+                    std::cerr << stem.toStdString() << " checkbox=" << check->objectName().toStdString()
+                        << " actual=" << check->width() << 'x' << check->height()
+                        << " hint=" << check->sizeHint().width() << 'x' << check->sizeHint().height()
+                        << " textWidth=" << check->fontMetrics().horizontalAdvance(check->text())
+                        << " font=" << check->font().toString().toStdString() << '\n';
+                record(check->width() >= check->sizeHint().width() && check->height() >= check->sizeHint().height(),
+                    stem + " full checkbox glyphs " + check->objectName());
+            }
+            if (auto* spin = qobject_cast<QAbstractSpinBox*>(control))
+            {
+                if (spin->width() < spin->sizeHint().width() || spin->height() < spin->sizeHint().height())
+                    std::cerr << stem.toStdString() << " spin=" << spin->objectName().toStdString()
+                        << " actual=" << spin->width() << 'x' << spin->height()
+                        << " hint=" << spin->sizeHint().width() << 'x' << spin->sizeHint().height() << '\n';
+                record(spin->width() >= spin->sizeHint().width() && spin->height() >= spin->sizeHint().height(),
+                    stem + " intrinsic spin " + spin->objectName());
+                if (auto* editor = spin->findChild<QLineEdit*>())
+                    record(QFontMetrics(editor->font()).horizontalAdvance(editor->text()) <= editor->contentsRect().width() &&
+                        QFontMetrics(editor->font()).height() <= editor->contentsRect().height(),
+                        stem + " full current spin glyphs " + spin->objectName());
+            }
+            if (auto* text = qobject_cast<QPlainTextEdit*>(control))
+                record(text->viewport()->height() >= text->fontMetrics().lineSpacing() * 3,
+                    stem + " multiline has three visible text lines");
+        }
+        for (auto* label : footer->findChildren<QLabel*>())
+            if (label->isVisible() && label->wordWrap() && !label->text().isEmpty())
+                record(label->height() >= label->heightForWidth(label->width()), stem + " visible error glyph height");
+        if (QGuiApplication::platformName() != "offscreen")
+            record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()), stem + " native screen bounds");
+        std::cout << stem.toStdString() << " size=" << dialog->width() << 'x' << dialog->height()
+            << " Hrange=" << scroll->horizontalScrollBar()->maximum() << '\n';
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        ApplyQtDisplaySettings(app, settings);
+        {
+            QtDialogFlowRow flow;
+            QList<QPushButton*> commands;
+            for (int index = 0; index < 4; ++index) {
+                auto* button = new QPushButton(QString::fromUtf8("Команда"));
+                button->setAutoDefault(false); flow.addWidget(button); commands.push_back(button);
+            }
+            flow.ensurePolished();
+            const int pairWidth = commands[0]->sizeHint().width() * 2 + 8;
+            flow.resize(pairWidth, flow.heightForWidth(pairWidth)); flow.show(); settle();
+            record(commands[0]->y() == commands[1]->y() && commands[2]->y() > commands[1]->y(),
+                QString("flow %1 measured pair wraps to two rows").arg(scale));
+            for (auto* button : commands)
+                record(flow.rect().contains(button->geometry()), QString("flow %1 command contained").arg(scale));
+            const int twoRowHeight = flow.heightForWidth(pairWidth);
+            commands[1]->hide(); commands[3]->hide(); settle();
+            flow.resize(pairWidth, flow.heightForWidth(pairWidth)); settle();
+            record(commands[0]->y() == commands[2]->y() && flow.heightForWidth(pairWidth) < twoRowHeight,
+                QString("flow %1 hidden commands leave no row or gap").arg(scale));
+            commands[1]->show(); commands[3]->show(); settle();
+            flow.resize(pairWidth, flow.heightForWidth(pairWidth)); settle();
+            record(flow.heightForWidth(pairWidth) == twoRowHeight && commands[2]->y() > commands[1]->y(),
+                QString("flow %1 show restores measured rows").arg(scale));
+            flow.close();
+        }
+        for (const QString& kind : {QString("rules"), QString("rules-history-populated"), QString("rules-history-corrupt"),
+            QString("vault"), QString("banner-create"), QString("banner-edit"), QString("cloud")}) {
+            QTemporaryDir temp;
+            if (!temp.isValid()) return false;
+            QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().toStdString()));
+            workspace.data.bannerTexts = {u8"Длинная фраза для проверки чтения и редактирования интерфейса\nСледующая строка не должна автоматически сохранять форму."};
+            if (!SaveBannerTexts(workspace.directory, workspace.data.bannerTexts)) return false;
+            workspace.reload();
+            if (kind == "rules-history-populated" || kind == "rules-history-corrupt") {
+                QFile history(temp.path() + "/meta/qt-rules-history.json");
+                const QByteArray content = kind == "rules-history-corrupt" ? QByteArray("{broken history")
+                    : QJsonDocument(QJsonArray{QJsonObject{{"timestamp", 1700000000}, {"changes", QString::fromUtf8(
+                        "База уровня, линейный прирост, квадратичный прирост, фокус-бонус и правила расчёта прогресса персонажей и материалов окружения")}}}).toJson();
+                if (!history.open(QIODevice::WriteOnly) || history.write(content) != content.size()) return false;
+            }
+            const auto before = snapshot(temp.path());
+            record(!before.contains("read-error"), kind + " initial snapshot readable");
+            const QString stem = kind + QString("-%1").arg(scale);
+            const QString objectName = kind.startsWith("banner") ? "bannerEditor"
+                : kind.startsWith("rules") ? "rulesEditor" : kind == "vault" ? "vaultEditor" : "cloudSettings";
+            bool visited = false;
+            ScheduleQtModalDriver(app, objectName, stem, [&](QDialog* dialog) {
+                visited = true;
+                dialog->resize(640, 520); settle();
+                inspect(dialog, stem + " narrow", QSize(640, 520)); capture(dialog, stem + "-initial", scale);
+                if (kind == "cloud" && scale == 200) {
+                    auto* pathRow = dialog->findChild<QWidget*>("cloudRootRow");
+                    auto* root = dialog->findChild<QLineEdit*>("cloudRoot");
+                    auto* browse = dialog->findChild<QPushButton*>("cloudBrowse");
+                    if (pathRow && root && browse) std::cout << "cloud path metrics row=" << pathRow->width() << 'x' << pathRow->height()
+                        << " hint=" << pathRow->sizeHint().width() << 'x' << pathRow->sizeHint().height()
+                        << " minimum=" << pathRow->minimumSizeHint().width() << 'x' << pathRow->minimumSizeHint().height()
+                        << " root=" << root->y() << ':' << root->height() << " browse=" << browse->y() << ':' << browse->height()
+                        << " HFW=" << pathRow->heightForWidth(pathRow->width()) << '\n';
+                }
+                dialog->resize(1000, 640); settle(); inspect(dialog, stem + " wide", QSize(1000, 640));
+                dialog->resize(640, 520); settle(); inspect(dialog, stem + " reversed", QSize(640, 520));
+                auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+                auto* box = dialog->findChild<QDialogButtonBox*>();
+                if (!scroll || !box) { dialog->reject(); return; }
+                auto* save = box->button(QDialogButtonBox::Save);
+                auto* cancel = box->button(QDialogButtonBox::Cancel);
+                if (!save || !cancel) { dialog->reject(); return; }
+                auto* notice = dialog->findChild<QLabel*>(kind.startsWith("rules") ? "rulesNotice" : kind == "vault" ? "vaultNotice" : kind == "cloud" ? "cloudNotice" : "bannerNotice");
+                QWidget* first = nullptr;
+                if (kind == "vault") {
+                    auto* name = dialog->findChild<QLineEdit*>("vaultCurrencyName");
+                    auto* code = dialog->findChild<QLineEdit*>("vaultCurrencyCode");
+                    auto* minimum = dialog->findChild<QSpinBox*>("vaultPomodoroMinimum");
+                    if (!name || !code || !minimum) { record(false, stem + " vault fields"); dialog->reject(); return; }
+                    first = name; name->clear(); code->setText("DRAFT"); minimum->setValue(89);
+                    save->setFocus(); QTest::keyClick(save, Qt::Key_Return); settle();
+                    record(dialog->isVisible() && notice && !notice->text().isEmpty() && name->hasFocus() &&
+                        code->text() == "DRAFT" && minimum->value() == 89, stem + " required name addressed / draft retained");
+                    name->setText(QString::fromUtf8("Валюта проверки материалов и персонажей"));
+                    for (int day = 0; day < 7; ++day) dialog->findChild<QCheckBox*>(QString("vaultDay%1").arg(day))->setChecked(false);
+                    save->click(); settle();
+                    record(dialog->isVisible() && notice && !notice->text().isEmpty() && name->text().startsWith(QString::fromUtf8("Валюта")),
+                        stem + " missing days preserve draft");
+                } else if (kind.startsWith("banner")) {
+                    auto* text = dialog->findChild<QPlainTextEdit*>("bannerText");
+                    if (!text) { record(false, stem + " banner field"); dialog->reject(); return; }
+                    first = text; text->clear(); save->click(); settle();
+                    record(dialog->isVisible() && notice && !notice->text().isEmpty() && text->hasFocus(), stem + " required banner addressed");
+                    text->setPlainText(QString::fromUtf8("Длинная фраза для интерфейса: материалы, персонажи и окружение."));
+                    scroll->ensureWidgetVisible(text, 0, 0); text->setFocus(); text->moveCursor(QTextCursor::End);
+                    QTest::keyClick(text, Qt::Key_Return); settle();
+                    record(dialog->isVisible() && text->toPlainText().endsWith('\n'), stem + " multiline Return does not save");
+                } else if (kind == "cloud") {
+                    auto* root = dialog->findChild<QLineEdit*>("cloudRoot");
+                    auto* minutes = dialog->findChild<QSpinBox*>("cloudMinutes");
+                    if (!root || !minutes) { record(false, stem + " cloud fields"); dialog->reject(); return; }
+                    first = root; minutes->setValue(119); root->clear(); save->click(); settle();
+                    record(dialog->isVisible() && notice && !notice->text().isEmpty() && root->hasFocus() && minutes->value() == 119,
+                        stem + " empty root addressed / draft retained");
+                    root->setText(QDir::toNativeSeparators(temp.path())); save->click(); settle();
+                    record(dialog->isVisible() && notice && !notice->text().isEmpty() && root->hasFocus() && minutes->value() == 119,
+                        stem + " overlap root addressed / draft retained");
+                    root->setText(QDir::toNativeSeparators(temp.path() + QString::fromUtf8("-внешняя-папка-проверки-длинного-пути")));
+                    for (const auto* name : {"cloudEnabled", "cloudAutoPull", "cloudAutoPush", "cloudIncludeAdmin", "cloudAutoSync"}) {
+                        auto* check = dialog->findChild<QCheckBox*>(name);
+                        record(check != nullptr, stem + " cloud setting hook " + name);
+                        if (check) { scroll->ensureWidgetVisible(check, 0, 0); check->setFocus();
+                            if (!check->isChecked()) QTest::keyClick(check, Qt::Key_Space); }
+                    }
+                    record(root->accessibleDescription().contains(root->text()), stem + " complete long path accessible context");
+                    if (scale == 100 || scale == 200) {
+                        const auto draftRoot = root->text();
+                        root->setText(QDir::toNativeSeparators(temp.path()));
+                        auto* browse = dialog->findChild<QPushButton*>("cloudBrowse");
+                        bool pickerVisited = false;
+                        ScheduleQtModalDriver(app, {}, stem + " Qt folder picker", [&](QDialog* nested) {
+                            auto* picker = qobject_cast<QFileDialog*>(nested);
+                            if (!picker) { record(false, stem + " actual QFileDialog"); nested->reject(); return; }
+                            pickerVisited = true;
+                            record(picker->testOption(QFileDialog::DontUseNativeDialog), stem + " actual Qt picker retained");
+                            record(picker->testOption(QFileDialog::ShowDirsOnly) && picker->fileMode() == QFileDialog::Directory,
+                                stem + " actual folder selection semantics retained");
+                            record(MissingAccessibleNames(picker).isEmpty(), stem + " picker actual accessible control names");
+                            record(picker->directory().absolutePath() == QDir(temp.path()).absolutePath(), stem + " picker synthetic root");
+                            if (QGuiApplication::platformName() != "offscreen")
+                                record(picker->screen()->availableGeometry().contains(picker->frameGeometry()), stem + " picker screen bounds");
+                            auto* pickerBox = picker->findChild<QDialogButtonBox*>();
+                            auto* pickerCancel = pickerBox ? pickerBox->button(QDialogButtonBox::Cancel) : nullptr;
+                            record(pickerCancel != nullptr, stem + " picker Cancel command");
+                            if (pickerBox) for (auto* button : pickerBox->buttons())
+                                record(button->width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(),
+                                    stem + " picker command readable");
+                            capture(picker, stem + "-picker", scale);
+                            if (pickerCancel) { pickerCancel->setFocus(); QTest::keyClick(pickerCancel, Qt::Key_Return); settle(); }
+                            record(!picker->isVisible(), stem + " picker local Cancel Return");
+                            if (picker->isVisible()) picker->reject();
+                        }, record);
+                        if (browse) { scroll->ensureWidgetVisible(browse, 0, 0); browse->setFocus(); QTest::keyClick(browse, Qt::Key_Return); settle(); }
+                        else record(false, stem + " picker Browse command");
+                        record(pickerVisited && dialog->isVisible() && root->text() == QDir::toNativeSeparators(temp.path()),
+                            stem + " picker Cancel leaves root and parent draft");
+                        root->setText(draftRoot);
+                    }
+                } else {
+                    auto* base = dialog->findChild<QSpinBox*>("rulesLevelBase");
+                    if (!base) { record(false, stem + " rules fields"); dialog->reject(); return; }
+                    first = base; base->setValue(99999);
+                    if (scale == 100 || scale == 200) {
+                        if (kind == "rules") {
+                            bool presetVisited = false;
+                            ScheduleQtModalDriver(app, {}, stem + " preset name", [&](QDialog* nested) {
+                                auto* input = qobject_cast<QInputDialog*>(nested);
+                                if (!input) { record(false, stem + " compatible QInputDialog"); nested->reject(); return; }
+                                presetVisited = true; input->resize(640, 520); settle();
+                                auto* field = input->findChild<QLineEdit*>();
+                                auto* inputBox = input->findChild<QDialogButtonBox*>();
+                                auto* ok = inputBox ? inputBox->button(QDialogButtonBox::Ok) : nullptr;
+                                auto* inputCancel = inputBox ? inputBox->button(QDialogButtonBox::Cancel) : nullptr;
+                                record(field && ok && inputCancel, stem + " preset hooks");
+                                if (!field || !ok || !inputCancel) { input->reject(); return; }
+                                field->clear(); ok->setFocus(); QTest::keyClick(ok, Qt::Key_Return); settle();
+                                auto* inputNotice = input->findChild<QLabel*>("rulesPresetNameNotice");
+                                record(input->isVisible() && field->hasFocus() && inputNotice && inputNotice->isVisible() && !inputNotice->text().isEmpty(),
+                                    stem + " invalid preset stays open / addresses name");
+                                const QString invalidName(49, QChar(0x042f));
+                                input->setTextValue(invalidName); ok->click(); settle();
+                                record(input->isVisible() && input->textValue() == invalidName, stem + " invalid preset retains draft");
+                                for (auto* label : input->findChildren<QLabel*>()) if (label->isVisible() && label->wordWrap() && !label->text().isEmpty())
+                                    record(label->height() >= label->heightForWidth(label->width()), stem + " preset error readable");
+                                record(input->rect().contains(QRect(inputCancel->mapTo(input, QPoint()), inputCancel->size())), stem + " preset Cancel bounds");
+                                capture(input, stem + "-preset-invalid", scale);
+                                inputCancel->setFocus(); QTest::keyClick(inputCancel, Qt::Key_Return); settle();
+                                record(!input->isVisible(), stem + " preset local Cancel Return");
+                                if (input->isVisible()) input->reject();
+                            }, record);
+                            auto* preset = dialog->findChild<QPushButton*>("rulesSavePreset");
+                            if (preset) { scroll->ensureWidgetVisible(preset, 0, 0); preset->setFocus(); QTest::keyClick(preset, Qt::Key_Return); settle(); }
+                            else record(false, stem + " preset command");
+                            record(presetVisited && dialog->isVisible() && base->value() == 99999, stem + " preset Cancel preserves main draft");
+                        }
+                        bool historyVisited = false;
+                        ScheduleQtModalDriver(app, "rulesHistoryDialog", stem + " history", [&](QDialog* nested) {
+                            historyVisited = true; nested->resize(640, 520); settle();
+                            auto* table = nested->findChild<QTableWidget*>("rulesHistoryTable");
+                            auto* close = nested->findChild<QPushButton*>("rulesHistoryClose");
+                            auto* content = nested->findChild<QScrollArea*>("dialogContentScrollArea");
+                            record(close && close->isDefault() && content && content->horizontalScrollBar()->maximum() == 0,
+                                stem + " history default / no outer overflow");
+                            record(nested->size() == QSize(640, 520).boundedTo(nested->maximumSize()), stem + " bounded history");
+                            if (kind == "rules-history-populated") {
+                                record(table && table->rowCount() == 1 && table->item(0, 1) && table->item(0, 1)->text().contains(QString::fromUtf8("окружения")),
+                                    stem + " full history changes retained");
+                                if (table && table->rowCount() == 1) {
+                                    const int textWidth = table->columnWidth(1) - 8;
+                                    const int measuredHeight = table->fontMetrics().boundingRect(QRect(0, 0, textWidth, 10000),
+                                        Qt::TextWordWrap, table->item(0, 1)->text()).height();
+                                    record(table->rowHeight(0) >= measuredHeight, stem + " full wrapped history row glyph height");
+                                    record(table->item(0, 0)->data(Qt::AccessibleTextRole).toString().contains("2023"), stem + " complete timestamp context");
+                                }
+                            } else {
+                                auto* historyNotice = nested->findChild<QLabel*>("rulesHistoryNotice");
+                                record(historyNotice && historyNotice->isVisible() && !historyNotice->text().isEmpty() &&
+                                    historyNotice->height() >= historyNotice->heightForWidth(historyNotice->width()), stem + " empty/corrupt history explanation");
+                                if (kind == "rules-history-corrupt") record(!table || !table->isVisible(), stem + " corrupt history has no orphan table");
+                            }
+                            capture(nested, stem + "-history", scale);
+                            if (close) { close->setFocus(); QTest::keyClick(close, Qt::Key_Return); settle(); }
+                            record(!nested->isVisible(), stem + " history local Close Return");
+                            if (nested->isVisible()) nested->reject();
+                        }, record);
+                        auto* history = dialog->findChild<QPushButton*>("rulesHistory");
+                        if (history) { scroll->ensureWidgetVisible(history, 0, 0); history->setFocus(); QTest::keyClick(history, Qt::Key_Return); settle(); }
+                        else record(false, stem + " history command");
+                        record(historyVisited && dialog->isVisible() && base->value() == 99999, stem + " history preserves main draft");
+                    }
+                }
+                const auto draftValues = [](QDialog* form) {
+                    QMap<QString, QVariant> result;
+                    for (auto* field : form->findChildren<QWidget*>()) {
+                        const auto key = field->objectName();
+                        if (key.isEmpty() || key.startsWith("qt_")) continue;
+                        if (auto* input = qobject_cast<QLineEdit*>(field)) result.insert(key, input->text());
+                        else if (auto* input = qobject_cast<QPlainTextEdit*>(field)) result.insert(key, input->toPlainText());
+                        else if (auto* spin = qobject_cast<QSpinBox*>(field)) result.insert(key, spin->value());
+                        else if (auto* spin = qobject_cast<QDoubleSpinBox*>(field)) result.insert(key, spin->value());
+                        else if (auto* time = qobject_cast<QTimeEdit*>(field)) result.insert(key, time->time());
+                        else if (auto* check = qobject_cast<QCheckBox*>(field)) result.insert(key, check->isChecked());
+                        else if (auto* combo = qobject_cast<QComboBox*>(field)) result.insert(key, QVariantList{combo->currentIndex(), combo->currentText()});
+                    }
+                    return result;
+                };
+                const auto draftBeforeResize = draftValues(dialog);
+                dialog->resize(1000, 640); settle(); inspect(dialog, stem + " draft wide", QSize(1000, 640));
+                dialog->resize(640, 520); settle();
+                record(draftValues(dialog) == draftBeforeResize, stem + " edited draft survives resize reversal");
+                inspect(dialog, stem + " draft/error", QSize(640, 520)); capture(dialog, stem + "-draft", scale);
+                if (first) {
+                    scroll->ensureWidgetVisible(first, 0, 0); first->setFocus(); settle();
+                    auto* focused = dialog->focusWidget(); QTest::keyClick(focused, Qt::Key_Tab); settle();
+                    record(dialog->focusWidget() && dialog->focusWidget() != focused && dialog->isVisible(), stem + " Tab advances");
+                    QTest::keyClick(dialog->focusWidget(), Qt::Key_Backtab); settle();
+                    record(dialog->focusWidget() == focused, stem + " Backtab returns locally");
+                }
+                scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum()); settle();
+                capture(dialog, stem + "-body-bottom", scale);
+                cancel->setFocus(); QTest::keyClick(cancel, Qt::Key_Return); settle();
+                record(!dialog->isVisible(), stem + " focused Cancel Return");
+                if (dialog->isVisible()) dialog->reject();
+            }, record);
+            bool accepted = false;
+            if (kind.startsWith("rules")) accepted = ShowRulesEditor(nullptr, workspace);
+            else if (kind == "vault") accepted = ShowVaultEditor(nullptr, workspace);
+            else if (kind == "cloud") accepted = ShowCloudSettings(nullptr, workspace.directory);
+            else accepted = ShowBannerEditor(nullptr, workspace, kind == "banner-create" ? -1 : 0);
+            const auto after = snapshot(temp.path());
+            record(!after.contains("read-error"), stem + " final snapshot readable");
+            record(visited && !accepted && after == before, stem + " Cancel preserves every workspace file byte");
+            if ((scale == 100 || scale == 200) && !kind.startsWith("rules-history")) {
+                bool escapeVisited = false;
+                ScheduleQtModalDriver(app, objectName, stem + " Escape", [&](QDialog* dialog) {
+                    escapeVisited = true;
+                    if (auto* text = dialog->findChild<QPlainTextEdit*>("bannerText")) {
+                        text->setPlainText(QString::fromUtf8("Черновик для проверки Escape")); text->setFocus();
+                    } else if (auto* root = dialog->findChild<QLineEdit*>("cloudRoot")) {
+                        root->setText(QString::fromUtf8("Черновик внешнего пути")); root->setFocus();
+                    } else if (auto* name = dialog->findChild<QLineEdit*>("vaultCurrencyName")) {
+                        name->setText(QString::fromUtf8("Черновик валюты")); name->setFocus();
+                    } else if (auto* base = dialog->findChild<QSpinBox*>("rulesLevelBase")) {
+                        base->setValue(54321); base->setFocus();
+                    }
+                    QTest::keyClick(dialog->focusWidget() ? dialog->focusWidget() : dialog, Qt::Key_Escape); settle();
+                    record(!dialog->isVisible(), stem + " Escape rejects draft");
+                    if (dialog->isVisible()) dialog->reject();
+                }, record);
+                bool escapeAccepted = false;
+                if (kind == "rules") escapeAccepted = ShowRulesEditor(nullptr, workspace);
+                else if (kind == "vault") escapeAccepted = ShowVaultEditor(nullptr, workspace);
+                else if (kind == "cloud") escapeAccepted = ShowCloudSettings(nullptr, workspace.directory);
+                else escapeAccepted = ShowBannerEditor(nullptr, workspace, kind == "banner-create" ? -1 : 0);
+                const auto afterEscape = snapshot(temp.path());
+                record(escapeVisited && !escapeAccepted && !afterEscape.contains("read-error") && afterEscape == before,
+                    stem + " Escape preserves every workspace file byte");
+            }
+        }
+    }
     return checked;
 }
 
@@ -9832,6 +10262,8 @@ int main(int argc, char** argv) {
         return TestQtCatalogProfileLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_XP_FORMS"))
         return TestQtXpDialogLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SERVICE_EDITORS"))
+        return TestQtServiceEditorLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CHARTS"))
         return TestQtChartReadability(app) && TestStatisticsTrendBeyondAuditPageLimit() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
@@ -9871,6 +10303,7 @@ int main(int argc, char** argv) {
     if (!TestQtWorkingEditorLayout(app)) { std::cerr << "Working editor layout failed\n"; return 1; }
     if (!TestQtCatalogProfileLayout(app)) { std::cerr << "Catalog/profile layout failed\n"; return 1; }
     if (!TestQtXpDialogLayout(app)) { std::cerr << "XP dialog layout failed\n"; return 1; }
+    if (!TestQtServiceEditorLayout(app)) { std::cerr << "Service editor layout failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }

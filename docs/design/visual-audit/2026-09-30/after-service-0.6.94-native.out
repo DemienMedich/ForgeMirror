@@ -1,0 +1,246 @@
+rules-90 narrow size=640x520 Hrange=0
+rules-90 wide size=1000x640 Hrange=0
+rules-90 reversed size=640x520 Hrange=0
+rules-90 draft wide size=1000x640 Hrange=0
+rules-90 draft/error size=640x520 Hrange=0
+rules-history-populated-90 narrow size=640x520 Hrange=0
+rules-history-populated-90 wide size=1000x640 Hrange=0
+rules-history-populated-90 reversed size=640x520 Hrange=0
+rules-history-populated-90 draft wide size=1000x640 Hrange=0
+rules-history-populated-90 draft/error size=640x520 Hrange=0
+rules-history-corrupt-90 narrow size=640x520 Hrange=0
+rules-history-corrupt-90 wide size=1000x640 Hrange=0
+rules-history-corrupt-90 reversed size=640x520 Hrange=0
+rules-history-corrupt-90 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-90 draft/error size=640x520 Hrange=0
+vault-90 narrow size=640x520 Hrange=0
+vault-90 wide size=1000x640 Hrange=0
+vault-90 reversed size=640x520 Hrange=0
+vault-90 draft wide size=1000x640 Hrange=0
+vault-90 draft/error size=640x520 Hrange=0
+banner-create-90 narrow size=640x520 Hrange=0
+banner-create-90 wide size=1000x640 Hrange=0
+banner-create-90 reversed size=640x520 Hrange=0
+banner-create-90 draft wide size=1000x640 Hrange=0
+banner-create-90 draft/error size=640x520 Hrange=0
+banner-edit-90 narrow size=640x520 Hrange=0
+banner-edit-90 wide size=1000x640 Hrange=0
+banner-edit-90 reversed size=640x520 Hrange=0
+banner-edit-90 draft wide size=1000x640 Hrange=0
+banner-edit-90 draft/error size=640x520 Hrange=0
+cloud-90 narrow size=640x520 Hrange=0
+cloud-90 wide size=1000x640 Hrange=0
+cloud-90 reversed size=640x520 Hrange=0
+cloud-90 draft wide size=1000x640 Hrange=0
+cloud-90 draft/error size=640x520 Hrange=0
+rules-100 narrow size=640x520 Hrange=0
+rules-100 wide size=1000x640 Hrange=0
+rules-100 reversed size=640x520 Hrange=0
+rules-100 draft wide size=1000x640 Hrange=0
+rules-100 draft/error size=640x520 Hrange=0
+rules-history-populated-100 narrow size=640x520 Hrange=0
+rules-history-populated-100 wide size=1000x640 Hrange=0
+rules-history-populated-100 reversed size=640x520 Hrange=0
+rules-history-populated-100 draft wide size=1000x640 Hrange=0
+rules-history-populated-100 draft/error size=640x520 Hrange=0
+rules-history-corrupt-100 narrow size=640x520 Hrange=0
+rules-history-corrupt-100 wide size=1000x640 Hrange=0
+rules-history-corrupt-100 reversed size=640x520 Hrange=0
+rules-history-corrupt-100 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-100 draft/error size=640x520 Hrange=0
+vault-100 narrow size=640x520 Hrange=0
+vault-100 wide size=1000x640 Hrange=0
+vault-100 reversed size=640x520 Hrange=0
+vault-100 draft wide size=1000x640 Hrange=0
+vault-100 draft/error size=640x520 Hrange=0
+banner-create-100 narrow size=640x520 Hrange=0
+banner-create-100 wide size=1000x640 Hrange=0
+banner-create-100 reversed size=640x520 Hrange=0
+banner-create-100 draft wide size=1000x640 Hrange=0
+banner-create-100 draft/error size=640x520 Hrange=0
+banner-edit-100 narrow size=640x520 Hrange=0
+banner-edit-100 wide size=1000x640 Hrange=0
+banner-edit-100 reversed size=640x520 Hrange=0
+banner-edit-100 draft wide size=1000x640 Hrange=0
+banner-edit-100 draft/error size=640x520 Hrange=0
+cloud-100 narrow size=640x520 Hrange=0
+cloud-100 wide size=1000x640 Hrange=0
+cloud-100 reversed size=640x520 Hrange=0
+cloud-100 draft wide size=1000x640 Hrange=0
+cloud-100 draft/error size=640x520 Hrange=0
+rules-110 narrow size=640x520 Hrange=0
+rules-110 wide size=1000x640 Hrange=0
+rules-110 reversed size=640x520 Hrange=0
+rules-110 draft wide size=1000x640 Hrange=0
+rules-110 draft/error size=640x520 Hrange=0
+rules-history-populated-110 narrow size=640x520 Hrange=0
+rules-history-populated-110 wide size=1000x640 Hrange=0
+rules-history-populated-110 reversed size=640x520 Hrange=0
+rules-history-populated-110 draft wide size=1000x640 Hrange=0
+rules-history-populated-110 draft/error size=640x520 Hrange=0
+rules-history-corrupt-110 narrow size=640x520 Hrange=0
+rules-history-corrupt-110 wide size=1000x640 Hrange=0
+rules-history-corrupt-110 reversed size=640x520 Hrange=0
+rules-history-corrupt-110 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-110 draft/error size=640x520 Hrange=0
+vault-110 narrow size=640x520 Hrange=0
+vault-110 wide size=1000x640 Hrange=0
+vault-110 reversed size=640x520 Hrange=0
+vault-110 draft wide size=1000x640 Hrange=0
+vault-110 draft/error size=640x520 Hrange=0
+banner-create-110 narrow size=640x520 Hrange=0
+banner-create-110 wide size=1000x640 Hrange=0
+banner-create-110 reversed size=640x520 Hrange=0
+banner-create-110 draft wide size=1000x640 Hrange=0
+banner-create-110 draft/error size=640x520 Hrange=0
+banner-edit-110 narrow size=640x520 Hrange=0
+banner-edit-110 wide size=1000x640 Hrange=0
+banner-edit-110 reversed size=640x520 Hrange=0
+banner-edit-110 draft wide size=1000x640 Hrange=0
+banner-edit-110 draft/error size=640x520 Hrange=0
+cloud-110 narrow size=640x520 Hrange=0
+cloud-110 wide size=1000x640 Hrange=0
+cloud-110 reversed size=640x520 Hrange=0
+cloud-110 draft wide size=1000x640 Hrange=0
+cloud-110 draft/error size=640x520 Hrange=0
+rules-125 narrow size=640x520 Hrange=0
+rules-125 wide size=1000x640 Hrange=0
+rules-125 reversed size=640x520 Hrange=0
+rules-125 draft wide size=1000x640 Hrange=0
+rules-125 draft/error size=640x520 Hrange=0
+rules-history-populated-125 narrow size=640x520 Hrange=0
+rules-history-populated-125 wide size=1000x640 Hrange=0
+rules-history-populated-125 reversed size=640x520 Hrange=0
+rules-history-populated-125 draft wide size=1000x640 Hrange=0
+rules-history-populated-125 draft/error size=640x520 Hrange=0
+rules-history-corrupt-125 narrow size=640x520 Hrange=0
+rules-history-corrupt-125 wide size=1000x640 Hrange=0
+rules-history-corrupt-125 reversed size=640x520 Hrange=0
+rules-history-corrupt-125 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-125 draft/error size=640x520 Hrange=0
+vault-125 narrow size=640x520 Hrange=0
+vault-125 wide size=1000x640 Hrange=0
+vault-125 reversed size=640x520 Hrange=0
+vault-125 draft wide size=1000x640 Hrange=0
+vault-125 draft/error size=640x520 Hrange=0
+banner-create-125 narrow size=640x520 Hrange=0
+banner-create-125 wide size=1000x640 Hrange=0
+banner-create-125 reversed size=640x520 Hrange=0
+banner-create-125 draft wide size=1000x640 Hrange=0
+banner-create-125 draft/error size=640x520 Hrange=0
+banner-edit-125 narrow size=640x520 Hrange=0
+banner-edit-125 wide size=1000x640 Hrange=0
+banner-edit-125 reversed size=640x520 Hrange=0
+banner-edit-125 draft wide size=1000x640 Hrange=0
+banner-edit-125 draft/error size=640x520 Hrange=0
+cloud-125 narrow size=640x520 Hrange=0
+cloud-125 wide size=1000x640 Hrange=0
+cloud-125 reversed size=640x520 Hrange=0
+cloud-125 draft wide size=1000x640 Hrange=0
+cloud-125 draft/error size=640x520 Hrange=0
+rules-150 narrow size=640x520 Hrange=0
+rules-150 wide size=1000x640 Hrange=0
+rules-150 reversed size=640x520 Hrange=0
+rules-150 draft wide size=1000x640 Hrange=0
+rules-150 draft/error size=640x520 Hrange=0
+rules-history-populated-150 narrow size=640x520 Hrange=0
+rules-history-populated-150 wide size=1000x640 Hrange=0
+rules-history-populated-150 reversed size=640x520 Hrange=0
+rules-history-populated-150 draft wide size=1000x640 Hrange=0
+rules-history-populated-150 draft/error size=640x520 Hrange=0
+rules-history-corrupt-150 narrow size=640x520 Hrange=0
+rules-history-corrupt-150 wide size=1000x640 Hrange=0
+rules-history-corrupt-150 reversed size=640x520 Hrange=0
+rules-history-corrupt-150 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-150 draft/error size=640x520 Hrange=0
+vault-150 narrow size=640x520 Hrange=0
+vault-150 wide size=1000x640 Hrange=0
+vault-150 reversed size=640x520 Hrange=0
+vault-150 draft wide size=1000x640 Hrange=0
+vault-150 draft/error size=640x520 Hrange=0
+banner-create-150 narrow size=640x520 Hrange=0
+banner-create-150 wide size=1000x640 Hrange=0
+banner-create-150 reversed size=640x520 Hrange=0
+banner-create-150 draft wide size=1000x640 Hrange=0
+banner-create-150 draft/error size=640x520 Hrange=0
+banner-edit-150 narrow size=640x520 Hrange=0
+banner-edit-150 wide size=1000x640 Hrange=0
+banner-edit-150 reversed size=640x520 Hrange=0
+banner-edit-150 draft wide size=1000x640 Hrange=0
+banner-edit-150 draft/error size=640x520 Hrange=0
+cloud-150 narrow size=640x520 Hrange=0
+cloud-150 wide size=1000x640 Hrange=0
+cloud-150 reversed size=640x520 Hrange=0
+cloud-150 draft wide size=1000x640 Hrange=0
+cloud-150 draft/error size=640x520 Hrange=0
+rules-175 narrow size=640x520 Hrange=0
+rules-175 wide size=1000x640 Hrange=0
+rules-175 reversed size=640x520 Hrange=0
+rules-175 draft wide size=1000x640 Hrange=0
+rules-175 draft/error size=640x520 Hrange=0
+rules-history-populated-175 narrow size=640x520 Hrange=0
+rules-history-populated-175 wide size=1000x640 Hrange=0
+rules-history-populated-175 reversed size=640x520 Hrange=0
+rules-history-populated-175 draft wide size=1000x640 Hrange=0
+rules-history-populated-175 draft/error size=640x520 Hrange=0
+rules-history-corrupt-175 narrow size=640x520 Hrange=0
+rules-history-corrupt-175 wide size=1000x640 Hrange=0
+rules-history-corrupt-175 reversed size=640x520 Hrange=0
+rules-history-corrupt-175 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-175 draft/error size=640x520 Hrange=0
+vault-175 narrow size=640x520 Hrange=0
+vault-175 wide size=1000x640 Hrange=0
+vault-175 reversed size=640x520 Hrange=0
+vault-175 draft wide size=1000x640 Hrange=0
+vault-175 draft/error size=640x520 Hrange=0
+banner-create-175 narrow size=640x520 Hrange=0
+banner-create-175 wide size=1000x640 Hrange=0
+banner-create-175 reversed size=640x520 Hrange=0
+banner-create-175 draft wide size=1000x640 Hrange=0
+banner-create-175 draft/error size=640x520 Hrange=0
+banner-edit-175 narrow size=640x520 Hrange=0
+banner-edit-175 wide size=1000x640 Hrange=0
+banner-edit-175 reversed size=640x520 Hrange=0
+banner-edit-175 draft wide size=1000x640 Hrange=0
+banner-edit-175 draft/error size=640x520 Hrange=0
+cloud-175 narrow size=640x520 Hrange=0
+cloud-175 wide size=1000x640 Hrange=0
+cloud-175 reversed size=640x520 Hrange=0
+cloud-175 draft wide size=1000x640 Hrange=0
+cloud-175 draft/error size=640x520 Hrange=0
+rules-200 narrow size=640x520 Hrange=0
+rules-200 wide size=1000x640 Hrange=0
+rules-200 reversed size=640x520 Hrange=0
+rules-200 draft wide size=1000x640 Hrange=0
+rules-200 draft/error size=640x520 Hrange=0
+rules-history-populated-200 narrow size=640x520 Hrange=0
+rules-history-populated-200 wide size=1000x640 Hrange=0
+rules-history-populated-200 reversed size=640x520 Hrange=0
+rules-history-populated-200 draft wide size=1000x640 Hrange=0
+rules-history-populated-200 draft/error size=640x520 Hrange=0
+rules-history-corrupt-200 narrow size=640x520 Hrange=0
+rules-history-corrupt-200 wide size=1000x640 Hrange=0
+rules-history-corrupt-200 reversed size=640x520 Hrange=0
+rules-history-corrupt-200 draft wide size=1000x640 Hrange=0
+rules-history-corrupt-200 draft/error size=640x520 Hrange=0
+vault-200 narrow size=640x520 Hrange=0
+vault-200 wide size=1000x640 Hrange=0
+vault-200 reversed size=640x520 Hrange=0
+vault-200 draft wide size=1000x640 Hrange=0
+vault-200 draft/error size=640x520 Hrange=0
+banner-create-200 narrow size=640x520 Hrange=0
+banner-create-200 wide size=1000x640 Hrange=0
+banner-create-200 reversed size=640x520 Hrange=0
+banner-create-200 draft wide size=1000x640 Hrange=0
+banner-create-200 draft/error size=640x520 Hrange=0
+banner-edit-200 narrow size=640x520 Hrange=0
+banner-edit-200 wide size=1000x640 Hrange=0
+banner-edit-200 reversed size=640x520 Hrange=0
+banner-edit-200 draft wide size=1000x640 Hrange=0
+banner-edit-200 draft/error size=640x520 Hrange=0
+cloud-200 narrow size=640x520 Hrange=0
+cloud path metrics row=388x124 hint=242x124 minimum=239x124 root=0:54 browse=70:54 HFW=-1
+cloud-200 wide size=1000x640 Hrange=0
+cloud-200 reversed size=640x520 Hrange=0
+cloud-200 draft wide size=1000x640 Hrange=0
+cloud-200 draft/error size=640x520 Hrange=0

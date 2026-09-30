@@ -155,3 +155,132 @@ protected:
 private:
     QBoxLayout* row_;
 };
+
+// Secondary commands wrap individually: two commands that fit stay together,
+// rather than turning the whole group into a vertical stack at one breakpoint.
+class QtDialogFlowLayout final : public QLayout {
+public:
+    explicit QtDialogFlowLayout(QWidget* parent = nullptr,
+        int horizontalSpacing = 8, int verticalSpacing = 4)
+        : QLayout(parent), horizontalSpacing_(std::max(0, horizontalSpacing)),
+          verticalSpacing_(std::max(0, verticalSpacing)) {
+        setContentsMargins(0, 0, 0, 0);
+    }
+
+    ~QtDialogFlowLayout() override {
+        while (auto* item = takeAt(0)) delete item;
+    }
+
+    void addItem(QLayoutItem* item) override {
+        items_.append(item);
+        invalidate();
+    }
+    int count() const override { return items_.size(); }
+    QLayoutItem* itemAt(int index) const override { return items_.value(index, nullptr); }
+    QLayoutItem* takeAt(int index) override {
+        if (index < 0 || index >= items_.size()) return nullptr;
+        auto* item = items_.takeAt(index);
+        invalidate();
+        return item;
+    }
+    Qt::Orientations expandingDirections() const override { return {}; }
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override {
+        return doLayout(QRect(0, 0, width, 0), false);
+    }
+    QSize sizeHint() const override {
+        // Prefer one row, but do not make its total width the minimum width.
+        // The enclosing form can then measure the actual wrapped height.
+        int width = 0;
+        int height = 0;
+        int visibleItems = 0;
+        for (const auto* item : items_) {
+            if (!participates(item)) continue;
+            const auto hint = intrinsicSize(item);
+            width += hint.width() + (visibleItems++ ? horizontalSpacing_ : 0);
+            height = std::max(height, hint.height());
+        }
+        const auto margins = contentsMargins();
+        return QSize(width + margins.left() + margins.right(),
+            height + margins.top() + margins.bottom());
+    }
+    QSize minimumSize() const override {
+        QSize result(0, 0);
+        for (const auto* item : items_) {
+            if (participates(item)) result = result.expandedTo(intrinsicSize(item));
+        }
+        const auto margins = contentsMargins();
+        return result + QSize(margins.left() + margins.right(),
+            margins.top() + margins.bottom());
+    }
+    void setGeometry(const QRect& rect) override {
+        QLayout::setGeometry(rect);
+        doLayout(rect, true);
+    }
+
+private:
+    static bool participates(const QLayoutItem* item) {
+        return !item->isEmpty() && (!item->widget() || !item->widget()->isHidden());
+    }
+    static QSize intrinsicSize(const QLayoutItem* item) {
+        return item->sizeHint().expandedTo(item->minimumSize());
+    }
+    int doLayout(const QRect& rect, bool place) const {
+        const auto margins = contentsMargins();
+        const int availableWidth = std::max(0,
+            rect.width() - margins.left() - margins.right());
+        const int left = rect.x() + margins.left();
+        const int top = rect.y() + margins.top();
+        int x = left;
+        int y = top;
+        int rowWidth = 0;
+        int rowHeight = 0;
+        bool rowHasItems = false;
+        for (auto* item : items_) {
+            if (!participates(item)) continue;
+            const QSize hint = intrinsicSize(item);
+            const int gap = rowHasItems ? horizontalSpacing_ : 0;
+            if (rowHasItems && rowWidth + gap + hint.width() > availableWidth) {
+                y += rowHeight + verticalSpacing_;
+                x = left;
+                rowWidth = 0;
+                rowHeight = 0;
+                rowHasItems = false;
+            }
+            if (rowHasItems) {
+                x += horizontalSpacing_;
+                rowWidth += horizontalSpacing_;
+            }
+            const int height = item->hasHeightForWidth()
+                ? std::max(hint.height(), item->heightForWidth(hint.width())) : hint.height();
+            if (place) item->setGeometry(QRect(x, y, hint.width(), height));
+            x += hint.width();
+            rowWidth += hint.width();
+            rowHeight = std::max(rowHeight, height);
+            rowHasItems = true;
+        }
+        return y - rect.y() + rowHeight + margins.bottom();
+    }
+
+    QList<QLayoutItem*> items_;
+    int horizontalSpacing_;
+    int verticalSpacing_;
+};
+
+class QtDialogFlowRow final : public QWidget {
+public:
+    explicit QtDialogFlowRow(QWidget* parent = nullptr,
+        int horizontalSpacing = 8, int verticalSpacing = 4)
+        : QWidget(parent), flow_(new QtDialogFlowLayout(this, horizontalSpacing, verticalSpacing)) {
+        auto policy = QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        policy.setHeightForWidth(true);
+        setSizePolicy(policy);
+    }
+
+    void addWidget(QWidget* widget) { flow_->addWidget(widget); }
+    QSize minimumSizeHint() const override { return flow_->minimumSize(); }
+    int heightForWidth(int width) const override { return flow_->heightForWidth(width); }
+
+private:
+    QtDialogFlowLayout* flow_;
+};
