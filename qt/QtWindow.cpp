@@ -758,6 +758,18 @@ static void applyQtTextScaleMetrics(QWidget* root, int scalePercent) {
     const auto scale = [scalePercent](int value) { return scaledUiMetric(value, scalePercent); };
     for (auto* widget : widgets) {
         bool ok = false;
+        if (!widget->property("qtTextScaleIconSize").isValid()) {
+            if (auto* button = qobject_cast<QAbstractButton*>(widget); button && !button->icon().isNull())
+                widget->setProperty("qtTextScaleIconSize", button->iconSize());
+            else if (auto* view = qobject_cast<QAbstractItemView*>(widget); view && view->iconSize().isValid())
+                widget->setProperty("qtTextScaleIconSize", view->iconSize());
+        }
+        const auto baseIconSize = widget->property("qtTextScaleIconSize").toSize();
+        if (baseIconSize.isValid()) {
+            const QSize iconSize(scale(baseIconSize.width()), scale(baseIconSize.height()));
+            if (auto* button = qobject_cast<QAbstractButton*>(widget)) button->setIconSize(iconSize);
+            else if (auto* view = qobject_cast<QAbstractItemView*>(widget)) view->setIconSize(iconSize);
+        }
         if (!widget->property("qtTextScaleFixedWidth").isValid() &&
             widget->minimumWidth() > 0 && widget->minimumWidth() == widget->maximumWidth())
             widget->setProperty("qtTextScaleFixedWidth", widget->minimumWidth());
@@ -868,33 +880,39 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     header->addWidget(profiles_);
     const auto drawHeaderIcon = [](int kind) {
-        QPixmap pixmap(20, 20);
-        pixmap.fill(Qt::transparent);
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(QPen(QColor("#b9b9c4"), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.setBrush(Qt::NoBrush);
-        if (kind == 0) { // Copy
-            painter.drawRoundedRect(QRectF(2.5, 6.5, 10, 10), 1.5, 1.5);
-            painter.drawRoundedRect(QRectF(7.5, 2.5, 10, 10), 1.5, 1.5);
-        } else if (kind == 1) { // Refresh
-            painter.drawArc(QRectF(3, 3, 14, 14), 40 * 16, 285 * 16);
-            QPainterPath arrow;
-            arrow.moveTo(15.5, 2.5); arrow.lineTo(18, 3.2); arrow.lineTo(17.3, 5.8);
-            painter.drawPath(arrow);
-        } else if (kind == 2) { // Open shortcut
-            painter.drawRoundedRect(QRectF(2.5, 7, 10, 10), 1.5, 1.5);
-            QPainterPath arrow;
-            arrow.moveTo(9, 11); arrow.lineTo(17, 3); arrow.lineTo(12.5, 3);
-            arrow.moveTo(17, 3); arrow.lineTo(17, 7.5);
-            painter.drawPath(arrow);
-        } else { // Focus timer
-            painter.drawEllipse(QRectF(3, 3, 14, 14));
-            painter.drawLine(QPointF(10, 5.5), QPointF(10, 10));
-            painter.drawLine(QPointF(10, 10), QPointF(13.5, 12));
-            painter.drawLine(QPointF(7.5, 1.5), QPointF(12.5, 1.5));
-        }
-        return QIcon(pixmap);
+        const auto render = [kind](int size) {
+            QPixmap pixmap(size, size);
+            pixmap.fill(Qt::transparent);
+            QPainter painter(&pixmap);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.scale(size / 20.0, size / 20.0);
+            painter.setPen(QPen(QColor("#b9b9c4"), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.setBrush(Qt::NoBrush);
+            if (kind == 0) { // Copy
+                painter.drawRoundedRect(QRectF(2.5, 6.5, 10, 10), 1.5, 1.5);
+                painter.drawRoundedRect(QRectF(7.5, 2.5, 10, 10), 1.5, 1.5);
+            } else if (kind == 1) { // Refresh
+                painter.drawArc(QRectF(3, 3, 14, 14), 40 * 16, 285 * 16);
+                QPainterPath arrow;
+                arrow.moveTo(15.5, 2.5); arrow.lineTo(18, 3.2); arrow.lineTo(17.3, 5.8);
+                painter.drawPath(arrow);
+            } else if (kind == 2) { // Open shortcut
+                painter.drawRoundedRect(QRectF(2.5, 7, 10, 10), 1.5, 1.5);
+                QPainterPath arrow;
+                arrow.moveTo(9, 11); arrow.lineTo(17, 3); arrow.lineTo(12.5, 3);
+                arrow.moveTo(17, 3); arrow.lineTo(17, 7.5);
+                painter.drawPath(arrow);
+            } else { // Focus timer
+                painter.drawEllipse(QRectF(3, 3, 14, 14));
+                painter.drawLine(QPointF(10, 5.5), QPointF(10, 10));
+                painter.drawLine(QPointF(10, 10), QPointF(13.5, 12));
+                painter.drawLine(QPointF(7.5, 1.5), QPointF(12.5, 1.5));
+            }
+            return pixmap;
+        };
+        QIcon icon;
+        for (const int size : {20, 40, 60}) icon.addPixmap(render(size), QIcon::Normal);
+        return icon;
     };
     profileRecentButton_ = new QToolButton;
     profileRecentButton_->setObjectName("recentProfiles");
@@ -964,6 +982,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     cloudQuickButton_ = new QToolButton;
     cloudQuickButton_->setObjectName("quickCloudSync");
     cloudQuickButton_->setText(QString::fromUtf8("Облако"));
+    cloudQuickButton_->setIconSize(QSize(14, 14));
     cloudQuickButton_->setAccessibleName(QString::fromUtf8("Быстрая синхронизация с облаком"));
     cloudQuickButton_->setAccessibleDescription(QString::fromUtf8(
         "Запускает только настроенные направления загрузки и выгрузки. Стрелка открывает раздел облака."));
@@ -1318,11 +1337,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigationIndicatorAnimation_->setObjectName("navigationIndicatorAnimation");
     navigationIndicatorAnimation_->setDuration(180);
     navigationIndicatorAnimation_->setEasingCurve(QEasingCurve::OutCubic);
-    const auto drawNavigationIcon = [](int index, const QColor& color) {
-        QPixmap pixmap(20, 20);
+    const auto drawNavigationIcon = [](int index, const QColor& color, int size) {
+        QPixmap pixmap(size, size);
         pixmap.fill(Qt::transparent);
         QPainter painter(&pixmap);
         painter.setRenderHint(QPainter::Antialiasing);
+        painter.scale(size / 20.0, size / 20.0);
         painter.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         QPainterPath path;
@@ -1397,8 +1417,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     for (int index = 0; index < navigation_->count(); ++index) {
         auto* item = navigation_->item(index);
         QIcon icon;
-        icon.addPixmap(drawNavigationIcon(index, QColor("#b9b9c4")), QIcon::Normal);
-        icon.addPixmap(drawNavigationIcon(index, QColor("#eeeeef")), QIcon::Selected);
+        for (const int size : {20, 40, 60}) {
+            icon.addPixmap(drawNavigationIcon(index, QColor("#b9b9c4"), size), QIcon::Normal);
+            icon.addPixmap(drawNavigationIcon(index, QColor("#eeeeef"), size), QIcon::Selected);
+        }
         item->setIcon(icon);
         item->setData(Qt::AccessibleTextRole, item->text());
         const auto tooltip = navigationHotkeys[size_t(index)];
@@ -5300,6 +5322,9 @@ void QtWindow::render() {
                 : assigneeNames.mid(0, 2).join(QStringLiteral(", "));
             if (assigneeNames.size() > 2) assigneeSummary += QStringLiteral(" +%1").arg(assigneeNames.size() - 2);
             const int previousRowCount = table_->rowCount();
+            const QString taskTitle = q(task->title).trimmed().isEmpty()
+                ? q(AppTaskDisplayTitle(*task)) : q(task->title);
+            // Preserve canonical search terms; the visible title has its own project column.
             row(task->id, {q(AppTaskDisplayTitle(*task)), timeText(task->createdAt),
                 q(project == data.projects.end() ? task->project : project->name), assigneeSummary,
                 q(AppTaskStatusLabel(task->status)), q(AppTaskPriorityLabel(task->priority)), timeText(task->deadlineAt),
@@ -5315,6 +5340,16 @@ void QtWindow::render() {
                     }
                 }
                 auto* titleItem = table_->item(previousRowCount, 0);
+                titleItem->setText(taskTitle);
+                const QString titleContext = QString::fromUtf8("%1\nПроект: %2\nЭтап: %3\nСтатус: %4\nПриоритет: %5\nСрок: %6\nИсполнители: %7")
+                    .arg(taskTitle,
+                        project == data.projects.end() ? q(task->project) : q(project->name),
+                        stage == data.pipelineSteps.end() ? q(task->pipelineStep) : q(stage->title),
+                        q(AppTaskStatusLabel(task->status)), q(AppTaskPriorityLabel(task->priority)),
+                        timeText(task->deadlineAt), assigneeNames.isEmpty()
+                            ? QString::fromUtf8("Не назначена") : assigneeNames.join(QStringLiteral(", ")));
+                titleItem->setToolTip(titleContext);
+                titleItem->setData(Qt::AccessibleDescriptionRole, titleContext);
                 const bool isFocus = focusTask && focusTask->id == task->id;
                 if (isFocus || view.overdue) {
                     const QColor base = palette().color(QPalette::Base);
@@ -5334,7 +5369,8 @@ void QtWindow::render() {
                 if (!view.alerts.isEmpty()) {
                     const auto explanation = view.alerts.join('\n');
                     titleItem->setToolTip(titleItem->toolTip() + QStringLiteral("\n\n%1").arg(explanation));
-                    titleItem->setData(Qt::AccessibleDescriptionRole, explanation);
+                    titleItem->setData(Qt::AccessibleDescriptionRole,
+                        titleContext + QStringLiteral("\n\n%1").arg(explanation));
                 }
             }
         }
@@ -8393,7 +8429,6 @@ void QtWindow::updateCloudQuickStatus() {
         }
     }
     cloudQuickButton_->setIcon(qtStatusDotIcon(color));
-    cloudQuickButton_->setIconSize(QSize(14, 14));
     cloudQuickButton_->setToolTip(status);
     cloudQuickButton_->setAccessibleDescription(QString::fromUtf8("Запускает настроенные направления синхронизации. Состояние: %1")
         .arg(status));

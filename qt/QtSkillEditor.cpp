@@ -4,6 +4,7 @@
 #include "AppUtils.h"
 #include "AppWorkspaceStorageLock.h"
 #include "Profile.h"
+#include "QtScrollableDialog.h"
 #include <QtWidgets>
 #include <QSaveFile>
 #include <QTemporaryDir>
@@ -317,15 +318,34 @@ QString MergeQtSkills(QtWorkspace& workspace, const std::string& restoreProfileI
 bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string& id,
                      const std::string& restoreProfileId) {
     if (!id.empty() && !workspace.catalog.contains_id(id)) return false;
-    QDialog dialog(parent);
+    QtScrollableDialog dialog(parent, QSize(640, 520), QSize(420, 300));
     dialog.setObjectName("skillEditor");
     dialog.setWindowTitle(QString::fromUtf8(id.empty() ? "Новый навык" : "Редактирование навыка"));
-    dialog.setMinimumWidth(480);
-    auto* form = new QFormLayout(&dialog);
+    dialog.scrollArea()->setAccessibleName(QString::fromUtf8("Поля редактора навыка"));
+    auto* form = dialog.formLayout();
+    form->setHorizontalSpacing(dialog.scaledMetric(8));
+    form->setVerticalSpacing(dialog.scaledMetric(8));
+    form->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFormAlignment(Qt::AlignTop);
+    const auto addField = [form](const char* key, const char* caption, const QString& details, QWidget* input) {
+        auto* label = new QLabel(QString::fromUtf8(caption));
+        label->setObjectName(QString::fromLatin1(key) + QStringLiteral("Label"));
+        label->setTextFormat(Qt::PlainText);
+        label->setWordWrap(true);
+        label->setBuddy(input);
+        label->setToolTip(details);
+        input->setAccessibleName(QString::fromUtf8(caption));
+        input->setToolTip(details);
+        form->addRow(label, input);
+    };
     auto* name = new QLineEdit(id.empty() ? QString() : q(workspace.catalog.display_name(id)));
     name->setObjectName("skillName");
+    const QString nameDetails = QString::fromUtf8("Обязательное название навыка.");
+    name->setAccessibleDescription(nameDetails);
     auto* description = new QLineEdit(id.empty() ? QString() : q(workspace.catalog.description(id)));
     description->setObjectName("skillDescription");
+    const QString descriptionDetails = QString::fromUtf8("Описание обязательно; формат каталога поддерживает только одну строку.");
+    description->setAccessibleDescription(descriptionDetails);
     auto* category = new QLineEdit(id.empty() ? QString() : q(workspace.catalog.category(id)));
     category->setObjectName("skillCategory");
     auto* weight = new QDoubleSpinBox;
@@ -334,19 +354,41 @@ bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string&
     weight->setDecimals(6);
     weight->setSingleStep(0.05);
     weight->setValue(id.empty() ? 1.0 : workspace.catalog.weight(id));
-    form->addRow(QString::fromUtf8("Название"), name);
-    form->addRow(QString::fromUtf8("Описание"), description);
-    form->addRow(QString::fromUtf8("Категория"), category);
-    form->addRow(QString::fromUtf8("Вес"), weight);
+    addField("skillName", "Название", nameDetails, name);
+    addField("skillDescription", "Описание", descriptionDetails, description);
+    addField("skillCategory", "Категория", QString::fromUtf8("Необязательная категория каталога."), category);
+    addField("skillWeight", "Вес", QString::fromUtf8("Допустимый вес от 0,5 до 1,6; шаг изменения — 0,05."), weight);
+    name->setAccessibleName(QString::fromUtf8("Название навыка"));
+    description->setAccessibleName(QString::fromUtf8("Описание навыка"));
+    category->setAccessibleName(QString::fromUtf8("Категория навыка"));
+    category->setAccessibleDescription(category->toolTip());
+    weight->setAccessibleName(QString::fromUtf8("Вес навыка"));
+    weight->setAccessibleDescription(weight->toolTip());
+    for (auto* field : {name, description, category}) {
+        field->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        const QString details = field->toolTip();
+        const auto updateToolTip = [field, details](const QString& value) {
+            field->setToolTip(value.isEmpty() ? details : details + QStringLiteral("\n\n") + value);
+        };
+        updateToolTip(field->text());
+        QObject::connect(field, &QLineEdit::textChanged, field, updateToolTip);
+    }
     auto* professionList = new QListWidget;
     professionList->setObjectName("skillProfessions");
     professionList->setAccessibleName(QString::fromUtf8("Профессии, связанные с навыком"));
-    professionList->setAccessibleDescription(QString::fromUtf8("Отметьте профессии, которым будет назначен этот навык."));
-    professionList->setMaximumHeight(120);
+    professionList->setAccessibleDescription(QString::fromUtf8("Отметьте профессии, которым будет назначен этот навык. Пробел меняет отметку текущей строки."));
+    professionList->setMinimumHeight(dialog.scaledMetric(64));
+    professionList->setMaximumHeight(dialog.scaledMetric(120));
+    professionList->setWordWrap(true);
+    professionList->setTextElideMode(Qt::ElideNone);
+    professionList->setResizeMode(QListView::Adjust);
+    professionList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     const auto previousBindings = workspace.catalog.professions(id);
     auto addProfession = [&](const std::string& key, const QString& title, bool checked) {
         auto* item = new QListWidgetItem(title, professionList);
         item->setData(Qt::UserRole, q(key));
+        item->setData(Qt::AccessibleTextRole, title);
+        item->setToolTip(title);
         item->setCheckState(checked ? Qt::Checked : Qt::Unchecked);
     };
     for (const auto& binding : previousBindings) {
@@ -358,21 +400,50 @@ bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string&
         if (std::find(previousBindings.begin(), previousBindings.end(), p.id) == previousBindings.end()) addProfession(p.id, q(p.name), false);
     form->addRow(QString::fromUtf8("Профессии"), professionList);
     auto* hint = new QLabel(QString::fromUtf8("Описание — одна строка. Накопленный XP не меняется. Недоступные связи сохраняются, пока вы сами их не снимете."));
+    hint->setObjectName("skillEditorHint");
+    hint->setTextFormat(Qt::PlainText);
     hint->setWordWrap(true);
     form->addRow(hint);
     auto* notice = new QLabel;
     notice->setObjectName("editorNotice");
     notice->setTextFormat(Qt::PlainText);
     notice->setWordWrap(true);
-    form->addRow(notice);
+    notice->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    notice->setAccessibleName(QString::fromUtf8("Результат сохранения навыка"));
+    dialog.footerLayout()->addWidget(notice);
+    notice->hide();
+    const auto clearNotice = [notice, name, description, nameDetails, descriptionDetails] {
+        notice->clear(); notice->hide();
+        notice->setAccessibleName(QString::fromUtf8("Результат сохранения навыка"));
+        notice->setAccessibleDescription({});
+        if (!name->text().trimmed().isEmpty()) name->setAccessibleDescription(nameDetails);
+        if (!description->text().trimmed().isEmpty()) description->setAccessibleDescription(descriptionDetails);
+    };
     for (auto* field : {name, description, category})
-        QObject::connect(field, &QLineEdit::textChanged, notice, &QLabel::clear);
-    QObject::connect(weight, &QDoubleSpinBox::valueChanged, notice, &QLabel::clear);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
-    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
-    form->addRow(buttons);
+        QObject::connect(field, &QLineEdit::textChanged, &dialog, clearNotice);
+    QObject::connect(weight, &QDoubleSpinBox::valueChanged, &dialog, clearNotice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    buttons->setObjectName("skillEditorButtons");
+    auto* save = buttons->button(QDialogButtonBox::Save);
+    auto* cancel = buttons->button(QDialogButtonBox::Cancel);
+    save->setObjectName("skillSave");
+    cancel->setObjectName("skillCancel");
+    save->setText(QString::fromUtf8("Сохранить"));
+    cancel->setText(QString::fromUtf8("Отмена"));
+    save->setAccessibleName(QString::fromUtf8("Сохранить навык"));
+    cancel->setAccessibleName(QString::fromUtf8("Отменить редактирование навыка"));
+    save->setProperty("primary", true);
+    save->setMinimumHeight(dialog.scaledMetric(32));
+    save->setAutoDefault(true);
+    save->setDefault(true);
+    cancel->setAutoDefault(false);
+    dialog.footerLayout()->addWidget(buttons);
+    QWidget::setTabOrder(name, description);
+    QWidget::setTabOrder(description, category);
+    QWidget::setTabOrder(category, weight);
+    QWidget::setTabOrder(weight, professionList);
+    QWidget::setTabOrder(professionList, save);
+    QWidget::setTabOrder(save, cancel);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
         std::vector<std::string> selected;
@@ -398,6 +469,24 @@ bool ShowSkillEditor(QWidget* parent, QtWorkspace& workspace, const std::string&
         const auto error = SaveQtSkill(workspace, id, name->text(), weight->value(), description->text(), category->text(), selected);
         if (!error.isEmpty()) { notice->setText(error); return; }
         dialog.accept();
+    });
+    // This presentation callback follows the unchanged persistence handler.
+    // A failed save preserves the draft and only reveals its existing error.
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (dialog.result() == QDialog::Accepted || notice->text().isEmpty()) return;
+        notice->show();
+        notice->setAccessibleName(notice->text());
+        notice->setAccessibleDescription(QString::fromUtf8("Ошибка сохранения навыка."));
+        const bool requiredError = notice->text() == QString::fromUtf8("Название и описание обязательны.") ||
+            notice->text() == QString::fromUtf8("Проверьте название, описание и вес целевого навыка.");
+        QLineEdit* field = requiredError && name->text().trimmed().isEmpty() ? name
+            : requiredError && description->text().trimmed().isEmpty() ? description : nullptr;
+        if (field) {
+            field->setAccessibleDescription(notice->text());
+            dialog.formLayout()->activate();
+            dialog.scrollArea()->ensureWidgetVisible(field, 0, dialog.scaledMetric(8));
+            field->setFocus(Qt::OtherFocusReason);
+        }
     });
     return dialog.exec() == QDialog::Accepted;
 }

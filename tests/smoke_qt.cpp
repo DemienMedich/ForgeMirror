@@ -3382,6 +3382,507 @@ static bool TestQtWorkingEditorLayout(QApplication& app) {
     return checked;
 }
 
+static bool TestQtCatalogProfileLayout(QApplication& app) {
+    const auto originalFont = app.font();
+    const auto originalStyle = app.styleSheet();
+    const auto originalBase = app.property("forgeBasePointSize");
+    const QString clipboardBefore = QApplication::clipboard()->text();
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty()) QDir().mkpath(artifacts);
+    bool checked = true;
+    auto record = [&](bool ok, const QString& context) {
+        if (!ok) std::cerr << "Catalog/profile layout: " << context.toStdString() << '\n';
+        checked &= ok;
+    };
+    auto settle = [] { QApplication::processEvents(); QApplication::processEvents(); };
+    const auto driveModal = [&](const QString& expectedObjectName, const QString& context,
+        std::function<void(QDialog*)> driver) {
+        const int requiredLoopLevel = QThread::currentThread()->loopLevel() + 1;
+        // An initial zero-shot can run inside QWidget::show(), before exec()
+        // installs its event loop. Closing there loses the reject/accept exit.
+        QTimer::singleShot(0, &app, [&, expectedObjectName, context, driver, requiredLoopLevel] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!dialog) { record(false, context + " active modal"); return; }
+            if (!expectedObjectName.isEmpty() && dialog->objectName() != expectedObjectName) {
+                record(false, context + " expected modal");
+                QTimer::singleShot(20, dialog, [dialog] { dialog->reject(); });
+                return;
+            }
+            auto* ready = new QTimer(dialog);
+            ready->setInterval(1);
+            QObject::connect(ready, &QTimer::timeout, dialog, [&, ready, dialog, context, driver, requiredLoopLevel] {
+                // Time alone is not a readiness signal: font/layout work can
+                // pump events during show(). Wait for this dialog's exec(),
+                // including the extra level of a nested editor/input dialog.
+                if (QThread::currentThread()->loopLevel() < requiredLoopLevel) return;
+                // Keep the sender (and its captured driver) alive through
+                // reentrant processEvents()/nested dialogs inside the driver.
+                ready->stop();
+                std::cout << context.toStdString() << " driver-loop=" << QThread::currentThread()->loopLevel()
+                    << " required=" << requiredLoopLevel << '\n';
+                if (QGuiApplication::platformName() != "offscreen") {
+                    dialog->showNormal(); dialog->raise(); dialog->activateWindow();
+                    record(QTest::qWaitForWindowExposed(dialog, 2000), context + " native window exposed");
+                    record(QTest::qWaitForWindowActive(dialog, 2000), context + " native window active");
+                }
+                driver(dialog);
+                ready->deleteLater();
+            });
+            ready->start();
+        });
+    };
+    auto capture = [&](QDialog* dialog, const QString& stem, int scale) {
+        if (!artifacts.isEmpty() && (scale == 100 || scale == 200))
+            record(dialog->grab().save(artifacts + '/' + stem + ".png"), stem + " capture");
+    };
+    auto inspect = [&](QDialog* dialog, const QString& stem, QSize requested) {
+        record(dialog->size() == requested.boundedTo(dialog->maximumSize()), stem + " bounded size");
+        auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+        record(footer && footer->isVisible(), stem + " persistent footer");
+        int primaries = 0;
+        for (auto* button : dialog->findChildren<QPushButton*>()) {
+            if (!button->isVisible()) continue;
+            if (button->property("primary").toBool()) {
+                ++primaries;
+                record(button->isDefault(), stem + " primary is default");
+            }
+            if (footer && footer->isAncestorOf(button))
+                record(dialog->rect().contains(QRect(button->mapTo(dialog, QPoint()), button->size())),
+                    stem + " footer command bounds " + button->objectName());
+        }
+        record(primaries == 1, stem + " one primary");
+        for (auto* scroll : dialog->findChildren<QScrollArea*>()) {
+            if (!scroll->isVisible()) continue;
+            auto* body = scroll->widget();
+            record(body && body->width() <= scroll->viewport()->width() && scroll->horizontalScrollBar()->maximum() == 0,
+                stem + " content width");
+            if (!body) continue;
+            for (auto* form : body->findChildren<QFormLayout*>()) {
+                for (int row = 0; row < form->rowCount(); ++row) {
+                    for (auto role : {QFormLayout::LabelRole, QFormLayout::FieldRole, QFormLayout::SpanningRole}) {
+                        auto* item = form->itemAt(row, role);
+                        auto* field = item ? item->widget() : nullptr;
+                        if (!field || !field->isVisible()) continue;
+                        record(body->rect().contains(QRect(field->mapTo(body, QPoint()), field->size())),
+                            stem + " field bounds " + field->objectName());
+                        if (auto* label = qobject_cast<QLabel*>(field); label && label->wordWrap())
+                            record(label->height() >= label->heightForWidth(label->width()), stem + " wrapped label");
+                    }
+                }
+            }
+        }
+        if (QGuiApplication::platformName() != "offscreen")
+            record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()), stem + " screen bounds");
+        std::cout << stem.toStdString() << " size=" << dialog->width() << 'x' << dialog->height()
+            << " primaries=" << primaries << '\n';
+    };
+    auto cancel = [&](QDialog* dialog, const QString& stem) {
+        auto* box = dialog->findChild<QDialogButtonBox*>();
+        auto* button = box ? box->button(QDialogButtonBox::Cancel) : nullptr;
+        if (!button && box) button = box->button(QDialogButtonBox::Close);
+        if (!button) { record(false, stem + " Cancel"); dialog->reject(); return; }
+        QTimer modalGuard;
+        modalGuard.setSingleShot(true);
+        QObject::connect(&modalGuard, &QTimer::timeout, &app, [&] {
+            record(false, stem + " Cancel opened a blocking modal");
+            auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (modal && modal != dialog) {
+                if (auto* question = qobject_cast<QMessageBox*>(modal)) {
+                    if (auto* no = question->button(QMessageBox::No)) no->click();
+                    else if (auto* cancel = question->button(QMessageBox::Cancel)) cancel->click();
+                    else question->reject();
+                } else modal->reject();
+            }
+            if (dialog->isVisible()) dialog->reject();
+        });
+        modalGuard.start(250);
+        button->setFocus(); QTest::keyClick(button, Qt::Key_Return); settle();
+        modalGuard.stop();
+        record(!dialog->isVisible(), stem + " focused Cancel Return");
+        if (dialog->isVisible()) dialog->reject();
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) { checked = false; break; }
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+        QtWorkspace workspace(directory);
+        workspace.data.professions = {
+            {"catalog-artist", u8"Художник персонажей, материалов и окружения", "Catalog fixture"},
+            {"catalog-engineer", u8"Инженер инструментов и автоматизации производства", "Catalog fixture"}
+        };
+        record(AppSaveProfessionsData(directory, workspace.data.professions), "profession fixture");
+        workspace.catalog.add_skill("Catalog fixture skill", 1.25, "Single-line fixture description", "Art",
+            {"catalog-artist", "missing-catalog-profession"});
+        const auto skillId = workspace.catalog.id_for_name("Catalog fixture skill");
+        if (!skillId) { checked = false; break; }
+        Profile profile(u8"Анна Смирнова — художник персонажей и окружения");
+        profile.set_login("synthetic-catalog-layout-login");
+        profile.set_password_encoded(EncodePassword("synthetic-layout-password"));
+        profile.set_profession_id("catalog-artist");
+        profile.set_total_xp(777); profile.set_wallet_balance(42);
+        const auto created = workspace.storage->create_profile(profile);
+        if (!created) { checked = false; break; }
+        Profile blockedProfile(u8"Борис Александров — инженер инструментов и автоматизации производства");
+        blockedProfile.set_login("synthetic-blocked-layout-login");
+        blockedProfile.set_password_encoded(EncodePassword("synthetic-blocked-layout-password"));
+        blockedProfile.set_profession_id("catalog-engineer");
+        blockedProfile.set_blocked(true);
+        const auto blockedCreated = workspace.storage->create_profile(blockedProfile);
+        Profile archivedProfile(u8"Виктория Кузнецова — архивный профиль специалиста по материалам окружения");
+        archivedProfile.set_login("synthetic-archived-layout-login");
+        archivedProfile.set_password_encoded(EncodePassword("synthetic-archived-layout-password"));
+        const auto archivedCreated = workspace.storage->create_profile(archivedProfile);
+        if (!blockedCreated || !archivedCreated || !workspace.storage->set_archived(archivedCreated->id, true) ||
+            !workspace.storage->set_active_profile(created->id)) { checked = false; break; }
+        workspace.reload();
+        const QString profileId = QString::fromStdString(created->id);
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        SaveQtDisplaySettings(directory, settings); ApplyQtDisplaySettings(app, settings);
+        auto bytes = [&](const QString& path) {
+            QFile file(temp.path() + '/' + path);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+        };
+        const auto skillsBefore = bytes("skills.txt");
+        const auto professionsBefore = bytes("meta/professions.txt");
+        const auto profileBefore = bytes(profileId + ".ini");
+        const auto auditBefore = bytes("meta/profile-audit.log");
+        for (bool edit : {false, true}) {
+            const auto stem = QStringLiteral("skill-editor-%1-%2").arg(edit ? "edit" : "new").arg(scale);
+            bool visited = false;
+            driveModal("skillEditor", stem, [&, edit, stem](QDialog* dialog) {
+                visited = true; dialog->resize(640, 520); settle(); inspect(dialog, stem, QSize(640, 520));
+                capture(dialog, stem, scale);
+                auto* name = dialog->findChild<QLineEdit*>("skillName");
+                auto* description = dialog->findChild<QLineEdit*>("skillDescription");
+                auto* weight = dialog->findChild<QDoubleSpinBox*>("skillWeight");
+                auto* links = dialog->findChild<QListWidget*>("skillProfessions");
+                auto* box = dialog->findChild<QDialogButtonBox*>();
+                if (!name || !description || !weight || !links || !box) { dialog->reject(); record(false, stem + " fields"); return; }
+                const auto initialBindings = workspace.catalog.professions(edit ? *skillId : std::string{});
+                record(links->count() >= 2 && (!edit || initialBindings.size() == 2), stem + " bindings");
+                links->setCurrentRow(0); links->setFocus(); const auto originalCheck = links->item(0)->checkState();
+                QTest::keyClick(links, Qt::Key_Space); record(links->item(0)->checkState() != originalCheck, stem + " Space link");
+                QTest::keyClick(links, Qt::Key_Space);
+                description->setText("Unsaved description"); name->clear(); weight->setFocus();
+                box->button(QDialogButtonBox::Save)->click(); settle();
+                auto* error = dialog->findChild<QLabel*>("editorNotice");
+                record(dialog->isVisible() && error && !error->text().isEmpty() && name->hasFocus(), stem + " required title focus");
+                inspect(dialog, stem + " validation", QSize(640, 520));
+                name->setText(edit ? "Unsaved skill draft edit" : "Unsaved skill draft new"); description->clear(); weight->setFocus();
+                box->button(QDialogButtonBox::Save)->click(); settle();
+                record(dialog->isVisible() && description->hasFocus(), stem + " required description focus");
+                description->setText("Unsaved description");
+                cancel(dialog, stem);
+            });
+            record(!ShowSkillEditor(nullptr, workspace, edit ? *skillId : std::string{}) && visited && bytes("skills.txt") == skillsBefore,
+                stem + " cancel leaves data unchanged");
+        }
+        for (bool edit : {false, true}) {
+            const auto stem = QStringLiteral("profession-editor-%1-%2").arg(edit ? "edit" : "new").arg(scale);
+            bool visited = false;
+            driveModal("professionEditor", stem, [&, edit, stem](QDialog* dialog) {
+                visited = true; dialog->resize(560, 360); settle(); inspect(dialog, stem, QSize(560, 360)); capture(dialog, stem, scale);
+                auto* name = dialog->findChild<QLineEdit*>("professionName");
+                auto* description = dialog->findChild<QLineEdit*>("professionDescription");
+                auto* box = dialog->findChild<QDialogButtonBox*>();
+                if (!name || !description || !box) { dialog->reject(); record(false, stem + " fields"); return; }
+                description->setText("Unsaved profession description"); name->clear(); description->setFocus();
+                box->button(QDialogButtonBox::Save)->click(); settle();
+                record(dialog->isVisible() && name->hasFocus() && !dialog->findChild<QLabel*>("professionNotice")->text().isEmpty(), stem + " title validation");
+                inspect(dialog, stem + " validation", QSize(560, 360));
+                record(description->text() == "Unsaved profession description", stem + " draft retained");
+                cancel(dialog, stem);
+            });
+            record(!ShowProfessionEditor(nullptr, workspace, edit ? "catalog-artist" : std::string{}) && visited &&
+                bytes("meta/professions.txt") == professionsBefore, stem + " cancel unchanged");
+        }
+        for (bool reset : {false, true}) {
+            const auto stem = QStringLiteral("profile-%1-password-%2").arg(reset ? "reset" : "change").arg(scale);
+            const QSize requested = reset ? QSize(640, 520) : QSize(560, 360);
+            bool visited = false;
+            driveModal("profilePasswordDialog", stem, [&, reset, stem, requested](QDialog* dialog) {
+                visited = true; dialog->resize(requested); settle(); inspect(dialog, stem, requested); capture(dialog, stem, scale);
+                auto* box = dialog->findChild<QDialogButtonBox*>();
+                if (!box) { dialog->reject(); record(false, stem + " buttons"); return; }
+                if (reset) {
+                    auto* confirmation = dialog->findChild<QCheckBox*>("confirmProfilePasswordReset");
+                    auto* login = dialog->findChild<QLineEdit*>("resetProfileLogin");
+                    auto* copyLogin = dialog->findChild<QPushButton*>("copyResetProfileLogin");
+                    auto* generated = dialog->findChild<QLineEdit*>("resetProfileGeneratedPassword");
+                    auto* reveal = dialog->findChild<QCheckBox*>("revealResetProfilePassword");
+                    auto* copyPassword = dialog->findChild<QPushButton*>("copyResetProfilePassword");
+                    if (!confirmation || !login || !copyLogin || !generated || !reveal || !copyPassword) {
+                        record(false, stem + " reset controls"); dialog->reject(); return;
+                    }
+                    record(generated->echoMode() == QLineEdit::Password && !copyPassword->isEnabled(), stem + " masked by default");
+                    box->button(QDialogButtonBox::Save)->click(); settle();
+                    record(dialog->isVisible() && confirmation->hasFocus(), stem + " explicit reset confirmation focus");
+                    copyLogin->setFocus(); QTest::keyClick(copyLogin, Qt::Key_Return); settle();
+                    record(dialog->isVisible() && QApplication::clipboard()->text() == login->text() &&
+                        bytes(profileId + ".ini") == profileBefore, stem + " local Copy Return is not reset");
+                    reveal->setFocus(); QTest::keyClick(reveal, Qt::Key_Space); settle();
+                    record(generated->echoMode() == QLineEdit::Normal && copyPassword->isEnabled(), stem + " explicit reveal");
+                    copyPassword->setFocus(); QTest::keyClick(copyPassword, Qt::Key_Return); settle();
+                    record(dialog->isVisible() && QApplication::clipboard()->text() == generated->text(), stem + " local password Copy Return");
+                    reveal->setChecked(false); settle();
+                    record(generated->echoMode() == QLineEdit::Password && !copyPassword->isEnabled(), stem + " conceal again");
+                } else {
+                    auto* current = dialog->findChild<QLineEdit*>("currentPassword");
+                    auto* next = dialog->findChild<QLineEdit*>("newPassword");
+                    auto* confirm = dialog->findChild<QLineEdit*>("confirmPassword");
+                    if (!current || !next || !confirm) { record(false, stem + " change fields"); dialog->reject(); return; }
+                    current->setText("synthetic-layout-password"); next->setText("synthetic-next"); confirm->setText("synthetic-mismatch");
+                    current->setFocus(); box->button(QDialogButtonBox::Save)->click(); settle();
+                    record(dialog->isVisible() && (next->hasFocus() || confirm->hasFocus()) &&
+                        next->text() == "synthetic-next" && current->text() == "synthetic-layout-password", stem + " mismatch focus and draft");
+                }
+                inspect(dialog, stem + " validation", requested); cancel(dialog, stem);
+            });
+            record(!ShowProfilePasswordDialog(nullptr, workspace, profileId, profileId, reset) && visited &&
+                bytes(profileId + ".ini") == profileBefore && bytes("meta/profile-audit.log") == auditBefore, stem + " cancel unchanged");
+            QApplication::clipboard()->setText(clipboardBefore);
+        }
+        const auto stem = QStringLiteral("profile-manager-%1").arg(scale);
+        bool managerVisited = false;
+        driveModal("profileManager", stem, [&, stem](QDialog* manager) {
+            managerVisited = true; manager->resize(640, 520); settle(); inspect(manager, stem, QSize(640, 520)); capture(manager, stem, scale);
+            auto* table = manager->findChild<QTableWidget*>("profileRecords");
+            auto* search = manager->findChild<QLineEdit*>("profileSearch");
+            auto* open = manager->findChild<QPushButton*>("openManagedProfile");
+            auto* more = manager->findChild<QPushButton*>("profileMoreActions");
+            auto* filterToggle = manager->findChild<QToolButton*>("profileFiltersToggle");
+            auto* filtersPanel = manager->findChild<QWidget*>("profileFiltersPanel");
+            auto* scroll = manager->findChild<QScrollArea*>("dialogContentScrollArea");
+            auto* archiveAction = manager->findChild<QAction*>("archiveProfileAction");
+            auto* resetAction = manager->findChild<QAction*>("resetProfilePasswordAction");
+            auto* deleteAction = manager->findChild<QAction*>("deleteArchivedProfileAction");
+            record(table && search && open && open->property("primary").toBool() && open->isDefault(), stem + " main controls");
+            if (!table || !search || !open) { manager->reject(); return; }
+            const int rowHeight = table->verticalHeader()->defaultSectionSize();
+            record(table->rowCount() >= 3 && rowHeight >= QFontMetrics(table->font()).lineSpacing() + 4,
+                stem + " three actual readable profiles");
+            const auto inspectVisibleRows = [&](const QString& context) {
+                const QRect tableBounds(table->mapTo(manager, QPoint()), table->size());
+                QRect visibleBounds = tableBounds.intersected(manager->rect());
+                // Clip against every actual ancestor, whether the list is inside
+                // a scrolling form or pinned beside an independently scrolling toolbar.
+                for (auto* ancestor = table->parentWidget(); ancestor && ancestor != manager;
+                     ancestor = ancestor->parentWidget())
+                    visibleBounds = visibleBounds.intersected(QRect(ancestor->mapTo(manager, QPoint()), ancestor->size()));
+                const int visibleHeight = visibleBounds.height();
+                const int neededHeight = table->horizontalHeader()->height() + rowHeight * 3 + table->frameWidth() * 2;
+                record(visibleHeight >= neededHeight && visibleBounds.top() == tableBounds.top() &&
+                    table->viewport()->height() >= rowHeight * 3,
+                    context + " viewport contains header and three profile rows");
+                std::cout << context.toStdString() << " table-visible=" << visibleHeight
+                    << " table-needed=" << neededHeight << '\n';
+            };
+            inspectVisibleRows(stem + " collapsed");
+            const auto selectProfile = [&](const std::string& id) {
+                for (int row = 0; row < table->rowCount(); ++row) {
+                    if (table->item(row, 0)->data(Qt::UserRole).toString() == QString::fromStdString(id)) {
+                        table->selectRow(row); settle(); return true;
+                    }
+                }
+                record(false, stem + " expected fixture row"); return false;
+            };
+            const bool newManagerHooks = more && filterToggle && filtersPanel && archiveAction && resetAction && deleteAction;
+            record(newManagerHooks, stem + " disclosure and command menu hooks");
+            if (newManagerHooks) {
+                record(!filterToggle->isChecked() && !filtersPanel->isVisible(), stem + " filters collapsed initially");
+                filterToggle->setFocus(); QTest::keyClick(filterToggle, Qt::Key_Space); settle();
+                record(filtersPanel->isVisible() && filterToggle->isChecked(), stem + " keyboard filters open");
+                inspect(manager, stem + " filters", QSize(640, 520));
+                inspectVisibleRows(stem + " filters expanded without scrolling");
+                capture(manager, stem + "-filters", scale);
+                if (scroll) { scroll->ensureWidgetVisible(table, 0, 0); settle(); }
+                inspectVisibleRows(stem + " filters expanded list reached");
+                capture(manager, stem + "-filters-list", scale);
+                auto* archiveFilter = manager->findChild<QComboBox*>("profileArchiveFilter");
+                auto* professionFilter = manager->findChild<QComboBox*>("profileProfessionFilter");
+                auto* sort = manager->findChild<QComboBox*>("profileSort");
+                if (archiveFilter && professionFilter && sort) {
+                    archiveFilter->setCurrentIndex(2); professionFilter->setCurrentIndex(1); sort->setCurrentIndex(1); settle();
+                    filterToggle->setFocus(); QTest::keyClick(filterToggle, Qt::Key_Space); settle();
+                    QTest::keyClick(filterToggle, Qt::Key_Space); settle();
+                    record(archiveFilter->currentIndex() == 2 && professionFilter->currentIndex() == 1 && sort->currentIndex() == 1,
+                        stem + " filter disclosure retains values");
+                    archiveFilter->setCurrentIndex(0); professionFilter->setCurrentIndex(0); sort->setCurrentIndex(0); settle();
+                } else record(false, stem + " filter controls");
+                filterToggle->setFocus(); QTest::keyClick(filterToggle, Qt::Key_Space); settle();
+                if (scroll) { scroll->verticalScrollBar()->setValue(0); settle(); }
+                selectProfile(created->id);
+                record(open->isEnabled() && manager->findChild<QPushButton*>("editProfile")->isEnabled() &&
+                    archiveAction->isEnabled() && resetAction->isEnabled() && !deleteAction->isEnabled(), stem + " active menu state");
+                selectProfile(blockedCreated->id);
+                // Existing manager semantics allow a blocked profile to be opened or edited;
+                // the account's blocked state is enforced by the original domain handlers.
+                record(open->isEnabled() && archiveAction->isEnabled() && resetAction->isEnabled() && !deleteAction->isEnabled(),
+                    stem + " blocked menu preserves original state");
+                selectProfile(archivedCreated->id);
+                record(!open->isEnabled() && !manager->findChild<QPushButton*>("editProfile")->isEnabled() &&
+                    archiveAction->isEnabled() && !resetAction->isEnabled() && deleteAction->isEnabled() &&
+                    archiveAction->text().contains(QString::fromUtf8("Восстановить")), stem + " archived menu state");
+                selectProfile(created->id);
+                bool popupVisited = false;
+                QTimer::singleShot(0, more, [&] {
+                    auto* popup = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+                    popupVisited = popup && popup == more->menu() && popup->isVisible();
+                    if (popup) popup->close();
+                });
+                more->setFocus(); QTest::keyClick(more, Qt::Key_Return); settle();
+                record(popupVisited && manager->isVisible() && open->isDefault(), stem + " local More Return opens menu only");
+                if (!manager->isVisible()) return;
+            }
+            search->setText("definitely-no-profile-match"); settle();
+            record(table->rowCount() == 0 && !open->isEnabled() && !manager->findChild<QLabel*>("profileListSummary")->text().isEmpty(), stem + " empty search");
+            if (newManagerHooks) record(!more->isEnabled() && !archiveAction->isEnabled() && !resetAction->isEnabled() &&
+                !deleteAction->isEnabled(), stem + " no-selection command menu disabled");
+            inspect(manager, stem + " no-match", QSize(640, 520)); capture(manager, stem + "-no-match", scale);
+            search->clear(); settle(); selectProfile(created->id);
+            bool editorVisited = false;
+            driveModal("profileEditor", stem + " editor", [&, stem](QDialog* editor) {
+                editorVisited = true; editor->resize(560, 380); settle();
+                inspect(editor, stem + " editor", QSize(560, 380)); capture(editor, stem + "-editor", scale);
+                auto* name = editor->findChild<QLineEdit*>("profileName");
+                auto* profession = editor->findChild<QComboBox*>("profileProfession");
+                auto* blocked = editor->findChild<QCheckBox*>("profileBlocked");
+                auto* buttons = editor->findChild<QDialogButtonBox*>();
+                if (!name || !profession || !blocked || !buttons) { editor->reject(); record(false, stem + " edit fields"); return; }
+                profession->setCurrentIndex(2); blocked->setChecked(true); name->clear(); profession->setFocus();
+                buttons->button(QDialogButtonBox::Save)->click(); settle();
+                record(editor->isVisible() && name->hasFocus() && profession->currentIndex() == 2 && blocked->isChecked(), stem + " edit validation draft");
+                inspect(editor, stem + " editor validation", QSize(560, 380)); cancel(editor, stem + " editor");
+            });
+            manager->findChild<QPushButton*>("editProfile")->click();
+            record(editorVisited && bytes(profileId + ".ini") == profileBefore, stem + " edit cancel unchanged");
+            auto* create = manager->findChild<QPushButton*>("createProfile");
+            if (create) {
+                const auto profileCountBefore = workspace.storage->list_profiles().size();
+                bool createVisited = false;
+                driveModal({}, stem + " create", [&, stem](QDialog* dialog) {
+                    auto* input = qobject_cast<QInputDialog*>(dialog);
+                    if (!input) { record(false, stem + " create dialog"); dialog->reject(); return; }
+                    createVisited = true;
+                    auto* name = input->findChild<QLineEdit*>("profileCreateName");
+                    auto* error = input->findChild<QLabel*>("profileNameValidationNotice");
+                    auto* save = input->findChild<QPushButton*>("profileCreateSave");
+                    auto* cancelCreate = input->findChild<QPushButton*>("profileCreateCancel");
+                    if (!name || !error || !save || !cancelCreate) {
+                        record(false, stem + " create validation hooks"); input->reject(); return;
+                    }
+                    int primaries = 0;
+                    for (auto* button : input->findChildren<QPushButton*>())
+                        if (button->isVisible() && button->property("primary").toBool()) ++primaries;
+                    record(primaries == 1 && save->isDefault() && !error->isVisible(), stem + " create initial primary and no error");
+                    input->setTextValue(QStringLiteral("   ")); input->accept(); settle();
+                    record(input->isVisible() && input->textValue() == QStringLiteral("   ") && name->hasFocus() &&
+                        error->isVisible() && !error->text().isEmpty(), stem + " empty create draft retained");
+                    if (!input->isVisible()) return;
+                    const QString invalidName = QString::fromUtf8("Несохранённый профиль") + QChar(0x01);
+                    input->setTextValue(invalidName); input->accept(); settle();
+                    record(input->isVisible() && input->textValue() == invalidName && name->hasFocus() && !error->text().isEmpty(),
+                        stem + " control character create draft retained");
+                    record(save->isDefault() && !cancelCreate->autoDefault(), stem + " create sole default after validation");
+                    const auto saveImage = save->grab().toImage();
+                    int accentPixels = 0;
+                    for (int y = 0; y < saveImage.height(); ++y) for (int x = 0; x < saveImage.width(); ++x) {
+                        const QColor color = saveImage.pixelColor(x, y);
+                        accentPixels += color == QColor("#7554ad") || color == QColor("#8764bf");
+                    }
+                    // A single pixel can hit ClearType text at a compact scale.
+                    // Require a substantial painted accent, not just a property.
+                    const bool primaryPainted = accentPixels > saveImage.width() * saveImage.height() / 4;
+                    record(primaryPainted, stem + " create primary rendered accent");
+                    if (!primaryPainted) {
+                        std::cerr << "Create primary sample: scale=" << scale << " accentPixels=" << accentPixels
+                            << " size=" << saveImage.width() << 'x' << saveImage.height() << " enabled=" << save->isEnabled() << '\n';
+                        if (!artifacts.isEmpty()) saveImage.save(artifacts + QStringLiteral("/create-primary-failure-%1.png").arg(scale));
+                    }
+                    for (auto* control : input->findChildren<QWidget*>()) {
+                        if (!control->isVisible() || control->isWindow()) continue;
+                        if (qobject_cast<QLineEdit*>(control) || qobject_cast<QPushButton*>(control) || qobject_cast<QLabel*>(control))
+                            record(input->rect().contains(QRect(control->mapTo(input, QPoint()), control->size())),
+                                stem + " create validation control bounds " + control->objectName());
+                    }
+                    capture(input, stem + "-create-error", scale);
+                    cancelCreate->setFocus(); QTest::keyClick(cancelCreate, Qt::Key_Return); settle();
+                    record(!input->isVisible(), stem + " create focused Cancel Return");
+                    if (input->isVisible()) input->reject();
+                });
+                create->setFocus(); QTest::keyClick(create, Qt::Key_Return); settle();
+                record(createVisited && manager->isVisible() && workspace.storage->list_profiles().size() == profileCountBefore,
+                    stem + " invalid creation Cancel leaves profile list unchanged");
+                if (!manager->isVisible()) return;
+                const QString newName = QString::fromUtf8("Алексей Орлов — новый профиль для проверки интерфейса и реквизитов");
+                bool validCreateVisited = false;
+                driveModal({}, stem + " valid create", [&, stem, newName](QDialog* dialog) {
+                    auto* input = qobject_cast<QInputDialog*>(dialog);
+                    if (!input) { record(false, stem + " valid create dialog"); dialog->reject(); return; }
+                    validCreateVisited = true; input->setTextValue(newName);
+                    auto* save = input->findChild<QPushButton*>("profileCreateSave");
+                    if (save) { save->setFocus(); QTest::keyClick(save, Qt::Key_Return); settle(); }
+                    else { record(false, stem + " valid create Save hook"); input->accept(); }
+                    if (input->isVisible()) { record(false, stem + " valid create closes"); input->reject(); }
+                });
+                create->click(); settle();
+                record(validCreateVisited && manager->isVisible() && workspace.storage->list_profiles().size() == profileCountBefore + 1,
+                    stem + " valid synthetic profile created");
+                auto* credentials = manager->findChild<QLineEdit*>("createdProfileCredentials");
+                auto* credentialsToggle = manager->findChild<QToolButton*>("profileCredentialsToggle");
+                auto* credentialsPanel = manager->findChild<QWidget*>("profileCredentialsPanel");
+                auto* reveal = manager->findChild<QCheckBox*>("showCreatedProfileCredentials");
+                auto* copyLogin = manager->findChild<QPushButton*>("copyCreatedProfileLogin");
+                auto* copyPassword = manager->findChild<QPushButton*>("copyCreatedProfilePassword");
+                if (!credentials || !credentialsToggle || !credentialsPanel || !reveal || !copyLogin || !copyPassword) {
+                    record(false, stem + " created credentials disclosure hooks");
+                } else {
+                    record(credentialsToggle->isVisible() && !credentialsToggle->isChecked() && !credentialsPanel->isVisible() &&
+                        credentials->echoMode() == QLineEdit::Password && !reveal->isChecked() && !copyPassword->isEnabled(),
+                        stem + " credentials initially collapsed and masked");
+                    if (scroll) { scroll->ensureWidgetVisible(credentialsToggle, 0, 0); settle(); }
+                    credentialsToggle->setFocus(); QTest::keyClick(credentialsToggle, Qt::Key_Space); settle();
+                    record(credentialsPanel->isVisible() && credentials->echoMode() == QLineEdit::Password,
+                        stem + " credentials disclosure does not reveal secret");
+                    if (scroll) { scroll->ensureWidgetVisible(credentialsPanel, 0, 0); settle(); }
+                    inspect(manager, stem + " masked credentials", QSize(640, 520));
+                    capture(manager, stem + "-masked-credentials", scale);
+                    const QString loginMarker = QString::fromUtf8("Логин: ");
+                    const QString passwordMarker = QString::fromUtf8("   Пароль: ");
+                    const int separator = credentials->text().indexOf(passwordMarker);
+                    const QString expectedLogin = separator >= 0 ? credentials->text().mid(loginMarker.size(), separator - loginMarker.size()) : QString();
+                    const QString expectedPassword = separator >= 0 ? credentials->text().mid(separator + passwordMarker.size()) : QString();
+                    record(!expectedLogin.isEmpty() && !expectedPassword.isEmpty(), stem + " generated credentials available");
+                    QApplication::clipboard()->setText(clipboardBefore);
+                    copyPassword->click();
+                    record(QApplication::clipboard()->text() == clipboardBefore, stem + " masked password cannot copy");
+                    copyLogin->setFocus(); QTest::keyClick(copyLogin, Qt::Key_Return); settle();
+                    record(manager->isVisible() && QApplication::clipboard()->text() == expectedLogin &&
+                        workspace.storage->list_profiles().size() == profileCountBefore + 1, stem + " local credential login Copy Return");
+                    reveal->setFocus(); QTest::keyClick(reveal, Qt::Key_Space); settle();
+                    record(reveal->isChecked() && credentials->echoMode() == QLineEdit::Normal && copyPassword->isEnabled(),
+                        stem + " credentials reveal is explicit");
+                    // No capture or value diagnostics while plaintext credentials are visible.
+                    copyPassword->setFocus(); QTest::keyClick(copyPassword, Qt::Key_Return); settle();
+                    record(manager->isVisible() && QApplication::clipboard()->text() == expectedPassword,
+                        stem + " local credential password Copy Return");
+                    reveal->setChecked(false); settle();
+                    record(credentials->echoMode() == QLineEdit::Password && !copyPassword->isEnabled(), stem + " credentials concealed again");
+                    QApplication::clipboard()->setText(clipboardBefore);
+                    credentialsToggle->setFocus(); QTest::keyClick(credentialsToggle, Qt::Key_Space); settle();
+                    record(!credentialsPanel->isVisible(), stem + " credentials close locally");
+                }
+            } else record(false, stem + " create command");
+            cancel(manager, stem + " manager");
+        });
+        record(ShowProfileManager(nullptr, workspace, profileId).isEmpty() && managerVisited && bytes(profileId + ".ini") == profileBefore,
+            stem + " manager cancel unchanged");
+    }
+    QApplication::clipboard()->setText(clipboardBefore);
+    app.setFont(originalFont); app.setStyleSheet(originalStyle); app.setProperty("forgeBasePointSize", originalBase);
+    return checked;
+}
+
 static bool TestPipelineEditor() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -6017,14 +6518,19 @@ static bool TestQtTaskContextDetails() {
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     QtWorkspace workspace(directory);
     const auto profile = workspace.storage->create_profile(Profile(u8"Участник контекста"));
-    if (!profile) return false;
+    const auto secondProfile = workspace.storage->create_profile(Profile(u8"Второй участник контекста"));
+    const auto thirdProfile = workspace.storage->create_profile(Profile(u8"Третий участник контекста"));
+    if (!profile || !secondProfile || !thirdProfile) return false;
     ProjectEntry project; project.id = "context-project"; project.name = u8"Проект контекста";
     PipelineStep next; next.id = "context-next"; next.stageCode = "B"; next.title = u8"Проверка";
     PipelineStep current; current.id = "context-current"; current.stageCode = "A"; current.title = u8"Разработка";
     current.nextIds = {next.id}; current.hints = {u8"Проверить сборку", u8"Проверить журнал", u8"Передать результат", u8"Зафиксировать итог"};
     TaskEntry task; task.id = "context-task"; task.title = u8"Собрать Qt-клиент"; task.description = u8"Описание контекста";
     task.projectId = project.id; task.pipelineStepId = current.id; task.skillIds = {u8"Моделирование"};
+    task.project = project.name; task.deadlineAt = 1893456000;
     task.participants.push_back({profile->id, 70, 8, 5, {}});
+    task.participants.push_back({secondProfile->id, 15, 0, 0, {}});
+    task.participants.push_back({thirdProfile->id, 15, 0, 0, {}});
     workspace.data.projects = {project};
     workspace.data.pipelineSteps = {current, next};
     workspace.data.tasks = {task};
@@ -6037,9 +6543,41 @@ static bool TestQtTaskContextDetails() {
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* table = window.findChild<QTableWidget*>("records");
     auto* details = window.findChild<QTextBrowser*>("details");
-    if (!navigation || !table || !details) return false;
+    auto* search = window.findChild<QLineEdit*>("search");
+    if (!navigation || !table || !details || !search) return false;
     navigation->setCurrentRow(1);
-    if (table->rowCount() != 1) return false;
+    if (table->rowCount() != 1 || table->columnCount() < 7) return false;
+    const QString rawTitle = QString::fromUtf8(task.title.c_str());
+    const QString canonicalTitle = QString::fromUtf8(AppTaskDisplayTitle(task).c_str());
+    const auto* titleItem = table->item(0, 0);
+    if (!titleItem || titleItem->text().section(QStringLiteral("  ["), 0, 0) != rawTitle ||
+        titleItem->data(Qt::UserRole).toString() != QString::fromStdString(task.id) || canonicalTitle == rawTitle) {
+        std::cerr << "Task title repeats its separate project column or lost its identity\n";
+        return false;
+    }
+    const QStringList contextValues{rawTitle, QString::fromUtf8(project.name.c_str()),
+        QString::fromUtf8(current.title.c_str()), QString::fromUtf8("Участник контекста"),
+        QString::fromUtf8("Второй участник контекста"), QString::fromUtf8("Третий участник контекста"),
+        table->item(0, 4)->text(), table->item(0, 5)->text(), table->item(0, 6)->text()};
+    for (const auto& value : contextValues) {
+        if (value.isEmpty() || !titleItem->toolTip().contains(value) ||
+            !titleItem->data(Qt::AccessibleDescriptionRole).toString().contains(value)) {
+            std::cerr << "Task title lost complete tooltip or accessible context\n";
+            return false;
+        }
+    }
+    if (table->item(0, 3)->text().contains(QString::fromUtf8(thirdProfile->name.c_str())) ||
+        !table->item(0, 3)->text().endsWith(QStringLiteral(" +1"))) {
+        std::cerr << "Complete task context expanded the compact visible assignee column\n";
+        return false;
+    }
+    search->setText(canonicalTitle);
+    if (table->rowCount() != 1 || table->item(0, 0)->data(Qt::UserRole).toString() != QString::fromStdString(task.id) ||
+        table->item(0, 0)->text().section(QStringLiteral("  ["), 0, 0) != rawTitle) {
+        std::cerr << "Task canonical project-title search no longer resolves the same raw-title row\n";
+        return false;
+    }
+    search->clear();
     table->selectRow(0); QApplication::processEvents();
     const QString text = details->toPlainText();
     const bool result = text.contains(QString::fromUtf8("Проект контекста")) &&
@@ -7942,6 +8480,19 @@ static bool TestNavigationVisualContract() {
         std::cerr << "Disclosure motion lost immediate state, reversal, geometry, or reduced-motion policy\n";
         return false;
     }
+    struct RestoreApplicationStyle {
+        QFont font = qApp->font();
+        QString stylesheet = qApp->styleSheet();
+        QVariant basePointSize = qApp->property("forgeBasePointSize");
+        ~RestoreApplicationStyle() {
+            qApp->setFont(font);
+            qApp->setStyleSheet(stylesheet);
+            qApp->setProperty("forgeBasePointSize", basePointSize);
+        }
+    } restore;
+    QtDisplaySettings initialSettings;
+    initialSettings.motionEnabled = false;
+    ApplyQtDisplaySettings(*qApp, initialSettings);
     // The common control style must retain a visible selected state after it
     // replaces the platform's default button background.
     QPushButton stateProbe;
@@ -7961,6 +8512,7 @@ static bool TestNavigationVisualContract() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    if (!SaveQtDisplaySettings(directory, initialSettings)) return false;
     QtWorkspace workspace(directory);
     QtWindow window(workspace);
     window.resize(1120, 720);
@@ -8000,21 +8552,105 @@ static bool TestNavigationVisualContract() {
         }
     }
 
+    auto* displayAction = window.findChild<QAction*>("qtDisplaySettingsAction");
+    auto* cloudStatusTimer = window.findChild<QTimer*>("cloudQuickStatusTimer");
+    auto* cloudButton = window.findChild<QToolButton*>("quickCloudSync");
+    if (!displayAction || !cloudStatusTimer || !cloudStatusTimer->isActive() || !cloudButton) return false;
+    const std::array<std::pair<const char*, int>, 7> iconControls{{
+        {"profileIdentityCopy", 18}, {"quickRefresh", 18}, {"quickShortcutLauncher", 18},
+        {"pomodoroQuickButton", 14}, {"quickCloudSync", 14}, {"editEntry", 16}, {"deleteEntry", 16}}};
+    auto iconsFitScale = [&](int percent) {
+        const QSize navigationSize(qRound(18 * percent / 100.0), qRound(18 * percent / 100.0));
+        if (navigation->iconSize() != navigationSize) {
+            std::cerr << "Navigation icon size drifted at " << percent << "%\n";
+            return false;
+        }
+        for (const auto& [name, baseSize] : iconControls) {
+            const auto* button = window.findChild<QAbstractButton*>(name);
+            const int expected = qRound(baseSize * percent / 100.0);
+            if (!button || button->icon().isNull() || button->iconSize() != QSize(expected, expected)) {
+                std::cerr << name << " icon size drifted at " << percent << "%\n";
+                return false;
+            }
+        }
+        return true;
+    };
+    auto changeScale = [&](int percent) {
+        bool accepted = false;
+        QTimer::singleShot(0, &window, [&] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            auto* scale = dialog->findChild<QComboBox*>("qtScale");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            const int index = scale ? scale->findData(percent) : -1;
+            if (index < 0 || !buttons || !buttons->button(QDialogButtonBox::Save)) {
+                dialog->reject();
+                return;
+            }
+            scale->setCurrentIndex(index);
+            buttons->button(QDialogButtonBox::Save)->click();
+            accepted = dialog->result() == QDialog::Accepted;
+        });
+        displayAction->trigger();
+        QApplication::processEvents();
+        QApplication::processEvents();
+        return accepted && LoadQtDisplaySettings(directory).scalePercent == percent;
+    };
+    // Reapplying the same scale and returning to 100% must use the original
+    // icon tokens, not the size left by the previous application.
+    if (!iconsFitScale(100) || !changeScale(200) || !iconsFitScale(200) ||
+        !changeScale(200) || !iconsFitScale(200)) return false;
+    QEventLoop cloudTimerLoop;
+    int cloudStatusTicks = 0;
+    // The status scan is throttled to two seconds. A changed tooltip proves
+    // the real refresh reached its presentation update, not only timeout().
+    const QString pendingCloudTooltip = QStringLiteral("Awaiting the periodic status refresh");
+    cloudButton->setToolTip(pendingCloudTooltip);
+    const int previousCloudInterval = cloudStatusTimer->interval();
+    const auto cloudConnection = QObject::connect(cloudStatusTimer, &QTimer::timeout, &cloudTimerLoop, [&] {
+        ++cloudStatusTicks;
+        if (cloudButton->toolTip() != pendingCloudTooltip) cloudTimerLoop.quit();
+    });
+    cloudStatusTimer->setInterval(10);
+    QTimer::singleShot(3100, &cloudTimerLoop, &QEventLoop::quit);
+    cloudTimerLoop.exec();
+    QObject::disconnect(cloudConnection);
+    cloudStatusTimer->setInterval(previousCloudInterval);
+    if (cloudStatusTicks == 0 || cloudButton->toolTip() == pendingCloudTooltip || !iconsFitScale(200)) {
+        std::cerr << "Periodic cloud status refresh lost the current icon scale\n";
+        return false;
+    }
+    if (!changeScale(100) || !iconsFitScale(100)) return false;
+    window.resize(1120, 720);
+    window.raise();
+    window.activateWindow();
+    if (!QTest::qWaitForWindowActive(&window, 2000)) {
+        std::cerr << "Navigation test window did not reactivate after the modal scale round-trip\n";
+        window.close();
+        return false;
+    }
+    QApplication::processEvents();
+
     navigation->clearFocus();
     QApplication::processEvents();
     const auto navigationWithoutFocus = navigation->viewport()->grab().toImage();
     navigation->setFocus(Qt::TabFocusReason);
     QApplication::processEvents();
     const auto stylesheet = qApp->styleSheet();
-    const bool focusVisible = navigation->hasFocus() &&
-        navigation->viewport()->grab().toImage() != navigationWithoutFocus &&
-        stylesheet.contains(QStringLiteral("QListWidget#navigation::item:focus")) &&
-        stylesheet.contains(QStringLiteral("QPushButton:focus")) &&
-        stylesheet.contains(QStringLiteral("QToolButton:focus"));
-    const bool pointerStates = stylesheet.contains(QStringLiteral("QPushButton:hover")) &&
-        stylesheet.contains(QStringLiteral("QToolButton:hover")) &&
-        stylesheet.contains(QStringLiteral("QPushButton:pressed")) &&
-        stylesheet.contains(QStringLiteral("QPushButton#primary:disabled"));
+    const bool navigationHasFocus = navigation->hasFocus();
+    const bool focusChangesAppearance = navigation->viewport()->grab().toImage() != navigationWithoutFocus;
+    const bool navigationFocusStyle = stylesheet.contains(QStringLiteral("QListWidget#navigation::item:focus"));
+    const bool pushFocusStyle = stylesheet.contains(QStringLiteral("QPushButton:focus"));
+    const bool toolFocusStyle = stylesheet.contains(QStringLiteral("QToolButton:focus"));
+    const bool testWindowActiveAtFocus = window.isActiveWindow();
+    const QString focusedObject = QApplication::focusWidget() ? QApplication::focusWidget()->objectName() : QStringLiteral("<none>");
+    const bool focusVisible = navigationHasFocus && focusChangesAppearance &&
+        navigationFocusStyle && pushFocusStyle && toolFocusStyle;
+    const bool pushHoverStyle = stylesheet.contains(QStringLiteral("QPushButton:hover"));
+    const bool toolHoverStyle = stylesheet.contains(QStringLiteral("QToolButton:hover"));
+    const bool pushPressedStyle = stylesheet.contains(QStringLiteral("QPushButton:pressed"));
+    const bool primaryDisabledStyle = stylesheet.contains(QStringLiteral("QPushButton#primary:disabled"));
+    const bool pointerStates = pushHoverStyle && toolHoverStyle && pushPressedStyle && primaryDisabledStyle;
     QPushButton* hoverTarget = nullptr;
     for (auto* button : window.findChildren<QPushButton*>()) {
         if (button->isVisible() && button->isEnabled() && button->size().width() > 24 && button->size().height() > 20) {
@@ -8023,19 +8659,44 @@ static bool TestNavigationVisualContract() {
         }
     }
     bool hoverChangesAppearance = false;
+    bool hoverTargetUnderMouse = false;
+    bool hoverPixelsChanged = false;
     if (hoverTarget) {
         QTest::mouseMove(&window, QPoint(window.width() - 1, window.height() - 1));
-        QApplication::processEvents();
+        // QWidget mouseMove uses the native cursor on Windows. Enter/leave
+        // events arrive asynchronously; do not sample before they are delivered.
+        const bool pointerLeft = QTest::qWaitFor([&] { return !hoverTarget->underMouse(); }, 1000);
         const auto beforeHover = hoverTarget->grab().toImage();
         QTest::mouseMove(hoverTarget, hoverTarget->rect().center(), 20);
-        QApplication::processEvents();
-        hoverChangesAppearance = hoverTarget->underMouse() && hoverTarget->grab().toImage() != beforeHover;
+        hoverTargetUnderMouse = QTest::qWaitFor([&] { return hoverTarget->underMouse(); }, 1000);
+        hoverPixelsChanged = hoverTarget->grab().toImage() != beforeHover;
+        hoverChangesAppearance = pointerLeft && hoverTargetUnderMouse && hoverPixelsChanged;
     }
-    window.close();
     if (!focusVisible || !pointerStates || !hoverChangesAppearance) {
         std::cerr << "Navigation keyboard focus or common button interaction states missing\n";
+        std::cerr << "Navigation focus: hasFocus=" << navigationHasFocus << " pixelsChanged=" << focusChangesAppearance
+                  << " styles(nav/push/tool)=" << navigationFocusStyle << '/' << pushFocusStyle << '/' << toolFocusStyle
+                  << " windowActive=" << testWindowActiveAtFocus << " focusedObject=" << focusedObject.toStdString() << '\n';
+        std::cerr << "Navigation pointer: styles(pushHover/toolHover/pressed/primaryDisabled)="
+                  << pushHoverStyle << '/' << toolHoverStyle << '/' << pushPressedStyle << '/' << primaryDisabledStyle
+                  << " target=" << (hoverTarget ? hoverTarget->objectName().toStdString() : "<none>")
+                  << " underMouse=" << hoverTargetUnderMouse << " pixelsChanged=" << hoverPixelsChanged << '\n';
+        if (hoverTarget) {
+            const QPoint requestedCursor = hoverTarget->mapToGlobal(hoverTarget->rect().center());
+            const QPoint actualCursor = QCursor::pos();
+            auto* hit = QApplication::widgetAt(requestedCursor);
+            std::cerr << "Navigation cursor: requested=" << requestedCursor.x() << ',' << requestedCursor.y()
+                << " actual=" << actualCursor.x() << ',' << actualCursor.y()
+                << " hit=" << (hit ? hit->objectName().toStdString() : "<none>")
+                << " targetBounds=" << hoverTarget->geometry().x() << ',' << hoverTarget->geometry().y() << ','
+                << hoverTarget->width() << ',' << hoverTarget->height() << '\n';
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); window.grab().save(artifacts + "/navigation-pointer-diagnostic.png"); }
+        }
+        window.close();
         return false;
     }
+    window.close();
     return true;
 }
 
@@ -8671,8 +9332,12 @@ int main(int argc, char** argv) {
         return TestQtWorkingEditorLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_INLINE_PROJECT"))
         return TestQtTaskInlineProjectCreation() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CATALOG_PROFILES"))
+        return TestQtCatalogProfileLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
         return TestDisclosureMotionContract() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_NAVIGATION"))
+        return TestNavigationVisualContract() ? 0 : 1;
     if (!qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_WORKSPACE").trimmed().isEmpty())
         return PrepareUiVisualAuditWorkspace() ? 0 : 1;
     if (!TestQtCommandHelpDialogLayout() || !TestQtCommandHelpProcess()) {
@@ -8704,6 +9369,7 @@ int main(int argc, char** argv) {
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestQtWorkingEditorLayout(app)) { std::cerr << "Working editor layout failed\n"; return 1; }
+    if (!TestQtCatalogProfileLayout(app)) { std::cerr << "Catalog/profile layout failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }

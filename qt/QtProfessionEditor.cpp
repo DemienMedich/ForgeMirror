@@ -5,6 +5,7 @@
 #include "AppWorkspaceStorageLock.h"
 #include "Profile.h"
 #include "SkillCatalog.h"
+#include "QtScrollableDialog.h"
 #include <QtWidgets>
 #include <QSaveFile>
 #include <QTemporaryDir>
@@ -170,29 +171,82 @@ bool ShowProfessionEditor(QWidget* parent, QtWorkspace& workspace, const std::st
     const auto found = std::find_if(workspace.data.professions.begin(), workspace.data.professions.end(),
         [&](const auto& p) { return p.id == id; });
     if (!id.empty() && found == workspace.data.professions.end()) return false;
-    QDialog dialog(parent);
+    QtScrollableDialog dialog(parent, QSize(560, 360), QSize(420, 300));
     dialog.setObjectName("professionEditor");
     dialog.setWindowTitle(QString::fromUtf8(id.empty() ? "Новая профессия" : "Редактирование профессии"));
-    dialog.setMinimumWidth(480);
-    auto* form = new QFormLayout(&dialog);
+    dialog.scrollArea()->setAccessibleName(QString::fromUtf8("Поля редактора профессии"));
+    auto* form = dialog.formLayout();
+    form->setHorizontalSpacing(dialog.scaledMetric(8));
+    form->setVerticalSpacing(dialog.scaledMetric(8));
+    form->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFormAlignment(Qt::AlignTop);
+    const auto addField = [form](const char* key, const char* caption, const QString& details, QWidget* input) {
+        auto* label = new QLabel(QString::fromUtf8(caption));
+        label->setObjectName(QString::fromLatin1(key) + QStringLiteral("Label"));
+        label->setTextFormat(Qt::PlainText);
+        label->setWordWrap(true);
+        label->setBuddy(input);
+        label->setToolTip(details);
+        input->setAccessibleName(QString::fromUtf8(caption));
+        input->setToolTip(details);
+        form->addRow(label, input);
+    };
     auto* name = new QLineEdit(id.empty() ? QString() : q(found->name));
     name->setObjectName("professionName");
+    const QString nameDetails = QString::fromUtf8("Обязательное название профессии.");
+    name->setAccessibleDescription(nameDetails);
     auto* description = new QLineEdit(id.empty() ? QString() : q(found->description));
     description->setObjectName("professionDescription");
-    form->addRow(QString::fromUtf8("Название"), name);
-    form->addRow(QString::fromUtf8("Описание"), description);
+    const QString descriptionDetails = QString::fromUtf8("Необязательное однострочное описание профессии.");
+    description->setAccessibleDescription(descriptionDetails);
+    addField("professionName", "Название", nameDetails, name);
+    addField("professionDescription", "Описание", descriptionDetails, description);
+    name->setAccessibleName(QString::fromUtf8("Название профессии"));
+    description->setAccessibleName(QString::fromUtf8("Описание профессии"));
+    for (auto* field : {name, description}) {
+        field->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        const QString details = field->toolTip();
+        const auto updateToolTip = [field, details](const QString& value) {
+            field->setToolTip(value.isEmpty() ? details : details + QStringLiteral("\n\n") + value);
+        };
+        updateToolTip(field->text());
+        QObject::connect(field, &QLineEdit::textChanged, field, updateToolTip);
+    }
     auto* notice = new QLabel;
     notice->setObjectName("professionNotice");
     notice->setWordWrap(true);
     notice->setTextFormat(Qt::PlainText);
-    form->addRow(notice);
-    QObject::connect(name, &QLineEdit::textChanged, notice, &QLabel::clear);
-    QObject::connect(description, &QLineEdit::textChanged, notice, &QLabel::clear);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
-    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
-    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    form->addRow(buttons);
+    notice->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    notice->setAccessibleName(QString::fromUtf8("Результат сохранения профессии"));
+    dialog.footerLayout()->addWidget(notice);
+    notice->hide();
+    const auto clearNotice = [notice, name, nameDetails] {
+        notice->clear(); notice->hide();
+        notice->setAccessibleName(QString::fromUtf8("Результат сохранения профессии"));
+        notice->setAccessibleDescription({});
+        if (!name->text().trimmed().isEmpty()) name->setAccessibleDescription(nameDetails);
+    };
+    QObject::connect(name, &QLineEdit::textChanged, &dialog, clearNotice);
+    QObject::connect(description, &QLineEdit::textChanged, &dialog, clearNotice);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    buttons->setObjectName("professionEditorButtons");
+    auto* save = buttons->button(QDialogButtonBox::Save);
+    auto* cancel = buttons->button(QDialogButtonBox::Cancel);
+    save->setObjectName("professionSave");
+    cancel->setObjectName("professionCancel");
+    save->setText(QString::fromUtf8("Сохранить"));
+    cancel->setText(QString::fromUtf8("Отмена"));
+    save->setAccessibleName(QString::fromUtf8("Сохранить профессию"));
+    cancel->setAccessibleName(QString::fromUtf8("Отменить редактирование профессии"));
+    save->setProperty("primary", true);
+    save->setMinimumHeight(dialog.scaledMetric(32));
+    save->setAutoDefault(true);
+    save->setDefault(true);
+    cancel->setAutoDefault(false);
+    dialog.footerLayout()->addWidget(buttons);
+    QWidget::setTabOrder(name, description);
+    QWidget::setTabOrder(description, save);
+    QWidget::setTabOrder(save, cancel);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
         AppWorkspaceStorageWriteLock writeLock(workspace.directory);
@@ -251,6 +305,21 @@ bool ShowProfessionEditor(QWidget* parent, QtWorkspace& workspace, const std::st
         }
         workspace.data.professions = std::move(candidate);
         dialog.accept();
+    });
+    // Keep the transaction/merge handler intact; focus only the field named
+    // by its existing required-name validation, without discarding the draft.
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (dialog.result() == QDialog::Accepted || notice->text().isEmpty()) return;
+        notice->show();
+        notice->setAccessibleName(notice->text());
+        notice->setAccessibleDescription(QString::fromUtf8("Ошибка сохранения профессии."));
+        if (name->text().trimmed().isEmpty() && notice->text() == QString::fromUtf8(
+            "Укажите название. Переносы строк, управляющие символы и | не поддерживаются.")) {
+            name->setAccessibleDescription(notice->text());
+            dialog.formLayout()->activate();
+            dialog.scrollArea()->ensureWidgetVisible(name, 0, dialog.scaledMetric(8));
+            name->setFocus(Qt::OtherFocusReason);
+        }
     });
     return dialog.exec() == QDialog::Accepted;
 }
