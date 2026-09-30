@@ -47,6 +47,8 @@ $savedEnvironment = @{
     PATH = $env:PATH
     QT_PLUGIN_PATH = $env:QT_PLUGIN_PATH
     QT_QPA_PLATFORM_PLUGIN_PATH = $env:QT_QPA_PLATFORM_PLUGIN_PATH
+    QT_QPA_PLATFORM = $env:QT_QPA_PLATFORM
+    QML2_IMPORT_PATH = $env:QML2_IMPORT_PATH
 }
 $results = [Collections.Generic.List[object]]::new()
 try {
@@ -65,13 +67,22 @@ try {
 
         $setupLog = Join-Path $evidenceRoot "install-$version.log"
         $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$installDirectory`"", "/LOG=`"$setupLog`"")
-        $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru
+        $process = Start-Process -FilePath $setup -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
         if ($process.ExitCode -ne 0) { throw "Install/update to $version failed with exit code $($process.ExitCode)." }
 
         $installedExe = Join-Path $installDirectory 'ForgeMirrorQt.exe'
         if (-not (Test-Path -LiteralPath $installedExe)) { throw "Installed executable is missing for $version." }
         $installedVersion = (Get-Item -LiteralPath $installedExe).VersionInfo.ProductVersion.Trim()
         if ($installedVersion -ne $version) { throw "Installed EXE reports $installedVersion, expected $version." }
+        $installedPlatformPlugin = Join-Path $installDirectory 'platforms\qwindows.dll'
+        $packagedPlatformPlugin = Join-Path $package 'platforms\qwindows.dll'
+        if (-not (Test-Path -LiteralPath $installedPlatformPlugin -PathType Leaf)) {
+            throw "Installed Windows platform plugin is missing for $version."
+        }
+        $platformPluginHash = (Get-FileHash -LiteralPath $installedPlatformPlugin -Algorithm SHA256).Hash
+        if ($platformPluginHash -ne (Get-FileHash -LiteralPath $packagedPlatformPlugin -Algorithm SHA256).Hash) {
+            throw "Installed Windows platform plugin does not match the package for $version."
+        }
         $registryEntry = Get-ChildItem $uninstallRoot | ForEach-Object { Get-ItemProperty $_.PSPath } |
             Where-Object { $_.InstallLocation -and ([IO.Path]::GetFullPath($_.InstallLocation).TrimEnd('\') -ieq $installDirectory.TrimEnd('\')) } |
             Select-Object -First 1
@@ -82,6 +93,8 @@ try {
         $env:PATH = 'C:\Windows\System32;C:\Windows'
         Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+        Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
         $versionOutput = ''
         if ($version -eq $CurrentVersion) {
             $versionStdout = Join-Path $evidenceRoot "version-$version.stdout.txt"
@@ -124,6 +137,8 @@ try {
             UninstallDisplayVersion = $registryEntry.DisplayVersion
             VersionCommandOutput = $versionOutput
             MainWindowTitle = $windowTitle
+            WindowsPlatformPlugin = $installedPlatformPlugin
+            WindowsPlatformPluginSha256 = $platformPluginHash
             Screenshot = $screenshot
             ScreenshotBytes = (Get-Item -LiteralPath $screenshot).Length
             ScreenshotSha256 = (Get-FileHash -LiteralPath $screenshot -Algorithm SHA256).Hash
@@ -133,8 +148,16 @@ try {
     $uninstaller = Join-Path $installDirectory 'unins000.exe'
     if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'Isolated uninstall program is missing.' }
     $uninstallLog = Join-Path $evidenceRoot 'uninstall.log'
-    $removed = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/LOG=`"$uninstallLog`"") -Wait -PassThru
+    $removed = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/LOG=`"$uninstallLog`"") -WindowStyle Hidden -Wait -PassThru
     if ($removed.ExitCode -ne 0) { throw "Isolated uninstall failed with exit code $($removed.ExitCode)." }
+    $uninstallLogText = Get-Content -LiteralPath $uninstallLog -Raw
+    $deadlineHelperResult = [regex]::Match($uninstallLogText,
+        'Running Exec parameters: --remove-deadline-schedule[^\r\n]*\r?\n[^\r\n]*Process exit code: (\d+)')
+    if (-not $deadlineHelperResult.Success) { throw 'Uninstall did not record its deadline-schedule helper result.' }
+    $deadlineHelperExitCode = [int]$deadlineHelperResult.Groups[1].Value
+    if ($deadlineHelperExitCode -ne 0) {
+        throw "Uninstall deadline-schedule helper failed with exit code $deadlineHelperExitCode. Do not alter an existing task owned by another installation to make this check pass."
+    }
     Start-Sleep -Milliseconds 500
     $remaining = Get-ChildItem $uninstallRoot | ForEach-Object { Get-ItemProperty $_.PSPath } |
         Where-Object { $_.InstallLocation -and ([IO.Path]::GetFullPath($_.InstallLocation).TrimEnd('\') -ieq $installDirectory.TrimEnd('\')) }
@@ -146,6 +169,7 @@ try {
     $results
     [pscustomobject]@{
         UninstallExitCode = $removed.ExitCode
+        DeadlineScheduleHelperExitCode = $deadlineHelperExitCode
         InstallDirectoryRemoved = $true
         UninstallRegistryRemoved = $true
         ExternalWorkspaceMarkerSha256 = $markerAfter
@@ -155,7 +179,7 @@ try {
     $cleanupUninstaller = Join-Path $installDirectory 'unins000.exe'
     if (Test-Path -LiteralPath $cleanupUninstaller) {
         try {
-            $cleanup = Start-Process -FilePath $cleanupUninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-') -Wait -PassThru
+            $cleanup = Start-Process -FilePath $cleanupUninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-') -WindowStyle Hidden -Wait -PassThru
             if ($cleanup.ExitCode -ne 0) { Write-Warning "Lifecycle test cleanup exited with code $($cleanup.ExitCode)." }
         } catch { Write-Warning "Lifecycle test cleanup could not run: $_" }
     }
@@ -179,5 +203,7 @@ try {
     $env:PATH = $savedEnvironment.PATH
     if ($null -ne $savedEnvironment.QT_PLUGIN_PATH) { $env:QT_PLUGIN_PATH = $savedEnvironment.QT_PLUGIN_PATH } else { Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue }
     if ($null -ne $savedEnvironment.QT_QPA_PLATFORM_PLUGIN_PATH) { $env:QT_QPA_PLATFORM_PLUGIN_PATH = $savedEnvironment.QT_QPA_PLATFORM_PLUGIN_PATH } else { Remove-Item Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue }
+    if ($null -ne $savedEnvironment.QT_QPA_PLATFORM) { $env:QT_QPA_PLATFORM = $savedEnvironment.QT_QPA_PLATFORM } else { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
+    if ($null -ne $savedEnvironment.QML2_IMPORT_PATH) { $env:QML2_IMPORT_PATH = $savedEnvironment.QML2_IMPORT_PATH } else { Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue }
     if (Test-Path -LiteralPath $testScript) { Remove-Item -LiteralPath $testScript -Force }
 }

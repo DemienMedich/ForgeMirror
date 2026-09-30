@@ -156,7 +156,7 @@ Tooltip rules:
 - Do not add new panels to “fill space”.
 - Do not add additional tabs that duplicate existing pages.
 - Do not introduce new color palettes or major theme changes.
-- Do not add animations.
+- Motion is allowed only under the bounded policy in [UI tokens](AGENT_UI_TOKENS.md): short, interruptible, local transitions with a user opt-out and Windows reduced-motion support.
 - Do not increase padding to “make it breathe” if it reduces density.
 - Do not add a “Сменить” button (profile switching must be via dropdown only).
 
@@ -174,7 +174,7 @@ Before finishing a UI change, verify:
 - [ ] Details are collapsible and closed by default
 - [ ] No large empty gaps around donut/charts/lists
 - [ ] Tooltips exist for complex mechanics
-- [ ] No new theme/colors/animations introduced
+- [ ] No new theme/colors introduced; any motion follows the bounded policy and is disabled by the user/system preference
 
 If any checkbox fails, adjust UI until it passes.
 

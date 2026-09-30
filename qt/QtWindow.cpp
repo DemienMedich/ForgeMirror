@@ -1,6 +1,7 @@
 #include "QtWindow.h"
 #include "QtLogSanitization.h"
 #include "QtAchievements.h"
+#include "QtActionIcons.h"
 #include "QtPomodoro.h"
 #include "QtProfessionEditor.h"
 #include "QtRulesEditor.h"
@@ -44,6 +45,7 @@
 #include <QJsonObject>
 #include <QtWidgets>
 #include <QPointer>
+#include <QPropertyAnimation>
 #include <algorithm>
 #include <cstdlib>
 #include <limits>
@@ -99,6 +101,138 @@ private:
     double alpha_ = 0.25;
     double tileScale_ = 1.0;
     bool tiled_ = false;
+};
+
+// Keeps the shared filters and action bar readable on compact windows. Hidden
+// controls are skipped, so page-specific actions do not reserve empty slots.
+class QtFlowLayout final : public QLayout {
+public:
+    explicit QtFlowLayout(QWidget* parentWidget, int horizontalSpacing = 6, int verticalSpacing = 6,
+                          bool stretchRows = false)
+        : QLayout(parentWidget), horizontalSpacing_(horizontalSpacing), verticalSpacing_(verticalSpacing),
+          stretchRows_(stretchRows) {
+        setContentsMargins(0, 0, 0, 0);
+    }
+
+    ~QtFlowLayout() override {
+        while (auto* item = takeAt(0)) delete item;
+    }
+
+    void addItem(QLayoutItem* item) override { items_.append(item); }
+    int count() const override { return items_.size(); }
+    QLayoutItem* itemAt(int index) const override { return items_.value(index, nullptr); }
+    QLayoutItem* takeAt(int index) override {
+        return index >= 0 && index < items_.size() ? items_.takeAt(index) : nullptr;
+    }
+    Qt::Orientations expandingDirections() const override { return Qt::Orientations(); }
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override { return doLayout(QRect(0, 0, width, 0), true); }
+    QSize sizeHint() const override { return minimumSize(); }
+    QSize minimumSize() const override {
+        QSize result;
+        for (const auto* item : items_) {
+            if (!item->isEmpty()) result = result.expandedTo(item->minimumSize());
+        }
+        const auto margins = contentsMargins();
+        result += QSize(margins.left() + margins.right(), margins.top() + margins.bottom());
+        return result;
+    }
+    void setGeometry(const QRect& rect) override {
+        QLayout::setGeometry(rect);
+        doLayout(rect, false);
+    }
+
+private:
+    int doLayout(const QRect& rect, bool testOnly) const {
+        const auto margins = contentsMargins();
+        const QRect area = rect.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom());
+        int y = area.y();
+        QList<QLayoutItem*> row;
+        int rowWidth = 0;
+        int rowHeight = 0;
+        int contentBottom = area.y();
+        auto placeRow = [&](bool place) {
+            if (row.isEmpty()) return;
+            const int rowCount = int(row.size());
+            const int gaps = horizontalSpacing_ * std::max(0, rowCount - 1);
+            const int baseWidth = rowWidth - (row.isEmpty() ? 0 : horizontalSpacing_);
+            const int availableWidth = std::max(baseWidth, area.width() - gaps);
+            const int extraPerItem = stretchRows_ ? std::max(0, availableWidth - baseWidth) / rowCount : 0;
+            const int extraRemainder = stretchRows_ ? std::max(0, availableWidth - baseWidth) % rowCount : 0;
+            int x = area.x();
+            for (int index = 0; index < row.size(); ++index) {
+                auto* item = row[index];
+                const auto itemSize = item->sizeHint().expandedTo(item->minimumSize());
+                const int width = itemSize.width() + extraPerItem + (index < extraRemainder ? 1 : 0);
+                if (place) item->setGeometry(QRect(x, y, width, rowHeight));
+                x += width + horizontalSpacing_;
+            }
+            contentBottom = y + rowHeight;
+            y = contentBottom + verticalSpacing_;
+            row.clear();
+            rowWidth = 0;
+            rowHeight = 0;
+        };
+        for (auto* item : items_) {
+            if (item->isEmpty()) continue;
+            const QSize itemSize = item->sizeHint().expandedTo(item->minimumSize());
+            const int proposedWidth = rowWidth + itemSize.width() + (row.isEmpty() ? 0 : horizontalSpacing_);
+            if (!row.isEmpty() && proposedWidth > area.width()) {
+                placeRow(!testOnly);
+            }
+            row.append(item);
+            rowWidth += itemSize.width() + (row.size() == 1 ? 0 : horizontalSpacing_);
+            rowHeight = std::max(rowHeight, itemSize.height());
+        }
+        if (!row.isEmpty()) placeRow(!testOnly);
+        return contentBottom - rect.y() + margins.bottom();
+    }
+
+    QList<QLayoutItem*> items_;
+    int horizontalSpacing_;
+    int verticalSpacing_;
+    bool stretchRows_;
+};
+
+// The viewport decides the breakpoint, so a child's old minimum width cannot
+// keep a compact page stuck in its wide layout.
+class QtProfileMainColumns final : public QWidget {
+public:
+    explicit QtProfileMainColumns(QWidget* parent = nullptr) : QWidget(parent) {
+        setObjectName("profileMainColumns");
+        columns_ = new QBoxLayout(QBoxLayout::TopToBottom, this);
+        columns_->setContentsMargins(0, 0, 0, 0);
+        columns_->setSpacing(16);
+    }
+    void addColumn(QWidget* column, int stretch) {
+        column->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        columns_->addWidget(column, stretch, Qt::AlignTop);
+    }
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        QWidget::resizeEvent(event);
+        updateDirection();
+    }
+    void showEvent(QShowEvent* event) override {
+        QWidget::showEvent(event);
+        updateDirection();
+    }
+private:
+    void updateDirection() {
+        int availableWidth = width();
+        for (auto* ancestor = parentWidget(); ancestor; ancestor = ancestor->parentWidget()) {
+            if (auto* scroll = qobject_cast<QScrollArea*>(ancestor)) {
+                availableWidth = scroll->viewport()->width();
+                break;
+            }
+        }
+        const double baseSize = qApp->property("forgeBasePointSize").toDouble();
+        const double scale = baseSize > 0 ? qApp->font().pointSizeF() / baseSize : 1.0;
+        const auto direction = availableWidth >= qRound(720 * scale)
+            ? QBoxLayout::LeftToRight : QBoxLayout::TopToBottom;
+        if (columns_->direction() != direction) columns_->setDirection(direction);
+    }
+    QBoxLayout* columns_ = nullptr;
 };
 
 static void applyQtWindowLayoutGeometry(QWidget* root, const QtDisplaySettings& settings) {
@@ -177,6 +311,28 @@ void labelForAccessibility(QWidget* widget, const QString& name, const QString& 
     if (!widget) return;
     widget->setAccessibleName(name);
     if (!description.isEmpty()) widget->setAccessibleDescription(description);
+}
+QPixmap fallbackAchievementIcon(const QSize& size, const QPalette& palette) {
+    QPixmap image(size);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const qreal scale = std::min(size.width(), size.height()) / 32.0;
+    painter.scale(scale, scale);
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(palette.color(QPalette::Highlight), 1.5));
+    painter.drawEllipse(QRectF(5.5, 5.5, 21.0, 21.0));
+    QPolygonF star;
+    constexpr qreal pi = 3.14159265358979323846;
+    for (int point = 0; point < 10; ++point) {
+        const qreal angle = -pi * 0.5 + point * pi / 5.0;
+        const qreal radius = point % 2 == 0 ? 7.0 : 3.2;
+        star << QPointF(16.0 + std::cos(angle) * radius, 16.0 + std::sin(angle) * radius);
+    }
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(palette.color(QPalette::Text));
+    painter.drawPolygon(star);
+    return image;
 }
 QString timeText(std::int64_t t) {
     return t ? QDateTime::fromSecsSinceEpoch(t).toString("dd.MM.yyyy HH:mm") : QString::fromUtf8("—");
@@ -684,12 +840,41 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profiles_->setObjectName("profiles");
     labelForAccessibility(profiles_, QString::fromUtf8("Выбранный профиль"),
         QString::fromUtf8("Список доступных активных профилей."));
-    profiles_->setProperty("qtTextScaleMinimumWidth", 200);
-    profiles_->setMinimumWidth(200);
+    profiles_->setProperty("qtTextScaleMinimumWidth", 160);
+    profiles_->setMinimumWidth(160);
     header->addWidget(profiles_);
+    const auto drawHeaderIcon = [](int kind) {
+        QPixmap pixmap(20, 20);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(QColor("#b9b9c4"), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.setBrush(Qt::NoBrush);
+        if (kind == 0) { // Copy
+            painter.drawRoundedRect(QRectF(2.5, 6.5, 10, 10), 1.5, 1.5);
+            painter.drawRoundedRect(QRectF(7.5, 2.5, 10, 10), 1.5, 1.5);
+        } else if (kind == 1) { // Refresh
+            painter.drawArc(QRectF(3, 3, 14, 14), 40 * 16, 285 * 16);
+            QPainterPath arrow;
+            arrow.moveTo(15.5, 2.5); arrow.lineTo(18, 3.2); arrow.lineTo(17.3, 5.8);
+            painter.drawPath(arrow);
+        } else if (kind == 2) { // Open shortcut
+            painter.drawRoundedRect(QRectF(2.5, 7, 10, 10), 1.5, 1.5);
+            QPainterPath arrow;
+            arrow.moveTo(9, 11); arrow.lineTo(17, 3); arrow.lineTo(12.5, 3);
+            arrow.moveTo(17, 3); arrow.lineTo(17, 7.5);
+            painter.drawPath(arrow);
+        } else { // Focus timer
+            painter.drawEllipse(QRectF(3, 3, 14, 14));
+            painter.drawLine(QPointF(10, 5.5), QPointF(10, 10));
+            painter.drawLine(QPointF(10, 10), QPointF(13.5, 12));
+            painter.drawLine(QPointF(7.5, 1.5), QPointF(12.5, 1.5));
+        }
+        return QIcon(pixmap);
+    };
     profileRecentButton_ = new QToolButton;
     profileRecentButton_->setObjectName("recentProfiles");
-    profileRecentButton_->setText(QString::fromUtf8("Недавние"));
+    profileRecentButton_->setText(QString::fromUtf8("Недав."));
     profileRecentButton_->setAccessibleName(QString::fromUtf8("Недавно выбранные профили"));
     profileRecentButton_->setToolTip(QString::fromUtf8("Быстро выбрать один из шести недавно открытых профилей"));
     profileRecentButton_->setPopupMode(QToolButton::InstantPopup);
@@ -699,7 +884,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(profileRecentButton_);
     profileIdentityCopy_ = new QToolButton;
     profileIdentityCopy_->setObjectName("profileIdentityCopy");
-    profileIdentityCopy_->setText(QString::fromUtf8("Копировать"));
+    profileIdentityCopy_->setIcon(drawHeaderIcon(0));
+    profileIdentityCopy_->setIconSize(QSize(18, 18));
+    profileIdentityCopy_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    markScaleFixedSize(profileIdentityCopy_, QSize(32, 32));
     profileIdentityCopy_->setAccessibleName(QString::fromUtf8("Копировать данные выбранного профиля"));
     profileIdentityCopy_->setToolTip(QString::fromUtf8("Скопировать имя, ID или логин выбранного профиля"));
     profileIdentityCopy_->setPopupMode(QToolButton::InstantPopup);
@@ -739,7 +927,12 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addStretch();
     mode_ = new QLabel;
     header->addWidget(mode_);
-    auto* refresh = new QPushButton(QString::fromUtf8("Обновить"));
+    auto* refresh = new QPushButton;
+    refresh->setObjectName("quickRefresh");
+    refresh->setIcon(drawHeaderIcon(1));
+    refresh->setIconSize(QSize(18, 18));
+    markScaleFixedSize(refresh, QSize(32, 32));
+    labelForAccessibility(refresh, QString::fromUtf8("Обновить данные"));
     refresh->setToolTip(QString::fromUtf8("Перечитать локальную копию данных без облачной синхронизации"));
     header->addWidget(refresh);
     cloudQuickButton_ = new QToolButton;
@@ -763,7 +956,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(cloudQuickButton_);
     shortcutLauncher_ = new QToolButton;
     shortcutLauncher_->setObjectName("quickShortcutLauncher");
-    shortcutLauncher_->setText(QString::fromUtf8("Ярлыки"));
+    shortcutLauncher_->setIcon(drawHeaderIcon(2));
+    shortcutLauncher_->setIconSize(QSize(18, 18));
+    shortcutLauncher_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    markScaleFixedSize(shortcutLauncher_, QSize(32, 32));
     shortcutLauncher_->setAccessibleName(QString::fromUtf8("Быстрый запуск ярлыков"));
     shortcutLauncher_->setAccessibleDescription(QString::fromUtf8("Открывает сохранённые программы; цвет точки показывает состояние процесса."));
     shortcutLauncher_->setToolTip(QString::fromUtf8("Быстрый запуск. Зелёная точка — запущена, красная — не запущена, серая — статус неизвестен."));
@@ -797,10 +993,14 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(shortcutLauncher_);
     pomodoroQuickButton_ = new QToolButton;
     pomodoroQuickButton_->setObjectName("pomodoroQuickButton");
-    pomodoroQuickButton_->setText(QString::fromUtf8("Фокус · 25:00"));
+    pomodoroQuickButton_->setIcon(drawHeaderIcon(3));
+    pomodoroQuickButton_->setIconSize(QSize(14, 14));
+    pomodoroQuickButton_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    pomodoroQuickButton_->setText(QString::fromUtf8("25:00"));
     pomodoroQuickButton_->setAccessibleName(QString::fromUtf8("Быстрое управление Pomodoro"));
     pomodoroQuickButton_->setAccessibleDescription(QString::fromUtf8("Показывает текущую фазу и оставшееся время; меню содержит старт или паузу, следующий интервал и сброс."));
     pomodoroQuickButton_->setToolTip(pomodoroQuickButton_->accessibleDescription());
+    pomodoroQuickButton_->setFixedWidth(scaledUiMetric(88, displaySettings_.scalePercent));
     pomodoroQuickButton_->setPopupMode(QToolButton::InstantPopup);
     pomodoroQuickMenu_ = new QMenu(pomodoroQuickButton_);
     pomodoroQuickMenu_->setObjectName("pomodoroQuickMenu");
@@ -832,6 +1032,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     header->addWidget(pomodoroQuickButton_);
     auto* menuButton = new QToolButton;
     menuButton->setText(QString::fromUtf8("⋯"));
+    menuButton->setAccessibleName(QString::fromUtf8("Дополнительные действия"));
+    markScaleFixedSize(menuButton, QSize(32, 32));
     menuButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(menuButton);
     adminLoginAction_ = menu->addAction(QString::fromUtf8("Войти как администратор"), this, [this] { authenticate(); });
@@ -929,6 +1131,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         if (!ShowQtDisplaySettings(this, workspace_.directory, displaySettings_)) return;
         appendLog(AppLogLevel::Info, "InterfaceSettings", "Qt display settings saved");
         ApplyQtDisplaySettings(*qApp, displaySettings_);
+        updateNavigationIndicator(false);
         applyQtWindowLayoutGeometry(backgroundSurface_, displaySettings_);
         setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
         setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
@@ -1028,6 +1231,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigation_->setObjectName("navigation");
     navigation_->setAccessibleName(QString::fromUtf8("Разделы ForgeMirror"));
     navigation_->setAccessibleDescription(QString::fromUtf8("Переключение между модулями программы. Скрытые пункты недоступны в текущем режиме."));
+    navigation_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     navigation_->addItems({QString::fromUtf8("Профиль"), QString::fromUtf8("Задачи"),
         QString::fromUtf8("Проекты"), QString::fromUtf8("Навыки"), QString::fromUtf8("Пайплайн"),
         QString::fromUtf8("Профессии"), QString::fromUtf8("Статистика"), QString::fromUtf8("Аудит"),
@@ -1040,6 +1244,16 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString(), QString(), QString(), QString(), QStringLiteral("F6"), QStringLiteral("F5")
     };
     navigation_->setIconSize(QSize(18, 18));
+    navigationIndicator_ = new QFrame(navigation_->viewport());
+    navigationIndicator_->setObjectName("navigationActiveIndicator");
+    navigationIndicator_->setAttribute(Qt::WA_TransparentForMouseEvents);
+    navigationIndicator_->setFocusPolicy(Qt::NoFocus);
+    navigationIndicator_->hide();
+    navigation_->viewport()->installEventFilter(this);
+    navigationIndicatorAnimation_ = new QPropertyAnimation(navigationIndicator_, "geometry", this);
+    navigationIndicatorAnimation_->setObjectName("navigationIndicatorAnimation");
+    navigationIndicatorAnimation_->setDuration(180);
+    navigationIndicatorAnimation_->setEasingCurve(QEasingCurve::OutCubic);
     const auto drawNavigationIcon = [](int index, const QColor& color) {
         QPixmap pixmap(20, 20);
         pixmap.fill(Qt::transparent);
@@ -1126,10 +1340,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         const auto tooltip = navigationHotkeys[size_t(index)];
         if (!tooltip.isEmpty()) item->setToolTip(item->text() + QStringLiteral(" · ") + tooltip);
     }
-    markScaleFixedWidth(navigation_, 168);
+    markScaleFixedWidth(navigation_, 208);
     auto* navigationColumn = new QWidget;
     navigationColumn->setObjectName("navigationColumn");
-    markScaleFixedWidth(navigationColumn, 168);
+    markScaleFixedWidth(navigationColumn, 208);
     auto* navigationLayout = new QVBoxLayout(navigationColumn);
     navigationLayout->setContentsMargins(0, 0, 0, 0);
     navigationLayout->setSpacing(8);
@@ -1178,6 +1392,49 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     summary_->setTextFormat(Qt::PlainText);
     summary_->setWordWrap(true);
     content->addWidget(summary_);
+    adminStatsKpiRow_ = new QWidget;
+    adminStatsKpiRow_->setObjectName("adminStatsKpiRow");
+    auto kpiRowPolicy = adminStatsKpiRow_->sizePolicy();
+    kpiRowPolicy.setHeightForWidth(true);
+    adminStatsKpiRow_->setSizePolicy(kpiRowPolicy);
+    auto* adminStatsKpiLayout = new QtFlowLayout(adminStatsKpiRow_, 8, 8, true);
+    const std::array<QString, 4> statsKpiCaptions = {
+        QString::fromUtf8("Профилей"), QString::fromUtf8("Средний уровень"),
+        QString::fromUtf8("Общий XP"), QString::fromUtf8("Активные ачивки")
+    };
+    const std::array<QString, 4> statsKpiNames = {
+        QString::fromUtf8("Общее число профилей"), QString::fromUtf8("Средний уровень профилей"),
+        QString::fromUtf8("Общий опыт всех профилей"), QString::fromUtf8("Активные достижения профилей")
+    };
+    for (size_t index = 0; index < statsKpiCaptions.size(); ++index) {
+        auto* card = new QFrame(adminStatsKpiRow_);
+        card->setObjectName(QStringLiteral("adminStatsKpiCard_%1").arg(index));
+        card->setProperty("metric", true);
+        card->setMinimumWidth(scaledUiMetric(148, displaySettings_.scalePercent));
+        markScaleFixedHeight(card, 56);
+        auto* cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(12, 8, 12, 8);
+        cardLayout->setSpacing(0);
+        auto* caption = new QLabel(statsKpiCaptions[index], card);
+        caption->setWordWrap(false);
+        caption->setAccessibleName(statsKpiNames[index]);
+        cardLayout->addWidget(caption);
+        adminStatsKpiValues_[index] = new QLabel(QString::fromUtf8("—"), card);
+        adminStatsKpiValues_[index]->setObjectName(QStringLiteral("adminStatsKpiValue_%1").arg(index));
+        adminStatsKpiValues_[index]->setProperty("metricValue", true);
+        QFont metricFont = adminStatsKpiValues_[index]->font();
+        metricFont.setPointSizeF(metricFont.pointSizeF() * 1.12);
+        adminStatsKpiValues_[index]->setFont(metricFont);
+        adminStatsKpiValues_[index]->setAccessibleName(statsKpiNames[index]);
+        cardLayout->addWidget(adminStatsKpiValues_[index]);
+        adminStatsKpiNotes_[index] = new QLabel(card);
+        adminStatsKpiNotes_[index]->setObjectName(QStringLiteral("adminStatsKpiNote_%1").arg(index));
+        // Secondary metrics are still exposed via card tooltips/accessibility,
+        // without a third line inflating the compact 56 px KPI row.
+        adminStatsKpiNotes_[index]->hide();
+        adminStatsKpiLayout->addWidget(card);
+    }
+    content->addWidget(adminStatsKpiRow_);
     taskPipelineSummary_ = new QLabel;
     taskPipelineSummary_->setObjectName("taskPipelineSummary");
     taskPipelineSummary_->setTextFormat(Qt::RichText);
@@ -1213,6 +1470,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* modelForm = new QFormLayout(modelSettingsPage_);
     modelForm->setContentsMargins(0, 0, 0, 0);
     modelForm->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+    modelForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
     modelChoice_ = new QComboBox;
     modelChoice_->setObjectName("modelChoice");
     modelFilter_ = new QLineEdit;
@@ -1228,9 +1486,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelChoiceRefresh_->setObjectName("modelChoiceRefresh");
     labelForAccessibility(modelChoiceRefresh_, QString::fromUtf8("Обновить список моделей"));
     auto* modelFilterRow = new QWidget;
-    auto* modelFilterLayout = new QHBoxLayout(modelFilterRow);
+    modelFilterRow->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    auto* modelFilterLayout = new QtFlowLayout(modelFilterRow, 8, 4);
     modelFilterLayout->setContentsMargins(0, 0, 0, 0);
-    modelFilterLayout->addWidget(modelFilter_, 1);
+    modelFilterLayout->addWidget(modelFilter_);
     modelFilterLayout->addWidget(modelFilterReset_);
     modelFilterLayout->addWidget(modelChoiceRefresh_);
     modelChoiceCount_ = new QLabel;
@@ -1270,7 +1529,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelForm->addRow(modelAutoRotate_);
     modelForm->addRow(QString::fromUtf8("Скорость поворота"), modelSpeed_);
     modelForm->addRow(QString::fromUtf8("Цвет линий"), modelColor_);
-    modelForm->addRow(QString(), new QLabel(QString::fromUtf8("Перетаскивайте модель мышью, колесом меняйте масштаб. Настройки хранятся в локальном meta/ui.ini.")));
+    auto* modelHelp = new QLabel(QString::fromUtf8("Перетаскивайте модель мышью, колесом меняйте масштаб. Настройки хранятся в локальном meta/ui.ini."));
+    modelHelp->setObjectName("modelSettingsHelp");
+    modelHelp->setWordWrap(true);
+    modelForm->addRow(QString(), modelHelp);
     content->addWidget(modelSettingsPage_, 1);
     modelPage_->hide(); modelSettingsPage_->hide();
     modelTimer_ = new QTimer(this);
@@ -1283,9 +1545,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     modelTimer_->start();
     profileMetrics_ = new QWidget;
     profileMetrics_->setObjectName("profileMetrics");
-    auto* metricsLayout = new QHBoxLayout(profileMetrics_);
-    metricsLayout->setContentsMargins(0, 0, 0, 0);
-    metricsLayout->setSpacing(8);
+    auto* metricsLayout = new QtFlowLayout(profileMetrics_, 8, 8, true);
+    QSizePolicy metricsPolicy = profileMetrics_->sizePolicy();
+    metricsPolicy.setHeightForWidth(true);
+    profileMetrics_->setSizePolicy(metricsPolicy);
     const QStringList metricNames = {QString::fromUtf8("Уровень"), QString::fromUtf8("Всего XP"),
         QString::fromUtf8("Выполнено задач"), QString::fromUtf8("XP до уровня"), QString::fromUtf8("Кукоины")};
     for (int i = 0; i < 5; ++i) {
@@ -1299,7 +1562,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         profileValues_[i] = new QLabel(QString::fromUtf8("—"));
         profileValues_[i]->setProperty("metricValue", true);
         box->addWidget(profileValues_[i]);
-        metricsLayout->addWidget(metric, 1);
+        metricsLayout->addWidget(metric);
     }
     content->addWidget(profileMetrics_);
     profileOverview_ = new QWidget;
@@ -1355,41 +1618,54 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         stateGrid->addWidget(heading, 0, index);
         stateGrid->addWidget(profileStateValues_[index], 1, index);
     }
-    profileOverviewLayout->addWidget(stateCard);
-    auto* signalGrid = new QGridLayout;
-    signalGrid->setContentsMargins(0, 0, 0, 0);
-    signalGrid->setHorizontalSpacing(8);
-    signalGrid->setVerticalSpacing(8);
+    auto* profileMain = new QtProfileMainColumns(profileOverview_);
+    auto* profileWork = new QWidget(profileMain);
+    profileWork->setObjectName("profileWorkColumn");
+    auto* profileWorkLayout = new QVBoxLayout(profileWork);
+    profileWorkLayout->setContentsMargins(0, 0, 0, 0);
+    profileWorkLayout->setSpacing(8);
+    auto* profileContext = new QWidget(profileMain);
+    profileContext->setObjectName("profileContextColumn");
+    auto* profileContextLayout = new QVBoxLayout(profileContext);
+    profileContextLayout->setContentsMargins(0, 0, 0, 0);
+    profileContextLayout->setSpacing(8);
+    auto* profileDiagnostics = new QWidget(profileOverview_);
+    profileDiagnostics->setObjectName("profileDiagnostics");
+    auto* profileDiagnosticsLayout = new QVBoxLayout(profileDiagnostics);
+    profileDiagnosticsLayout->setContentsMargins(0, 0, 0, 0);
+    profileDiagnosticsLayout->setSpacing(8);
+    profileDiagnosticsLayout->addWidget(stateCard);
     const QStringList signalNames = {QString::fromUtf8("Следующий рубеж"), QString::fromUtf8("Рабочий фокус"),
         QString::fromUtf8("Нагрузка"), QString::fromUtf8("Слабая зона")};
     for (int index = 0; index < 4; ++index) {
         auto* card = new QFrame;
         card->setObjectName(QStringLiteral("profileSignalCard%1").arg(index));
-        card->setProperty("metric", true);
         auto* box = new QVBoxLayout(card);
-        box->setContentsMargins(10, 8, 10, 8);
-        box->setSpacing(2);
+        box->setContentsMargins(0, 0, 0, 0);
+        box->setSpacing(4);
         auto* heading = new QLabel(signalNames[index], card);
         heading->setObjectName(QStringLiteral("profileSignalHeading%1").arg(index));
         profileSignalValues_[index] = new QLabel(QString::fromUtf8("—"), card);
         profileSignalValues_[index]->setObjectName(QStringLiteral("profileSignalValue%1").arg(index));
         profileSignalValues_[index]->setWordWrap(true);
+        profileSignalValues_[index]->setTextFormat(Qt::PlainText);
         profileSignalValues_[index]->setProperty("metricValue", true);
         labelForAccessibility(profileSignalValues_[index], QString::fromUtf8("Сигнал профиля: %1").arg(signalNames[index]));
         profileSignalDetails_[index] = new QLabel(card);
         profileSignalDetails_[index]->setObjectName(QStringLiteral("profileSignalDetail%1").arg(index));
         profileSignalDetails_[index]->setWordWrap(true);
+        profileSignalDetails_[index]->setTextFormat(Qt::PlainText);
         box->addWidget(heading);
         box->addWidget(profileSignalValues_[index]);
         box->addWidget(profileSignalDetails_[index]);
-        signalGrid->addWidget(card, index / 2, index % 2);
+        if (index == 1 || index == 2) profileWorkLayout->addWidget(card);
+        else if (index == 0) profileContextLayout->addWidget(card);
+        else profileDiagnosticsLayout->addWidget(card);
     }
-    profileOverviewLayout->addLayout(signalGrid);
     auto* profileBalanceCard = new QFrame(profileOverview_);
     profileBalanceCard->setObjectName("profileBalanceCard");
-    profileBalanceCard->setProperty("metric", true);
     auto* profileBalanceLayout = new QVBoxLayout(profileBalanceCard);
-    profileBalanceLayout->setContentsMargins(10, 8, 10, 8);
+    profileBalanceLayout->setContentsMargins(0, 0, 0, 0);
     profileBalanceLayout->setSpacing(4);
     auto* profileBalanceHeading = new QLabel(QString::fromUtf8("Зоны перекоса"), profileBalanceCard);
     profileBalanceHeading->setObjectName("profileBalanceHeading");
@@ -1400,6 +1676,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileBalanceTable_->setHorizontalHeaderLabels({QString::fromUtf8("Категория"), QString::fromUtf8("Оценка"), QString::fromUtf8("Прогресс")});
     profileBalanceTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     profileBalanceTable_->setSelectionMode(QAbstractItemView::NoSelection);
+    profileBalanceTable_->setFrameShape(QFrame::NoFrame);
+    profileBalanceTable_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     profileBalanceTable_->setShowGrid(false);
     profileBalanceTable_->verticalHeader()->hide();
     profileBalanceTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -1419,39 +1697,46 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         profileBalanceTable_->setCellWidget(row, 2, profileBalanceBars_[row]);
     }
     profileBalanceLayout->addWidget(profileBalanceTable_);
-    profileOverviewLayout->addWidget(profileBalanceCard);
+    profileContextLayout->addWidget(profileBalanceCard);
     profileTaskBriefCard_ = new QFrame;
     auto* profileTaskCard = profileTaskBriefCard_;
     profileTaskCard->setObjectName("profileTaskBriefCard");
-    profileTaskCard->setProperty("metric", true);
     auto* taskBriefLayout = new QVBoxLayout(profileTaskCard);
-    taskBriefLayout->setContentsMargins(10, 8, 10, 8);
-    taskBriefLayout->setSpacing(6);
+    taskBriefLayout->setContentsMargins(0, 0, 0, 0);
+    taskBriefLayout->setSpacing(4);
     profileTaskSummary_ = new QLabel(QString::fromUtf8("Текущие задачи профиля"), profileTaskCard);
     profileTaskSummary_->setObjectName("profileTaskBriefSummary");
+    profileTaskSummary_->setWordWrap(true);
     profileTaskSummary_->setProperty("metricValue", true);
     labelForAccessibility(profileTaskSummary_, QString::fromUtf8("Сводка назначенных задач профиля"));
     taskBriefLayout->addWidget(profileTaskSummary_);
+    profileTaskEmpty_ = new QLabel(QString::fromUtf8("Активных задач нет. Назначенные задачи появятся здесь."), profileTaskCard);
+    profileTaskEmpty_->setObjectName("profileTaskEmpty");
+    profileTaskEmpty_->setWordWrap(true);
+    profileTaskEmpty_->setAccessibleName(QString::fromUtf8("Нет активных задач профиля"));
+    taskBriefLayout->addWidget(profileTaskEmpty_);
     profileTaskBriefTable_ = new QTableWidget(0, 4, profileTaskCard);
     profileTaskBriefTable_->setObjectName("profileTaskBriefTable");
     profileTaskBriefTable_->setHorizontalHeaderLabels({QString::fromUtf8("Задача"), QString::fromUtf8("Проект"),
         QString::fromUtf8("Этап"), QString::fromUtf8("Срок")});
+    profileTaskBriefTable_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     profileTaskBriefTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     profileTaskBriefTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     profileTaskBriefTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    profileTaskBriefTable_->setFrameShape(QFrame::NoFrame);
     profileTaskBriefTable_->setShowGrid(false);
     profileTaskBriefTable_->verticalHeader()->hide();
-    profileTaskBriefTable_->horizontalHeader()->setStretchLastSection(true);
+    profileTaskBriefTable_->horizontalHeader()->setStretchLastSection(false);
+    profileTaskBriefTable_->viewport()->installEventFilter(this);
     profileTaskBriefTable_->setMaximumHeight(scaledUiMetric(160, displaySettings_.scalePercent));
     profileTaskBriefTable_->setAccessibleName(QString::fromUtf8("Ближайшие активные задачи профиля"));
     profileTaskBriefTable_->setAccessibleDescription(QString::fromUtf8("До четырёх назначенных задач, отсортированных по срочности. Двойной щелчок откроет задачу."));
     taskBriefLayout->addWidget(profileTaskBriefTable_);
     profileRecentActionsCard_ = new QFrame;
     profileRecentActionsCard_->setObjectName("profileRecentActionsCard");
-    profileRecentActionsCard_->setProperty("metric", true);
     auto* recentActionsLayout = new QVBoxLayout(profileRecentActionsCard_);
-    recentActionsLayout->setContentsMargins(10, 8, 10, 8);
-    recentActionsLayout->setSpacing(5);
+    recentActionsLayout->setContentsMargins(0, 0, 0, 0);
+    recentActionsLayout->setSpacing(4);
     auto* recentActionsTitle = new QLabel(QString::fromUtf8("Последние действия"), profileRecentActionsCard_);
     recentActionsTitle->setProperty("metricValue", true);
     recentActionsTitle->setObjectName("profileRecentActionsTitle");
@@ -1462,18 +1747,19 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     labelForAccessibility(profileRecentActionsSummary_, QString::fromUtf8("Последние начисления опыта профиля"),
         QString::fromUtf8("Показывает до трёх последних записанных начислений XP по задачам. Полная история доступна в истории профиля."));
     recentActionsLayout->addWidget(profileRecentActionsSummary_);
-    auto* profileOverviewActions = new QGridLayout;
-    profileOverviewActions->setContentsMargins(0, 0, 0, 0);
-    profileOverviewActions->setHorizontalSpacing(6);
-    profileOverviewActions->setVerticalSpacing(4);
+    auto* profileOverviewActions = new QtFlowLayout(nullptr, 8, 4);
     const QStringList overviewTaskActionNames = {QString::fromUtf8("Открыть фокус-задачу"), QString::fromUtf8("Все задачи профиля"),
         QString::fromUtf8("Активные"), QString::fromUtf8("Просроченные"), QString::fromUtf8("Ждут XP")};
     for (int index = 0; index < 5; ++index) {
         profileOverviewTaskButtons_[index] = new QPushButton(overviewTaskActionNames[index], profileOverview_);
         profileOverviewTaskButtons_[index]->setObjectName(QStringLiteral("profileOverviewTaskAction%1").arg(index));
-        profileOverviewTaskButtons_[index]->setMinimumHeight(30);
+        markScaleFixedHeight(profileOverviewTaskButtons_[index], 26);
         labelForAccessibility(profileOverviewTaskButtons_[index], overviewTaskActionNames[index]);
-        profileOverviewActions->addWidget(profileOverviewTaskButtons_[index], index / 3, index % 3);
+        profileOverviewTaskButtons_[index]->setToolTip(overviewTaskActionNames[index]);
+        if (index < 2) profileOverviewTaskButtons_[index]->setIcon(CreateQtActionIcon(
+            index == 0 ? QtActionIcon::Focus : QtActionIcon::Tasks, palette()));
+        if (index == 0) profileOverviewTaskButtons_[index]->setText(QString::fromUtf8("Фокус-задача"));
+        profileOverviewActions->addWidget(profileOverviewTaskButtons_[index]);
         connect(profileOverviewTaskButtons_[index], &QPushButton::clicked, this, [this, index] {
             if (index == 0 && profileTaskBriefTable_->rowCount() > 0) {
                 auto* item = profileTaskBriefTable_->item(0, 0);
@@ -1488,7 +1774,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileOverviewAnalytics_ = new QPushButton(QString::fromUtf8("Графики и категории"), profileOverview_);
     profileOverviewAnalytics_->setObjectName("profileOverviewAnalytics");
     labelForAccessibility(profileOverviewAnalytics_, QString::fromUtf8("Открыть графики и категории профиля"));
-    profileOverviewActions->addWidget(profileOverviewAnalytics_, 1, 2);
+    profileOverviewAnalytics_->setIcon(CreateQtActionIcon(QtActionIcon::Chart, palette()));
+    profileOverviewAnalytics_->setToolTip(profileOverviewAnalytics_->accessibleName());
+    profileOverviewAnalytics_->setText(QString());
+    profileOverviewAnalytics_->setStyleSheet(QStringLiteral("padding: 0px; min-height: 0px;"));
+    markScaleFixedWidth(profileOverviewAnalytics_, 26);
+    markScaleFixedHeight(profileOverviewAnalytics_, 26);
+    profileOverviewActions->addWidget(profileOverviewAnalytics_);
     connect(profileOverviewAnalytics_, &QPushButton::clicked, this, [this] {
         displaySettings_.profileViewMode = 1;
         saveDisplayContext();
@@ -1497,9 +1789,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileOverviewXp_ = new QPushButton(QString::fromUtf8("Добавить XP"), profileOverview_);
     profileOverviewXp_->setObjectName("profileOverviewQuickXp");
     labelForAccessibility(profileOverviewXp_, QString::fromUtf8("Добавить опыт выбранному профилю"));
-    profileOverviewActions->addWidget(profileOverviewXp_, 2, 0);
+    profileOverviewXp_->setIcon(CreateQtActionIcon(QtActionIcon::AddXp, palette()));
+    profileOverviewXp_->setToolTip(profileOverviewXp_->accessibleName());
+    profileOverviewActions->addWidget(profileOverviewXp_);
     connect(profileOverviewXp_, &QPushButton::clicked, this, [this] { grantDirectXp(); });
-    profileRankControls_ = new QWidget(profileOverview_);
+    profileRankControls_ = new QWidget;
     profileRankControls_->setObjectName("profileRankControls");
     auto* profileRankLayout = new QHBoxLayout(profileRankControls_);
     profileRankLayout->setContentsMargins(0, 0, 0, 0);
@@ -1519,11 +1813,30 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     profileRankApply_->setToolTip(QString::fromUtf8("Сохранить выбранный ранг сразу"));
     labelForAccessibility(profileRankApply_, QString::fromUtf8("Применить выбранный ранг профиля"), profileRankApply_->toolTip());
     profileRankLayout->addWidget(profileRankApply_);
-    profileOverviewActions->addWidget(profileRankControls_, 2, 1, 1, 2);
     connect(profileRankApply_, &QPushButton::clicked, this, [this] { applyProfileRank(); });
-    profileOverviewLayout->addLayout(profileOverviewActions);
-    profileOverviewLayout->addWidget(profileTaskCard);
-    profileOverviewLayout->addWidget(profileRecentActionsCard_);
+    profileWorkLayout->addLayout(profileOverviewActions);
+    profileWorkLayout->addWidget(profileTaskCard);
+    profileMain->addColumn(profileWork, 3);
+    profileMain->addColumn(profileContext, 2);
+    profileOverviewLayout->addWidget(profileMain);
+    auto* diagnosticsToggle = new QToolButton(profileOverview_);
+    diagnosticsToggle->setObjectName("profileDiagnosticsToggle");
+    diagnosticsToggle->setText(QString::fromUtf8("Диагностика и последние действия"));
+    diagnosticsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    diagnosticsToggle->setCheckable(true);
+    diagnosticsToggle->setIcon(CreateQtActionIcon(QtActionIcon::ChevronRight, palette()));
+    diagnosticsToggle->setToolTip(QString::fromUtf8("Показать состояние, слабую зону и последние начисления XP"));
+    diagnosticsToggle->setAccessibleName(QString::fromUtf8("Подробности профиля"));
+    markScaleFixedHeight(diagnosticsToggle, 26);
+    profileOverviewLayout->addWidget(diagnosticsToggle, 0, Qt::AlignLeft);
+    profileDiagnosticsLayout->addWidget(profileRecentActionsCard_);
+    profileDiagnostics->hide();
+    profileOverviewLayout->addWidget(profileDiagnostics);
+    connect(diagnosticsToggle, &QToolButton::toggled, this, [this, diagnosticsToggle, profileDiagnostics](bool expanded) {
+        profileDiagnostics->setVisible(expanded);
+        diagnosticsToggle->setIcon(CreateQtActionIcon(expanded ? QtActionIcon::ChevronDown : QtActionIcon::ChevronRight, palette()));
+        diagnosticsToggle->setAccessibleDescription(expanded ? QString::fromUtf8("Подробности раскрыты") : QString::fromUtf8("Подробности свёрнуты"));
+    });
     content->addWidget(profileOverview_);
     connect(profileTaskBriefTable_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
         if (row < 0 || row >= profileTaskBriefTable_->rowCount()) return;
@@ -1555,7 +1868,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         });
     }
     profileModesLayout->addStretch();
-    content->addWidget(profileViewModes_);
+    content->insertWidget(content->indexOf(profileMetrics_), profileViewModes_);
+    content->addWidget(profileRankControls_);
     auto* taskModeButton = new QPushButton(QString::fromUtf8("Задачи"));
     taskModeButton->setObjectName("profileViewMode3");
     taskModeButton->setCheckable(true);
@@ -1569,9 +1883,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     });
     profileTaskActions_ = new QWidget;
     profileTaskActions_->setObjectName("profileTaskActions");
-    auto* profileTaskActionsLayout = new QHBoxLayout(profileTaskActions_);
-    profileTaskActionsLayout->setContentsMargins(0, 0, 0, 0);
-    profileTaskActionsLayout->setSpacing(6);
+    auto* profileTaskActionsLayout = new QtFlowLayout(profileTaskActions_, 6, 4);
+    QSizePolicy profileTaskActionsPolicy = profileTaskActions_->sizePolicy();
+    profileTaskActionsPolicy.setHeightForWidth(true);
+    profileTaskActions_->setSizePolicy(profileTaskActionsPolicy);
     const QStringList profileTaskActionNames = {QString::fromUtf8("Все задачи"), QString::fromUtf8("Активные"),
         QString::fromUtf8("Просроченные"), QString::fromUtf8("Ждут XP")};
     for (int i = 0; i < 4; ++i) {
@@ -1582,24 +1897,33 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         profileTaskActionsLayout->addWidget(profileTaskFilterButtons_[i]);
         connect(profileTaskFilterButtons_[i], &QPushButton::clicked, this, [this, i] { openProfileTasksFilter(i); });
     }
-    profileTaskActionsLayout->addStretch(1);
     content->addWidget(profileTaskActions_);
     profileTaskActions_->hide();
     profileSkillFilters_ = new QWidget;
     profileSkillFilters_->setObjectName("profileSkillFilters");
-    auto* skillFilterGrid = new QGridLayout(profileSkillFilters_);
-    skillFilterGrid->setContentsMargins(0, 0, 0, 0);
-    skillFilterGrid->setHorizontalSpacing(8);
-    skillFilterGrid->setVerticalSpacing(4);
-    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("Сортировка")), 0, 0);
+    auto* skillFilterFlow = new QtFlowLayout(profileSkillFilters_, 8, 4);
+    QSizePolicy skillFilterPolicy = profileSkillFilters_->sizePolicy();
+    skillFilterPolicy.setHeightForWidth(true);
+    profileSkillFilters_->setSizePolicy(skillFilterPolicy);
+    auto makeSkillFilterGroup = [this](QLabel* label, QWidget* control, const char* objectName) {
+        auto* group = new QWidget(profileSkillFilters_);
+        group->setObjectName(QString::fromLatin1(objectName));
+        auto* row = new QHBoxLayout(group);
+        row->setContentsMargins(0, 0, 0, 0);
+        row->setSpacing(6);
+        label->setBuddy(control);
+        row->addWidget(label);
+        row->addWidget(control);
+        return group;
+    };
     profileSkillSort_ = new QComboBox;
     profileSkillSort_->setObjectName("profileSkillSort");
     profileSkillSort_->addItems({QString::fromUtf8("По имени"), QString::fromUtf8("По уровню"),
         QString::fromUtf8("По XP"), QString::fromUtf8("По весу")});
     profileSkillSort_->setCurrentIndex(std::clamp(displaySettings_.profileSkillSort, 0, 3));
     labelForAccessibility(profileSkillSort_, QString::fromUtf8("Сортировка навыков"));
-    skillFilterGrid->addWidget(profileSkillSort_, 0, 1);
-    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("Категория веса")), 0, 2);
+    skillFilterFlow->addWidget(makeSkillFilterGroup(new QLabel(QString::fromUtf8("Сортировка"), profileSkillFilters_),
+        profileSkillSort_, "profileSkillSortGroup"));
     profileSkillWeightCategory_ = new QComboBox;
     profileSkillWeightCategory_->setObjectName("profileSkillWeightCategory");
     profileSkillWeightCategory_->addItems({QString::fromUtf8("Все"), QString::fromUtf8("A (>=1,30)"),
@@ -1607,8 +1931,8 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         QString::fromUtf8("D (0,70-0,89)"), QString::fromUtf8("E (<0,70)")});
     profileSkillWeightCategory_->setCurrentIndex(std::clamp(displaySettings_.profileSkillWeightCategory, 0, 5));
     labelForAccessibility(profileSkillWeightCategory_, QString::fromUtf8("Фильтр навыков по категории веса"));
-    skillFilterGrid->addWidget(profileSkillWeightCategory_, 0, 3);
-    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("Вес от")), 1, 0);
+    skillFilterFlow->addWidget(makeSkillFilterGroup(new QLabel(QString::fromUtf8("Категория веса"), profileSkillFilters_),
+        profileSkillWeightCategory_, "profileSkillWeightCategoryGroup"));
     profileSkillWeightMin_ = new QDoubleSpinBox;
     profileSkillWeightMin_->setObjectName("profileSkillWeightMin");
     profileSkillWeightMin_->setRange(0.0, 2.0);
@@ -1617,8 +1941,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     markScaleFixedWidth(profileSkillWeightMin_, 82);
     profileSkillWeightMin_->setValue(displaySettings_.profileSkillWeightMin);
     labelForAccessibility(profileSkillWeightMin_, QString::fromUtf8("Минимальный вес навыка"));
-    skillFilterGrid->addWidget(profileSkillWeightMin_, 1, 1, Qt::AlignLeft);
-    skillFilterGrid->addWidget(new QLabel(QString::fromUtf8("до")), 1, 2);
     profileSkillWeightMax_ = new QDoubleSpinBox;
     profileSkillWeightMax_->setObjectName("profileSkillWeightMax");
     profileSkillWeightMax_->setRange(profileSkillWeightMin_->value(), 2.0);
@@ -1627,12 +1949,21 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     markScaleFixedWidth(profileSkillWeightMax_, 82);
     profileSkillWeightMax_->setValue(std::max(profileSkillWeightMin_->value(), displaySettings_.profileSkillWeightMax));
     labelForAccessibility(profileSkillWeightMax_, QString::fromUtf8("Максимальный вес навыка"));
-    skillFilterGrid->addWidget(profileSkillWeightMax_, 1, 3, Qt::AlignLeft);
+    auto* weightRange = new QWidget(profileSkillFilters_);
+    weightRange->setObjectName("profileSkillWeightRangeGroup");
+    auto* weightRangeLayout = new QHBoxLayout(weightRange);
+    weightRangeLayout->setContentsMargins(0, 0, 0, 0);
+    weightRangeLayout->setSpacing(6);
+    weightRangeLayout->addWidget(new QLabel(QString::fromUtf8("Вес от"), weightRange));
+    weightRangeLayout->addWidget(profileSkillWeightMin_);
+    weightRangeLayout->addWidget(new QLabel(QString::fromUtf8("до"), weightRange));
+    weightRangeLayout->addWidget(profileSkillWeightMax_);
+    skillFilterFlow->addWidget(weightRange);
     profileSkillFilterReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
     profileSkillFilterReset_->setObjectName("profileSkillFilterReset");
     profileSkillFilterReset_->setToolTip(QString::fromUtf8("Вернуть поиск, сортировку, категорию и диапазон веса к значениям по умолчанию"));
     labelForAccessibility(profileSkillFilterReset_, QString::fromUtf8("Сбросить фильтры навыков"));
-    skillFilterGrid->addWidget(profileSkillFilterReset_, 2, 0, 1, 4, Qt::AlignLeft);
+    skillFilterFlow->addWidget(profileSkillFilterReset_);
     content->addWidget(profileSkillFilters_);
     profileAnalytics_ = new QtProfileAnalytics;
     profileAnalytics_->setProperty("qtTextScaleMinimumHeight", 380);
@@ -1640,7 +1971,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;
     pomodoro->setQuickStateChanged([this, pomodoro] {
-        pomodoroQuickButton_->setText(pomodoro->quickSummary());
+        const auto summary = pomodoro->quickSummary();
+        pomodoroQuickButton_->setText(summary.section(QStringLiteral(" · "), -1));
+        pomodoroQuickButton_->setToolTip(pomodoroQuickButton_->accessibleDescription() + QStringLiteral("\n") + summary);
         pomodoroQuickMenu_->actions().front()->setText(pomodoro->quickToggleText());
         pomodoroQuickMenu_->actions().at(1)->setEnabled(pomodoro->quickNextEnabled());
     });
@@ -1685,7 +2018,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
             .arg(pomodoroDaysLabel(vault.pomodoroDaysMask));
     });
     content->addWidget(pomodoro_, 1);
-    auto* filters = new QHBoxLayout;
+    auto* filters = new QtFlowLayout(nullptr);
     search_ = new QLineEdit;
     search_->setObjectName("search");
     search_->setPlaceholderText(QString::fromUtf8("Поиск по текущему разделу…"));
@@ -1956,70 +2289,112 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     content->addWidget(auditFilters_);
     adminStatsFilters_ = new QWidget;
     adminStatsFilters_->setObjectName("adminProfileStatsFilters");
-    auto* adminStatsLayout = new QGridLayout(adminStatsFilters_);
-    adminStatsLayout->setContentsMargins(0, 0, 0, 0);
-    adminStatsLayout->setHorizontalSpacing(8);
-    adminStatsLayout->setVerticalSpacing(4);
+    auto* adminStatsLayout = new QtFlowLayout(adminStatsFilters_, 8, 4);
+    auto adminStatsFilterPolicy = adminStatsFilters_->sizePolicy();
+    adminStatsFilterPolicy.setHeightForWidth(true);
+    adminStatsFilters_->setSizePolicy(adminStatsFilterPolicy);
     adminStatsSearch_ = new QLineEdit;
     adminStatsSearch_->setObjectName("adminProfileStatsSearch");
     adminStatsSearch_->setPlaceholderText(QString::fromUtf8("Фильтр по ID или имени"));
+    adminStatsSearch_->setMinimumWidth(scaledUiMetric(190, displaySettings_.scalePercent));
     adminStatsSearch_->setClearButtonEnabled(true);
     labelForAccessibility(adminStatsSearch_, QString::fromUtf8("Поиск по ID или имени профиля в статистике"));
-    adminStatsLayout->addWidget(adminStatsSearch_, 0, 0, 1, 2);
+    adminStatsLayout->addWidget(adminStatsSearch_);
     adminStatsArchived_ = new QCheckBox(QString::fromUtf8("Включая архив"));
     adminStatsArchived_->setObjectName("adminStatsIncludeArchived");
     adminStatsArchived_->setChecked(displaySettings_.adminStatsIncludeArchived);
     labelForAccessibility(adminStatsArchived_, QString::fromUtf8("Включить архивные профили в статистику"));
-    adminStatsLayout->addWidget(adminStatsArchived_, 0, 2);
+    adminStatsLayout->addWidget(adminStatsArchived_);
     adminStatsRank_ = new QComboBox;
     adminStatsRank_->setObjectName("adminStatsRankFilter");
     labelForAccessibility(adminStatsRank_, QString::fromUtf8("Фильтр статистики по рангу профиля"));
+    markScaleMaximumWidth(adminStatsRank_, 150);
     adminStatsRank_->addItem(QString::fromUtf8("Все ранги"), 0);
     const auto& rankOptions = adminProfileRanks();
     for (int i = 0; i < int(rankOptions.size()); ++i)
         adminStatsRank_->addItem(rankOptions[size_t(i)].first, i + 1);
     adminStatsRank_->setCurrentIndex(std::clamp(displaySettings_.adminStatsRankFilter, 0, 16));
-    adminStatsLayout->addWidget(adminStatsRank_, 0, 3);
+    adminStatsLayout->addWidget(adminStatsRank_);
     adminStatsView_ = new QComboBox;
     adminStatsView_->setObjectName("adminStatsView");
     labelForAccessibility(adminStatsView_, QString::fromUtf8("Представление статистики профилей"));
+    markScaleMaximumWidth(adminStatsView_, 190);
     adminStatsView_->addItems({QString::fromUtf8("Все профили"), QString::fromUtf8("Топ по уровню"),
         QString::fromUtf8("Топ по XP"), QString::fromUtf8("Топ по ачивкам"), QString::fromUtf8("Неактивные"),
         QString::fromUtf8("Профили на прогреве"), QString::fromUtf8("Распределение по рангам"),
         QString::fromUtf8("Средние категории")});
     adminStatsView_->setCurrentIndex(std::clamp(displaySettings_.adminStatsView, 0, 7));
-    adminStatsLayout->addWidget(adminStatsView_, 0, 4);
+    adminStatsLayout->addWidget(adminStatsView_);
+    adminStatsInactivityField_ = new QWidget;
+    auto* inactivityFieldLayout = new QHBoxLayout(adminStatsInactivityField_);
+    inactivityFieldLayout->setContentsMargins(0, 0, 0, 0);
+    inactivityFieldLayout->setSpacing(6);
     adminStatsInactivityLabel_ = new QLabel(QString::fromUtf8("Порог простоя, дней"));
-    adminStatsLayout->addWidget(adminStatsInactivityLabel_, 1, 0);
     adminStatsInactivityDays_ = new QSpinBox;
     adminStatsInactivityDays_->setObjectName("adminStatsInactivityDays");
     adminStatsInactivityDays_->setRange(1, 365);
     adminStatsInactivityDays_->setValue(std::clamp(displaySettings_.adminStatsInactivityDays, 1, 365));
     labelForAccessibility(adminStatsInactivityDays_, QString::fromUtf8("Порог неактивности профиля в днях"));
-    adminStatsLayout->addWidget(adminStatsInactivityDays_, 1, 1);
+    adminStatsInactivityLabel_->setBuddy(adminStatsInactivityDays_);
+    inactivityFieldLayout->addWidget(adminStatsInactivityLabel_);
+    inactivityFieldLayout->addWidget(adminStatsInactivityDays_);
+    adminStatsLayout->addWidget(adminStatsInactivityField_);
     adminStatsAutoRefresh_ = new QCheckBox(QString::fromUtf8("Автообновление"));
     adminStatsAutoRefresh_->setObjectName("adminStatsAutoRefresh");
     adminStatsAutoRefresh_->setChecked(displaySettings_.adminStatsAutoRefresh);
     labelForAccessibility(adminStatsAutoRefresh_, QString::fromUtf8("Автоматически обновлять статистику профилей"));
-    adminStatsLayout->addWidget(adminStatsAutoRefresh_, 1, 2);
-    adminStatsLayout->addWidget(new QLabel(QString::fromUtf8("Интервал, сек")), 1, 3);
+    adminStatsLayout->addWidget(adminStatsAutoRefresh_);
+    adminStatsRefreshIntervalField_ = new QWidget;
+    auto* refreshIntervalLayout = new QHBoxLayout(adminStatsRefreshIntervalField_);
+    refreshIntervalLayout->setContentsMargins(0, 0, 0, 0);
+    refreshIntervalLayout->setSpacing(6);
+    auto* refreshIntervalLabel = new QLabel(QString::fromUtf8("Интервал, сек"));
     adminStatsRefreshSeconds_ = new QSpinBox;
     adminStatsRefreshSeconds_->setObjectName("adminStatsRefreshSeconds");
     adminStatsRefreshSeconds_->setRange(5, 120);
     adminStatsRefreshSeconds_->setValue(std::clamp(displaySettings_.adminStatsRefreshSeconds, 5, 120));
     labelForAccessibility(adminStatsRefreshSeconds_, QString::fromUtf8("Интервал автообновления статистики в секундах"));
-    adminStatsLayout->addWidget(adminStatsRefreshSeconds_, 1, 4);
+    refreshIntervalLabel->setBuddy(adminStatsRefreshSeconds_);
+    refreshIntervalLayout->addWidget(refreshIntervalLabel);
+    refreshIntervalLayout->addWidget(adminStatsRefreshSeconds_);
+    adminStatsLayout->addWidget(adminStatsRefreshIntervalField_);
     adminStatsRefreshButton_ = new QPushButton(QString::fromUtf8("Обновить"));
     adminStatsRefreshButton_->setObjectName("adminStatsRefresh");
     labelForAccessibility(adminStatsRefreshButton_, QString::fromUtf8("Обновить статистику профилей сейчас"));
-    adminStatsLayout->addWidget(adminStatsRefreshButton_, 1, 5);
+    adminStatsLayout->addWidget(adminStatsRefreshButton_);
     adminStatsReset_ = new QPushButton(QString::fromUtf8("Сбросить фильтры"));
     adminStatsReset_->setObjectName("adminStatsReset");
     labelForAccessibility(adminStatsReset_, QString::fromUtf8("Сбросить фильтры статистики профилей"));
-    adminStatsLayout->addWidget(adminStatsReset_, 1, 6);
+    adminStatsLayout->addWidget(adminStatsReset_);
     content->addWidget(adminStatsFilters_);
+    listEmptyState_ = new QWidget;
+    listEmptyState_->setObjectName("listEmptyState");
+    auto* emptyLayout = new QVBoxLayout(listEmptyState_);
+    emptyLayout->setContentsMargins(0, 8, 0, 0);
+    emptyLayout->setSpacing(4);
+    auto* emptyHeading = new QHBoxLayout;
+    emptyHeading->setSpacing(8);
+    listEmptyIcon_ = new QLabel;
+    listEmptyIcon_->setObjectName("listEmptyIcon");
+    markScaleFixedWidth(listEmptyIcon_, 24);
+    emptyHeading->addWidget(listEmptyIcon_);
+    listEmptyTitle_ = new QLabel;
+    listEmptyTitle_->setObjectName("listEmptyTitle");
+    listEmptyTitle_->setProperty("metricValue", true);
+    listEmptyTitle_->setTextFormat(Qt::PlainText);
+    listEmptyTitle_->setWordWrap(true);
+    emptyHeading->addWidget(listEmptyTitle_, 1);
+    emptyLayout->addLayout(emptyHeading);
+    listEmptyDescription_ = new QLabel;
+    listEmptyDescription_->setObjectName("listEmptyDescription");
+    listEmptyDescription_->setWordWrap(true);
+    listEmptyDescription_->setTextFormat(Qt::PlainText);
+    emptyLayout->addWidget(listEmptyDescription_);
+    emptyLayout->addStretch(1);
+    content->addWidget(listEmptyState_, 1);
     table_ = new QTableWidget;
     table_->setObjectName("records");
+    table_->viewport()->installEventFilter(this);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -2030,8 +2405,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     table_->horizontalHeader()->setStretchLastSection(true);
     content->addWidget(table_, 1);
     bottomActions_ = new QWidget;
-    auto* bottom = new QHBoxLayout(bottomActions_);
-    bottom->setContentsMargins(0, 0, 0, 0);
+    bottomActions_->setObjectName("bottomActions");
+    auto* bottom = new QtFlowLayout(bottomActions_);
+    QSizePolicy actionPolicy = bottomActions_->sizePolicy();
+    actionPolicy.setHeightForWidth(true);
+    bottomActions_->setSizePolicy(actionPolicy);
     detailsToggle_ = new QPushButton(QString::fromUtf8("Подробности"));
     detailsToggle_->setObjectName("detailsToggle");
     detailsToggle_->setCheckable(true);
@@ -2085,6 +2463,25 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     moveDown_->setObjectName("movePipelineDown");
     moveDown_->setToolTip(QString::fromUtf8("Переместить этап на одну позицию ниже"));
     bottom->addWidget(moveDown_);
+    const auto compactAction = [this](QPushButton* button, QtActionIcon symbol, const QString& name) {
+        button->setIcon(CreateQtActionIcon(symbol, palette()));
+        button->setIconSize(QSize(16, 16));
+        button->setAccessibleName(name);
+        if (button->toolTip().isEmpty()) button->setToolTip(name);
+        button->setText(QString());
+        button->setStyleSheet(QStringLiteral("padding: 0px; min-height: 0px;"));
+        markScaleFixedWidth(button, 26);
+        markScaleFixedHeight(button, 26);
+    };
+    compactAction(editEntry_, QtActionIcon::Edit, QString::fromUtf8("Редактировать выбранную запись"));
+    compactAction(deleteEntry_, QtActionIcon::Delete, QString::fromUtf8("Удалить выбранную запись"));
+    compactAction(moveUp_, QtActionIcon::MoveUp, QString::fromUtf8("Переместить выбранную запись выше"));
+    compactAction(moveDown_, QtActionIcon::MoveDown, QString::fromUtf8("Переместить выбранную запись ниже"));
+    moveUp_->setToolTip(moveUp_->accessibleName());
+    moveDown_->setToolTip(moveDown_->accessibleName());
+    compactAction(catalogFilterReset_, QtActionIcon::Reset, QString::fromUtf8("Сбросить фильтры и сортировку каталога навыков"));
+    compactAction(projectFilterReset_, QtActionIcon::Reset, QString::fromUtf8("Сбросить поиск и фильтры проектов"));
+    detailsToggle_->setIcon(CreateQtActionIcon(QtActionIcon::Details, palette()));
     pipelineMap_ = new QPushButton(QString::fromUtf8("Карта переходов"));
     pipelineMap_->setObjectName("pipelineMap");
     pipelineMap_->setToolTip(QString::fromUtf8("Просмотреть этапы по веткам и допустимые переходы между ними"));
@@ -2291,7 +2688,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     cloudReleaseButton_->setMenu(cloudReleaseMenu);
     cloudReleaseButton_->setToolTip(QString::fromUtf8("Загрузить или запустить установщик более новой версии из manifest"));
     bottom->addWidget(cloudReleaseButton_);
-    bottom->addStretch();
     content->addWidget(bottomActions_);
     details_ = new QTextBrowser;
     details_->setObjectName("details");
@@ -2343,7 +2739,10 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
         }
         saveDisplayContext();
         render();
+        QTimer::singleShot(0, this, [this] { updateNavigationIndicator(true); });
     });
+    connect(navigation_->verticalScrollBar(), &QScrollBar::valueChanged, this,
+        [this] { updateNavigationIndicator(false); });
     connect(profiles_, &QComboBox::currentIndexChanged, this, [this] {
         profileSession_.lock();
         rememberRecentProfile(profiles_->currentData().toString());
@@ -3549,6 +3948,90 @@ void QtWindow::openProjectTasksFilter(const QString& projectId, int quickFilter)
         : QString::fromUtf8("Показаны задачи выбранного проекта по выбранному фильтру."), 4000);
 }
 
+void QtWindow::updateNavigationIndicator(bool animate) {
+    if (!navigation_ || !navigationIndicator_ || !navigationIndicatorAnimation_) return;
+    navigation_->doItemsLayout();
+    const auto* item = navigation_->currentItem();
+    if (!item || item->isHidden()) {
+        navigationIndicator_->hide();
+        navigationIndicatorAnimation_->stop();
+        return;
+    }
+
+    const QRect row = navigation_->visualItemRect(item);
+    if (row.isEmpty() || !navigation_->viewport()->rect().intersects(row)) {
+        navigationIndicator_->hide();
+        navigationIndicatorAnimation_->stop();
+        return;
+    }
+
+    const QRect target(row.left() + 2, row.top() + 6, 3, std::max(12, row.height() - 12));
+    const bool motionAllowed = IsQtMotionAllowed(displaySettings_);
+    navigationIndicator_->setProperty("motionSuppressed", !motionAllowed);
+    if (!animate || !motionAllowed || !navigationIndicator_->isVisible()) {
+        navigationIndicatorAnimation_->stop();
+        navigationIndicator_->setGeometry(target);
+        navigationIndicator_->show();
+        return;
+    }
+
+    navigationIndicatorAnimation_->stop();
+    navigationIndicatorAnimation_->setStartValue(navigationIndicator_->geometry());
+    navigationIndicatorAnimation_->setEndValue(target);
+    navigationIndicatorAnimation_->start();
+}
+
+bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (navigation_ && watched == navigation_->viewport() && event->type() == QEvent::Resize)
+        updateNavigationIndicator(false);
+    if (table_ && watched == table_->viewport() && event->type() == QEvent::Resize)
+        updateProjectColumnLayout();
+    if (profileTaskBriefTable_ && watched == profileTaskBriefTable_->viewport() && event->type() == QEvent::Resize)
+        updateProfileTaskColumnLayout();
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void QtWindow::updateProfileTaskColumnLayout() {
+    if (!profileTaskBriefTable_ || profileTaskBriefTable_->property("profileTaskColumnLayoutUpdating").toBool()) return;
+    profileTaskBriefTable_->setProperty("profileTaskColumnLayoutUpdating", true);
+    const int width = profileTaskBriefTable_->viewport()->width();
+    profileTaskBriefTable_->setColumnHidden(1, width < scaledUiMetric(640, displaySettings_.scalePercent));
+    profileTaskBriefTable_->setColumnHidden(2, width < scaledUiMetric(880, displaySettings_.scalePercent));
+    auto* header = profileTaskBriefTable_->horizontalHeader();
+    header->setSectionResizeMode(0, QHeaderView::Stretch);
+    header->setSectionResizeMode(1, QHeaderView::Fixed);
+    header->setSectionResizeMode(2, QHeaderView::Fixed);
+    profileTaskBriefTable_->setColumnWidth(1, scaledUiMetric(160, displaySettings_.scalePercent));
+    profileTaskBriefTable_->setColumnWidth(2, scaledUiMetric(136, displaySettings_.scalePercent));
+    header->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    for (int row = 0; row < profileTaskBriefTable_->rowCount(); ++row)
+        if (auto* deadline = profileTaskBriefTable_->item(row, 3))
+            deadline->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    profileTaskBriefTable_->setProperty("profileTaskColumnLayoutUpdating", false);
+}
+
+void QtWindow::updateProjectColumnLayout() {
+    if (!navigation_ || navigation_->currentRow() != Projects || !table_ || table_->columnCount() != 8 ||
+        table_->property("projectColumnLayoutUpdating").toBool()) return;
+    table_->setProperty("projectColumnLayoutUpdating", true);
+    const int width = table_->viewport()->width();
+    table_->setColumnHidden(1, width < scaledUiMetric(720, displaySettings_.scalePercent));
+    for (int column : {3, 4, 5})
+        table_->setColumnHidden(column, width < scaledUiMetric(560, displaySettings_.scalePercent));
+    table_->setColumnHidden(2, width < scaledUiMetric(440, displaySettings_.scalePercent));
+    table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
+    table_->setColumnWidth(1, scaledUiMetric(192, displaySettings_.scalePercent));
+    for (int column = 2; column < 8; ++column) {
+        table_->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
+        for (int row = 0; row < table_->rowCount(); ++row)
+            if (auto* item = table_->item(row, column)) item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    }
+    table_->setAccessibleDescription(QString::fromUtf8(
+        "Проекты и рабочие сигналы. Описание и вторичные счётчики скрываются в узком окне; все данные выбранного проекта доступны в подробностях."));
+    table_->setProperty("projectColumnLayoutUpdating", false);
+}
+
 void QtWindow::saveDisplayContext() {
     const auto profileId = profiles_->currentData().toString();
     if (!profileId.isEmpty()) displaySettings_.lastProfileId = profileId;
@@ -3805,17 +4288,23 @@ void QtWindow::render() {
     };
     title_->setText(navigation_->item(page)->text());
     table_->setAccessibleName(QString::fromUtf8("Данные раздела «%1»").arg(title_->text()));
-    mode_->setText(admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8(unlocked ?
-        (profileSession_.isTrusted() ? "Доверенный доступ · Qt" : "Личный доступ · Qt") : "Просмотр · Qt"));
+    const QString fullMode = admin_ ? QString::fromUtf8("Администратор · Qt") : QString::fromUtf8(unlocked ?
+        (profileSession_.isTrusted() ? "Доверенный доступ · Qt" : "Личный доступ · Qt") : "Просмотр · Qt");
+    mode_->setText(admin_ ? QString::fromUtf8("Админ") : QString::fromUtf8(unlocked ?
+        (profileSession_.isTrusted() ? "Доверенный" : "Личный") : "Просмотр"));
+    mode_->setAccessibleName(fullMode);
+    mode_->setToolTip(fullMode);
     const bool timerPage = page == Pomodoro;
     const bool modelPage = page == ModelViewerPage || page == ModelSettingsPage;
     summary_->setVisible(!timerPage && !modelPage);
+    adminStatsKpiRow_->setVisible(page == AdminProfileStats && admin_);
     taskPipelineSummary_->setVisible(page == Tasks);
     statisticsChart_->setVisible(page == Statistics);
     search_->setVisible(!timerPage && !modelPage && page != AdminProfileStats);
     table_->setVisible(!timerPage && !modelPage);
+    listEmptyState_->hide();
     bottomActions_->setVisible(!timerPage && !modelPage);
-    const bool hasDetails = page == Tasks || page == Statistics || page == Pipeline;
+    const bool hasDetails = page == Tasks || page == Statistics || page == Pipeline || page == Projects || page == Catalog;
     detailsToggle_->setText(page == Pipeline ? QString::fromUtf8("Подробности этапа") : QString::fromUtf8("Подробности"));
     search_->setPlaceholderText(page == Pipeline
         ? QString::fromUtf8("Название, код, ветка, описание, контроль…")
@@ -3848,8 +4337,7 @@ void QtWindow::render() {
     reportCompare_->setEnabled(reportDateRange_->currentIndex() != 0);
     reportCustomRange_->setVisible(page == Statistics && reportDateRange_->currentIndex() == 4);
     adminStatsFilters_->setVisible(page == AdminProfileStats && admin_);
-    adminStatsInactivityLabel_->setVisible(page == AdminProfileStats && admin_ && adminStatsView_->currentIndex() == 4);
-    adminStatsInactivityDays_->setVisible(adminStatsView_->currentIndex() == 4);
+    adminStatsInactivityField_->setVisible(page == AdminProfileStats && admin_ && adminStatsView_->currentIndex() == 4);
     adminStatsRefreshSeconds_->setEnabled(adminStatsAutoRefresh_->isChecked());
     projectsOverdue_->setVisible(page == Projects);
     projectsXpPending_->setVisible(page == Projects);
@@ -3883,7 +4371,6 @@ void QtWindow::render() {
     storageResolve_->setVisible(page == Cloud);
     cloudReleaseButton_->setVisible(page == Cloud);
     profileMetrics_->setVisible(page == ProfilePage);
-    profileOverview_->setVisible(page == ProfilePage);
     profileRankControls_->setVisible(page == ProfilePage && admin_);
     profileRankControls_->setEnabled(!profiles_->currentData().toString().isEmpty());
     profileTaskBriefCard_->setVisible(page == ProfilePage && workspace_.modules.tasks);
@@ -3899,6 +4386,7 @@ void QtWindow::render() {
         const QSignalBlocker blocker(profileViewModeButtons_[i]);
         profileViewModeButtons_[i]->setChecked(i == profileMode);
     }
+    profileOverview_->setVisible(page == ProfilePage && (profileMode == 0 || profileMode == 2));
     if (auto* taskMode = findChild<QPushButton*>("profileViewMode3")) {
         const QSignalBlocker blocker(taskMode);
         taskMode->setChecked(profileMode == 3);
@@ -3994,6 +4482,8 @@ void QtWindow::render() {
             profileBalanceBars_[row]->setAccessibleDescription(QStringLiteral("0/10"));
         }
         profileTaskBriefTable_->setRowCount(0);
+        profileTaskBriefTable_->hide();
+        profileTaskEmpty_->show();
         profileTaskSummary_->setText(QString::fromUtf8("Нет назначенных активных задач."));
         profileRecentActionsSummary_->setText(QString::fromUtf8("Пока нет начислений по задачам."));
         profileRecentActionsSummary_->setAccessibleDescription(QString::fromUtf8("Пока нет сохранённых начислений XP по задачам для выбранного профиля."));
@@ -4071,7 +4561,9 @@ void QtWindow::render() {
                     const auto iconSize = QSize(scaledUiMetric(32, displaySettings_.scalePercent), scaledUiMetric(32, displaySettings_.scalePercent));
                     icon->setPixmap(iconState.pixmap(iconSize, active ? QIcon::Normal : QIcon::Disabled));
                 } else {
-                    icon->setText(QStringLiteral("?"));
+                    const auto iconSize = QSize(scaledUiMetric(32, displaySettings_.scalePercent), scaledUiMetric(32, displaySettings_.scalePercent));
+                    const QIcon iconState(fallbackAchievementIcon(iconSize, icon->palette()));
+                    icon->setPixmap(iconState.pixmap(iconSize, active ? QIcon::Normal : QIcon::Disabled));
                 }
             }
             profileAchievementOverflow_->setText(recentAchievements.size() > 3
@@ -4202,7 +4694,7 @@ void QtWindow::render() {
             QString focusValue = QString::fromUtf8("Свободное окно");
             QString focusDetail = QString::fromUtf8("Можно брать новую задачу.");
             if (focusTask) {
-                focusValue = q(AppTaskDisplayTitle(*focusTask));
+                focusValue = focusTask->title.empty() ? QString::fromUtf8("Без названия") : q(focusTask->title);
                 auto project = std::find_if(data.projects.begin(), data.projects.end(), [&](const auto& item) {
                     return !focusTask->projectId.empty() && item.id == focusTask->projectId;
                 });
@@ -4249,18 +4741,34 @@ void QtWindow::render() {
                 });
                 const int rowIndex = profileTaskBriefTable_->rowCount();
                 profileTaskBriefTable_->insertRow(rowIndex);
-                QStringList values{q(AppTaskDisplayTitle(task)), project == data.projects.end() ? q(task.project) : q(project->name),
+                QStringList values{task.title.empty() ? QString::fromUtf8("Без названия") : q(task.title),
+                    project == data.projects.end() ? q(task.project) : q(project->name),
                     stage == data.pipelineSteps.end() ? q(task.pipelineStep) : q(stage->title),
                     task.deadlineAt > 0 ? QDateTime::fromSecsSinceEpoch(task.deadlineAt).toString("dd.MM HH:mm") : QString::fromUtf8("Не задан")};
+                const QString context = QString::fromUtf8("%1\nПроект: %2\nЭтап: %3\nСрок: %4")
+                    .arg(values[0], values[1].isEmpty() ? QString::fromUtf8("Без проекта") : values[1],
+                        values[2].isEmpty() ? QString::fromUtf8("Без этапа") : values[2], values[3]);
                 for (int column = 0; column < values.size(); ++column) {
                     auto* cell = new QTableWidgetItem(values[column]);
-                    cell->setToolTip(values[column]);
+                    cell->setToolTip(context);
+                    cell->setData(Qt::AccessibleTextRole, values[column]);
+                    cell->setData(Qt::AccessibleDescriptionRole, context);
                     if (column == 0) cell->setData(Qt::UserRole, q(task.id));
                     profileTaskBriefTable_->setItem(rowIndex, column, cell);
                 }
             }
-            profileTaskBriefTable_->setAccessibleDescription(QString::fromUtf8("Показаны %1 из %2 назначенных активных задач, отсортированных по срочности.")
+            profileTaskBriefTable_->setAccessibleDescription(QString::fromUtf8(
+                "Показаны %1 из %2 назначенных активных задач, отсортированных по срочности. Проект и этап скрываются в узком окне; полный контекст есть в подсказке задачи. Двойной щелчок откроет задачу.")
                 .arg(shownTasks).arg(qulonglong(activeProfileTasks.size())));
+            profileTaskBriefTable_->setVisible(shownTasks > 0);
+            profileTaskEmpty_->setVisible(shownTasks == 0);
+            updateProfileTaskColumnLayout();
+            int previewHeight = profileTaskBriefTable_->horizontalHeader()->height() + 2;
+            for (int row = 0; row < shownTasks; ++row) previewHeight += profileTaskBriefTable_->rowHeight(row);
+            profileTaskBriefTable_->setFixedHeight(std::min(previewHeight, scaledUiMetric(140, displaySettings_.scalePercent)));
+            int balanceHeight = profileBalanceTable_->horizontalHeader()->height() + 2;
+            for (int row = 0; row < profileBalanceTable_->rowCount(); ++row) balanceHeight += profileBalanceTable_->rowHeight(row);
+            profileBalanceTable_->setFixedHeight(balanceHeight);
             profileOverviewTaskButtons_[0]->setEnabled(focusTask != nullptr);
             profileOverviewTaskButtons_[1]->setEnabled(!id.empty());
             profileOverviewTaskButtons_[2]->setEnabled(activeTasks > 0);
@@ -4756,7 +5264,7 @@ void QtWindow::render() {
             if (groupMode == 1 && category != previousCategory) {
                 const int groupRow = table_->rowCount();
                 table_->insertRow(groupRow);
-                auto* heading = new QTableWidgetItem(QString::fromUtf8("▰ %1").arg(categoryLabels[category]));
+                auto* heading = new QTableWidgetItem(categoryLabels[category]);
                 heading->setFlags(Qt::ItemIsEnabled);
                 heading->setBackground(palette().color(QPalette::AlternateBase));
                 heading->setToolTip(QString::fromUtf8("Группа навыков по категории веса: %1").arg(categoryLabels[category]));
@@ -4837,16 +5345,44 @@ void QtWindow::render() {
         const auto active = total - archived;
         const auto averageLevel = total ? double(totalLevels) / total : 0.0;
         const auto averageXp = total ? double(totalXp) / total : 0.0;
-        summary_->setAccessibleName(QString::fromUtf8("Сводные показатели статистики профилей"));
-        summary_->setText(QString::fromUtf8(
-            "Профилей: %1 · активных: %2 · архивных: %3\nСредний уровень: %4 · максимум: %5 · общий XP: %6 · средний XP: %7\n"
-            "Ачивки: %8 всего, %9 активных · прогрев: %10 · без активности: %11 · без ачивок: %12\n"
-            "Обновлено: %13%14")
-            .arg(total).arg(active).arg(archived).arg(averageLevel, 0, 'f', 1).arg(maxLevel)
-            .arg(totalXp).arg(averageXp, 0, 'f', 0).arg(achievementsTotal).arg(achievementsActive)
-            .arg(recovery).arg(noActivity).arg(noAchievements)
-            .arg(QDateTime::fromSecsSinceEpoch(adminStatsLastRefresh_).toString("dd.MM.yyyy HH:mm:ss"))
+        const std::array<QString, 4> kpiValues = {
+            QString::number(total), QString::number(averageLevel, 'f', 1),
+            QLocale().toString(qlonglong(totalXp)), QString::number(achievementsActive)
+        };
+        const std::array<QString, 4> kpiNotes = {
+            QString::fromUtf8("%1 активных · %2 архивных").arg(active).arg(archived),
+            QString::fromUtf8("Максимум: %1").arg(maxLevel),
+            QString::fromUtf8("Средний XP: %1").arg(QLocale().toString(qRound64(averageXp))),
+            QString::fromUtf8("Всего: %1").arg(achievementsTotal)
+        };
+        const std::array<QString, 4> kpiNames = {
+            QString::fromUtf8("Профилей"), QString::fromUtf8("Средний уровень"),
+            QString::fromUtf8("Общий XP"), QString::fromUtf8("Активные ачивки")
+        };
+        for (size_t index = 0; index < kpiValues.size(); ++index) {
+            adminStatsKpiValues_[index]->setText(kpiValues[index]);
+            adminStatsKpiValues_[index]->setAccessibleName(kpiNames[index] + QStringLiteral(": ") + kpiValues[index]);
+            adminStatsKpiNotes_[index]->setText(kpiNotes[index]);
+            adminStatsKpiNotes_[index]->setAccessibleName(kpiNotes[index]);
+            auto* card = adminStatsKpiRow_->findChild<QFrame*>(QStringLiteral("adminStatsKpiCard_%1").arg(index));
+            if (card) {
+                card->setAccessibleName(kpiNames[index] + QStringLiteral(". ") + kpiValues[index]
+                    + QStringLiteral(". ") + kpiNotes[index]);
+                card->setToolTip(kpiNames[index] + QStringLiteral(": ") + kpiValues[index]
+                    + QStringLiteral("\n") + kpiNotes[index]);
+            }
+        }
+        const auto refreshedAt = QDateTime::fromSecsSinceEpoch(adminStatsLastRefresh_).toString("dd.MM.yyyy HH:mm:ss");
+        summary_->setAccessibleName(QString::fromUtf8("Сигналы состояния и времени обновления статистики профилей"));
+        summary_->setText(QString::fromUtf8("Прогрев: %1 · без активности: %2 · без ачивок: %3 · Обновлено: %4%5")
+            .arg(recovery).arg(noActivity).arg(noAchievements).arg(refreshedAt)
             .arg(adminStatsUnreadableProfiles_ ? QString::fromUtf8(" · не удалось прочитать: %1").arg(adminStatsUnreadableProfiles_) : QString()));
+        summary_->setToolTip(QString::fromUtf8(
+            "Профилей: %1 · активных: %2 · архивных: %3. Средний уровень: %4 · максимум: %5. "
+            "Общий XP: %6 · средний XP: %7. Ачивки: %8 всего, %9 активных.")
+            .arg(total).arg(active).arg(archived).arg(averageLevel, 0, 'f', 1).arg(maxLevel)
+            .arg(QLocale().toString(qlonglong(totalXp))).arg(QLocale().toString(qRound64(averageXp)))
+            .arg(achievementsTotal).arg(achievementsActive));
 
         std::vector<QtAdminProfileStatsRow> filtered;
         const auto query = adminStatsSearch_->text().trimmed();
@@ -5529,17 +6065,28 @@ void QtWindow::render() {
         for (int col = 0; col < table_->columnCount(); ++col)
             table_->setColumnWidth(col, std::clamp(table_->columnWidth(col), 96, 280));
     }
+    if (page == ProfilePage && profileMode == 1 && table_->columnCount() == 6) {
+        constexpr int widths[] = {38, 184, 58, 54, 74, 58};
+        for (int col = 0; col < table_->columnCount(); ++col) table_->setColumnWidth(col, widths[col]);
+    } else if (page == ProfilePage && profileMode == 3 && table_->columnCount() == 5) {
+        constexpr int widths[] = {148, 72, 82, 96, 94};
+        for (int col = 0; col < table_->columnCount(); ++col) table_->setColumnWidth(col, widths[col]);
+    }
+    if (page == Projects) updateProjectColumnLayout();
     QStringList accessibleColumns;
     for (int col = 0; col < table_->columnCount(); ++col)
         if (!table_->isColumnHidden(col) && table_->horizontalHeaderItem(col))
             accessibleColumns << table_->horizontalHeaderItem(col)->text();
     table_->setAccessibleDescription(QString::fromUtf8("Строк: %1. Видимые столбцы: %2.")
         .arg(table_->rowCount()).arg(accessibleColumns.join(QString::fromUtf8(", "))));
+    if (page == Projects) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
+        " Описание и вторичные счётчики в узком окне доступны в подробностях выбранного проекта."));
     // Give free width to readable content instead of stretching the final numeric column.
     if (page != AdminProfileStats) {
         int stretchColumn = 0;
         if (page == Catalog) stretchColumn = 2;
-        else if (page == Pipeline || page == Projects || page == Professions || page == Shortcuts) stretchColumn = 1;
+        else if (page == Pipeline || page == Professions || page == Shortcuts) stretchColumn = 1;
+        else if (page == ProfilePage && profileMode == 1) stretchColumn = 1;
         table_->horizontalHeader()->setSectionResizeMode(stretchColumn, QHeaderView::Stretch);
     }
     // Catalog ordering is controlled by its persistent sort/group selectors; header sorting
@@ -5559,6 +6106,22 @@ void QtWindow::render() {
         if (table_->item(index, 0)->data(Qt::UserRole).toString() == previous) { table_->selectRow(index); break; }
     }
     if (page == Tasks && !pendingProfileTaskId_.empty()) pendingProfileTaskId_.clear();
+    if ((page == Projects || page == Catalog || page == Pipeline) && table_->rowCount() == 0) {
+        const bool hasEntries = page == Projects ? !data.projects.empty()
+            : page == Catalog ? !workspace_.catalog.skills().empty() : !data.pipelineSteps.empty();
+        listEmptyIcon_->setPixmap(navigation_->item(page)->icon().pixmap(QSize(24, 24)));
+        const QString emptyTitle = page == Projects ? QString::fromUtf8("Пока нет проектов")
+            : page == Catalog ? QString::fromUtf8("Каталог навыков пуст") : QString::fromUtf8("Пока нет этапов пайплайна");
+        listEmptyTitle_->setText(hasEntries ? QString::fromUtf8("По фильтрам ничего не найдено") : emptyTitle);
+        listEmptyDescription_->setText(hasEntries
+            ? QString::fromUtf8("Измените запрос или снимите ограничения кнопкой сброса рядом с фильтрами.")
+            : admin_ ? QString::fromUtf8("Начните с действия «%1» вверху страницы.").arg(primary_->text())
+            : QString::fromUtf8("Записи появятся здесь после добавления администратором."));
+        listEmptyState_->setAccessibleName(listEmptyTitle_->text());
+        listEmptyState_->setAccessibleDescription(listEmptyDescription_->text());
+        listEmptyState_->show();
+        table_->hide();
+    }
     details();
 }
 

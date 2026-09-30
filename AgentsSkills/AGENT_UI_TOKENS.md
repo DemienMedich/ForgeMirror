@@ -237,11 +237,23 @@ Multiple header rows
 
 Decorative containers
 
-Animations
+Animations outside the bounded motion policy below
 
 New color palettes
 
 Reintroducing removed controls (e.g. “Сменить”)
+
+### 9.1 Bounded motion policy
+
+Motion is permitted only when it clarifies a state change and follows every rule here:
+
+- Keep transitions short: typically 150–220 ms, with a calm ease-out on entry and a shorter ease-in on exit.
+- Animate only local, interruptible state changes (for example, the active navigation marker, a compact disclosure, or transient feedback). A new input must retarget or stop the previous transition cleanly.
+- Keep the animated properties explicit. Do not use broad `all` transitions or animate layout changes across a page.
+- At most one or two meaningful elements may move on a screen at once. Do not animate tables, whole pages at startup, or repeatedly refreshed charts.
+- No looping/decorative motion, pulsing, parallax, bounce, or heavy blur.
+- Provide a persistent application preference to disable motion and honor Windows reduced-motion/client-area-animation settings. When disabled, update state immediately without changing meaning or functionality.
+- Motion must not change density, spacing, palette, focus order, keyboard behavior, or accessible state.
 
 10) Agent Self-Check (Mandatory)
 Before finishing any UI task, the agent must verify:
@@ -263,6 +275,8 @@ Before finishing any UI task, the agent must verify:
  No large empty gaps
 
  No banned controls reintroduced
+
+ Motion follows the bounded policy and can be disabled by user/system preference
 
 If any check fails, the implementation is incorrect.
 

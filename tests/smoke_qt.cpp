@@ -32,6 +32,7 @@
 #include "QtPipelineTransition.h"
 #include "QtPipelineMap.h"
 #include "QtPomodoro.h"
+#include "QtCommandHelpDialog.h"
 #include "AppPipelineService.h"
 #include "AppProfessionService.h"
 #include "AppSkillService.h"
@@ -57,6 +58,7 @@
 #include <set>
 #include <fstream>
 #include <iomanip>
+#include <memory>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -5545,15 +5547,18 @@ static bool TestQtVisibleTaskSelectionTools() {
     workspace.data.tasks = {first, second, hidden};
     if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
     workspace.reload();
-    QtWindow window(workspace); window.show(); QApplication::processEvents();
+    QtWindow window(workspace); window.resize(800, 520); window.show(); QApplication::processEvents();
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* search = window.findChild<QLineEdit*>("search");
     auto* selectionTools = window.findChild<QToolButton*>("taskSelectionTools");
+    auto* bottomActions = window.findChild<QWidget*>("bottomActions");
+    auto* pageScroll = window.findChild<QScrollArea*>("pageContentScrollArea");
     auto* selectVisible = window.findChild<QAction*>("selectVisibleTasks");
     auto* clearSelection = window.findChild<QAction*>("clearTaskSelection");
     auto* table = window.findChild<QTableWidget*>("records");
     auto* bulkEdit = window.findChild<QPushButton*>("bulkTaskEdit");
-    if (!navigation || !search || !selectionTools || !selectVisible || !clearSelection || !table || !bulkEdit) return false;
+    if (!navigation || !search || !selectionTools || !bottomActions || !pageScroll || !selectVisible ||
+        !clearSelection || !table || !bulkEdit) return false;
     navigation->setCurrentRow(1);
     if (selectionTools->isVisible()) return false;
     QAction* adminAction = nullptr;
@@ -5563,6 +5568,13 @@ static bool TestQtVisibleTaskSelectionTools() {
     QTimer::singleShot(0, [] { SubmitAdminLoginForTest("admin123"); });
     adminAction->trigger();
     if (!selectionTools->isVisible()) return false;
+    QApplication::processEvents();
+    if (pageScroll->horizontalScrollBar()->maximum() != 0)
+        return false; // Filters or page actions must wrap instead of widening the page.
+    for (auto* action : bottomActions->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
+        if (action->isVisible() && action->geometry().right() >= bottomActions->width())
+            return false;
+    }
     search->setText(QString::fromUtf8("Visible"));
     if (table->rowCount() != 2) return false;
     selectVisible->trigger();
@@ -6114,11 +6126,15 @@ static bool TestPomodoroQuickHeader() {
         else if (action->objectName() == "pomodoroQuickReset") reset = action;
         else if (action->objectName() == "pomodoroOpenPage") openPage = action;
     }
-    if (!toggle || !next || !reset || !openPage || button->text() != panel->quickSummary()) return fail(2);
+    if (!toggle || !next || !reset || !openPage ||
+        button->text() != panel->quickSummary().section(QStringLiteral(" · "), -1) ||
+        !button->toolTip().contains(panel->quickSummary())) return fail(2);
     QMetaObject::invokeMethod(menu, "aboutToShow", Qt::DirectConnection);
     if (toggle->text() != QString::fromUtf8("Старт фокуса") || !next->isEnabled()) return fail(3);
     toggle->trigger();
-    if (panel->quickToggleText() != QString::fromUtf8("Пауза") || button->text() != panel->quickSummary()) return fail(4);
+    if (panel->quickToggleText() != QString::fromUtf8("Пауза") ||
+        button->text() != panel->quickSummary().section(QStringLiteral(" · "), -1) ||
+        !button->toolTip().contains(panel->quickSummary())) return fail(4);
     panel->advanceSecondsForTest(1);
     toggle->trigger();
     if (panel->quickToggleText() != QString::fromUtf8("Продолжить")) return fail(5);
@@ -6287,6 +6303,17 @@ static bool TestDisplaySettings(QApplication& app) {
     const auto originalAppFont = app.font();
     const auto originalAppStyleSheet = app.styleSheet();
     const auto originalBasePointSize = app.property("forgeBasePointSize");
+    QtDisplaySettings disabledMotion;
+    disabledMotion.motionEnabled = false;
+    if (IsQtMotionAllowed(disabledMotion)) return false;
+#ifdef _WIN32
+    BOOL systemAnimationsEnabled = FALSE;
+    const bool systemPreferenceAvailable = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &systemAnimationsEnabled, 0) != FALSE;
+    if (IsQtMotionAllowed(QtDisplaySettings{}) != (systemPreferenceAvailable && systemAnimationsEnabled != FALSE)) {
+        std::cerr << "Qt navigation motion did not follow the Windows client-area animation preference\n";
+        return false;
+    }
+#endif
     QTemporaryDir legacyRecentTemp;
     if (!legacyRecentTemp.isValid() || !QDir().mkpath(legacyRecentTemp.path() + "/meta")) return false;
     QFile legacyRecentFile(legacyRecentTemp.path() + "/meta/ui.ini");
@@ -6295,7 +6322,8 @@ static bool TestDisplaySettings(QApplication& app) {
     legacyRecentFile.close();
     const auto legacyRecentDirectory = std::filesystem::u8path(legacyRecentTemp.path().toUtf8().constData());
     const auto importedRecent = LoadQtDisplaySettings(legacyRecentDirectory).recentProfileIds;
-    if (importedRecent != QStringList{QStringLiteral("legacy-a"), QStringLiteral("legacy-b")}) return false;
+    if (importedRecent != QStringList{QStringLiteral("legacy-a"), QStringLiteral("legacy-b")} ||
+        !LoadQtDisplaySettings(legacyRecentDirectory).motionEnabled) return false;
     auto migratedRecent = LoadQtDisplaySettings(legacyRecentDirectory);
     if (!SaveQtDisplaySettings(legacyRecentDirectory, migratedRecent) ||
         LoadQtDisplaySettings(legacyRecentDirectory).recentProfileIds != importedRecent) return false;
@@ -6551,6 +6579,9 @@ static bool TestDisplaySettings(QApplication& app) {
         windowPaddingX->setValue(10); windowPaddingY->setValue(11); framePaddingX->setValue(6); framePaddingY->setValue(5);
         itemSpacingX->setValue(9); itemSpacingY->setValue(4);
         dialog->findChild<QCheckBox*>("qtCompactRows")->setChecked(true);
+        auto* motion = dialog->findChild<QCheckBox*>("qtMotionEnabled");
+        if (!motion) { qobject_cast<QDialog*>(dialog)->reject(); return; }
+        motion->setChecked(false);
         dialog->findChild<QCheckBox*>("qtFullscreen")->setChecked(false);
         dialog->findChild<QCheckBox*>("qtDecorated")->setChecked(true);
         auto* tray = dialog->findChild<QCheckBox*>("qtMinimizeToTray");
@@ -6586,7 +6617,7 @@ static bool TestDisplaySettings(QApplication& app) {
     });
     if (!ShowQtDisplaySettings(nullptr, directory, settings) || !saved || settings.scalePercent != 125 ||
         settings.windowOpacityPercent != 86 ||
-        settings.spacingPercent != 120 || settings.cornerRadius != 8 || !settings.compactRows ||
+        settings.spacingPercent != 120 || settings.cornerRadius != 8 || !settings.compactRows || settings.motionEnabled ||
         settings.windowRounding != 13 || settings.frameRounding != 11 || settings.scrollbarRounding != 12 || settings.grabRounding != 7 ||
         settings.windowPaddingX != 10 || settings.windowPaddingY != 11 || settings.framePaddingX != 6 || settings.framePaddingY != 5 ||
         settings.itemSpacingX != 9 || settings.itemSpacingY != 4 ||
@@ -6609,7 +6640,7 @@ static bool TestDisplaySettings(QApplication& app) {
     QFile file(temp.path() + "/meta/ui.ini"); if (!file.open(QIODevice::ReadOnly)) return false; const auto before = file.readAll(); file.close();
     if (!before.contains("unknown=kept") || !before.contains("[qt]") || !before.contains("scalePercent=125") || !before.startsWith("\xEF\xBB\xBF")) return false;
     const auto loaded = LoadQtDisplaySettings(directory); if (loaded.scalePercent != 125 || loaded.windowOpacityPercent != 86 || loaded.spacingPercent != 120 ||
-        loaded.cornerRadius != 8 || !loaded.compactRows ||
+        loaded.cornerRadius != 8 || !loaded.compactRows || loaded.motionEnabled ||
         loaded.windowRounding != 13 || loaded.frameRounding != 11 || loaded.scrollbarRounding != 12 || loaded.grabRounding != 7 ||
         loaded.windowPaddingX != 10 || loaded.windowPaddingY != 11 || loaded.framePaddingX != 6 || loaded.framePaddingY != 5 ||
         loaded.itemSpacingX != 9 || loaded.itemSpacingY != 4 ||
@@ -6637,9 +6668,10 @@ static bool TestDisplaySettings(QApplication& app) {
     auto* accessibleSearch = restoredWindow.findChild<QLineEdit*>("search");
     auto* accessibleTable = restoredWindow.findChild<QTableWidget*>();
     auto* backgroundSurface = restoredWindow.findChild<QWidget*>("qtBackgroundSurface");
+    auto* navigationIndicator = restoredWindow.findChild<QWidget*>("navigationActiveIndicator");
     auto* focusSearch = restoredWindow.findChild<QShortcut*>("shortcutFocusSearch");
     auto* clearSearch = restoredWindow.findChild<QShortcut*>("shortcutClearSearch");
-    if (!restoredNavigation || restoredNavigation->currentRow() != 16 ||
+    if (!restoredNavigation || restoredNavigation->currentRow() != 16 || !navigationIndicator ||
         restoredNavigation->accessibleName().isEmpty() || !accessibleSearch || !backgroundSurface ||
         accessibleSearch->accessibleName().isEmpty() || accessibleSearch->text() != QStringLiteral("remember this log query") ||
         !accessibleTable || !focusSearch || !clearSearch) {
@@ -6654,6 +6686,17 @@ static bool TestDisplaySettings(QApplication& app) {
     };
     if (!hasAccessibleName("profiles")) return false;
     restoredNavigation->setCurrentRow(0); QApplication::processEvents();
+    const auto selectedRow = restoredNavigation->visualItemRect(restoredNavigation->currentItem());
+    const QRect expectedIndicator(selectedRow.left() + 2, selectedRow.top() + 6, 3, std::max(12, selectedRow.height() - 12));
+    if (!navigationIndicator->property("motionSuppressed").toBool() || navigationIndicator->geometry() != expectedIndicator) {
+        const auto actual = navigationIndicator->geometry();
+        std::cerr << "Disabled navigation motion did not move the marker immediately to the active row: suppressed="
+                  << navigationIndicator->property("motionSuppressed").toBool() << " actual=" << actual.x() << ',' << actual.y() << ','
+                  << actual.width() << ',' << actual.height() << " expected=" << expectedIndicator.x() << ',' << expectedIndicator.y() << ','
+                  << expectedIndicator.width() << ',' << expectedIndicator.height() << " row=" << selectedRow.x() << ','
+                  << selectedRow.y() << ',' << selectedRow.width() << ',' << selectedRow.height() << '\n';
+        return false;
+    }
     if (backgroundSurface->property("backgroundPath").toString() != "ui/backgrounds/reference.png") { std::cerr << "Qt page background binding failed: " << backgroundSurface->property("backgroundPath").toString().toUtf8().constData() << '\n'; return false; }
     const auto backgroundArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!backgroundArtifacts.isEmpty()) {
@@ -6807,7 +6850,7 @@ static bool TestQtUiSettingsReset() {
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto settings = QtDisplaySettings{};
     settings.scalePercent = 125; settings.windowOpacityPercent = 75; settings.spacingPercent = 120;
-    settings.cornerRadius = 12; settings.compactRows = true; settings.fullscreen = true; settings.decorated = false;
+    settings.cornerRadius = 12; settings.compactRows = true; settings.motionEnabled = false; settings.fullscreen = true; settings.decorated = false;
     settings.minimizeToTray = true; settings.deadlineNotificationsWhenClosed = true;
     settings.lastProfileId = QStringLiteral("profile-keep"); settings.lastPage = 13;
     settings.recentProfileIds = {QStringLiteral("profile-recent-a"), QStringLiteral("profile-recent-b")};
@@ -6853,7 +6896,7 @@ static bool TestQtUiSettingsReset() {
     if (!ResetQtUiSettings(directory)) return failAt(__LINE__);
     const auto reset = LoadQtDisplaySettings(directory);
     if (reset.scalePercent != 100 || reset.windowOpacityPercent != 100 || reset.spacingPercent != 100 ||
-        reset.cornerRadius != 4 || reset.compactRows || reset.fullscreen || !reset.decorated || reset.minimizeToTray ||
+        reset.cornerRadius != 4 || reset.compactRows || !reset.motionEnabled || reset.fullscreen || !reset.decorated || reset.minimizeToTray ||
         reset.deadlineNotificationsWhenClosed || reset.lastProfileId != QStringLiteral("profile-keep") ||
         reset.recentProfileIds != QStringList{QStringLiteral("profile-recent-a"), QStringLiteral("profile-recent-b")} ||
         reset.lastPage != 0 || reset.taskQuickFilter != 0 || !reset.logFilter.isEmpty() || !reset.projectFilter.isEmpty() ||
@@ -6966,6 +7009,417 @@ static bool TestVisibleQtAccessibleNames() {
     if (!missing.isEmpty()) {
         std::cerr << "Visible Qt controls without accessible names:\n";
         for (const auto& name : missing) std::cerr << "  " << name.toUtf8().constData() << '\n';
+        return false;
+    }
+    return true;
+}
+
+static bool PrepareUiVisualAuditWorkspace() {
+    const auto path = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_WORKSPACE").trimmed();
+    if (path.isEmpty()) return false;
+    const auto appData = qEnvironmentVariable("APPDATA").trimmed();
+    if (appData.isEmpty()) return false;
+    const auto requestedRoot = QDir::cleanPath(QFileInfo(path).absoluteFilePath()).toCaseFolded();
+    const auto productionRoot = QDir::cleanPath(QFileInfo(appData + "/ForgeMirror").absoluteFilePath()).toCaseFolded();
+    if (requestedRoot == productionRoot || requestedRoot.startsWith(productionRoot + QDir::separator()) ||
+        productionRoot.startsWith(requestedRoot + QDir::separator())) {
+        std::cerr << "Refusing to use the production workspace for a visual audit\n";
+        return false;
+    }
+    const QFileInfo root(path);
+    if (root.exists()) {
+        QDir contents(path);
+        if (!root.isDir() || !contents.isEmpty()) {
+            std::cerr << "Refusing to reuse a non-empty UI audit workspace\n";
+            return false;
+        }
+    } else if (!QDir().mkpath(path)) {
+        std::cerr << "Unable to create UI audit workspace\n";
+        return false;
+    }
+
+    const auto directory = std::filesystem::u8path(path.toUtf8().constData());
+    if (!SetAdminPassword(directory, "isolated-ui-audit-only") || !SetAdminStayLoggedIn(directory, true)) {
+        std::cerr << "Unable to enable administrator views in UI audit workspace\n";
+        return false;
+    }
+    QtWorkspace workspace(directory);
+    const std::array<std::pair<const char*, const char*>, 5> skillNames = {{
+        {"UI audit — Planning", "Synthetic audit skill for visual review."},
+        {"UI audit — Modeling", "Synthetic audit skill for visual review."},
+        {"UI audit — Materials", "Synthetic audit skill for visual review."},
+        {"UI audit — Presentation", "Synthetic audit skill for visual review."},
+        {"UI audit — Delivery", "Synthetic audit skill for visual review."}
+    }};
+    std::array<std::string, 5> skillIds;
+    for (size_t i = 0; i < skillNames.size(); ++i) {
+        if (!workspace.catalog.add_skill(skillNames[i].first, 1.0 + (i % 3) * 0.25, skillNames[i].second)) {
+            std::cerr << "Unable to add synthetic audit skill\n";
+            return false;
+        }
+        const auto id = workspace.catalog.id_for_name(skillNames[i].first);
+        if (!id) return false;
+        skillIds[i] = *id;
+    }
+
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    std::vector<std::string> profileIds;
+    const std::array<const char*, 4> names = {"Анна Смирнова", "Марк Волков", "Ирина Белова", "Денис Орлов"};
+    const std::array<int, 4> xp = {6840, 3920, 2150, 980};
+    for (size_t i = 0; i < names.size(); ++i) {
+        Profile profile(names[i]);
+        profile.set_total_xp(xp[i]);
+        profile.set_tasks_completed(int(18 - i * 4));
+        profile.set_last_task_timestamp(now - std::int64_t(i) * 86400);
+        profile.set_wallet_balance(145.50 - i * 27.25);
+        profile.set_inactivity_tasks(int(i));
+        profile.set_category_best_scores({int(8 - i), int(7 + i % 3), int(6 + i), int(5 + i), int(4 + i)});
+        for (size_t skill = 0; skill < skillIds.size(); ++skill) {
+            if ((skill + i) % 2 == 0) {
+                profile.add_skill(skillIds[skill], int(1 + ((i + skill) % 5)), 1.0 + (skill % 3) * 0.25);
+                profile.grant_xp(skillIds[skill], int(80 + ((i + skill) % 4) * 65));
+            }
+        }
+        if (i == 0) {
+            profile.add_achievement({"Чистый проход", skillIds[2], 8.0, now - 3600 * 24 * 3, 0, {}});
+            profile.add_achievement({"Сданный блок", skillIds[4], 5.0, now - 3600 * 24 * 8, 0, {}});
+        }
+        const auto created = workspace.storage->create_profile(profile);
+        if (!created) return false;
+        profileIds.push_back(created->id);
+    }
+    if (profileIds.empty() || !workspace.storage->set_active_profile(profileIds.front())) return false;
+
+    const auto project = AppSaveProjectEntry(directory, workspace.data.projects, -1,
+        u8"Визуальная переработка", u8"Синтетический проект для проверки плотности и иерархии экранов.");
+    if (!project.ok || project.projectIndex < 0 || size_t(project.projectIndex) >= workspace.data.projects.size()) return false;
+    const auto& projectEntry = workspace.data.projects[size_t(project.projectIndex)];
+    const std::array<const char*, 5> taskTitles = {
+        "Собрать референсы", "Пересмотреть карточки профиля", "Сверить русский текст на узкой ширине",
+        "Проверить таблицу статистики", "Зафиксировать визуальные состояния"
+    };
+    for (size_t i = 0; i < taskTitles.size(); ++i) {
+        TaskEntry task;
+        task.id = "ui-audit-task-" + std::to_string(i + 1);
+        task.projectId = projectEntry.id;
+        task.project = projectEntry.name;
+        task.title = taskTitles[i];
+        task.description = "Synthetic content only. This workspace is disposable and isolated from user data.";
+        task.createdAt = now - std::int64_t(i) * 3600 * 7;
+        task.deadlineAt = now + (std::int64_t(i) - 1) * 3600 * 24;
+        task.status = i < 2 ? 1 : (i == 2 ? 0 : (i == 3 ? 2 : 0));
+        task.priority = int(i % 3);
+        task.category = int(i % Profile::kCategoryCount);
+        task.assignees = {profileIds.front()};
+        task.skillIds = {skillIds[i % skillIds.size()]};
+        if (!AppCreateTaskEntry(directory, workspace.data.tasks, task, "ui-audit").ok) return false;
+    }
+
+    auto settings = LoadQtDisplaySettings(directory);
+    settings.lastProfileId = QString::fromStdString(profileIds.front());
+    settings.lastPage = 0;
+    settings.profileViewMode = 0;
+    settings.motionEnabled = false;
+    settings.adminStatsAutoRefresh = false;
+    if (!SaveQtDisplaySettings(directory, settings)) return false;
+    std::cout << "Prepared isolated UI audit workspace: " << path.toUtf8().constData() << '\n';
+    return true;
+}
+
+static bool TestQtAllPagesFitAtMinimumWidth() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const bool hadAuditWorkspace = qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+    const auto previousAuditWorkspace = qgetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+    qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE", temp.path().toUtf8());
+    const bool prepared = PrepareUiVisualAuditWorkspace();
+    if (hadAuditWorkspace) qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE", previousAuditWorkspace);
+    else qunsetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+    if (!prepared) return false;
+
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    // The optional 3D module is disabled by default. Enable it only in this
+    // fixture so the matrix visits its actual pages rather than falling back
+    // to Profile when a hidden navigation item is selected.
+    workspace.modules.view3d = true;
+    QtWindow window(workspace);
+    window.resize(800, 520);
+    window.show();
+    QApplication::processEvents();
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    auto* pageScroll = window.findChild<QScrollArea*>("pageContentScrollArea");
+    if (!navigation || !pageScroll || navigation->count() != 18) return false;
+    auto* records = window.findChild<QTableWidget*>("records");
+    auto* search = window.findChild<QLineEdit*>("search");
+    auto* emptyState = window.findChild<QWidget*>("listEmptyState");
+    auto* emptyTitle = window.findChild<QLabel*>("listEmptyTitle");
+    auto* detailsToggle = window.findChild<QPushButton*>("detailsToggle");
+    auto* details = window.findChild<QTextBrowser*>("details");
+    if (!records || !search || !emptyState || !emptyTitle || !emptyTitle->wordWrap() || !detailsToggle || !details) return false;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    for (int page = 0; page < navigation->count(); ++page) {
+        if (!navigation->item(page) || navigation->item(page)->isHidden()) {
+            std::cerr << "Minimum-width matrix has an unavailable navigation page: " << page << '\n';
+            return false;
+        }
+        navigation->setCurrentRow(page);
+        QApplication::processEvents();
+        QApplication::processEvents();
+        if (navigation->currentRow() != page) {
+            std::cerr << "Minimum-width matrix did not open the requested page: " << page << '\n';
+            return false;
+        }
+        if (!artifacts.isEmpty())
+            window.grab().save(artifacts + QStringLiteral("/page-%1-800.png").arg(page));
+        if (page == 0) {
+            auto* briefTasks = window.findChild<QTableWidget*>("profileTaskBriefTable");
+            auto* focus = window.findChild<QLabel*>("profileSignalValue1");
+            if (!briefTasks || !focus || briefTasks->rowCount() == 0 ||
+                !briefTasks->isColumnHidden(1) || !briefTasks->isColumnHidden(2) ||
+                briefTasks->columnWidth(0) <= briefTasks->columnWidth(3) ||
+                briefTasks->horizontalScrollBar()->maximum() != 0) {
+                std::cerr << "Profile task preview did not prioritize task titles and deadlines at minimum width\n";
+                return false;
+            }
+            for (int row = 0; row < briefTasks->rowCount(); ++row) {
+                const auto* title = briefTasks->item(row, 0);
+                const auto* project = briefTasks->item(row, 1);
+                const auto* stage = briefTasks->item(row, 2);
+                const auto* deadline = briefTasks->item(row, 3);
+                if (!title || !project || !stage || !deadline) return false;
+                const auto taskId = title->data(Qt::UserRole).toString().toStdString();
+                const auto task = std::find_if(workspace.data.tasks.begin(), workspace.data.tasks.end(),
+                    [&](const auto& entry) { return entry.id == taskId; });
+                const auto context = title->data(Qt::AccessibleDescriptionRole).toString();
+                if (task == workspace.data.tasks.end() || title->text() != QString::fromStdString(task->title) ||
+                    title->data(Qt::AccessibleTextRole).toString() != title->text() ||
+                    !title->toolTip().contains(project->text()) || !context.contains(project->text()) ||
+                    !context.contains(stage->text().isEmpty() ? QString::fromUtf8("Без этапа") : stage->text()) ||
+                    !context.contains(deadline->text()) ||
+                    briefTasks->columnWidth(3) < briefTasks->fontMetrics().horizontalAdvance(deadline->text())) {
+                    std::cerr << "Profile task title/context or readable deadline was lost in the compact preview\n";
+                    return false;
+                }
+            }
+            const auto taskId = briefTasks->item(0, 0)->data(Qt::UserRole).toString();
+            if (focus->text() != briefTasks->item(0, 0)->text() ||
+                !QMetaObject::invokeMethod(briefTasks, "cellDoubleClicked", Qt::DirectConnection,
+                    Q_ARG(int, 0), Q_ARG(int, 0))) return false;
+            QApplication::processEvents();
+            const int selectedTaskRow = records->currentRow();
+            if (navigation->currentRow() != 1 || selectedTaskRow < 0 || !records->item(selectedTaskRow, 0) ||
+                records->item(selectedTaskRow, 0)->data(Qt::UserRole).toString() != taskId) {
+                std::cerr << "Compact profile task preview no longer opens the selected task\n";
+                return false;
+            }
+            navigation->setCurrentRow(0);
+            QApplication::processEvents();
+            QApplication::processEvents();
+        }
+        if (page == 8) {
+            auto* pomodoro = window.findChild<QWidget*>("pomodoroPanel");
+            auto* layout = pomodoro ? qobject_cast<QBoxLayout*>(pomodoro->layout()) : nullptr;
+            if (!layout || layout->direction() != QBoxLayout::TopToBottom) {
+                std::cerr << "Pomodoro controls must stack at the minimum window width\n";
+                return false;
+            }
+        }
+        if (page == 2 && records->rowCount() > 0) {
+            if (records->horizontalScrollBar()->maximum() != 0 || records->columnWidth(0) < 120 ||
+                !records->isColumnHidden(1) || !detailsToggle->isVisible() || detailsToggle->isChecked()) {
+                std::cerr << "Projects did not keep the name and working signals readable at minimum width\n";
+                return false;
+            }
+            records->selectRow(0);
+            detailsToggle->click();
+            QApplication::processEvents();
+            if (!details->isVisible() || !details->toPlainText().contains(records->item(0, 1)->text())) return false;
+            detailsToggle->click();
+        }
+        if (page == 2 || page == 3 || page == 4) {
+            search->setText(QStringLiteral("no-matching-record-visual-audit"));
+            QApplication::processEvents();
+            if (records->rowCount() != 0 || records->isVisible() || !emptyState->isVisible() ||
+                !emptyTitle->text().contains(QString::fromUtf8("ничего не найдено")) ||
+                pageScroll->horizontalScrollBar()->maximum() != 0) return false;
+            if (!artifacts.isEmpty())
+                window.grab().save(artifacts + QStringLiteral("/page-%1-no-matches-800.png").arg(page));
+            auto* reset = window.findChild<QPushButton*>(page == 2 ? "projectFilterReset" :
+                page == 3 ? "catalogFilterReset" : "pipelineFilterReset");
+            if (!reset) return false;
+            reset->click();
+            QApplication::processEvents();
+            if (!search->text().isEmpty() || !records->isVisible() || emptyState->isVisible()) return false;
+        }
+        const int horizontalRange = pageScroll->horizontalScrollBar()->maximum();
+        if (horizontalRange != 0) {
+            const auto* item = navigation->item(page);
+            std::cerr << "Qt page overflows horizontally at 800x520: page=" << page << " label="
+                << (item ? item->text().toUtf8().constData() : "<missing>") << " viewport="
+                << pageScroll->viewport()->width() << " content=" << pageScroll->widget()->sizeHint().width()
+                << " maximum=" << horizontalRange << '\n';
+            if (page == 8) {
+                auto* pomodoro = window.findChild<QWidget*>("pomodoroPanel");
+                if (pomodoro) {
+                    std::cerr << "  pomodoro width=" << pomodoro->width() << " minimum=" << pomodoro->minimumSizeHint().width()
+                        << " sizeHint=" << pomodoro->sizeHint().width() << '\n';
+                    for (auto* child : pomodoro->findChildren<QWidget*>()) {
+                        if (!child->isVisible()) continue;
+                        if (child->width() > 400 || child->minimumSizeHint().width() > 400 ||
+                            child->sizeHint().width() > 400) {
+                            std::cerr << "  child=" << child->metaObject()->className() << " name="
+                                << child->objectName().toUtf8().constData() << " width=" << child->width()
+                                << " minimum=" << child->minimumSizeHint().width()
+                                << " hint=" << child->sizeHint().width() << '\n';
+                        }
+                    }
+                }
+            } else if (page == 17) {
+                for (auto* child : pageScroll->widget()->findChildren<QWidget*>()) {
+                    if (!child->isVisible()) continue;
+                    if (child->minimumSizeHint().width() > 500 || child->sizeHint().width() > 800 ||
+                        child->minimumWidth() > 500) {
+                        std::cerr << "  child=" << child->metaObject()->className() << " name="
+                            << child->objectName().toUtf8().constData() << " width=" << child->width()
+                            << " minimum=" << child->minimumSizeHint().width()
+                            << " hint=" << child->sizeHint().width() << '\n';
+                    }
+                }
+            }
+            return false;
+        }
+        if (page == 15) {
+            auto* modelFilter = window.findChild<QLineEdit*>("modelFilter");
+            auto* modelReset = window.findChild<QPushButton*>("modelFilterReset");
+            auto* modelRefresh = window.findChild<QPushButton*>("modelChoiceRefresh");
+            auto* modelHelp = window.findChild<QLabel*>("modelSettingsHelp");
+            if (!modelFilter || !modelReset || !modelRefresh || !modelHelp || !modelHelp->wordWrap())
+                return false;
+            // The narrow form must wrap; when the measured controls fit in
+            // the wider field they must share a row. Offscreen font metrics
+            // differ from native Windows, so a fixed window width alone is
+            // not evidence that all three controls fit.
+            window.resize(1120, 720);
+            QApplication::processEvents();
+            QApplication::processEvents();
+            if (!artifacts.isEmpty())
+                window.grab().save(artifacts + QStringLiteral("/model-settings-after-1120.png"));
+            auto* filterRow = modelFilter->parentWidget();
+            if (!filterRow || modelReset->parentWidget() != filterRow ||
+                modelRefresh->parentWidget() != filterRow || !filterRow->layout()) return false;
+            int singleRowWidth = 16; // Two 8 px horizontal gaps in QtFlowLayout.
+            for (int index = 0; index < filterRow->layout()->count(); ++index)
+                singleRowWidth += filterRow->layout()->itemAt(index)->sizeHint().width();
+            const bool fitsSingleRow = filterRow->contentsRect().width() >= singleRowWidth;
+            if (navigation->currentRow() != page || pageScroll->horizontalScrollBar()->maximum() != 0 ||
+                (fitsSingleRow && (modelFilter->y() != modelReset->y() || modelFilter->y() != modelRefresh->y()))) {
+                std::cerr << "3D settings did not use the available wide-form width\n";
+                return false;
+            }
+            window.resize(800, 520);
+            QApplication::processEvents();
+            QApplication::processEvents();
+            if (pageScroll->horizontalScrollBar()->maximum() != 0) return false;
+        }
+    }
+    window.close();
+    return true;
+}
+
+static bool TestNavigationVisualContract() {
+    // The common control style must retain a visible selected state after it
+    // replaces the platform's default button background.
+    QPushButton stateProbe;
+    stateProbe.setCheckable(true);
+    stateProbe.setFocusPolicy(Qt::NoFocus);
+    stateProbe.setFixedSize(40, 30);
+    stateProbe.ensurePolished();
+    const auto normalButton = stateProbe.grab().toImage();
+    stateProbe.setChecked(true);
+    const auto checkedButton = stateProbe.grab().toImage();
+    if (normalButton.isNull() || checkedButton.isNull() ||
+        normalButton.pixelColor(normalButton.width() / 2, normalButton.height() / 2) ==
+            checkedButton.pixelColor(checkedButton.width() / 2, checkedButton.height() / 2)) {
+        std::cerr << "Checked controls are visually indistinguishable from unselected controls\n";
+        return false;
+    }
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    QtWorkspace workspace(directory);
+    QtWindow window(workspace);
+    window.resize(1120, 720);
+    window.show();
+    QApplication::processEvents();
+
+    auto* navigation = window.findChild<QListWidget*>("navigation");
+    if (!navigation || navigation->count() != 18 || navigation->iconSize() != QSize(18, 18))
+        return false;
+    if (navigation->horizontalScrollBarPolicy() != Qt::ScrollBarAlwaysOff ||
+        navigation->horizontalScrollBar()->maximum() != 0) {
+        std::cerr << "Navigation labels require horizontal scrolling at 1120x720: viewport="
+                  << navigation->viewport()->width() << " content=" << navigation->sizeHintForColumn(0)
+                  << " maximum=" << navigation->horizontalScrollBar()->maximum()
+                  << " policy=" << navigation->horizontalScrollBarPolicy() << '\n';
+        return false;
+    }
+    for (int row = 0; row < navigation->count(); ++row) {
+        const auto* item = navigation->item(row);
+        if (!item || item->icon().isNull() || item->text().isEmpty() ||
+            item->data(Qt::AccessibleTextRole).toString() != item->text()) {
+            std::cerr << "Navigation icon or accessible label missing at row " << row << '\n';
+            return false;
+        }
+        const auto normal = item->icon().pixmap(navigation->iconSize(), QIcon::Normal).toImage();
+        const auto selected = item->icon().pixmap(navigation->iconSize(), QIcon::Selected).toImage();
+        auto hasVisiblePixel = [](const QImage& image) {
+            for (int y = 0; y < image.height(); ++y)
+                for (int x = 0; x < image.width(); ++x)
+                    if (qAlpha(image.pixel(x, y)) != 0) return true;
+            return false;
+        };
+        if (normal.size() != navigation->iconSize() || selected.size() != navigation->iconSize() ||
+            !hasVisiblePixel(normal) || !hasVisiblePixel(selected) || normal == selected) {
+            std::cerr << "Navigation icon state rendering invalid at row " << row << '\n';
+            return false;
+        }
+    }
+
+    navigation->clearFocus();
+    QApplication::processEvents();
+    const auto navigationWithoutFocus = navigation->viewport()->grab().toImage();
+    navigation->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    const auto stylesheet = qApp->styleSheet();
+    const bool focusVisible = navigation->hasFocus() &&
+        navigation->viewport()->grab().toImage() != navigationWithoutFocus &&
+        stylesheet.contains(QStringLiteral("QListWidget#navigation::item:focus")) &&
+        stylesheet.contains(QStringLiteral("QPushButton:focus")) &&
+        stylesheet.contains(QStringLiteral("QToolButton:focus"));
+    const bool pointerStates = stylesheet.contains(QStringLiteral("QPushButton:hover")) &&
+        stylesheet.contains(QStringLiteral("QToolButton:hover")) &&
+        stylesheet.contains(QStringLiteral("QPushButton:pressed")) &&
+        stylesheet.contains(QStringLiteral("QPushButton#primary:disabled"));
+    QPushButton* hoverTarget = nullptr;
+    for (auto* button : window.findChildren<QPushButton*>()) {
+        if (button->isVisible() && button->isEnabled() && button->size().width() > 24 && button->size().height() > 20) {
+            hoverTarget = button;
+            break;
+        }
+    }
+    bool hoverChangesAppearance = false;
+    if (hoverTarget) {
+        QTest::mouseMove(&window, QPoint(window.width() - 1, window.height() - 1));
+        QApplication::processEvents();
+        const auto beforeHover = hoverTarget->grab().toImage();
+        QTest::mouseMove(hoverTarget, hoverTarget->rect().center(), 20);
+        QApplication::processEvents();
+        hoverChangesAppearance = hoverTarget->underMouse() && hoverTarget->grab().toImage() != beforeHover;
+    }
+    window.close();
+    if (!focusVisible || !pointerStates || !hoverChangesAppearance) {
+        std::cerr << "Navigation keyboard focus or common button interaction states missing\n";
         return false;
     }
     return true;
@@ -7084,6 +7538,41 @@ static bool TestQtDeadlineEvaluation() {
     backup.close();
     if (!LoadTasksDataReadOnly(std::filesystem::u8path(temp.path().toUtf8().constData())).empty() ||
         !primary.open(QIODevice::ReadOnly) || primary.readAll() != "invalid primary") return false;
+#ifdef _WIN32
+    // Exercise only executable resolution and a no-op child: never configure a scheduled task.
+    {
+        std::vector<wchar_t> systemDirectory(32768), windowsDirectory(32768);
+        const auto systemLength = GetSystemDirectoryW(systemDirectory.data(), static_cast<UINT>(systemDirectory.size()));
+        const auto windowsLength = GetWindowsDirectoryW(windowsDirectory.data(), static_cast<UINT>(windowsDirectory.size()));
+        if (!systemLength || systemLength >= systemDirectory.size() ||
+            !windowsLength || windowsLength >= windowsDirectory.size()) return false;
+        const auto systemPath = QString::fromWCharArray(systemDirectory.data(), static_cast<int>(systemLength));
+        const auto windowsPath = QString::fromWCharArray(windowsDirectory.data(), static_cast<int>(windowsLength));
+        const auto executable = QtDeadlinePowerShellExecutable();
+        const auto expectedExecutable = QDir(systemPath).filePath(QStringLiteral("WindowsPowerShell/v1.0/powershell.exe"));
+        if (!QDir::isAbsolutePath(executable) || !QFileInfo(executable).isFile() ||
+            executable.compare(expectedExecutable, Qt::CaseInsensitive) != 0) return false;
+        struct RestorePath {
+            const bool wasSet = qEnvironmentVariableIsSet("PATH");
+            const QByteArray previous = qgetenv("PATH");
+            ~RestorePath() { if (wasSet) qputenv("PATH", previous); else qunsetenv("PATH"); }
+        } restorePath;
+        if (!qputenv("PATH", (systemPath + ';' + windowsPath).toUtf8())) return false;
+        QProcess process;
+        process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* arguments) {
+            arguments->flags |= CREATE_NO_WINDOW;
+        });
+        process.start(executable, {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"),
+            QStringLiteral("-NonInteractive"), QStringLiteral("-Command"), QStringLiteral("exit 0")});
+        if (!process.waitForStarted(5000)) return false;
+        if (!process.waitForFinished(15000)) {
+            process.kill();
+            process.waitForFinished(5000);
+            return false;
+        }
+        if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) return false;
+    }
+#endif
     return true;
 }
 
@@ -7302,10 +7791,50 @@ static bool TestQtLogSourceSanitizationAndRetention() {
     return true;
 }
 
+static bool TestQtRelativeWorkspaceStartup() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+#ifdef _WIN32
+    const auto executable = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ForgeMirrorQt.exe"));
+#else
+    const auto executable = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ForgeMirrorQt"));
+#endif
+    if (!QFileInfo::exists(executable)) {
+        std::cerr << "Qt application executable is unavailable for relative-workspace startup regression\n";
+        return false;
+    }
+    QProcess process;
+    process.setProgram(executable);
+    process.setWorkingDirectory(temp.path());
+    process.setArguments({QStringLiteral("--storage-dir"), QStringLiteral("relative-workspace"),
+        QStringLiteral("--smoke-test")});
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    process.setProcessEnvironment(environment);
+    process.start();
+    if (!process.waitForStarted(3000) || !process.waitForFinished(10000)) {
+        process.kill();
+        process.waitForFinished(3000);
+        std::cerr << "Qt application failed to finish the relative-workspace startup probe\n";
+        return false;
+    }
+    const auto stderrText = process.readAllStandardError();
+    const auto workspacePath = QDir(temp.path()).filePath(QStringLiteral("relative-workspace"));
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0 || !QFileInfo(workspacePath).isDir()) {
+        std::cerr << "Qt application rejected a relative workspace path: "
+            << stderrText.toStdString() << '\n';
+        return false;
+    }
+    return true;
+}
+
 static bool TestQtRecentProfileActions() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    auto compactDisplay = LoadQtDisplaySettings(workspace.directory);
+    compactDisplay.profileViewMode = 0;
+    if (!SaveQtDisplaySettings(workspace.directory, compactDisplay)) return false;
     Profile profile(u8"Профиль ленты XP");
     const auto profileInfo = workspace.storage->create_profile(profile);
     if (!profileInfo || !workspace.storage->set_active_profile(profileInfo->id)) return false;
@@ -7330,15 +7859,31 @@ static bool TestQtRecentProfileActions() {
     if (!AppSaveTasks(workspace.directory, tasks)) return false;
 
     QtWindow window(workspace);
+    window.resize(800, 520);
     window.show();
     QApplication::processEvents();
     auto* profiles = window.findChild<QComboBox*>("profiles");
     auto* navigation = window.findChild<QListWidget*>("navigation");
     auto* card = window.findChild<QWidget*>("profileRecentActionsCard");
+    auto* metrics = window.findChild<QWidget*>("profileMetrics");
+    auto* pageScroll = window.findChild<QScrollArea*>("pageContentScrollArea");
+    auto* headerScroll = window.findChild<QScrollArea*>("headerScrollArea");
     auto* summary = window.findChild<QLabel*>("profileRecentActionsSummary");
-    if (!profiles || !navigation || !card || !summary) return false;
+    if (!profiles || !navigation || !card || !metrics || !pageScroll || !headerScroll || !summary) return false;
+    if (headerScroll->horizontalScrollBarPolicy() != Qt::ScrollBarAsNeeded) {
+        std::cerr << "Header must keep horizontal navigation available when scaled content exceeds the window\n";
+        return false;
+    }
     const int profileIndex = profiles->findData(QString::fromStdString(profileInfo->id));
     if (profileIndex < 0) return false;
+    auto* modeAnalytics = window.findChild<QPushButton*>("profileViewMode1");
+    auto* modeFocus = window.findChild<QPushButton*>("profileViewMode2");
+    auto* modeTasks = window.findChild<QPushButton*>("profileViewMode3");
+    auto* overview = window.findChild<QWidget*>("profileOverview");
+    auto* analytics = window.findChild<QWidget*>("profileAnalyticsCharts");
+    auto* taskActions = window.findChild<QWidget*>("profileTaskActions");
+    auto* records = window.findChild<QTableWidget*>("records");
+    if (!modeAnalytics || !modeFocus || !modeTasks || !overview || !analytics || !taskActions || !records) return false;
     profiles->setCurrentIndex(profileIndex);
     workspace.data.taskAudit = {
         {now - 80, "test", "recent-xp-1", "participants", "", "awarded"},
@@ -7350,16 +7895,143 @@ static bool TestQtRecentProfileActions() {
     navigation->setCurrentRow(0);
     QApplication::processEvents();
 
+    if (pageScroll->horizontalScrollBar()->maximum() != 0 || !metrics->sizePolicy().hasHeightForWidth()) {
+        std::cerr << "Profile overview horizontal overflowed at 800x520\n";
+        return false;
+    }
+    const auto metricCards = metrics->findChildren<QFrame*>(QString(), Qt::FindDirectChildrenOnly);
+    if (metricCards.size() != 5 || metrics->height() <= metricCards.first()->height()) return false;
+    const int firstMetricY = metricCards.first()->y();
+    bool wrappedMetrics = false;
+    for (const auto* metric : metricCards) {
+        if (metric->geometry().right() >= metrics->width()) {
+            return false;
+        }
+        wrappedMetrics |= metric->y() != firstMetricY;
+    }
+    if (!wrappedMetrics) return false;
+
+    auto* mainColumns = window.findChild<QWidget*>("profileMainColumns");
+    auto* mainLayout = mainColumns ? qobject_cast<QBoxLayout*>(mainColumns->layout()) : nullptr;
+    auto* diagnostics = window.findChild<QWidget*>("profileDiagnostics");
+    auto* diagnosticsToggle = window.findChild<QToolButton*>("profileDiagnosticsToggle");
+    auto* emptyTasks = window.findChild<QLabel*>("profileTaskEmpty");
+    auto* briefTasks = window.findChild<QTableWidget*>("profileTaskBriefTable");
+    if (!mainLayout || mainLayout->direction() != QBoxLayout::TopToBottom ||
+        !diagnostics || !diagnostics->isHidden() || !diagnosticsToggle || diagnosticsToggle->isChecked() ||
+        !emptyTasks || !emptyTasks->isVisible() || !briefTasks || !briefTasks->isHidden()) {
+        std::cerr << "Profile overview did not stack its work/context columns, collapse diagnostics, or explain empty tasks\n";
+        return false;
+    }
+    diagnosticsToggle->click();
+    QApplication::processEvents();
+    if (!diagnostics->isVisible() || !summary->isVisible() || pageScroll->horizontalScrollBar()->maximum() != 0) return false;
+    diagnosticsToggle->click();
+    window.resize(1120, 720);
+    QApplication::processEvents();
+    if (mainLayout->direction() != QBoxLayout::LeftToRight || pageScroll->horizontalScrollBar()->maximum() != 0) {
+        std::cerr << "Profile overview did not restore wide work/context columns\n";
+        return false;
+    }
+    window.resize(800, 520);
+    QApplication::processEvents();
+
     const QString text = summary->text();
     const bool ordered = text.indexOf(QString::fromUtf8("Самое новое начисление")) <
             text.indexOf(QString::fromUtf8("Второе начисление")) &&
         text.indexOf(QString::fromUtf8("Второе начисление")) < text.indexOf(QString::fromUtf8("Третье начисление"));
-    return !card->isHidden() && ordered &&
+    const bool feedIsCorrect = !card->isHidden() && ordered &&
         !text.contains(QString::fromUtf8("Скрытое начисление")) &&
         !text.contains(QString::fromUtf8("Чужое начисление")) &&
         text.contains(QString::fromUtf8("+8 глобального / +16 навыкового XP")) &&
         text.contains(QString::fromUtf8("+1 в истории")) &&
         summary->accessibleDescription().contains(QString::fromUtf8("3 из 4"));
+    if (!feedIsCorrect) return false;
+
+    const std::array<QPushButton*, 3> modes = {modeAnalytics, modeFocus, modeTasks};
+    for (int index = 0; index < int(modes.size()); ++index) {
+        modes[size_t(index)]->click();
+        QApplication::processEvents();
+        if (pageScroll->horizontalScrollBar()->maximum() != 0) {
+            std::cerr << "Profile mode " << index + 1 << " horizontally overflows at 800x520: viewport="
+                      << pageScroll->viewport()->width() << " content=" << pageScroll->widget()->sizeHint().width()
+                      << " maximum=" << pageScroll->horizontalScrollBar()->maximum() << '\n';
+            for (auto* child : pageScroll->widget()->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
+                if (!child->isVisible()) continue;
+                std::cerr << "  child=" << child->metaObject()->className() << " name="
+                          << child->objectName().toUtf8().constData() << " size=" << child->size().width()
+                          << " hint=" << child->sizeHint().width() << " minimum=" << child->minimumSizeHint().width()
+                          << " explicit-min=" << child->minimumWidth() << '\n';
+            }
+            return false;
+        }
+        if ((index == 0 && (overview->isVisible() || !analytics->isVisible() || !records->isVisible())) ||
+            (index == 1 && (!overview->isVisible() || records->isVisible() || analytics->isVisible())) ||
+            (index == 2 && (overview->isVisible() || !taskActions->isVisible() || !records->isVisible()))) {
+            std::cerr << "Profile mode " << index + 1 << " did not expose the expected content at 800x520\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool TestQtCommandHelpDialogLayout() {
+    const QString rawHelpText = QString::fromUtf8(
+        "Usage: Z:/workspace/package/ForgeMirrorQt.exe [options]\n"
+        "ForgeMirror Qt — изолированный клиент переноса\n\n"
+        "Options:\n"
+        "  --storage-dir <path>  Explicit test workspace (never use the production directory).\n"
+        "  --smoke-test          Open the real window and exit after one second.");
+    const auto helpText = BuildQtGuiCommandHelpText(rawHelpText, QStringLiteral("ForgeMirrorQt"));
+    if (!helpText.startsWith(QStringLiteral("Usage: ForgeMirrorQt [options]"))) return false;
+    std::unique_ptr<QDialog> dialog(CreateQtCommandHelpDialog(helpText));
+    auto* text = dialog->findChild<QPlainTextEdit*>(QStringLiteral("commandHelpText"));
+    auto* buttons = dialog->findChild<QDialogButtonBox*>(QStringLiteral("commandHelpButtons"));
+    if (!text || !buttons || !buttons->button(QDialogButtonBox::Close)) return false;
+    dialog->show();
+    QApplication::processEvents();
+    const auto artifactDir = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    bool screenshotSaved = true;
+    if (!artifactDir.isEmpty()) {
+        QDir().mkpath(artifactDir);
+        screenshotSaved = dialog->grab().save(artifactDir + QStringLiteral("/command-help-dialog.png"));
+    }
+    const int expectedMinimumWidth = QGuiApplication::primaryScreen()
+        ? qMin(700, QGuiApplication::primaryScreen()->availableGeometry().width() - 32) : 700;
+    const bool valid = dialog->windowTitle() == QString::fromUtf8("Справка ForgeMirror Qt") &&
+        dialog->accessibleName() == QString::fromUtf8("Справка командной строки ForgeMirror Qt") &&
+        text->accessibleName() == QString::fromUtf8("Список параметров командной строки") &&
+        text->toPlainText() == helpText && text->isReadOnly() &&
+        text->lineWrapMode() == QPlainTextEdit::NoWrap &&
+        dialog->width() >= expectedMinimumWidth && text->width() >= expectedMinimumWidth - 80 &&
+        text->height() >= 300 && screenshotSaved;
+    dialog->close();
+    return valid;
+}
+
+static bool TestQtCommandHelpProcess() {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto executable = QDir(QCoreApplication::applicationDirPath())
+        .filePath(QStringLiteral("ForgeMirrorQt.exe"));
+    if (!QFileInfo::exists(executable)) return false;
+    const auto screenshot = QDir(temp.path()).filePath(QStringLiteral("command-help.png"));
+    QProcess process;
+    process.setProgram(executable);
+    process.setArguments({QStringLiteral("--help"), QStringLiteral("--smoke-test"),
+        QStringLiteral("--screenshot"), screenshot});
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    process.setProcessEnvironment(environment);
+    process.start();
+    if (!process.waitForStarted(3000) || !process.waitForFinished(5000)) {
+        process.kill();
+        process.waitForFinished(3000);
+        return false;
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) return false;
+    QImage image(screenshot);
+    return !image.isNull() && image.width() >= 600 && image.height() >= 360;
 }
 
 int main(int argc, char** argv) {
@@ -7367,6 +8039,20 @@ int main(int argc, char** argv) {
     ApplyQtTheme(app);
     DialogAccessibilityAuditor dialogAccessibilityAuditor;
     app.installEventFilter(&dialogAccessibilityAuditor);
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PROFILE_LAYOUT"))
+        return TestQtRecentProfileActions() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_RELATIVE_WORKSPACE"))
+        return TestQtRelativeWorkspaceStartup() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PAGE_LAYOUT"))
+        return TestQtAllPagesFitAtMinimumWidth() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_COMMAND_HELP"))
+        return TestQtCommandHelpDialogLayout() && TestQtCommandHelpProcess() ? 0 : 1;
+    if (!qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_WORKSPACE").trimmed().isEmpty())
+        return PrepareUiVisualAuditWorkspace() ? 0 : 1;
+    if (!TestQtCommandHelpDialogLayout() || !TestQtCommandHelpProcess()) {
+        std::cerr << "Qt command help dialog or launch failed\n";
+        return 1;
+    }
     if (!TestQtLogSourceSanitizationAndRetention()) { std::cerr << "Qt log source, sanitization, or retention failed\n"; return 1; }
     qunsetenv("FORGEMIRROR_ADMIN_PASSWORD");
     qunsetenv("FORGEMIRROR_DISABLE_MODULES");
@@ -7416,6 +8102,7 @@ int main(int argc, char** argv) {
     if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }
     if (!TestQtUiSettingsReset()) { std::cerr << "Qt UI settings reset failed\n"; return 1; }
     if (!TestVisibleQtAccessibleNames()) { std::cerr << "Qt accessible-name audit failed\n"; return 1; }
+    if (!TestNavigationVisualContract()) { std::cerr << "Qt navigation visual contract failed\n"; return 1; }
     if (!TestQtModuleToggleParity()) { std::cerr << "Qt module toggle parity failed\n"; return 1; }
     if (!TestWorkspaceImportSnapshot()) { std::cerr << "Workspace import snapshot failed\n"; return 1; }
     if (!TestQtDeadlineEvaluation()) { std::cerr << "Qt deadline evaluation failed\n"; return 1; }
@@ -7642,7 +8329,7 @@ int main(int argc, char** argv) {
         !weakestCategoryBar || weakestCategoryBar->value() != 2 ||
         profileBalance->item(1, 0)->text() != QString::fromUtf8(Profile::kCategoryLabels[0]) ||
         profileBalance->item(1, 1)->text() != QStringLiteral("3/10") ||
-        !profileBrief || profileBrief->rowCount() != 1 ||
+        !profileBrief || profileBrief->rowCount() != 1 || !profileBrief->isVisible() ||
         profileBrief->item(0, 0)->text() != QString::fromUtf8("Проверка Qt <без HTML>") || !openFocusTask)
         return fail("Profile overview state, weak-category ranking, focus signals, workload, or task preview missing");
     auto* profileCollectionSummary = window.findChild<QLabel*>("profileCollectionSummary");
@@ -7655,8 +8342,10 @@ int main(int argc, char** argv) {
         !profileCollectionSummary->text().contains(QString::fromUtf8("Бонус: +16.5%")) ||
         !profileAchievementPreview || !profileAchievementPreview->isVisible() || !recentAchievement0 ||
         !recentAchievement0->toolTip().contains(QString::fromUtf8("Недавно истекла")) || recentAchievement0->isEnabled() ||
+        recentAchievement0->text() == QStringLiteral("?") || recentAchievement0->pixmap(Qt::ReturnByValue).isNull() ||
         !recentAchievement1 || !recentAchievement1->toolTip().contains(QString::fromUtf8("Свежая активная")) ||
-        !recentAchievement1->isEnabled() || !recentAchievementOverflow || recentAchievementOverflow->text() != QStringLiteral("+1"))
+        !recentAchievement1->isEnabled() || recentAchievement1->text() == QStringLiteral("?") ||
+        recentAchievement1->pixmap(Qt::ReturnByValue).isNull() || !recentAchievementOverflow || recentAchievementOverflow->text() != QStringLiteral("+1"))
         return fail(("Profile achievement preview failed: summary=" + (profileCollectionSummary ? profileCollectionSummary->text().toStdString() : "<missing>") +
             "; preview=" + (profileAchievementPreview && profileAchievementPreview->isVisible() ? "visible" : "hidden") +
             "; first=" + (recentAchievement0 ? recentAchievement0->toolTip().toStdString() : "<missing>") +
@@ -8022,6 +8711,7 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(17);
     QApplication::processEvents();
     auto* profileStatsSummary = window.findChild<QLabel*>("summary");
+    auto* profileStatsKpiRow = window.findChild<QWidget*>("adminStatsKpiRow");
     auto* statsArchived = window.findChild<QCheckBox*>("adminStatsIncludeArchived");
     auto* statsView = window.findChild<QComboBox*>("adminStatsView");
     auto* statsRank = window.findChild<QComboBox*>("adminStatsRankFilter");
@@ -8031,14 +8721,38 @@ int main(int argc, char** argv) {
     auto* statsRefreshSeconds = window.findChild<QSpinBox*>("adminStatsRefreshSeconds");
     auto* statsRefreshButton = window.findChild<QPushButton*>("adminStatsRefresh");
     auto* statsResetButton = window.findChild<QPushButton*>("adminStatsReset");
-    if (nav->item(17)->isHidden() || !profileStatsSummary || !profileStatsSummary->text().contains(QString::fromUtf8("Профилей: 2")) ||
+    std::array<QLabel*, 4> statsKpiValues{};
+    for (size_t index = 0; index < statsKpiValues.size(); ++index)
+        statsKpiValues[index] = window.findChild<QLabel*>(QStringLiteral("adminStatsKpiValue_%1").arg(index));
+    if (nav->item(17)->isHidden() || !profileStatsSummary ||
+        !profileStatsSummary->text().contains(QString::fromUtf8("без активности")) ||
+        !profileStatsSummary->toolTip().contains(QString::fromUtf8("Профилей: 2")) ||
+        !profileStatsKpiRow || !profileStatsKpiRow->isVisible() ||
+        profileStatsKpiRow->findChildren<QFrame*>(QString(), Qt::FindDirectChildrenOnly).size() != 4 ||
+        !statsKpiValues[0] || statsKpiValues[0]->text() != QStringLiteral("2") ||
+        !statsKpiValues[1] || statsKpiValues[1]->text().isEmpty() ||
+        !statsKpiValues[2] || statsKpiValues[2]->text().isEmpty() ||
+        !statsKpiValues[3] || statsKpiValues[3]->text().isEmpty() ||
+        !statsKpiValues[0]->property("metricValue").toBool() ||
         !statsArchived || !statsArchived->isChecked() || !statsView || !statsRank || !statsSearch || !statsDays ||
         !statsAutoRefresh || !statsRefreshSeconds || !statsRefreshButton || !statsResetButton ||
         statsArchived->accessibleName().isEmpty() || statsRank->accessibleName().isEmpty() || statsView->accessibleName().isEmpty() ||
         statsSearch->accessibleName().isEmpty() || statsAutoRefresh->accessibleName().isEmpty() ||
         statsRefreshSeconds->accessibleName().isEmpty() || statsDays->accessibleName().isEmpty() ||
         table->rowCount() != 2 || table->columnCount() != 9)
+    {
+        std::cerr << "Profile stats KPI diagnostic: row="
+                  << (profileStatsKpiRow && profileStatsKpiRow->isVisible())
+                  << " cards=" << (profileStatsKpiRow
+                      ? profileStatsKpiRow->findChildren<QFrame*>(QString(), Qt::FindDirectChildrenOnly).size() : -1)
+                  << " values=";
+        for (const auto* value : statsKpiValues)
+            std::cerr << (value ? value->text().toUtf8().constData() : "<missing>") << '|';
+        std::cerr << " summary=" << (profileStatsSummary ? profileStatsSummary->text().toUtf8().constData() : "<missing>")
+                  << " tooltip=" << (profileStatsSummary ? profileStatsSummary->toolTip().toUtf8().constData() : "<missing>")
+                  << '\n';
         return fail("Administrator profile statistics page or archived profile data unavailable");
+    }
     const auto statsArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!statsArtifacts.isEmpty()) {
         QDir().mkpath(statsArtifacts);
@@ -9221,6 +9935,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (!TestQtRecentProfileActions()) return fail("Recent profile XP feed failed filtering, ordering, details, or overflow summary");
+    if (!TestQtRelativeWorkspaceStartup()) return fail("Relative Qt workspace path startup failed");
+    if (!TestQtAllPagesFitAtMinimumWidth()) return fail("A Qt section overflows at the minimum supported window size");
     std::cout << "smoke_qt: OK; accessible dialogs audited: " << g_dialogAccessibilityAudits << '\n';
     return 0;
 }

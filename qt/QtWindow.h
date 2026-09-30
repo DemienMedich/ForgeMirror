@@ -48,7 +48,9 @@ class QtLogActivityChart;
 class QtProfileAnalytics;
 class QSystemTrayIcon;
 class QCloseEvent;
+class QEvent;
 class QTimer;
+class QPropertyAnimation;
 class QtBackgroundSurface;
 
 class QtWindow : public QMainWindow {
@@ -57,6 +59,7 @@ public:
     void recordRuntimeMessage(AppLogLevel level, const QString& text);
 private:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
     bool reload();
     void render();
     void details();
@@ -100,6 +103,9 @@ private:
     void saveModelSettings();
     void updateModelSettingsFromControls();
     void saveDisplayContext();
+    void updateNavigationIndicator(bool animate);
+    void updateProjectColumnLayout();
+    void updateProfileTaskColumnLayout();
     void refreshTaskFilterChoices();
     void refreshCatalogProfessionChoices();
     bool requireAdmin();
@@ -129,6 +135,8 @@ private:
     QAction* storageCleanupAction_;
     QComboBox* profiles_;
     QListWidget* navigation_;
+    QWidget* navigationIndicator_ = nullptr;
+    QPropertyAnimation* navigationIndicatorAnimation_ = nullptr;
     QLineEdit* search_;
     QComboBox* statusFilter_;
     QComboBox* priorityFilter_;
@@ -161,6 +169,10 @@ private:
     QCheckBox* projectsOverdue_;
     QCheckBox* projectsXpPending_;
     QLabel* summary_;
+    QWidget* listEmptyState_ = nullptr;
+    QLabel* listEmptyIcon_ = nullptr;
+    QLabel* listEmptyTitle_ = nullptr;
+    QLabel* listEmptyDescription_ = nullptr;
     QLabel* taskPipelineSummary_;
     QtReportChart* statisticsChart_;
     QtLogActivityChart* logActivityChart_;
@@ -184,6 +196,7 @@ private:
     QWidget* profileTaskBriefCard_ = nullptr;
     QLabel* profileTaskSummary_ = nullptr;
     QTableWidget* profileTaskBriefTable_ = nullptr;
+    QLabel* profileTaskEmpty_ = nullptr;
     QWidget* profileRecentActionsCard_ = nullptr;
     QLabel* profileRecentActionsSummary_ = nullptr;
     QPushButton* profileOverviewTaskButtons_[5]{};
@@ -229,7 +242,7 @@ private:
     void refreshModelChoices();
     QLabel* profileValues_[5];
     std::string pendingProfileTaskId_;
-    QTableWidget* table_;
+    QTableWidget* table_ = nullptr;
     QTextBrowser* details_;
     QPushButton* primary_;
     QToolButton* dragHandle_;
@@ -268,6 +281,9 @@ private:
     QPushButton* logPresetErrors_;
     QCheckBox* logAutoScroll_;
     QCheckBox* logCompactView_;
+    QWidget* adminStatsKpiRow_;
+    std::array<QLabel*, 4> adminStatsKpiValues_{};
+    std::array<QLabel*, 4> adminStatsKpiNotes_{};
     QWidget* adminStatsFilters_;
     QLineEdit* adminStatsSearch_;
     QCheckBox* adminStatsArchived_;
@@ -277,6 +293,8 @@ private:
     QSpinBox* adminStatsRefreshSeconds_;
     QSpinBox* adminStatsInactivityDays_;
     QLabel* adminStatsInactivityLabel_;
+    QWidget* adminStatsInactivityField_;
+    QWidget* adminStatsRefreshIntervalField_;
     QPushButton* adminStatsRefreshButton_;
     QPushButton* adminStatsReset_;
     std::int64_t adminStatsLastRefresh_ = 0;

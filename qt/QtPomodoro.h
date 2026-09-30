@@ -12,6 +12,9 @@ class QTimer;
 class QSpinBox;
 class QCheckBox;
 class QComboBox;
+class QBoxLayout;
+class QFormLayout;
+class QResizeEvent;
 
 class QtPomodoro : public QWidget {
 public:
@@ -31,6 +34,8 @@ public:
     void quickNext();
     void quickReset();
     void advanceSecondsForTest(int seconds);
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 private:
     enum Phase { Work, Break, LongBreak };
     void startOrResume();
@@ -84,6 +89,8 @@ private:
     QComboBox* focusSound_;
     QComboBox* breakSound_;
     QSpinBox* soundVolume_;
+    QFormLayout* soundForm_ = nullptr;
     QDeadlineTimer deadline_;
     std::function<void()> quickStateChanged_;
+    QBoxLayout* rootLayout_ = nullptr;
 };

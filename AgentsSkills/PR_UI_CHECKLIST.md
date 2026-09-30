@@ -33,7 +33,7 @@ This checklist is required for any PR that changes UI layout, spacing, or contro
 
 ## G) Visual Regression
 - [ ] No new colors/theme changes
-- [ ] No animations added
+- [ ] Any motion follows the bounded policy in `AGENT_UI_TOKENS.md`, can be disabled, and respects the system preference
 - [ ] No layout flicker across frames
 - [ ] Tested at common window sizes (small/medium/large)
 

@@ -16,5 +16,7 @@ struct QtDeadlineSummary {
 };
 
 QtDeadlineSummary EvaluateQtDeadlines(const std::vector<TaskEntry>& tasks, std::int64_t now);
+// Resolve the Windows runtime independently of PATH; empty on unsupported platforms.
+QString QtDeadlinePowerShellExecutable();
 bool ConfigureQtDeadlineSchedule(bool enabled, QString* error = nullptr);
 int RunQtDeadlineAgent(const std::filesystem::path& workspace);

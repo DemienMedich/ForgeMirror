@@ -10,6 +10,10 @@
 #include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace {
 QString pathFor(const std::filesystem::path& directory) { return QString::fromUtf8((directory / "meta/ui.ini").u8string()); }
@@ -498,7 +502,7 @@ QtDisplaySettings LoadQtDisplaySettings(const std::filesystem::path& directory) 
             else if (key == "xpPendingOnly") out.projectsXpPendingOnly = value == "1";
         }
         if (section == "qt") {
-            if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "windowOpacityPercent") out.windowOpacityPercent = normalizedOpacity(value.toInt()); else if (key == "spacingPercent") out.spacingPercent = nearestValue(value.toInt(), {80, 90, 100, 110, 120}); else if (key == "cornerRadius") out.cornerRadius = nearestValue(value.toInt(), {0, 4, 8, 12}); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
+            if (key == "scalePercent") out.scalePercent = normalizedScale(value.toInt()); else if (key == "windowOpacityPercent") out.windowOpacityPercent = normalizedOpacity(value.toInt()); else if (key == "spacingPercent") out.spacingPercent = nearestValue(value.toInt(), {80, 90, 100, 110, 120}); else if (key == "cornerRadius") out.cornerRadius = nearestValue(value.toInt(), {0, 4, 8, 12}); else if (key == "compactRows") out.compactRows = value == "1"; else if (key == "motionEnabled") out.motionEnabled = value != "0"; else if (key == "fullscreen") out.fullscreen = value == "1"; else if (key == "decorated") out.decorated = value != "0"; else if (key == "minimizeToTray") out.minimizeToTray = value == "1"; else if (key == "deadlineNotificationsWhenClosed") out.deadlineNotificationsWhenClosed = value == "1";
             else if (key == "windowRounding") out.windowRounding = parseMetric(value, 24.0, out.windowRounding);
             else if (key == "frameRounding") out.frameRounding = parseMetric(value, 24.0, out.frameRounding);
             else if (key == "scrollbarRounding") out.scrollbarRounding = parseMetric(value, 24.0, out.scrollbarRounding);
@@ -575,7 +579,7 @@ bool SaveQtDisplaySettings(const std::filesystem::path& directory, const QtDispl
     for (int i = 0; i < lines.size(); ++i) { const auto line = lines[i].trimmed(); if (line == "[qt]") { begin = i; continue; } if (begin >= 0 && i > begin && line.startsWith('[')) { end = i; break; } }
     if (begin < 0) { if (!lines.isEmpty() && !lines.back().isEmpty()) lines << ""; begin = lines.size(); lines << "[qt]"; end = lines.size(); }
     auto set = [&](const QString& key, const QString& value) { for (int i = begin + 1; i < end; ++i) if (lines[i].section('=', 0, 0).trimmed() == key) { lines[i] = key + '=' + value; return; } lines.insert(end++, key + '=' + value); };
-    set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("windowOpacityPercent", QString::number(normalizedOpacity(settings.windowOpacityPercent))); set("spacingPercent", QString::number(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))); set("cornerRadius", QString::number(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))); set("compactRows", settings.compactRows ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
+    set("scalePercent", QString::number(normalizedScale(settings.scalePercent))); set("windowOpacityPercent", QString::number(normalizedOpacity(settings.windowOpacityPercent))); set("spacingPercent", QString::number(nearestValue(settings.spacingPercent, {80, 90, 100, 110, 120}))); set("cornerRadius", QString::number(nearestValue(settings.cornerRadius, {0, 4, 8, 12}))); set("compactRows", settings.compactRows ? "1" : "0"); set("motionEnabled", settings.motionEnabled ? "1" : "0"); set("fullscreen", settings.fullscreen ? "1" : "0"); set("decorated", settings.decorated ? "1" : "0"); set("minimizeToTray", settings.minimizeToTray ? "1" : "0"); set("deadlineNotificationsWhenClosed", settings.deadlineNotificationsWhenClosed ? "1" : "0");
     const auto metricText = [](double value, double maximum, double fallback) {
         return QString::number(boundedMetric(value, maximum, fallback), 'f', 1);
     };
@@ -859,6 +863,9 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         preset.itemSpacingX = geometry[8]->value(); preset.itemSpacingY = geometry[9]->value();
     };
     auto* compact = new QCheckBox(QString::fromUtf8("Компактные строки таблиц")); compact->setObjectName("qtCompactRows"); compact->setChecked(settings.compactRows);
+    auto* motion = new QCheckBox(QString::fromUtf8("Плавные переходы навигации")); motion->setObjectName("qtMotionEnabled"); motion->setChecked(settings.motionEnabled);
+    motion->setAccessibleName(QString::fromUtf8("Плавные переходы навигации"));
+    motion->setToolTip(QString::fromUtf8("Коротко перемещает маркер активного раздела. Учитывает системное отключение анимации Windows."));
     auto* fullscreen = new QCheckBox(QString::fromUtf8("Полноэкранный режим (F11)")); fullscreen->setObjectName("qtFullscreen"); fullscreen->setChecked(settings.fullscreen);
     auto* decorated = new QCheckBox(QString::fromUtf8("Показывать рамку окна")); decorated->setObjectName("qtDecorated"); decorated->setChecked(settings.decorated);
     auto* tray = new QCheckBox(QString::fromUtf8("При закрытии сворачивать в трей и продолжать напоминания"));
@@ -969,7 +976,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     form->addRow(QString::fromUtf8("Скругление карточек и акцентных кнопок"), rounding);
     form->addRow(geometryToggle);
     form->addRow(geometryGroup);
-    form->addRow(compact); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
+    form->addRow(compact); form->addRow(motion); form->addRow(fullscreen); form->addRow(decorated); form->addRow(tray); form->addRow(background);
     form->addRow(QString(), backgroundsButton);
     auto* builtInPresetRow = new QWidget;
     auto* builtInPresetLayout = new QHBoxLayout(builtInPresetRow);
@@ -1043,7 +1050,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&, readGeometry] {
         auto next = settings; next.scalePercent = scale->currentData().toInt(); next.windowOpacityPercent = opacity->value(); next.spacingPercent = spacing->currentData().toInt();
-        next.cornerRadius = rounding->currentData().toInt(); next.compactRows = compact->isChecked();
+        next.cornerRadius = rounding->currentData().toInt(); next.compactRows = compact->isChecked(); next.motionEnabled = motion->isChecked();
         QtLayoutPreset geometrySettings;
         readGeometry(geometrySettings);
         next.windowRounding = geometrySettings.windowRounding; next.frameRounding = geometrySettings.frameRounding;
@@ -1071,4 +1078,15 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
         settings = next; dialog.accept();
     });
     return dialog.exec() == QDialog::Accepted;
+}
+
+bool IsQtMotionAllowed(const QtDisplaySettings& settings) {
+    if (!settings.motionEnabled) return false;
+#ifdef _WIN32
+    BOOL clientAreaAnimationsEnabled = FALSE;
+    if (!SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &clientAreaAnimationsEnabled, 0)) return false;
+    return clientAreaAnimationsEnabled != FALSE;
+#else
+    return true;
+#endif
 }

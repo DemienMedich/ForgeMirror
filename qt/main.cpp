@@ -2,17 +2,34 @@
 #include "QtTheme.h"
 #include "QtLogSanitization.h"
 #include "QtDeadlineAgent.h"
+#include "QtCommandHelpDialog.h"
 #include "QtWorkspaceImport.h"
 #include <QtWidgets>
 #include <QLockFile>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 std::filesystem::path path(const QString& value) { return std::filesystem::u8path(value.toUtf8().constData()); }
 QPointer<QtWindow> runtimeLogWindow;
 QtMessageHandler previousQtMessageHandler = nullptr;
 thread_local bool forwardingQtMessage = false;
+bool hasCommandOutputTarget() {
+#ifdef _WIN32
+    const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    return output && output != INVALID_HANDLE_VALUE && GetFileType(output) != FILE_TYPE_UNKNOWN;
+#else
+    return true;
+#endif
+}
+
 void qtRuntimeMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& text) {
     if (previousQtMessageHandler) previousQtMessageHandler(type, context, text);
     if (type < QtWarningMsg || type == QtFatalMsg || forwardingQtMessage || !qApp) return;
@@ -41,15 +58,39 @@ int main(int argc, char** argv) {
     parser.addOption({"screenshot", "Save the Qt window as PNG before smoke-test exit.", "path"});
     parser.addOption({"deadline-agent", "One-shot deadline notifier used by the opt-in Windows schedule."});
     parser.addOption({"remove-deadline-schedule", "Remove this installation's opt-in Windows deadline schedule."});
-    // Parse without process(): process() defers handling the built-in help and
-    // version options until the event loop, which this GUI entry point must not
-    // start before opening the workspace. Explicitly show them here instead.
+    // Parse without process() so command-line help and version never fall
+    // through into normal workspace startup in this GUI-subsystem executable.
     if (!parser.parse(app.arguments())) {
         std::cerr << parser.errorText().toUtf8().constData() << '\n';
         return 2;
     }
-    if (parser.isSet(helpOption)) parser.showHelp(0);
-    if (parser.isSet(versionOption)) parser.showVersion();
+    if (parser.isSet(helpOption)) {
+        if (!parser.isSet("smoke-test") && hasCommandOutputTarget()) {
+            parser.showHelp(0);
+            return 0;
+        }
+        std::unique_ptr<QDialog> dialog(CreateQtCommandHelpDialog(
+            BuildQtGuiCommandHelpText(parser.helpText(), QCoreApplication::applicationName())));
+        bool success = true;
+        if (parser.isSet("smoke-test")) {
+            QTimer::singleShot(1000, dialog.get(), [&] {
+                if (parser.isSet("screenshot"))
+                    success = dialog->grab().save(parser.value("screenshot"));
+                dialog->accept();
+            });
+        }
+        dialog->exec();
+        return success ? 0 : 2;
+    }
+    if (parser.isSet(versionOption)) {
+        if (hasCommandOutputTarget()) {
+            parser.showVersion();
+            return 0;
+        }
+        QMessageBox::information(nullptr, QString::fromUtf8("ForgeMirror Qt"),
+            QString::fromUtf8("ForgeMirror Qt %1").arg(QCoreApplication::applicationVersion()));
+        return 0;
+    }
     if (parser.isSet("remove-deadline-schedule"))
         return ConfigureQtDeadlineSchedule(false, nullptr) ? 0 : 1;
     try {
@@ -78,7 +119,8 @@ int main(int argc, char** argv) {
         if (normalized == original || normalized.startsWith(original + '/') || original.startsWith(normalized + '/'))
             throw std::runtime_error("Qt migration must use a separate workspace outside the production directory.");
         if (parser.isSet("deadline-agent")) return RunQtDeadlineAgent(directory);
-        std::filesystem::create_directories(directory.parent_path());
+        const auto workspaceParent = directory.parent_path();
+        if (!workspaceParent.empty()) std::filesystem::create_directories(workspaceParent);
         QLockFile lock(QString::fromStdWString(directory.wstring()) + ".qt.lock");
         if (!lock.tryLock(0)) throw std::runtime_error("This Qt workspace is already open in another process.");
         int exitCode = 0;

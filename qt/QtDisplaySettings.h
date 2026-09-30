@@ -27,6 +27,7 @@ struct QtDisplaySettings {
     bool backgroundTiled = false;
     double backgroundTileScale = 1.0;
     bool compactRows = false;
+    bool motionEnabled = true;
     bool fullscreen = false;
     bool decorated = true;
     bool minimizeToTray = false;
@@ -114,4 +115,5 @@ bool DeleteQtLayoutPreset(const std::filesystem::path& directory, const QString&
 bool IsQtLayoutPresetDeletable(const std::filesystem::path& directory, const QString& name);
 bool ApplyQtBuiltInLayoutPreset(const QString& name, QtLayoutPreset* preset);
 void ApplyQtDisplaySettings(QApplication& app, const QtDisplaySettings& settings);
+bool IsQtMotionAllowed(const QtDisplaySettings& settings);
 bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directory, QtDisplaySettings& settings);

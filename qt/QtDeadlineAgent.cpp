@@ -19,15 +19,39 @@
 #include <QTimer>
 
 #include <algorithm>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
+QString QtDeadlinePowerShellExecutable() {
+#ifdef _WIN32
+    std::vector<wchar_t> systemDirectory(MAX_PATH);
+    for (;;) {
+        const auto length = GetSystemDirectoryW(systemDirectory.data(), static_cast<UINT>(systemDirectory.size()));
+        if (!length) return {};
+        if (length < systemDirectory.size())
+            return QDir(QString::fromWCharArray(systemDirectory.data(), static_cast<int>(length)))
+                .filePath(QStringLiteral("WindowsPowerShell/v1.0/powershell.exe"));
+        systemDirectory.resize(static_cast<std::size_t>(length) + 1);
+    }
+#else
+    return {};
+#endif
+}
 
 namespace {
 constexpr auto kTaskName = "Pharos.ForgeMirrorQt.DeadlineReminders";
 constexpr std::int64_t kDay = 24 * 60 * 60;
 
 bool runTaskScript(const QString& script) {
+    const auto executable = QtDeadlinePowerShellExecutable();
+    if (executable.isEmpty()) return false;
     QProcess process;
     QByteArray utf16(reinterpret_cast<const char*>(script.utf16()), script.size() * int(sizeof(ushort)));
-    process.start(QStringLiteral("powershell.exe"), {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"),
+    process.start(executable, {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"),
         QStringLiteral("-NonInteractive"), QStringLiteral("-ExecutionPolicy"), QStringLiteral("Bypass"),
         QStringLiteral("-EncodedCommand"), QString::fromLatin1(utf16.toBase64())});
     if (!process.waitForStarted(5000) || !process.waitForFinished(15000)) {
