@@ -1,0 +1,8 @@
+motion-on allowed=1 state=2 t=0:33 y=6:6:21 target=40
+motion-on reversal stop=32 start=32
+motion-on hidden state=0 t=21 y=40
+motion-on disabled state=0 y=6
+motion-off allowed=0 state=0 t=0:0 y=6:40:40 target=40
+motion-off reversal stop=0 start=0
+motion-off hidden state=0 t=0 y=40
+motion-off disabled state=0 y=6

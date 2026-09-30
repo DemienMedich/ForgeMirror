@@ -1006,34 +1006,97 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     shortcutLauncher_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     markScaleFixedSize(shortcutLauncher_, QSize(32, 32));
     shortcutLauncher_->setAccessibleName(QString::fromUtf8("Быстрый запуск ярлыков"));
-    shortcutLauncher_->setAccessibleDescription(QString::fromUtf8("Открывает сохранённые программы; цвет точки показывает состояние процесса."));
+    shortcutLauncher_->setAccessibleDescription(QString::fromUtf8("Открывает сохранённые файлы и папки; состояние программы показано текстом и точкой."));
     shortcutLauncher_->setToolTip(QString::fromUtf8("Быстрый запуск. Зелёная точка — запущена, красная — не запущена, серая — статус неизвестен."));
     shortcutLauncher_->setPopupMode(QToolButton::InstantPopup);
-    shortcutMenu_ = new QMenu(shortcutLauncher_);
+    class ShortcutMenu final : public QMenu {
+    public:
+        using QMenu::QMenu;
+        QSize sizeHint() const override {
+            const QScopedValueRollback<bool> measuring(painting_, false);
+            return QMenu::sizeHint();
+        }
+    protected:
+        void initStyleOption(QStyleOptionMenuItem* option, const QAction* action) const override {
+            QMenu::initStyleOption(option, action);
+            // QMenu adds the shared tab width after item sizing. Fusion also
+            // adds its current reserved width, so do not count it twice in
+            // geometry passes, including those outside sizeHint().
+            if (!painting_ && option) option->reservedShortcutWidth = 0;
+        }
+        void paintEvent(QPaintEvent* event) override {
+            sizeHint(); // Refresh dirty geometry under the sizing-only rule.
+            const QScopedValueRollback<bool> painting(painting_, true);
+            QMenu::paintEvent(event); // Painting retains the complete tab column.
+        }
+    private:
+        mutable bool painting_ = false;
+    };
+    shortcutMenu_ = new ShortcutMenu(shortcutLauncher_);
     shortcutMenu_->setObjectName("quickShortcutMenu");
+    shortcutMenu_->setToolTipsVisible(true);
     shortcutLauncher_->setMenu(shortcutMenu_);
     connect(shortcutMenu_, &QMenu::aboutToShow, this, [this] {
         shortcutMenu_->clear();
         const auto entries = LoadShortcutsData(workspace_.directory);
         const auto states = qtShortcutRunStates(entries);
+        const auto* menuScreen = shortcutMenu_->screen();
+        const int menuWidth = std::max(1, std::min(640,
+            menuScreen ? menuScreen->availableGeometry().width() - 32 : 640));
+        shortcutMenu_->setMaximumWidth(menuWidth);
+        const QFontMetrics menuMetrics(shortcutMenu_->font());
+        struct MenuLabel { QAction* action; QString label; QString status; };
+        std::vector<MenuLabel> labels;
+        int widestStatus = 0;
         for (size_t index = 0; index < entries.size(); ++index) {
             const auto& entry = entries[index];
             const auto state = states[index];
-            auto* action = shortcutMenu_->addAction(qtShortcutStatusIcon(state), q(entry.label));
+            const QString status = state == QtShortcutRunState::Running ? QString::fromUtf8("Запущена") :
+                state == QtShortcutRunState::NotRunning ? QString::fromUtf8("Не запущена") : QString::fromUtf8("Статус недоступен");
+            const QString fullLabel = q(entry.label);
+            widestStatus = std::max(widestStatus, menuMetrics.horizontalAdvance(status));
+            auto* action = shortcutMenu_->addAction(qtShortcutStatusIcon(state), QStringLiteral("…\t") + status);
+            labels.push_back({action, fullLabel, status});
             action->setObjectName("quickShortcutAction");
             action->setData(q(entry.id));
             action->setProperty("shortcutRunState", int(state));
-            action->setToolTip(state == QtShortcutRunState::Running ? QString::fromUtf8("Запущена") :
-                state == QtShortcutRunState::NotRunning ? QString::fromUtf8("Не запущена") : QString::fromUtf8("Статус недоступен"));
             const auto path = q(entry.path);
+            const auto context = QString::fromUtf8("%1\n%2\n%3").arg(fullLabel, status, QDir::toNativeSeparators(path));
+            action->setToolTip(context); action->setStatusTip(context);
             connect(action, &QAction::triggered, this, [path] { QDesktopServices::openUrl(QUrl::fromLocalFile(path)); });
         }
+        if (entries.empty()) {
+            const auto guidance = QString::fromUtf8("Сохранённых ярлыков пока нет");
+            auto* empty = shortcutMenu_->addAction(QStringLiteral("…"));
+            empty->setObjectName("quickShortcutEmpty"); empty->setEnabled(false);
+            empty->setToolTip(guidance); labels.push_back({empty, guidance, {}});
+        }
         if (!shortcutMenu_->actions().isEmpty()) shortcutMenu_->addSeparator();
-        auto* manage = shortcutMenu_->addAction(QString::fromUtf8("Управление ярлыками…"));
+        const auto manageTitle = QString::fromUtf8("Управление ярлыками…");
+        auto* manage = shortcutMenu_->addAction(QStringLiteral("…"));
         manage->setObjectName("manageShortcutsAction");
+        manage->setToolTip(manageTitle); manage->setStatusTip(manageTitle);
+        labels.push_back({manage, manageTitle, {}});
         connect(manage, &QAction::triggered, this, [this] {
             navigation_->setCurrentRow(Shortcuts);
         });
+        // QMenu allocates shared label/status columns. Its real styled size
+        // includes icon/check gutters, tab spacing, frame and popup margins.
+        const int ellipsisWidth = menuMetrics.horizontalAdvance(QStringLiteral("…"));
+        const int styleOverhead = std::max(0, shortcutMenu_->sizeHint().width() - ellipsisWidth - widestStatus);
+        int labelWidth = std::max(ellipsisWidth, menuWidth - widestStatus - styleOverhead);
+        const auto applyLabels = [&] {
+            for (const auto& row : labels) {
+                auto visibleLabel = menuMetrics.elidedText(row.label, Qt::ElideRight, labelWidth);
+                visibleLabel.replace('&', QStringLiteral("&&"));
+                row.action->setText(row.status.isEmpty() ? visibleLabel : visibleLabel + '\t' + row.status);
+            }
+        };
+        applyLabels();
+        while (shortcutMenu_->sizeHint().width() > menuWidth && labelWidth > ellipsisWidth) {
+            labelWidth = std::max(ellipsisWidth, labelWidth - (shortcutMenu_->sizeHint().width() - menuWidth));
+            applyLabels();
+        }
     });
     header->addWidget(shortcutLauncher_);
     pomodoroQuickButton_ = new QToolButton;
@@ -1337,6 +1400,13 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     navigationIndicatorAnimation_->setObjectName("navigationIndicatorAnimation");
     navigationIndicatorAnimation_->setDuration(180);
     navigationIndicatorAnimation_->setEasingCurve(QEasingCurve::OutCubic);
+    connect(navigationIndicatorAnimation_, &QPropertyAnimation::valueChanged, this, [this] {
+        // A hidden/disabled window and a changed motion policy must not leave
+        // a presentation-only animation running in the background.
+        if (!isVisible() || !isEnabled() || !navigation_->isEnabled() ||
+            !IsQtMotionAllowed(displaySettings_))
+            updateNavigationIndicator(false);
+    });
     const auto drawNavigationIcon = [](int index, const QColor& color, int size) {
         QPixmap pixmap(size, size);
         pixmap.fill(Qt::transparent);
@@ -3312,16 +3382,98 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
 }
 
 void QtWindow::showShortcutHelp() {
-    QDialog dialog(this);
+    class HelpIntroLabel final : public QLabel {
+    public:
+        using QLabel::QLabel;
+    protected:
+        void resizeEvent(QResizeEvent* event) override {
+            QLabel::resizeEvent(event); reserveTextHeight();
+        }
+        void showEvent(QShowEvent* event) override {
+            QLabel::showEvent(event); reserveTextHeight();
+        }
+        bool event(QEvent* event) override {
+            const bool handled = QLabel::event(event);
+            if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange)
+                reserveTextHeight();
+            return handled;
+        }
+    private:
+        void reserveTextHeight() {
+            if (!isVisible() || width() <= 0) return;
+            const int required = std::max(0, heightForWidth(width()));
+            if (minimumHeight() != required) setMinimumHeight(required);
+        }
+    };
+    class HelpTable final : public QTableWidget {
+    public:
+        using QTableWidget::QTableWidget;
+        int heightForWidth(int width) const override {
+            const int firstWidth = columnWidth(0);
+            const int secondWidth = std::max(1, width - frameWidth() * 2 - firstWidth);
+            int height = horizontalHeader()->height() + frameWidth() * 2;
+            for (int row = 0; row < rowCount(); ++row)
+                height += measuredRowHeight(row, firstWidth, secondWidth);
+            return height;
+        }
+        QSize sizeHint() const override {
+            auto hint = QTableWidget::sizeHint();
+            hint.setHeight(heightForWidth(width()));
+            return hint;
+        }
+        QSize minimumSizeHint() const override {
+            auto hint = QTableWidget::minimumSizeHint();
+            hint.setHeight(heightForWidth(width()));
+            return hint;
+        }
+        void refreshRows() {
+            if (updatingRows_) return;
+            updatingRows_ = true;
+            bool changed = previousWidth_ != width();
+            previousWidth_ = width();
+            for (int row = 0; row < rowCount(); ++row) {
+                const int required = measuredRowHeight(row, columnWidth(0), columnWidth(1));
+                if (rowHeight(row) != required) { setRowHeight(row, required); changed = true; }
+            }
+            updatingRows_ = false;
+            if (changed) updateGeometry();
+        }
+    protected:
+        void resizeEvent(QResizeEvent* event) override {
+            QTableWidget::resizeEvent(event); refreshRows();
+        }
+        void showEvent(QShowEvent* event) override {
+            QTableWidget::showEvent(event); refreshRows();
+        }
+    private:
+        int measuredRowHeight(int row, int firstWidth, int secondWidth) const {
+            int height = verticalHeader()->minimumSectionSize();
+            for (int column = 0; column < columnCount(); ++column) {
+                const auto index = model()->index(row, column);
+                auto* delegate = itemDelegateForIndex(index);
+                if (!delegate) continue;
+                QStyleOptionViewItem option; option.initFrom(this); option.widget = this;
+                option.font = font(); option.fontMetrics = fontMetrics();
+                option.rect = QRect(0, 0, column == 0 ? firstWidth : secondWidth, rowHeight(row));
+                option.features |= QStyleOptionViewItem::WrapText;
+                height = std::max(height, delegate->sizeHint(option, index).height());
+            }
+            return height;
+        }
+        bool updatingRows_ = false;
+        int previousWidth_ = -1;
+    };
+    QtScrollableDialog dialog(this, QSize(640, 520));
     dialog.setObjectName("shortcutHelp");
     dialog.setWindowTitle(QString::fromUtf8("Горячие клавиши"));
-    dialog.resize(540, 520);
-    auto* layout = new QVBoxLayout(&dialog);
-    auto* intro = new QLabel(QString::fromUtf8(
+    auto* form = dialog.formLayout();
+    form->setVerticalSpacing(dialog.scaledMetric(8)); form->setFormAlignment(Qt::AlignTop);
+    form->setSizeConstraint(QLayout::SetMinimumSize);
+    auto* intro = new HelpIntroLabel(QString::fromUtf8(
         "Команды работают в текущем разделе. Защищённые операции требуют входа администратора; локальные ярлыки доступны всем пользователям."));
-    intro->setWordWrap(true);
-    layout->addWidget(intro);
-    auto* table = new QTableWidget(17, 2, &dialog);
+    intro->setObjectName("shortcutHelpIntro"); intro->setTextFormat(Qt::PlainText); intro->setWordWrap(true);
+    form->addRow(intro);
+    auto* table = new HelpTable(17, 2, dialog.bodyWidget());
     table->setObjectName("shortcutHelpTable");
     table->setHorizontalHeaderLabels({QString::fromUtf8("Клавиша"), QString::fromUtf8("Действие")});
     const std::vector<std::pair<QString, QString>> rows = {
@@ -3339,17 +3491,41 @@ void QtWindow::showShortcutHelp() {
     for (int row = 0; row < int(rows.size()); ++row) {
         table->setItem(row, 0, new QTableWidgetItem(rows[row].first));
         table->setItem(row, 1, new QTableWidgetItem(rows[row].second));
+        const auto context = rows[row].first + QStringLiteral(" · ") + rows[row].second;
+        for (int column = 0; column < 2; ++column) {
+            auto* item = table->item(row, column);
+            item->setToolTip(context); item->setData(Qt::AccessibleTextRole, item->text());
+            item->setData(Qt::AccessibleDescriptionRole, context);
+        }
     }
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionMode(QAbstractItemView::NoSelection);
+    table->setWordWrap(true); table->setTextElideMode(Qt::ElideNone);
+    table->setShowGrid(false); table->setAlternatingRowColors(true);
+    table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto tablePolicy = QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    tablePolicy.setHeightForWidth(true); table->setSizePolicy(tablePolicy);
+    table->setAccessibleName(QString::fromUtf8("Памятка горячих клавиш"));
+    table->setAccessibleDescription(QString::fromUtf8("17 сочетаний клавиш и соответствующие действия. Таблица доступна только для чтения."));
     table->verticalHeader()->hide();
     table->horizontalHeader()->setStretchLastSection(true);
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    layout->addWidget(table);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
-    buttons->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    // The form must know the complete table height before it places the body,
+    // rather than grow a minimum height inside a later section-resize signal.
+    connect(table->horizontalHeader(), &QHeaderView::sectionResized, &dialog,
+        [table](int, int, int) { table->refreshRows(); });
+    form->addRow(table); table->refreshRows();
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    buttons->setObjectName("shortcutHelpButtons");
+    auto* close = buttons->button(QDialogButtonBox::Close);
+    close->setObjectName("shortcutHelpClose"); close->setText(QString::fromUtf8("Закрыть"));
+    close->setAccessibleName(QString::fromUtf8("Закрыть памятку горячих клавиш")); close->setProperty("primary", true);
+    close->setMinimumHeight(dialog.scaledMetric(32)); close->setAutoDefault(true); close->setDefault(true);
+    QWidget::setTabOrder(table, close); table->setFocus();
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
+    dialog.footerLayout()->addWidget(buttons);
     dialog.exec();
 }
 
@@ -4055,7 +4231,8 @@ void QtWindow::updateNavigationIndicator(bool animate) {
     const QRect target(row.left() + 2, row.top() + 6, 3, std::max(12, row.height() - 12));
     const bool motionAllowed = IsQtMotionAllowed(displaySettings_);
     navigationIndicator_->setProperty("motionSuppressed", !motionAllowed);
-    if (!animate || !motionAllowed || !navigationIndicator_->isVisible()) {
+    if (!animate || !motionAllowed || !isVisible() || !isEnabled() ||
+        !navigation_->isEnabled() || !navigationIndicator_->isVisible()) {
         navigationIndicatorAnimation_->stop();
         navigationIndicator_->setGeometry(target);
         navigationIndicator_->show();
@@ -4068,7 +4245,22 @@ void QtWindow::updateNavigationIndicator(bool animate) {
     navigationIndicatorAnimation_->start();
 }
 
+void QtWindow::hideEvent(QHideEvent* event) {
+    updateNavigationIndicator(false);
+    QMainWindow::hideEvent(event);
+}
+
+void QtWindow::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::EnabledChange && !isEnabled())
+        updateNavigationIndicator(false);
+    QMainWindow::changeEvent(event);
+}
+
 bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (navigation_ && watched == navigation_->viewport() &&
+        (event->type() == QEvent::Hide ||
+         (event->type() == QEvent::EnabledChange && !navigation_->isEnabled())))
+        updateNavigationIndicator(false);
     if (watched == centralWidget() && event->type() == QEvent::Resize) updateResponsiveShell();
     if (navigation_ && watched == navigation_->viewport() && event->type() == QEvent::Resize)
         updateNavigationIndicator(false);
@@ -6470,12 +6662,53 @@ void QtWindow::adjustWallet() {
     const auto profile = workspace_.storage->load_profile();
     if (!profile) { message(u8"Не удалось загрузить профиль."); return; }
 
-    QDialog dialog(this);
+    QtScrollableDialog dialog(this, QSize(640, 520));
     dialog.setObjectName("walletAdjustmentDialog");
     dialog.setWindowTitle(QString::fromUtf8("Изменение кошелька профиля"));
-    dialog.setMinimumWidth(420);
-    auto* form = new QFormLayout(&dialog);
-    form->addRow(QString::fromUtf8("Профиль"), new QLabel(q(profile->name())));
+    class WalletWrappedLabel final : public QLabel {
+    public:
+        using QLabel::QLabel;
+        void reserveTextHeight() {
+            if (!isVisible() || width() <= 0) return;
+            const int required = std::max(0, heightForWidth(width()));
+            if (minimumHeight() != required) setMinimumHeight(required);
+        }
+    protected:
+        void resizeEvent(QResizeEvent* event) override {
+            QLabel::resizeEvent(event); reserveTextHeight();
+        }
+        void showEvent(QShowEvent* event) override {
+            QLabel::showEvent(event); reserveTextHeight();
+        }
+        bool event(QEvent* event) override {
+            const bool handled = QLabel::event(event);
+            if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange)
+                reserveTextHeight();
+            return handled;
+        }
+    };
+    auto* form = dialog.formLayout();
+    form->setHorizontalSpacing(dialog.scaledMetric(8));
+    form->setVerticalSpacing(dialog.scaledMetric(8));
+    form->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFormAlignment(Qt::AlignTop);
+    form->setSizeConstraint(QLayout::SetMinimumSize);
+    const auto addField = [form](const QString& caption, QWidget* field) {
+        auto* fieldLabel = new WalletWrappedLabel(caption);
+        fieldLabel->setObjectName(field->objectName() + QStringLiteral("Label"));
+        fieldLabel->setTextFormat(Qt::PlainText);
+        fieldLabel->setWordWrap(true);
+        fieldLabel->setBuddy(field);
+        form->addRow(fieldLabel, field);
+    };
+    auto* hint = new WalletWrappedLabel(QString::fromUtf8("Изменение записывается в аудит. Перед применением проверьте сумму и основание операции."));
+    hint->setObjectName("walletAdjustmentHint");
+    hint->setTextFormat(Qt::PlainText); hint->setWordWrap(true); form->addRow(hint);
+    auto* profileName = new WalletWrappedLabel(q(profile->name()));
+    profileName->setObjectName("walletProfile"); profileName->setTextFormat(Qt::PlainText);
+    profileName->setWordWrap(true); profileName->setAccessibleName(QString::fromUtf8("Профиль операции"));
+    profileName->setAccessibleDescription(q(profile->name()));
+    addField(QString::fromUtf8("Профиль"), profileName);
     auto* operation = new QComboBox;
     operation->setObjectName("walletOperation");
     operation->addItems({QString::fromUtf8("Начислить"), QString::fromUtf8("Списать")});
@@ -6485,30 +6718,63 @@ void QtWindow::adjustWallet() {
     amount->setRange(0.01, 1000000000.0);
     amount->setValue(1.0);
     amount->setGroupSeparatorShown(true);
-    amount->setSuffix(QStringLiteral(" ") + q(workspace_.data.vault.currencyName.empty()
+    const QString currency = QStringLiteral(" ") + q(workspace_.data.vault.currencyName.empty()
         ? (workspace_.data.vault.currencyCode.empty() ? std::string(u8"Кукоин") : workspace_.data.vault.currencyCode)
-        : workspace_.data.vault.currencyName));
+        : workspace_.data.vault.currencyName);
+    auto* currencyLabel = new WalletWrappedLabel(currency.trimmed());
+    currencyLabel->setObjectName("walletCurrency"); currencyLabel->setTextFormat(Qt::PlainText);
+    currencyLabel->setWordWrap(true); currencyLabel->setAccessibleName(QString::fromUtf8("Валюта операции"));
+    currencyLabel->setAccessibleDescription(currency.trimmed());
+    labelForAccessibility(operation, QString::fromUtf8("Операция кошелька"), QString::fromUtf8("Начисление или списание с записью в аудит."));
+    labelForAccessibility(amount, QString::fromUtf8("Сумма операции"), QString::fromUtf8("От 0,01 до 1 000 000 000; валюта указана ниже."));
     auto* reason = new QLineEdit;
     reason->setObjectName("walletReason");
     reason->setMaxLength(120);
     reason->setPlaceholderText(QString::fromUtf8("Например: корректировка награды"));
-    auto* preview = new QLabel;
+    labelForAccessibility(reason, QString::fromUtf8("Основание операции"), QString::fromUtf8("Обязательное основание для аудита, до 120 символов."));
+    auto* preview = new WalletWrappedLabel;
     preview->setObjectName("walletPreview");
-    preview->setWordWrap(true);
-    auto* notice = new QLabel;
+    preview->setTextFormat(Qt::PlainText); preview->setWordWrap(true);
+    preview->setAccessibleName(QString::fromUtf8("Баланс до и после операции"));
+    auto* notice = new WalletWrappedLabel;
     notice->setObjectName("walletNotice");
-    notice->setWordWrap(true);
-    form->addRow(QString::fromUtf8("Операция"), operation);
-    form->addRow(QString::fromUtf8("Сумма"), amount);
-    form->addRow(QString::fromUtf8("Основание"), reason);
-    form->addRow(QString::fromUtf8("Баланс"), preview);
-    form->addRow(notice);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Применить"));
-    buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
-    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    form->addRow(buttons);
-    const auto currency = amount->suffix();
+    notice->setTextFormat(Qt::PlainText); notice->setWordWrap(true);
+    notice->setAccessibleName(QString::fromUtf8("Результат операции кошелька"));
+    notice->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    addField(QString::fromUtf8("Операция"), operation);
+    addField(QString::fromUtf8("Сумма"), amount);
+    addField(QString::fromUtf8("Валюта"), currencyLabel);
+    addField(QString::fromUtf8("Основание"), reason);
+    addField(QString::fromUtf8("Баланс"), preview);
+    amount->ensurePolished(); amount->setMinimumWidth(amount->sizeHint().width());
+    const auto margins = dialog.layout()->contentsMargins();
+    const int contentWidth = dialog.width() - margins.left() - margins.right()
+        - dialog.style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+    if (dialog.findChild<QLabel*>("walletAmountLabel")->sizeHint().width()
+        + amount->minimumWidth() + form->horizontalSpacing() > contentWidth)
+        form->setRowWrapPolicy(QFormLayout::WrapAllRows);
+    dialog.footerLayout()->addWidget(notice); notice->hide();
+    const auto showNotice = [notice](const QString& text) {
+        notice->setText(text); notice->setAccessibleDescription(text); notice->show();
+        notice->reserveTextHeight();
+    };
+    const auto clearNotice = [notice] {
+        notice->clear(); notice->setAccessibleDescription({}); notice->hide();
+        notice->setProperty("walletBalanceError", false);
+    };
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    buttons->setObjectName("walletButtons");
+    auto* apply = buttons->button(QDialogButtonBox::Save);
+    auto* cancel = buttons->button(QDialogButtonBox::Cancel);
+    apply->setObjectName("walletApply"); cancel->setObjectName("walletCancel");
+    apply->setText(QString::fromUtf8("Применить")); apply->setProperty("primary", true);
+    apply->setAccessibleName(QString::fromUtf8("Проверить и применить операцию кошелька"));
+    apply->setMinimumHeight(dialog.scaledMetric(32)); apply->setAutoDefault(true); apply->setDefault(true);
+    cancel->setText(QString::fromUtf8("Отмена")); cancel->setAccessibleName(QString::fromUtf8("Отменить изменение кошелька"));
+    cancel->setAutoDefault(false); dialog.footerLayout()->addWidget(buttons);
+    QWidget::setTabOrder(operation, amount); QWidget::setTabOrder(amount, reason);
+    QWidget::setTabOrder(reason, apply); QWidget::setTabOrder(apply, cancel);
+    operation->setFocus();
     auto updatePreview = [=] {
         const bool debit = operation->currentIndex() == 1;
         const double value = amount->value();
@@ -6516,30 +6782,58 @@ void QtWindow::adjustWallet() {
         preview->setText(QString::fromUtf8("%1 → %2%3")
             .arg(profile->wallet_balance(), 0, 'f', 2)
             .arg(after, 0, 'f', 2).arg(currency));
-        buttons->button(QDialogButtonBox::Save)->setEnabled(!debit || value <= profile->wallet_balance() + 0.000001);
+        preview->setAccessibleDescription(preview->text());
+        preview->reserveTextHeight();
+        const bool blocked = debit && value > profile->wallet_balance() + 0.000001;
+        apply->setEnabled(!blocked);
+        if (blocked) {
+            notice->setProperty("walletBalanceError", true);
+            showNotice(QString::fromUtf8("Сумма списания превышает баланс профиля."));
+        } else if (notice->property("walletBalanceError").toBool()) clearNotice();
     };
-    connect(operation, &QComboBox::currentIndexChanged, &dialog, updatePreview);
-    connect(amount, &QDoubleSpinBox::valueChanged, &dialog, updatePreview);
+    connect(operation, &QComboBox::currentIndexChanged, &dialog, [=] { clearNotice(); updatePreview(); });
+    connect(amount, &QDoubleSpinBox::valueChanged, &dialog, [=] { clearNotice(); updatePreview(); });
+    connect(reason, &QLineEdit::textChanged, &dialog, [=] {
+        if (!notice->property("walletBalanceError").toBool()) clearNotice();
+        reason->setAccessibleDescription(reason->toolTip());
+    });
     updatePreview();
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
         const bool debit = operation->currentIndex() == 1;
         const double value = amount->value();
         const auto memo = reason->text().trimmed();
-        if (memo.isEmpty()) { notice->setText(QString::fromUtf8("Укажите основание операции для аудита.")); return; }
+        if (memo.isEmpty()) {
+            const auto error = QString::fromUtf8("Укажите основание операции для аудита.");
+            showNotice(error); reason->setAccessibleDescription(error); reason->setFocus(Qt::OtherFocusReason);
+            dialog.scrollArea()->ensureWidgetVisible(reason, 0, dialog.scaledMetric(8)); return;
+        }
         if (debit && value > profile->wallet_balance() + 0.000001) {
-            notice->setText(QString::fromUtf8("Сумма списания превышает баланс профиля.")); return;
+            showNotice(QString::fromUtf8("Сумма списания превышает баланс профиля."));
+            amount->setFocus(Qt::OtherFocusReason);
+            dialog.scrollArea()->ensureWidgetVisible(amount, 0, dialog.scaledMetric(8)); return;
         }
         QMessageBox confirm(QMessageBox::Question, QString::fromUtf8("Подтвердить операцию"),
             QString::fromUtf8("%1 %2 профилю «%3»?\nБаланс: %4 → %5\nОснование: %6")
                 .arg(debit ? QString::fromUtf8("Списать") : QString::fromUtf8("Начислить"))
-                .arg(currency.trimmed())
+                .arg(QStringLiteral("%1%2").arg(value, 0, 'f', 2).arg(currency))
                 .arg(q(profile->name()))
                 .arg(profile->wallet_balance(), 0, 'f', 2)
                 .arg(profile->wallet_balance() + (debit ? -value : value), 0, 'f', 2)
                 .arg(memo), QMessageBox::Yes | QMessageBox::No, &dialog);
+        confirm.setObjectName("walletConfirmation"); confirm.setTextFormat(Qt::PlainText);
+        confirm.setAccessibleName(QString::fromUtf8("Подтверждение изменения кошелька"));
+        confirm.setAccessibleDescription(confirm.text());
+        confirm.button(QMessageBox::Yes)->setObjectName("walletConfirmationApply");
+        confirm.button(QMessageBox::No)->setObjectName("walletConfirmationCancel");
         confirm.button(QMessageBox::Yes)->setText(QString::fromUtf8("Подтвердить"));
+        confirm.button(QMessageBox::Yes)->setProperty("primary", true);
+        confirm.button(QMessageBox::Yes)->style()->unpolish(confirm.button(QMessageBox::Yes));
+        confirm.button(QMessageBox::Yes)->style()->polish(confirm.button(QMessageBox::Yes));
         confirm.button(QMessageBox::No)->setText(QString::fromUtf8("Отмена"));
+        for (auto* text : confirm.findChildren<QLabel*>()) {
+            text->setTextFormat(Qt::PlainText); text->setWordWrap(true);
+        }
         confirm.setDefaultButton(QMessageBox::No);
         if (confirm.exec() != QMessageBox::Yes) return;
         const QString audit = QStringLiteral("%1|%2|%3")
@@ -6550,7 +6844,7 @@ void QtWindow::adjustWallet() {
                 return AppAdjustProfileWallet(*workspace_.storage, profileId, profileId, debit ? -value : value);
             }, [this](AppLogLevel level, const std::string& event) { appendLog(level, "CoreWalletMutation", event); });
         if (!result.ok || !result.profile) {
-            notice->setText(result.errorMessage.empty() ? QString::fromUtf8("Не удалось сохранить кошелёк.") : q(result.errorMessage));
+            showNotice(result.errorMessage.empty() ? QString::fromUtf8("Не удалось сохранить кошелёк.") : q(result.errorMessage));
             updatePreview();
             return;
         }
@@ -6954,12 +7248,15 @@ void QtWindow::showWalletHistory() {
     if (navigation_->currentRow() != ProfilePage || profileId.empty() ||
         (!admin_ && !profileSession_.isUnlocked(*workspace_.storage, profileId))) return;
 
-    QDialog dialog(this);
+    QtScrollableDialog dialog(this, QSize(640, 520));
     dialog.setObjectName("profileWalletHistoryDialog");
     dialog.setWindowTitle(QString::fromUtf8("История кошелька профиля"));
-    dialog.resize(720, 400);
-    auto* layout = new QVBoxLayout(&dialog);
-    auto* table = new QTableWidget(&dialog);
+    auto* form = dialog.formLayout();
+    form->setVerticalSpacing(dialog.scaledMetric(8)); form->setFormAlignment(Qt::AlignTop);
+    auto* summary = new QLabel(QString::fromUtf8("Операции выбранного профиля, новые сверху. Полная дата, сумма и основание доступны в строке и её подсказке."));
+    summary->setObjectName("walletHistorySummary"); summary->setTextFormat(Qt::PlainText);
+    summary->setWordWrap(true); form->addRow(summary);
+    auto* table = new QTableWidget(dialog.bodyWidget());
     table->setObjectName("profileWalletHistoryTable");
     table->setColumnCount(4);
     table->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Операция"),
@@ -6968,8 +7265,18 @@ void QtWindow::showWalletHistory() {
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setAlternatingRowColors(true);
     table->setShowGrid(false);
+    table->setWordWrap(true); table->setTextElideMode(Qt::ElideNone);
+    table->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    table->setMinimumHeight(dialog.scaledMetric(192));
+    table->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    table->setAccessibleName(QString::fromUtf8("История кошелька выбранного профиля"));
+    table->setAccessibleDescription(QString::fromUtf8("Дата, операция, сумма и основание. Стрелки выбирают строки; данные доступны только для чтения."));
     table->verticalHeader()->hide();
-    table->horizontalHeader()->setStretchLastSection(true);
+    table->horizontalHeader()->setStretchLastSection(false);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
+    table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
     const QString currency = q(workspace_.data.vault.currencyName.empty()
         ? (workspace_.data.vault.currencyCode.empty() ? std::string(u8"Кукоин") : workspace_.data.vault.currencyCode)
         : workspace_.data.vault.currencyName);
@@ -7006,19 +7313,64 @@ void QtWindow::showWalletHistory() {
 
         const int row = table->rowCount();
         table->insertRow(row);
-        const QStringList values{timeText(entry.timestamp), operation, amount, reason};
+        const auto timestamp = QDateTime::fromSecsSinceEpoch(entry.timestamp);
+        const auto fullTimestamp = entry.timestamp > 0 ? timestamp.toString(Qt::ISODate) : timeText(entry.timestamp);
+        const QStringList values{entry.timestamp > 0 ? timestamp.toString("dd.MM\nyyyy\nHH:mm:ss") : timeText(entry.timestamp),
+            operation, amount.section(' ', 0, 0) + QStringLiteral("\n") + currency, reason};
+        const QString fullContext = QString::fromUtf8("%1 · %2 · %3\n%4")
+            .arg(fullTimestamp, operation, amount, reason);
         for (int column = 0; column < values.size(); ++column) {
             auto* item = new QTableWidgetItem(values[column]);
-            item->setToolTip(values[column]);
+            item->setToolTip(fullContext);
+            item->setData(Qt::AccessibleTextRole, column == 0 ? fullTimestamp : values[column]);
+            item->setData(Qt::AccessibleDescriptionRole, fullContext);
             table->setItem(row, column, item);
         }
     }
-    table->resizeColumnsToContents();
-    layout->addWidget(table, 1);
+    const auto updateColumns = [table] {
+        if (table->property("walletHistoryUpdatingColumns").toBool()) return;
+        table->setProperty("walletHistoryUpdatingColumns", true);
+        const QFontMetrics metrics(table->font());
+        const auto textWidth = [table, metrics](const QString& text) {
+            QStyleOptionViewItem option; option.initFrom(table);
+            option.font = table->font(); option.fontMetrics = metrics;
+            option.features = QStyleOptionViewItem::HasDisplay; option.text = text;
+            return table->style()->sizeFromContents(QStyle::CT_ItemViewItem, &option,
+                metrics.size(Qt::TextSingleLine, text), table).width();
+        };
+        int widths[4]{textWidth(QStringLiteral("00:00:00")), textWidth(QString::fromUtf8("Операция")),
+            textWidth(QString::fromUtf8("Сумма")), textWidth(QString::fromUtf8("Основание"))};
+        // Keep each numeric value and each unbroken word readable. Exceptional
+        // long data scroll inside this table, never enlarge the outer dialog.
+        for (int row = 0; row < table->rowCount(); ++row) {
+            for (int column = 0; column < 4; ++column) {
+                const auto words = table->item(row, column)->text().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+                for (const auto& word : words) widths[column] = std::max(widths[column], textWidth(word));
+            }
+        }
+        widths[3] = std::max(widths[3], table->viewport()->width() - widths[0] - widths[1] - widths[2]);
+        for (int column = 0; column < 4; ++column) table->setColumnWidth(column, widths[column]);
+        table->resizeRowsToContents();
+        table->setProperty("walletHistoryUpdatingColumns", false);
+    };
+    connect(table->horizontalHeader(), &QHeaderView::geometriesChanged, &dialog, updateColumns);
+    connect(table->horizontalHeader(), &QHeaderView::sectionResized, &dialog, [updateColumns](int, int, int) { updateColumns(); });
+    form->addRow(table); updateColumns();
+    auto* empty = new QLabel(QString::fromUtf8("Операций кошелька пока нет. Здесь появятся начисления, списания и награды Pomodoro."));
+    empty->setObjectName("walletHistoryEmpty"); empty->setTextFormat(Qt::PlainText); empty->setWordWrap(true);
+    empty->setAccessibleName(empty->text()); form->addRow(empty);
+    empty->setVisible(table->rowCount() == 0); table->setVisible(table->rowCount() > 0);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-    buttons->button(QDialogButtonBox::Close)->setText(QString::fromUtf8("Закрыть"));
+    buttons->setObjectName("profileWalletHistoryButtons");
+    auto* close = buttons->button(QDialogButtonBox::Close);
+    close->setObjectName("profileWalletHistoryClose"); close->setText(QString::fromUtf8("Закрыть"));
+    close->setAccessibleName(QString::fromUtf8("Закрыть историю кошелька")); close->setProperty("primary", true);
+    close->setMinimumHeight(dialog.scaledMetric(32)); close->setAutoDefault(true); close->setDefault(true);
+    QWidget::setTabOrder(table, close);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
+    dialog.footerLayout()->addWidget(buttons);
+    if (table->rowCount() == 0) { dialog.resize(640, 320); close->setFocus(); }
+    else table->setFocus();
     dialog.exec();
 }
 
@@ -7771,9 +8123,19 @@ void QtWindow::createEntry(bool edit) {
     }
     if (navigation_->currentRow() == Shortcuts) {
         if (edit) return;
-        QDialog dialog(this); dialog.setObjectName("shortcutEditor"); dialog.setWindowTitle(QString::fromUtf8("Добавить ярлык")); dialog.setMinimumWidth(520);
-        auto* form = new QFormLayout(&dialog);
+        QtScrollableDialog dialog(this, QSize(640, 520));
+        dialog.setObjectName("shortcutEditor"); dialog.setWindowTitle(QString::fromUtf8("Добавить ярлык"));
+        auto* form = dialog.formLayout();
+        form->setHorizontalSpacing(dialog.scaledMetric(8)); form->setVerticalSpacing(dialog.scaledMetric(8));
+        form->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop); form->setFormAlignment(Qt::AlignTop);
+        const auto addField = [form](const QString& caption, QWidget* field) {
+            auto* fieldLabel = new QLabel(caption);
+            fieldLabel->setObjectName(field->objectName() + QStringLiteral("Label"));
+            fieldLabel->setTextFormat(Qt::PlainText); fieldLabel->setWordWrap(true); fieldLabel->setBuddy(field);
+            form->addRow(fieldLabel, field);
+        };
         auto* hint = new QLabel(QString::fromUtf8("Добавьте существующий файл или папку. ForgeMirror хранит только название и путь, сам объект не копируется."));
+        hint->setObjectName("shortcutHint"); hint->setTextFormat(Qt::PlainText);
         hint->setWordWrap(true); form->addRow(hint);
         auto* label = new QLineEdit; label->setObjectName("shortcutLabel"); label->setMaxLength(96);
         labelForAccessibility(label, QString::fromUtf8("Название ярлыка"), QString::fromUtf8("Короткое имя для быстрого запуска."));
@@ -7781,27 +8143,68 @@ void QtWindow::createEntry(bool edit) {
         labelForAccessibility(path, QString::fromUtf8("Путь к файлу или папке ярлыка"),
             QString::fromUtf8("Введите существующий путь или выберите файл либо папку."));
         auto* browse = new QPushButton(QString::fromUtf8("Выбрать файл…")); browse->setObjectName("shortcutBrowse");
+        browse->setAutoDefault(false);
         labelForAccessibility(browse, QString::fromUtf8("Выбрать файл ярлыка"), QString::fromUtf8("Выбирает существующий локальный файл."));
         auto* browseFolder = new QPushButton(QString::fromUtf8("Выбрать папку…")); browseFolder->setObjectName("shortcutBrowseFolder");
+        browseFolder->setAutoDefault(false);
         labelForAccessibility(browseFolder, QString::fromUtf8("Выбрать папку ярлыка"), QString::fromUtf8("Выбирает существующую локальную папку."));
-        auto* pathActions = new QHBoxLayout;
-        pathActions->addWidget(browse); pathActions->addWidget(browseFolder); pathActions->addStretch();
-        auto* pathActionsWidget = new QWidget(&dialog); pathActionsWidget->setLayout(pathActions);
-        form->addRow(QString::fromUtf8("Название"), label); form->addRow(QString::fromUtf8("Путь"), path); form->addRow(pathActionsWidget);
-        auto* notice = new QLabel; notice->setObjectName("shortcutNotice"); notice->setWordWrap(true); form->addRow(notice);
-        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-        buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Добавить")); buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
-        buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена")); form->addRow(buttons);
+        auto* pathActions = new QtDialogFlowRow(dialog.bodyWidget(), dialog.scaledMetric(8), dialog.scaledMetric(4));
+        pathActions->setObjectName("shortcutPathActions"); pathActions->addWidget(browse); pathActions->addWidget(browseFolder);
+        addField(QString::fromUtf8("Название"), label); addField(QString::fromUtf8("Путь"), path); form->addRow(pathActions);
+        auto* notice = new QLabel; notice->setObjectName("shortcutNotice"); notice->setTextFormat(Qt::PlainText);
+        notice->setWordWrap(true); notice->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        notice->setAccessibleName(QString::fromUtf8("Результат добавления ярлыка"));
+        dialog.footerLayout()->addWidget(notice); notice->hide();
+        const auto showNotice = [notice](const QString& text) {
+            notice->setText(text); notice->setAccessibleDescription(text); notice->show();
+        };
+        const auto clearNotice = [notice, label, path] {
+            notice->clear(); notice->hide(); notice->setAccessibleDescription({});
+            label->setAccessibleDescription(label->toolTip()); path->setAccessibleDescription(path->toolTip());
+        };
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+        buttons->setObjectName("shortcutEditorButtons");
+        auto* save = buttons->button(QDialogButtonBox::Save);
+        auto* cancel = buttons->button(QDialogButtonBox::Cancel);
+        save->setObjectName("shortcutSave"); cancel->setObjectName("shortcutCancel");
+        save->setText(QString::fromUtf8("Добавить")); save->setProperty("primary", true);
+        save->setAccessibleName(QString::fromUtf8("Добавить локальный ярлык"));
+        save->setMinimumHeight(dialog.scaledMetric(32)); save->setAutoDefault(true); save->setDefault(true);
+        cancel->setText(QString::fromUtf8("Отмена")); cancel->setAccessibleName(QString::fromUtf8("Отменить добавление ярлыка"));
+        cancel->setAutoDefault(false); dialog.footerLayout()->addWidget(buttons);
+        QWidget::setTabOrder(label, path); QWidget::setTabOrder(path, browse);
+        QWidget::setTabOrder(browse, browseFolder); QWidget::setTabOrder(browseFolder, save); QWidget::setTabOrder(save, cancel);
+        label->setFocus();
+        connect(label, &QLineEdit::textChanged, &dialog, clearNotice);
+        connect(path, &QLineEdit::textChanged, &dialog, clearNotice);
         connect(browse, &QPushButton::clicked, &dialog, [&] {
             QFileDialog picker(&dialog, QString::fromUtf8("Выберите файл ярлыка")); picker.setOption(QFileDialog::DontUseNativeDialog);
+            picker.setObjectName("shortcutFilePicker");
             picker.setFileMode(QFileDialog::ExistingFile);
+            if (auto* folder = picker.findChild<QComboBox*>(QStringLiteral("lookInCombo"))) {
+                folder->setAccessibleName(QString::fromUtf8("Папка файла ярлыка"));
+                folder->setAccessibleDescription(QString::fromUtf8("Выбор папки существующего локального файла."));
+            }
+            if (auto* type = picker.findChild<QComboBox*>(QStringLiteral("fileTypeCombo"))) {
+                type->setAccessibleName(QString::fromUtf8("Тип файла ярлыка"));
+                type->setAccessibleDescription(QString::fromUtf8("Фильтр типов существующих файлов."));
+            }
             if (picker.exec() == QDialog::Accepted && !picker.selectedFiles().isEmpty()) path->setText(QDir::toNativeSeparators(picker.selectedFiles().front()));
         });
         connect(browseFolder, &QPushButton::clicked, &dialog, [&] {
             QFileDialog picker(&dialog, QString::fromUtf8("Выберите папку ярлыка"));
+            picker.setObjectName("shortcutFolderPicker");
             picker.setOption(QFileDialog::DontUseNativeDialog);
             picker.setOption(QFileDialog::ShowDirsOnly);
             picker.setFileMode(QFileDialog::Directory);
+            if (auto* folder = picker.findChild<QComboBox*>(QStringLiteral("lookInCombo"))) {
+                folder->setAccessibleName(QString::fromUtf8("Папка ярлыка"));
+                folder->setAccessibleDescription(QString::fromUtf8("Выбор существующей локальной папки."));
+            }
+            if (auto* type = picker.findChild<QComboBox*>(QStringLiteral("fileTypeCombo"))) {
+                type->setAccessibleName(QString::fromUtf8("Тип выбираемого объекта"));
+                type->setAccessibleDescription(QString::fromUtf8("Выбор папки, не файла."));
+            }
             if (picker.exec() == QDialog::Accepted && !picker.selectedFiles().isEmpty())
                 path->setText(QDir::toNativeSeparators(picker.selectedFiles().front()));
         });
@@ -7809,7 +8212,12 @@ void QtWindow::createEntry(bool edit) {
         connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
             const auto result = AppAddShortcut(workspace_.directory, workspace_.data.shortcuts,
                 u(label->text().trimmed()), u(QDir::fromNativeSeparators(path->text().trimmed())));
-            if (!result.ok) { notice->setText(q(result.errorMessage)); return; }
+            if (!result.ok) {
+                const auto error = q(result.errorMessage); showNotice(error);
+                QWidget* field = label->text().trimmed().isEmpty() ? static_cast<QWidget*>(label) : path;
+                field->setAccessibleDescription(error); field->setFocus(Qt::OtherFocusReason);
+                dialog.scrollArea()->ensureWidgetVisible(field, 0, dialog.scaledMetric(8)); return;
+            }
             dialog.accept();
         });
         if (dialog.exec() == QDialog::Accepted) { reload(); statusBar()->showMessage(QString::fromUtf8("Ярлык добавлен"), 3000); }

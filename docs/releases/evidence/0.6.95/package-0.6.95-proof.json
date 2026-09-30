@@ -1,0 +1,16 @@
+[
+  {
+    "Path": "Z:\\CPP\\ForgeMirror\\package-qt-0.6.95-release\\ForgeMirrorQt.exe",
+    "Bytes": 4098560,
+    "Sha256": "F289043BA32262C02CAEC2B24DD972DC8F44C3CB3164827D08C757D46081DD43",
+    "FileVersion": "0.6.95",
+    "ProductVersion": "0.6.95"
+  },
+  {
+    "Path": "Z:\\CPP\\ForgeMirror\\package-qt-0.6.95-release\\platforms\\qwindows.dll",
+    "Bytes": 907912,
+    "Sha256": "12577A7C4F2230BBEA53F279573D7E3D1A08D631197855481E1E1580F61BB877",
+    "FileVersion": "6.8.3.0",
+    "ProductVersion": "6.8.3.0"
+  }
+]

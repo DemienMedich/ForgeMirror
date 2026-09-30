@@ -2,12 +2,14 @@
 #include "AppWorkspaceStorageLock.h"
 #include "AppWorkspaceDataService.h"
 #include "CloudSync.h"
+#include "QtScrollableDialog.h"
 #include <QtWidgets>
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -310,16 +312,266 @@ QString label(const std::string& relative) {
         : relative == "skills.txt" ? "Навыки" : "Профессии");
 }
 
+int decisionMetric(const QWidget* widget, int base) {
+    const double savedBase = qApp->property("forgeBasePointSize").toDouble();
+    const double current = widget ? widget->font().pointSizeF() : qApp->font().pointSizeF();
+    const double scale = savedBase > 0.0 && current > 0.0 ? std::clamp(current / savedBase, 0.9, 2.0) : 1.0;
+    return std::max(1, int(std::lround(base * scale)));
+}
+
+qreal layoutDecisionText(QTextLayout& text, qreal width) {
+    QTextOption option; option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    text.setTextOption(option); text.beginLayout();
+    qreal height = 0;
+    while (true) {
+        auto line = text.createLine(); if (!line.isValid()) break;
+        line.setLineWidth(std::max(qreal(1), width)); line.setPosition(QPointF(0, height)); height += line.height();
+    }
+    text.endLayout(); return std::ceil(height);
+}
+
+// The same line layout measures and paints cells, including unbroken paths.
+class DecisionTextDelegate final : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    int textHeight(const QString& text, int width, const QFont& font) const {
+        QTextLayout layout(QString(text).replace(QLatin1Char('\n'), QChar::LineSeparator), font);
+        return std::max(QFontMetrics(font).lineSpacing(), int(layoutDecisionText(layout, width)));
+    }
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        const auto* table = qobject_cast<QTableWidget*>(parent());
+        if (!table) return QStyledItemDelegate::sizeHint(option, index);
+        QStyleOptionViewItem content(option); initStyleOption(&content, index);
+        const int padding = decisionMetric(table, 16);
+        return QSize(table->columnWidth(index.column()), textHeight(content.text,
+            std::max(1, table->columnWidth(index.column()) - padding), content.font) + decisionMetric(table, 8));
+    }
+    QSize commandCellSize(QWidget* command, const QModelIndex& index) const {
+        const auto* table = qobject_cast<QTableWidget*>(parent());
+        const QSize wanted = command->sizeHint().expandedTo(command->minimumSize());
+        QStyleOptionViewItem option; option.initFrom(table); option.widget = table;
+        option.font = table->font(); option.fontMetrics = table->fontMetrics(); option.rect = QRect(QPoint(), wanted);
+        const QRect contents = editorContents(option, index, command);
+        // Index widgets are positioned in SE_ItemViewItemText, not the full
+        // cell. Reserve its actual QSS/style insets, not a guessed cell gap.
+        return wanted + QSize(std::max(0, option.rect.width() - contents.width()),
+            std::max(0, option.rect.height() - contents.height()));
+    }
+    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        const auto* table = qobject_cast<QTableWidget*>(parent());
+        if (!table || table->cellWidget(index.row(), index.column()) != editor) {
+            QStyledItemDelegate::updateEditorGeometry(editor, option, index); return;
+        }
+        const QRect contents = editorContents(option, index, editor);
+        const int wantedHeight = editor->sizeHint().expandedTo(editor->minimumSize()).height();
+        const int height = std::min(contents.height(), wantedHeight);
+        editor->setGeometry(QRect(contents.left(), contents.top() + (contents.height() - height) / 2,
+            contents.width(), height));
+    }
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        QStyleOptionViewItem content(option); initStyleOption(&content, index);
+        auto* style = content.widget ? content.widget->style() : QApplication::style();
+        const int horizontalInset = decisionMetric(content.widget, 8), verticalInset = decisionMetric(content.widget, 4);
+        const QRect textRect = option.rect.adjusted(horizontalInset, verticalInset, -horizontalInset, -verticalInset);
+        QStyleOptionViewItem background(content); background.text.clear();
+        style->drawControl(QStyle::CE_ItemViewItem, &background, painter, content.widget);
+        QTextLayout text(QString(content.text).replace(QLatin1Char('\n'), QChar::LineSeparator), content.font);
+        layoutDecisionText(text, std::max(1, textRect.width()));
+        painter->save(); painter->setClipRect(option.rect);
+        const auto group = content.state & QStyle::State_Enabled ? QPalette::Active : QPalette::Disabled;
+        painter->setPen(content.palette.color(group, content.state & QStyle::State_Selected ? QPalette::HighlightedText : QPalette::Text));
+        text.draw(painter, textRect.topLeft()); painter->restore();
+    }
+private:
+    QRect editorContents(const QStyleOptionViewItem& option, const QModelIndex& index, const QWidget* editor) const {
+        QStyleOptionViewItem content(option); initStyleOption(&content, index);
+        content.showDecorationSelected = editor->style()->styleHint(QStyle::SH_ItemView_ShowDecorationSelected, nullptr, editor);
+        auto* style = content.widget ? content.widget->style() : QApplication::style();
+        return style->subElementRect(QStyle::SE_ItemViewItemText, &content, content.widget);
+    }
+};
+
+class DecisionTable final : public QTableWidget {
+public:
+    explicit DecisionTable(bool backups, QWidget* parent = nullptr)
+        : QTableWidget(parent), backups_(backups), text_(new DecisionTextDelegate(this)) {
+        setItemDelegate(text_); setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        setWordWrap(true); setTextElideMode(Qt::ElideNone);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        horizontalHeader()->setStretchLastSection(false);
+        horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+        verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+        setMinimumWidth(0);
+    }
+    void fitContents() {
+        if (fitting_ || !columnCount()) return;
+        fitting_ = true; ensurePolished();
+        const QFontMetrics metrics(font()); const int padding = decisionMetric(this, 16);
+        const int cellPadding = decisionMetric(this, 8);
+        const auto fullWidth = [&](int column) {
+            int wanted = 0;
+            for (int row = 0; row < rowCount(); ++row) if (auto* value = item(row, column))
+                for (const auto& line : value->text().split(QLatin1Char('\n')))
+                    wanted = std::max(wanted, std::max(metrics.horizontalAdvance(line), metrics.boundingRect(line).width()));
+            return std::max(headerWidth(column), wanted + padding);
+        };
+        const auto wordWidth = [&](int column) {
+            int wanted = 0;
+            for (int row = 0; row < rowCount(); ++row) if (auto* value = item(row, column))
+                for (const auto& word : value->text().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts))
+                    wanted = std::max(wanted, std::max(metrics.horizontalAdvance(word), metrics.boundingRect(word).width()));
+            return std::max(headerWidth(column), wanted + padding);
+        };
+        std::vector<int> widths(static_cast<size_t>(columnCount()), 0);
+        for (int column = 0; column < columnCount(); ++column) widths[size_t(column)] = headerWidth(column);
+        if (backups_) {
+            for (int row = 0; row < rowCount(); ++row) if (auto* button = cellWidget(row, 3)) {
+                button->ensurePolished(); widths[3] = std::max(widths[3], text_->commandCellSize(button, model()->index(row, 3)).width());
+            }
+            // Headers and actual commands are the only hard minima. Prefer the
+            // complete date/source when spare space permits; summary wraps.
+            int spare = std::max(0, viewport()->width() - widths[0] - widths[1] - widths[2] - widths[3]);
+            for (int column : {0, 1}) {
+                const int extra = std::min(spare, std::max(0, fullWidth(column) - widths[size_t(column)]));
+                widths[size_t(column)] += extra; spare -= extra;
+            }
+            widths[2] += spare;
+        } else {
+            const int available = viewport()->width();
+            widths[0] = std::max(widths[0], std::min(fullWidth(0), available - widths[1] - widths[2]));
+            const int spare = std::max(0, available - widths[0] - widths[1] - widths[2]);
+            // Short real summary words get useful space, while at least half
+            // the flexible width remains available for the full wrapped path.
+            widths[1] += std::min(std::max(0, wordWidth(1) - widths[1]), spare / 2);
+            widths[2] = std::max(widths[2], available - widths[0] - widths[1]);
+        }
+        int totalWidth = 0;
+        for (int column = 0; column < columnCount(); ++column) { setColumnWidth(column, widths[size_t(column)]); totalWidth += widths[size_t(column)]; }
+        horizontalHeader()->setMinimumHeight(std::max(horizontalHeader()->sizeHint().height(), metrics.lineSpacing() + cellPadding));
+        int height = std::max(horizontalHeader()->height(), horizontalHeader()->minimumHeight()) + frameWidth() * 2;
+        for (int row = 0; row < rowCount(); ++row) {
+            int rowHeight = metrics.lineSpacing() + cellPadding;
+            for (int column = 0; column < columnCount(); ++column) {
+                if (auto* value = item(row, column)) rowHeight = std::max(rowHeight,
+                    text_->textHeight(value->text(), std::max(1, columnWidth(column) - padding), font()) + cellPadding);
+                if (auto* widget = cellWidget(row, column)) rowHeight = std::max(rowHeight,
+                    text_->commandCellSize(widget, model()->index(row, column)).height());
+            }
+            setRowHeight(row, rowHeight); height += rowHeight;
+        }
+        if (totalWidth > viewport()->width()) height += style()->pixelMetric(QStyle::PM_ScrollBarExtent, nullptr, this);
+        if (minimumHeight() != height) { setMinimumHeight(height); updateGeometry(); }
+        fitting_ = false;
+    }
+    QSize sizeHint() const override { return QSize(480, minimumHeight()); }
+    QSize minimumSizeHint() const override { return QSize(0, minimumHeight()); }
+protected:
+    bool viewportEvent(QEvent* event) override {
+        const bool result = QTableWidget::viewportEvent(event);
+        if (event->type() == QEvent::Resize && !queued_) {
+            queued_ = true;
+            QTimer::singleShot(0, this, [this] { queued_ = false; fitContents(); });
+        }
+        return result;
+    }
+    void resizeEvent(QResizeEvent* event) override { QTableWidget::resizeEvent(event); fitContents(); }
+    void showEvent(QShowEvent* event) override { QTableWidget::showEvent(event); fitContents(); }
+    void changeEvent(QEvent* event) override {
+        QTableWidget::changeEvent(event);
+        if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange)
+            QTimer::singleShot(0, this, [this] { fitContents(); });
+    }
+private:
+    int headerWidth(int column) const {
+        QStyleOptionHeader option; option.initFrom(horizontalHeader()); option.section = column;
+        option.text = horizontalHeaderItem(column) ? horizontalHeaderItem(column)->text() : QString();
+        option.fontMetrics = QFontMetrics(horizontalHeader()->font());
+        const QSize text(std::max(option.fontMetrics.horizontalAdvance(option.text), option.fontMetrics.boundingRect(option.text).width()),
+            option.fontMetrics.lineSpacing());
+        return horizontalHeader()->style()->sizeFromContents(QStyle::CT_HeaderSection, &option, text, horizontalHeader()).width();
+    }
+    bool backups_ = false;
+    bool fitting_ = false;
+    bool queued_ = false;
+    DecisionTextDelegate* text_ = nullptr;
+};
+
+void describeDecisionItems(QTableWidget* table) {
+    for (int row = 0; row < table->rowCount(); ++row) for (int column = 0; column < table->columnCount(); ++column)
+        if (auto* item = table->item(row, column)) {
+            item->setToolTip(Qt::convertFromPlainText(item->text())); item->setData(Qt::AccessibleTextRole, item->text());
+        }
+}
+
+// Keep QMessageBox identity and its result/default contract. Only its long
+// source/target label becomes a scrollable plain-text body, not hidden details.
+class DecisionConfirmation final : public QMessageBox {
+public:
+    DecisionConfirmation(Icon icon, const QString& title, const QString& text, StandardButtons buttons, QWidget* parent)
+        : QMessageBox(icon, title, text, buttons, parent) {
+        setTextFormat(Qt::PlainText);
+        setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, false);
+        auto* grid = qobject_cast<QGridLayout*>(layout());
+        auto* label = findChild<QLabel*>(QStringLiteral("qt_msgbox_label"));
+        if (grid && label) {
+            const int index = grid->indexOf(label); int row, column, rows, columns;
+            grid->getItemPosition(index, &row, &column, &rows, &columns);
+            grid->removeWidget(label); label->hide(); label->setMaximumSize(0, 0);
+            auto* body = new QPlainTextEdit(this); body->setObjectName("conflictConfirmBody");
+            body->setPlainText(text); body->setReadOnly(true); body->setTabChangesFocus(true);
+            body->setLineWrapMode(QPlainTextEdit::WidgetWidth); body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+            body->setFrameShape(QFrame::NoFrame); body->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
+            body->setMinimumSize(0, 0); body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            body->setAccessibleName(QString::fromUtf8("Источник, заменяемая версия и резервная копия"));
+            body->setAccessibleDescription(text);
+            grid->addWidget(body, row, column, rows, columns); grid->setRowStretch(row, 1);
+            body->ensurePolished();
+            const auto margins = body->contentsMargins();
+            body->setMinimumHeight(body->fontMetrics().lineSpacing() * 3 + int(std::ceil(body->document()->documentMargin() * 2))
+                + body->frameWidth() * 2 + margins.top() + margins.bottom());
+        }
+        if (layout()) layout()->setSizeConstraint(QLayout::SetNoConstraint);
+    }
+protected:
+    void showEvent(QShowEvent* event) override {
+        QMessageBox::showEvent(event);
+        if (layout()) layout()->setSizeConstraint(QLayout::SetNoConstraint);
+        const auto* currentScreen = screen() ? screen() : QGuiApplication::primaryScreen();
+        if (!currentScreen) return;
+        const auto available = currentScreen->availableGeometry();
+        const QSize extra(std::max(0, frameGeometry().width() - width()), std::max(0, frameGeometry().height() - height()));
+        const QSize limit(std::max(1, available.width() - extra.width() - 16), std::max(1, available.height() - extra.height() - 16));
+        setMinimumSize(QSize(420, 260).boundedTo(limit)); setMaximumSize(limit); resize(QSize(640, 520).boundedTo(limit));
+        const auto frame = frameGeometry();
+        const int left = std::clamp(frame.left(), available.left(), std::max(available.left(), available.right() - frame.width() + 1));
+        const int top = std::clamp(frame.top(), available.top(), std::max(available.top(), available.bottom() - frame.height() + 1));
+        move(pos() + QPoint(left - frame.left(), top - frame.top()));
+    }
+    void keyPressEvent(QKeyEvent* event) override {
+        if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
+            (event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::KeypadModifier)) {
+            auto* button = qobject_cast<QPushButton*>(focusWidget());
+            if (button && button->isEnabled() && button->isVisible()) { event->accept(); button->click(); return; }
+        }
+        QMessageBox::keyPressEvent(event);
+    }
+};
+
 bool confirm(QWidget* parent, const QString& title, const QString& source, const QString& target, const QString& action) {
-    QMessageBox box(QMessageBox::Warning, title,
+    DecisionConfirmation box(QMessageBox::Warning, title,
         QString::fromUtf8("Источник\n%1\n\nБудет заменено\n%2\n\nТекущая заменяемая версия сначала сохранится в локальном meta/updates.")
             .arg(source, target), QMessageBox::Yes | QMessageBox::Cancel, parent);
     box.setObjectName("cloudConflictConfirm");
     box.setDefaultButton(QMessageBox::Cancel);
     box.button(QMessageBox::Yes)->setText(action);
     box.button(QMessageBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    box.button(QMessageBox::Yes)->setMinimumWidth(120); box.button(QMessageBox::Yes)->setStyleSheet("min-height: 40px; max-height: 40px;");
-    box.button(QMessageBox::Cancel)->setMinimumWidth(120); box.button(QMessageBox::Cancel)->setStyleSheet("min-height: 40px; max-height: 40px;");
+    for (const auto role : {QMessageBox::Yes, QMessageBox::Cancel}) {
+        auto* button = qobject_cast<QPushButton*>(box.button(role));
+        button->setAutoDefault(role == QMessageBox::Cancel);
+        button->setAccessibleName(button->text());
+        button->ensurePolished();
+        button->setMinimumHeight(std::max(decisionMetric(&box, 40), button->sizeHint().height()));
+    }
     return box.exec() == QMessageBox::Yes;
 }
 }
@@ -714,19 +966,27 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
                                bool tasksModuleEnabled, bool pipelineModuleEnabled) {
     const auto config = LoadCloudSyncConfig(workspace);
     const auto root = ResolveCloudRootPath(config, workspace);
-    QDialog dialog(parent); dialog.setObjectName("cloudConflictResolver");
-    dialog.setWindowTitle(QString::fromUtf8("Сравнение облачных версий")); dialog.resize(820, 560); dialog.setMinimumSize(720, 480);
-    auto* layout = new QVBoxLayout(&dialog); layout->setContentsMargins(18, 16, 18, 16); layout->setSpacing(12);
+    QtScrollableDialog dialog(parent, QSize(640, 520)); dialog.setObjectName("cloudConflictResolver");
+    dialog.setWindowTitle(QString::fromUtf8("Сравнение облачных версий"));
+    dialog.scrollArea()->setAccessibleName(QString::fromUtf8("Сравнение файлов и локальные резервные копии"));
+    auto* form = dialog.formLayout(); form->setFormAlignment(Qt::AlignTop);
+    form->setVerticalSpacing(dialog.scaledMetric(8));
     auto* intro = new QLabel(QString::fromUtf8("Выберите направление для отдельного файла. Любая замена требует подтверждения и резервной копии."));
-    intro->setWordWrap(true); intro->setProperty("warning", true); layout->addWidget(intro);
-    auto* tabs = new QTabWidget; tabs->setObjectName("cloudConflictTabs"); layout->addWidget(tabs, 1);
+    intro->setTextFormat(Qt::PlainText); intro->setWordWrap(true); intro->setProperty("warning", true); form->addRow(intro);
+    auto* tabs = new QTabWidget; tabs->setObjectName("cloudConflictTabs");
+    tabs->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); tabs->setUsesScrollButtons(true);
+    tabs->setAccessibleName(QString::fromUtf8("Файл для сравнения"));
+    form->addRow(tabs);
     bool changed = false;
     std::string requestedModule;
     auto addFileTab = [&](const std::string& relative) {
-        auto* page = new QWidget; auto* box = new QVBoxLayout(page); box->setContentsMargins(12, 12, 12, 12); box->setSpacing(10);
+        auto* page = new QWidget; page->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        auto* box = new QVBoxLayout(page); box->setContentsMargins(dialog.scaledMetric(8), dialog.scaledMetric(8), dialog.scaledMetric(8), dialog.scaledMetric(8));
+        box->setSpacing(dialog.scaledMetric(8)); box->setAlignment(Qt::AlignTop);
         const bool catalogPair = relative == "skills.txt" || relative == "meta/professions.txt";
         const auto local = workspace / std::filesystem::u8path(relative); const auto cloud = root / std::filesystem::u8path(relative);
-        auto* comparison = new QTableWidget(2, 3); comparison->setObjectName(objectName(relative, "Comparison"));
+        auto* comparison = new DecisionTable(false); comparison->setRowCount(2); comparison->setColumnCount(3);
+        comparison->setObjectName(objectName(relative, "Comparison"));
         comparison->setAccessibleName(QString::fromUtf8("Сравнение локальной и облачной версий файла"));
         comparison->setAccessibleDescription(QString::fromUtf8("Столбцы показывают сторону, сводку содержимого и путь. Выберите направление кнопками ниже."));
         comparison->setHorizontalHeaderLabels({QString::fromUtf8("Версия"), QString::fromUtf8("Сводка"), QString::fromUtf8("Путь")});
@@ -738,11 +998,9 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         comparison->setItem(1, 0, new QTableWidgetItem(QString::fromUtf8("Облачная")));
         comparison->setItem(1, 1, new QTableWidgetItem(preview(cloud, relative)));
         comparison->setItem(1, 2, new QTableWidgetItem(q(cloud)));
-        comparison->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed); comparison->setColumnWidth(0, 105);
-        comparison->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed); comparison->setColumnWidth(1, 160);
-        comparison->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-        comparison->setTextElideMode(Qt::ElideMiddle); comparison->setMaximumHeight(118); box->addWidget(comparison);
-        auto* actions = new QHBoxLayout; actions->setSpacing(8);
+        describeDecisionItems(comparison); box->addWidget(comparison); comparison->fitContents();
+        auto* actions = new QtDialogFlowRow(page, dialog.scaledMetric(8), dialog.scaledMetric(4));
+        actions->setObjectName(objectName(relative, "Actions"));
         const bool canOpenModule = (relative == "meta/tasks.json" && tasksModuleEnabled) ||
             (relative == "meta/pipeline.json" && pipelineModuleEnabled);
         if (canOpenModule) {
@@ -751,7 +1009,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
             openModuleButton->setAccessibleName(relative == "meta/tasks.json"
                 ? QString::fromUtf8("Открыть модуль задач") : QString::fromUtf8("Открыть модуль пайплайна"));
             openModuleButton->setToolTip(QString::fromUtf8("Перейти к модулю, не изменяя локальные и облачные файлы."));
-            openModuleButton->setStyleSheet("min-height: 40px; max-height: 40px;");
+            openModuleButton->setAutoDefault(false);
             actions->addWidget(openModuleButton);
             QObject::connect(openModuleButton, &QPushButton::clicked, &dialog, [&, relative] {
                 requestedModule = relative;
@@ -759,10 +1017,16 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
             });
         }
         auto* apply = new QPushButton(QString::fromUtf8("Принять из облака")); apply->setObjectName(objectName(relative, "ApplyCloud"));
-        apply->setProperty("primary", true); apply->setStyleSheet("min-height: 40px; max-height: 40px;"); apply->setEnabled(std::filesystem::is_regular_file(cloud)); actions->addWidget(apply);
+        apply->setProperty("primary", true); apply->setAutoDefault(false);
+        apply->setAccessibleName(QString::fromUtf8("Принять из облака: ") + label(relative));
+        apply->setToolTip(QString::fromUtf8("Заменить локальную версию после подтверждения и резервного копирования."));
+        apply->setEnabled(std::filesystem::is_regular_file(cloud)); actions->addWidget(apply);
         auto* push = new QPushButton(QString::fromUtf8("Отправить локальную")); push->setObjectName(objectName(relative, "PushCloud"));
-        push->setStyleSheet("min-height: 40px; max-height: 40px;"); push->setEnabled(config.enabled && std::filesystem::is_regular_file(local)); actions->addWidget(push); actions->addStretch(); box->addLayout(actions);
-        auto* backups = new QTableWidget; backups->setObjectName(objectName(relative, "Backups"));
+        push->setAutoDefault(false);
+        push->setAccessibleName(QString::fromUtf8("Отправить локальную версию: ") + label(relative));
+        push->setToolTip(QString::fromUtf8("Заменить облачную версию после подтверждения и резервного копирования."));
+        push->setEnabled(config.enabled && std::filesystem::is_regular_file(local)); actions->addWidget(push); box->addWidget(actions);
+        auto* backups = new DecisionTable(true); backups->setObjectName(objectName(relative, "Backups"));
         backups->setAccessibleName(QString::fromUtf8("Резервные копии файла"));
         backups->setAccessibleDescription(QString::fromUtf8("Список локальных снимков с датой, источником и сводкой. Восстановление доступно в последнем столбце."));
         backups->setColumnCount(4); backups->setHorizontalHeaderLabels({QString::fromUtf8("Дата"), QString::fromUtf8("Источник"), QString::fromUtf8("Сводка"), QString::fromUtf8("Действие")});
@@ -770,10 +1034,19 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
         const auto snapshots = ListCloudWorkspaceBackups(workspace, relative); const int shown = int(std::min<size_t>(5, snapshots.size())); backups->setRowCount(shown);
         for (int i = 0; i < shown; ++i) {
             const auto snapshot = snapshots[size_t(i)];
-            backups->setItem(i, 0, new QTableWidgetItem(QDateTime::fromSecsSinceEpoch(snapshot.createdAt).toString("yyyy-MM-dd HH:mm")));
+            const auto timestamp = QDateTime::fromSecsSinceEpoch(snapshot.createdAt);
+            auto* date = new QTableWidgetItem(timestamp.toString("yyyy-MM-dd\nHH:mm"));
+            date->setData(Qt::AccessibleDescriptionRole, timestamp.toString(Qt::ISODate)); backups->setItem(i, 0, date);
             backups->setItem(i, 1, new QTableWidgetItem(q(snapshot.sourceKind)));
             backups->setItem(i, 2, new QTableWidgetItem(preview(snapshot.path, relative)));
-            auto* restore = new QPushButton(QString::fromUtf8("Восстановить")); restore->setStyleSheet("min-height: 40px; max-height: 40px;"); backups->setRowHeight(i, 44); backups->setCellWidget(i, 3, restore);
+            auto* restore = new QPushButton(QString::fromUtf8("Восстановить"));
+            restore->setObjectName(objectName(relative, "Restore") + QString::number(i));
+            restore->setAutoDefault(false);
+            const auto context = label(relative) + QStringLiteral(" · ") + timestamp.toString("yyyy-MM-dd HH:mm") +
+                QStringLiteral(" · ") + q(snapshot.sourceKind) + QStringLiteral("\n") + q(snapshot.path);
+            restore->setAccessibleName(QString::fromUtf8("Восстановить снимок: ") + context);
+            restore->setAccessibleDescription(QString::fromUtf8("Замена локального файла только после подтверждения; текущая версия сохраняется."));
+            restore->setToolTip(Qt::convertFromPlainText(context)); backups->setCellWidget(i, 3, restore);
             QObject::connect(restore, &QPushButton::clicked, &dialog, [&, snapshot, relative, local, catalogPair] {
                 auto sourceText = preview(snapshot.path, relative) + "\n" + q(snapshot.path);
                 auto targetText = preview(local, relative) + "\n" + q(local);
@@ -806,11 +1079,13 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
                 else { changed = changed || result.changed; dialog.accept(); }
             });
         }
-        backups->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed); backups->setColumnWidth(0, 140);
-        backups->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed); backups->setColumnWidth(1, 82);
-        backups->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-        backups->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed); backups->setColumnWidth(3, 150);
-        box->addWidget(new QLabel(QString::fromUtf8("Последние локальные снимки"))); box->addWidget(backups, 1);
+        describeDecisionItems(backups);
+        auto* backupTitle = new QLabel(QString::fromUtf8("Последние локальные снимки"));
+        backupTitle->setTextFormat(Qt::PlainText); backupTitle->setWordWrap(true); box->addWidget(backupTitle);
+        box->addWidget(backups); backups->fitContents();
+        auto* empty = new QLabel(QString::fromUtf8("Локальных снимков этого файла пока нет."));
+        empty->setObjectName(objectName(relative, "EmptyBackups")); empty->setTextFormat(Qt::PlainText); empty->setWordWrap(true);
+        box->addWidget(empty); empty->setVisible(shown == 0); backups->setVisible(shown != 0);
         QObject::connect(apply, &QPushButton::clicked, &dialog, [&, relative, local, cloud, catalogPair] {
             auto sourceText = preview(cloud, relative) + "\n" + q(cloud);
             auto targetText = preview(local, relative) + "\n" + q(local);
@@ -844,11 +1119,32 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
             else { changed = changed || result.changed; dialog.accept(); }
         });
         tabs->addTab(page, label(relative));
+        // QSS can reset QWidget minima when a previously parentless page is
+        // polished/reparented. Measure commands only after their final ancestry.
+        for (auto* button : page->findChildren<QPushButton*>()) {
+            button->ensurePolished();
+            button->setMinimumHeight(std::max(dialog.scaledMetric(40), button->sizeHint().height()));
+        }
+        comparison->fitContents(); backups->fitContents();
     };
     addFileTab("meta/tasks.json"); addFileTab("meta/pipeline.json");
     addFileTab("meta/projects.json"); addFileTab("meta/banner.json");
     addFileTab("meta/gameplay.ini"); addFileTab("meta/professions.txt"); addFileTab("skills.txt");
-    auto* close = new QPushButton(QString::fromUtf8("Закрыть")); close->setMinimumWidth(120); close->setStyleSheet("min-height: 40px; max-height: 40px;"); layout->addWidget(close, 0, Qt::AlignRight);
+    auto* notice = new QLabel;
+    notice->setObjectName("cloudConflictNotice"); notice->setTextFormat(Qt::PlainText); notice->setWordWrap(true);
+    notice->setAccessibleName(QString::fromUtf8("Контекст выбранного файла и безопасное закрытие"));
+    dialog.footerLayout()->addWidget(notice);
+    const auto updateContext = [tabs, notice] {
+        notice->setText(QString::fromUtf8("%1. Замена — после подтверждения и резервной копии. Закрытие не изменяет файлы.").arg(tabs->tabText(tabs->currentIndex())));
+    };
+    QObject::connect(tabs, &QTabWidget::currentChanged, &dialog, updateContext); updateContext();
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog); buttons->setObjectName("cloudConflictButtons");
+    auto* close = buttons->button(QDialogButtonBox::Close); close->setObjectName("cloudConflictClose");
+    close->setText(QString::fromUtf8("Закрыть")); close->setAccessibleName(QString::fromUtf8("Закрыть сравнение без изменений"));
+    close->setAutoDefault(true); close->setDefault(true);
+    dialog.footerLayout()->addWidget(buttons);
+    close->ensurePolished(); close->setMinimumHeight(std::max(dialog.scaledMetric(40), close->sizeHint().height()));
+    QWidget::setTabOrder(tabs, close); close->setFocus();
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::reject);
     dialog.exec();
     if (!requestedModule.empty() && openModule) openModule(requestedModule);

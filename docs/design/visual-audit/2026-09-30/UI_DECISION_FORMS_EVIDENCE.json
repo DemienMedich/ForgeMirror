@@ -1,0 +1,2192 @@
+{
+  "SchemaVersion": 1,
+  "CheckpointVersion": "0.6.95",
+  "GeneratedUtc": "2026-09-30T05:18:13.6712789Z",
+  "RefreshRequired": false,
+  "Status": "Scoped final native decision/motion/quick-menu evidence; release acceptance and whole UI goal are separate.",
+  "Scope": [
+    "Cloud conflict seven file tabs and nested decisions",
+    "Storage conflict and nested decisions",
+    "Wallet credit/debit/history and confirmations",
+    "Shortcut create/help and Qt file/folder pickers",
+    "Quick menu empty/populated without launching actions",
+    "Navigation marker on/off, reversal, hide and disabled lifecycle"
+  ],
+  "Limitations": [
+    "Native contexts use fresh synthetic QTemporaryDir fixtures; production and installed user data are not evidence inputs.",
+    "Decision forms cover seven UI scales 90/100/110/125/150/175/200; preserved BEFORE and screenshots are 100/200. PNG count is not context count or proof of visual review of every image.",
+    "Exit codes below are explicitly supplied by the operator from the actual runs; completion markers, empty final stderr, preserved identities and copied hashes are independently checked by this script.",
+    "The 0.6.94 motion and first-run 0.6.95 menu failures are intentionally retained as historical failures, not accepted final results. Their stderr is not required to be empty.",
+    "No claim of native hover acceptance, all 18 pages at seven scales, OS SPI setting changes, optional graphics components, production update, full-suite acceptance or Setup lifecycle is made by this index.",
+    "Package profile/help images are copied separately by the package verifier and included only if already present; their presence alone is not installer acceptance.",
+    "Prototype supplement: sizing-only FAIL and phase-gated PASS are preserved as separate offscreen prototype groups. Their counters and images never increase NativeRunLogs or NativeRuns acceptance, and do not close native hover, 18x7, SPI, destruction or release lifecycle gates."
+  ],
+  "Counts": {
+    "BeforeDecisionPng": 24,
+    "AfterDecisionPng": 70,
+    "BeforeMotionPng": 4,
+    "AfterMotionPng": 4,
+    "AfterMenuPng": 4,
+    "HistoricalMenuPng": 4,
+    "PackagePng": 2,
+    "TotalPng": 120,
+    "NativeRunLogs": 12,
+    "PersistentArtifacts": 153,
+    "PrototypeOnlyPng": 4,
+    "FailedHistoricalPrototypePng": 4,
+    "PrototypeLogs": 4
+  },
+  "NativeRuns": {
+    "BeforeDecision": {
+      "CapturesFromDriver": 24,
+      "Version": "0.6.94",
+      "ExitCodeFromOriginalProof": 0
+    },
+    "AfterDecision": {
+      "ModalContextsFromDriver": 83,
+      "ConfirmationsFromDriver": 20,
+      "ObservedExitCodeSupplied": 0,
+      "MainStateChecksFromDriver": 404,
+      "StderrBytes": 0,
+      "Version": "0.6.95"
+    },
+    "BeforeMotion": {
+      "Version": "0.6.94",
+      "Status": "KnownFailedHistorical; reversal passed, hide/disabled lifecycle failed; inspect retained logs",
+      "ExitCode": null
+    },
+    "AfterMotion": {
+      "Version": "0.6.95",
+      "PolicyContextsFromDriver": 2,
+      "StderrBytes": 0,
+      "ObservedExitCodeSupplied": 0
+    },
+    "FirstMenu": {
+      "Version": "0.6.95",
+      "Status": "KnownFailedHistorical; cropped action rows; inspect retained logs",
+      "ExitCode": null
+    },
+    "AfterMenu": {
+      "Version": "0.6.95",
+      "StderrBytes": 0,
+      "ObservedExitCodeSupplied": 0,
+      "ContextsFromDriver": 4,
+      "ActionLaunches": 0
+    }
+  },
+  "BeforeProvenance": {
+    "Driver": {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/baseline.cpp",
+      "Bytes": 9547,
+      "Sha256": "E75C9F311EE596025215AC9666A4FD509DE57829BB923E73B32B8BFC9939FFAB"
+    },
+    "ArchivedLibraries": [
+      {
+        "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/ForgeMirrorQtUi.lib",
+        "Bytes": 44532618,
+        "Sha256": "67CFCEC5BF1EBD11D2A5BC320809EEF8F48E54C872ACE8BD30D298805E0DDB68"
+      },
+      {
+        "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/ForgeMirrorQtCore.lib",
+        "Bytes": 26376318,
+        "Sha256": "084EF6CFD8130490E29737124CD716DEC910C5B2BD3A2C318E911864C94C26E3"
+      }
+    ],
+    "Executable": {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/driver-build/Release/decision_baseline.exe",
+      "Bytes": 3965952,
+      "Sha256": "D15CD5362068AC6C8EFAC07EFC6BB01798180A5DD7A0808C1512596FE9591AC3"
+    },
+    "LinkedCmake": {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/CMakeLists.txt",
+      "Bytes": 1051,
+      "Sha256": "58E0309E5B95DACC62F1E296B7965461E71313749BAC21CD9EB72AC8663A4737"
+    },
+    "Kind": "Genuine preserved-library native baseline",
+    "OriginalProof": {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/native-before-proof.json",
+      "Bytes": 6478,
+      "Sha256": "E0E3C3C496AECB60048449E5FB4132C4493A74950A037BCDC94A9DED34C6901F"
+    },
+    "Version": "0.6.94"
+  },
+  "CurrentSources": [
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/CMakeLists.txt",
+      "Bytes": 7870,
+      "Sha256": "1FEA13A64C8021353E6D75BCB4C9F7F90DCB4B8E49EDE778E44F6F9CF7DB9B15"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/main.cpp",
+      "Bytes": 9592,
+      "Sha256": "8F0F3850785B00226B4526096CCAF1F167082D4A09BBA5BCCDD7F038380B77B6"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtAchievements.cpp",
+      "Bytes": 25712,
+      "Sha256": "6D6FD24DF93DC25083EBA750540FE697A873795E1F94310034397F02D4021DA0"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtAchievements.h",
+      "Bytes": 801,
+      "Sha256": "490531AF0F5F21EF72C65336929AF5B61581A83ECBDED6F2D4901DC20BE5FFA2"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtActionIcons.h",
+      "Bytes": 7270,
+      "Sha256": "E2D0589080ED1E6BF4FD4B9E314D86CC44217548615407D1E1E48C1DE533ACB7"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtAuditExport.cpp",
+      "Bytes": 2135,
+      "Sha256": "EF84DEBBC11E8069F08DB3C4CDDF2C2CCAF3BDCAD9C80BEA7672289E50C519F6"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtAuditExport.h",
+      "Bytes": 384,
+      "Sha256": "1E6A121FCC5040C993009F38B7B46DE1D1D60DE7D1E8ADD4BE16DBCC47B0DDFC"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtBannerEditor.cpp",
+      "Bytes": 5791,
+      "Sha256": "B7617899DACF919B2B099065A83E3666A91B67412005E73245EFE78522F0CA6F"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtBannerEditor.h",
+      "Bytes": 243,
+      "Sha256": "E2BD671FCC66BD3EDCDDAC0CAEDA0C0033F1FA32C02B8F0C6A58CDA969B0FA2D"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudAutoSync.cpp",
+      "Bytes": 4760,
+      "Sha256": "C2F374D117A5477029D1F6D5EE5D74628991F226094E6C8354D49BFA4167AB86"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudAutoSync.h",
+      "Bytes": 1225,
+      "Sha256": "3D1CC837B67B1A0C90392F91718F767C5A19B6F1E16F0828E03CDE6C228345A7"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudConflict.cpp",
+      "Bytes": 73964,
+      "Sha256": "D31F98489C345A7FEB895CE4C130905E6415CAA44EA1D70371BAE5DE8ECF43C8"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudConflict.h",
+      "Bytes": 1519,
+      "Sha256": "3F0A18535ECBEC0C7B181029685CC7C71B7495407669DA4B7FCA37A41418FAF8"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudPull.cpp",
+      "Bytes": 15959,
+      "Sha256": "15B53658D4D1DA069654C391983CAD5277E9CEE308A15212A729C0B1DE0D29F8"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudPull.h",
+      "Bytes": 597,
+      "Sha256": "E3E424075B1D7B6C21FDC06AA754A1E5D18137D6D77EF41697BC6CE77D19F75B"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudPushPreview.cpp",
+      "Bytes": 25341,
+      "Sha256": "200853A9BA27C07328AFE2C4C4041B74D93F7DDF2240B1DB2A6B9F4B9F608037"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudPushPreview.h",
+      "Bytes": 1288,
+      "Sha256": "942217903DA5017E0156A9A42D5E1B6BD24EE1A69052956CA72E636B717CCF22"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudRelease.cpp",
+      "Bytes": 6454,
+      "Sha256": "7645B621216CFC74D5E7251863C2F75DEFC5C7C7EC4613A32D653F2D93A80568"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudRelease.h",
+      "Bytes": 569,
+      "Sha256": "BD10DFF0AAEE68DEF125EC14D6CCA9C5AE2DB9A95FEC803CA317273380C76AF6"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudSettings.cpp",
+      "Bytes": 15591,
+      "Sha256": "CA6920BA20B18CF6613F80DE94045A4CF4CE1E710A2BC84E95B8AC922FFBFEEC"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCloudSettings.h",
+      "Bytes": 140,
+      "Sha256": "A3248589515A0541A1771881518EA812C19A0A0CDEE726121E3D01392083A6C7"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtCommandHelpDialog.h",
+      "Bytes": 2731,
+      "Sha256": "73E36A0B905584748933A4F43C25BED9002CE8FEBCB9CBBB1C15876965D0976F"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtDeadlineAgent.cpp",
+      "Bytes": 8757,
+      "Sha256": "EC0D35711FAF94E36168D362E686EC04E7C1496CA91DCF35C4EE4CC65FB237C5"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtDeadlineAgent.h",
+      "Bytes": 622,
+      "Sha256": "3988F5D03DED27407A79786385272895BDB012AA3196E6F304675014A6E518F1"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtDisclosureButton.h",
+      "Bytes": 5165,
+      "Sha256": "ED1C0C22C16714859DF1FBB405420FF24AE56EA5A3F6E4E8AB9A0C9BC19E6C2B"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtDisplaySettings.cpp",
+      "Bytes": 86557,
+      "Sha256": "1E7EC0E379C4A244041D28FF9CAEF740AAFE80757F7566E3B94D3F2A89001486"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtDisplaySettings.h",
+      "Bytes": 4546,
+      "Sha256": "89D69E640EB4D80DB361CD494FB59DF1E8ACE47206C4CDE777A786997AF2C178"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtLogActivityChart.cpp",
+      "Bytes": 11839,
+      "Sha256": "B31A57D65FB223D328F082F443516497EC0992FAE533F21A117420452833F3D3"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtLogActivityChart.h",
+      "Bytes": 1506,
+      "Sha256": "C808CAC4B0CDF7CA699EC12B200FE01BF3485B19D728BF04D24D1113B6E4F755"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtLogSanitization.h",
+      "Bytes": 615,
+      "Sha256": "219DA32875672568013273A6C00C561FE324438ED281FA9332CCE369DF26A095"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtModelViewer.cpp",
+      "Bytes": 14816,
+      "Sha256": "9E210765DA433F13AB69F7E06F864A8AF96B77693B77E8F98B4DF87BEFF8BBAF"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtModelViewer.h",
+      "Bytes": 1843,
+      "Sha256": "2435B460F2FAA05667CB49F10C9CCDA615220F98B6E1137EA1B4E5F39DB6A083"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPipelineEditor.cpp",
+      "Bytes": 15193,
+      "Sha256": "5F0C2A9A5804AAA1764ECD90E4949B1538DFF801CCC5F7EB8C031AF879879BC5"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPipelineEditor.h",
+      "Bytes": 147,
+      "Sha256": "BC0349E3441A29A9C13EB6D83F7B179E40A366D8EBB03FE3DFB4394B7DBFE58C"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPipelineMap.cpp",
+      "Bytes": 40611,
+      "Sha256": "23D5826F2C4E6F2CAECF9D79692A97D9A7ACBA300AF4C2C0C604CE91536E8ADB"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPipelineMap.h",
+      "Bytes": 299,
+      "Sha256": "2886650CD57DDAD42DE9F54DB486A3101627CC7208AD9698192CDFAC600E43F1"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPipelineTransition.cpp",
+      "Bytes": 5515,
+      "Sha256": "280E12DCBD889C38AA71C203DA39CC95DE2FBD0488D16C42D9D79B1659AB14A2"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPipelineTransition.h",
+      "Bytes": 150,
+      "Sha256": "FA187FB5E12D1A974FEDD1A83A8A4E8BBE18644E7492D459906F85C9520FB5E6"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPomodoro.cpp",
+      "Bytes": 25726,
+      "Sha256": "2EE53C1363AF04622976F85727334144B92F701FF0F5FCC4E7B51D6F1CA30364"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtPomodoro.h",
+      "Bytes": 3035,
+      "Sha256": "CC1190E209772D2DD9C8CEC7BB3736AA89B7B4C4392C894FF692C741FE421898"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfessionEditor.cpp",
+      "Bytes": 23815,
+      "Sha256": "096EEDD901B5F5FB1B03295D8EC6A8C96A77CBA3B928480FAF498113435201C2"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfessionEditor.h",
+      "Bytes": 470,
+      "Sha256": "B26B84BCC431D86D94D6C62446FD3D181AF6A3FDBCBAD60C8BCD061173167489"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileAnalytics.cpp",
+      "Bytes": 27889,
+      "Sha256": "AD31B051AD71C75DB232E13F64821FDA4547E8E8C78A55B31F54D098F8C1B086"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileAnalytics.h",
+      "Bytes": 2477,
+      "Sha256": "EFCACE3384D23F3AF918D9543752EEA87AE008985260A4A349EF8E4097F14215"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileDialogs.cpp",
+      "Bytes": 59576,
+      "Sha256": "0A2AB066FBF4E148C3701C3EA845D03E8CE5B229A8AD4D4EE65D26EE7A2667F0"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileDialogs.h",
+      "Bytes": 332,
+      "Sha256": "676BFC073E9EFB949CB5FA46D7B7CE48DED14C256B7A1A6EA73ED4E93C30E8A4"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileReportExport.cpp",
+      "Bytes": 6671,
+      "Sha256": "0777F33B797F6EFF614B3DF0817FD7DAF63AFABAEA573A283F1969F39B45F3C2"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileReportExport.h",
+      "Bytes": 273,
+      "Sha256": "FE8C95742CD5D7412EB60A416919F8AEEF4D56A1B98868F3AADA71957158EEE8"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileSession.cpp",
+      "Bytes": 11349,
+      "Sha256": "101E1E1F8691C2FD8AB232923FE2781C74E285180A7DA8AA7E339D3CA0384D2E"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtProfileSession.h",
+      "Bytes": 985,
+      "Sha256": "E1C82AD464DAFC81C7C4238E765DCCF38F425C57F69C0FE8A9EC9B49ED9FAD97"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtReportChart.cpp",
+      "Bytes": 17474,
+      "Sha256": "FF74E0A674C485AB439337A44664A31969B9DE9C4D3C1A4BDA3C6848EF1B80C3"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtReportChart.h",
+      "Bytes": 2288,
+      "Sha256": "D87A766E20AE76960B741C85FF3F9C501DE12A804A0447AF4AD8E5C7E0D72E9F"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtReportExport.cpp",
+      "Bytes": 2170,
+      "Sha256": "DBF09C7D94BE9DED4652ED3337122B4B2257F419349B2761E6D15975970607C7"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtReportExport.h",
+      "Bytes": 404,
+      "Sha256": "41C018412C2F2F05824095F09630AF33523358C933F9A9D415706B1552FF2275"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtRulesEditor.cpp",
+      "Bytes": 38335,
+      "Sha256": "FACF5B02CA495855F1B1CCECDE7A78289C4C88731BC925B41DEE0E424FE8DC74"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtRulesEditor.h",
+      "Bytes": 116,
+      "Sha256": "13E6B93B8040884A66AD55C76C89E5959218D6697ED41577E5CEDADC14E0717A"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtScrollableDialog.h",
+      "Bytes": 11917,
+      "Sha256": "A6DB243DC36EF1BFEAAD0632DFA51F446474B4347291E0DE86862FA8188023F5"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtSkillEditor.cpp",
+      "Bytes": 32220,
+      "Sha256": "42D6E752DA4B8F50A2877118E56FACF3C6A018548B412FB0F0ED42B96571D755"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtSkillEditor.h",
+      "Bytes": 921,
+      "Sha256": "D96EAF14D7963B5F238EDA51C56E3DCF5CB5D513185DF09C296EFB7773F25BB5"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtStorageConflict.cpp",
+      "Bytes": 27293,
+      "Sha256": "98E32FF06D16C64A17445D18E8515394B4DC030406F5E3E6C0D585F7AAEEF34D"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtStorageConflict.h",
+      "Bytes": 588,
+      "Sha256": "D5050C304FC74AF010AE9D46CA60F37ABC8019E9B28A0A1F288C172512B23D78"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtStorageHealthReport.cpp",
+      "Bytes": 19196,
+      "Sha256": "07C3D65D3F54E37B8D57143ADE35BAE4035E574529E8535752085E2645064916"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtStorageHealthReport.h",
+      "Bytes": 1047,
+      "Sha256": "EA83FCAF6728D46C04984AA8B091BB2153F588936C4C06E0A7EAB4E5C1A81CDD"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtTaskCompletionDialog.cpp",
+      "Bytes": 53664,
+      "Sha256": "798FA759AE8E04A6ECB635ECADB00C8DA6A833010194CD99BD00C025A2DB207A"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtTaskCompletionDialog.h",
+      "Bytes": 609,
+      "Sha256": "326A4EAFECBE35294C9DDCC7E77B3D213E2613C83A168551E61B1B086B02F1A9"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtTheme.cpp",
+      "Bytes": 5243,
+      "Sha256": "E7B7F7792E76EED70196FE3DD4C4AEDD498C0F8C7C843EAD05E6F23607B3AAD7"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtTheme.h",
+      "Bytes": 341,
+      "Sha256": "A48B9BFBE5B2E942BA1E17E2A16E58D820B8732E217B6BC16A72A5F4FCE8287D"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtVaultEditor.cpp",
+      "Bytes": 10986,
+      "Sha256": "9F4BBB81492C20E48564CC6D8A46A964E8F61B8792632283AE59CEA01AA2E16C"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtVaultEditor.h",
+      "Bytes": 116,
+      "Sha256": "545430140004C30183AE4DEF5E485116B0E273C567A4F0545580494FACD98CEE"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtWindow.cpp",
+      "Bytes": 645234,
+      "Sha256": "E52E904A73904DD9BC435FF975F9FD3DB362C9F54A43A3158C527B633B6DE255"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtWindow.h",
+      "Bytes": 12057,
+      "Sha256": "867BE023DFA377EFC60343A7D81888747A17C131BF02B982988F2587A3137FA5"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtWorkspace.cpp",
+      "Bytes": 1837,
+      "Sha256": "38AB921D13653A6F67E19956AAFC1A2584B2FA2642FFED07F7CD37A72ED19BA5"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtWorkspace.h",
+      "Bytes": 1043,
+      "Sha256": "E70DED1F0F5C327769FE502D5CB75C64B507E4AFAF1F0E01BC6D1B9A9C3266DF"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtWorkspaceImport.cpp",
+      "Bytes": 9329,
+      "Sha256": "7A30DAD3D2CD062C8585685AD4F77026D1B0C0746F7B650C28B2ECFBFB5CC794"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/qt/QtWorkspaceImport.h",
+      "Bytes": 255,
+      "Sha256": "0BCA2C1FE502C9CB531789B6E364DDD74C5F5B942EB58AA8BDD7199ED645B38B"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/tests/smoke_qt.cpp",
+      "Bytes": 906280,
+      "Sha256": "B56BC55D68601D421E337C0BDED54F8287B8CD48976E608F1AF97F139053F4D1"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/VERSION",
+      "Bytes": 8,
+      "Sha256": "33E3EBEDE1DB14D41838C092A0B67A32BE2DC1F0EE959F30056A7C049C2C038B"
+    }
+  ],
+  "CurrentLinkedBinaries": [
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/Release/ForgeMirrorQtUi.lib",
+      "Bytes": 45522604,
+      "Sha256": "12E44B48252E51BF55E6254C128011C1124E5A3286D18619971FA93D08D62713"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/Release/ForgeMirrorQtCore.lib",
+      "Bytes": 26376322,
+      "Sha256": "7E77CFAE83EA041F6BD8E7DB624BACFB7430BABDF629D3CAE272BCB1352A05DB"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/Release/smoke_qt.exe",
+      "Bytes": 6017024,
+      "Sha256": "6ABDD58657849C7D6002947D76904A00DE526C6B3FC5B6CB077255DCD1FC7BA7"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/build/Release/motion_probe.exe",
+      "Bytes": 4017152,
+      "Sha256": "E2C6196FB1A5BB708FAE7B8C4A5912DBFFBBE6BE57F2480A680FB80CF94CAFCD"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/driver-build/Release/quick_menu_probe.exe",
+      "Bytes": 4044288,
+      "Sha256": "6404AD0E0EC8D7389CAC2D7882B71560C7A5D64EC242221B11274AAAE4F4CF81"
+    }
+  ],
+  "PackageImages": [
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/docs/design/visual-audit/2026-09-30/profile-packaged-after-0.6.95.png",
+      "Bytes": 78173,
+      "Sha256": "DB77E7B052237F7E0049CAA2C41C248E99D02A949EEB11E3FC23904D483B6C4C",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/profile-packaged-after-0.6.95.png",
+      "Group": "PackageStartupSeparateVerifier"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/docs/design/visual-audit/2026-09-30/help-packaged-after-0.6.95.png",
+      "Bytes": 17852,
+      "Sha256": "7CDC3CF9FF471ABFD771256418740E0D5D1F38E166A0FA6E7771949207DB59F7",
+      "PixelWidth": 760,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/help-packaged-after-0.6.95.png",
+      "Group": "PackageStartupSeparateVerifier"
+    }
+  ],
+  "SeparatePackageProofInputsIfPresent": [
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/package-0.6.95-runtime.json",
+      "Bytes": 776,
+      "Sha256": "B718C4016AC5478FD079EB5722BE72836A966FCB813176609D32ED120C571E61"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/package-0.6.95-proof.json",
+      "Bytes": 536,
+      "Sha256": "8EAFDB288E1A0E7628AA1A0254A368C2172893BA98ACD93ED1C5271825BC761F"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/package-0.6.95-inventory.json",
+      "Bytes": 4710,
+      "Sha256": "D62B34864DA8EF53B4719B2C735AED566FD4E169ABB4E4B061D0D113C3FA94F5"
+    }
+  ],
+  "FullSuiteAcceptance": "Not evaluated by this script; record separately from the actual final suite.",
+  "InstallerAcceptance": "Not evaluated by this script; record actual Setup and disposable lifecycle separately.",
+  "Artifacts": [
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-0-100.png",
+      "Bytes": 27001,
+      "Sha256": "B439903858D9911AD82232D27D16427FD288C9BB508B8C96E70A4C2BB46A1640",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-0-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-0-200.png",
+      "Bytes": 55060,
+      "Sha256": "098652693A406095723C457B69C39CCC1701D561BF984C27CB76685567CA6F7A",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-0-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-1-100.png",
+      "Bytes": 22328,
+      "Sha256": "7D4AC01F282F37729D550DD187BF42CFCEC2B97627F5E1146178A64F83A38018",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-1-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-1-200.png",
+      "Bytes": 55307,
+      "Sha256": "2EA95FD4F47A3DFEEAAD9678BCB9C25F414B40975E730778269FBF1F00BC3D61",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-1-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-2-100.png",
+      "Bytes": 22208,
+      "Sha256": "89051A60400551A5C56E2DBFB0971FD04A81F10115CF8CE804BCAA9860A61429",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-2-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-2-200.png",
+      "Bytes": 55318,
+      "Sha256": "A3D74EAE5E51652347FF44548C4DAFDA50E60C85203749C0713DA1181480F175",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-2-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-3-100.png",
+      "Bytes": 22102,
+      "Sha256": "D78E5EC7021931CD7C54B92323987296E26D4F9B505F3358ECFC8C2946668F64",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-3-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-3-200.png",
+      "Bytes": 56073,
+      "Sha256": "5C5C6C25BB8A0746A7892ADCC7CB90349DF4D7AD45EFB098F96B6B37325583F5",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-3-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-4-100.png",
+      "Bytes": 22319,
+      "Sha256": "CCE87FFB9678AF8C38D3EFA49A4F518A0F9D5534A7EF238A4F37865C4F1CF4AA",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-4-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-4-200.png",
+      "Bytes": 55898,
+      "Sha256": "FB42EEC0F89B1F14030157AF498E64E685408383F63D0EECB253D787AD332392",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-4-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-5-100.png",
+      "Bytes": 22232,
+      "Sha256": "AC718191F8D976F74741C43CF6F357669E1C3DF3FEFF04AC1DAB61130522D652",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-5-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-5-200.png",
+      "Bytes": 54446,
+      "Sha256": "EA22B6E76058675A1C7938E43E00020D07CF13F6492E85C0D2170D9B993E4A7D",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-5-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-6-100.png",
+      "Bytes": 21909,
+      "Sha256": "F8F2AEDE0B918C333E54A8CB70B9270C6BFF7F377F038E9F5AAB0DBDDC41E5CF",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-6-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/cloud-tab-6-200.png",
+      "Bytes": 55041,
+      "Sha256": "BFB65D16C9AC5FC5C6ADBA3DF46DC28C4B35023A8BBFDC35F11038CA29969BA9",
+      "PixelWidth": 720,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-cloud-tab-6-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/shortcut-create-100.png",
+      "Bytes": 13548,
+      "Sha256": "639E0E37B8BF2847E9FEC41646DB9024CBBF2E9EEBAF638337038D24086B1EE7",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-shortcut-create-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/shortcut-create-200.png",
+      "Bytes": 36683,
+      "Sha256": "23AE74560290DC998A41BF60ABE16929C66EE69E4ED5C890C4D59807E68D92C2",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-shortcut-create-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/shortcut-help-100.png",
+      "Bytes": 21560,
+      "Sha256": "D84CD617CD1C1A1335E846BC5FE437626CCC52BE1DF980DEFB0492B82FC27968",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-shortcut-help-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/shortcut-help-200.png",
+      "Bytes": 38448,
+      "Sha256": "273F5F6F5414FA9653BF2848D3A8F515EC08FE770189A0C94F0BDF806802A77B",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-shortcut-help-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/storage-100.png",
+      "Bytes": 17652,
+      "Sha256": "57B828F57C6098BC1A6B4000C5872E6175EAE2CA38354A324ABDBF04E13027B7",
+      "PixelWidth": 760,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-storage-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/storage-200.png",
+      "Bytes": 45564,
+      "Sha256": "AF513701B81D663272D2A36E74E5D64B3BB272E64708912834ED6B6B45EF0BA1",
+      "PixelWidth": 760,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-storage-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/wallet-0-100.png",
+      "Bytes": 15261,
+      "Sha256": "4BD62BDEBE777E7A5702A50CEBAAEAEB27EFBC731A7800B639BA2FB124B6E98F",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-wallet-0-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/wallet-0-200.png",
+      "Bytes": 37050,
+      "Sha256": "0948D6E8FD04999C2B9BB18973E3A542594D159A31C38E71730F1C752901871A",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-wallet-0-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/wallet-1-100.png",
+      "Bytes": 15380,
+      "Sha256": "D71958BF1D65EE9E8E99B22F4A4365F31484EFB86DBC0973F0A7FA2EE0D8FFB6",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-wallet-1-100.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94/wallet-1-200.png",
+      "Bytes": 37562,
+      "Sha256": "E93D5BAEBA3CF2837D0486E0298FDD462A0264150322DEA302254016B18CFE73",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-wallet-1-200.png",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-banner-100.png",
+      "Bytes": 28122,
+      "Sha256": "2E7B933CB047E585573A64C02EE649E20A4F914F8AB483E27AFBFD4AC7BA62D6",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-banner-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-banner-200.png",
+      "Bytes": 47511,
+      "Sha256": "C2EC97722A876A6DEE6E30E0FD627CF580697155DCC897F4F1B72121EEF94BBC",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-banner-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-confirm-accept-100.png",
+      "Bytes": 19038,
+      "Sha256": "A2ABE4DC1BE0DD8F4ECD23D1AABA1D1A5972E2458BBAD946E1A1F60FA4EF4F74",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-confirm-accept-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-confirm-accept-200.png",
+      "Bytes": 49563,
+      "Sha256": "0379ECA502EFB4D5BAE1D4666F432D31BDD03C03739B9181E98B080F01B20BF0",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-confirm-accept-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-confirm-cancel-100.png",
+      "Bytes": 19038,
+      "Sha256": "A2ABE4DC1BE0DD8F4ECD23D1AABA1D1A5972E2458BBAD946E1A1F60FA4EF4F74",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-confirm-cancel-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-confirm-cancel-200.png",
+      "Bytes": 49563,
+      "Sha256": "0379ECA502EFB4D5BAE1D4666F432D31BDD03C03739B9181E98B080F01B20BF0",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-confirm-cancel-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-gameplay-100.png",
+      "Bytes": 28167,
+      "Sha256": "B06DF28D246FA448CF11D4A60B348231D90B59E1E3D56D8D3708449C39570490",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-gameplay-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-gameplay-200.png",
+      "Bytes": 48787,
+      "Sha256": "872344565189C489D7139BBF8BA02CF49E9CC3ED8A9000FC5A78DEACFE2409EA",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-gameplay-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-invalid-100-confirmation.png",
+      "Bytes": 19098,
+      "Sha256": "9F6C9D42AD5B8D6A182B2D12D2583C6C9936731DB49C108B20F992B321260DC5",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-invalid-100-confirmation.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-invalid-100-warning.png",
+      "Bytes": 4573,
+      "Sha256": "C247D8BF50A8901D281539E60182D564199C31D1B0807E24DAB1EC1B4703DD19",
+      "PixelWidth": 339,
+      "PixelHeight": 104,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-invalid-100-warning.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-invalid-100.png",
+      "Bytes": 31531,
+      "Sha256": "A4990BDF59175ABE925C3D0F00399A694EF5F927212A23FD0759A1B688C778A3",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-invalid-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-invalid-200-confirmation.png",
+      "Bytes": 49675,
+      "Sha256": "06A43A3F27C178156C4F6A19B629A143786556C33C2A1D8DE98012D24887B508",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-invalid-200-confirmation.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-invalid-200-warning.png",
+      "Bytes": 11246,
+      "Sha256": "70722C90696F13C785BEC76EEC6DEA36A920071B2CB7A06CA6D1D54654636C40",
+      "PixelWidth": 500,
+      "PixelHeight": 160,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-invalid-200-warning.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-invalid-200.png",
+      "Bytes": 46831,
+      "Sha256": "FDF9F7DB79D224ECF7945F1E175DACBC6942DDC5EE3F821D82125587D9D57C56",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-invalid-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-missing-100.png",
+      "Bytes": 32990,
+      "Sha256": "388CDA3F9EA5C96E58B1B7F00AC030A1282A4EBBD9D91675BA7D20196342D3B4",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-missing-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-missing-200.png",
+      "Bytes": 45982,
+      "Sha256": "B5F0FE24632117A62EBCD533C46DE5D5B170D40F7375F41BE80D2EE94A9B5624",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-missing-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-pipeline-100.png",
+      "Bytes": 28514,
+      "Sha256": "BB5E7D6B239EDAF3F23FF5F7E529787FA5D4300693EC9AEB95238F10D8DDB7E0",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-pipeline-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-pipeline-200.png",
+      "Bytes": 46438,
+      "Sha256": "3C308BC064DA361CE5285C100374E5BAC88D3830CBE81212881D1DA5FAF96B0E",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-pipeline-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-professions-100.png",
+      "Bytes": 28031,
+      "Sha256": "37146EBF7CF9377CE2A375B5C3E002222C03C8AE4D9905A86953306773DD7735",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-professions-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-professions-200.png",
+      "Bytes": 47162,
+      "Sha256": "1BE297CD837D1E1EE0665F6A670CE25B6A00666322D82E9B589C098096B46514",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-professions-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-projects-100.png",
+      "Bytes": 27764,
+      "Sha256": "9057E722076504553089640C1323D8951BBA47ADADB0151EF20878FD721D1340",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-projects-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-projects-200.png",
+      "Bytes": 47189,
+      "Sha256": "01FA3AB2D094BB6323EB06CAE6A698D50ABBBD8E60B5E3EDC8EE6B6086F87FEB",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-projects-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-skills-100.png",
+      "Bytes": 27840,
+      "Sha256": "1A9A6370AB437B101DF66D1676DC828103E339F3BF611F31094979B177AE3952",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-skills-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-skills-200.png",
+      "Bytes": 47290,
+      "Sha256": "C16220C1B7AB7A296E16D1DE5F3358102F04A00FF07E1423A034530FC5FB3F3A",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-skills-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-tasks-100.png",
+      "Bytes": 31995,
+      "Sha256": "739F17122CAF6B0C4BA5C5748FCCBC6EC5640F77A0D15693FB50F73F65E3FB38",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-tasks-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/cloud-tasks-200.png",
+      "Bytes": 46832,
+      "Sha256": "D8D50C05EC7BD5C582143072AA7F87A880D8729D7A96BF47D7C89AB40D007228",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-cloud-tasks-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-100-error.png",
+      "Bytes": 18283,
+      "Sha256": "CE797ED679A8FE8E289370817A088E90FF322E1396F925FC70814FE22F4CC28F",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-100-error.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-100.png",
+      "Bytes": 13931,
+      "Sha256": "41ABE1F925815D306170A0FFD80DC52D2834B9127F6921AA7A37241935AC9518",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-200-error.png",
+      "Bytes": 57102,
+      "Sha256": "549AC4C7B334FDC3BFFD3A3D8727771ED5150948E56F171262221555EF549796",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-200-error.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-200.png",
+      "Bytes": 36336,
+      "Sha256": "58D7D3B4E39F1E8BB7D4C805DE5C1A54BA6763B0F7BBC0290B834F512E7D4403",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-help-100.png",
+      "Bytes": 22769,
+      "Sha256": "AF8B63958B897F83634D4C356D22C993BEA0AD723047E1A95E69C5DBF6A48601",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-help-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-help-200.png",
+      "Bytes": 33110,
+      "Sha256": "9A729C042A9235A4474A5974A1A11B32822F47D09D365C1967D12B3323385DFF",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-help-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-picker-file-100.png",
+      "Bytes": 26049,
+      "Sha256": "A66C3140011060E94837C671CF5EF093DB53FA248D5E8298543E736D7E3883D8",
+      "PixelWidth": 652,
+      "PixelHeight": 424,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-picker-file-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-picker-file-200.png",
+      "Bytes": 46079,
+      "Sha256": "847351FB1AA8A811A3109A18B1987981938AD9D19F1E29DE23834348F4BD06C1",
+      "PixelWidth": 735,
+      "PixelHeight": 502,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-picker-file-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-picker-folder-100.png",
+      "Bytes": 26092,
+      "Sha256": "263966788940F000D42187CAA13DB8B0910884D0C5ABCA19AF0380B5BC06D94C",
+      "PixelWidth": 652,
+      "PixelHeight": 424,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-picker-folder-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/shortcut-picker-folder-200.png",
+      "Bytes": 46840,
+      "Sha256": "B2CDA7E637901BB449DFD35F729E53815AE48089FF02A20EE51A4ABFA96B4B03",
+      "PixelWidth": 735,
+      "PixelHeight": 502,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-shortcut-picker-folder-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-100.png",
+      "Bytes": 25951,
+      "Sha256": "9BE6953C7807981CC7966F65DF5E39BDEE8FD809E53A402605107BE4D553FF4C",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-200.png",
+      "Bytes": 52741,
+      "Sha256": "611F40175E66F4EC450923B874C770636EC0F7CFBE8CFFA6A1E44453F6D54084",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-confirm-accept-100.png",
+      "Bytes": 22964,
+      "Sha256": "D810C2BCD647627834A59739C1FB8F291C8EC5D07AA07F7F234EE018E62791FC",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-confirm-accept-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-confirm-accept-200.png",
+      "Bytes": 49990,
+      "Sha256": "D014C7E4049CE3C1BAE3E8F8C5654A0FA4F225BDAF7199C91E9E45A42612B84D",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-confirm-accept-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-confirm-cancel-100.png",
+      "Bytes": 22964,
+      "Sha256": "D810C2BCD647627834A59739C1FB8F291C8EC5D07AA07F7F234EE018E62791FC",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-confirm-cancel-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-confirm-cancel-200.png",
+      "Bytes": 49990,
+      "Sha256": "D014C7E4049CE3C1BAE3E8F8C5654A0FA4F225BDAF7199C91E9E45A42612B84D",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-confirm-cancel-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-invalid-100-confirmation.png",
+      "Bytes": 22450,
+      "Sha256": "A27BF7BF97E94B057A2193F2474473B1BB83A2374F41BC91FA6AF1B63C3CB667",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-invalid-100-confirmation.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-invalid-100-warning.png",
+      "Bytes": 4755,
+      "Sha256": "F645ABF9407ACB3EEFA7BFDE807613E13E0636F72DC3AD08403EABE0A5905086",
+      "PixelWidth": 355,
+      "PixelHeight": 104,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-invalid-100-warning.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-invalid-100.png",
+      "Bytes": 25172,
+      "Sha256": "A3E394FB633694145BB8E603FDBD023FC0BE7B5D4DDCD792F1CCFEFFD6754711",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-invalid-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-invalid-200-confirmation.png",
+      "Bytes": 45953,
+      "Sha256": "B54C722EC01322B19A1956F2F71417D72F09BC7A2F43C2FE527620276E76463C",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-invalid-200-confirmation.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-invalid-200-warning.png",
+      "Bytes": 12274,
+      "Sha256": "FDF5CE6BD3EBF154EA6A6CDA63EEA77C226FDBF0437CE046BCE4DFB931A1743B",
+      "PixelWidth": 500,
+      "PixelHeight": 160,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-invalid-200-warning.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/storage-invalid-200.png",
+      "Bytes": 52741,
+      "Sha256": "611F40175E66F4EC450923B874C770636EC0F7CFBE8CFFA6A1E44453F6D54084",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-storage-invalid-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-0-100-error.png",
+      "Bytes": 18528,
+      "Sha256": "CD510C5877BCA46612EFF7186EA981CBA155C558C3AF27CBDFD7C223B719A2B6",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-0-100-error.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-0-100-maximum.png",
+      "Bytes": 17808,
+      "Sha256": "46A2730ECC12AE956DBF400FA1F0BDD724F646C79931913568F9E5520590DB56",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-0-100-maximum.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-0-100.png",
+      "Bytes": 17982,
+      "Sha256": "6CA3219216AF75190C04053942C709EA0AD45CA059B86028114591B52677510F",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-0-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-0-200-error.png",
+      "Bytes": 39348,
+      "Sha256": "80137B808F582A64AB612D43655F6EB2FFE472992294757841775DDA03B41D8E",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-0-200-error.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-0-200-maximum.png",
+      "Bytes": 38615,
+      "Sha256": "ED5DCC4EDAC34807B75668CEB7FF5AFCED2CFBDC1ACFD3AC68C26CF770B8DA88",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-0-200-maximum.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-0-200.png",
+      "Bytes": 42417,
+      "Sha256": "581E6878912AE3EBEFC7E7A8229E83F4D84E5A4CFBA37331D770B908DDE6D653",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-0-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-1-100-error.png",
+      "Bytes": 18538,
+      "Sha256": "201941D87485E299EE2551B545F893DFE825F35EEE7B56617B7CD4FBC9D3342B",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-1-100-error.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-1-100.png",
+      "Bytes": 17994,
+      "Sha256": "6BB5867D709C8F540FD7CDBF225C2CB68A6846F0F1169E7F39F6DED71E6BFAFC",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-1-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-1-200-error.png",
+      "Bytes": 39354,
+      "Sha256": "2B329E3BB81A5BBF99E7EAB7EC33EFB5286EE2479F8C87EC13D328357E750901",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-1-200-error.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-1-200.png",
+      "Bytes": 36244,
+      "Sha256": "D8F10E0F2F6590DD58497FDAE5E2264405F8BD523D246ECCC256C9E2BFF6A576",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-1-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-credit-accept-100.png",
+      "Bytes": 12822,
+      "Sha256": "E9BB01B309674A15F4F5115B56F547AAC552494A57BEA802AF4B80C3E27588F5",
+      "PixelWidth": 500,
+      "PixelHeight": 164,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-credit-accept-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-credit-accept-200.png",
+      "Bytes": 53400,
+      "Sha256": "CD4E3A56D827719C6F4635EC2FF199EC7A60AA37EAB8C5E50B5F3597BF3A8557",
+      "PixelWidth": 500,
+      "PixelHeight": 556,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-credit-accept-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-credit-cancel-100.png",
+      "Bytes": 12822,
+      "Sha256": "E9BB01B309674A15F4F5115B56F547AAC552494A57BEA802AF4B80C3E27588F5",
+      "PixelWidth": 500,
+      "PixelHeight": 164,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-credit-cancel-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-credit-cancel-200.png",
+      "Bytes": 53400,
+      "Sha256": "CD4E3A56D827719C6F4635EC2FF199EC7A60AA37EAB8C5E50B5F3597BF3A8557",
+      "PixelWidth": 500,
+      "PixelHeight": 556,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-credit-cancel-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-debit-accept-100.png",
+      "Bytes": 12847,
+      "Sha256": "955009540EBA8C999C9C77BA0001FE9FBE2ADEB6CCF5D0A060C619D3D4F03E93",
+      "PixelWidth": 500,
+      "PixelHeight": 164,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-debit-accept-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-debit-accept-200.png",
+      "Bytes": 53582,
+      "Sha256": "7D4989D35226A5C8885842BB3DFD4C07EA48D26D9FC591E5898865E82E33D03D",
+      "PixelWidth": 500,
+      "PixelHeight": 556,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-debit-accept-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-debit-cancel-100.png",
+      "Bytes": 12847,
+      "Sha256": "955009540EBA8C999C9C77BA0001FE9FBE2ADEB6CCF5D0A060C619D3D4F03E93",
+      "PixelWidth": 500,
+      "PixelHeight": 164,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-debit-cancel-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-confirm-debit-cancel-200.png",
+      "Bytes": 53582,
+      "Sha256": "7D4989D35226A5C8885842BB3DFD4C07EA48D26D9FC591E5898865E82E33D03D",
+      "PixelWidth": 500,
+      "PixelHeight": 556,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-confirm-debit-cancel-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-history-empty-100.png",
+      "Bytes": 8143,
+      "Sha256": "D278D6B0A08AB7E53D32E9FA96E51C80A185D3959C5FD21B20A76AA40D4940CD",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-history-empty-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-history-empty-200.png",
+      "Bytes": 26709,
+      "Sha256": "C36208CEDE3C3EBD30DC3D8EE8C30ADAF06FD5EBA154773C99D3D76A519DC3A1",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-history-empty-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-history-populated-100.png",
+      "Bytes": 20289,
+      "Sha256": "66CCE1CBC9A9936A0F7AE773581E5C4296189E2C2C1976A6CFE92FE1EC21BD2A",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-history-populated-100.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95/wallet-history-populated-200.png",
+      "Bytes": 39457,
+      "Sha256": "405EFB43D5060CCF5845EDB06075CE9910B1F91EEA64935D44DC88EBE1D04F8F",
+      "PixelWidth": 640,
+      "PixelHeight": 520,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-wallet-history-populated-200.png",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/native-corrected/motion-off-middle.png",
+      "Bytes": 46045,
+      "Sha256": "014A86BC74BDD03F82F9D299AC72A6FED2680697AC8FB45D799BBC860309C70F",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-motion-off-middle.png",
+      "Group": "MotionBefore",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/native-corrected/motion-off-start.png",
+      "Bytes": 53658,
+      "Sha256": "0EB5B5D40626532218C47E0BF3A033E59FC87E39DAD584E0C9EC3AD4DA85CFA5",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-motion-off-start.png",
+      "Group": "MotionBefore",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/native-corrected/motion-on-middle.png",
+      "Bytes": 46071,
+      "Sha256": "84293B77FFA628966886A4A582FB789DCD08AF9E57B03CF0A7D63CA3E9679E35",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-motion-on-middle.png",
+      "Group": "MotionBefore",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/native-corrected/motion-on-start.png",
+      "Bytes": 53699,
+      "Sha256": "5F6E72412E7C4F9EB5C44755EBE6BE59743BB3F7D57672234742D5B547431A37",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-motion-on-start.png",
+      "Group": "MotionBefore",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/native-accepted/motion-off-middle.png",
+      "Bytes": 46262,
+      "Sha256": "E0131C28555BA7718361BEE672415FC410FBD89466CA6F5E3F5AC76D9C7E2834",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-motion-off-middle.png",
+      "Group": "MotionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/native-accepted/motion-off-start.png",
+      "Bytes": 53868,
+      "Sha256": "1A97E12DAF89BEAB70F26FC9C2B2AE9B99398B080F3329D715138385D13DEFDE",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-motion-off-start.png",
+      "Group": "MotionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/native-accepted/motion-on-middle.png",
+      "Bytes": 45998,
+      "Sha256": "C275729AABF8826D22CA462D5AF29B50FF55DAB4B8D3828EE2E4989989CB7813",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-motion-on-middle.png",
+      "Group": "MotionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/native-accepted/motion-on-start.png",
+      "Bytes": 53579,
+      "Sha256": "C9EF07D6AAA37EAC5E8B9BE4EF6C4EBB6B4728E8A5B990A9113EC6A3F6A4DAD0",
+      "PixelWidth": 1120,
+      "PixelHeight": 720,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-motion-on-start.png",
+      "Group": "MotionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/native-images/quick-menu-empty-100.png",
+      "Bytes": 3176,
+      "Sha256": "A349836B9D9C22A5D60E10FED8C72ED9A885A8E459A1EDFDEEA37E9F3C604B60",
+      "PixelWidth": 242,
+      "PixelHeight": 52,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-quick-menu-empty-100.png",
+      "Group": "MenuAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/native-images/quick-menu-empty-200.png",
+      "Bytes": 8736,
+      "Sha256": "29A1899E40457F378BF3C4E78B06AA0BE31B0C5218CA32BE9658468DEC8F1A10",
+      "PixelWidth": 446,
+      "PixelHeight": 90,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-quick-menu-empty-200.png",
+      "Group": "MenuAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/native-images/quick-menu-populated-100.png",
+      "Bytes": 7995,
+      "Sha256": "DBA3A06C76006406355B397B8C02C53A214340A85E0E3A6732181A8427B03B56",
+      "PixelWidth": 582,
+      "PixelHeight": 102,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-quick-menu-populated-100.png",
+      "Group": "MenuAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/native-images/quick-menu-populated-200.png",
+      "Bytes": 18150,
+      "Sha256": "875C7D94E1201006ED30B614936F016C7ED0101DCAA581129C97E640D65FADD1",
+      "PixelWidth": 595,
+      "PixelHeight": 178,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-quick-menu-populated-200.png",
+      "Group": "MenuAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/first-run/native-images/quick-menu-empty-100.png",
+      "Bytes": 3176,
+      "Sha256": "A349836B9D9C22A5D60E10FED8C72ED9A885A8E459A1EDFDEEA37E9F3C604B60",
+      "PixelWidth": 242,
+      "PixelHeight": 52,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/intermediate-menu-0.6.95-quick-menu-empty-100.png",
+      "Group": "MenuFirstRun",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/first-run/native-images/quick-menu-empty-200.png",
+      "Bytes": 8736,
+      "Sha256": "29A1899E40457F378BF3C4E78B06AA0BE31B0C5218CA32BE9658468DEC8F1A10",
+      "PixelWidth": 446,
+      "PixelHeight": 90,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/intermediate-menu-0.6.95-quick-menu-empty-200.png",
+      "Group": "MenuFirstRun",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/first-run/native-images/quick-menu-populated-100.png",
+      "Bytes": 8195,
+      "Sha256": "033C381EE81A9C282033ADB990BF18FFD7BA8C9E19D0C4C17A71ABA5EBE3E47D",
+      "PixelWidth": 640,
+      "PixelHeight": 102,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/intermediate-menu-0.6.95-quick-menu-populated-100.png",
+      "Group": "MenuFirstRun",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/first-run/native-images/quick-menu-populated-200.png",
+      "Bytes": 20083,
+      "Sha256": "609DB81F3E90BA5F797FC4AEE8A91D42AA9CC22701312516DE2BE4D4AC3E2A59",
+      "PixelWidth": 640,
+      "PixelHeight": 178,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/intermediate-menu-0.6.95-quick-menu-populated-200.png",
+      "Group": "MenuFirstRun",
+      "Status": "KnownFailedHistorical",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94.out",
+      "Bytes": 6547,
+      "Sha256": "869C2F70B169AB1DB816BBB6A5B2CD8D55EA94297FFB8269C120B007C8B57D96",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-native.out",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-before-0.6.94.err",
+      "Bytes": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-decision-0.6.94-native.err",
+      "Group": "DecisionBefore",
+      "Status": "PreservedNativeBaseline",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95.out",
+      "Bytes": 20130,
+      "Sha256": "9000CE33D426AE24C06B6BC452190B891D6284D8DDDCE243B5D3E54986D669B9",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-native.out",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/native-decision-accepted-0.6.95.err",
+      "Bytes": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-decision-0.6.95-native.err",
+      "Group": "DecisionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/native-corrected.out",
+      "Bytes": 322,
+      "Sha256": "03D2E6452A1096AD12C1628BC8827D2BE4A2DAB6880EDBA213BE1B3C73F3C58F",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-native-corrected.out",
+      "Group": "MotionBefore",
+      "Status": "KnownFailedHistorical",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/native-corrected.err",
+      "Bytes": 130,
+      "Sha256": "6F2B65CADE8F4DA1F876B7D77DA1186BAD214B98CAA13B234811277138E8AA86",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-native-corrected.err",
+      "Group": "MotionBefore",
+      "Status": "KnownFailedHistorical",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/native-accepted.out",
+      "Bytes": 321,
+      "Sha256": "8DF7185B39DA80F72C5688E5013390A85A30D373495CF19832926BFF1F618565",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-native-accepted.out",
+      "Group": "MotionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/native-accepted.err",
+      "Bytes": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-native-accepted.err",
+      "Group": "MotionAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/native.out",
+      "Bytes": 2312,
+      "Sha256": "D9990EAAC99C6FB7EDB1F01210C6FB5FDD22E85184FB7F6912B9316F96AB3539",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-native.out",
+      "Group": "MenuAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/native.err",
+      "Bytes": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-native.err",
+      "Group": "MenuAfter",
+      "Status": "FinalNativeExit0",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/first-run/native.out",
+      "Bytes": 1182,
+      "Sha256": "C81913226F9E0F40E91349160B01BAD547D42BE72307E78BB5FD07B47FD6108D",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/intermediate-menu-0.6.95-native.out",
+      "Group": "MenuFirstRun",
+      "Status": "KnownFailedHistorical",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/first-run/native.err",
+      "Bytes": 756,
+      "Sha256": "65D7D4CC67FF84252451052DC4E248ED6C30B37548438900247DDC13FC2F8733",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/intermediate-menu-0.6.95-native.err",
+      "Group": "MenuFirstRun",
+      "Status": "KnownFailedHistorical",
+      "Kind": "NativeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/CMakeLists.txt",
+      "Bytes": 1051,
+      "Sha256": "58E0309E5B95DACC62F1E296B7965461E71313749BAC21CD9EB72AC8663A4737",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/baseline-0.6.94-CMakeLists.txt",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/baseline.cpp",
+      "Bytes": 9547,
+      "Sha256": "E75C9F311EE596025215AC9666A4FD509DE57829BB923E73B32B8BFC9939FFAB",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/baseline-0.6.94-driver.cpp",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/visual-decision-baseline-0.6.94/native-before-proof.json",
+      "Bytes": 6478,
+      "Sha256": "E0E3C3C496AECB60048449E5FB4132C4493A74950A037BCDC94A9DED34C6901F",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/baseline-0.6.94-native-before-proof.json",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/CMakeLists.txt",
+      "Bytes": 689,
+      "Sha256": "5256B7EA34274DC08075541B741686B81BD9DC6F6EFD5589F1265D62E832D287",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-CMakeLists.txt",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.94/motion_probe.cpp",
+      "Bytes": 5275,
+      "Sha256": "4153507FB729486FCBA2D6A3AA19D39D011B42472DA9F719CE7FE537DC050A2E",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/before-motion-0.6.94-driver.cpp",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/CMakeLists.txt",
+      "Bytes": 600,
+      "Sha256": "D48094D9C3F8097A1A1406B88D3B3FFF1C3C885C67B9307DFDF2FED3B98F3C66",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-CMakeLists.txt",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/motion-decision-probe-0.6.95/motion_probe.cpp",
+      "Bytes": 5275,
+      "Sha256": "4153507FB729486FCBA2D6A3AA19D39D011B42472DA9F719CE7FE537DC050A2E",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-motion-0.6.95-driver.cpp",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/CMakeLists.txt",
+      "Bytes": 732,
+      "Sha256": "894D56DC326DC012D11C8CB4B94C38044A85E1CEF17B45BEC63BF8FD1BE22165",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-CMakeLists.txt",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/quick-menu-probe-0.6.95/probe.cpp",
+      "Bytes": 10573,
+      "Sha256": "AB52668843F522701D6FD2FA5953FA967C4982822E55C1AACE45B9CEBAA057CA",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/after-menu-0.6.95-driver.cpp",
+      "Group": "Provenance",
+      "Status": "BuildInputsNotRuntimeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/source-proof.json",
+      "Bytes": 662,
+      "Sha256": "C2B4521CD20C3240DAD84B80656A82DB2EB0B569AE49C8831F13660660C422B4",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-source-proof.json",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/runtime-proof.json",
+      "Bytes": 708,
+      "Sha256": "1760542A734F34D33D784074F849F707108C80AAC4C5B10CFF1A398EBF56E188",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-runtime-proof.json",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/prototype.cpp",
+      "Bytes": 10398,
+      "Sha256": "292157AE1129F4BA5F6ABDDC3AFBE0290C3A92D37A9FF4BD66524C666372E0A3",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-prototype.cpp",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/QtTheme.cpp",
+      "Bytes": 5243,
+      "Sha256": "E7B7F7792E76EED70196FE3DD4C4AEDD498C0F8C7C843EAD05E6F23607B3AAD7",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-QtTheme.cpp",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/QtTheme.h",
+      "Bytes": 341,
+      "Sha256": "A48B9BFBE5B2E942BA1E17E2A16E58D820B8732E217B6BC16A72A5F4FCE8287D",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-QtTheme.h",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/CMakeLists.txt",
+      "Bytes": 315,
+      "Sha256": "753B9B2316B843D813C4C2889023F444783DED750401C4EFC78F85BC45E45743",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-CMakeLists.txt",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/stdout.log",
+      "Bytes": 1779,
+      "Sha256": "7417DBFBAE13B2D36FF4B62DC93A5E3F2047DBB9B4FBE4FF72DAAA3A3F79E459",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-stdout.log",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "PrototypeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/stderr.log",
+      "Bytes": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-stderr.log",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "PrototypeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before.proof.json",
+      "Bytes": 662,
+      "Sha256": "2FAFFCECAC7DD959DDE0A2BC43BBB3DD379005832777406455BD0D06DD291F3D",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before.proof.json",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before.cpp",
+      "Bytes": 10174,
+      "Sha256": "1EEA14BB692AD383A5D568A280896C3DF14E76AF8E7C5E945AE9AA9C1B4BA674",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before.cpp",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "ProvenanceInput"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before.stdout.log",
+      "Bytes": 1779,
+      "Sha256": "31A4949289811B65D254908F64BBBA26AE2AF1C29C5A171DD3513B6D83231E11",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before.stdout.log",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "PrototypeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before.stderr.log",
+      "Bytes": 0,
+      "Sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before.stderr.log",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "PrototypeLog"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/prototype-1-100.png",
+      "Bytes": 1439,
+      "Sha256": "EB47EC1C9D0050766C2E1712434285B17DB1C76166FE4D87BFB5B41A479FEB51",
+      "PixelWidth": 579,
+      "PixelHeight": 86,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-prototype-1-100.png",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before-1-100.png",
+      "Bytes": 1440,
+      "Sha256": "7C572CC42EE1C8BF6D6D4524880DE1994450E4FC3416751D16A35BB85A0A4B13",
+      "PixelWidth": 579,
+      "PixelHeight": 86,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before-1-100.png",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/prototype-2-200.png",
+      "Bytes": 1684,
+      "Sha256": "DF9BA7208F6F1CBDC0CA8C4F94004B4DE01C939449F3D451A9F3A18D2EB87822",
+      "PixelWidth": 599,
+      "PixelHeight": 142,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-prototype-2-200.png",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before-2-200.png",
+      "Bytes": 1649,
+      "Sha256": "A123F226A22E496E120BD6B9945D60826ED17FF5342E246811CE8BFE181B13DF",
+      "PixelWidth": 599,
+      "PixelHeight": 142,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before-2-200.png",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/prototype-3-100.png",
+      "Bytes": 1439,
+      "Sha256": "EB47EC1C9D0050766C2E1712434285B17DB1C76166FE4D87BFB5B41A479FEB51",
+      "PixelWidth": 579,
+      "PixelHeight": 86,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-prototype-3-100.png",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before-3-100.png",
+      "Bytes": 1440,
+      "Sha256": "7C572CC42EE1C8BF6D6D4524880DE1994450E4FC3416751D16A35BB85A0A4B13",
+      "PixelWidth": 579,
+      "PixelHeight": 86,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before-3-100.png",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/prototype-4-200.png",
+      "Bytes": 1684,
+      "Sha256": "DF9BA7208F6F1CBDC0CA8C4F94004B4DE01C939449F3D451A9F3A18D2EB87822",
+      "PixelWidth": 599,
+      "PixelHeight": 142,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-only-menu-phase-0.6.95-prototype-4-200.png",
+      "Group": "MenuPrototypeOnly",
+      "Status": "PrototypeOnlyPassNotNativeAcceptance",
+      "Kind": "Png"
+    },
+    {
+      "OriginalPath": "Z:/CPP/ForgeMirror/build-qt/menu-sizing-prototype/sizing-only-before-4-200.png",
+      "Bytes": 1649,
+      "Sha256": "A123F226A22E496E120BD6B9945D60826ED17FF5342E246811CE8BFE181B13DF",
+      "PixelWidth": 599,
+      "PixelHeight": 142,
+      "RelativePath": "docs/design/visual-audit/2026-09-30/decision-0.6.95/prototype-failed-menu-sizing-only-0.6.95-sizing-only-before-4-200.png",
+      "Group": "MenuPrototypeFailedHistorical",
+      "Status": "FailedHistoricalPrototypeOnly",
+      "Kind": "Png"
+    }
+  ],
+  "MenuPrototypeEvidence": {
+    "Scope": "Offscreen prototype only; never native/product/release acceptance.",
+    "Final": {
+      "ExecutableSha256FromProof": "131DEB1644BBE3B77CB589B1C0827BBEB83A610A1630A38AFAE0F59C9B53BC44",
+      "StatesFromDriver": 4,
+      "NoActionTriggeredFromProof": true,
+      "ScalesFromDriver": [
+        100,
+        200,
+        100,
+        200
+      ],
+      "NaturalAndRenderedWidthsFromProof": [
+        579,
+        599,
+        579,
+        599
+      ],
+      "ActionChecksFromDriver": 12,
+      "ObservedRunExitFromProof": 0
+    },
+    "Historical": {
+      "Status": "Sizing-only FAIL retained, including empty historical stderr",
+      "ActionChecksFromDriver": 12,
+      "StatesFromDriver": 4
+    },
+    "Policy": "No capped hint, truncated status, hidden action row, or weakened native glyph/status/bounds predicate constitutes acceptance."
+  },
+  "PrototypeSupplementGeneratedUtc": "2026-09-30T05:20:39.7065943Z"
+}

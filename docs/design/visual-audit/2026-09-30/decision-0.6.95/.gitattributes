@@ -1,0 +1,6 @@
+# Evidence identities are raw bytes, including recorded line endings.
+* -text whitespace=cr-at-eol
+# Recorded diagnostics, including historical failures, stay verbatim.
+*.out -whitespace
+*.err -whitespace
+*.log -whitespace

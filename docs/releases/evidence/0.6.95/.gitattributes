@@ -1,0 +1,3 @@
+# Preserve the bytes of recorded runtime and installer proof files.
+* -text whitespace=cr-at-eol
+*.log -whitespace

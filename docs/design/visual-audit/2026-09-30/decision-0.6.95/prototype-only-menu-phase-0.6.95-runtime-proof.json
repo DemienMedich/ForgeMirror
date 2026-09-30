@@ -1,0 +1,25 @@
+{
+  "Scope": "Offscreen prototype only; not product or native acceptance.",
+  "ConfigureExit": 0,
+  "BuildExit": 0,
+  "RunExit": 0,
+  "CopiedSourceProof": "source-proof.json",
+  "FirstFailedCandidate": "sizing-only-before.proof.json",
+  "Passes": [
+    100,
+    200,
+    100,
+    200
+  ],
+  "NaturalAndRenderedWidths": [
+    579,
+    599,
+    579,
+    599
+  ],
+  "FullStatuses": "Запущена, Не запущена, Статус недоступен",
+  "NoActionTriggered": true,
+  "StdoutSha256": "7417DBFBAE13B2D36FF4B62DC93A5E3F2047DBB9B4FBE4FF72DAAA3A3F79E459",
+  "StderrBytes": 0,
+  "ExecutableSha256": "131DEB1644BBE3B77CB589B1C0827BBEB83A610A1630A38AFAE0F59C9B53BC44"
+}

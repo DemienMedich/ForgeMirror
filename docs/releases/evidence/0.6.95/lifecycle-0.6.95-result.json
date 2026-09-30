@@ -1,0 +1,55 @@
+{
+  "Version": "0.6.95",
+  "PreviousVersion": "0.6.94",
+  "Status": "Verified equivalent disposable-AppId install/update/uninstall; not byte-identical release Setup or user update.",
+  "DerivedFromLog": false,
+  "EvidenceSource": "Direct structured output of the completed verifier, which throws on failed checks.",
+  "VerifierPath": "Z:\\CPP\\ForgeMirror\\installer\\verify-qt-lifecycle.ps1",
+  "VerifierSha256": "774A54747B4F638F28250B956599BB0F143AB847A9B8A2E8C9D59A3DDF23DDA8",
+  "Records": [
+    {
+      "Version": "0.6.94",
+      "Installer": "Z:\\CPP\\ForgeMirror\\build-qt\\lifecycle-0.6.95-5271272C8C484EA5BB1995AD42D64D95\\payload-0.6.94\\ForgeMirrorSetup_0.6.94.exe",
+      "InstallerBytes": 12653929,
+      "InstallerSha256": "20496B00DE5D82B30F589443F10DAD3F8ECEF1EBECD7063BBC1245C861AFCA36",
+      "InstalledProductVersion": "0.6.94",
+      "UninstallDisplayVersion": "0.6.94",
+      "VersionCommandOutput": "",
+      "MainWindowTitle": "ForgeMirror · Qt migration · 0.6.94",
+      "WindowTitleMethod": "Win32 enumeration restricted to the launched process; includes hidden windows",
+      "StartupExitCode": 0,
+      "StartupStderrBytes": 0,
+      "WindowsPlatformPlugin": "C:\\Users\\mrdem\\AppData\\Local\\Programs\\ForgeMirrorQtLifecycle-5271272C8C484EA5BB1995AD42D64D95\\platforms\\qwindows.dll",
+      "WindowsPlatformPluginSha256": "12577A7C4F2230BBEA53F279573D7E3D1A08D631197855481E1E1580F61BB877",
+      "Screenshot": "Z:\\CPP\\ForgeMirror\\build-qt\\lifecycle-0.6.95-5271272C8C484EA5BB1995AD42D64D95\\installed-0.6.94.png",
+      "ScreenshotBytes": 55511,
+      "ScreenshotSha256": "DCF8FB0960F958F904778C1D59F5A647A13F545CF0140C70E43CA00A53E64DB1"
+    },
+    {
+      "Version": "0.6.95",
+      "Installer": "Z:\\CPP\\ForgeMirror\\build-qt\\lifecycle-0.6.95-5271272C8C484EA5BB1995AD42D64D95\\payload-0.6.95\\ForgeMirrorSetup_0.6.95.exe",
+      "InstallerBytes": 12675191,
+      "InstallerSha256": "F6A6B725B998D8F5C7EDBDFDA7EF6C5C3001C341DE917EFFB974E46A5A234872",
+      "InstalledProductVersion": "0.6.95",
+      "UninstallDisplayVersion": "0.6.95",
+      "VersionCommandOutput": "ForgeMirrorQt 0.6.95",
+      "MainWindowTitle": "ForgeMirror · Qt migration · 0.6.95",
+      "WindowTitleMethod": "Win32 enumeration restricted to the launched process; includes hidden windows",
+      "StartupExitCode": 0,
+      "StartupStderrBytes": 0,
+      "WindowsPlatformPlugin": "C:\\Users\\mrdem\\AppData\\Local\\Programs\\ForgeMirrorQtLifecycle-5271272C8C484EA5BB1995AD42D64D95\\platforms\\qwindows.dll",
+      "WindowsPlatformPluginSha256": "12577A7C4F2230BBEA53F279573D7E3D1A08D631197855481E1E1580F61BB877",
+      "Screenshot": "Z:\\CPP\\ForgeMirror\\build-qt\\lifecycle-0.6.95-5271272C8C484EA5BB1995AD42D64D95\\installed-0.6.95.png",
+      "ScreenshotBytes": 55502,
+      "ScreenshotSha256": "CFF133E46B89B8FB679107D7BEDEC654858BD618F991DC7AF3A45BACA239632E"
+    },
+    {
+      "UninstallExitCode": 0,
+      "DeadlineScheduleHelperExitCode": 0,
+      "InstallDirectoryRemoved": true,
+      "UninstallRegistryRemoved": true,
+      "ExternalWorkspaceMarkerSha256": "7BB6463B30F9E301FED333CDF8960CA9497B602CCD8EEB46AE42693FDEA15A4D",
+      "EvidenceDirectory": "Z:\\CPP\\ForgeMirror\\build-qt\\lifecycle-0.6.95-5271272C8C484EA5BB1995AD42D64D95"
+    }
+  ]
+}

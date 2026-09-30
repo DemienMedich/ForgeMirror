@@ -1,0 +1,25 @@
+quick-menu-empty-100 action=quickShortcutEmpty row=242x25 glyphWidth=191 fontHeight=17
+quick-menu-empty-100 action=manageShortcutsAction row=242x25 glyphWidth=144 fontHeight=17
+quick-menu-empty-100 post-paint action=quickShortcutEmpty row=242x25 sharedTextWidth=191
+quick-menu-empty-100 post-paint action=manageShortcutsAction row=242x25 sharedTextWidth=144
+quick-menu-populated-100 action=quickShortcutAction row=582x25 glyphWidth=490 fontHeight=17
+quick-menu-populated-100 action=quickShortcutAction row=582x25 glyphWidth=509 fontHeight=17
+quick-menu-populated-100 action=quickShortcutAction row=582x25 glyphWidth=539 fontHeight=17
+quick-menu-populated-100 action=manageShortcutsAction row=582x25 glyphWidth=144 fontHeight=17
+quick-menu-populated-100 post-paint action=quickShortcutAction row=582x25 sharedTextWidth=539
+quick-menu-populated-100 post-paint action=quickShortcutAction row=582x25 sharedTextWidth=539
+quick-menu-populated-100 post-paint action=quickShortcutAction row=582x25 sharedTextWidth=539
+quick-menu-populated-100 post-paint action=manageShortcutsAction row=582x25 sharedTextWidth=252
+quick-menu-empty-200 action=quickShortcutEmpty row=446x44 glyphWidth=395 fontHeight=36
+quick-menu-empty-200 action=manageShortcutsAction row=446x44 glyphWidth=301 fontHeight=36
+quick-menu-empty-200 post-paint action=quickShortcutEmpty row=446x44 sharedTextWidth=395
+quick-menu-empty-200 post-paint action=manageShortcutsAction row=446x44 sharedTextWidth=301
+quick-menu-populated-200 action=quickShortcutAction row=595x44 glyphWidth=446 fontHeight=36
+quick-menu-populated-200 action=quickShortcutAction row=595x44 glyphWidth=483 fontHeight=36
+quick-menu-populated-200 action=quickShortcutAction row=595x44 glyphWidth=552 fontHeight=36
+quick-menu-populated-200 action=manageShortcutsAction row=595x44 glyphWidth=301 fontHeight=36
+quick-menu-populated-200 post-paint action=quickShortcutAction row=595x44 sharedTextWidth=552
+quick-menu-populated-200 post-paint action=quickShortcutAction row=595x44 sharedTextWidth=552
+quick-menu-populated-200 post-paint action=quickShortcutAction row=595x44 sharedTextWidth=552
+quick-menu-populated-200 post-paint action=manageShortcutsAction row=595x44 sharedTextWidth=531
+Quick menu native contexts=4 no action launched; synthetic workspaces only

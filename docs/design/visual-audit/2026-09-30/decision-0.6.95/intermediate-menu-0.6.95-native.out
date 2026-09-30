@@ -1,0 +1,13 @@
+quick-menu-empty-100 action=quickShortcutEmpty row=242x25 glyphWidth=191 fontHeight=17
+quick-menu-empty-100 action=manageShortcutsAction row=242x25 glyphWidth=144 fontHeight=17
+quick-menu-populated-100 action=quickShortcutAction row=718x25 glyphWidth=589 fontHeight=17
+quick-menu-populated-100 action=quickShortcutAction row=718x25 glyphWidth=586 fontHeight=17
+quick-menu-populated-100 action=quickShortcutAction row=718x25 glyphWidth=590 fontHeight=17
+quick-menu-populated-100 action=manageShortcutsAction row=718x25 glyphWidth=144 fontHeight=17
+quick-menu-empty-200 action=quickShortcutEmpty row=446x44 glyphWidth=395 fontHeight=36
+quick-menu-empty-200 action=manageShortcutsAction row=446x44 glyphWidth=301 fontHeight=36
+quick-menu-populated-200 action=quickShortcutAction row=815x44 glyphWidth=588 fontHeight=36
+quick-menu-populated-200 action=quickShortcutAction row=815x44 glyphWidth=579 fontHeight=36
+quick-menu-populated-200 action=quickShortcutAction row=815x44 glyphWidth=589 fontHeight=36
+quick-menu-populated-200 action=manageShortcutsAction row=815x44 glyphWidth=301 fontHeight=36
+Quick menu native contexts=4 no action launched; synthetic workspaces only

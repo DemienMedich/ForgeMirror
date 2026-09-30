@@ -1,0 +1,21 @@
+pass=1 scale=100 font=10 natural=579x86 maximum=640 minimum=0
+  action=quickShortcutAction rect=579x21 labelGlyph=299 statusGlyph=104 glyphs=419 fits=1
+  action=quickShortcutAction rect=579x21 labelGlyph=299 statusGlyph=143 glyphs=458 fits=1
+  action=quickShortcutAction rect=579x21 labelGlyph=299 statusGlyph=221 glyphs=536 fits=1
+  action=manageShortcutsAction rect=579x21 labelGlyph=260 statusGlyph=0 glyphs=260 fits=1
+pass=2 scale=200 font=20 natural=599x142 maximum=640 minimum=0
+  action=quickShortcutAction rect=599x35 labelGlyph=81 statusGlyph=216 glyphs=313 fits=1
+  action=quickShortcutAction rect=599x35 labelGlyph=81 statusGlyph=297 glyphs=394 fits=1
+  action=quickShortcutAction rect=599x35 labelGlyph=81 statusGlyph=459 glyphs=556 fits=1
+  action=manageShortcutsAction rect=599x35 labelGlyph=81 statusGlyph=0 glyphs=81 fits=1
+pass=3 scale=100 font=10 natural=579x86 maximum=640 minimum=0
+  action=quickShortcutAction rect=579x21 labelGlyph=299 statusGlyph=104 glyphs=419 fits=1
+  action=quickShortcutAction rect=579x21 labelGlyph=299 statusGlyph=143 glyphs=458 fits=1
+  action=quickShortcutAction rect=579x21 labelGlyph=299 statusGlyph=221 glyphs=536 fits=1
+  action=manageShortcutsAction rect=579x21 labelGlyph=260 statusGlyph=0 glyphs=260 fits=1
+pass=4 scale=200 font=20 natural=599x142 maximum=640 minimum=0
+  action=quickShortcutAction rect=599x35 labelGlyph=81 statusGlyph=216 glyphs=313 fits=1
+  action=quickShortcutAction rect=599x35 labelGlyph=81 statusGlyph=297 glyphs=394 fits=1
+  action=quickShortcutAction rect=599x35 labelGlyph=81 statusGlyph=459 glyphs=556 fits=1
+  action=manageShortcutsAction rect=599x35 labelGlyph=81 statusGlyph=0 glyphs=81 fits=1
+PrototypeOnly=PASS states=4 actions=12 no action triggered no product targets

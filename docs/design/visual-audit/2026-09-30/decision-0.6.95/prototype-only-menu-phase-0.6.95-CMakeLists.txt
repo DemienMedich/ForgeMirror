@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(MenuSizingPrototype LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+add_compile_options(/utf-8)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets)
+add_executable(menu_sizing_prototype prototype.cpp QtTheme.cpp)
+target_link_libraries(menu_sizing_prototype PRIVATE Qt6::Widgets)

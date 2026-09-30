@@ -1,0 +1,155 @@
+{
+  "Version": "0.6.94",
+  "Execution": "Native Windows ordinary console invocation",
+  "RequestedSize": "640x520",
+  "Scales": [
+    100,
+    200
+  ],
+  "ExitCode": 0,
+  "StderrBytes": 0,
+  "Contexts": 24,
+  "Captures": [
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-0-100.png",
+      "Bytes": 27001,
+      "Sha256": "B439903858D9911AD82232D27D16427FD288C9BB508B8C96E70A4C2BB46A1640"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-0-200.png",
+      "Bytes": 55060,
+      "Sha256": "098652693A406095723C457B69C39CCC1701D561BF984C27CB76685567CA6F7A"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-1-100.png",
+      "Bytes": 22328,
+      "Sha256": "7D4AC01F282F37729D550DD187BF42CFCEC2B97627F5E1146178A64F83A38018"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-1-200.png",
+      "Bytes": 55307,
+      "Sha256": "2EA95FD4F47A3DFEEAAD9678BCB9C25F414B40975E730778269FBF1F00BC3D61"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-2-100.png",
+      "Bytes": 22208,
+      "Sha256": "89051A60400551A5C56E2DBFB0971FD04A81F10115CF8CE804BCAA9860A61429"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-2-200.png",
+      "Bytes": 55318,
+      "Sha256": "A3D74EAE5E51652347FF44548C4DAFDA50E60C85203749C0713DA1181480F175"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-3-100.png",
+      "Bytes": 22102,
+      "Sha256": "D78E5EC7021931CD7C54B92323987296E26D4F9B505F3358ECFC8C2946668F64"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-3-200.png",
+      "Bytes": 56073,
+      "Sha256": "5C5C6C25BB8A0746A7892ADCC7CB90349DF4D7AD45EFB098F96B6B37325583F5"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-4-100.png",
+      "Bytes": 22319,
+      "Sha256": "CCE87FFB9678AF8C38D3EFA49A4F518A0F9D5534A7EF238A4F37865C4F1CF4AA"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-4-200.png",
+      "Bytes": 55898,
+      "Sha256": "FB42EEC0F89B1F14030157AF498E64E685408383F63D0EECB253D787AD332392"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-5-100.png",
+      "Bytes": 22232,
+      "Sha256": "AC718191F8D976F74741C43CF6F357669E1C3DF3FEFF04AC1DAB61130522D652"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-5-200.png",
+      "Bytes": 54446,
+      "Sha256": "EA22B6E76058675A1C7938E43E00020D07CF13F6492E85C0D2170D9B993E4A7D"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-6-100.png",
+      "Bytes": 21909,
+      "Sha256": "F8F2AEDE0B918C333E54A8CB70B9270C6BFF7F377F038E9F5AAB0DBDDC41E5CF"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\cloud-tab-6-200.png",
+      "Bytes": 55041,
+      "Sha256": "BFB65D16C9AC5FC5C6ADBA3DF46DC28C4B35023A8BBFDC35F11038CA29969BA9"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\shortcut-create-100.png",
+      "Bytes": 13548,
+      "Sha256": "639E0E37B8BF2847E9FEC41646DB9024CBBF2E9EEBAF638337038D24086B1EE7"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\shortcut-create-200.png",
+      "Bytes": 36683,
+      "Sha256": "23AE74560290DC998A41BF60ABE16929C66EE69E4ED5C890C4D59807E68D92C2"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\shortcut-help-100.png",
+      "Bytes": 21560,
+      "Sha256": "D84CD617CD1C1A1335E846BC5FE437626CCC52BE1DF980DEFB0492B82FC27968"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\shortcut-help-200.png",
+      "Bytes": 38448,
+      "Sha256": "273F5F6F5414FA9653BF2848D3A8F515EC08FE770189A0C94F0BDF806802A77B"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\storage-100.png",
+      "Bytes": 17652,
+      "Sha256": "57B828F57C6098BC1A6B4000C5872E6175EAE2CA38354A324ABDBF04E13027B7"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\storage-200.png",
+      "Bytes": 45564,
+      "Sha256": "AF513701B81D663272D2A36E74E5D64B3BB272E64708912834ED6B6B45EF0BA1"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\wallet-0-100.png",
+      "Bytes": 15261,
+      "Sha256": "4BD62BDEBE777E7A5702A50CEBAAEAEB27EFBC731A7800B639BA2FB124B6E98F"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\wallet-0-200.png",
+      "Bytes": 37050,
+      "Sha256": "0948D6E8FD04999C2B9BB18973E3A542594D159A31C38E71730F1C752901871A"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\wallet-1-100.png",
+      "Bytes": 15380,
+      "Sha256": "D71958BF1D65EE9E8E99B22F4A4365F31484EFB86DBC0973F0A7FA2EE0D8FFB6"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\native-decision-before-0.6.94\\wallet-1-200.png",
+      "Bytes": 37562,
+      "Sha256": "E93D5BAEBA3CF2837D0486E0298FDD462A0264150322DEA302254016B18CFE73"
+    }
+  ],
+  "ArchivedLibraries": [
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\visual-decision-baseline-0.6.94\\ForgeMirrorQtUi.lib",
+      "Bytes": 44532618,
+      "Sha256": "67CFCEC5BF1EBD11D2A5BC320809EEF8F48E54C872ACE8BD30D298805E0DDB68"
+    },
+    {
+      "Path": "Z:\\CPP\\ForgeMirror\\build-qt\\visual-decision-baseline-0.6.94\\ForgeMirrorQtCore.lib",
+      "Bytes": 26376318,
+      "Sha256": "084EF6CFD8130490E29737124CD716DEC910C5B2BD3A2C318E911864C94C26E3"
+    }
+  ],
+  "DriverSourceSha256": "E75C9F311EE596025215AC9666A4FD509DE57829BB923E73B32B8BFC9939FFAB",
+  "DriverExeSha256": "D15CD5362068AC6C8EFAC07EFC6BB01798180A5DD7A0808C1512596FE9591AC3",
+  "Fixture": "QTemporaryDir; no production paths; all modal UI changes cancelled",
+  "InspectedImages": [
+    "cloud-tab-0-200.png",
+    "storage-200.png",
+    "wallet-0-200.png",
+    "shortcut-help-200.png"
+  ]
+}

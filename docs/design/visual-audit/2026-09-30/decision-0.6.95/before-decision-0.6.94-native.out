@@ -1,0 +1,135 @@
+cloud-tab-0-100 actual=720x520 minimum=720x480
+  table tasksComparison size=656x118 rows=2 row0=30
+  table tasksBackups size=656x143 rows=2 row0=44
+  cell command actual=134x42 hint=98x42
+  cell command actual=134x42 hint=98x42
+  command openTasksModule actual=116x42 hint=116x42
+  command applyCloudTasks actual=132x42 hint=132x42
+  command pushCloudTasks actual=151x42 hint=151x42
+  command  actual=134x42 hint=98x42
+  command  actual=134x42 hint=98x42
+  command  actual=120x42 hint=67x42
+cloud-tab-1-100 actual=720x520 minimum=720x480
+  table pipelineComparison size=656x118 rows=2 row0=30
+  table pipelineBackups size=656x143 rows=0 row0=0
+  command openPipelineModule actual=116x42 hint=116x42
+  command applyCloudPipeline actual=132x42 hint=132x42
+  command pushCloudPipeline actual=151x42 hint=151x42
+  command  actual=120x42 hint=67x42
+cloud-tab-2-100 actual=720x520 minimum=720x480
+  table projectsComparison size=656x118 rows=2 row0=30
+  table projectsBackups size=656x143 rows=0 row0=0
+  command applyCloudProjects actual=132x42 hint=132x42
+  command pushCloudProjects actual=151x42 hint=151x42
+  command  actual=120x42 hint=67x42
+cloud-tab-3-100 actual=720x520 minimum=720x480
+  table bannerComparison size=656x118 rows=2 row0=30
+  table bannerBackups size=656x143 rows=0 row0=0
+  command applyCloudBanner actual=132x42 hint=132x42
+  command pushCloudBanner actual=151x42 hint=151x42
+  command  actual=120x42 hint=67x42
+cloud-tab-4-100 actual=720x520 minimum=720x480
+  table gameplayComparison size=656x118 rows=2 row0=30
+  table gameplayBackups size=656x143 rows=0 row0=0
+  command applyCloudGameplay actual=132x42 hint=132x42
+  command pushCloudGameplay actual=151x42 hint=151x42
+  command  actual=120x42 hint=67x42
+cloud-tab-5-100 actual=720x520 minimum=720x480
+  table professionsComparison size=656x118 rows=2 row0=30
+  table professionsBackups size=656x143 rows=0 row0=0
+  command applyCloudProfessions actual=132x42 hint=132x42
+  command pushCloudProfessions actual=151x42 hint=151x42
+  command  actual=120x42 hint=67x42
+cloud-tab-6-100 actual=720x520 minimum=720x480
+  table skillsComparison size=656x118 rows=2 row0=30
+  table skillsBackups size=656x143 rows=0 row0=0
+  command applyCloudSkills actual=132x42 hint=132x42
+  command pushCloudSkills actual=151x42 hint=151x42
+  command  actual=120x42 hint=67x42
+storage-100 actual=760x520 minimum=760x390
+  table storageComparison size=724x118 rows=2 row0=30
+  command acceptCloudStorage actual=133x42 hint=133x42
+  command keepLocalStorage actual=200x42 hint=200x42
+  command  actual=120x42 hint=67x42
+wallet-0-100 actual=640x520 minimum=420x225
+  command  actual=84x28 hint=84x28
+  command  actual=63x28 hint=63x28
+wallet-1-100 actual=640x520 minimum=420x225
+  command  actual=84x28 hint=84x28
+  command  actual=63x28 hint=63x28
+shortcut-create-100 actual=640x520 minimum=520x216
+  command shortcutBrowse actual=112x28 hint=112x28
+  command shortcutBrowseFolder actual=115x28 hint=115x28
+  command  actual=76x28 hint=76x28
+  command  actual=63x28 hint=63x28
+shortcut-help-100 actual=640x520 minimum=123x123
+  table shortcutHelpTable size=618x424 rows=17 row0=30
+  command  actual=67x28 hint=67x28
+cloud-tab-0-200 actual=720x520 minimum=720x480
+  table tasksComparison size=656x118 rows=2 row0=40
+  table tasksBackups size=656x50 rows=2 row0=44
+  cell command actual=118x42 hint=204x42
+  cell command actual=118x42 hint=204x42
+  command openTasksModule actual=214x42 hint=236x42
+  command applyCloudTasks actual=213x42 hint=269x42
+  command pushCloudTasks actual=213x42 hint=309x42
+  command  actual=118x42 hint=204x42
+  command  actual=118x42 hint=204x42
+  command  actual=136x42 hint=136x42
+cloud-tab-1-200 actual=720x520 minimum=720x480
+  table pipelineComparison size=656x118 rows=2 row0=40
+  table pipelineBackups size=656x50 rows=0 row0=0
+  command openPipelineModule actual=214x42 hint=236x42
+  command applyCloudPipeline actual=213x42 hint=269x42
+  command pushCloudPipeline actual=213x42 hint=309x42
+  command  actual=136x42 hint=136x42
+cloud-tab-2-200 actual=720x520 minimum=720x480
+  table projectsComparison size=656x118 rows=2 row0=40
+  table projectsBackups size=656x50 rows=0 row0=0
+  command applyCloudProjects actual=269x42 hint=269x42
+  command pushCloudProjects actual=309x42 hint=309x42
+  command  actual=136x42 hint=136x42
+cloud-tab-3-200 actual=720x520 minimum=720x480
+  table bannerComparison size=656x118 rows=2 row0=40
+  table bannerBackups size=656x50 rows=0 row0=0
+  command applyCloudBanner actual=269x42 hint=269x42
+  command pushCloudBanner actual=309x42 hint=309x42
+  command  actual=136x42 hint=136x42
+cloud-tab-4-200 actual=720x520 minimum=720x480
+  table gameplayComparison size=656x118 rows=2 row0=40
+  table gameplayBackups size=656x50 rows=0 row0=0
+  command applyCloudGameplay actual=269x42 hint=269x42
+  command pushCloudGameplay actual=309x42 hint=309x42
+  command  actual=136x42 hint=136x42
+cloud-tab-5-200 actual=720x520 minimum=720x480
+  table professionsComparison size=656x118 rows=2 row0=40
+  table professionsBackups size=656x50 rows=0 row0=0
+  command applyCloudProfessions actual=269x42 hint=269x42
+  command pushCloudProfessions actual=309x42 hint=309x42
+  command  actual=136x42 hint=136x42
+cloud-tab-6-200 actual=720x520 minimum=720x480
+  table skillsComparison size=656x118 rows=2 row0=40
+  table skillsBackups size=656x50 rows=0 row0=0
+  command applyCloudSkills actual=269x42 hint=269x42
+  command pushCloudSkills actual=309x42 hint=309x42
+  command  actual=136x42 hint=136x42
+storage-200 actual=760x520 minimum=760x390
+  table storageComparison size=724x118 rows=2 row0=40
+  command acceptCloudStorage actual=273x42 hint=273x42
+  command keepLocalStorage actual=405x42 hint=405x42
+  command  actual=136x42 hint=136x42
+wallet-0-200 actual=640x520 minimum=420x386
+  command  actual=175x54 hint=175x54
+  command  actual=128x54 hint=128x54
+wallet-1-200 actual=640x520 minimum=420x386
+  command  actual=175x54 hint=175x54
+  command  actual=128x54 hint=128x54
+shortcut-create-200 actual=640x520 minimum=520x358
+  command shortcutBrowse actual=230x54 hint=230x54
+  command shortcutBrowseFolder actual=239x54 hint=239x54
+  command  actual=154x54 hint=154x54
+  command  actual=128x54 hint=128x54
+shortcut-help-200 actual=640x520 minimum=235x168
+  table shortcutHelpTable size=618x288 rows=17 row0=40
+  command  actual=136x54 hint=136x54
+BEFORE captures=24 isolated fixture; no accepted mutations

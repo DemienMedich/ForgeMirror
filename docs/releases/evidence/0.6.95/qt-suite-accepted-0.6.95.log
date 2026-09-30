@@ -1,0 +1,943 @@
+Start testing: Sep 30 08:15 RTZ 2 (çèìà)
+----------------------------------------------------------
+1/1 Testing: smoke_qt
+1/1 Test: smoke_qt
+Command: "Z:/CPP/ForgeMirror/build-qt/Release/smoke_qt.exe"
+Directory: Z:/CPP/ForgeMirror/build-qt
+"smoke_qt" start time: Sep 30 08:15 RTZ 2 (çèìà)
+Output:
+----------------------------------------------------------
+task-editor-90 size=640x520 scrolls=1 primaries=1
+task-editor-90 validation size=640x520 scrolls=1 primaries=1
+task-editor-90 additional size=640x520 scrolls=1 primaries=1
+task-editor-90 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-90 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-90 inline project size=640x520 scrolls=1 primaries=1
+project-editor-90 size=640x520 scrolls=1 primaries=1
+project-editor-90 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-90-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-90-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-90-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-90-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-90 validation size=640x520 scrolls=1 primaries=1
+task-editor-100 size=640x520 scrolls=1 primaries=1
+task-editor-100 validation size=640x520 scrolls=1 primaries=1
+task-editor-100 additional size=640x520 scrolls=1 primaries=1
+task-editor-100 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-100 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-100 inline project size=640x520 scrolls=1 primaries=1
+project-editor-100 size=640x520 scrolls=1 primaries=1
+project-editor-100 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-100-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-100-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-100-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-100-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-100 validation size=640x520 scrolls=1 primaries=1
+task-editor-110 size=640x520 scrolls=1 primaries=1
+task-editor-110 validation size=640x520 scrolls=1 primaries=1
+task-editor-110 additional size=640x520 scrolls=1 primaries=1
+task-editor-110 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-110 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-110 inline project size=640x520 scrolls=1 primaries=1
+project-editor-110 size=640x520 scrolls=1 primaries=1
+project-editor-110 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-110-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-110-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-110-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-110-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-110 validation size=640x520 scrolls=1 primaries=1
+task-editor-125 size=640x520 scrolls=1 primaries=1
+task-editor-125 validation size=640x520 scrolls=1 primaries=1
+task-editor-125 additional size=640x520 scrolls=1 primaries=1
+task-editor-125 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-125 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-125 inline project size=640x520 scrolls=1 primaries=1
+project-editor-125 size=640x520 scrolls=1 primaries=1
+project-editor-125 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-125-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-125-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-125-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-125-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-125 validation size=640x520 scrolls=1 primaries=1
+task-editor-150 size=640x520 scrolls=1 primaries=1
+task-editor-150 validation size=640x520 scrolls=1 primaries=1
+task-editor-150 additional size=640x520 scrolls=1 primaries=1
+task-editor-150 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-150 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-150 inline project size=640x520 scrolls=1 primaries=1
+project-editor-150 size=640x520 scrolls=1 primaries=1
+project-editor-150 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-150-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-150-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-150-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-150-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-150 validation size=640x520 scrolls=1 primaries=1
+task-editor-175 size=640x520 scrolls=1 primaries=1
+task-editor-175 validation size=640x520 scrolls=1 primaries=1
+task-editor-175 additional size=640x520 scrolls=1 primaries=1
+task-editor-175 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-175 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-175 inline project size=640x520 scrolls=1 primaries=1
+project-editor-175 size=640x520 scrolls=1 primaries=1
+project-editor-175 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-175-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-175-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-175-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-175-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-175 validation size=640x520 scrolls=1 primaries=1
+task-editor-200 size=640x520 scrolls=1 primaries=1
+task-editor-200 validation size=640x520 scrolls=1 primaries=1
+task-editor-200 additional size=640x520 scrolls=1 primaries=1
+task-editor-200 reopened wide size=780x520 scrolls=1 primaries=1
+task-editor-200 reopened narrow size=640x520 scrolls=1 primaries=1
+task-editor-200 inline project size=640x520 scrolls=1 primaries=1
+project-editor-200 size=640x520 scrolls=1 primaries=1
+project-editor-200 validation size=640x520 scrolls=1 primaries=1
+pipeline-editor-200-tab-0 size=640x520 scrolls=1 primaries=1
+pipeline-editor-200-tab-1 size=640x520 scrolls=1 primaries=1
+pipeline-editor-200-tab-2 size=640x520 scrolls=1 primaries=1
+pipeline-editor-200-tab-3 size=640x520 scrolls=1 primaries=1
+pipeline-editor-200 validation size=640x520 scrolls=1 primaries=1
+skill-editor-new-90 size=640x520 primaries=1
+skill-editor-new-90 validation size=640x520 primaries=1
+skill-editor-edit-90 size=640x520 primaries=1
+skill-editor-edit-90 validation size=640x520 primaries=1
+profession-editor-new-90 size=560x360 primaries=1
+profession-editor-new-90 validation size=560x360 primaries=1
+profession-editor-edit-90 size=560x360 primaries=1
+profession-editor-edit-90 validation size=560x360 primaries=1
+profile-change-password-90 size=560x360 primaries=1
+profile-change-password-90 validation size=560x360 primaries=1
+profile-reset-password-90 size=640x520 primaries=1
+profile-reset-password-90 validation size=640x520 primaries=1
+profile-manager-90 size=640x520 primaries=1
+profile-manager-90 collapsed table-visible=380 table-needed=93
+profile-manager-90 filters size=640x520 primaries=1
+profile-manager-90 filters expanded without scrolling table-visible=380 table-needed=93
+profile-manager-90 filters expanded list reached table-visible=380 table-needed=93
+profile-manager-90 no-match size=640x520 primaries=1
+profile-manager-90 editor size=560x380 primaries=1
+profile-manager-90 editor validation size=560x380 primaries=1
+profile-manager-90 masked credentials size=640x520 primaries=1
+skill-editor-new-100 size=640x520 primaries=1
+skill-editor-new-100 validation size=640x520 primaries=1
+skill-editor-edit-100 size=640x520 primaries=1
+skill-editor-edit-100 validation size=640x520 primaries=1
+profession-editor-new-100 size=560x360 primaries=1
+profession-editor-new-100 validation size=560x360 primaries=1
+profession-editor-edit-100 size=560x360 primaries=1
+profession-editor-edit-100 validation size=560x360 primaries=1
+profile-change-password-100 size=560x360 primaries=1
+profile-change-password-100 validation size=560x360 primaries=1
+profile-reset-password-100 size=640x520 primaries=1
+profile-reset-password-100 validation size=640x520 primaries=1
+profile-manager-100 size=640x520 primaries=1
+profile-manager-100 collapsed table-visible=368 table-needed=103
+profile-manager-100 filters size=640x520 primaries=1
+profile-manager-100 filters expanded without scrolling table-visible=368 table-needed=103
+profile-manager-100 filters expanded list reached table-visible=368 table-needed=103
+profile-manager-100 no-match size=640x520 primaries=1
+profile-manager-100 editor size=560x380 primaries=1
+profile-manager-100 editor validation size=560x380 primaries=1
+profile-manager-100 masked credentials size=640x520 primaries=1
+skill-editor-new-110 size=640x520 primaries=1
+skill-editor-new-110 validation size=640x520 primaries=1
+skill-editor-edit-110 size=640x520 primaries=1
+skill-editor-edit-110 validation size=640x520 primaries=1
+profession-editor-new-110 size=560x360 primaries=1
+profession-editor-new-110 validation size=560x360 primaries=1
+profession-editor-edit-110 size=560x360 primaries=1
+profession-editor-edit-110 validation size=560x360 primaries=1
+profile-change-password-110 size=560x360 primaries=1
+profile-change-password-110 validation size=560x360 primaries=1
+profile-reset-password-110 size=640x520 primaries=1
+profile-reset-password-110 validation size=640x520 primaries=1
+profile-manager-110 size=640x520 primaries=1
+profile-manager-110 collapsed table-visible=354 table-needed=114
+profile-manager-110 filters size=640x520 primaries=1
+profile-manager-110 filters expanded without scrolling table-visible=354 table-needed=114
+profile-manager-110 filters expanded list reached table-visible=354 table-needed=114
+profile-manager-110 no-match size=640x520 primaries=1
+profile-manager-110 editor size=560x380 primaries=1
+profile-manager-110 editor validation size=560x380 primaries=1
+profile-manager-110 masked credentials size=640x520 primaries=1
+skill-editor-new-125 size=640x520 primaries=1
+skill-editor-new-125 validation size=640x520 primaries=1
+skill-editor-edit-125 size=640x520 primaries=1
+skill-editor-edit-125 validation size=640x520 primaries=1
+profession-editor-new-125 size=560x360 primaries=1
+profession-editor-new-125 validation size=560x360 primaries=1
+profession-editor-edit-125 size=560x360 primaries=1
+profession-editor-edit-125 validation size=560x360 primaries=1
+profile-change-password-125 size=560x360 primaries=1
+profile-change-password-125 validation size=560x360 primaries=1
+profile-reset-password-125 size=640x520 primaries=1
+profile-reset-password-125 validation size=640x520 primaries=1
+profile-manager-125 size=640x520 primaries=1
+profile-manager-125 collapsed table-visible=293 table-needed=128
+profile-manager-125 filters size=640x520 primaries=1
+profile-manager-125 filters expanded without scrolling table-visible=293 table-needed=128
+profile-manager-125 filters expanded list reached table-visible=293 table-needed=128
+profile-manager-125 no-match size=640x520 primaries=1
+profile-manager-125 editor size=560x380 primaries=1
+profile-manager-125 editor validation size=560x380 primaries=1
+profile-manager-125 masked credentials size=640x520 primaries=1
+skill-editor-new-150 size=640x520 primaries=1
+skill-editor-new-150 validation size=640x520 primaries=1
+skill-editor-edit-150 size=640x520 primaries=1
+skill-editor-edit-150 validation size=640x520 primaries=1
+profession-editor-new-150 size=560x360 primaries=1
+profession-editor-new-150 validation size=560x360 primaries=1
+profession-editor-edit-150 size=560x360 primaries=1
+profession-editor-edit-150 validation size=560x360 primaries=1
+profile-change-password-150 size=560x360 primaries=1
+profile-change-password-150 validation size=560x360 primaries=1
+profile-reset-password-150 size=640x520 primaries=1
+profile-reset-password-150 validation size=640x520 primaries=1
+profile-manager-150 size=640x520 primaries=1
+profile-manager-150 collapsed table-visible=260 table-needed=152
+profile-manager-150 filters size=640x520 primaries=1
+profile-manager-150 filters expanded without scrolling table-visible=260 table-needed=152
+profile-manager-150 filters expanded list reached table-visible=260 table-needed=152
+profile-manager-150 no-match size=640x520 primaries=1
+profile-manager-150 editor size=560x380 primaries=1
+profile-manager-150 editor validation size=560x380 primaries=1
+profile-manager-150 masked credentials size=640x520 primaries=1
+skill-editor-new-175 size=640x520 primaries=1
+skill-editor-new-175 validation size=640x520 primaries=1
+skill-editor-edit-175 size=640x520 primaries=1
+skill-editor-edit-175 validation size=640x520 primaries=1
+profession-editor-new-175 size=560x360 primaries=1
+profession-editor-new-175 validation size=560x360 primaries=1
+profession-editor-edit-175 size=560x360 primaries=1
+profession-editor-edit-175 validation size=560x360 primaries=1
+profile-change-password-175 size=560x360 primaries=1
+profile-change-password-175 validation size=560x360 primaries=1
+profile-reset-password-175 size=640x520 primaries=1
+profile-reset-password-175 validation size=640x520 primaries=1
+profile-manager-175 size=640x520 primaries=1
+profile-manager-175 collapsed table-visible=222 table-needed=176
+profile-manager-175 filters size=640x520 primaries=1
+profile-manager-175 filters expanded without scrolling table-visible=222 table-needed=176
+profile-manager-175 filters expanded list reached table-visible=222 table-needed=176
+profile-manager-175 no-match size=640x520 primaries=1
+profile-manager-175 editor size=560x380 primaries=1
+profile-manager-175 editor validation size=560x380 primaries=1
+profile-manager-175 masked credentials size=640x520 primaries=1
+skill-editor-new-200 size=640x520 primaries=1
+skill-editor-new-200 validation size=640x520 primaries=1
+skill-editor-edit-200 size=640x520 primaries=1
+skill-editor-edit-200 validation size=640x520 primaries=1
+profession-editor-new-200 size=560x360 primaries=1
+profession-editor-new-200 validation size=560x360 primaries=1
+profession-editor-edit-200 size=560x360 primaries=1
+profession-editor-edit-200 validation size=560x360 primaries=1
+profile-change-password-200 size=560x360 primaries=1
+profile-change-password-200 validation size=560x360 primaries=1
+profile-reset-password-200 size=640x520 primaries=1
+profile-reset-password-200 validation size=640x520 primaries=1
+profile-manager-200 size=640x520 primaries=1
+profile-manager-200 collapsed table-visible=201 table-needed=201
+profile-manager-200 filters size=640x520 primaries=1
+profile-manager-200 filters expanded without scrolling table-visible=201 table-needed=201
+profile-manager-200 filters expanded list reached table-visible=201 table-needed=201
+profile-manager-200 no-match size=640x520 primaries=1
+profile-manager-200 editor size=560x380 primaries=1
+profile-manager-200 editor validation size=560x380 primaries=1
+profile-manager-200 masked credentials size=640x520 primaries=1
+completion-90 checked
+manual-xp-90 checked
+completion-100 checked
+manual-xp-100 checked
+completion-110 checked
+manual-xp-110 checked
+completion-125 checked
+manual-xp-125 checked
+completion-150 checked
+manual-xp-150 checked
+completion-175 checked
+manual-xp-175 checked
+completion-200 checked
+manual-xp-200 checked
+rules-90 narrow size=640x520 Hrange=0
+rules-90 wide size=780x640 Hrange=0
+rules-90 reversed size=640x520 Hrange=0
+rules-90 draft wide size=780x640 Hrange=0
+rules-90 draft/error size=640x520 Hrange=0
+rules-history-populated-90 narrow size=640x520 Hrange=0
+rules-history-populated-90 wide size=780x640 Hrange=0
+rules-history-populated-90 reversed size=640x520 Hrange=0
+rules-history-populated-90 draft wide size=780x640 Hrange=0
+rules-history-populated-90 draft/error size=640x520 Hrange=0
+rules-history-corrupt-90 narrow size=640x520 Hrange=0
+rules-history-corrupt-90 wide size=780x640 Hrange=0
+rules-history-corrupt-90 reversed size=640x520 Hrange=0
+rules-history-corrupt-90 draft wide size=780x640 Hrange=0
+rules-history-corrupt-90 draft/error size=640x520 Hrange=0
+vault-90 narrow size=640x520 Hrange=0
+vault-90 wide size=780x640 Hrange=0
+vault-90 reversed size=640x520 Hrange=0
+vault-90 draft wide size=780x640 Hrange=0
+vault-90 draft/error size=640x520 Hrange=0
+banner-create-90 narrow size=640x520 Hrange=0
+banner-create-90 wide size=780x640 Hrange=0
+banner-create-90 reversed size=640x520 Hrange=0
+banner-create-90 draft wide size=780x640 Hrange=0
+banner-create-90 draft/error size=640x520 Hrange=0
+banner-edit-90 narrow size=640x520 Hrange=0
+banner-edit-90 wide size=780x640 Hrange=0
+banner-edit-90 reversed size=640x520 Hrange=0
+banner-edit-90 draft wide size=780x640 Hrange=0
+banner-edit-90 draft/error size=640x520 Hrange=0
+cloud-90 narrow size=640x520 Hrange=0
+cloud-90 wide size=780x640 Hrange=0
+cloud-90 reversed size=640x520 Hrange=0
+cloud-90 draft wide size=780x640 Hrange=0
+cloud-90 draft/error size=640x520 Hrange=0
+rules-100 narrow size=640x520 Hrange=0
+rules-100 wide size=780x640 Hrange=0
+rules-100 reversed size=640x520 Hrange=0
+rules-100 draft wide size=780x640 Hrange=0
+rules-100 draft/error size=640x520 Hrange=0
+rules-history-populated-100 narrow size=640x520 Hrange=0
+rules-history-populated-100 wide size=780x640 Hrange=0
+rules-history-populated-100 reversed size=640x520 Hrange=0
+rules-history-populated-100 draft wide size=780x640 Hrange=0
+rules-history-populated-100 draft/error size=640x520 Hrange=0
+rules-history-corrupt-100 narrow size=640x520 Hrange=0
+rules-history-corrupt-100 wide size=780x640 Hrange=0
+rules-history-corrupt-100 reversed size=640x520 Hrange=0
+rules-history-corrupt-100 draft wide size=780x640 Hrange=0
+rules-history-corrupt-100 draft/error size=640x520 Hrange=0
+vault-100 narrow size=640x520 Hrange=0
+vault-100 wide size=780x640 Hrange=0
+vault-100 reversed size=640x520 Hrange=0
+vault-100 draft wide size=780x640 Hrange=0
+vault-100 draft/error size=640x520 Hrange=0
+banner-create-100 narrow size=640x520 Hrange=0
+banner-create-100 wide size=780x640 Hrange=0
+banner-create-100 reversed size=640x520 Hrange=0
+banner-create-100 draft wide size=780x640 Hrange=0
+banner-create-100 draft/error size=640x520 Hrange=0
+banner-edit-100 narrow size=640x520 Hrange=0
+banner-edit-100 wide size=780x640 Hrange=0
+banner-edit-100 reversed size=640x520 Hrange=0
+banner-edit-100 draft wide size=780x640 Hrange=0
+banner-edit-100 draft/error size=640x520 Hrange=0
+cloud-100 narrow size=640x520 Hrange=0
+cloud-100 wide size=780x640 Hrange=0
+cloud-100 reversed size=640x520 Hrange=0
+cloud-100 draft wide size=780x640 Hrange=0
+cloud-100 draft/error size=640x520 Hrange=0
+rules-110 narrow size=640x520 Hrange=0
+rules-110 wide size=780x640 Hrange=0
+rules-110 reversed size=640x520 Hrange=0
+rules-110 draft wide size=780x640 Hrange=0
+rules-110 draft/error size=640x520 Hrange=0
+rules-history-populated-110 narrow size=640x520 Hrange=0
+rules-history-populated-110 wide size=780x640 Hrange=0
+rules-history-populated-110 reversed size=640x520 Hrange=0
+rules-history-populated-110 draft wide size=780x640 Hrange=0
+rules-history-populated-110 draft/error size=640x520 Hrange=0
+rules-history-corrupt-110 narrow size=640x520 Hrange=0
+rules-history-corrupt-110 wide size=780x640 Hrange=0
+rules-history-corrupt-110 reversed size=640x520 Hrange=0
+rules-history-corrupt-110 draft wide size=780x640 Hrange=0
+rules-history-corrupt-110 draft/error size=640x520 Hrange=0
+vault-110 narrow size=640x520 Hrange=0
+vault-110 wide size=780x640 Hrange=0
+vault-110 reversed size=640x520 Hrange=0
+vault-110 draft wide size=780x640 Hrange=0
+vault-110 draft/error size=640x520 Hrange=0
+banner-create-110 narrow size=640x520 Hrange=0
+banner-create-110 wide size=780x640 Hrange=0
+banner-create-110 reversed size=640x520 Hrange=0
+banner-create-110 draft wide size=780x640 Hrange=0
+banner-create-110 draft/error size=640x520 Hrange=0
+banner-edit-110 narrow size=640x520 Hrange=0
+banner-edit-110 wide size=780x640 Hrange=0
+banner-edit-110 reversed size=640x520 Hrange=0
+banner-edit-110 draft wide size=780x640 Hrange=0
+banner-edit-110 draft/error size=640x520 Hrange=0
+cloud-110 narrow size=640x520 Hrange=0
+cloud-110 wide size=780x640 Hrange=0
+cloud-110 reversed size=640x520 Hrange=0
+cloud-110 draft wide size=780x640 Hrange=0
+cloud-110 draft/error size=640x520 Hrange=0
+rules-125 narrow size=640x520 Hrange=0
+rules-125 wide size=780x640 Hrange=0
+rules-125 reversed size=640x520 Hrange=0
+rules-125 draft wide size=780x640 Hrange=0
+rules-125 draft/error size=640x520 Hrange=0
+rules-history-populated-125 narrow size=640x520 Hrange=0
+rules-history-populated-125 wide size=780x640 Hrange=0
+rules-history-populated-125 reversed size=640x520 Hrange=0
+rules-history-populated-125 draft wide size=780x640 Hrange=0
+rules-history-populated-125 draft/error size=640x520 Hrange=0
+rules-history-corrupt-125 narrow size=640x520 Hrange=0
+rules-history-corrupt-125 wide size=780x640 Hrange=0
+rules-history-corrupt-125 reversed size=640x520 Hrange=0
+rules-history-corrupt-125 draft wide size=780x640 Hrange=0
+rules-history-corrupt-125 draft/error size=640x520 Hrange=0
+vault-125 narrow size=640x520 Hrange=0
+vault-125 wide size=780x640 Hrange=0
+vault-125 reversed size=640x520 Hrange=0
+vault-125 draft wide size=780x640 Hrange=0
+vault-125 draft/error size=640x520 Hrange=0
+banner-create-125 narrow size=640x520 Hrange=0
+banner-create-125 wide size=780x640 Hrange=0
+banner-create-125 reversed size=640x520 Hrange=0
+banner-create-125 draft wide size=780x640 Hrange=0
+banner-create-125 draft/error size=640x520 Hrange=0
+banner-edit-125 narrow size=640x520 Hrange=0
+banner-edit-125 wide size=780x640 Hrange=0
+banner-edit-125 reversed size=640x520 Hrange=0
+banner-edit-125 draft wide size=780x640 Hrange=0
+banner-edit-125 draft/error size=640x520 Hrange=0
+cloud-125 narrow size=640x520 Hrange=0
+cloud-125 wide size=780x640 Hrange=0
+cloud-125 reversed size=640x520 Hrange=0
+cloud-125 draft wide size=780x640 Hrange=0
+cloud-125 draft/error size=640x520 Hrange=0
+rules-150 narrow size=640x520 Hrange=0
+rules-150 wide size=780x640 Hrange=0
+rules-150 reversed size=640x520 Hrange=0
+rules-150 draft wide size=780x640 Hrange=0
+rules-150 draft/error size=640x520 Hrange=0
+rules-history-populated-150 narrow size=640x520 Hrange=0
+rules-history-populated-150 wide size=780x640 Hrange=0
+rules-history-populated-150 reversed size=640x520 Hrange=0
+rules-history-populated-150 draft wide size=780x640 Hrange=0
+rules-history-populated-150 draft/error size=640x520 Hrange=0
+rules-history-corrupt-150 narrow size=640x520 Hrange=0
+rules-history-corrupt-150 wide size=780x640 Hrange=0
+rules-history-corrupt-150 reversed size=640x520 Hrange=0
+rules-history-corrupt-150 draft wide size=780x640 Hrange=0
+rules-history-corrupt-150 draft/error size=640x520 Hrange=0
+vault-150 narrow size=640x520 Hrange=0
+vault-150 wide size=780x640 Hrange=0
+vault-150 reversed size=640x520 Hrange=0
+vault-150 draft wide size=780x640 Hrange=0
+vault-150 draft/error size=640x520 Hrange=0
+banner-create-150 narrow size=640x520 Hrange=0
+banner-create-150 wide size=780x640 Hrange=0
+banner-create-150 reversed size=640x520 Hrange=0
+banner-create-150 draft wide size=780x640 Hrange=0
+banner-create-150 draft/error size=640x520 Hrange=0
+banner-edit-150 narrow size=640x520 Hrange=0
+banner-edit-150 wide size=780x640 Hrange=0
+banner-edit-150 reversed size=640x520 Hrange=0
+banner-edit-150 draft wide size=780x640 Hrange=0
+banner-edit-150 draft/error size=640x520 Hrange=0
+cloud-150 narrow size=640x520 Hrange=0
+cloud-150 wide size=780x640 Hrange=0
+cloud-150 reversed size=640x520 Hrange=0
+cloud-150 draft wide size=780x640 Hrange=0
+cloud-150 draft/error size=640x520 Hrange=0
+rules-175 narrow size=640x520 Hrange=0
+rules-175 wide size=780x640 Hrange=0
+rules-175 reversed size=640x520 Hrange=0
+rules-175 draft wide size=780x640 Hrange=0
+rules-175 draft/error size=640x520 Hrange=0
+rules-history-populated-175 narrow size=640x520 Hrange=0
+rules-history-populated-175 wide size=780x640 Hrange=0
+rules-history-populated-175 reversed size=640x520 Hrange=0
+rules-history-populated-175 draft wide size=780x640 Hrange=0
+rules-history-populated-175 draft/error size=640x520 Hrange=0
+rules-history-corrupt-175 narrow size=640x520 Hrange=0
+rules-history-corrupt-175 wide size=780x640 Hrange=0
+rules-history-corrupt-175 reversed size=640x520 Hrange=0
+rules-history-corrupt-175 draft wide size=780x640 Hrange=0
+rules-history-corrupt-175 draft/error size=640x520 Hrange=0
+vault-175 narrow size=640x520 Hrange=0
+vault-175 wide size=780x640 Hrange=0
+vault-175 reversed size=640x520 Hrange=0
+vault-175 draft wide size=780x640 Hrange=0
+vault-175 draft/error size=640x520 Hrange=0
+banner-create-175 narrow size=640x520 Hrange=0
+banner-create-175 wide size=780x640 Hrange=0
+banner-create-175 reversed size=640x520 Hrange=0
+banner-create-175 draft wide size=780x640 Hrange=0
+banner-create-175 draft/error size=640x520 Hrange=0
+banner-edit-175 narrow size=640x520 Hrange=0
+banner-edit-175 wide size=780x640 Hrange=0
+banner-edit-175 reversed size=640x520 Hrange=0
+banner-edit-175 draft wide size=780x640 Hrange=0
+banner-edit-175 draft/error size=640x520 Hrange=0
+cloud-175 narrow size=640x520 Hrange=0
+cloud-175 wide size=780x640 Hrange=0
+cloud-175 reversed size=640x520 Hrange=0
+cloud-175 draft wide size=780x640 Hrange=0
+cloud-175 draft/error size=640x520 Hrange=0
+rules-200 narrow size=640x520 Hrange=0
+rules-200 wide size=780x640 Hrange=0
+rules-200 reversed size=640x520 Hrange=0
+rules-200 draft wide size=780x640 Hrange=0
+rules-200 draft/error size=640x520 Hrange=0
+rules-history-populated-200 narrow size=640x520 Hrange=0
+rules-history-populated-200 wide size=780x640 Hrange=0
+rules-history-populated-200 reversed size=640x520 Hrange=0
+rules-history-populated-200 draft wide size=780x640 Hrange=0
+rules-history-populated-200 draft/error size=640x520 Hrange=0
+rules-history-corrupt-200 narrow size=640x520 Hrange=0
+rules-history-corrupt-200 wide size=780x640 Hrange=0
+rules-history-corrupt-200 reversed size=640x520 Hrange=0
+rules-history-corrupt-200 draft wide size=780x640 Hrange=0
+rules-history-corrupt-200 draft/error size=640x520 Hrange=0
+vault-200 narrow size=640x520 Hrange=0
+vault-200 wide size=780x640 Hrange=0
+vault-200 reversed size=640x520 Hrange=0
+vault-200 draft wide size=780x640 Hrange=0
+vault-200 draft/error size=640x520 Hrange=0
+banner-create-200 narrow size=640x520 Hrange=0
+banner-create-200 wide size=780x640 Hrange=0
+banner-create-200 reversed size=640x520 Hrange=0
+banner-create-200 draft wide size=780x640 Hrange=0
+banner-create-200 draft/error size=640x520 Hrange=0
+banner-edit-200 narrow size=640x520 Hrange=0
+banner-edit-200 wide size=780x640 Hrange=0
+banner-edit-200 reversed size=640x520 Hrange=0
+banner-edit-200 draft wide size=780x640 Hrange=0
+banner-edit-200 draft/error size=640x520 Hrange=0
+cloud-200 narrow size=640x520 Hrange=0
+cloud path metrics row=604x124 hint=497x124 minimum=412x124 root=0:54 browse=70:54 HFW=-1
+cloud-200 wide size=780x640 Hrange=0
+cloud-200 reversed size=640x520 Hrange=0
+cloud-200 draft wide size=780x640 Hrange=0
+cloud-200 draft/error size=640x520 Hrange=0
+cloud-tasks-90 narrow actual=640x520 Hrange=0
+cloud-tasks-90 wide actual=780x640 Hrange=0
+cloud-tasks-90 reversed actual=640x520 Hrange=0
+cloud-pipeline-90 narrow actual=640x520 Hrange=0
+cloud-pipeline-90 wide actual=780x640 Hrange=0
+cloud-pipeline-90 reversed actual=640x520 Hrange=0
+cloud-projects-90 narrow actual=640x520 Hrange=0
+cloud-projects-90 wide actual=780x640 Hrange=0
+cloud-projects-90 reversed actual=640x520 Hrange=0
+cloud-banner-90 narrow actual=640x520 Hrange=0
+cloud-banner-90 wide actual=780x640 Hrange=0
+cloud-banner-90 reversed actual=640x520 Hrange=0
+cloud-gameplay-90 narrow actual=640x520 Hrange=0
+cloud-gameplay-90 wide actual=780x640 Hrange=0
+cloud-gameplay-90 reversed actual=640x520 Hrange=0
+cloud-professions-90 narrow actual=640x520 Hrange=0
+cloud-professions-90 wide actual=780x640 Hrange=0
+cloud-professions-90 reversed actual=640x520 Hrange=0
+cloud-skills-90 narrow actual=640x520 Hrange=0
+cloud-skills-90 wide actual=780x640 Hrange=0
+cloud-skills-90 reversed actual=640x520 Hrange=0
+cloud-missing-90 narrow actual=640x520 Hrange=0
+cloud-missing-90 wide actual=780x640 Hrange=0
+cloud-missing-90 reversed actual=640x520 Hrange=0
+storage-90 narrow actual=640x520 Hrange=0
+storage-90 wide actual=780x640 Hrange=0
+storage-90 reversed actual=640x520 Hrange=0
+wallet-0-90 narrow actual=640x520 Hrange=0
+wallet-0-90 wide actual=780x640 Hrange=0
+wallet-0-90 reversed actual=640x520 Hrange=0
+wallet-0-90 error actual=640x520 Hrange=0
+wallet-0-90 maximum amount actual=640x520 Hrange=0
+wallet-0-90 draft wide actual=780x640 Hrange=0
+wallet-0-90 draft actual=640x520 Hrange=0
+wallet-1-90 narrow actual=640x520 Hrange=0
+wallet-1-90 wide actual=780x640 Hrange=0
+wallet-1-90 reversed actual=640x520 Hrange=0
+wallet-1-90 error actual=640x520 Hrange=0
+wallet-1-90 overbalance actual=640x520 Hrange=0
+wallet-1-90 draft wide actual=780x640 Hrange=0
+wallet-1-90 draft actual=640x520 Hrange=0
+wallet-history-empty-90 narrow actual=640x520 Hrange=0
+wallet-history-empty-90 wide actual=780x640 Hrange=0
+wallet-history-empty-90 reversed actual=640x520 Hrange=0
+wallet-history-populated-90 narrow actual=640x520 Hrange=0
+wallet-history-populated-90 wide actual=780x640 Hrange=0
+wallet-history-populated-90 reversed actual=640x520 Hrange=0
+shortcut-90 narrow actual=640x520 Hrange=0
+shortcut-90 wide actual=780x640 Hrange=0
+shortcut-90 reversed actual=640x520 Hrange=0
+shortcut-90 error actual=640x520 Hrange=0
+shortcut-90 draft wide actual=780x640 Hrange=0
+shortcut-90 draft actual=640x520 Hrange=0
+shortcut-help-90 narrow actual=640x520 Hrange=0
+shortcut-help-90 wide actual=780x640 Hrange=0
+shortcut-help-90 reversed actual=640x520 Hrange=0
+cloud-tasks-100 narrow actual=640x520 Hrange=0
+cloud-tasks-100 wide actual=780x640 Hrange=0
+cloud-tasks-100 reversed actual=640x520 Hrange=0
+cloud-pipeline-100 narrow actual=640x520 Hrange=0
+cloud-pipeline-100 wide actual=780x640 Hrange=0
+cloud-pipeline-100 reversed actual=640x520 Hrange=0
+cloud-projects-100 narrow actual=640x520 Hrange=0
+cloud-projects-100 wide actual=780x640 Hrange=0
+cloud-projects-100 reversed actual=640x520 Hrange=0
+cloud-banner-100 narrow actual=640x520 Hrange=0
+cloud-banner-100 wide actual=780x640 Hrange=0
+cloud-banner-100 reversed actual=640x520 Hrange=0
+cloud-gameplay-100 narrow actual=640x520 Hrange=0
+cloud-gameplay-100 wide actual=780x640 Hrange=0
+cloud-gameplay-100 reversed actual=640x520 Hrange=0
+cloud-professions-100 narrow actual=640x520 Hrange=0
+cloud-professions-100 wide actual=780x640 Hrange=0
+cloud-professions-100 reversed actual=640x520 Hrange=0
+cloud-skills-100 narrow actual=640x520 Hrange=0
+cloud-skills-100 wide actual=780x640 Hrange=0
+cloud-skills-100 reversed actual=640x520 Hrange=0
+cloud-missing-100 narrow actual=640x520 Hrange=0
+cloud-missing-100 wide actual=780x640 Hrange=0
+cloud-missing-100 reversed actual=640x520 Hrange=0
+storage-100 narrow actual=640x520 Hrange=0
+storage-100 wide actual=780x640 Hrange=0
+storage-100 reversed actual=640x520 Hrange=0
+wallet-0-100 narrow actual=640x520 Hrange=0
+wallet-0-100 wide actual=780x640 Hrange=0
+wallet-0-100 reversed actual=640x520 Hrange=0
+wallet-0-100 error actual=640x520 Hrange=0
+wallet-0-100 maximum amount actual=640x520 Hrange=0
+wallet-0-100 draft wide actual=780x640 Hrange=0
+wallet-0-100 draft actual=640x520 Hrange=0
+wallet-1-100 narrow actual=640x520 Hrange=0
+wallet-1-100 wide actual=780x640 Hrange=0
+wallet-1-100 reversed actual=640x520 Hrange=0
+wallet-1-100 error actual=640x520 Hrange=0
+wallet-1-100 overbalance actual=640x520 Hrange=0
+wallet-1-100 draft wide actual=780x640 Hrange=0
+wallet-1-100 draft actual=640x520 Hrange=0
+wallet-history-empty-100 narrow actual=640x520 Hrange=0
+wallet-history-empty-100 wide actual=780x640 Hrange=0
+wallet-history-empty-100 reversed actual=640x520 Hrange=0
+wallet-history-populated-100 narrow actual=640x520 Hrange=0
+wallet-history-populated-100 wide actual=780x640 Hrange=0
+wallet-history-populated-100 reversed actual=640x520 Hrange=0
+shortcut-100 narrow actual=640x520 Hrange=0
+shortcut-100 wide actual=780x640 Hrange=0
+shortcut-100 reversed actual=640x520 Hrange=0
+shortcut-100 error actual=640x520 Hrange=0
+shortcut-100 draft wide actual=780x640 Hrange=0
+shortcut-100 draft actual=640x520 Hrange=0
+shortcut-help-100 narrow actual=640x520 Hrange=0
+shortcut-help-100 wide actual=780x640 Hrange=0
+shortcut-help-100 reversed actual=640x520 Hrange=0
+cloud-invalid-100 narrow actual=640x520 Hrange=0
+cloud-invalid-100 wide actual=780x640 Hrange=0
+cloud-invalid-100 reversed actual=640x520 Hrange=0
+storage-invalid-100 narrow actual=640x520 Hrange=0
+storage-invalid-100 wide actual=780x640 Hrange=0
+storage-invalid-100 reversed actual=640x520 Hrange=0
+cloud-tasks-110 narrow actual=640x520 Hrange=0
+cloud-tasks-110 wide actual=780x640 Hrange=0
+cloud-tasks-110 reversed actual=640x520 Hrange=0
+cloud-pipeline-110 narrow actual=640x520 Hrange=0
+cloud-pipeline-110 wide actual=780x640 Hrange=0
+cloud-pipeline-110 reversed actual=640x520 Hrange=0
+cloud-projects-110 narrow actual=640x520 Hrange=0
+cloud-projects-110 wide actual=780x640 Hrange=0
+cloud-projects-110 reversed actual=640x520 Hrange=0
+cloud-banner-110 narrow actual=640x520 Hrange=0
+cloud-banner-110 wide actual=780x640 Hrange=0
+cloud-banner-110 reversed actual=640x520 Hrange=0
+cloud-gameplay-110 narrow actual=640x520 Hrange=0
+cloud-gameplay-110 wide actual=780x640 Hrange=0
+cloud-gameplay-110 reversed actual=640x520 Hrange=0
+cloud-professions-110 narrow actual=640x520 Hrange=0
+cloud-professions-110 wide actual=780x640 Hrange=0
+cloud-professions-110 reversed actual=640x520 Hrange=0
+cloud-skills-110 narrow actual=640x520 Hrange=0
+cloud-skills-110 wide actual=780x640 Hrange=0
+cloud-skills-110 reversed actual=640x520 Hrange=0
+cloud-missing-110 narrow actual=640x520 Hrange=0
+cloud-missing-110 wide actual=780x640 Hrange=0
+cloud-missing-110 reversed actual=640x520 Hrange=0
+storage-110 narrow actual=640x520 Hrange=0
+storage-110 wide actual=780x640 Hrange=0
+storage-110 reversed actual=640x520 Hrange=0
+wallet-0-110 narrow actual=640x520 Hrange=0
+wallet-0-110 wide actual=780x640 Hrange=0
+wallet-0-110 reversed actual=640x520 Hrange=0
+wallet-0-110 error actual=640x520 Hrange=0
+wallet-0-110 maximum amount actual=640x520 Hrange=0
+wallet-0-110 draft wide actual=780x640 Hrange=0
+wallet-0-110 draft actual=640x520 Hrange=0
+wallet-1-110 narrow actual=640x520 Hrange=0
+wallet-1-110 wide actual=780x640 Hrange=0
+wallet-1-110 reversed actual=640x520 Hrange=0
+wallet-1-110 error actual=640x520 Hrange=0
+wallet-1-110 overbalance actual=640x520 Hrange=0
+wallet-1-110 draft wide actual=780x640 Hrange=0
+wallet-1-110 draft actual=640x520 Hrange=0
+wallet-history-empty-110 narrow actual=640x520 Hrange=0
+wallet-history-empty-110 wide actual=780x640 Hrange=0
+wallet-history-empty-110 reversed actual=640x520 Hrange=0
+wallet-history-populated-110 narrow actual=640x520 Hrange=0
+wallet-history-populated-110 wide actual=780x640 Hrange=0
+wallet-history-populated-110 reversed actual=640x520 Hrange=0
+shortcut-110 narrow actual=640x520 Hrange=0
+shortcut-110 wide actual=780x640 Hrange=0
+shortcut-110 reversed actual=640x520 Hrange=0
+shortcut-110 error actual=640x520 Hrange=0
+shortcut-110 draft wide actual=780x640 Hrange=0
+shortcut-110 draft actual=640x520 Hrange=0
+shortcut-help-110 narrow actual=640x520 Hrange=0
+shortcut-help-110 wide actual=780x640 Hrange=0
+shortcut-help-110 reversed actual=640x520 Hrange=0
+cloud-tasks-125 narrow actual=640x520 Hrange=0
+cloud-tasks-125 wide actual=780x640 Hrange=0
+cloud-tasks-125 reversed actual=640x520 Hrange=0
+cloud-pipeline-125 narrow actual=640x520 Hrange=0
+cloud-pipeline-125 wide actual=780x640 Hrange=0
+cloud-pipeline-125 reversed actual=640x520 Hrange=0
+cloud-projects-125 narrow actual=640x520 Hrange=0
+cloud-projects-125 wide actual=780x640 Hrange=0
+cloud-projects-125 reversed actual=640x520 Hrange=0
+cloud-banner-125 narrow actual=640x520 Hrange=0
+cloud-banner-125 wide actual=780x640 Hrange=0
+cloud-banner-125 reversed actual=640x520 Hrange=0
+cloud-gameplay-125 narrow actual=640x520 Hrange=0
+cloud-gameplay-125 wide actual=780x640 Hrange=0
+cloud-gameplay-125 reversed actual=640x520 Hrange=0
+cloud-professions-125 narrow actual=640x520 Hrange=0
+cloud-professions-125 wide actual=780x640 Hrange=0
+cloud-professions-125 reversed actual=640x520 Hrange=0
+cloud-skills-125 narrow actual=640x520 Hrange=0
+cloud-skills-125 wide actual=780x640 Hrange=0
+cloud-skills-125 reversed actual=640x520 Hrange=0
+cloud-missing-125 narrow actual=640x520 Hrange=0
+cloud-missing-125 wide actual=780x640 Hrange=0
+cloud-missing-125 reversed actual=640x520 Hrange=0
+storage-125 narrow actual=640x520 Hrange=0
+storage-125 wide actual=780x640 Hrange=0
+storage-125 reversed actual=640x520 Hrange=0
+wallet-0-125 narrow actual=640x520 Hrange=0
+wallet-0-125 wide actual=780x640 Hrange=0
+wallet-0-125 reversed actual=640x520 Hrange=0
+wallet-0-125 error actual=640x520 Hrange=0
+wallet-0-125 maximum amount actual=640x520 Hrange=0
+wallet-0-125 draft wide actual=780x640 Hrange=0
+wallet-0-125 draft actual=640x520 Hrange=0
+wallet-1-125 narrow actual=640x520 Hrange=0
+wallet-1-125 wide actual=780x640 Hrange=0
+wallet-1-125 reversed actual=640x520 Hrange=0
+wallet-1-125 error actual=640x520 Hrange=0
+wallet-1-125 overbalance actual=640x520 Hrange=0
+wallet-1-125 draft wide actual=780x640 Hrange=0
+wallet-1-125 draft actual=640x520 Hrange=0
+wallet-history-empty-125 narrow actual=640x520 Hrange=0
+wallet-history-empty-125 wide actual=780x640 Hrange=0
+wallet-history-empty-125 reversed actual=640x520 Hrange=0
+wallet-history-populated-125 narrow actual=640x520 Hrange=0
+wallet-history-populated-125 wide actual=780x640 Hrange=0
+wallet-history-populated-125 reversed actual=640x520 Hrange=0
+shortcut-125 narrow actual=640x520 Hrange=0
+shortcut-125 wide actual=780x640 Hrange=0
+shortcut-125 reversed actual=640x520 Hrange=0
+shortcut-125 error actual=640x520 Hrange=0
+shortcut-125 draft wide actual=780x640 Hrange=0
+shortcut-125 draft actual=640x520 Hrange=0
+shortcut-help-125 narrow actual=640x520 Hrange=0
+shortcut-help-125 wide actual=780x640 Hrange=0
+shortcut-help-125 reversed actual=640x520 Hrange=0
+cloud-tasks-150 narrow actual=640x520 Hrange=0
+cloud-tasks-150 wide actual=780x640 Hrange=0
+cloud-tasks-150 reversed actual=640x520 Hrange=0
+cloud-pipeline-150 narrow actual=640x520 Hrange=0
+cloud-pipeline-150 wide actual=780x640 Hrange=0
+cloud-pipeline-150 reversed actual=640x520 Hrange=0
+cloud-projects-150 narrow actual=640x520 Hrange=0
+cloud-projects-150 wide actual=780x640 Hrange=0
+cloud-projects-150 reversed actual=640x520 Hrange=0
+cloud-banner-150 narrow actual=640x520 Hrange=0
+cloud-banner-150 wide actual=780x640 Hrange=0
+cloud-banner-150 reversed actual=640x520 Hrange=0
+cloud-gameplay-150 narrow actual=640x520 Hrange=0
+cloud-gameplay-150 wide actual=780x640 Hrange=0
+cloud-gameplay-150 reversed actual=640x520 Hrange=0
+cloud-professions-150 narrow actual=640x520 Hrange=0
+cloud-professions-150 wide actual=780x640 Hrange=0
+cloud-professions-150 reversed actual=640x520 Hrange=0
+cloud-skills-150 narrow actual=640x520 Hrange=0
+cloud-skills-150 wide actual=780x640 Hrange=0
+cloud-skills-150 reversed actual=640x520 Hrange=0
+cloud-missing-150 narrow actual=640x520 Hrange=0
+cloud-missing-150 wide actual=780x640 Hrange=0
+cloud-missing-150 reversed actual=640x520 Hrange=0
+storage-150 narrow actual=640x520 Hrange=0
+storage-150 wide actual=780x640 Hrange=0
+storage-150 reversed actual=640x520 Hrange=0
+wallet-0-150 narrow actual=640x520 Hrange=0
+wallet-0-150 wide actual=780x640 Hrange=0
+wallet-0-150 reversed actual=640x520 Hrange=0
+wallet-0-150 error actual=640x520 Hrange=0
+wallet-0-150 maximum amount actual=640x520 Hrange=0
+wallet-0-150 draft wide actual=780x640 Hrange=0
+wallet-0-150 draft actual=640x520 Hrange=0
+wallet-1-150 narrow actual=640x520 Hrange=0
+wallet-1-150 wide actual=780x640 Hrange=0
+wallet-1-150 reversed actual=640x520 Hrange=0
+wallet-1-150 error actual=640x520 Hrange=0
+wallet-1-150 overbalance actual=640x520 Hrange=0
+wallet-1-150 draft wide actual=780x640 Hrange=0
+wallet-1-150 draft actual=640x520 Hrange=0
+wallet-history-empty-150 narrow actual=640x520 Hrange=0
+wallet-history-empty-150 wide actual=780x640 Hrange=0
+wallet-history-empty-150 reversed actual=640x520 Hrange=0
+wallet-history-populated-150 narrow actual=640x520 Hrange=0
+wallet-history-populated-150 wide actual=780x640 Hrange=0
+wallet-history-populated-150 reversed actual=640x520 Hrange=0
+shortcut-150 narrow actual=640x520 Hrange=0
+shortcut-150 wide actual=780x640 Hrange=0
+shortcut-150 reversed actual=640x520 Hrange=0
+shortcut-150 error actual=640x520 Hrange=0
+shortcut-150 draft wide actual=780x640 Hrange=0
+shortcut-150 draft actual=640x520 Hrange=0
+shortcut-help-150 narrow actual=640x520 Hrange=0
+shortcut-help-150 wide actual=780x640 Hrange=0
+shortcut-help-150 reversed actual=640x520 Hrange=0
+cloud-tasks-175 narrow actual=640x520 Hrange=0
+cloud-tasks-175 wide actual=780x640 Hrange=0
+cloud-tasks-175 reversed actual=640x520 Hrange=0
+cloud-pipeline-175 narrow actual=640x520 Hrange=0
+cloud-pipeline-175 wide actual=780x640 Hrange=0
+cloud-pipeline-175 reversed actual=640x520 Hrange=0
+cloud-projects-175 narrow actual=640x520 Hrange=0
+cloud-projects-175 wide actual=780x640 Hrange=0
+cloud-projects-175 reversed actual=640x520 Hrange=0
+cloud-banner-175 narrow actual=640x520 Hrange=0
+cloud-banner-175 wide actual=780x640 Hrange=0
+cloud-banner-175 reversed actual=640x520 Hrange=0
+cloud-gameplay-175 narrow actual=640x520 Hrange=0
+cloud-gameplay-175 wide actual=780x640 Hrange=0
+cloud-gameplay-175 reversed actual=640x520 Hrange=0
+cloud-professions-175 narrow actual=640x520 Hrange=0
+cloud-professions-175 wide actual=780x640 Hrange=0
+cloud-professions-175 reversed actual=640x520 Hrange=0
+cloud-skills-175 narrow actual=640x520 Hrange=0
+cloud-skills-175 wide actual=780x640 Hrange=0
+cloud-skills-175 reversed actual=640x520 Hrange=0
+cloud-missing-175 narrow actual=640x520 Hrange=0
+cloud-missing-175 wide actual=780x640 Hrange=0
+cloud-missing-175 reversed actual=640x520 Hrange=0
+storage-175 narrow actual=640x520 Hrange=0
+storage-175 wide actual=780x640 Hrange=0
+storage-175 reversed actual=640x520 Hrange=0
+wallet-0-175 narrow actual=640x520 Hrange=0
+wallet-0-175 wide actual=780x640 Hrange=0
+wallet-0-175 reversed actual=640x520 Hrange=0
+wallet-0-175 error actual=640x520 Hrange=0
+wallet-0-175 maximum amount actual=640x520 Hrange=0
+wallet-0-175 draft wide actual=780x640 Hrange=0
+wallet-0-175 draft actual=640x520 Hrange=0
+wallet-1-175 narrow actual=640x520 Hrange=0
+wallet-1-175 wide actual=780x640 Hrange=0
+wallet-1-175 reversed actual=640x520 Hrange=0
+wallet-1-175 error actual=640x520 Hrange=0
+wallet-1-175 overbalance actual=640x520 Hrange=0
+wallet-1-175 draft wide actual=780x640 Hrange=0
+wallet-1-175 draft actual=640x520 Hrange=0
+wallet-history-empty-175 narrow actual=640x520 Hrange=0
+wallet-history-empty-175 wide actual=780x640 Hrange=0
+wallet-history-empty-175 reversed actual=640x520 Hrange=0
+wallet-history-populated-175 narrow actual=640x520 Hrange=0
+wallet-history-populated-175 wide actual=780x640 Hrange=0
+wallet-history-populated-175 reversed actual=640x520 Hrange=0
+shortcut-175 narrow actual=640x520 Hrange=0
+shortcut-175 wide actual=780x640 Hrange=0
+shortcut-175 reversed actual=640x520 Hrange=0
+shortcut-175 error actual=640x520 Hrange=0
+shortcut-175 draft wide actual=780x640 Hrange=0
+shortcut-175 draft actual=640x520 Hrange=0
+shortcut-help-175 narrow actual=640x520 Hrange=0
+shortcut-help-175 wide actual=780x640 Hrange=0
+shortcut-help-175 reversed actual=640x520 Hrange=0
+cloud-tasks-200 narrow actual=640x520 Hrange=0
+cloud-tasks-200 wide actual=780x640 Hrange=0
+cloud-tasks-200 reversed actual=640x520 Hrange=0
+cloud-pipeline-200 narrow actual=640x520 Hrange=0
+cloud-pipeline-200 wide actual=780x640 Hrange=0
+cloud-pipeline-200 reversed actual=640x520 Hrange=0
+cloud-projects-200 narrow actual=640x520 Hrange=0
+cloud-projects-200 wide actual=780x640 Hrange=0
+cloud-projects-200 reversed actual=640x520 Hrange=0
+cloud-banner-200 narrow actual=640x520 Hrange=0
+cloud-banner-200 wide actual=780x640 Hrange=0
+cloud-banner-200 reversed actual=640x520 Hrange=0
+cloud-gameplay-200 narrow actual=640x520 Hrange=0
+cloud-gameplay-200 wide actual=780x640 Hrange=0
+cloud-gameplay-200 reversed actual=640x520 Hrange=0
+cloud-professions-200 narrow actual=640x520 Hrange=0
+cloud-professions-200 wide actual=780x640 Hrange=0
+cloud-professions-200 reversed actual=640x520 Hrange=0
+cloud-skills-200 narrow actual=640x520 Hrange=0
+cloud-skills-200 wide actual=780x640 Hrange=0
+cloud-skills-200 reversed actual=640x520 Hrange=0
+cloud-missing-200 narrow actual=640x520 Hrange=0
+cloud-missing-200 wide actual=780x640 Hrange=0
+cloud-missing-200 reversed actual=640x520 Hrange=0
+storage-200 narrow actual=640x520 Hrange=0
+storage-200 wide actual=780x640 Hrange=0
+storage-200 reversed actual=640x520 Hrange=0
+wallet-0-200 narrow actual=640x520 Hrange=0
+wallet-0-200 wide actual=780x640 Hrange=0
+wallet-0-200 reversed actual=640x520 Hrange=0
+wallet-0-200 error actual=640x520 Hrange=0
+wallet-0-200 maximum amount actual=640x520 Hrange=0
+wallet-0-200 draft wide actual=780x640 Hrange=0
+wallet-0-200 draft actual=640x520 Hrange=0
+wallet-1-200 narrow actual=640x520 Hrange=0
+wallet-1-200 wide actual=780x640 Hrange=0
+wallet-1-200 reversed actual=640x520 Hrange=0
+wallet-1-200 error actual=640x520 Hrange=0
+wallet-1-200 overbalance actual=640x520 Hrange=0
+wallet-1-200 draft wide actual=780x640 Hrange=0
+wallet-1-200 draft actual=640x520 Hrange=0
+wallet-history-empty-200 narrow actual=640x520 Hrange=0
+wallet-history-empty-200 wide actual=780x640 Hrange=0
+wallet-history-empty-200 reversed actual=640x520 Hrange=0
+wallet-history-populated-200 narrow actual=640x520 Hrange=0
+wallet-history-populated-200 wide actual=780x640 Hrange=0
+wallet-history-populated-200 reversed actual=640x520 Hrange=0
+shortcut-200 narrow actual=640x520 Hrange=0
+shortcut-200 wide actual=780x640 Hrange=0
+shortcut-200 reversed actual=640x520 Hrange=0
+shortcut-200 error actual=640x520 Hrange=0
+shortcut-200 draft wide actual=780x640 Hrange=0
+shortcut-200 draft actual=640x520 Hrange=0
+shortcut-help-200 narrow actual=640x520 Hrange=0
+shortcut-help-200 wide actual=780x640 Hrange=0
+shortcut-help-200 reversed actual=640x520 Hrange=0
+cloud-invalid-200 narrow actual=640x520 Hrange=0
+cloud-invalid-200 wide actual=780x640 Hrange=0
+cloud-invalid-200 reversed actual=640x520 Hrange=0
+storage-invalid-200 narrow actual=640x520 Hrange=0
+storage-invalid-200 wide actual=780x640 Hrange=0
+storage-invalid-200 reversed actual=640x520 Hrange=0
+Decision forms verified main states=404 modal contexts=83 confirmations=20 across seven scales
+display-dialog 90 collapsed actual=640x520 minHint=240x115 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 90 expanded actual=640x520 minHint=240x115 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 100 collapsed actual=640x520 minHint=259x119 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 100 expanded actual=640x520 minHint=259x119 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 150 collapsed actual=640x520 minHint=380x140 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 150 expanded actual=640x520 minHint=380x140 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 200 collapsed actual=640x520 minHint=501x161 frameFitsScreen=1 footerFitsDialog=1
+display-dialog 200 expanded actual=640x520 minHint=501x161 frameFitsScreen=1 footerFitsDialog=1
+Nested background selection index=1 data=ui/backgrounds/reference.png alpha=55
+storageHealth: before cancel preview
+storageHealth: cancel timer modal=storageCleanupDialog
+storageHealth: after cancel preview
+storageHealth: before delete preview
+storageHealth: delete timer modal=storageCleanupDialog
+storageHealth: after delete preview
+Chart renderer states checked: 224
+Report selector contexts checked: 72
+pipeline-map 100 requested=1040x740 actual=1040x740 selectedVisible=1 fullSelectedVisible=1
+pipeline-map 100 requested=720x520 actual=720x520 selectedVisible=1 fullSelectedVisible=1
+pipeline-map 200 requested=720x520 actual=720x520 selectedVisible=1 fullSelectedVisible=1
+Prepared isolated UI audit workspace: C:/Users/mrdem/AppData/Local/Temp/smoke_qt-zLMcKj
+smoke_qt: OK; accessible dialogs audited: 323
+<end of output>
+Test time =  56.02 sec
+----------------------------------------------------------
+Test Passed.
+"smoke_qt" end time: Sep 30 08:16 RTZ 2 (çèìà)
+"smoke_qt" time elapsed: 00:00:56
+----------------------------------------------------------
+
+End testing: Sep 30 08:16 RTZ 2 (çèìà)

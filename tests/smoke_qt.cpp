@@ -4322,6 +4322,508 @@ static bool TestQtServiceEditorLayout(QApplication& app) {
     return checked;
 }
 
+static bool TestQtDecisionFormsLayout(QApplication& app) {
+    struct RestoreStyle {
+        QFont font = qApp->font();
+        QString stylesheet = qApp->styleSheet();
+        QVariant base = qApp->property("forgeBasePointSize");
+        ~RestoreStyle() { qApp->setFont(font); qApp->setStyleSheet(stylesheet); qApp->setProperty("forgeBasePointSize", base); }
+    } restore;
+    bool checked = true;
+    int mainStates = 0, confirmations = 0, modalContexts = 0;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty() && !QDir().mkpath(artifacts)) return false;
+    const auto record = [&](bool okay, const QString& context) {
+        checked &= okay;
+        if (!okay) std::cerr << "Decision forms: " << context.toStdString() << '\n';
+    };
+    const auto settle = [] { QApplication::processEvents(); QApplication::processEvents(); };
+    struct Snapshot { bool okay = true; QMap<QString, QByteArray> files; };
+    const auto snapshot = [](const QString& root) {
+        Snapshot result;
+        QDirIterator entries(root, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+        while (entries.hasNext()) {
+            QFile file(entries.next());
+            if (!file.open(QIODevice::ReadOnly)) { result.okay = false; break; }
+            const auto bytes = file.readAll();
+            if (file.error() != QFileDevice::NoError) { result.okay = false; break; }
+            result.files.insert(QDir(root).relativeFilePath(file.fileName()), bytes);
+        }
+        return result;
+    };
+    const auto unchanged = [&](const Snapshot& before, const QString& directory, const QString& context) {
+        const auto after = snapshot(directory);
+        record(before.okay && after.okay, context + " snapshot read success");
+        record(before.okay && after.okay && before.files == after.files, context + " all file bytes unchanged");
+    };
+    const auto write = [](const std::filesystem::path& target, const QByteArray& bytes) {
+        QFile file(QString::fromUtf8(target.u8string()));
+        QDir().mkpath(QFileInfo(file).absolutePath());
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    const auto read = [&](const std::filesystem::path& target, const QString& context) {
+        QFile file(QString::fromUtf8(target.u8string()));
+        const bool opened = file.open(QIODevice::ReadOnly);
+        record(opened, context + " read success");
+        const auto bytes = opened ? file.readAll() : QByteArray();
+        record(opened && file.error() == QFileDevice::NoError, context + " read complete");
+        return bytes;
+    };
+    const auto capture = [&](QDialog* dialog, const QString& stem, int scale) {
+        if (!artifacts.isEmpty() && (scale == 100 || scale == 200))
+            record(dialog->grab().save(artifacts + '/' + stem + ".png"), stem + " capture");
+    };
+    const auto inspect = [&](QDialog* dialog, const QString& stem, QSize requested) {
+        ++mainStates;
+        auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+        auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+        record(scroll && scroll->widget() && footer, stem + " scroll body / permanent footer");
+        if (!scroll || !scroll->widget() || !footer) return;
+        auto* body = scroll->widget();
+        record(dialog->size() == requested.boundedTo(dialog->maximumSize()), stem + " actual bounded request");
+        record(body->width() <= scroll->viewport()->width() && scroll->horizontalScrollBar()->maximum() == 0,
+            stem + " no outer horizontal overflow");
+        record(dialog->rect().contains(QRect(footer->mapTo(dialog, QPoint()), footer->size())), stem + " persistent footer bounds");
+        int primaries = 0, defaults = 0;
+        for (auto* button : dialog->findChildren<QPushButton*>()) {
+            if (!button->isVisible() || button->window() != dialog) continue;
+            primaries += button->property("primary").toBool(); defaults += button->isDefault();
+            record(button->width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(),
+                stem + " intrinsic command " + button->objectName() + QString(" actual=%1x%2 hint=%3x%4 min=%5x%6")
+                    .arg(button->width()).arg(button->height()).arg(button->sizeHint().width()).arg(button->sizeHint().height())
+                    .arg(button->minimumWidth()).arg(button->minimumHeight()));
+            record(!button->accessibleName().isEmpty(), stem + " named command " + button->objectName());
+            if (footer->isAncestorOf(button))
+                record(dialog->rect().contains(QRect(button->mapTo(dialog, QPoint()), button->size())), stem + " footer command " + button->objectName());
+        }
+        record(primaries == 1 && defaults == 1, stem + " one meaningful primary / one default");
+        for (auto* child : body->findChildren<QWidget*>()) {
+            if (!child->isVisible() || child->window() != dialog) continue;
+            bool insideTable = false;
+            for (auto* ancestor = child->parentWidget(); ancestor && ancestor != body; ancestor = ancestor->parentWidget())
+                insideTable |= qobject_cast<QAbstractItemView*>(ancestor) != nullptr;
+            // Internal table scrolling is allowed. Its cells are measured below;
+            // mapping an off-viewport cell into the outer body is not a clipping test.
+            if (insideTable) continue;
+            if (qobject_cast<QLabel*>(child) || qobject_cast<QAbstractSpinBox*>(child) ||
+                qobject_cast<QCheckBox*>(child) || qobject_cast<QPushButton*>(child) ||
+                qobject_cast<QLineEdit*>(child) || qobject_cast<QComboBox*>(child) || qobject_cast<QTableWidget*>(child))
+                record(body->rect().contains(QRect(child->mapTo(body, QPoint()), child->size())), stem + " body bounds " + child->objectName() +
+                    QString(" origin=%1,%2 size=%3x%4 body=%5x%6")
+                        .arg(child->mapTo(body, QPoint()).x()).arg(child->mapTo(body, QPoint()).y())
+                        .arg(child->width()).arg(child->height()).arg(body->width()).arg(body->height()));
+            if (auto* label = qobject_cast<QLabel*>(child); label && !label->text().isEmpty()) {
+                if (label->wordWrap()) record(label->height() >= label->heightForWidth(label->width()), stem + " full wrapped label " + label->objectName() +
+                    QString(" width=%1 height=%2 required=%3").arg(label->width()).arg(label->height()).arg(label->heightForWidth(label->width())));
+                else record(label->fontMetrics().horizontalAdvance(label->text()) <= label->contentsRect().width(), stem + " full label " + label->objectName());
+            }
+            if (auto* spin = qobject_cast<QAbstractSpinBox*>(child)) {
+                record(spin->width() >= spin->sizeHint().width() && spin->height() >= spin->sizeHint().height(), stem + " intrinsic numeric field " + spin->objectName());
+                if (auto* editor = spin->findChild<QLineEdit*>())
+                    record(editor->fontMetrics().horizontalAdvance(editor->text()) <= editor->contentsRect().width() &&
+                        editor->fontMetrics().height() <= editor->contentsRect().height(), stem + " numeric glyphs " + spin->objectName());
+            }
+        }
+        for (auto* table : dialog->findChildren<QTableWidget*>()) {
+            if (!table->isVisible() || table->window() != dialog) continue;
+            record(table->editTriggers() == QAbstractItemView::NoEditTriggers, stem + " readonly table " + table->objectName());
+            for (int row = 0; row < table->rowCount(); ++row) for (int column = 0; column < table->columnCount(); ++column) {
+                if (auto* command = table->cellWidget(row, column)) {
+                    record(command->size().width() >= command->sizeHint().width() && command->height() >= command->sizeHint().height(),
+                        stem + " intrinsic cell command " + command->objectName() + QString(" actual=%1x%2 hint=%3x%4")
+                            .arg(command->width()).arg(command->height()).arg(command->sizeHint().width()).arg(command->sizeHint().height()));
+                    record(table->rowHeight(row) >= command->height() && table->columnWidth(column) >= command->width(), stem + " allocated cell command");
+                }
+                if (!table->item(row, column)) continue;
+                QStyleOptionViewItem option; option.initFrom(table); option.widget = table; option.font = table->font();
+                option.fontMetrics = table->fontMetrics(); option.rect = QRect(0, 0, table->columnWidth(column), table->rowHeight(row));
+                if (table->wordWrap()) option.features |= QStyleOptionViewItem::WrapText;
+                const auto index = table->model()->index(row, column);
+                const auto* delegate = table->itemDelegateForIndex(index);
+                record(delegate && table->rowHeight(row) >= delegate->sizeHint(option, index).height(),
+                    stem + " full cell glyph height " + table->objectName() + QString(" %1:%2").arg(row).arg(column));
+            }
+        }
+        for (auto* label : footer->findChildren<QLabel*>())
+            if (label->isVisible() && label->wordWrap() && !label->text().isEmpty())
+                record(label->height() >= label->heightForWidth(label->width()), stem + " visible notice glyph height");
+        if (QGuiApplication::platformName() != "offscreen")
+            record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()), stem + " native screen bounds");
+        std::cout << stem.toStdString() << " actual=" << dialog->width() << 'x' << dialog->height()
+            << " Hrange=" << scroll->horizontalScrollBar()->maximum() << '\n';
+    };
+    const auto resizeInspect = [&](QDialog* dialog, const QString& stem) {
+        dialog->resize(640, 520); settle(); inspect(dialog, stem + " narrow", QSize(640,520));
+        dialog->resize(1000,640); settle(); inspect(dialog, stem + " wide", QSize(1000,640));
+        dialog->resize(640,520); settle(); inspect(dialog, stem + " reversed", QSize(640,520));
+    };
+    const auto cancelReturn = [&](QDialog* dialog, QPushButton* cancel, const QString& context) {
+        record(cancel && cancel->isVisible() && cancel->isEnabled(), context + " local safe cancel / close hook");
+        if (!cancel) { dialog->reject(); return; }
+        bool rescued = false;
+        QTimer guard; guard.setSingleShot(true);
+        QObject::connect(&guard, &QTimer::timeout, dialog, [&] {
+            rescued = true;
+            if (auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget())) modal->reject();
+            dialog->reject();
+        });
+        guard.start(500);
+        cancel->setFocus(); settle(); record(dialog->focusWidget() == cancel, context + " cancel focus");
+        record(cancel->isDefault() || !cancel->autoDefault(), context + " focused safe Return target");
+        QTest::keyClick(cancel, Qt::Key_Return); settle();
+        record(!rescued && !dialog->isVisible() && dialog->result() == QDialog::Rejected, context + " Return cancels locally");
+        guard.stop(); if (dialog->isVisible()) dialog->reject();
+    };
+    const auto inspectConfirm = [&](QDialog* dialog, const QString& context, int scale, QMessageBox::StandardButton safe) {
+        ++confirmations;
+        auto* confirm = qobject_cast<QMessageBox*>(dialog);
+        record(confirm && confirm->defaultButton() == confirm->button(safe), context + " safe default");
+        if (!confirm) { dialog->reject(); return; }
+        for (auto* button : confirm->findChildren<QPushButton*>()) if (button->isVisible()) {
+            record(button->size().width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(), context + " intrinsic confirmation command");
+            record(confirm->rect().contains(QRect(button->mapTo(confirm, QPoint()), button->size())), context + " confirmation footer bounds");
+        }
+        for (auto* label : confirm->findChildren<QLabel*>()) if (label->isVisible() && !label->text().isEmpty() && label->wordWrap())
+            record(label->height() >= label->heightForWidth(label->width()), context + " full confirmation glyphs");
+        if (auto* body = confirm->findChild<QPlainTextEdit*>("conflictConfirmBody")) {
+            record(body->isReadOnly() && body->tabChangesFocus() && body->toPlainText() == confirm->text(), context + " complete readonly source / target context");
+            record(body->horizontalScrollBar()->maximum() == 0 && body->viewport()->height() >= body->fontMetrics().lineSpacing()*3,
+                context + " wrapped confirmation body has three visible text lines" +
+                    QString(" viewport=%1x%2 line=%3 Hrange=%4").arg(body->viewport()->width()).arg(body->viewport()->height())
+                        .arg(body->fontMetrics().lineSpacing()).arg(body->horizontalScrollBar()->maximum()));
+        }
+        if (QGuiApplication::platformName() != "offscreen")
+            record(confirm->screen()->availableGeometry().contains(confirm->frameGeometry()), context + " confirmation screen bounds");
+        capture(confirm, context, scale);
+    };
+    const QStringList fileStems{"tasks", "pipeline", "projects", "banner", "gameplay", "professions", "skills"};
+    for (const int scale : {90,100,110,125,150,175,200}) {
+        QTemporaryDir temporary; if (!temporary.isValid()) return false;
+        const auto local = std::filesystem::u8path((temporary.path() + QString::fromUtf8("/Длинное имя рабочей папки для сравнения данных")).toUtf8().toStdString());
+        const auto cloud = std::filesystem::u8path((temporary.path() + QString::fromUtf8("/Длинное имя облачной папки для сравнения данных")).toUtf8().toStdString());
+        CloudSyncConfig config; config.enabled = true; config.root = cloud;
+        std::filesystem::create_directories(local); std::filesystem::create_directories(cloud);
+        if (!SaveCloudSyncConfig(local, config)) return false;
+        const QString longText = QString::fromUtf8("Очень длинный русский контекст для проверки полного текста, локальной версии и безопасного подтверждения");
+        for (const auto& directory : {local, cloud}) {
+            const bool remote = directory == cloud;
+            const auto tasks = QJsonDocument(QJsonArray{QJsonObject{{"id", remote ? "remote" : "local"}, {"title", longText}}}).toJson();
+            if (!write(directory / "meta/tasks.json", tasks) || !write(directory / "meta/pipeline.json", "{\"steps\":[]}") ||
+                !write(directory / "meta/projects.json", "[]") || !write(directory / "meta/banner.json", "{\"items\":[\"Fixture phrase\"]}") ||
+                !write(directory / "meta/gameplay.ini", "[leveling]\nbase=1500\n") ||
+                !write(directory / "meta/professions.txt", "pr_decision|Fixture profession|Description\n") ||
+                !write(directory / "skills.txt", "sk_decision|Fixture skill|1|prof=pr_decision|Description\n")) return false;
+            StorageVaultData vault; vault.balance = remote ? 25 : 10; vault.currencyCode = remote ? "CLD" : "LOC";
+            vault.currencyName = u8"Длинное название валюты тестового кошелька";
+            vault.log.push_back({1700000000, vault.balance, "fixture", longText.toUtf8().toStdString()});
+            if (!SaveStorageVault(directory, vault)) return false;
+        }
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        if (!SaveQtDisplaySettings(local, settings)) return false;
+        ApplyQtDisplaySettings(app, settings);
+        // Populate actual reversible snapshots; all following Cancel checks include their exact bytes.
+        record(ApplyQtCloudWorkspaceFile(local, cloud / "meta/tasks.json", "meta/tasks.json", "cloud").ok, "decision snapshot fixture");
+        const QString suffix = QString::number(scale);
+        const auto beforeCloud = snapshot(temporary.path());
+        ++modalContexts;
+        ScheduleQtModalDriver(app, "cloudConflictResolver", "cloud-" + suffix, [&](QDialog* dialog) {
+            auto* tabs = dialog->findChild<QTabWidget*>("cloudConflictTabs");
+            record(tabs && tabs->count() == 7, "cloud-" + suffix + " seven original files");
+            if (!tabs) { dialog->reject(); return; }
+            for (int index=0; index<tabs->count(); ++index) {
+                tabs->setCurrentIndex(index); settle();
+                const QString stem = "cloud-" + fileStems[index] + '-' + suffix;
+                resizeInspect(dialog, stem); capture(dialog, stem, scale);
+                auto* comparison = dialog->findChild<QTableWidget*>(fileStems[index] + "Comparison");
+                auto* backups = dialog->findChild<QTableWidget*>(fileStems[index] + "Backups");
+                record(comparison && comparison->rowCount() == 2 && comparison->columnCount() == 3 &&
+                    comparison->selectionMode() == QAbstractItemView::NoSelection, stem + " original comparison columns / readonly");
+                record(comparison && comparison->horizontalScrollBar()->maximum()==0,
+                    stem + " measured comparison columns fit without artificial horizontal scroll");
+                record(backups && backups->columnCount() == 4 && backups->selectionMode() == QAbstractItemView::NoSelection, stem + " original snapshot columns");
+                if (index == 0) record(backups && backups->rowCount() >= 2, stem + " populated backup fixture");
+                else record(backups && backups->rowCount() == 0, stem + " empty backup fixture");
+                auto* apply = dialog->findChild<QPushButton*>("applyCloud" + QString(fileStems[index]).replace(0,1,fileStems[index].left(1).toUpper()));
+                record(apply && apply->isEnabled() && !apply->autoDefault(), stem + " dangerous action not default");
+            }
+            cancelReturn(dialog, dialog->findChild<QPushButton*>("cloudConflictClose"), "cloud-" + suffix);
+        }, record);
+        record(!ShowCloudConflictResolver(nullptr, local, {}, true, true), "cloud-" + suffix + " cancelled");
+        unchanged(beforeCloud, temporary.path(), "cloud-" + suffix);
+        // Missing source keeps read-only comparison reachable and disables its destructive action.
+        const auto cloudTasks = read(cloud / "meta/tasks.json", "cloud task source");
+        std::filesystem::remove(cloud / "meta/tasks.json");
+        const auto beforeMissing = snapshot(temporary.path());
+        ++modalContexts;
+        ScheduleQtModalDriver(app, "cloudConflictResolver", "cloud-missing-" + suffix, [&](QDialog* dialog) {
+            resizeInspect(dialog, "cloud-missing-" + suffix); capture(dialog, "cloud-missing-" + suffix, scale);
+            auto* apply=dialog->findChild<QPushButton*>("applyCloudTasks"); record(apply && !apply->isEnabled(), "cloud missing source disables apply");
+            cancelReturn(dialog, dialog->findChild<QPushButton*>("cloudConflictClose"), "cloud-missing-" + suffix);
+        }, record);
+        record(!ShowCloudConflictResolver(nullptr, local), "cloud missing cancelled");
+        unchanged(beforeMissing, temporary.path(), "cloud-missing-" + suffix);
+        if (!write(cloud / "meta/tasks.json", cloudTasks)) return false;
+        const auto beforeStorage = snapshot(temporary.path()); bool localChanged = false;
+        ++modalContexts;
+        ScheduleQtModalDriver(app, "storageConflictResolver", "storage-" + suffix, [&](QDialog* dialog) {
+            resizeInspect(dialog, "storage-" + suffix); capture(dialog, "storage-" + suffix, scale);
+            auto* table = dialog->findChild<QTableWidget*>("storageComparison");
+            record(table && table->rowCount()==2 && table->columnCount()==3 && table->selectionMode()==QAbstractItemView::NoSelection,
+                "storage-" + suffix + " original readonly comparison");
+            record(table && table->horizontalScrollBar()->maximum()==0,
+                "storage-" + suffix + " measured comparison columns fit without artificial horizontal scroll");
+            cancelReturn(dialog, dialog->findChild<QPushButton*>("storageConflictClose"), "storage-" + suffix);
+        }, record);
+        record(!ShowQtStorageConflictResolver(nullptr, local, &localChanged) && !localChanged, "storage cancelled without local change");
+        unchanged(beforeStorage, temporary.path(), "storage-" + suffix);
+
+        if (!SetAdminPassword(local, "decision-forms-isolated-only") || !SetAdminStayLoggedIn(local, true)) return false;
+        QtWorkspace workspace(local); Profile profile(longText.toUtf8().toStdString()); profile.set_wallet_balance(250);
+        const auto created = workspace.storage->create_profile(profile); if (!created) return false;
+        if (!workspace.storage->set_active_profile(created->id)) return false;
+        QtWindow window(workspace); window.showNormal(); settle();
+        auto* nav=window.findChild<QListWidget*>("navigation"); auto* adjust=window.findChild<QPushButton*>("adjustProfileWallet");
+        auto* create=window.findChild<QPushButton*>("primary"); auto* help=window.findChild<QAction*>("shortcutHelpAction");
+        if (!nav || !adjust || !create || !help) return false;
+        nav->setCurrentRow(0); settle();
+        record(adjust->isVisible() && adjust->isEnabled(), "wallet administrator fixture command");
+        for (const int operation : {0,1}) {
+            const QString stem = QString("wallet-%1-%2").arg(operation).arg(scale); const auto before = snapshot(temporary.path());
+            ++modalContexts;
+            ScheduleQtModalDriver(app, "walletAdjustmentDialog", stem, [&](QDialog* dialog) {
+                auto* choice=dialog->findChild<QComboBox*>("walletOperation"); auto* amount=dialog->findChild<QDoubleSpinBox*>("walletAmount");
+                auto* reason=dialog->findChild<QLineEdit*>("walletReason"); auto* save=dialog->findChild<QPushButton*>("walletApply");
+                auto* notice=dialog->findChild<QLabel*>("walletNotice");
+                record(choice && amount && reason && save && notice, stem + " actual wallet fields");
+                if (!choice || !amount || !reason || !save || !notice) { dialog->reject(); return; }
+                choice->setCurrentIndex(operation); amount->setValue(12.5); resizeInspect(dialog, stem);
+                reason->clear(); save->click(); settle();
+                record(dialog->isVisible() && notice->isVisible() && !notice->text().isEmpty() && dialog->focusWidget()==reason,
+                    stem + " required memo stays local and focuses field");
+                inspect(dialog, stem + " error", QSize(640,520)); capture(dialog, stem + "-error", scale);
+                reason->setText(longText); reason->setFocus(); settle(); QTest::keyClick(reason, Qt::Key_Tab); settle();
+                record(dialog->focusWidget()==save, stem + " memo Tab to apply"); QTest::keyClick(save, Qt::Key_Backtab); settle();
+                record(dialog->focusWidget()==reason, stem + " Backtab returns to memo");
+                if (operation==1) {
+                    amount->setValue(251); settle(); record(!save->isEnabled() && notice->isVisible() && !notice->text().isEmpty(), stem + " overbalance guarded with reason");
+                    inspect(dialog, stem + " overbalance", QSize(640,520)); amount->setValue(12.5); settle(); record(save->isEnabled(), stem + " valid debit restored");
+                } else {
+                    amount->setValue(1000000000.0); settle();
+                    record(amount->value()==1000000000.0, stem + " real maximum amount fixture");
+                    inspect(dialog, stem + " maximum amount", QSize(640,520)); capture(dialog, stem + "-maximum", scale);
+                    amount->setValue(12.5); settle();
+                }
+                dialog->resize(1000,640); settle(); inspect(dialog, stem + " draft wide", QSize(1000,640));
+                dialog->resize(640,520); settle(); record(reason->text()==longText && amount->value()==12.5, stem + " resize retains draft");
+                inspect(dialog, stem + " draft", QSize(640,520)); capture(dialog, stem, scale);
+                cancelReturn(dialog, dialog->findChild<QPushButton*>("walletCancel"), stem);
+            }, record); adjust->click(); unchanged(before, temporary.path(), stem);
+        }
+        auto* history = window.findChild<QPushButton*>("profileWalletHistory");
+        if (!history) return false;
+        for (const bool populated : {false,true}) {
+            if (populated) for (int index=0; index<3; ++index)
+                record(AppendProfileAudit(local,created->id,"wallet_adjustment",
+                    std::string(index==0 ? "credit|1000000000.00|" : "credit|12.50|") + longText.toUtf8().toStdString()),
+                    "history three safe audit fixtures including maximum amount");
+            const auto beforeHistory=snapshot(temporary.path()); const QString stem=QString("wallet-history-%1-%2").arg(populated ? "populated" : "empty").arg(scale);
+            ++modalContexts;
+            ScheduleQtModalDriver(app,"profileWalletHistoryDialog",stem,[&](QDialog* dialog) {
+                resizeInspect(dialog,stem); capture(dialog,stem,scale);
+                auto* table=dialog->findChild<QTableWidget*>("profileWalletHistoryTable");
+                record(table && table->columnCount()==4 && table->rowCount()==(populated ? 3 : 0),stem + " original audit columns and rows");
+                if (populated && table) {
+                    bool maximumVisible=false;
+                    for (int row=0; row<table->rowCount(); ++row)
+                        maximumVisible |= table->item(row,2) && table->item(row,2)->text().contains("1000000000.00");
+                    record(maximumVisible,stem + " complete maximum amount is in real history cell");
+                    for (int row=0; row<table->rowCount(); ++row) if (auto* item=table->item(row,2)) {
+                        QStyleOptionViewItem option; option.initFrom(table); option.widget=table;
+                        option.font=table->font(); option.fontMetrics=table->fontMetrics();
+                        option.features=QStyleOptionViewItem::HasDisplay | QStyleOptionViewItem::WrapText;
+                        option.text=item->text(); option.rect=QRect(0,0,table->columnWidth(2),table->rowHeight(row));
+                        const auto textRect=table->style()->subElementRect(QStyle::SE_ItemViewItemText,&option,table);
+                        record(option.fontMetrics.horizontalAdvance(item->text().section('\n',0,0))<=textRect.width(),
+                            stem + " numeric glyph width fits actual styled cell");
+                    }
+                }
+                cancelReturn(dialog,dialog->findChild<QPushButton*>("profileWalletHistoryClose"),stem);
+            },record); history->click(); unchanged(beforeHistory,temporary.path(),stem);
+        }
+        const auto target=local / std::filesystem::u8path(u8"Безопасная папка ярлыка с длинным названием"); std::filesystem::create_directories(target);
+        nav->setCurrentRow(11); settle();
+        const auto beforeShortcut=snapshot(temporary.path());
+        ++modalContexts;
+        ScheduleQtModalDriver(app, "shortcutEditor", "shortcut-" + suffix, [&](QDialog* dialog) {
+            auto* label=dialog->findChild<QLineEdit*>("shortcutLabel"); auto* targetField=dialog->findChild<QLineEdit*>("shortcutPath");
+            auto* save=dialog->findChild<QPushButton*>("shortcutSave"); auto* notice=dialog->findChild<QLabel*>("shortcutNotice");
+            record(label && targetField && save && notice && !targetField->isReadOnly(), "shortcut field hooks");
+            if (!label || !targetField || !save || !notice) { dialog->reject(); return; }
+            label->setText(longText.left(90)); targetField->setText(QString::fromUtf8((target / "missing").u8string()));
+            resizeInspect(dialog, "shortcut-" + suffix); save->click(); settle();
+            record(dialog->isVisible() && !notice->text().isEmpty() && notice->isVisible() && dialog->focusWidget()==targetField,
+                "shortcut invalid path keeps draft and focuses target");
+            inspect(dialog,"shortcut-" + suffix + " error",QSize(640,520)); capture(dialog,"shortcut-" + suffix + "-error",scale);
+            targetField->setText(QString::fromUtf8(target.u8string())); targetField->setFocus(); settle();
+            QTest::keyClick(targetField,Qt::Key_Tab); settle(); auto* browse=dialog->findChild<QPushButton*>("shortcutBrowse");
+            record(dialog->focusWidget()==browse,"shortcut target Tab to file picker"); QTest::keyClick(browse,Qt::Key_Backtab); settle();
+            record(dialog->focusWidget()==targetField,"shortcut Backtab to target");
+            dialog->resize(1000,640); settle(); inspect(dialog,"shortcut-" + suffix + " draft wide",QSize(1000,640));
+            dialog->resize(640,520); settle(); record(label->text()==longText.left(90) && targetField->text()==QString::fromUtf8(target.u8string()),"shortcut draft retained");
+            inspect(dialog,"shortcut-" + suffix + " draft",QSize(640,520)); capture(dialog,"shortcut-" + suffix,scale);
+            if (scale==100 || scale==200) for (const bool folder : {false,true}) {
+                auto* pickerCommand=dialog->findChild<QPushButton*>(folder ? "shortcutBrowseFolder" : "shortcutBrowse");
+                record(pickerCommand,"shortcut picker command"); if (!pickerCommand) continue;
+                const QString pickerContext=QString("shortcut-picker-%1-%2").arg(folder ? "folder" : "file").arg(scale);
+                ScheduleQtModalDriver(app,folder ? "shortcutFolderPicker" : "shortcutFilePicker",pickerContext,[&](QDialog* nested) {
+                    auto* picker=qobject_cast<QFileDialog*>(nested);
+                    record(picker && picker->testOption(QFileDialog::DontUseNativeDialog) &&
+                        picker->fileMode()==(folder ? QFileDialog::Directory : QFileDialog::ExistingFile),pickerContext + " original Qt picker mode");
+                    if (picker && folder) record(picker->testOption(QFileDialog::ShowDirsOnly),pickerContext + " directory-only option");
+                    if (picker) for (const auto* name : {"lookInCombo","fileTypeCombo"}) {
+                        auto* combo=picker->findChild<QComboBox*>(QString::fromLatin1(name));
+                        record(combo && !combo->accessibleName().isEmpty(),pickerContext + " actual named picker combo " + name);
+                    }
+                    if (QGuiApplication::platformName()!="offscreen") record(nested->screen()->availableGeometry().contains(nested->frameGeometry()),pickerContext + " native bounds");
+                    capture(nested,pickerContext,scale);
+                    auto* buttons=nested->findChild<QDialogButtonBox*>();
+                    cancelReturn(nested,buttons ? buttons->button(QDialogButtonBox::Cancel) : nullptr,pickerContext);
+                },record); pickerCommand->click();
+                record(dialog->isVisible() && targetField->text()==QString::fromUtf8(target.u8string()),pickerContext + " Cancel preserves target draft");
+            }
+            cancelReturn(dialog,dialog->findChild<QPushButton*>("shortcutCancel"),"shortcut-" + suffix);
+        },record); create->click(); unchanged(beforeShortcut,temporary.path(),"shortcut-" + suffix);
+        const auto beforeHelp=snapshot(temporary.path());
+        ++modalContexts;
+        ScheduleQtModalDriver(app,"shortcutHelp","shortcut-help-" + suffix,[&](QDialog* dialog) {
+            resizeInspect(dialog,"shortcut-help-" + suffix); capture(dialog,"shortcut-help-" + suffix,scale);
+            auto* table=dialog->findChild<QTableWidget*>("shortcutHelpTable"); record(table && table->rowCount()==17 && table->columnCount()==2,"all 17 shortcut commands preserved");
+            cancelReturn(dialog,dialog->findChild<QPushButton*>("shortcutHelpClose"),"shortcut-help-" + suffix);
+        },record); help->trigger(); unchanged(beforeHelp,temporary.path(),"shortcut-help-" + suffix);
+
+        if (scale==100 || scale==200) {
+            // Exercise real confirmation callbacks: cancel leaves all bytes; accept uses disposable known fixtures only.
+            const auto invalidConflict = [&](bool storage) {
+                const auto target=cloud / (storage ? "meta/storage.json" : "meta/tasks.json");
+                const auto original=read(target,"invalid conflict original fixture");
+                if (!write(target,"{broken")) { record(false,"invalid conflict fixture write"); return; }
+                const auto before=snapshot(temporary.path());
+                const QString stem=QString("%1-invalid-%2").arg(storage ? "storage" : "cloud").arg(scale);
+                bool warningShown=false;
+                ++modalContexts;
+                ScheduleQtModalDriver(app,storage ? "storageConflictResolver" : "cloudConflictResolver",stem,[&](QDialog* dialog) {
+                    resizeInspect(dialog,stem); capture(dialog,stem,scale);
+                    QTimer warningPoll; warningPoll.setInterval(1); QElapsedTimer elapsed; elapsed.start();
+                    const int warningLoopLevel=QThread::currentThread()->loopLevel()+1;
+                    QObject::connect(&warningPoll,&QTimer::timeout,dialog,[&] {
+                        if(QThread::currentThread()->loopLevel()<warningLoopLevel) return;
+                        auto* warning=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+                        if (warning && warning->icon()==QMessageBox::Warning &&
+                            warning->objectName()!="cloudConflictConfirm" && warning->objectName()!="storageConflictConfirm") {
+                            warningPoll.stop(); warningShown=true;
+                            if(QGuiApplication::platformName()!="offscreen") {
+                                warning->showNormal(); warning->raise(); warning->activateWindow();
+                                record(QTest::qWaitForWindowExposed(warning,2000) && QTest::qWaitForWindowActive(warning,2000),stem + " native warning ready");
+                            }
+                            record(!warning->text().isEmpty() && warning->button(QMessageBox::Ok),stem + " actual rejected-source warning");
+                            for(auto* label:warning->findChildren<QLabel*>()) if(label->isVisible() && label->wordWrap() && !label->text().isEmpty())
+                                record(label->height()>=label->heightForWidth(label->width()),stem + " warning glyph height");
+                            capture(warning,stem + "-warning",scale); warning->button(QMessageBox::Ok)->click();
+                        } else if (elapsed.elapsed()>8000) {
+                            warningPoll.stop(); record(false,stem + " warning readiness timeout");
+                            if(auto* modal=qobject_cast<QDialog*>(QApplication::activeModalWidget())) modal->reject(); dialog->reject();
+                        }
+                    }); warningPoll.start();
+                    ScheduleQtModalDriver(app,storage ? "storageConflictConfirm" : "cloudConflictConfirm",stem + " confirmation",[&](QDialog* nested) {
+                        inspectConfirm(nested,stem + "-confirmation",scale,QMessageBox::Cancel);
+                        auto* confirm=qobject_cast<QMessageBox*>(nested); if(confirm) confirm->button(QMessageBox::Yes)->click(); else nested->reject();
+                    },record);
+                    auto* apply=dialog->findChild<QPushButton*>(storage ? "acceptCloudStorage" : "applyCloudTasks");
+                    record(apply && apply->isEnabled(),stem + " original apply remains reachable for file validation");
+                    if(apply && apply->isEnabled()) apply->click();
+                    warningPoll.stop(); record(warningShown && dialog->isVisible(),stem + " invalid source did not close comparison");
+                    dialog->reject();
+                },record);
+                if(storage) record(!ShowQtStorageConflictResolver(nullptr,local,&localChanged) && !localChanged,stem + " no storage mutation");
+                else record(!ShowCloudConflictResolver(nullptr,local),stem + " no cloud mutation");
+                unchanged(before,temporary.path(),stem); record(write(target,original),stem + " restore disposable fixture");
+            };
+            invalidConflict(false); invalidConflict(true);
+            const auto cloudIncoming=read(cloud / "meta/tasks.json","cloud incoming fixture");
+            if (!write(local / "meta/tasks.json","[{\"id\":\"local-confirm\",\"title\":\"Local confirmation fixture\"}]")) return false;
+            for (const bool accept : {false,true}) {
+                const auto before=snapshot(temporary.path()); const QString stem=QString("cloud-confirm-%1-%2").arg(accept ? "accept" : "cancel").arg(scale);
+                ++modalContexts;
+                ScheduleQtModalDriver(app,"cloudConflictResolver",stem,[&](QDialog* dialog) {
+                    ScheduleQtModalDriver(app,"cloudConflictConfirm",stem,[&](QDialog* box) {
+                        inspectConfirm(box,stem,scale,QMessageBox::Cancel); auto* confirm=qobject_cast<QMessageBox*>(box);
+                        record(confirm && confirm->text().contains("meta/tasks.json") && confirm->text().contains(QString::fromUtf8("Будет заменено")),stem + " full dangerous target context");
+                        if (confirm) confirm->button(accept ? QMessageBox::Yes : QMessageBox::Cancel)->click(); else box->reject();
+                    },record);
+                    auto* apply=dialog->findChild<QPushButton*>("applyCloudTasks"); record(apply && apply->isEnabled(),stem + " real apply callback");
+                    if (apply) apply->click(); else dialog->reject();
+                    if (!accept) { record(dialog->isVisible(),stem + " Cancel keeps comparison open"); dialog->reject(); }
+                },record); record(ShowCloudConflictResolver(nullptr,local)==accept,stem + " mutation result");
+                if (!accept) unchanged(before,temporary.path(),stem);
+                else record(read(local / "meta/tasks.json","accepted cloud tasks")==cloudIncoming,stem + " accepted exact source bytes");
+            }
+            const auto beforeConfirm=snapshot(temporary.path());
+            ++modalContexts;
+            ScheduleQtModalDriver(app,"storageConflictResolver","storage-cancel-confirm-" + suffix,[&](QDialog* dialog) {
+                ScheduleQtModalDriver(app,"storageConflictConfirm","storage-confirm-cancel-" + suffix,[&](QDialog* box) {
+                    inspectConfirm(box,"storage-confirm-cancel-" + suffix,scale,QMessageBox::Cancel);
+                    auto* confirm=qobject_cast<QMessageBox*>(box); if (confirm) QTest::keyClick(confirm->button(QMessageBox::Cancel),Qt::Key_Return); else box->reject();
+                },record);
+                auto* apply=dialog->findChild<QPushButton*>("acceptCloudStorage"); record(apply,"storage apply hook"); if (apply) apply->click();
+                record(dialog->isVisible(),"storage confirmation Cancel keeps comparison open"); dialog->reject();
+            },record); record(!ShowQtStorageConflictResolver(nullptr,local,&localChanged) && !localChanged,"storage confirmation cancellation");
+            unchanged(beforeConfirm,temporary.path(),"storage-confirm-cancel-" + suffix);
+            ++modalContexts;
+            ScheduleQtModalDriver(app,"storageConflictResolver","storage-accept-confirm-" + suffix,[&](QDialog* dialog) {
+                ScheduleQtModalDriver(app,"storageConflictConfirm","storage-confirm-accept-" + suffix,[&](QDialog* box) {
+                    inspectConfirm(box,"storage-confirm-accept-" + suffix,scale,QMessageBox::Cancel);
+                    auto* confirm=qobject_cast<QMessageBox*>(box); if (confirm) confirm->button(QMessageBox::Yes)->click(); else box->reject();
+                },record); auto* apply=dialog->findChild<QPushButton*>("acceptCloudStorage"); if (apply) apply->click(); else dialog->reject();
+            },record); record(ShowQtStorageConflictResolver(nullptr,local,&localChanged) && localChanged,"storage accepted known remote fixture");
+            record(read(local / "meta/storage.json","accepted local storage")==read(cloud / "meta/storage.json","accepted remote storage"),"storage accepted file bytes");
+            nav->setCurrentRow(0); settle();
+            for(const int operation : {0,1}) for(const bool accept : {false,true}) {
+                const QString stem=QString("wallet-confirm-%1-%2-%3").arg(operation ? "debit" : "credit").arg(accept ? "accept" : "cancel").arg(scale);
+                if (!workspace.storage->set_active_profile(created->id)) return false;
+                const auto priorProfile=workspace.storage->load_profile(); if (!priorProfile) return false;
+                const double priorBalance=priorProfile->wallet_balance();
+                const auto before=snapshot(temporary.path());
+                ++modalContexts;
+                ScheduleQtModalDriver(app,"walletAdjustmentDialog",stem,[&](QDialog* dialog) {
+                    dialog->findChild<QComboBox*>("walletOperation")->setCurrentIndex(operation);
+                    dialog->findChild<QDoubleSpinBox*>("walletAmount")->setValue(12.5);
+                    dialog->findChild<QLineEdit*>("walletReason")->setText(longText);
+                    ScheduleQtModalDriver(app,"walletConfirmation",stem,[&](QDialog* box) {
+                        inspectConfirm(box,stem,scale,QMessageBox::No); auto* confirm=qobject_cast<QMessageBox*>(box);
+                        record(confirm && confirm->text().contains("12.50"),stem + " numeric amount in confirmation");
+                        record(confirm && confirm->text().count(longText)>=2 &&
+                            confirm->text().contains(QString::fromUtf8(workspace.data.vault.currencyName)) &&
+                            confirm->text().contains(QString::number(priorBalance,'f',2)) &&
+                            confirm->text().contains(QString::number(priorBalance+(operation ? -12.5 : 12.5),'f',2)) &&
+                            confirm->text().contains(operation ? QString::fromUtf8("Списать") : QString::fromUtf8("Начислить")),
+                            stem + " full profile memo currency direction and balances");
+                        if (confirm) confirm->button(accept ? QMessageBox::Yes : QMessageBox::No)->click(); else box->reject();
+                    },record); auto* save=dialog->findChild<QPushButton*>("walletApply"); if (save) save->click(); else dialog->reject();
+                    if (!accept) { record(dialog->isVisible(),stem + " comparison remains open"); dialog->reject(); }
+                },record); adjust->click();
+                if (!accept) unchanged(before,temporary.path(),stem);
+                if (!workspace.storage->set_active_profile(created->id)) return false;
+                const auto saved=workspace.storage->load_profile(); record(saved && saved->wallet_balance()==
+                    (priorBalance+(accept ? (operation ? -12.5 : 12.5) : 0)),stem + " persisted wallet balance");
+            }
+        }
+        window.close(); settle();
+    }
+    std::cout << "Decision forms verified main states=" << mainStates << " modal contexts=" << modalContexts
+        << " confirmations=" << confirmations << " across seven scales\n";
+    return checked;
+}
+
 static bool TestQtXpDialogLayout(QApplication& app) {
     struct RestoreStyle {
         QFont font = qApp->font();
@@ -9401,7 +9903,63 @@ static bool TestDisclosureMotionContract() {
     return animation->state() == QAbstractAnimation::Stopped && button->indicatorAngle() == 0;
 }
 
+static bool TestNavigationMotionLifecycle() {
+    // Two fresh workspaces exercise the real scheduled navigation transition.
+    // No forced animation clock/end value and no system setting is changed.
+    for (const bool enabled : {true, false}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+        QtDisplaySettings settings;
+        settings.motionEnabled = enabled;
+        if (!SaveQtDisplaySettings(directory, settings)) return false;
+        QtWorkspace workspace(directory);
+        QtWindow window(workspace);
+        window.resize(1120, 720);
+        window.show();
+        QApplication::processEvents();
+        auto* navigation = window.findChild<QListWidget*>("navigation");
+        auto* marker = window.findChild<QWidget*>("navigationActiveIndicator");
+        auto* animation = window.findChild<QPropertyAnimation*>("navigationIndicatorAnimation");
+        if (!navigation || !marker || !animation) return false;
+        const auto target = [&](int row) {
+            const QRect bounds = navigation->visualItemRect(navigation->item(row));
+            return QRect(bounds.left() + 2, bounds.top() + 6, 3, std::max(12, bounds.height() - 12));
+        };
+        navigation->setCurrentRow(0);
+        QTest::qWait(200);
+        navigation->setCurrentRow(1);
+        QApplication::processEvents();
+        const bool allowed = IsQtMotionAllowed(settings);
+        if (allowed && animation->state() != QAbstractAnimation::Running) {
+            std::cerr << "Navigation lifecycle did not start the real transition\n";
+            return false;
+        }
+        if (!allowed && (animation->state() != QAbstractAnimation::Stopped || marker->geometry() != target(1)))
+            return false;
+        window.hide();
+        if (animation->state() != QAbstractAnimation::Stopped || marker->geometry() != target(1)) {
+            std::cerr << "Hidden navigation must stop immediately at the selected row\n";
+            return false;
+        }
+        window.show();
+        QApplication::processEvents();
+        navigation->setCurrentRow(0);
+        QApplication::processEvents();
+        if (allowed && animation->state() != QAbstractAnimation::Running) return false;
+        window.setEnabled(false);
+        if (animation->state() != QAbstractAnimation::Stopped || marker->geometry() != target(0)) {
+            std::cerr << "Disabled navigation must stop immediately at the selected row\n";
+            return false;
+        }
+        window.setEnabled(true);
+        window.close();
+    }
+    return true;
+}
+
 static bool TestNavigationVisualContract() {
+    if (!TestNavigationMotionLifecycle()) return false;
     if (!TestDisclosureMotionContract()) {
         std::cerr << "Disclosure motion lost immediate state, reversal, geometry, or reduced-motion policy\n";
         return false;
@@ -9839,6 +10397,11 @@ static bool TestShortcutFolderEditor() {
 }
 
 static bool TestQuickShortcutLauncher() {
+    struct RestoreStyle {
+        QFont font=qApp->font(); QString stylesheet=qApp->styleSheet();
+        QVariant base=qApp->property("forgeBasePointSize");
+        ~RestoreStyle() { qApp->setFont(font); qApp->setStyleSheet(stylesheet); qApp->setProperty("forgeBasePointSize",base); }
+    } restore;
     QTemporaryDir temp; if (!temp.isValid()) return false;
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     std::vector<ShortcutEntry> shortcuts;
@@ -9850,7 +10413,8 @@ static bool TestQuickShortcutLauncher() {
     missingFile.close();
     if (!unknownFile.open(QIODevice::WriteOnly) || unknownFile.write("fixture") != 7) return false;
     unknownFile.close();
-    const std::vector<QPair<QString, QString>> entries{{"Running", runningPath}, {"Stopped", missingPath}, {"Unknown", unknownPath}};
+    const QString longLabel=QString::fromUtf8("Очень длинное название & ярлыка безопасного файла для проверки подписи и полного контекста");
+    const std::vector<QPair<QString, QString>> entries{{longLabel+" A", runningPath}, {longLabel+" B", missingPath}, {longLabel+" C", unknownPath}};
     for (const auto& item : entries)
         if (!AppAddShortcut(directory, shortcuts, item.first.toUtf8().toStdString(), item.second.toUtf8().toStdString()).ok) return false;
     QtWorkspace workspace(directory);
@@ -9870,6 +10434,52 @@ static bool TestQuickShortcutLauncher() {
         if (expected < 0 || action->property("shortcutRunState").toInt() != expected || action->icon().isNull()) return false;
     }
     if (seen != 3) return false;
+    for (const int percent : {100,200,100,200}) {
+        QtDisplaySettings settings; settings.scalePercent=percent;
+        ApplyQtDisplaySettings(*qApp,settings);
+        const double measurementFont=menu->font().pointSizeF();
+        QMetaObject::invokeMethod(menu,"aboutToShow",Qt::DirectConnection);
+        const int measuredWidth=menu->sizeHint().width();
+        menu->ensurePolished();
+        if (menu->sizeHint().width()>menu->maximumWidth()) {
+            std::cerr << "Mixed shortcut statuses overflow the measured menu at " << percent << "%"
+                << " beforeFont=" << measurementFont << " finalFont=" << menu->font().pointSizeF()
+                << " beforeWidth=" << measuredWidth << " finalWidth=" << menu->sizeHint().width()
+                << " maximum=" << menu->maximumWidth() << '\n';
+            std::cerr << "menu font=" << menu->font().toString().toStdString()
+                << " statusGlyphs=" << menu->fontMetrics().horizontalAdvance(QString::fromUtf8("Статус недоступен"))
+                << " min=" << menu->minimumWidth() << " actionFont=" << menu->actions().front()->font().toString().toStdString() << '\n';
+            for (auto* action : menu->actions())
+                std::cerr << "menu text=" << action->text().toStdString()
+                    << " font=" << action->font().pointSizeF() << " glyphs="
+                    << QFontMetrics(action->font()).horizontalAdvance(action->text().section('\t',0,0).replace("&&","&"))
+                    << '+' << QFontMetrics(action->font()).horizontalAdvance(action->text().section('\t',1)) << '\n';
+            return false;
+        }
+        for (auto* action:menu->actions()) if(action->objectName()=="quickShortcutAction") {
+            if(!action->toolTip().contains(longLabel) || action->text().section('\t',1).isEmpty()) return false;
+        }
+        // A geometry-only hint can pass while the first paint dirties QMenu's
+        // action cache. Exercise that phase twice at each hot font reversal.
+        menu->resize(menu->sizeHint());
+        for (int frame=0; frame<2; ++frame) {
+            QPixmap rendered(menu->size()); rendered.fill(Qt::transparent);
+            menu->render(&rendered);
+            if (rendered.isNull() || menu->sizeHint().width()>menu->maximumWidth()) {
+                std::cerr << "Shortcut menu paint changed its width budget at " << percent << "%\n";
+                return false;
+            }
+            for (auto* action:menu->actions()) {
+                if (!action->isVisible()) continue;
+                const QRect rect=menu->actionGeometry(action);
+                if (!menu->rect().contains(rect)) {
+                    std::cerr << "Shortcut menu paint overflowed action " << action->objectName().toStdString()
+                        << " at " << percent << "%\n";
+                    return false;
+                }
+            }
+        }
+    }
     QAction* manage = nullptr;
     for (auto* action : menu->actions()) if (action->objectName() == "manageShortcutsAction") manage = action;
     if (!manage) return false;
@@ -10264,6 +10874,10 @@ int main(int argc, char** argv) {
         return TestQtXpDialogLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SERVICE_EDITORS"))
         return TestQtServiceEditorLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DECISION_FORMS"))
+        return TestQtDecisionFormsLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_QUICK_SHORTCUT"))
+        return TestQuickShortcutLauncher() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CHARTS"))
         return TestQtChartReadability(app) && TestStatisticsTrendBeyondAuditPageLimit() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
@@ -10304,6 +10918,7 @@ int main(int argc, char** argv) {
     if (!TestQtCatalogProfileLayout(app)) { std::cerr << "Catalog/profile layout failed\n"; return 1; }
     if (!TestQtXpDialogLayout(app)) { std::cerr << "XP dialog layout failed\n"; return 1; }
     if (!TestQtServiceEditorLayout(app)) { std::cerr << "Service editor layout failed\n"; return 1; }
+    if (!TestQtDecisionFormsLayout(app)) { std::cerr << "Decision forms layout failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }

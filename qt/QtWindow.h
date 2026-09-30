@@ -48,6 +48,7 @@ class QtLogActivityChart;
 class QtProfileAnalytics;
 class QSystemTrayIcon;
 class QCloseEvent;
+class QHideEvent;
 class QEvent;
 class QTimer;
 class QPropertyAnimation;
@@ -60,6 +61,8 @@ public:
     void recordRuntimeMessage(AppLogLevel level, const QString& text);
 private:
     void closeEvent(QCloseEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
     bool reload();
     void render();

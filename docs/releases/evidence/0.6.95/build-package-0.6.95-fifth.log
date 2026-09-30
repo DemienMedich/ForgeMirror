@@ -1,0 +1,62 @@
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Configuring done (0.2s)
+-- Generating done (0.3s)
+-- Build files have been written to: Z:/CPP/ForgeMirror/build-qt
+Версия MSBuild 17.14.40+3e7442088 для .NET Framework
+
+  ForgeMirrorQtCore.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\ForgeMirrorQtCore.lib
+  QtWindow.cpp
+  ForgeMirrorQtUi.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\ForgeMirrorQtUi.lib
+  ForgeMirrorQt.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\ForgeMirrorQt.exe
+Версия MSBuild 17.14.40+3e7442088 для .NET Framework
+
+  ForgeMirrorQtCore.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\ForgeMirrorQtCore.lib
+  ForgeMirrorQtUi.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\ForgeMirrorQtUi.lib
+  ForgeMirrorQt.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\ForgeMirrorQt.exe
+  smoke_qt.cpp
+  smoke_qt.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\smoke_qt.exe
+Версия MSBuild 17.14.40+3e7442088 для .NET Framework
+
+  smoke_core.vcxproj -> Z:\CPP\ForgeMirror\build-qt\Release\smoke_core.exe
+Test project Z:/CPP/ForgeMirror/build-qt
+    Start 1: smoke_qt
+1/1 Test #1: smoke_qt .........................   Passed   56.02 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =  56.18 sec
+smoke_core: OK
+Z:\CPP\ForgeMirror\package-qt-0.6.95-release\ForgeMirrorQt.exe 64 bit, release executable
+Adding in plugin type generic for module: Qt6Gui
+Adding Qt6Network for qtuiotouchplugin.dll from plugin type: generic
+Adding in plugin type iconengines for module: Qt6Gui
+Adding Qt6Svg for qsvgicon.dll from plugin type: iconengines
+Adding in plugin type imageformats for module: Qt6Gui
+Adding in plugin type networkinformation for module: Qt6Network
+Adding in plugin type platforms for module: Qt6Gui
+Adding in plugin type styles for module: Qt6Widgets
+Adding in plugin type tls for module: Qt6Network
+Skipping plugin qopensslbackend.dll. Use -force-openssl or specify -openssl-root if you want to use it.
+Direct dependencies: Qt6Core Qt6Gui Qt6Widgets
+All dependencies   : Qt6Core Qt6Gui Qt6Widgets
+To be deployed     : Qt6Core Qt6Gui Qt6Network Qt6Svg Qt6Widgets
+Warning: Cannot find any version of the dxcompiler.dll and dxil.dll.
+Warning: Cannot find Visual Studio installation directory, VCINSTALLDIR is not set.
+Qt6Core.dll is up to date.
+Qt6Gui.dll is up to date.
+Qt6Network.dll is up to date.
+Qt6Svg.dll is up to date.
+Qt6Widgets.dll is up to date.
+qtuiotouchplugin.dll is up to date.
+qsvgicon.dll is up to date.
+qgif.dll is up to date.
+qico.dll is up to date.
+qjpeg.dll is up to date.
+qsvg.dll is up to date.
+qnetworklistmanager.dll is up to date.
+qwindows.dll is up to date.
+qmodernwindowsstyle.dll is up to date.
+qcertonlybackend.dll is up to date.
+qschannelbackend.dll is up to date.
+Qt package: Z:\CPP\ForgeMirror\package-qt-0.6.95-release\ForgeMirrorQt.exe

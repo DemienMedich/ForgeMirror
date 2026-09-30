@@ -10,6 +10,34 @@ $ErrorActionPreference = 'Stop'
 foreach ($version in @($PreviousVersion, $CurrentVersion)) {
     if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Expected SemVer version, got '$version'." }
 }
+# Process.MainWindowTitle excludes hidden windows. Background startup probes
+# must stay hidden, so inspect only HWNDs owned by the exact launched process.
+# This reads the real title; it does not infer it from EXE/version metadata.
+if (-not ('ForgeMirrorQtLifecycleWindowTitle' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class ForgeMirrorQtLifecycleWindowTitle {
+    private delegate bool EnumCallback(IntPtr handle, IntPtr extra);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumCallback callback, IntPtr extra);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr handle, StringBuilder text, int count);
+    public static string Find(int processId, string version) {
+        string title="";
+        EnumWindows((handle, extra) => {
+            uint owner; GetWindowThreadProcessId(handle,out owner);
+            if (owner!=(uint)processId) return true;
+            var text=new StringBuilder(2048);
+            GetWindowText(handle,text,text.Capacity);
+            if (!text.ToString().Contains(version)) return true;
+            title=text.ToString(); return false;
+        },IntPtr.Zero);
+        return title;
+    }
+}
+'@
+}
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $previousPackage = (Resolve-Path (Join-Path $repoRoot $PreviousPackageDirectory)).Path
 $currentPackage = (Resolve-Path (Join-Path $repoRoot $CurrentPackageDirectory)).Path
@@ -99,7 +127,7 @@ try {
         if ($version -eq $CurrentVersion) {
             $versionStdout = Join-Path $evidenceRoot "version-$version.stdout.txt"
             $versionStderr = Join-Path $evidenceRoot "version-$version.stderr.txt"
-            $versionProcess = Start-Process -FilePath $installedExe -ArgumentList @('--version') -Wait -PassThru `
+            $versionProcess = Start-Process -FilePath $installedExe -ArgumentList @('--version') -WindowStyle Hidden -Wait -PassThru `
                 -RedirectStandardOutput $versionStdout -RedirectStandardError $versionStderr
             if ($versionProcess.ExitCode -ne 0) { throw "Installed --version failed with exit $($versionProcess.ExitCode)." }
             $versionOutput = (Get-Content -LiteralPath $versionStdout -Raw -ErrorAction SilentlyContinue).Trim()
@@ -107,13 +135,16 @@ try {
         }
         $screenshot = Join-Path $evidenceRoot "installed-$version.png"
         $smokeArguments = @('--smoke-test', '--screenshot', "`"$screenshot`"", '--storage-dir', "`"$workspace`"")
-        $smokeProcess = Start-Process -FilePath $installedExe -ArgumentList $smokeArguments -PassThru
+        $smokeStdout = Join-Path $evidenceRoot "startup-$version.stdout.txt"
+        $smokeStderr = Join-Path $evidenceRoot "startup-$version.stderr.txt"
+        $smokeProcess = Start-Process -FilePath $installedExe -ArgumentList $smokeArguments -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $smokeStdout -RedirectStandardError $smokeStderr
         $windowTitle = ''
         $windowDeadline = (Get-Date).AddSeconds(15)
         do {
             $smokeProcess.Refresh()
             if ($smokeProcess.HasExited) { break }
-            $windowTitle = $smokeProcess.MainWindowTitle
+            $windowTitle = [ForgeMirrorQtLifecycleWindowTitle]::Find($smokeProcess.Id, $version)
             if (-not $windowTitle) { Start-Sleep -Milliseconds 100 }
         } while (-not $windowTitle -and (Get-Date) -lt $windowDeadline)
         if (-not $windowTitle.Contains($version)) {
@@ -127,6 +158,9 @@ try {
         if ($smokeProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $screenshot)) {
             throw "Installed real-window smoke failed for $version (exit $($smokeProcess.ExitCode), screenshot $([bool](Test-Path -LiteralPath $screenshot)))."
         }
+        if ((Get-Item -LiteralPath $smokeStderr).Length -ne 0) {
+            throw "Installed startup emitted stderr for $version; inspect $smokeStderr."
+        }
 
         $results.Add([pscustomobject]@{
             Version = $version
@@ -137,6 +171,9 @@ try {
             UninstallDisplayVersion = $registryEntry.DisplayVersion
             VersionCommandOutput = $versionOutput
             MainWindowTitle = $windowTitle
+            WindowTitleMethod = 'Win32 enumeration restricted to the launched process; includes hidden windows'
+            StartupExitCode = $smokeProcess.ExitCode
+            StartupStderrBytes = (Get-Item -LiteralPath $smokeStderr).Length
             WindowsPlatformPlugin = $installedPlatformPlugin
             WindowsPlatformPluginSha256 = $platformPluginHash
             Screenshot = $screenshot
