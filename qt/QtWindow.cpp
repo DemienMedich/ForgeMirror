@@ -29,6 +29,7 @@
 #include "QtSkillEditor.h"
 #include "QtTaskCompletionDialog.h"
 #include "QtProfileDialogs.h"
+#include "QtScrollableDialog.h"
 #include "AppTaskProjectService.h"
 #include "AppPipelineService.h"
 #include "AppTaskWorkflowService.h"
@@ -7842,17 +7843,31 @@ void QtWindow::createEntry(bool edit) {
     const auto foundProject = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
         [&](const auto& entry) { return entry.id == projectId; });
     if (edit && projectMode && foundProject == workspace_.data.projects.end()) return;
-    QDialog dialog(this);
+    QtScrollableDialog dialog(this, projectMode ? QSize(560, 380) : QSize(640, 520));
     dialog.setWindowTitle(projectMode ? QString::fromUtf8("Новый проект") : QString::fromUtf8("Новая задача"));
     if (edit) dialog.setWindowTitle(QString::fromUtf8(projectMode ? "Редактирование проекта" : "Редактирование задачи"));
     dialog.setObjectName(projectMode ? "projectEditor" : "taskEditor");
-    dialog.setMinimumWidth(480);
-    auto* form = new QFormLayout(&dialog);
+    dialog.scrollArea()->setAccessibleName(QString::fromUtf8("Поля редактора"));
+    auto* editorScroll = dialog.scrollArea();
+    auto* form = dialog.formLayout();
+    const auto prepareForm = [&dialog](QFormLayout* layout) {
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setHorizontalSpacing(dialog.scaledMetric(12));
+        layout->setVerticalSpacing(dialog.scaledMetric(8));
+        layout->setRowWrapPolicy(QFormLayout::WrapLongRows);
+        layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        layout->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop);
+        layout->setFormAlignment(Qt::AlignTop);
+    };
+    prepareForm(form);
     auto* name = new QLineEdit;
     name->setObjectName("entryTitle");
+    labelForAccessibility(name, QString::fromUtf8("Название"), QString::fromUtf8("Обязательное поле."));
     auto* description = new QPlainTextEdit;
-    description->setMaximumHeight(96);
+    description->setMinimumHeight(dialog.scaledMetric(64));
+    description->setMaximumHeight(description->minimumHeight());
     description->setObjectName("entryDescription");
+    labelForAccessibility(description, QString::fromUtf8("Описание"));
     if (edit) {
         name->setText(q(projectMode ? foundProject->name : originalTask.title));
         description->setPlainText(q(projectMode ? foundProject->description : originalTask.description));
@@ -7879,6 +7894,24 @@ void QtWindow::createEntry(bool edit) {
     assignees->setObjectName("taskAssignees");
     skills->setObjectName("taskSkills");
     penalty->setObjectName("taskPenalty");
+    for (auto* box : {project, priority, status, category, pipeline}) {
+        box->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        box->setMinimumContentsLength(8);
+        box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        connect(box, &QComboBox::currentTextChanged, box, [box](const QString& text) { box->setToolTip(text); });
+    }
+    labelForAccessibility(project, QString::fromUtf8("Проект задачи"));
+    labelForAccessibility(priority, QString::fromUtf8("Приоритет задачи"));
+    labelForAccessibility(status, QString::fromUtf8("Начальный статус задачи"));
+    labelForAccessibility(category, QString::fromUtf8("Категория начисления XP"));
+    labelForAccessibility(pipeline, QString::fromUtf8("Этап пайплайна"));
+    labelForAccessibility(deadline, QString::fromUtf8("Дата и время срока задачи"));
+    labelForAccessibility(hasDeadline, QString::fromUtf8("Указать срок задачи"));
+    labelForAccessibility(assignees, QString::fromUtf8("Исполнители задачи"),
+        QString::fromUtf8("Отметьте нужные профили; пробел переключает отметку выбранной строки."));
+    labelForAccessibility(skills, QString::fromUtf8("Навыки задачи"),
+        QString::fromUtf8("Отметьте навыки для начисления XP; пробел переключает отметку выбранной строки."));
+    labelForAccessibility(penalty, QString::fromUtf8("Штраф за пропуск срока в процентах"));
     // Parent optional controls to the dialog even in the project-only form.
     for (QWidget* control : std::initializer_list<QWidget*>{project, priority, status, category, pipeline, deadline, hasDeadline, assignees, skills, penalty}) {
         control->setParent(&dialog);
@@ -7903,62 +7936,82 @@ void QtWindow::createEntry(bool edit) {
         if (!edit) {
             auto* createProjectInline = new QPushButton(QString::fromUtf8("Создать проект…"));
             createProjectInline->setObjectName("createProjectInline");
+            createProjectInline->setAutoDefault(false);
             labelForAccessibility(createProjectInline, QString::fromUtf8("Создать проект из задачи"),
                 QString::fromUtf8("Откроет поля нового проекта, не закрывая форму задачи."));
-            auto* projectControls = new QWidget(&dialog);
-            auto* projectControlsLayout = new QHBoxLayout(projectControls);
-            projectControlsLayout->setContentsMargins(0, 0, 0, 0);
-            projectControlsLayout->addWidget(project, 1);
-            projectControlsLayout->addWidget(createProjectInline);
+            auto* projectControls = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+            projectControls->setObjectName("taskProjectControls");
+            projectControls->addWidget(project, 1);
+            projectControls->addWidget(createProjectInline);
             form->addRow(QString::fromUtf8("Проект"), projectControls);
             auto* noProjects = new QLabel(QString::fromUtf8("Проектов пока нет. Создайте первый прямо из этой формы."));
             noProjects->setObjectName("taskNoProjectsHint");
             noProjects->setWordWrap(true);
-            noProjects->setVisible(workspace_.data.projects.empty());
             form->addRow(noProjects);
+            noProjects->setVisible(workspace_.data.projects.empty());
             auto* inlineProject = new QGroupBox(QString::fromUtf8("Новый проект"), &dialog);
             inlineProject->setObjectName("inlineProjectPanel");
             auto* inlineForm = new QFormLayout(inlineProject);
+            prepareForm(inlineForm);
+            inlineForm->setContentsMargins(dialog.scaledMetric(8), dialog.scaledMetric(8),
+                dialog.scaledMetric(8), dialog.scaledMetric(8));
             auto* inlineName = new QLineEdit;
             inlineName->setObjectName("inlineProjectName");
             labelForAccessibility(inlineName, QString::fromUtf8("Название нового проекта"));
             auto* inlineDescription = new QPlainTextEdit;
             inlineDescription->setObjectName("inlineProjectDescription");
-            inlineDescription->setMaximumHeight(72);
+            inlineDescription->setMinimumHeight(dialog.scaledMetric(48));
+            inlineDescription->setMaximumHeight(inlineDescription->minimumHeight());
             labelForAccessibility(inlineDescription, QString::fromUtf8("Описание нового проекта"));
             auto* inlineNotice = new QLabel;
             inlineNotice->setObjectName("inlineProjectNotice");
             inlineNotice->setWordWrap(true);
-            auto* inlineActions = new QHBoxLayout;
+            labelForAccessibility(inlineNotice, QString::fromUtf8("Результат создания проекта"));
+            auto* inlineActions = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+            inlineActions->setObjectName("inlineProjectActions");
             auto* saveInlineProject = new QPushButton(QString::fromUtf8("Сохранить и выбрать"));
             saveInlineProject->setObjectName("saveInlineProject");
-            saveInlineProject->setProperty("primary", true);
+            for (int key : {Qt::Key_Return, Qt::Key_Enter}) {
+                auto* submit = new QShortcut(QKeySequence(key), inlineName);
+                submit->setContext(Qt::WidgetShortcut);
+                connect(submit, &QShortcut::activated, saveInlineProject, &QPushButton::click);
+            }
+            saveInlineProject->setAutoDefault(false);
             labelForAccessibility(saveInlineProject, QString::fromUtf8("Сохранить проект и выбрать его для задачи"));
             auto* cancelInlineProject = new QPushButton(QString::fromUtf8("Отмена"));
             cancelInlineProject->setObjectName("cancelInlineProject");
+            cancelInlineProject->setAutoDefault(false);
+            labelForAccessibility(cancelInlineProject, QString::fromUtf8("Отменить создание проекта внутри задачи"));
             inlineActions->addWidget(saveInlineProject);
             inlineActions->addWidget(cancelInlineProject);
-            inlineActions->addStretch();
             inlineForm->addRow(QString::fromUtf8("Название"), inlineName);
             inlineForm->addRow(QString::fromUtf8("Описание"), inlineDescription);
             inlineForm->addRow(inlineNotice);
             inlineForm->addRow(inlineActions);
-            inlineProject->hide();
             form->addRow(inlineProject);
+            inlineProject->hide();
             connect(createProjectInline, &QPushButton::clicked, &dialog, [=] {
                 inlineProject->setVisible(!inlineProject->isVisible());
-                if (inlineProject->isVisible()) inlineName->setFocus();
+                if (inlineProject->isVisible()) {
+                    form->activate();
+                    editorScroll->ensureWidgetVisible(inlineName, 0, 8);
+                    inlineName->setFocus();
+                }
                 else { inlineName->clear(); inlineDescription->clear(); inlineNotice->clear(); }
             });
             connect(cancelInlineProject, &QPushButton::clicked, &dialog, [=] {
                 inlineProject->hide();
                 inlineName->clear(); inlineDescription->clear(); inlineNotice->clear();
+                editorScroll->ensureWidgetVisible(createProjectInline, 0, 8);
+                createProjectInline->setFocus(Qt::OtherFocusReason);
             });
             connect(saveInlineProject, &QPushButton::clicked, &dialog, [&, inlineName, inlineDescription, inlineNotice,
                                                                          project, inlineProject, noProjects] {
                 const QString candidateName = inlineName->text().trimmed();
                 if (candidateName.isEmpty()) {
                     inlineNotice->setText(QString::fromUtf8("Введите название проекта."));
+                    inlineName->setAccessibleDescription(inlineNotice->text());
+                    editorScroll->ensureWidgetVisible(inlineName, 0, dialog.scaledMetric(8));
                     inlineName->setFocus();
                     return;
                 }
@@ -8040,31 +8093,117 @@ void QtWindow::createEntry(bool edit) {
                 }
             }
         }
-        assignees->setMaximumHeight(96);
-        skills->setMaximumHeight(96);
+        for (auto* list : {assignees, skills}) {
+            list->setMinimumHeight(dialog.scaledMetric(64));
+            list->setMaximumHeight(list->minimumHeight());
+            list->setWordWrap(true);
+            list->setTextElideMode(Qt::ElideNone);
+            list->setResizeMode(QListView::Adjust);
+            list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            for (int row = 0; row < list->count(); ++row) {
+                list->item(row)->setToolTip(list->item(row)->text());
+                list->item(row)->setData(Qt::AccessibleTextRole, list->item(row)->text());
+            }
+        }
         form->addRow(QString::fromUtf8("Приоритет"), priority);
         if (!edit) form->addRow(QString::fromUtf8("Статус"), status);
-        form->addRow(QString::fromUtf8("Категория"), category);
         form->addRow(QString::fromUtf8("Этап"), pipeline);
         form->addRow(hasDeadline, deadline);
-        form->addRow(QString::fromUtf8("Штраф за срок"), penalty);
         form->addRow(QString::fromUtf8("Исполнители"), assignees);
-        form->addRow(QString::fromUtf8("Навыки"), skills);
+        // Start with working fields. Only the already-audited chevron moves;
+        // XP fields and their accessibility switch immediately, never in height.
+        auto* additionalToggle = new QtDisclosureButton(nullptr,
+            [this] { return IsQtMotionAllowed(displaySettings_); });
+        additionalToggle->setObjectName("taskAdditionalToggle");
+        additionalToggle->setText(QString::fromUtf8("Начисление XP и штрафы"));
+        labelForAccessibility(additionalToggle, QString::fromUtf8("Начисление XP и штрафы"),
+            QString::fromUtf8("Свёрнуто. Категория, штраф за срок и навыки задачи."));
+        additionalToggle->setToolTip(QString::fromUtf8("Категория начисления, штраф за срок и выбранные навыки"));
+        auto* additionalFields = new QWidget;
+        additionalFields->setObjectName("taskAdditionalFields");
+        auto* additionalForm = new QFormLayout(additionalFields);
+        prepareForm(additionalForm);
+        // The parent form's height-for-width can undersize a spanning nested
+        // form at fractional font scales. Enforce the real three-row minimum.
+        additionalForm->setSizeConstraint(QLayout::SetMinimumSize);
+        additionalForm->addRow(QString::fromUtf8("Категория"), category);
+        additionalForm->addRow(QString::fromUtf8("Штраф за срок"), penalty);
+        additionalForm->addRow(QString::fromUtf8("Навыки"), skills);
+        form->addRow(additionalToggle);
+        form->addRow(additionalFields);
+        additionalFields->hide();
+        connect(additionalToggle, &QToolButton::toggled, additionalFields,
+            [additionalToggle, additionalFields](bool expanded) {
+                additionalFields->setVisible(expanded);
+                additionalToggle->setAccessibleDescription(expanded
+                    ? QString::fromUtf8("Развёрнуто. Категория, штраф за срок и навыки задачи.")
+                    : QString::fromUtf8("Свёрнуто. Категория, штраф за срок и навыки задачи."));
+            });
         if (edit && !originalTask.participants.empty()) {
             auto* hint = new QLabel(QString::fromUtf8("XP уже начислен. Участники и параметры начисления зафиксированы."));
             hint->setWordWrap(true);
+            hint->setObjectName("taskLockedXpHint");
             form->addRow(hint);
         }
     }
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    buttons->setObjectName("entryEditorButtons");
     buttons->button(QDialogButtonBox::Save)->setText(QString::fromUtf8("Сохранить"));
     buttons->button(QDialogButtonBox::Save)->setProperty("primary", true);
+    buttons->button(QDialogButtonBox::Save)->setObjectName("entryEditorSave");
+    buttons->button(QDialogButtonBox::Save)->setMinimumHeight(dialog.scaledMetric(32));
+    buttons->button(QDialogButtonBox::Save)->setDefault(true);
+    buttons->button(QDialogButtonBox::Save)->setAutoDefault(true);
     buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    form->addRow(buttons);
+    buttons->button(QDialogButtonBox::Cancel)->setObjectName("entryEditorCancel");
+    buttons->button(QDialogButtonBox::Cancel)->setAutoDefault(false);
+    auto* notice = new QLabel;
+    notice->setObjectName("entryEditorNotice");
+    notice->setWordWrap(true);
+    notice->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    labelForAccessibility(notice, QString::fromUtf8("Ошибка заполнения редактора"));
+    notice->hide();
+    dialog.footerLayout()->addWidget(notice);
+    dialog.footerLayout()->addWidget(buttons);
+    connect(name, &QLineEdit::textEdited, &dialog, [name, notice](const QString& text) {
+        if (!text.trimmed().isEmpty()) {
+            notice->clear(); notice->hide();
+            notice->setAccessibleDescription({});
+            name->setAccessibleDescription(QString::fromUtf8("Обязательное поле."));
+        }
+    });
+    QWidget* previousTab = name;
+    const auto appendTab = [&previousTab](QWidget* widget) {
+        if (!widget) return;
+        QWidget::setTabOrder(previousTab, widget);
+        previousTab = widget;
+    };
+    appendTab(description);
+    if (!projectMode) {
+        appendTab(project);
+        for (const char* objectName : {"createProjectInline", "inlineProjectName", "inlineProjectDescription",
+                                      "saveInlineProject", "cancelInlineProject"})
+            appendTab(dialog.findChild<QWidget*>(QString::fromLatin1(objectName)));
+        appendTab(priority);
+        if (!edit) appendTab(status);
+        appendTab(pipeline); appendTab(hasDeadline); appendTab(deadline); appendTab(assignees);
+        appendTab(dialog.findChild<QWidget*>("taskAdditionalToggle"));
+        appendTab(category); appendTab(penalty); appendTab(skills);
+    }
+    appendTab(buttons->button(QDialogButtonBox::Save));
+    appendTab(buttons->button(QDialogButtonBox::Cancel));
     std::string createdTaskPendingCompletion;
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
-        if (name->text().trimmed().isEmpty()) { name->setFocus(); return; }
+        if (name->text().trimmed().isEmpty()) {
+            notice->setText(QString::fromUtf8(projectMode ? "Введите название проекта." : "Введите название задачи."));
+            notice->setAccessibleDescription(notice->text());
+            notice->show();
+            name->setAccessibleDescription(notice->text());
+            dialog.scrollArea()->ensureWidgetVisible(name, 0, dialog.scaledMetric(8));
+            name->setFocus(Qt::OtherFocusReason);
+            return;
+        }
         if (projectMode) {
             const auto current = std::find_if(workspace_.data.projects.begin(), workspace_.data.projects.end(),
                 [&](const auto& entry) { return entry.id == projectId; });

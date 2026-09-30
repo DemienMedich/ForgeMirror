@@ -3150,6 +3150,238 @@ static bool TestPipelineTransition() {
     return true;
 }
 
+// Native-sized editor coverage complements the transaction tests below: scroll
+// policies alone cannot prove that labels, footer commands and drafts fit.
+static bool TestQtWorkingEditorLayout(QApplication& app) {
+    const auto originalFont = app.font();
+    const auto originalStyle = app.styleSheet();
+    const auto originalBase = app.property("forgeBasePointSize");
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty()) QDir().mkpath(artifacts);
+    bool checked = true;
+    auto record = [&](bool ok, const QString& context) {
+        if (!ok) std::cerr << "Working editor layout: " << context.toStdString() << '\n';
+        checked &= ok;
+    };
+    auto capture = [&](QDialog* dialog, const QString& stem) {
+        if (!artifacts.isEmpty()) record(dialog->grab().save(artifacts + '/' + stem + ".png"), stem + " capture");
+    };
+    auto inspect = [&](QDialog* dialog, const QString& context, QSize expectedSize = QSize(640, 520)) {
+        // The helper also bounds the requested size to the available screen.
+        // The offscreen test monitor is only 800 px wide, unlike native Windows.
+        record(dialog->size() == expectedSize.boundedTo(dialog->maximumSize()), context + " bounded requested size");
+        auto* box = dialog->findChild<QDialogButtonBox*>();
+        auto* save = box ? box->button(QDialogButtonBox::Save) : nullptr;
+        auto* cancel = box ? box->button(QDialogButtonBox::Cancel) : nullptr;
+        auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+        record(save && cancel && footer && footer->isVisible() && footer->isAncestorOf(save) &&
+            footer->isAncestorOf(cancel), context + " persistent footer");
+        if (save && cancel) {
+            const QRect saveBounds(save->mapTo(dialog, QPoint()), save->size());
+            const QRect cancelBounds(cancel->mapTo(dialog, QPoint()), cancel->size());
+            record(dialog->rect().contains(saveBounds) && dialog->rect().contains(cancelBounds) &&
+                save->isDefault() && !cancel->autoDefault(), context + " visible default commands");
+            if (!dialog->rect().contains(saveBounds) || !dialog->rect().contains(cancelBounds) || !save->isDefault())
+                std::cerr << context.toStdString() << " save default=" << save->isDefault()
+                    << " save=" << saveBounds.x() << ',' << saveBounds.y() << ',' << saveBounds.width() << ',' << saveBounds.height()
+                    << " cancel=" << cancelBounds.x() << ',' << cancelBounds.y() << ',' << cancelBounds.width() << ',' << cancelBounds.height() << '\n';
+        }
+        int primaryCount = 0;
+        for (auto* button : dialog->findChildren<QPushButton*>())
+            if (button->isVisible() && button->property("primary").toBool()) ++primaryCount;
+        record(primaryCount == 1, context + " one primary action");
+        for (const char* id : {"taskProjectControls", "inlineProjectActions"}) {
+            auto* row = dialog->findChild<QWidget*>(QString::fromLatin1(id));
+            if (!row || !row->isVisible()) continue;
+            for (auto* child : row->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly)) {
+                if (!child->isVisible()) continue;
+                record(row->rect().contains(QRect(child->mapTo(row, QPoint()), child->size())),
+                    context + " adaptive control " + child->objectName());
+            }
+        }
+        int visibleScrolls = 0;
+        for (auto* scroll : dialog->findChildren<QScrollArea*>()) {
+            if (!scroll->isVisible()) continue;
+            ++visibleScrolls;
+            auto* body = scroll->widget();
+            record(body && body->width() <= scroll->viewport()->width() &&
+                scroll->horizontalScrollBar()->maximum() == 0, context + " scroll width");
+            if (!body) continue;
+            for (auto* form : body->findChildren<QFormLayout*>()) {
+                for (int row = 0; row < form->rowCount(); ++row) {
+                    for (auto role : {QFormLayout::LabelRole, QFormLayout::FieldRole, QFormLayout::SpanningRole}) {
+                        auto* item = form->itemAt(row, role);
+                        auto* control = item ? item->widget() : nullptr;
+                        if (!control || !control->isVisible()) continue;
+                        const QRect bounds(control->mapTo(body, QPoint()), control->size());
+                        record(body->rect().contains(bounds), context + " field bounds " + control->objectName());
+                        if (!body->rect().contains(bounds))
+                            std::cerr << context.toStdString() << " body=" << body->width() << 'x' << body->height()
+                                << " field=" << control->objectName().toStdString() << ' ' << bounds.x() << ',' << bounds.y()
+                                << ',' << bounds.width() << ',' << bounds.height()
+                                << " bodyHint=" << body->sizeHint().height() << " bodyHfw=" << body->heightForWidth(body->width())
+                                << " parent=" << control->parentWidget()->objectName().toStdString() << ' '
+                                << control->parentWidget()->width() << 'x' << control->parentWidget()->height()
+                                << " parentHint=" << control->parentWidget()->sizeHint().height()
+                                << " parentMin=" << control->parentWidget()->minimumSizeHint().height()
+                                << " parentHfw=" << control->parentWidget()->heightForWidth(control->parentWidget()->width()) << '\n';
+                        if (auto* label = qobject_cast<QLabel*>(control); label && label->wordWrap())
+                            record(label->height() >= label->heightForWidth(label->width()),
+                                context + " wrapped label " + label->objectName());
+                    }
+                }
+            }
+        }
+        record(visibleScrolls == 1, context + " one content scroll");
+        if (QGuiApplication::platformName() != "offscreen")
+            record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()), context + " screen bounds");
+        std::cout << context.toStdString() << " size=" << dialog->width() << 'x' << dialog->height()
+            << " scrolls=" << visibleScrolls << " primaries=" << primaryCount << '\n';
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) { checked = false; break; }
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+        QtWorkspace workspace(directory);
+        PipelineStep stage; stage.id = "editor-layout-stage";
+        stage.title = u8"Длинное название этапа проверки материалов и геометрии";
+        stage.stageCode = "CHECK-01";
+        stage.nextIds = {stage.id, "missing-editor-stage"};
+        stage.hints = {"Keep both references"};
+        workspace.data.pipelineSteps = {stage};
+        record(AppSavePipelineData(directory, workspace.data.pipelineSteps), "fixture pipeline");
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        SaveQtDisplaySettings(directory, settings);
+        ApplyQtDisplaySettings(app, settings);
+        record(SetAdminPassword(directory, "editor-layout-fixture-password") && SetAdminStayLoggedIn(directory, true),
+            "fixture administrator");
+        auto bytes = [&](const char* relative) {
+            QFile file(temp.path() + '/' + QString::fromUtf8(relative));
+            if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+            return file.readAll();
+        };
+        const auto pipelineBefore = bytes("meta/pipeline.json");
+        QtWindow window(workspace); window.resize(800, 520); window.show();
+        QApplication::processEvents();
+        auto* navigation = window.findChild<QListWidget*>("navigation");
+        auto* primary = window.findChild<QPushButton*>("primary");
+        if (!navigation || !primary) { checked = false; break; }
+        for (int page : {1, 2}) {
+            const auto stem = QStringLiteral("%1-editor-%2").arg(page == 1 ? "task" : "project").arg(scale);
+            const auto tasksBefore = bytes("meta/tasks.json");
+            const auto projectsBefore = bytes("meta/projects.json");
+            navigation->setCurrentRow(page); QApplication::processEvents();
+            bool visited = false;
+            QTimer::singleShot(0, [&] {
+                auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+                if (!dialog || dialog->objectName() != (page == 1 ? "taskEditor" : "projectEditor")) {
+                    record(false, stem + " dialog"); if (dialog) dialog->reject(); return;
+                }
+                visited = true; dialog->resize(640, 520); QApplication::processEvents(); QApplication::processEvents();
+                inspect(dialog, stem); if (scale == 100 || scale == 200) capture(dialog, stem);
+                auto* title = dialog->findChild<QLineEdit*>("entryTitle");
+                auto* description = dialog->findChild<QPlainTextEdit*>("entryDescription");
+                auto* buttons = dialog->findChild<QDialogButtonBox*>();
+                if (!title || !description || !buttons) { record(false, stem + " fields"); dialog->reject(); return; }
+                buttons->button(QDialogButtonBox::Save)->click(); QApplication::processEvents();
+                auto* notice = dialog->findChild<QLabel*>("entryEditorNotice");
+                record(dialog->isVisible() && title->hasFocus() && notice && !notice->text().isEmpty() &&
+                    !title->accessibleDescription().isEmpty(), stem + " empty title feedback");
+                inspect(dialog, stem + " validation");
+                QTest::keyClicks(title, "Draft"); QApplication::processEvents();
+                record(notice && !notice->isVisible(), stem + " correction clears validation");
+                title->setText(QString::fromUtf8("Черновик с длинным названием, который отменяется"));
+                description->setPlainText(QString::fromUtf8("Описание остаётся после раскрытия дополнительных полей."));
+                if (page == 1) {
+                    if (auto* toggle = dialog->findChild<QToolButton*>("taskAdditionalToggle")) {
+                        toggle->setFocus(); QTest::keyClick(toggle, Qt::Key_Space);
+                        QApplication::processEvents(); QApplication::processEvents();
+                        inspect(dialog, stem + " additional");
+                        auto* fields = dialog->findChild<QWidget*>("taskAdditionalFields");
+                        record(fields && fields->isVisible(), stem + " additional fields reachable");
+                        record(fields && fields->height() >= fields->minimumSizeHint().height(), stem + " additional intrinsic minimum");
+                        auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+                        if (scroll && fields) { scroll->ensureWidgetVisible(fields); QApplication::processEvents(); }
+                        if (scale == 100 || scale == 200) capture(dialog, stem + "-additional");
+                        QTest::keyClick(toggle, Qt::Key_Space); QApplication::processEvents();
+                        QTest::keyClick(toggle, Qt::Key_Space); QApplication::processEvents(); QApplication::processEvents();
+                        dialog->resize(800, 520); QApplication::processEvents(); QApplication::processEvents();
+                        inspect(dialog, stem + " reopened wide", QSize(800, 520));
+                        dialog->resize(640, 520); QApplication::processEvents(); QApplication::processEvents();
+                        inspect(dialog, stem + " reopened narrow");
+                        QTest::keyClick(toggle, Qt::Key_Space); QApplication::processEvents();
+                    } else record(false, stem + " additional disclosure");
+                    auto* inlineProject = dialog->findChild<QPushButton*>("createProjectInline");
+                    if (inlineProject) {
+                        inlineProject->setFocus(); QTest::keyClick(inlineProject, Qt::Key_Return);
+                        QApplication::processEvents(); QApplication::processEvents();
+                        record(dialog->isVisible() && dialog->findChild<QGroupBox*>("inlineProjectPanel")->isVisible(),
+                            stem + " focused create-project Return");
+                        inspect(dialog, stem + " inline project");
+                        if (scale == 100 || scale == 200) capture(dialog, stem + "-inline-project");
+                        if (auto* inlineTitle = dialog->findChild<QLineEdit*>("inlineProjectName"))
+                            inlineTitle->setText(QString::fromUtf8("Несохранённый проект"));
+                    } else record(false, stem + " inline project action");
+                }
+                record(!title->text().isEmpty() && description->toPlainText().contains(QString::fromUtf8("Описание остаётся")),
+                    stem + " draft retained");
+                auto* cancel = buttons->button(QDialogButtonBox::Cancel);
+                cancel->setFocus(); QTest::keyClick(cancel, Qt::Key_Enter); QApplication::processEvents();
+                record(!dialog->isVisible(), stem + " focused Cancel Enter");
+                if (dialog->isVisible()) dialog->reject();
+            });
+            primary->click(); record(visited && tasksBefore == bytes("meta/tasks.json") &&
+                projectsBefore == bytes("meta/projects.json"), stem + " cancel unchanged");
+        }
+        const auto stem = QStringLiteral("pipeline-editor-%1").arg(scale);
+        bool visited = false;
+        QTimer::singleShot(0, [&] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            auto* tabs = dialog ? dialog->findChild<QTabWidget*>("pipelineTabs") : nullptr;
+            if (!dialog || !tabs) { record(false, stem + " dialog"); if (dialog) dialog->reject(); return; }
+            visited = true; dialog->resize(640, 520);
+            auto* title = dialog->findChild<QLineEdit*>("stageTitle");
+            auto* done = dialog->findChild<QPlainTextEdit*>("stageDone");
+            auto* next = dialog->findChild<QListWidget*>("stageNextIds");
+            if (!title || !done || !next) { record(false, stem + " fields"); dialog->reject(); return; }
+            done->setPlainText(QString::fromUtf8("Черновик критерия готовности"));
+            for (int tab = 0; tab < tabs->count(); ++tab) {
+                tabs->setCurrentIndex(tab); QApplication::processEvents(); QApplication::processEvents();
+                const auto context = stem + QStringLiteral("-tab-%1").arg(tab);
+                inspect(dialog, context);
+                if (scale == 100 || scale == 200) capture(dialog, context);
+                const QRect barBounds(tabs->tabBar()->mapTo(dialog, QPoint()), tabs->tabBar()->size());
+                record(dialog->rect().contains(barBounds), context + " tab bar bounds");
+            }
+            int selected = 0;
+            for (int i = 0; i < next->count(); ++i) if (next->item(i)->checkState() == Qt::Checked) ++selected;
+            record(selected == 2 && done->toPlainText() == QString::fromUtf8("Черновик критерия готовности"), stem + " links and draft retained");
+            tabs->setCurrentIndex(2); next->setCurrentRow(next->count() - 1); next->setFocus();
+            const auto originalCheck = next->currentItem()->checkState();
+            QTest::keyClick(next, Qt::Key_Space);
+            record(next->currentItem()->checkState() != originalCheck, stem + " keyboard link toggle");
+            QTest::keyClick(next, Qt::Key_Space);
+            record(next->currentItem()->checkState() == originalCheck, stem + " keyboard link restore");
+            tabs->setCurrentIndex(3);
+            title->clear(); dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
+            QApplication::processEvents(); QApplication::processEvents();
+            record(tabs->currentIndex() == 0 && title->hasFocus() && bytes("meta/pipeline.json") == pipelineBefore,
+                stem + " validation from another tab");
+            inspect(dialog, stem + " validation");
+            if (scale == 200) capture(dialog, stem + "-validation");
+            auto* cancel = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Cancel);
+            cancel->setFocus(); QTest::keyClick(cancel, Qt::Key_Return); QApplication::processEvents();
+            record(!dialog->isVisible(), stem + " focused Cancel Return");
+            if (dialog->isVisible()) dialog->reject();
+        });
+        record(!ShowPipelineEditor(&window, workspace, stage.id) && visited && bytes("meta/pipeline.json") == pipelineBefore,
+            stem + " cancel unchanged");
+        window.close(); QApplication::processEvents();
+    }
+    app.setFont(originalFont); app.setStyleSheet(originalStyle); app.setProperty("forgeBasePointSize", originalBase);
+    return checked;
+}
+
 static bool TestPipelineEditor() {
     QTemporaryDir temp;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toStdString()));
@@ -5452,15 +5684,20 @@ static bool TestQtTaskInlineProjectCreation() {
         priority->setCurrentIndex(3);
         status->setCurrentIndex(status->findData(1));
         createProject->click();
+        QApplication::processEvents(); QApplication::processEvents();
         auto* projectName = dialog->findChild<QLineEdit*>("inlineProjectName");
         auto* projectDescription = dialog->findChild<QPlainTextEdit*>("inlineProjectDescription");
         auto* saveInline = dialog->findChild<QPushButton*>("saveInlineProject");
         if (!projectPanel->isVisible() || !projectName || !projectDescription || !saveInline) { dialog->reject(); return; }
         projectName->setText(QString::fromUtf8("Проект из задачи"));
         projectDescription->setPlainText(QString::fromUtf8("Создан внутри формы задачи"));
-        saveInline->click();
+        saveInline->setFocus(); QTest::keyClick(saveInline, Qt::Key_Return); QApplication::processEvents();
         inlineProjectId = project->currentData().toString();
-        if (inlineProjectId.isEmpty() || projectPanel->isVisible()) { dialog->reject(); return; }
+        if (inlineProjectId.isEmpty() || projectPanel->isVisible()) {
+            std::cerr << "Inline project first Save: id=" << inlineProjectId.toStdString()
+                << " panel=" << projectPanel->isVisible() << " dialog=" << dialog->isVisible() << '\n';
+            dialog->reject(); return;
+        }
         saveTask->button(QDialogButtonBox::Save)->click();
     });
     primary->click();
@@ -5472,7 +5709,11 @@ static bool TestQtTaskInlineProjectCreation() {
         tasks.front().status != 1 ||
         tasks.front().project != u8"Проект из задачи" ||
         projects.front().id != inlineProjectId.toStdString() ||
-        projects.front().description != u8"Создан внутри формы задачи") return false;
+        projects.front().description != u8"Создан внутри формы задачи") {
+        std::cerr << "Inline project persisted first step: projects=" << projects.size() << " tasks=" << tasks.size()
+            << " id=" << inlineProjectId.toStdString() << '\n';
+        return false;
+    }
     auto* projectFilter = window.findChild<QComboBox*>("taskProjectFilter");
     if (!projectFilter || projectFilter->findData(inlineProjectId) < 0) return false;
 
@@ -5489,18 +5730,40 @@ static bool TestQtTaskInlineProjectCreation() {
         if (!taskName || !createProject || !projectName || !saveProject || !project) { dialog->reject(); return; }
         taskName->setText(QString::fromUtf8("Отменённая задача"));
         createProject->click();
+        QApplication::processEvents(); QApplication::processEvents();
         projectName->setText(QString::fromUtf8("Проект остаётся после отмены"));
-        saveProject->click();
+        projectName->setFocus(); QTest::keyClick(projectName, Qt::Key_Enter); QApplication::processEvents();
         keptProjectId = project->currentData().toString();
         dialog->reject();
     });
     primary->click();
     const auto projectsAfterCancel = LoadProjectsData(directory);
     const auto tasksAfterCancel = LoadTasksData(directory);
-    return !keptProjectId.isEmpty() && projectsAfterCancel.size() == 2 && tasksAfterCancel.size() == 1 &&
+    const bool savedAndCancelled = !keptProjectId.isEmpty() && projectsAfterCancel.size() == 2 && tasksAfterCancel.size() == 1 &&
         std::any_of(projectsAfterCancel.begin(), projectsAfterCancel.end(), [&](const auto& item) {
             return item.id == keptProjectId.toStdString();
         }) && projectFilter->findData(keptProjectId) >= 0;
+    bool localCancel = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != "taskEditor") { if (dialog) dialog->reject(); return; }
+        dialog->findChild<QLineEdit*>("entryTitle")->setText("Never submit from local Cancel");
+        dialog->findChild<QPushButton*>("createProjectInline")->click();
+        QApplication::processEvents(); QApplication::processEvents();
+        dialog->findChild<QLineEdit*>("inlineProjectName")->setText("Never save cancelled inline project");
+        auto* cancel = dialog->findChild<QPushButton*>("cancelInlineProject");
+        cancel->setFocus(); QTest::keyClick(cancel, Qt::Key_Return); QApplication::processEvents();
+        localCancel = dialog->isVisible() && !dialog->findChild<QGroupBox*>("inlineProjectPanel")->isVisible() &&
+            dialog->findChild<QLineEdit*>("entryTitle")->text() == "Never submit from local Cancel";
+        QTest::keyClick(dialog, Qt::Key_Escape);
+        if (dialog->isVisible()) dialog->reject();
+    });
+    primary->click();
+    if (!savedAndCancelled || !localCancel)
+        std::cerr << "Inline project later steps: kept=" << savedAndCancelled << " localCancel=" << localCancel
+            << " keptId=" << keptProjectId.toStdString() << " projects=" << LoadProjectsData(directory).size()
+            << " tasks=" << LoadTasksData(directory).size() << '\n';
+    return savedAndCancelled && localCancel && LoadProjectsData(directory).size() == 2 && LoadTasksData(directory).size() == 1;
 }
 
 static bool TestQtTaskCreationCompletionHandoff() {
@@ -6513,7 +6776,10 @@ static bool TestDisplaySettings(QApplication& app) {
                 int primaryButtons = 0;
                 for (auto* button : dialog->findChildren<QPushButton*>()) primaryButtons += button->property("primary").toBool();
                 checks &= primaryButtons == 1;
-                dialog->reject();
+                auto* cancel = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Cancel);
+                cancel->setFocus(); QTest::keyClick(cancel, Qt::Key_Return); QApplication::processEvents();
+                checks &= !dialog->isVisible();
+                if (dialog->isVisible()) dialog->reject();
             });
             if (ShowQtDisplaySettings(nullptr, directory, draft)) checks = false;
         }
@@ -8401,6 +8667,10 @@ int main(int argc, char** argv) {
         return TestUiPipelineMapScaling(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PIPELINE_EDITOR"))
         return TestPipelineEditor() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKING_EDITORS"))
+        return TestQtWorkingEditorLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_INLINE_PROJECT"))
+        return TestQtTaskInlineProjectCreation() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
         return TestDisclosureMotionContract() ? 0 : 1;
     if (!qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_WORKSPACE").trimmed().isEmpty())
@@ -8433,6 +8703,7 @@ int main(int argc, char** argv) {
     if (!TestAchievementFiltersUi()) { std::cerr << "Achievement filters UI failed\n"; return 1; }
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
+    if (!TestQtWorkingEditorLayout(app)) { std::cerr << "Working editor layout failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }

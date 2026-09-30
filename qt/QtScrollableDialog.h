@@ -4,6 +4,17 @@
 #include <algorithm>
 #include <cmath>
 
+// Wrapped nested form rows can advertise a height-for-width smaller than the
+// form's intrinsic height. Never let the scroll viewport compress that body
+// and hide its last controls; wider/narrower layout still recalculates normally.
+class QtDialogFormBody final : public QWidget {
+public:
+    using QWidget::QWidget;
+    int heightForWidth(int width) const override {
+        return std::max(QWidget::heightForWidth(width), sizeHint().height());
+    }
+};
+
 // A form that can grow vertically without moving its commit/cancel commands
 // outside the screen. The caller owns the field hierarchy and footer contents.
 class QtScrollableDialog : public QDialog {
@@ -18,7 +29,7 @@ public:
         scroll_->setFrameShape(QFrame::NoFrame);
         scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         scroll_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        body_ = new QWidget(scroll_);
+        body_ = new QtDialogFormBody(scroll_);
         body_->setObjectName("dialogFormContent");
         body_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         form_ = new QFormLayout(body_);
@@ -50,6 +61,22 @@ public:
     }
 
 protected:
+    void keyPressEvent(QKeyEvent* event) override {
+        // Secondary commands deliberately do not take over the default Save.
+        // Return on a focused command must activate that command, rather than
+        // propagating through QDialog to an unrelated default operation.
+        if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
+            (event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::KeypadModifier)) {
+            auto* button = qobject_cast<QPushButton*>(focusWidget());
+            if (button && button->isVisible() && button->isEnabled()) {
+                event->accept();
+                button->click();
+                return;
+            }
+        }
+        QDialog::keyPressEvent(event);
+    }
+
     void showEvent(QShowEvent* event) override {
         for (const auto* layout : body_->findChildren<QFormLayout*>()) {
             for (int row = 0; row < layout->rowCount(); ++row) {

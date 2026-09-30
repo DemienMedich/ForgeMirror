@@ -1114,7 +1114,7 @@ bool ShowQtDisplaySettings(QWidget* parent, const std::filesystem::path& directo
     hint->setObjectName("qtLayoutPresetHint");
     hint->setWordWrap(true); presetsForm->addRow(hint);
     dialog.footerLayout()->addWidget(notice);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
     auto* saveButton = buttons->button(QDialogButtonBox::Save);
     auto* cancelButton = buttons->button(QDialogButtonBox::Cancel);
     saveButton->setText(QString::fromUtf8("Сохранить"));
