@@ -51,6 +51,7 @@
 #include <QProcessEnvironment>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <thread>
 #include <QtTest/QTest>
 #include <iostream>
@@ -405,6 +406,10 @@ static bool TestManualTaskXp() {
     return awarded && awarded->total_xp() == 500 && awarded->tasks_completed() == 1;
 }
 
+static void ScheduleQtModalDriver(QApplication& app, const QString& expectedObjectName,
+    const QString& context, std::function<void(QDialog*)> driver,
+    std::function<void(bool, const QString&)> record);
+
 static bool TestManualXpDialog() {
     auto fail = [](const char* text) { std::cerr << "manualXpDialog: " << text << '\n'; return false; };
     QTemporaryDir temp;
@@ -418,11 +423,10 @@ static bool TestManualXpDialog() {
     const auto second = workspace.storage->create_profile(Profile("Dialog Bob"));
     if (!first || !second) return fail("profile fixtures");
     workspace.reload();
-    bool formValidated = false, shortcutActions = false, accessible = false;
+    bool formValidated = false, shortcutActions = false, accessible = false, driverReady = true;
     QStringList missingNames;
-    QTimer::singleShot(0, [&] {
-        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
-        if (!dialog) return;
+    ScheduleQtModalDriver(*qApp, "manualXpDialog", "manual XP persisted",
+        [&](QDialog* dialog) {
         missingNames.append(MissingAccessibleNames(dialog));
         auto* project = dialog->findChild<QComboBox*>("manualXpProject");
         auto* title = dialog->findChild<QLineEdit*>("manualXpTitle");
@@ -490,11 +494,14 @@ static bool TestManualXpDialog() {
         shortcutActions = evenlySplit && selectedOnlyActive && evenlyRated && numericSortWorks && filterHidesRows;
         accessible = missingNames.isEmpty();
         save->click();
+    }, [&](bool okay, const QString& context) {
+        driverReady &= okay;
+        if (!okay) std::cerr << context.toStdString() << '\n';
     });
     if (!ShowManualXpDialog(nullptr, workspace, QString::fromStdString(first->id)))
         return fail("dialog cancelled or did not commit");
     missingNames.removeDuplicates();
-    if (!formValidated || !shortcutActions) return fail("manual form fields, quick splits or skill filters failed");
+    if (!driverReady || !formValidated || !shortcutActions) return fail("manual form fields, quick splits or skill filters failed");
     if (!accessible || !missingNames.isEmpty()) {
         for (const auto& name : missingNames) std::cerr << "  missing accessible name: " << name.toUtf8().constData() << '\n';
         return fail("manual dialog accessibility audit failed");
@@ -3382,6 +3389,40 @@ static bool TestQtWorkingEditorLayout(QApplication& app) {
     return checked;
 }
 
+// Drive the actual exec() loop, including nested dialogs. Closing a modal from
+// events pumped by show() is too early; timing alone is not a readiness signal.
+static void ScheduleQtModalDriver(QApplication& app, const QString& expectedObjectName,
+    const QString& context, std::function<void(QDialog*)> driver,
+    std::function<void(bool, const QString&)> record) {
+    const int requiredLoopLevel = QThread::currentThread()->loopLevel() + 1;
+    QTimer::singleShot(0, &app, [&app, expectedObjectName, context, driver, requiredLoopLevel, record] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog) { record(false, context + " active modal"); return; }
+        if (!expectedObjectName.isEmpty() && dialog->objectName() != expectedObjectName) {
+            record(false, context + " expected modal");
+            QTimer::singleShot(20, dialog, [dialog] { dialog->reject(); });
+            return;
+        }
+        auto* ready = new QTimer(dialog);
+        ready->setInterval(1);
+        QObject::connect(ready, &QTimer::timeout, dialog,
+            [&app, ready, dialog, context, driver, requiredLoopLevel, record] {
+                if (QThread::currentThread()->loopLevel() < requiredLoopLevel) return;
+                ready->stop();
+                if (QGuiApplication::platformName() != "offscreen") {
+                    dialog->showNormal(); dialog->raise(); dialog->activateWindow();
+                    record(QTest::qWaitForWindowExposed(dialog, 2000), context + " native window exposed");
+                    record(QTest::qWaitForWindowActive(dialog, 2000), context + " native window active");
+                }
+                driver(dialog);
+                // Empirically required order: keep the timer through reentrant
+                // processEvents()/nested dialogs, then queue its cleanup.
+                ready->deleteLater();
+            });
+        ready->start();
+    });
+}
+
 static bool TestQtCatalogProfileLayout(QApplication& app) {
     const auto originalFont = app.font();
     const auto originalStyle = app.styleSheet();
@@ -3397,39 +3438,7 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
     auto settle = [] { QApplication::processEvents(); QApplication::processEvents(); };
     const auto driveModal = [&](const QString& expectedObjectName, const QString& context,
         std::function<void(QDialog*)> driver) {
-        const int requiredLoopLevel = QThread::currentThread()->loopLevel() + 1;
-        // An initial zero-shot can run inside QWidget::show(), before exec()
-        // installs its event loop. Closing there loses the reject/accept exit.
-        QTimer::singleShot(0, &app, [&, expectedObjectName, context, driver, requiredLoopLevel] {
-            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
-            if (!dialog) { record(false, context + " active modal"); return; }
-            if (!expectedObjectName.isEmpty() && dialog->objectName() != expectedObjectName) {
-                record(false, context + " expected modal");
-                QTimer::singleShot(20, dialog, [dialog] { dialog->reject(); });
-                return;
-            }
-            auto* ready = new QTimer(dialog);
-            ready->setInterval(1);
-            QObject::connect(ready, &QTimer::timeout, dialog, [&, ready, dialog, context, driver, requiredLoopLevel] {
-                // Time alone is not a readiness signal: font/layout work can
-                // pump events during show(). Wait for this dialog's exec(),
-                // including the extra level of a nested editor/input dialog.
-                if (QThread::currentThread()->loopLevel() < requiredLoopLevel) return;
-                // Keep the sender (and its captured driver) alive through
-                // reentrant processEvents()/nested dialogs inside the driver.
-                ready->stop();
-                std::cout << context.toStdString() << " driver-loop=" << QThread::currentThread()->loopLevel()
-                    << " required=" << requiredLoopLevel << '\n';
-                if (QGuiApplication::platformName() != "offscreen") {
-                    dialog->showNormal(); dialog->raise(); dialog->activateWindow();
-                    record(QTest::qWaitForWindowExposed(dialog, 2000), context + " native window exposed");
-                    record(QTest::qWaitForWindowActive(dialog, 2000), context + " native window active");
-                }
-                driver(dialog);
-                ready->deleteLater();
-            });
-            ready->start();
-        });
+        ScheduleQtModalDriver(app, expectedObjectName, context, std::move(driver), record);
     };
     auto capture = [&](QDialog* dialog, const QString& stem, int scale) {
         if (!artifacts.isEmpty() && (scale == 100 || scale == 200))
@@ -3880,6 +3889,208 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
     }
     QApplication::clipboard()->setText(clipboardBefore);
     app.setFont(originalFont); app.setStyleSheet(originalStyle); app.setProperty("forgeBasePointSize", originalBase);
+    return checked;
+}
+
+static bool TestQtXpDialogLayout(QApplication& app) {
+    struct RestoreStyle {
+        QFont font = qApp->font();
+        QString stylesheet = qApp->styleSheet();
+        QVariant base = qApp->property("forgeBasePointSize");
+        ~RestoreStyle() { qApp->setFont(font); qApp->setStyleSheet(stylesheet); qApp->setProperty("forgeBasePointSize", base); }
+    } restore;
+    bool checked = true;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty() && !QDir().mkpath(artifacts)) return false;
+    auto settle = [] { QApplication::processEvents(); QApplication::processEvents(); };
+    auto record = [&](bool okay, const QString& context) {
+        checked &= okay;
+        if (!okay) std::cerr << "XP layout: " << context.toStdString() << '\n';
+    };
+    auto capture = [&](QDialog* dialog, const QString& stem, int scale) {
+        if (!artifacts.isEmpty() && (scale == 100 || scale == 200))
+            record(dialog->grab().save(artifacts + '/' + stem + ".png"), stem + " capture");
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        ApplyQtDisplaySettings(app, settings);
+        for (bool manual : {false, true}) {
+            QTemporaryDir temp;
+            if (!temp.isValid()) return false;
+            QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().toStdString()));
+            std::vector<std::string> skillIds, profileIds;
+            for (int index = 0; index < 3; ++index) {
+                const auto name = QString::fromUtf8("Навык проверки материалов, персонажей и окружения %1").arg(index + 1).toUtf8().toStdString();
+                workspace.catalog.add_skill(name, 1.0, "XP layout synthetic skill");
+                skillIds.push_back(*workspace.catalog.id_for_name(name));
+            }
+            for (int index = 0; index < 3; ++index) {
+                Profile profile(QString::fromUtf8("Специалист по проверке персонажей и окружения %1").arg(index + 1).toUtf8().toStdString());
+                for (const auto& id : skillIds) profile.add_skill(id);
+                const auto created = workspace.storage->create_profile(profile);
+                if (!created) return false;
+                profileIds.push_back(created->id);
+            }
+            TaskEntry task; task.id = "xp-layout-completion";
+            task.title = u8"Подготовить персонажей, материалы и окружение для итоговой проверки проекта";
+            task.skillIds = skillIds; task.deadlinePenaltyPercent = 20;
+            if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test", &workspace.data.taskAudit).ok) return false;
+            workspace.reload();
+            const QString active = QString::fromStdString(profileIds.front());
+            auto bytes = [&](const QString& relative) {
+                QFile file(temp.path() + '/' + relative);
+                return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+            };
+            QStringList paths{"meta/tasks.json", "meta/task-audit.log", "meta/updates/tasks.last-good.json"};
+            for (const auto& id : profileIds) paths << QString::fromStdString(id) + ".ini";
+            std::vector<QByteArray> before;
+            for (const auto& path : paths) before.push_back(bytes(path));
+            const auto stem = QStringLiteral("%1-%2").arg(manual ? "manual-xp" : "completion").arg(scale);
+            const QString prefix = manual ? "manualXp" : "xp";
+            bool visited = false;
+            auto inspect = [&](QDialog* dialog, const QString& state) {
+                auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+                auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+                auto* save = dialog->findChild<QPushButton*>(manual ? "manualXpSave" : "completeXp");
+                auto* cancel = dialog->findChild<QPushButton*>(manual ? "manualXpCancel" : "xpCancel");
+                record(scroll && scroll->widget() && footer && save && cancel, state + " form hooks");
+                if (!scroll || !scroll->widget() || !footer || !save || !cancel) return;
+                record(dialog->size() == QSize(640, 520).boundedTo(dialog->maximumSize()), state + " bounded size");
+                record(scroll->horizontalScrollBar()->maximum() == 0 && scroll->widget()->width() <= scroll->viewport()->width(),
+                    state + " outer horizontal overflow");
+                record(save->property("primary").toBool() && save->isDefault() && !cancel->autoDefault(),
+                    state + " single primary/default and local Cancel");
+                int primaries = 0;
+                for (auto* button : dialog->findChildren<QPushButton*>()) {
+                    if (button->isVisible() && button->property("primary").toBool()) ++primaries;
+                    if (button->isVisible() && footer->isAncestorOf(button))
+                        record(dialog->rect().contains(QRect(button->mapTo(dialog, QPoint()), button->size())),
+                            state + " footer button " + button->objectName());
+                }
+                record(primaries == 1, state + " one primary");
+                for (auto* label : dialog->findChildren<QLabel*>()) {
+                    if (!label->isVisible() || !label->wordWrap()) continue;
+                    record(label->height() >= label->heightForWidth(label->width()), state + " wrapped " + label->objectName());
+                }
+                for (auto* table : dialog->findChildren<QTableWidget*>()) {
+                    record(table->rowCount() == 3 && table->columnCount() >= 3, state + " allocation rows");
+                    record(table->viewport()->height() >= 3 * table->verticalHeader()->defaultSectionSize(),
+                        state + " three whole fixture rows");
+                    for (int row = 0; row < table->rowCount(); ++row) {
+                        auto* spin = qobject_cast<QSpinBox*>(table->cellWidget(row, 1));
+                        record(spin && table->rowHeight(row) >= spin->sizeHint().height(), state + " font safe spin row");
+                        if (spin && !table->isRowHidden(row)) {
+                            const bool fits = spin->height() >= spin->sizeHint().height() &&
+                                spin->width() >= spin->sizeHint().width();
+                            record(fits, state + " cell spin bounds");
+                            if (!fits) std::cerr << table->objectName().toStdString() << " row=" << row
+                                << " actual=" << spin->width() << 'x' << spin->height()
+                                << " hint=" << spin->sizeHint().width() << 'x' << spin->sizeHint().height() << '\n';
+                        }
+                    }
+                }
+                if (QGuiApplication::platformName() != "offscreen")
+                    record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()), state + " screen bounds");
+            };
+            auto show = [&] {
+                return manual ? ShowManualXpDialog(nullptr, workspace, active)
+                    : ShowTaskCompletionDialog(nullptr, workspace, QString::fromStdString(task.id), active);
+            };
+            ScheduleQtModalDriver(app, manual ? "manualXpDialog" : "taskCompletionDialog", stem,
+                [&](QDialog* dialog) {
+                    visited = true; dialog->resize(640, 520); settle(); inspect(dialog, stem);
+                    capture(dialog, stem, scale);
+                    auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+                    auto* save = dialog->findChild<QPushButton*>(manual ? "manualXpSave" : "completeXp");
+                    auto* cancel = dialog->findChild<QPushButton*>(manual ? "manualXpCancel" : "xpCancel");
+                    auto* participants = dialog->findChild<QTableWidget*>(prefix + "Participants");
+                    auto* skills = dialog->findChild<QTableWidget*>(prefix + "Skills");
+                    auto* filter = dialog->findChild<QLineEdit*>(prefix + "SkillFilter");
+                    auto* sort = dialog->findChild<QComboBox*>(prefix + "SkillSort");
+                    auto* onlyActive = dialog->findChild<QPushButton*>(manual ? "manualXpOnlyActive" : "xpOnlyActiveParticipant");
+                    auto* summary = dialog->findChild<QLabel*>(manual ? "manualXpSummary" : "xpSummary");
+                    if (!scroll || !save || !cancel || !participants || !skills || !filter || !sort || !onlyActive || !summary) {
+                        record(false, stem + " input hooks"); dialog->reject(); return;
+                    }
+                    if (manual) {
+                        auto* project = dialog->findChild<QComboBox*>("manualXpProject");
+                        auto* title = dialog->findChild<QLineEdit*>("manualXpTitle");
+                        auto* note = dialog->findChild<QPlainTextEdit*>("manualXpDescription");
+                        if (!project || !title || !note) { record(false, stem + " draft hooks"); dialog->reject(); return; }
+                        project->setCurrentText(QString::fromUtf8("Длинный проект проверки материалов и окружения"));
+                        title->setText(QString::fromUtf8("Несохранённая запись выполненной работы"));
+                        note->setPlainText(QString::fromUtf8("Первая строка результата"));
+                        note->setFocus(); note->moveCursor(QTextCursor::End); QTest::keyClick(note, Qt::Key_Return); settle();
+                        record(dialog->isVisible() && note->toPlainText().endsWith('\n'), stem + " multiline Return does not submit");
+                        project->setFocus(); QTest::keyClick(project, Qt::Key_Tab); settle();
+                        record(title->hasFocus(), stem + " project to title Tab");
+                        QTest::keyClick(title, Qt::Key_Backtab); settle();
+                        record(project->hasFocus() || project->lineEdit()->hasFocus(), stem + " title to project Shift Tab");
+                    }
+                    auto* share = qobject_cast<QSpinBox*>(participants->cellWidget(0, 1));
+                    if (!share) { record(false, stem + " share"); dialog->reject(); return; }
+                    share->setValue(99); settle();
+                    record(!save->isEnabled() && !summary->text().isEmpty() &&
+                        summary->accessibleDescription() == summary->text(), stem + " invalid shares feedback");
+                    inspect(dialog, stem + " invalid"); capture(dialog, stem + "-invalid", scale);
+                    scroll->ensureWidgetVisible(onlyActive, 0, 0); onlyActive->setFocus();
+                    QTest::keyClick(onlyActive, Qt::Key_Return); settle();
+                    record(dialog->isVisible() && share->value() == 100 && save->isEnabled(), stem + " local OnlyActive Return");
+                    const auto keptId = QString::fromStdString(skillIds.front());
+                    auto rating = [&](const QString& id) -> QSpinBox* {
+                        for (int row = 0; row < skills->rowCount(); ++row)
+                            if (skills->item(row, 0)->data(Qt::UserRole).toString() == id)
+                                return qobject_cast<QSpinBox*>(skills->cellWidget(row, 1));
+                        return nullptr;
+                    };
+                    auto* keptRating = rating(keptId);
+                    if (!keptRating) { record(false, stem + " rating ID"); dialog->reject(); return; }
+                    keptRating->setValue(5); sort->setCurrentIndex(3); settle();
+                    record(rating(keptId) && rating(keptId)->value() == 5, stem + " rating survives sort");
+                    filter->setText("no matching synthetic skill"); settle();
+                    bool hidden = true;
+                    for (int row = 0; row < skills->rowCount(); ++row) hidden &= skills->isRowHidden(row);
+                    record(hidden && save->isEnabled(), stem + " filtering does not change allocation");
+                    filter->clear(); settle(); inspect(dialog, stem + " reordered");
+                    scroll->ensureWidgetVisible(skills, 0, 0); settle(); capture(dialog, stem + "-allocation", scale);
+                    cancel->setFocus(); QTest::keyClick(cancel, Qt::Key_Return); settle();
+                    record(!dialog->isVisible(), stem + " local Cancel Return");
+                    if (dialog->isVisible()) dialog->reject();
+                }, record);
+            record(!show() && visited, stem + " cancelled");
+            for (size_t index = 0; index < before.size(); ++index)
+                record(bytes(paths[int(index)]) == before[index], stem + " cancel unchanged " + paths[int(index)]);
+            record(!std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"), stem + " no pending transaction");
+
+            if (scale == 100 || scale == 200) {
+                bool committed = false;
+                ScheduleQtModalDriver(app, manual ? "manualXpDialog" : "taskCompletionDialog", stem + " commit",
+                    [&](QDialog* dialog) {
+                        dialog->resize(640, 520); settle();
+                        if (manual) {
+                            dialog->findChild<QComboBox*>("manualXpProject")->setCurrentText("Synthetic XP work");
+                            dialog->findChild<QLineEdit*>("manualXpTitle")->setText("Keyboard committed XP");
+                            dialog->findChild<QPlainTextEdit*>("manualXpDescription")->setPlainText("Synthetic committed result");
+                        }
+                        auto* save = dialog->findChild<QPushButton*>(manual ? "manualXpSave" : "completeXp");
+                        if (!save || !save->isEnabled()) { record(false, stem + " enabled save"); dialog->reject(); return; }
+                        save->setFocus(); QTest::keyClick(save, Qt::Key_Enter); settle();
+                        committed = dialog->result() == QDialog::Accepted;
+                        if (dialog->isVisible()) dialog->reject();
+                    }, record);
+                record(show() && committed, stem + " numpad Enter commit");
+                const auto stored = LoadTasksData(workspace.directory);
+                const auto found = std::find_if(stored.begin(), stored.end(), [&](const auto& item) {
+                    return manual ? item.title == "Keyboard committed XP" : item.id == task.id;
+                });
+                record(found != stored.end() && found->status == 2 && found->participants.size() == 1 &&
+                    found->participants.front().profileId == profileIds.front(), stem + " keyboard commit persisted");
+                const auto awarded = workspace.storage->load_profile_snapshot(profileIds.front(), false);
+                record(awarded && awarded->total_xp() > 0 && awarded->tasks_completed() == 1, stem + " keyboard commit XP");
+            }
+            std::cout << stem.toStdString() << " checked\n";
+        }
+    }
     return checked;
 }
 
@@ -5584,6 +5795,243 @@ static bool TestMonthlyCompletionTrend() {
         std::accumulate(counts.begin(), counts.end(), 0) == 3;
 }
 
+static bool TestQtChartReadability(QApplication& app) {
+    struct RestoreStyle {
+        QFont font = qApp->font();
+        QString stylesheet = qApp->styleSheet();
+        QVariant base = qApp->property("forgeBasePointSize");
+        ~RestoreStyle() { qApp->setFont(font); qApp->setStyleSheet(stylesheet); qApp->setProperty("forgeBasePointSize", base); }
+    } restore;
+    bool checked = true;
+    int states = 0;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty() && !QDir().mkpath(artifacts)) return false;
+    auto record = [&](bool okay, const QString& context) {
+        checked &= okay;
+        if (!okay) std::cerr << "Chart readability: " << context.toStdString() << '\n';
+    };
+    auto settle = [] { QApplication::processEvents(); QApplication::processEvents(); };
+    const auto inspect = [&](auto* chart, const auto& metrics, const QString& stem) {
+        const QRectF bounds(0, 0, chart->width(), metrics.requiredHeight);
+        record(metrics.requiredHeight > 0 && chart->height() >= metrics.requiredHeight &&
+            chart->heightForWidth(chart->width()) == metrics.requiredHeight, stem + " actual HFW height");
+        for (size_t index = 0; index < metrics.texts.size(); ++index) {
+            const auto& region = metrics.texts[index];
+            if (region.text.isEmpty()) continue;
+            const auto context = stem + '/' + region.role;
+            record(!region.role.isEmpty() && region.rect.width() > 0 && region.rect.height() > 0 &&
+                bounds.adjusted(-0.5, -0.5, 0.5, 0.5).contains(region.rect), context + " text bounds");
+            // Independent glyph measurement: use the region's actual wrapping
+            // rule, not the renderer's calculated requiredHeight as proof.
+            QTextLayout text(region.text, region.font);
+            QTextOption option; option.setWrapMode(region.wrapMode);
+            text.setTextOption(option); text.beginLayout();
+            qreal height = 0;
+            while (true) {
+                auto line = text.createLine();
+                if (!line.isValid()) break;
+                line.setLineWidth(region.rect.width());
+                height += line.height();
+                record(line.naturalTextWidth() <= region.rect.width() + 0.75, context + " glyph width");
+            }
+            text.endLayout();
+            record(qCeil(height) <= region.rect.height() + 0.75, context + " glyph height");
+            for (size_t next = index + 1; next < metrics.texts.size(); ++next) {
+                const auto& other = metrics.texts[next];
+                if (other.text.isEmpty()) continue;
+                const auto overlap = region.rect.intersected(other.rect);
+                record(overlap.width() < 0.5 || overlap.height() < 0.5,
+                    context + " overlaps " + other.role);
+            }
+        }
+    };
+    const auto prepareHost = [&](QScrollArea& host, QWidget* chart, int width) {
+        host.setFrameShape(QFrame::NoFrame);
+        host.setWidgetResizable(true);
+        host.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        host.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+        host.setWidget(chart); host.ensurePolished();
+        host.resize(width + host.verticalScrollBar()->sizeHint().width(), 480);
+        host.show(); host.raise(); host.activateWindow();
+        if (QGuiApplication::platformName() != "offscreen")
+            record(QTest::qWaitForWindowExposed(&host, 2000), "chart host exposed");
+        settle();
+        record(host.viewport()->width() == width && chart->width() == width, "chart host requested width");
+    };
+    const auto capture = [&](QScrollArea& host, QWidget* chart, const QString& stem, int scale, int fixture) {
+        if (artifacts.isEmpty() || (scale != 100 && scale != 200) || (fixture != 0 && fixture != 4)) return;
+        record(chart->grab().save(artifacts + '/' + stem + ".png"), stem + " full renderer capture");
+        record(host.grab().save(artifacts + '/' + stem + "-viewport.png"), stem + " scroll viewport capture");
+        host.verticalScrollBar()->setValue(host.verticalScrollBar()->maximum()); settle();
+        record(host.grab().save(artifacts + '/' + stem + "-bottom.png"), stem + " scroll bottom capture");
+        host.verticalScrollBar()->setValue(0); settle();
+    };
+    const auto checkReflow = [&](QScrollArea& host, auto* chart, int originalWidth, const QString& stem) {
+        const auto originalHeight = chart->heightForWidth(originalWidth);
+        for (int width : {originalWidth == 640 ? 320 : 640, originalWidth}) {
+            host.resize(width + host.verticalScrollBar()->sizeHint().width(), 480); settle();
+            record(chart->width() == width, stem + " resized viewport width");
+            inspect(chart, chart->layoutMetrics(width), stem + QStringLiteral("-reflow-%1").arg(width));
+        }
+        record(chart->heightForWidth(originalWidth) == originalHeight, stem + " reversible geometry");
+        const auto originalFont = chart->font();
+        // Exercise FontChange on the same instance, within the supported
+        // 90..200% range; do not accidentally impose a new 250% contract.
+        QFont enlarged = originalFont; enlarged.setPointSizeF(originalFont.pointSizeF() *
+            (originalFont.pointSizeF() > app.property("forgeBasePointSize").toDouble() * 1.6 ? 0.8 : 1.25));
+        chart->setFont(enlarged); settle();
+        inspect(chart, chart->layoutMetrics(originalWidth), stem + " font-change");
+        chart->setFont(originalFont); settle();
+        inspect(chart, chart->layoutMetrics(originalWidth), stem + " font-restore");
+        record(chart->heightForWidth(originalWidth) == originalHeight, stem + " reversible font geometry");
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        ApplyQtDisplaySettings(app, settings);
+        for (int width : {640, 320}) {
+            {
+                QScrollArea host; auto* chart = new QtReportChart;
+                prepareHost(host, chart, width);
+                for (int fixture = 0; fixture < 6; ++fixture) {
+                    std::array<int, 12> trend{};
+                    int a = 0, b = 0, c = 0;
+                    QString period = QString::fromUtf8("За всё время");
+                    if (fixture == 1) { a = 2; b = 1; c = 7; trend[0] = 4; trend[5] = 10; trend[11] = 6; }
+                    if (fixture == 2) { a = 14; b = 12; c = 17; for (int i = 0; i < 12; ++i) trend[size_t(i)] = i + 1; }
+                    if (fixture == 3) {
+                        a = 123; b = 321; c = 666;
+                        period = QString::fromUtf8("Ручной период с 01.01.2025 по 30.09.2026 — проверка полного длинного русского названия периода");
+                        trend = {4, 20, 1, 35, 3, 6, 18, 9, 0, 12, 32, 10};
+                    }
+                    if (fixture == 4) {
+                        a = 123456789; b = 987654321; c = 66666666;
+                        period = QString::fromUtf8("Последние 90 дней — полное название отчётного периода");
+                        for (int i = 0; i < 12; ++i) trend[size_t(i)] = 12345678 + i * 12345;
+                    }
+                    if (fixture == 5) { a = 99; b = 7; c = 1111; trend[0] = 99; trend[11] = 1111; }
+                    chart->setValues(a, b, c, period); chart->setCompletionTrend(trend); settle();
+                    const auto metrics = chart->layoutMetrics(width);
+                    const auto stem = QStringLiteral("report-%1-%2-%3").arg(scale).arg(width).arg(fixture);
+                    inspect(chart, metrics, stem);
+                    record(metrics.period.text.contains(period) && metrics.trendPoints.size() == 12 &&
+                        chart->completionTrend() == trend, stem + " full period and data");
+                    record(!metrics.dateLabels.empty() && metrics.dateLabels.front().monthIndex == 0 &&
+                        metrics.dateLabels.back().monthIndex == 11, stem + " date endpoints");
+                    for (const auto& status : metrics.statuses)
+                        record(QFontMetricsF(status.value.font).horizontalAdvance(status.value.text) <= status.value.rect.width() + 0.75,
+                            stem + " unbroken status number");
+                    for (const auto& date : metrics.dateLabels)
+                        record(QFontMetricsF(date.label.font).horizontalAdvance(date.label.text) <= date.label.rect.width() + 0.75,
+                            stem + " unbroken date");
+                    for (const auto& value : metrics.valueLabels)
+                        record(value.label.text == QString::number(trend[size_t(value.monthIndex)]) &&
+                            QFontMetricsF(value.label.font).horizontalAdvance(value.label.text) <= value.label.rect.width() + 0.75,
+                            stem + " unbroken value annotation");
+                    const int peak = std::max(1, *std::max_element(trend.begin(), trend.end()));
+                    for (int index = 0; index < metrics.trendPoints.size(); ++index) {
+                        const auto point = metrics.trendPoints[index];
+                        const auto expected = QPointF(metrics.plot.left() + metrics.plot.width() * index / 11,
+                            metrics.plot.bottom() - metrics.plot.height() * trend[size_t(index)] / peak);
+                        record(std::isfinite(point.x()) && std::isfinite(point.y()) &&
+                            metrics.plot.adjusted(-0.5, -0.5, 0.5, 0.5).contains(point) &&
+                            QLineF(point, expected).length() < 0.5, stem + " plotted completion values");
+                    }
+                    const auto first = QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1).addMonths(-11);
+                    for (int i = 0; i < 12; ++i)
+                        record(chart->accessibleDescription().contains(first.addMonths(i).toString("yyyy-MM") +
+                            QStringLiteral(": %1").arg(trend[size_t(i)])), stem + " complete trend context");
+                    record((fixture != 0 || !metrics.emptyMessage.text.isEmpty()), stem + " empty explanation");
+                    capture(host, chart, stem, scale, fixture); ++states;
+                }
+                checkReflow(host, chart, width, QStringLiteral("report-%1-%2").arg(scale).arg(width));
+            }
+            {
+                QScrollArea host; auto* chart = new QtLogActivityChart;
+                prepareHost(host, chart, width);
+                for (int fixture = 0; fixture < 4; ++fixture) {
+                    std::vector<AppLogEntry> entries;
+                    const int count = fixture == 0 ? 0 : fixture == 1 ? 5 : fixture == 2 ? 12 : 1600;
+                    for (int i = 0; i < count; ++i) {
+                        AppLogEntry entry;
+                        entry.timestamp = fixture == 2 ? (i % 3 == 0 ? 0 : 1700000000) : 1700000000 + i * 3600;
+                        entries.push_back(entry);
+                    }
+                    chart->setEntries(entries); settle();
+                    const auto metrics = chart->layoutMetrics(width);
+                    const auto stem = QStringLiteral("log-%1-%2-%3").arg(scale).arg(width).arg(fixture);
+                    inspect(chart, metrics, stem);
+                    record(chart->values() == QtLogActivityChart::BuildHistogram(entries) &&
+                        std::accumulate(chart->values().begin(), chart->values().end(), 0) == count, stem + " unchanged histogram");
+                    record(chart->accessibleDescription().contains(QString::number(count)), stem + " total context");
+                    capture(host, chart, stem, scale, fixture == 3 ? 4 : fixture); ++states;
+                }
+                checkReflow(host, chart, width, QStringLiteral("log-%1-%2").arg(scale).arg(width));
+            }
+            {
+                QScrollArea host; auto* chart = new QtProfileAnalytics;
+                prepareHost(host, chart, width);
+                for (int fixture = 0; fixture < 6; ++fixture) {
+                    const int count = fixture == 0 ? 0 : fixture == 1 ? 2 : fixture == 2 ? 3 : fixture == 3 ? 8 : 16;
+                    std::vector<QtProfileSkillMetric> skills;
+                    for (int i = 0; i < count; ++i) {
+                        QtProfileSkillMetric item;
+                        item.name = QString::fromUtf8("Навык проверки материалов, персонажей и окружения %1").arg(i + 1);
+                        item.totalXp = fixture == 5 ? 123456789 - i * 1234 : 1000 - i * 10;
+                        item.level = fixture == 5 ? 12345 + i : i + 1;
+                        item.currentXp = 77; item.nextLevelXp = fixture == 5 && i % 2 == 0 ? 0 : 100;
+                        skills.push_back(item);
+                    }
+                    const std::array<int, Profile::kCategoryCount> scores = fixture <= 1 ?
+                        std::array<int, Profile::kCategoryCount>{} : std::array<int, Profile::kCategoryCount>{4, 8, 3, 6, 9};
+                    chart->setData(scores, fixture == 0 ? QStringList{} : QStringList{"E", "D", "C", "B", "A"}, skills);
+                    chart->axisControl()->setValue(std::max(3, count)); settle();
+                    const auto metrics = chart->layoutMetrics(width);
+                    const auto stem = QStringLiteral("profile-chart-%1-%2-%3").arg(scale).arg(width).arg(fixture);
+                    inspect(chart, metrics, stem);
+                    record(chart->axisControl()->width() >= chart->axisControl()->sizeHint().width() &&
+                        chart->axisControl()->height() >= chart->axisControl()->sizeHint().height(), stem + " readable axis input");
+                    if (count >= 3)
+                        record(metrics.radarAxes == count && metrics.radarPoints.size() == count &&
+                            metrics.radarEnds.size() == count, stem + " complete radar data");
+                    else record(metrics.radarPoints.isEmpty(), stem + " unavailable radar has no fabricated data");
+                    const auto axes = QtProfileAnalytics::TopSkills(skills, count);
+                    double maximum = 1;
+                    for (const auto& skill : axes)
+                        maximum = std::max(maximum, skill.level + (skill.nextLevelXp > 0 ?
+                            std::clamp(double(skill.currentXp) / skill.nextLevelXp, 0.0, 1.0) : 0.0));
+                    for (int index = 0; index < metrics.radarPoints.size(); ++index) {
+                        const auto& skill = axes[size_t(index)];
+                        const double value = skill.level + (skill.nextLevelXp > 0 ?
+                            std::clamp(double(skill.currentXp) / skill.nextLevelXp, 0.0, 1.0) : 0.0);
+                        const auto point = metrics.radarPoints[index];
+                        const auto expected = metrics.radarCenter + (metrics.radarEnds[index] - metrics.radarCenter) * (value / maximum);
+                        record(std::isfinite(point.x()) && std::isfinite(point.y()) &&
+                            metrics.plot.adjusted(-0.5, -0.5, 0.5, 0.5).contains(point) &&
+                            QLineF(point, expected).length() < 0.5, stem + " plotted radar values");
+                    }
+                    const auto ranked = QtProfileAnalytics::TopSkills(skills, 6);
+                    for (const auto& skill : ranked) {
+                        record(chart->accessibleDescription().contains(skill.name) &&
+                            chart->accessibleDescription().contains(QString::number(skill.totalXp)), stem + " full top XP context");
+                        bool fullNumber = false;
+                        for (const auto& text : metrics.texts)
+                            if (text.text == QString::number(skill.totalXp)) {
+                                fullNumber = QFontMetricsF(text.font).horizontalAdvance(text.text) <= text.rect.width() + 0.75;
+                                break;
+                            }
+                        record(fullNumber, stem + " full painted XP number");
+                    }
+                    capture(host, chart, stem, scale, fixture == 5 ? 4 : fixture); ++states;
+                }
+                checkReflow(host, chart, width, QStringLiteral("profile-chart-%1-%2").arg(scale).arg(width));
+            }
+        }
+    }
+    record(states == 224, "finite renderer matrix: 224 states");
+    std::cout << "Chart renderer states checked: " << states << '\n';
+    return checked;
+}
+
 static bool TestStatisticsTrendBeyondAuditPageLimit() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
@@ -5604,6 +6052,17 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
     const auto recentPage = LoadTaskAuditData(directory);
     if (recentPage.size() != 200 || std::any_of(recentPage.begin(), recentPage.end(), [](const auto& entry) { return entry.taskId == "trend-0"; }))
         return false;
+    for (int days : {0, 10, 60, 120, 400}) {
+        for (int status = 0; status < 3; ++status) {
+            TaskEntry task; task.id = "chart-context-" + std::to_string(days) + '-' + std::to_string(status);
+            task.project = "Synthetic report"; task.title = "Context chart fixture"; task.status = status;
+            task.createdAt = QDateTime(today.addDays(-days), QTime(12, 0), Qt::LocalTime).toSecsSinceEpoch();
+            workspace.data.tasks.push_back(task);
+        }
+    }
+    TaskEntry undated; undated.id = "chart-context-undated"; undated.title = "Missing creation date";
+    workspace.data.tasks.push_back(undated);
+    if (!AppSaveTasks(directory, workspace.data.tasks)) return false;
     QtWindow window(workspace); window.show(); QApplication::processEvents();
     QListWidget* navigation = window.findChild<QListWidget*>("navigation");
     QAction* adminAction = nullptr;
@@ -5625,6 +6084,43 @@ static bool TestStatisticsTrendBeyondAuditPageLimit() {
     const auto markerLabel = markerDate.toString("yyyy-MM") + QStringLiteral(": 1");
     const auto currentLabel = today.toString("yyyy-MM") + QStringLiteral(": 205");
     if (!chartDescription.contains(markerLabel) || !chartDescription.contains(currentLabel)) return false;
+    auto* view = window.findChild<QComboBox*>("reportView");
+    auto* range = window.findChild<QComboBox*>("reportDateRange");
+    auto* comparison = window.findChild<QCheckBox*>("reportComparePrevious");
+    auto* from = window.findChild<QDateEdit*>("reportDateFrom");
+    auto* to = window.findChild<QDateEdit*>("reportDateTo");
+    if (!view || !range || !comparison || !from || !to || view->count() != 8 || range->count() != 5) return false;
+    from->setDate(today.addDays(-75)); to->setDate(today.addDays(-20));
+    const auto expectedTrend = chart->completionTrend();
+    int contexts = 0;
+    for (int group = 0; group < view->count(); ++group) {
+        view->setCurrentIndex(group);
+        for (int period = 0; period < range->count(); ++period) {
+            range->setCurrentIndex(period);
+            for (int compare = 0; compare < (period == 0 ? 1 : 2); ++compare) {
+                comparison->setChecked(compare != 0); QApplication::processEvents();
+                QDate first = from->date(), last = to->date();
+                if (period == 1) { first = today.addDays(-29); last = today; }
+                if (period == 2) { first = today.addDays(-89); last = today; }
+                if (period == 3) { first = QDate(today.year(), 1, 1); last = today; }
+                std::array<int, 3> counts{};
+                for (const auto& task : workspace.data.tasks) {
+                    const auto date = QDateTime::fromSecsSinceEpoch(task.createdAt).date();
+                    if (period == 0 || (task.createdAt > 0 && date >= first && date <= last)) ++counts[size_t(task.status)];
+                }
+                const auto metrics = chart->layoutMetrics(chart->width());
+                for (int status = 0; status < 3; ++status)
+                    if (metrics.statuses[size_t(status)].value.text != QString::number(counts[size_t(status)])) return false;
+                // Grouping/comparison changes the report table, not the current
+                // period's status values or the independent 12-month audit.
+                if (chart->completionTrend() != expectedTrend || chart->height() < metrics.requiredHeight ||
+                    comparison->isEnabled() != (period != 0)) return false;
+                ++contexts;
+            }
+        }
+    }
+    if (contexts != 72) return false;
+    std::cout << "Report selector contexts checked: " << contexts << '\n';
     chart->setCompletionTrend(chart->completionTrend());
     return chart->accessibleDescription().count(QString::fromUtf8("Завершения по месяцам")) == 1;
 }
@@ -9334,6 +9830,10 @@ int main(int argc, char** argv) {
         return TestQtTaskInlineProjectCreation() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CATALOG_PROFILES"))
         return TestQtCatalogProfileLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_XP_FORMS"))
+        return TestQtXpDialogLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CHARTS"))
+        return TestQtChartReadability(app) && TestStatisticsTrendBeyondAuditPageLimit() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
         return TestDisclosureMotionContract() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_NAVIGATION"))
@@ -9370,6 +9870,7 @@ int main(int argc, char** argv) {
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestQtWorkingEditorLayout(app)) { std::cerr << "Working editor layout failed\n"; return 1; }
     if (!TestQtCatalogProfileLayout(app)) { std::cerr << "Catalog/profile layout failed\n"; return 1; }
+    if (!TestQtXpDialogLayout(app)) { std::cerr << "XP dialog layout failed\n"; return 1; }
     if (!TestPipelineEditor()) { std::cerr << "Pipeline editor failed\n"; return 1; }
     if (!TestTaskEditorTransaction()) { std::cerr << "Task editor transaction failed\n"; return 1; }
     if (!TestBulkAwardedTaskDeletion()) { std::cerr << "Bulk awarded task deletion failed\n"; return 1; }
@@ -9407,6 +9908,7 @@ int main(int argc, char** argv) {
     if (!TestQtStorageHealthReport()) { std::cerr << "Qt storage health report failed\n"; return 1; }
     if (!TestReportPeriodComparison()) { std::cerr << "Report period comparison failed\n"; return 1; }
     if (!TestMonthlyCompletionTrend()) { std::cerr << "Monthly completion trend failed\n"; return 1; }
+    if (!TestQtChartReadability(app)) { std::cerr << "Chart readability failed\n"; return 1; }
     if (!TestStatisticsTrendBeyondAuditPageLimit()) { std::cerr << "Statistics trend audit history failed\n"; return 1; }
     if (!TestPipelineMap()) { std::cerr << "Pipeline map failed\n"; return 1; }
     if (!TestQtPipelineDetailsAndFullTextFilter()) { std::cerr << "Qt pipeline detail/filter parity failed\n"; return 1; }

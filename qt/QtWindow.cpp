@@ -1529,7 +1529,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskPipelineSummary_->setWordWrap(true);
     content->addWidget(taskPipelineSummary_);
     statisticsChart_ = new QtReportChart;
-    statisticsChart_->setProperty("qtTextScaleFixedHeight", 144);
     content->addWidget(statisticsChart_);
     modelSettings_ = LoadQtModelSettings(workspace_.directory);
     modelPage_ = new QWidget;
@@ -2051,7 +2050,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     skillFilterFlow->addWidget(profileSkillFilterReset_);
     content->addWidget(profileSkillFilters_);
     profileAnalytics_ = new QtProfileAnalytics;
-    profileAnalytics_->setProperty("qtTextScaleMinimumHeight", 380);
     content->addWidget(profileAnalytics_);
     auto* pomodoro = new QtPomodoro(nullptr, workspace_.directory);
     pomodoro_ = pomodoro;

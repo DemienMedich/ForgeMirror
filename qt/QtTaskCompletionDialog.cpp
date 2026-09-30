@@ -1,22 +1,141 @@
 #include "QtTaskCompletionDialog.h"
 #include "QtWorkspace.h"
 #include "AppTaskCompletionService.h"
+#include "QtScrollableDialog.h"
 #include <QtWidgets>
 #include <algorithm>
 
 namespace {
 QString q(const std::string& s) { return QString::fromUtf8(s.data(), int(s.size())); }
 std::string u(const QString& s) { return s.toUtf8().toStdString(); }
-void setupTable(QTableWidget* table, const QStringList& headers) {
+void prepareForm(QtScrollableDialog& dialog) {
+    auto* form = dialog.formLayout();
+    form->setHorizontalSpacing(dialog.scaledMetric(8));
+    form->setVerticalSpacing(dialog.scaledMetric(8));
+    form->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop);
+    form->setFormAlignment(Qt::AlignTop);
+    dialog.footerLayout()->setSpacing(dialog.scaledMetric(8));
+    if (auto* outer = dialog.layout()) {
+        const int margin = dialog.scaledMetric(16);
+        outer->setContentsMargins(margin, margin, margin, margin);
+        outer->setSpacing(dialog.scaledMetric(8));
+    }
+}
+void addField(QFormLayout* form, const QString& caption, QWidget* field) {
+    auto* label = new QLabel(caption);
+    label->setTextFormat(Qt::PlainText);
+    label->setWordWrap(true);
+    label->setBuddy(field);
+    form->addRow(label, field);
+}
+QLabel* contextLabel(const QString& text, const char* objectName) {
+    auto* label = new QLabel(text);
+    label->setObjectName(objectName);
+    label->setTextFormat(Qt::PlainText);
+    label->setWordWrap(true);
+    label->setAccessibleName(text);
+    return label;
+}
+void secondaryCommand(QPushButton* button, const QString& description) {
+    button->setAutoDefault(false);
+    button->setAccessibleDescription(description);
+    button->setToolTip(description);
+}
+void fullComboContext(QComboBox* combo) {
+    combo->setToolTip(combo->currentText());
+    QObject::connect(combo, &QComboBox::currentTextChanged, combo,
+        [combo](const QString& text) { combo->setToolTip(text); });
+}
+void showSummary(QLabel* summary, const QString& text) {
+    summary->setText(text);
+    summary->setAccessibleDescription(text);
+}
+void prepareSpin(QSpinBox* spin) {
+    spin->ensurePolished();
+    spin->setMinimumSize(spin->sizeHint());
+    spin->setToolTip(spin->accessibleName() + QStringLiteral("\n") + spin->accessibleDescription());
+}
+void setupTable(QTableWidget* table, const QStringList& headers, const QtScrollableDialog& dialog) {
     table->setColumnCount(headers.size());
     table->setHorizontalHeaderLabels(headers);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->verticalHeader()->hide();
-    table->verticalHeader()->setDefaultSectionSize(32);
+    QSpinBox sample(table);
+    sample.setRange(0, 100);
+    sample.ensurePolished();
+    table->verticalHeader()->setDefaultSectionSize(std::max(dialog.scaledMetric(32),
+        sample.sizeHint().height() + dialog.scaledMetric(4)));
+    table->setWordWrap(false);
     table->setShowGrid(false);
     table->setAlternatingRowColors(true);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    // Keep names useful when several numeric columns need their intrinsic width.
+    // The table may scroll horizontally; the surrounding form never does.
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Interactive);
+    table->setColumnWidth(0, dialog.scaledMetric(160));
+    for (int column = 0; column < headers.size(); ++column)
+        table->horizontalHeaderItem(column)->setToolTip(headers[column]);
+    QObject::connect(table, &QTableWidget::itemChanged, table, [table](QTableWidgetItem* item) {
+        QSignalBlocker blocker(table);
+        item->setToolTip(item->text());
+        item->setData(Qt::AccessibleTextRole, item->text());
+    });
+}
+void fitAllocationTable(QTableWidget* table) {
+    const int horizontalMargin = 2 * std::max(0,
+        table->style()->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, table)) +
+        (table->showGrid() ? 1 : 0);
+    const int verticalMargin = 2 * std::max(0,
+        table->style()->pixelMetric(QStyle::PM_FocusFrameVMargin, nullptr, table)) +
+        (table->showGrid() ? 1 : 0);
+    int rowHeight = table->verticalHeader()->defaultSectionSize();
+    std::vector<int> widgetWidths(size_t(table->columnCount()), 0);
+    for (int row = 0; row < table->rowCount(); ++row) {
+        for (int column = 0; column < table->columnCount(); ++column) {
+            if (auto* spin = qobject_cast<QSpinBox*>(table->cellWidget(row, column))) {
+                // Measure the actual child after it inherits the viewport font/style.
+                // ResizeToContents alone does not reserve space for cell widgets.
+                prepareSpin(spin);
+                const auto hint = spin->sizeHint();
+                widgetWidths[size_t(column)] = std::max(widgetWidths[size_t(column)],
+                    hint.width() + horizontalMargin);
+                rowHeight = std::max(rowHeight, hint.height() + verticalMargin);
+            }
+            if (auto* item = table->item(row, column)) {
+                item->setToolTip(item->text());
+                item->setData(Qt::AccessibleTextRole, item->text());
+            }
+        }
+    }
+    table->verticalHeader()->setDefaultSectionSize(rowHeight);
+    for (int row = 0; row < table->rowCount(); ++row) table->setRowHeight(row, rowHeight);
+    for (int column = 0; column < table->columnCount(); ++column) {
+        if (!widgetWidths[size_t(column)]) continue;
+        table->horizontalHeader()->setSectionResizeMode(column, QHeaderView::Interactive);
+        table->setColumnWidth(column, std::max(widgetWidths[size_t(column)],
+            table->horizontalHeader()->sectionSizeHint(column)));
+    }
+    const int rows = std::clamp(table->rowCount(), 1, 3);
+    const int height = table->horizontalHeader()->sizeHint().height() +
+        rowHeight * rows + table->frameWidth() * 2 +
+        table->style()->pixelMetric(QStyle::PM_ScrollBarExtent, nullptr, table);
+    table->setMinimumHeight(height);
+    table->setMaximumHeight(height);
+}
+void prepareButtons(QtScrollableDialog& dialog, QDialogButtonBox* buttons,
+                    const char* boxName, const char* cancelName) {
+    buttons->setObjectName(boxName);
+    auto* save = buttons->button(QDialogButtonBox::Save);
+    save->setProperty("primary", true);
+    save->setMinimumHeight(dialog.scaledMetric(32));
+    save->setAutoDefault(true);
+    save->setDefault(true);
+    auto* cancel = buttons->button(QDialogButtonBox::Cancel);
+    cancel->setObjectName(cancelName);
+    cancel->setText(QString::fromUtf8("Отмена"));
+    cancel->setAccessibleName(QString::fromUtf8("Отменить начисление XP"));
+    secondaryCommand(cancel, QString::fromUtf8("Закрывает форму без сохранения записи и без начисления XP."));
+    dialog.footerLayout()->addWidget(buttons);
 }
 class CompletionSortItem final : public QTableWidgetItem {
 public:
@@ -65,6 +184,7 @@ void reorderSkillRows(QTableWidget* table, const std::vector<std::string>& skill
         table->setCellWidget(row, 1, rating);
         QObject::connect(rating, &QSpinBox::valueChanged, context, [changed] { changed(); });
     }
+    fitAllocationTable(table);
 }
 }
 
@@ -78,59 +198,69 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
     const auto activeProfile = workspace.storage->load_profile_snapshot(u(activeProfileId), false);
     AppContext context{workspace.directory, *workspace.storage, workspace.catalog};
     context.eventLogger = eventLogger;
-    QDialog dialog(parent);
+    QtScrollableDialog dialog(parent, QSize(800, 640));
     dialog.setObjectName("taskCompletionDialog");
     dialog.setWindowTitle(QString::fromUtf8("Завершение задачи и XP"));
-    dialog.resize(800, 640);
-    dialog.setMinimumSize(640, 480);
-    auto* layout = new QVBoxLayout(&dialog);
-    layout->setContentsMargins(16, 16, 16, 16);
-    layout->setSpacing(8);
-    auto* title = new QLabel(q(task.title));
-    title->setTextFormat(Qt::PlainText);
-    title->setWordWrap(true);
-    layout->addWidget(title);
-    auto* top = new QHBoxLayout;
+    prepareForm(dialog);
+    dialog.scrollArea()->setAccessibleName(QString::fromUtf8("Поля завершения задачи и распределения XP"));
+    auto* form = dialog.formLayout();
+    auto* title = contextLabel(q(task.title), "xpContext");
+    form->addRow(title);
+    auto* parameters = new QWidget;
+    parameters->setObjectName("xpParameters");
+    auto* top = new QFormLayout(parameters);
+    top->setContentsMargins(0, 0, 0, 0);
+    top->setHorizontalSpacing(dialog.scaledMetric(8));
+    top->setVerticalSpacing(dialog.scaledMetric(8));
+    top->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    top->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    top->setSizeConstraint(QLayout::SetMinimumSize);
     auto* category = new QComboBox;
     category->setObjectName("xpCategory");
     category->setAccessibleName(QString::fromUtf8("Категория завершённой задачи"));
     category->setAccessibleDescription(QString::fromUtf8("Определяет базовый пул опыта для начисления."));
+    category->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    category->setMinimumContentsLength(8);
+    category->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     for (auto* label : Profile::kCategoryLabels) category->addItem(label);
     category->setCurrentIndex(std::clamp(task.category, 0, 4));
+    fullComboContext(category);
     auto* score = new QSpinBox;
     score->setObjectName("xpScore");
     score->setAccessibleName(QString::fromUtf8("Оценка выполнения задачи"));
     score->setAccessibleDescription(QString::fromUtf8("Оценка от 1 до 10 влияет на начисляемый опыт."));
     score->setRange(1, 10);
     score->setValue(10);
-    top->addWidget(new QLabel(QString::fromUtf8("Категория")));
-    top->addWidget(category);
-    top->addWidget(new QLabel(QString::fromUtf8("Оценка")));
-    top->addWidget(score);
-    top->addStretch();
-    auto* penalty = new QLabel(QString::fromUtf8("Штраф задачи: %1% ").arg(task.deadlinePenaltyPercent));
+    addField(top, QString::fromUtf8("Категория"), category);
+    addField(top, QString::fromUtf8("Оценка"), score);
+    auto* penalty = contextLabel(QString::fromUtf8("Штраф задачи: %1%").arg(task.deadlinePenaltyPercent), "xpPenalty");
     penalty->setToolTip(QString::fromUtf8("Берётся заданный в задаче штраф, как в ImGui. Снижает общий пул до распределения."));
-    top->addWidget(penalty);
-    layout->addLayout(top);
-    auto* participantsHeader = new QHBoxLayout;
-    participantsHeader->addWidget(new QLabel(QString::fromUtf8("Участники · вклад должен давать 100% · 0% исключает участника")));
-    participantsHeader->addStretch();
+    top->addRow(penalty);
+    form->addRow(parameters);
+    auto* participantsHeader = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    participantsHeader->setObjectName("xpParticipantsCommands");
+    participantsHeader->addWidget(contextLabel(QString::fromUtf8("Участники · всего 100% · 0% исключает участника"),
+        "xpParticipantsHint"), 1);
     auto* even = new QPushButton(QString::fromUtf8("Поровну"));
     even->setObjectName("xpParticipantsEven");
     even->setAccessibleName(QString::fromUtf8("Равномерно распределить опыт между выбранными участниками"));
     even->setToolTip(QString::fromUtf8("Разделить 100% между участниками, у которых вклад больше нуля."));
+    secondaryCommand(even, even->toolTip());
     participantsHeader->addWidget(even);
     auto* onlyActive = new QPushButton(QString::fromUtf8("Только активный"));
     onlyActive->setObjectName("xpOnlyActiveParticipant");
     onlyActive->setAccessibleName(QString::fromUtf8("Назначить 100% активному профилю"));
+    secondaryCommand(onlyActive, QString::fromUtf8("Назначить 100% активному профилю и исключить остальных участников."));
     participantsHeader->addWidget(onlyActive);
-    layout->addLayout(participantsHeader);
+    form->addRow(participantsHeader);
     auto* participants = new QTableWidget;
     participants->setObjectName("xpParticipants");
     participants->setAccessibleName(QString::fromUtf8("Распределение опыта между участниками"));
     participants->setAccessibleDescription(QString::fromUtf8("Укажите долю каждого участника. Ненулевые доли должны составлять 100 процентов."));
-    setupTable(participants, {QString::fromUtf8("Профиль"), QString::fromUtf8("Вклад, %"), "XP", QString::fromUtf8("XP навыков"), QString::fromUtf8("Модификаторы")});
-    layout->addWidget(participants, 1);
+    setupTable(participants, {QString::fromUtf8("Профиль"), QString::fromUtf8("Вклад, %"), "XP", QString::fromUtf8("XP навыков"), QString::fromUtf8("Модификаторы")}, dialog);
+    participants->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Interactive);
+    participants->setColumnWidth(4, dialog.scaledMetric(160));
+    form->addRow(participants);
     std::vector<std::string> profileIds;
     std::vector<QSpinBox*> shares;
     for (const auto& profile : workspace.profiles) if (!profile.archived) {
@@ -158,9 +288,10 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
         }
     };
     split();
-    auto* skillsHeader = new QHBoxLayout;
-    skillsHeader->addWidget(new QLabel(QString::fromUtf8("Навыки · оценки 0–5 автоматически распределяют 100%")));
-    skillsHeader->addStretch();
+    fitAllocationTable(participants);
+    form->addRow(contextLabel(QString::fromUtf8("Навыки · оценки 0–5 распределяют 100%"), "xpSkillsHint"));
+    auto* skillsHeader = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    skillsHeader->setObjectName("xpSkillCommands");
     auto* skillFilter = new QLineEdit;
     skillFilter->setObjectName("xpSkillFilter");
     skillFilter->setAccessibleName(QString::fromUtf8("Фильтр навыков начисления XP"));
@@ -172,22 +303,26 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
     auto* skillSort = new QComboBox;
     skillSort->setObjectName("xpSkillSort");
     skillSort->setAccessibleName(QString::fromUtf8("Сортировка навыков начисления XP"));
+    skillSort->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    skillSort->setMinimumContentsLength(8);
     skillSort->addItems({QString::fromUtf8("По имени"), QString::fromUtf8("По доле"),
         QString::fromUtf8("По бонусу"), QString::fromUtf8("По XP")});
+    fullComboContext(skillSort);
     skillsHeader->addWidget(skillSort);
     auto* evenSkills = new QPushButton(QString::fromUtf8("Навыки поровну"));
     evenSkills->setObjectName("xpSkillsEven");
     evenSkills->setAccessibleName(QString::fromUtf8("Равномерно распределить XP по навыкам"));
     evenSkills->setToolTip(QString::fromUtf8("Поставить оценку 1 всем навыкам."));
+    secondaryCommand(evenSkills, evenSkills->toolTip());
     skillsHeader->addWidget(evenSkills);
-    layout->addLayout(skillsHeader);
+    form->addRow(skillsHeader);
     auto* skills = new QTableWidget;
     skills->setObjectName("xpSkills");
     skills->setAccessibleName(QString::fromUtf8("Распределение опыта по навыкам"));
     skills->setAccessibleDescription(QString::fromUtf8("Оценки от 0 до 5 распределяют между выбранными навыками до 100 процентов."));
     setupTable(skills, {QString::fromUtf8("Навык"), QString::fromUtf8("Оценка"),
-        QString::fromUtf8("Доля, %"), QString::fromUtf8("Бонус"), QString::fromUtf8("XP")});
-    layout->addWidget(skills, 1);
+        QString::fromUtf8("Доля, %"), QString::fromUtf8("Бонус"), QString::fromUtf8("XP")}, dialog);
+    form->addRow(skills);
     std::vector<std::string> skillIds = workspace.catalog.skills();
     std::vector<QSpinBox*> ratings;
     std::vector<bool> skillAllowed;
@@ -217,15 +352,23 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
     summary->setWordWrap(true);
     summary->setToolTip(QString::fromUtf8("Пул = XP категории × множитель оценки × фокус × штраф задачи.\n"
         "Повтор и прогрев снижают общий XP. Бонусы достижений действуют на навыки; дух — на оба вида XP."));
-    layout->addWidget(summary);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    summary->setAccessibleName(QString::fromUtf8("Предпросмотр начисления XP или ошибка операции"));
+    summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    dialog.footerLayout()->addWidget(summary);
+    fitAllocationTable(skills);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
     auto* save = buttons->button(QDialogButtonBox::Save);
-    save->setText(QString::fromUtf8("Завершить и начислить XP"));
+    save->setText(QString::fromUtf8("Завершить"));
     save->setObjectName("completeXp");
-    save->setProperty("primary", true);
-    save->setFixedHeight(32);
-    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    layout->addWidget(buttons);
+    save->setAccessibleName(QString::fromUtf8("Завершить задачу и начислить XP"));
+    save->setToolTip(QString::fromUtf8("Закрывает задачу и сохраняет начисление XP всем выбранным участникам. Повторное начисление запрещено."));
+    prepareButtons(dialog, buttons, "xpButtons", "xpCancel");
+    QWidget::setTabOrder(category, score);
+    QWidget::setTabOrder(score, even); QWidget::setTabOrder(even, onlyActive);
+    QWidget::setTabOrder(onlyActive, participants); QWidget::setTabOrder(participants, skillFilter);
+    QWidget::setTabOrder(skillFilter, skillSort); QWidget::setTabOrder(skillSort, evenSkills);
+    QWidget::setTabOrder(evenSkills, skills); QWidget::setTabOrder(skills, save);
+    QWidget::setTabOrder(save, buttons->button(QDialogButtonBox::Cancel));
     auto input = [&] {
         TaskCompletionInput request;
         request.taskId = task.id;
@@ -255,7 +398,7 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
             for (int c = 2; c < 5; ++c) participants->item(r, c)->setText(QString::fromUtf8("—"));
         for (int r = 0; r < skills->rowCount(); ++r)
             for (int c = 2; c < 5; ++c) skills->item(r, c)->setText(QString::fromUtf8("—"));
-        if (!preview.ok) { summary->setText(q(preview.errorMessage)); return; }
+        if (!preview.ok) { showSummary(summary, q(preview.errorMessage)); return; }
         for (size_t i = 0; i < preview.finalize.participants.size(); ++i) {
             const auto& p = preview.finalize.participants[i];
             const auto found = std::find(profileIds.begin(), profileIds.end(), p.profileId);
@@ -310,8 +453,7 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
             const bool allowed = index != skillIds.end() && skillAllowed[size_t(index - skillIds.begin())];
             skills->setRowHidden(row, !allowed || (!filter.isEmpty() && !name.contains(filter, Qt::CaseInsensitive)));
         }
-        summary->setText(QString::fromUtf8("Пул до штрафа: %1 XP  ·  к распределению: %2 XP  ·  участников: %3\n"
-            "Сохранение закроет задачу и запишет XP всем участникам. Повторное начисление запрещено.")
+        showSummary(summary, QString::fromUtf8("Пул: %1 XP · после штрафа: %2 XP · участников: %3")
             .arg(preview.rawPool).arg(preview.finalize.basePool).arg(preview.finalize.participants.size()));
     };
     for (auto* spin : shares) QObject::connect(spin, &QSpinBox::valueChanged, &dialog, refresh);
@@ -334,7 +476,7 @@ bool ShowTaskCompletionDialog(QWidget* parent, QtWorkspace& workspace,
         save->setEnabled(false);
         const auto result = CompleteTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, input());
         if (!result.ok) {
-            summary->setText(q(result.errorMessage));
+            showSummary(summary, q(result.errorMessage));
             // A pending rollback must be resolved before any further mutations.
             save->setEnabled(!std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"));
             return;
@@ -361,73 +503,93 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
                 [&](const auto& item) { return item.id == draft.id; })) break;
     }
 
-    QDialog dialog(parent);
+    QtScrollableDialog dialog(parent, QSize(800, 640));
     dialog.setObjectName("manualXpDialog");
     dialog.setWindowTitle(QString::fromUtf8("Добавить опыт без задачи"));
-    dialog.resize(980, 760);
-    dialog.setMinimumSize(720, 580);
-    auto* layout = new QVBoxLayout(&dialog);
-    auto* description = new QLabel(QString::fromUtf8("Запишите выполненную работу без заранее созданной задачи. Qt создаст запись в истории и начислит опыт одной транзакцией."));
-    description->setWordWrap(true);
-    layout->addWidget(description);
-
-    auto* details = new QFormLayout;
+    prepareForm(dialog);
+    dialog.scrollArea()->setAccessibleName(QString::fromUtf8("Поля ручной записи и распределения XP"));
+    auto* details = dialog.formLayout();
+    auto* description = contextLabel(QString::fromUtf8("Запишите выполненную работу. Запись истории и начисление XP сохраняются одной транзакцией."),
+        "manualXpContext");
+    details->addRow(description);
     auto* project = new QComboBox;
     project->setObjectName("manualXpProject");
     project->setAccessibleName(QString::fromUtf8("Проект ручной записи XP"));
+    project->setAccessibleDescription(QString::fromUtf8("Обязательный проект или категория выполненной работы."));
+    project->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    project->setMinimumContentsLength(8);
+    project->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     project->setEditable(true);
     for (const auto& item : workspace.data.projects) project->addItem(q(item.name), q(item.id));
     project->setCurrentIndex(-1);
     project->setCurrentText(QString());
     project->setPlaceholderText(QString::fromUtf8("Проект или категория работы"));
+    fullComboContext(project);
     auto* title = new QLineEdit;
     title->setObjectName("manualXpTitle");
     title->setAccessibleName(QString::fromUtf8("Название выполненной работы"));
+    title->setAccessibleDescription(QString::fromUtf8("Обязательное краткое название ручной записи."));
     title->setPlaceholderText(QString::fromUtf8("Краткое название работы"));
     auto* note = new QPlainTextEdit;
     note->setObjectName("manualXpDescription");
     note->setAccessibleName(QString::fromUtf8("Описание выполненной работы"));
+    note->setAccessibleDescription(QString::fromUtf8("Обязательное описание результата; переносы строк сохраняются."));
     note->setPlaceholderText(QString::fromUtf8("Краткое описание результата"));
-    note->setMaximumHeight(72);
-    auto* params = new QHBoxLayout;
+    const int noteHeight = QFontMetrics(note->font()).lineSpacing() * 3 +
+        qRound(note->document()->documentMargin() * 2) + note->frameWidth() * 2;
+    note->setMinimumHeight(noteHeight);
+    note->setMaximumHeight(noteHeight);
+    auto* parameters = new QWidget;
+    parameters->setObjectName("manualXpParameters");
+    auto* params = new QFormLayout(parameters);
+    params->setContentsMargins(0, 0, 0, 0);
+    params->setHorizontalSpacing(dialog.scaledMetric(8));
+    params->setVerticalSpacing(dialog.scaledMetric(8));
+    params->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    params->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    params->setSizeConstraint(QLayout::SetMinimumSize);
     auto* category = new QComboBox;
     category->setObjectName("manualXpCategory");
     category->setAccessibleName(QString::fromUtf8("Категория ручного начисления XP"));
+    category->setAccessibleDescription(QString::fromUtf8("Определяет базовый пул опыта для начисления."));
+    category->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    category->setMinimumContentsLength(8);
+    category->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     for (auto* label : Profile::kCategoryLabels) category->addItem(QString::fromUtf8(label));
+    fullComboContext(category);
     auto* score = new QSpinBox;
     score->setObjectName("manualXpScore");
     score->setAccessibleName(QString::fromUtf8("Оценка ручной записи XP"));
+    score->setAccessibleDescription(QString::fromUtf8("Оценка результата от 1 до 10 влияет на базовый пул XP."));
     score->setRange(1, 10);
     score->setValue(10);
-    params->addWidget(new QLabel(QString::fromUtf8("Категория")));
-    params->addWidget(category, 1);
-    params->addWidget(new QLabel(QString::fromUtf8("Оценка")));
-    params->addWidget(score);
-    details->addRow(QString::fromUtf8("Проект"), project);
-    details->addRow(QString::fromUtf8("Задача"), title);
-    details->addRow(QString::fromUtf8("Описание"), note);
-    details->addRow(QString::fromUtf8("Начисление"), params);
-    layout->addLayout(details);
+    addField(params, QString::fromUtf8("Категория"), category);
+    addField(params, QString::fromUtf8("Оценка"), score);
+    addField(details, QString::fromUtf8("Проект"), project);
+    addField(details, QString::fromUtf8("Работа"), title);
+    addField(details, QString::fromUtf8("Описание"), note);
+    details->addRow(parameters);
 
-    auto* participantsTitle = new QHBoxLayout;
-    participantsTitle->addWidget(new QLabel(QString::fromUtf8("Участники · доли должны составлять 100%")));
-    participantsTitle->addStretch();
+    auto* participantsTitle = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    participantsTitle->setObjectName("manualXpParticipantsCommands");
+    participantsTitle->addWidget(contextLabel(QString::fromUtf8("Участники · всего 100%"), "manualXpParticipantsHint"), 1);
     auto* evenParticipants = new QPushButton(QString::fromUtf8("Равномерно"));
     evenParticipants->setObjectName("manualXpParticipantsEven");
     evenParticipants->setAccessibleName(QString::fromUtf8("Равномерно распределить XP между выбранными профилями"));
+    secondaryCommand(evenParticipants, QString::fromUtf8("Разделить 100% между профилями, у которых доля больше нуля."));
     participantsTitle->addWidget(evenParticipants);
     auto* onlyActive = new QPushButton(QString::fromUtf8("Только активный"));
     onlyActive->setObjectName("manualXpOnlyActive");
     onlyActive->setAccessibleName(QString::fromUtf8("Оставить XP только активному профилю"));
+    secondaryCommand(onlyActive, QString::fromUtf8("Назначить 100% активному профилю и исключить остальные профили."));
     participantsTitle->addWidget(onlyActive);
-    layout->addLayout(participantsTitle);
+    details->addRow(participantsTitle);
     auto* participants = new QTableWidget;
     participants->setObjectName("manualXpParticipants");
-    participants->setMaximumHeight(170);
     participants->setAccessibleName(QString::fromUtf8("Распределение опыта между профилями"));
-    setupTable(participants, {QString::fromUtf8("Профиль"), QString::fromUtf8("Доля, %"), QString::fromUtf8("XP")});
-    participants->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    layout->addWidget(participants);
+    participants->setAccessibleDescription(QString::fromUtf8("Ненулевые доли профилей должны составлять 100 процентов."));
+    setupTable(participants, {QString::fromUtf8("Профиль"), QString::fromUtf8("Доля, %"), QString::fromUtf8("XP")}, dialog);
+    details->addRow(participants);
     std::vector<std::string> profileIds;
     std::vector<QSpinBox*> shares;
     for (const auto& info : workspace.profiles) if (!info.archived) {
@@ -437,6 +599,7 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
         auto* share = new QSpinBox;
         share->setRange(0, 100);
         share->setAccessibleName(QString::fromUtf8("Доля профиля %1").arg(q(info.name)));
+        share->setAccessibleDescription(QString::fromUtf8("Процент общего XP, назначаемый этому профилю."));
         share->setValue(info.id == activeId ? 100 : 0);
         participants->setCellWidget(row, 1, share);
         participants->setItem(row, 2, new QTableWidgetItem(QString::fromUtf8("—")));
@@ -444,7 +607,10 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
         shares.push_back(share);
     }
 
-    auto* skillTools = new QHBoxLayout;
+    fitAllocationTable(participants);
+    details->addRow(contextLabel(QString::fromUtf8("Навыки · оценки 0–5 распределяют 100%"), "manualXpSkillsHint"));
+    auto* skillTools = new QtDialogAdaptiveRow(nullptr, dialog.scaledMetric(8));
+    skillTools->setObjectName("manualXpSkillCommands");
     auto* skillFilter = new QLineEdit;
     skillFilter->setObjectName("manualXpSkillFilter");
     skillFilter->setAccessibleName(QString::fromUtf8("Фильтр навыков ручного начисления XP"));
@@ -455,22 +621,26 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
     auto* skillSort = new QComboBox;
     skillSort->setObjectName("manualXpSkillSort");
     skillSort->setAccessibleName(QString::fromUtf8("Сортировка навыков ручного начисления XP"));
+    skillSort->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    skillSort->setMinimumContentsLength(8);
     skillSort->addItems({QString::fromUtf8("По имени"), QString::fromUtf8("По доле"),
         QString::fromUtf8("По бонусу"), QString::fromUtf8("По XP")});
+    fullComboContext(skillSort);
     auto* evenSkills = new QPushButton(QString::fromUtf8("Навыки равномерно"));
     evenSkills->setObjectName("manualXpSkillsEven");
     evenSkills->setAccessibleName(QString::fromUtf8("Равномерно распределить XP по доступным навыкам"));
+    secondaryCommand(evenSkills, QString::fromUtf8("Поставить оценку 1 доступным навыкам; недоступные оставить с оценкой 0."));
     skillTools->addWidget(skillFilter, 1);
     skillTools->addWidget(skillSort);
     skillTools->addWidget(evenSkills);
-    layout->addLayout(skillTools);
+    details->addRow(skillTools);
     auto* skills = new QTableWidget;
     skills->setObjectName("manualXpSkills");
     skills->setAccessibleName(QString::fromUtf8("Распределение опыта по навыкам"));
+    skills->setAccessibleDescription(QString::fromUtf8("Оценки от 0 до 5 автоматически определяют долю XP каждого навыка."));
     setupTable(skills, {QString::fromUtf8("Навык"), QString::fromUtf8("Оценка"),
-        QString::fromUtf8("Доля, %"), QString::fromUtf8("Бонус"), QString::fromUtf8("XP")});
-    skills->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    layout->addWidget(skills, 1);
+        QString::fromUtf8("Доля, %"), QString::fromUtf8("Бонус"), QString::fromUtf8("XP")}, dialog);
+    details->addRow(skills);
     std::vector<std::string> skillIds = workspace.catalog.skills();
     std::vector<QSpinBox*> ratings;
     std::vector<bool> allowed;
@@ -483,6 +653,7 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
         auto* rating = new QSpinBox;
         rating->setRange(0, 5);
         rating->setAccessibleName(QString::fromUtf8("Оценка навыка %1").arg(q(workspace.catalog.display_name(id))));
+        rating->setAccessibleDescription(QString::fromUtf8("Оценка относительной доли опыта этого навыка от 0 до 5."));
         const auto professions = workspace.catalog.professions(id);
         const bool skillAllowed = activeProfile->profession_id().empty() || professions.empty() ||
             std::find(professions.begin(), professions.end(), activeProfile->profession_id()) != professions.end();
@@ -495,16 +666,27 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
     }
     auto* summary = new QLabel;
     summary->setObjectName("manualXpSummary");
+    summary->setTextFormat(Qt::PlainText);
     summary->setWordWrap(true);
-    layout->addWidget(summary);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+    summary->setAccessibleName(QString::fromUtf8("Предпросмотр ручного начисления XP или ошибка операции"));
+    summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    summary->setToolTip(QString::fromUtf8("Пул зависит от категории, оценки и текущих модификаторов. Доли участников должны давать 100%; оценки навыков распределяют XP автоматически."));
+    dialog.footerLayout()->addWidget(summary);
+    fitAllocationTable(skills);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
     auto* save = buttons->button(QDialogButtonBox::Save);
     save->setText(QString::fromUtf8("Начислить опыт"));
     save->setObjectName("manualXpSave");
     save->setAccessibleName(QString::fromUtf8("Создать ручную запись и начислить XP"));
-    save->setProperty("primary", true);
-    buttons->button(QDialogButtonBox::Cancel)->setText(QString::fromUtf8("Отмена"));
-    layout->addWidget(buttons);
+    save->setToolTip(QString::fromUtf8("Создаёт завершённую запись работы и начисляет XP выбранным участникам одной транзакцией."));
+    prepareButtons(dialog, buttons, "manualXpButtons", "manualXpCancel");
+    QWidget::setTabOrder(project, title); QWidget::setTabOrder(title, note);
+    QWidget::setTabOrder(note, category); QWidget::setTabOrder(category, score);
+    QWidget::setTabOrder(score, evenParticipants); QWidget::setTabOrder(evenParticipants, onlyActive);
+    QWidget::setTabOrder(onlyActive, participants); QWidget::setTabOrder(participants, skillFilter);
+    QWidget::setTabOrder(skillFilter, skillSort); QWidget::setTabOrder(skillSort, evenSkills);
+    QWidget::setTabOrder(evenSkills, skills); QWidget::setTabOrder(skills, save);
+    QWidget::setTabOrder(save, buttons->button(QDialogButtonBox::Cancel));
 
     auto buildDraft = [&] {
         TaskEntry item = draft;
@@ -552,7 +734,7 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
         for (int row = 0; row < skills->rowCount(); ++row)
             for (int column = 2; column < 5; ++column) skills->item(row, column)->setText(QString::fromUtf8("—"));
         if (!preview.ok) {
-            summary->setText(q(preview.errorMessage));
+            showSummary(summary, q(preview.errorMessage));
             save->setEnabled(false);
         } else {
             for (size_t i = 0; i < preview.finalize.participants.size(); ++i) {
@@ -585,7 +767,7 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
                 auto* xpItem = static_cast<CompletionSortItem*>(skills->item(tableRow, 4));
                 xpItem->setText(QString::number(gained)); xpItem->numeric = true; xpItem->numericKey = gained;
             }
-            summary->setText(QString::fromUtf8("Пул до распределения: %1 XP · после штрафа: %2 XP · участников: %3")
+            showSummary(summary, QString::fromUtf8("Пул: %1 XP · после штрафа: %2 XP · участников: %3")
                 .arg(preview.rawPool).arg(preview.finalize.basePool).arg(preview.finalize.participants.size()));
             save->setEnabled(!title->text().trimmed().isEmpty() && !project->currentText().trimmed().isEmpty() &&
                 !note->toPlainText().trimmed().isEmpty());
@@ -651,7 +833,7 @@ bool ShowManualXpDialog(QWidget* parent, QtWorkspace& workspace, const QString& 
         const auto input = buildInput();
         const auto result = CreateManualTaskWithXp(context, workspace.data.tasks, workspace.data.taskAudit, buildDraft(), input);
         if (!result.ok) {
-            summary->setText(q(result.errorMessage));
+            showSummary(summary, q(result.errorMessage));
             save->setEnabled(!std::filesystem::exists(workspace.directory / "meta/qt-xp-transaction"));
             return;
         }
