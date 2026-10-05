@@ -2842,6 +2842,9 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     table_->horizontalHeader()->setObjectName("recordsHeader");
     table_->viewport()->installEventFilter(this);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    // This is a read-only row selector: arrows navigate records, while Tab
+    // must leave the table instead of wrapping forever through its cells.
+    table_->setTabKeyNavigation(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setAlternatingRowColors(true);

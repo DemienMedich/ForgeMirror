@@ -9957,6 +9957,18 @@ static bool TestQtTaskAttentionBadges() {
         ++linkCount;
     }
     if(linkCount!=5)return false;
+    window.raise(); window.activateWindow();
+    if (!QTest::qWaitForWindowActive(&window, 2000)) return false;
+    int lastColumn = table->columnCount() - 1;
+    while (lastColumn >= 0 && table->isColumnHidden(lastColumn)) --lastColumn;
+    table->setCurrentCell(table->rowCount() - 1, lastColumn);
+    table->setFocus(Qt::TabFocusReason);
+    QTest::keyClick(table, Qt::Key_Tab);
+    if (!QTest::qWaitFor([&] { return pipelineSummary->hasFocus(); }, 1000)) {
+        std::cerr << "Tab from the task table does not reach pipeline diagnostics: focus="
+                  << (QApplication::focusWidget() ? QApplication::focusWidget()->objectName().toStdString() : "none") << '\n';
+        return false;
+    }
     for (const auto& [index, expectedIds] : riskFilters) {
         quick->setCurrentIndex(index);
         std::set<std::string> actualIds;
