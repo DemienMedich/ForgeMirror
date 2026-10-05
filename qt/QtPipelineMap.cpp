@@ -226,8 +226,15 @@ public:
         painter->setRenderHint(QPainter::Antialiasing);
         QColor border = palette_.color(QPalette::Disabled, QPalette::Text);
         border.setAlphaF(0.5);
-        if (isSelected() || option->state.testFlag(QStyle::State_MouseOver)) border = palette_.color(QPalette::Highlight);
-        painter->setBrush(palette_.color(isSelected() ? QPalette::Button : QPalette::AlternateBase));
+        if (isSelected() || option->state.testFlag(QStyle::State_MouseOver)) border = palette_.color(QPalette::Link);
+        if (isSelected()) {
+            QLinearGradient surface(bounds_.topLeft(), bounds_.bottomRight());
+            surface.setColorAt(0.0, palette_.color(QPalette::Highlight).darker(170));
+            surface.setColorAt(1.0, palette_.color(QPalette::Button));
+            painter->setBrush(surface);
+        } else {
+            painter->setBrush(palette_.color(QPalette::AlternateBase));
+        }
         painter->setPen(QPen(border, isSelected() ? 2.0 : 1.0, missing_ ? Qt::DashLine : Qt::SolidLine));
         painter->drawRoundedRect(bounds_.adjusted(1, 1, -1, -1), 8, 8);
         painter->setPen(palette_.color(QPalette::Text));

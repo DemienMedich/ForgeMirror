@@ -4,6 +4,7 @@
 #include "QtDeadlineAgent.h"
 #include "QtCommandHelpDialog.h"
 #include "QtWorkspaceImport.h"
+#include "QtWorkspaceImportDialog.h"
 #include <QtWidgets>
 #include <QLockFile>
 #include <filesystem>
@@ -127,11 +128,10 @@ int main(int argc, char** argv) {
         bool restartRequested = false;
         {
             if (!std::filesystem::exists(directory) && !parser.isSet("storage-dir") && std::filesystem::exists(production)) {
-                const auto answer = QMessageBox::question(nullptr, QString::fromUtf8("Копия данных для Qt"),
-                    QString::fromUtf8("Скопировать данные стабильной версии в отдельную папку Qt?\n"
-                        "Исходные данные останутся без изменений. Изменения Qt не попадут обратно.\n\n")
-                        + QString::fromStdWString(production.wstring()) + "\n → " + QString::fromStdWString(directory.wstring()),
-                    QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::Cancel);
+                QtWorkspaceImportDialog decision(QString::fromStdWString(production.wstring()),
+                    QString::fromStdWString(directory.wstring()));
+                decision.exec();
+                const auto answer = decision.choice();
                 if (answer == QMessageBox::Cancel) return 0;
                 if (answer == QMessageBox::Yes) {
                     QString importError;

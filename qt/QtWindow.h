@@ -66,6 +66,7 @@ private:
     bool eventFilter(QObject* watched, QEvent* event) override;
     bool reload();
     void render();
+    void updateTaskFilterPresentation();
     void details();
     void authenticate();
     void changeAdminPassword();
@@ -111,6 +112,8 @@ private:
     void updateResponsiveShell();
     void updateResponsiveHeader();
     void updateProjectColumnLayout();
+    void updateTaskColumnLayout();
+    void updateStatisticsColumnLayout();
     void updatePipelineColumnLayout();
     void updateProfileTaskColumnLayout();
     void refreshTaskFilterChoices();
@@ -161,6 +164,10 @@ private:
     QComboBox* taskSort_;
     QComboBox* taskAssigneeFilter_;
     QPushButton* taskFilterReset_;
+    QToolButton* taskFilterToggle_ = nullptr;
+    QWidget* taskFilterDetails_ = nullptr;
+    QWidget* listFilters_ = nullptr;
+    QLabel* taskFilterSummary_ = nullptr;
     QComboBox* taskProjectFilter_;
     QComboBox* taskPipelineFilter_;
     QComboBox* catalogProfessionFilter_;

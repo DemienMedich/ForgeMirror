@@ -1,4 +1,5 @@
 #include "QtPomodoro.h"
+#include "QtDisclosureButton.h"
 #include <QtWidgets>
 #include <QResizeEvent>
 #include <QSaveFile>
@@ -125,9 +126,9 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     workSeconds_(std::max(1, workSeconds)), breakSeconds_(std::max(1, breakSeconds)),
     longBreakSeconds_(std::max(1, longBreakSeconds)), cyclesBeforeLong_(std::max(1, cyclesBeforeLong)) {
     setObjectName("pomodoroPanel");
-    rootLayout_ = new QBoxLayout(QBoxLayout::LeftToRight, this);
+    rootLayout_ = new QBoxLayout(QBoxLayout::TopToBottom, this);
     rootLayout_->setContentsMargins(0, 0, 0, 0); rootLayout_->setSpacing(16);
-    auto* session = new QFrame; session->setProperty("metric", true);
+    auto* session = new QFrame; session->setProperty("metric", true); session->setObjectName("pomodoroSession");
     auto* sessionBox = new QVBoxLayout(session); sessionBox->setContentsMargins(16, 16, 16, 16); sessionBox->setSpacing(8);
     auto* heading = new QLabel(QString::fromUtf8("Сессия")); heading->setObjectName("pomodoroHeading"); sessionBox->addWidget(heading);
     phaseLabel_ = new QLabel; phaseLabel_->setObjectName("pomodoroPhase"); sessionBox->addWidget(phaseLabel_);
@@ -135,14 +136,36 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     progress_ = new QProgressBar; progress_->setObjectName("pomodoroProgress"); progress_->setTextVisible(false); sessionBox->addWidget(progress_);
     cyclesLabel_ = new QLabel; cyclesLabel_->setObjectName("pomodoroCycles"); sessionBox->addWidget(cyclesLabel_);
     statusLabel_ = new QLabel; statusLabel_->setObjectName("pomodoroStatus"); statusLabel_->setWordWrap(true); sessionBox->addWidget(statusLabel_);
-    sessionBox->addStretch(); rootLayout_->addWidget(session, 3);
+    rootLayout_->addWidget(session);
     auto* controls = new QFrame; controls->setProperty("metric", true);
     auto* controlBox = new QVBoxLayout(controls); controlBox->setContentsMargins(16, 16, 16, 16); controlBox->setSpacing(8);
-    controlBox->addWidget(new QLabel(QString::fromUtf8("Управление")));
-    start_ = new QPushButton(QString::fromUtf8("Старт фокуса")); start_->setObjectName("pomodoroStart"); start_->setProperty("primary", true); start_->setFixedHeight(32); controlBox->addWidget(start_);
-    pause_ = new QPushButton(QString::fromUtf8("Пауза")); pause_->setObjectName("pomodoroPause"); controlBox->addWidget(pause_);
-    next_ = new QPushButton(QString::fromUtf8("Начать следующий")); next_->setObjectName("pomodoroNext"); controlBox->addWidget(next_);
-    reset_ = new QPushButton(QString::fromUtf8("Сбросить")); reset_->setObjectName("pomodoroReset"); controlBox->addWidget(reset_);
+    auto* actions = new QHBoxLayout; actions->setSpacing(8); sessionBox->addLayout(actions);
+    start_ = new QPushButton(QString::fromUtf8("Старт фокуса")); start_->setObjectName("pomodoroStart"); actions->addWidget(start_,1);
+    pause_ = new QPushButton(QString::fromUtf8("Пауза")); pause_->setObjectName("pomodoroPause"); actions->addWidget(pause_,1);
+    next_ = new QPushButton(QString::fromUtf8("Начать следующий")); next_->setObjectName("pomodoroNext"); actions->addWidget(next_,1);
+    for (auto* action : {start_,pause_,next_}) {
+        action->setProperty("primary",true);
+        action->setProperty("qtTextScaleMinimumHeight",32);
+        action->setMinimumHeight(32);
+    }
+    reset_ = new QPushButton; reset_->setObjectName("pomodoroReset");
+    reset_->setIcon(CreateQtActionIcon(QtActionIcon::Reset,palette()));
+    reset_->setIconSize(QSize(16,16)); reset_->setProperty("qtTextScaleIconSize",QSize(16,16));
+    reset_->setToolTip(QString::fromUtf8("Сбросить таймер")); reset_->setAccessibleName(reset_->toolTip());
+    reset_->setProperty("qtTextScaleMinimumWidth",26); reset_->setProperty("qtTextScaleMinimumHeight",26);
+    reset_->setMinimumSize(26,26); reset_->setSizePolicy(QSizePolicy::Fixed,QSizePolicy::Fixed);
+    actions->addWidget(reset_);
+    settingsToggle_ = new QtDisclosureButton;
+    settingsToggle_->setObjectName("pomodoroSettingsToggle");
+    settingsToggle_->setText(QString::fromUtf8("Настройки Pomodoro"));
+    settingsToggle_->setAccessibleName(settingsToggle_->text());
+    settingsToggle_->setToolTip(QString::fromUtf8("Показать или скрыть настройки Pomodoro; несохранённые значения остаются в форме."));
+    rootLayout_->addWidget(settingsToggle_,0,Qt::AlignLeft);
+    settingsSummary_ = new QLabel; settingsSummary_->setObjectName("pomodoroSettingsSummary");
+    settingsSummary_->setWordWrap(true); rootLayout_->addWidget(settingsSummary_);
+    controls->setObjectName("pomodoroSettingsBody");
+    rootLayout_->addWidget(controls); controls->hide();
+    connect(settingsToggle_,&QToolButton::toggled,controls,&QWidget::setVisible);
     const auto saved = readPomodoro(storage_);
     if (!storage_.empty()) {
         if (saved.contains("workMinutes")) workSeconds_ = integer(saved, "workMinutes", 25, 5, 120) * 60;
@@ -151,7 +174,7 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
         if (saved.contains("cyclesBeforeLong")) cyclesBeforeLong_ = integer(saved, "cyclesBeforeLong", 4, 1, 8);
         if (saved.contains("autoAdvance")) autoAdvance_ = saved.value("autoAdvance") == "1";
     }
-    auto* form = new QFormLayout; form->setSpacing(8);
+    auto* form = new QFormLayout; form->setSpacing(8); form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     workMinutes_ = new QSpinBox; workMinutes_->setObjectName("pomodoroWorkMinutes"); workMinutes_->setRange(5, 120); workMinutes_->setValue(workSeconds_ / 60);
     breakMinutes_ = new QSpinBox; breakMinutes_->setObjectName("pomodoroBreakMinutes"); breakMinutes_->setRange(3, 60); breakMinutes_->setValue(breakSeconds_ / 60);
     longBreakMinutes_ = new QSpinBox; longBreakMinutes_->setObjectName("pomodoroLongBreakMinutes"); longBreakMinutes_->setRange(5, 90); longBreakMinutes_->setValue(longBreakSeconds_ / 60);
@@ -164,7 +187,7 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     form->addRow(QString::fromUtf8("Фокус, мин"), workMinutes_); form->addRow(QString::fromUtf8("Перерыв, мин"), breakMinutes_);
     form->addRow(QString::fromUtf8("Длинный, мин"), longBreakMinutes_); form->addRow(QString::fromUtf8("Фокусов"), cyclesSetting_); form->addRow(autoAdvanceSetting_);
     controlBox->addLayout(form);
-    auto* save = new QPushButton(QString::fromUtf8("Сохранить настройки")); save->setObjectName("pomodoroSaveSettings"); controlBox->addWidget(save);
+    auto* save = new QPushButton(QString::fromUtf8("Сохранить настройки")); save->setObjectName("pomodoroSaveSettings");
     soundSettings_ = new QWidget;
     soundForm_ = new QFormLayout(soundSettings_); soundForm_->setContentsMargins(0, 0, 0, 0); soundForm_->setSpacing(8);
     soundEnabled_ = new QCheckBox(QString::fromUtf8("Звук окончания")); soundEnabled_->setObjectName("pomodoroSoundEnabled");
@@ -192,14 +215,15 @@ QtPomodoro::QtPomodoro(QWidget* parent, std::filesystem::path storage, int workS
     refreshSoundInventory();
     soundSettings_->setToolTip(QString::fromUtf8("Администраторские сигналы из папки music рабочего места или поставки data/music."));
     controlBox->addWidget(soundSettings_); soundSettings_->hide();
+    controlBox->addWidget(save);
     auto* note = new QLabel(QString::fromUtf8("Награда возможна только за полный фокус при личном входе и по правилам хранилища."));
     note->setWordWrap(true); controlBox->addWidget(note);
     rewardStatusLabel_ = new QLabel;
     rewardStatusLabel_->setObjectName("pomodoroRewardStatus");
     rewardStatusLabel_->setAccessibleName(QString::fromUtf8("Статус награды Pomodoro"));
     rewardStatusLabel_->setWordWrap(true);
-    controlBox->addWidget(rewardStatusLabel_);
-    controlBox->addStretch(); rootLayout_->addWidget(controls, 2);
+    sessionBox->addWidget(rewardStatusLabel_);
+    rootLayout_->addStretch();
     timer_ = new QTimer(this); timer_->setInterval(250);
     connect(timer_, &QTimer::timeout, this, [this] {
         const auto milliseconds = deadline_.remainingTime();
@@ -234,14 +258,15 @@ void QtPomodoro::resizeEvent(QResizeEvent* event) {
     auto availableWidth = width();
     if (auto* pageScroll = window()->findChild<QScrollArea*>("pageContentScrollArea"))
         availableWidth = pageScroll->viewport()->width();
-    const auto direction = availableWidth < kStackedLayoutBreakpoint
-        ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
-    if (rootLayout_->direction() != direction) rootLayout_->setDirection(direction);
     if (soundForm_) {
         const auto rowPolicy = availableWidth < kStackedLayoutBreakpoint
             ? QFormLayout::WrapAllRows : QFormLayout::DontWrapRows;
         if (soundForm_->rowWrapPolicy() != rowPolicy) soundForm_->setRowWrapPolicy(rowPolicy);
     }
+}
+
+void QtPomodoro::setMotionPolicy(std::function<bool()> policy) {
+    settingsToggle_->setMotionPolicy(std::move(policy));
 }
 
 int QtPomodoro::duration(Phase phase) const { return phase == Work ? workSeconds_ : phase == Break ? breakSeconds_ : longBreakSeconds_; }
@@ -381,6 +406,10 @@ void QtPomodoro::advanceSecondsForTest(int seconds) {
     if (remaining_ == 0) finishInterval(); else refresh();
 }
 void QtPomodoro::refresh() {
+    settingsSummary_->setText(QString::fromUtf8("Фокус %1 мин · перерыв %2 / %3 мин · фокусов %4%5")
+        .arg(workSeconds_/60).arg(breakSeconds_/60).arg(longBreakSeconds_/60).arg(cyclesBeforeLong_)
+        .arg(autoAdvance_ ? QString::fromUtf8(" · автопереход") : QString()));
+    settingsToggle_->setAccessibleDescription(settingsSummary_->text());
     const int total = duration(phase_);
     phaseLabel_->setText(phaseName(phase_));
     timeLabel_->setText(QString("%1:%2").arg(remaining_ / 60, 2, 10, QChar('0')).arg(remaining_ % 60, 2, 10, QChar('0')));

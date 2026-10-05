@@ -11,6 +11,10 @@ class QtDialogFormBody final : public QWidget {
 public:
     using QWidget::QWidget;
     int heightForWidth(int width) const override {
+        // Simple spanning-row forms reserve wrapped label heights themselves.
+        // Their unconstrained sizeHint can retain a taller previous layout.
+        if (property("useMeasuredFormHeight").toBool())
+            return QWidget::heightForWidth(width);
         return std::max(QWidget::heightForWidth(width), sizeHint().height());
     }
 };
@@ -23,6 +27,23 @@ public:
         QSize preferredSize = QSize(640, 620), QSize minimumSize = QSize(420, 300))
         : QDialog(parent), requestedMinimum_(minimumSize) {
         auto* outer = new QVBoxLayout(this);
+        auto* heading = new QFrame(this);
+        heading->setObjectName("dialogHeadingSurface");
+        auto* headingLayout = new QHBoxLayout(heading);
+        headingLayout->setContentsMargins(scaledMetric(12), scaledMetric(8), scaledMetric(12), scaledMetric(8));
+        auto* title = new QLabel(heading);
+        title->setObjectName("dialogHeading");
+        title->setTextFormat(Qt::PlainText);
+        title->setWordWrap(true);
+        title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        headingLayout->addWidget(title);
+        const auto updateHeading = [heading, title](const QString& text) {
+            title->setText(text);
+            heading->setVisible(!text.trimmed().isEmpty());
+        };
+        connect(this, &QWidget::windowTitleChanged, this, updateHeading);
+        updateHeading(windowTitle());
+        outer->addWidget(heading);
         scroll_ = new QScrollArea(this);
         scroll_->setObjectName("dialogContentScrollArea");
         scroll_->setWidgetResizable(true);
@@ -40,8 +61,9 @@ public:
         outer->addWidget(scroll_, 1);
         auto* footer = new QWidget(this);
         footer->setObjectName("dialogFooter");
+        footer->setAttribute(Qt::WA_StyledBackground, true);
         footerLayout_ = new QVBoxLayout(footer);
-        footerLayout_->setContentsMargins(0, 0, 0, 0);
+        footerLayout_->setContentsMargins(scaledMetric(8), scaledMetric(8), scaledMetric(8), scaledMetric(8));
         outer->addWidget(footer);
         setMinimumSize(minimumSize);
         resize(preferredSize);

@@ -15,6 +15,7 @@ class QComboBox;
 class QBoxLayout;
 class QFormLayout;
 class QResizeEvent;
+class QtDisclosureButton;
 
 class QtPomodoro : public QWidget {
 public:
@@ -27,6 +28,7 @@ public:
         std::function<QString()> rulesTooltipHandler = {});
     void setAdministrator(bool administrator);
     void setQuickStateChanged(std::function<void()> handler);
+    void setMotionPolicy(std::function<bool()> policy);
     QString quickSummary() const;
     QString quickToggleText() const;
     bool quickNextEnabled() const;
@@ -93,4 +95,6 @@ private:
     QDeadlineTimer deadline_;
     std::function<void()> quickStateChanged_;
     QBoxLayout* rootLayout_ = nullptr;
+    QtDisclosureButton* settingsToggle_ = nullptr;
+    QLabel* settingsSummary_ = nullptr;
 };

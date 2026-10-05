@@ -26,8 +26,9 @@ bool ShowPipelineEditor(QWidget* parent, QtWorkspace& workspace, const std::stri
     tabs->setUsesScrollButtons(true);
     // Reuse the helper's scroll area as the first tab: no nested outer scroll,
     // while its persistent footer and screen bounds still belong to the dialog.
+    const int contentIndex = layout->indexOf(dialog.scrollArea());
     layout->removeWidget(dialog.scrollArea());
-    layout->insertWidget(0, tabs, 1);
+    layout->insertWidget(contentIndex, tabs, 1);
     auto page = [&](const char* key, const char* title, const char* description, bool first = false) {
         auto* scroll = first ? dialog.scrollArea() : new QScrollArea;
         auto* widget = first ? dialog.bodyWidget() : new QWidget;

@@ -2,6 +2,7 @@
 
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QSizePolicy>
 #include <QDateTime>
 #include <QFontMetricsF>
@@ -179,7 +180,11 @@ QtReportChart::LayoutMetrics QtReportChart::layoutMetrics(int availableWidth) co
     const QString lastDate = trendFirstMonth_.addMonths(11).toString("MM/yy");
     const qreal edgeWidth = std::max(textWidth(captionMetrics, firstDate), textWidth(captionMetrics, lastDate));
     const qreal plotInset = std::min(contentWidth / 4, std::max(textGap, edgeWidth / 2));
-    qreal plotHeight = std::max(qreal(32), qreal(qCeil(captionMetrics.height() * 2.0)));
+    // The populated trend is a readable chart, not a compressed sparkline.
+    // Empty history remains compact and keeps its explanatory message.
+    qreal plotHeight = trendMax > 0
+        ? std::max(qreal(72), qreal(qCeil(captionMetrics.height() * 4.0)))
+        : std::max(qreal(32), qreal(qCeil(captionMetrics.height() * 2.0)));
     if (trendMax == 0) {
         result.emptyMessage = textRegion(QStringLiteral("empty-trend"),
             QString::fromUtf8("Нет завершений в сохранённой части аудита за этот период"), captionFont,
@@ -300,7 +305,10 @@ void QtReportChart::paintEvent(QPaintEvent* event) {
         painter.drawRoundedRect(status.track, 3.5, 3.5);
         if (maxValue > 0 && values_[index] > 0 && status.track.width() > 0) {
             const qreal filledWidth = status.track.width() * double(values_[index]) / double(maxValue);
-            painter.setBrush(accentColor);
+            QLinearGradient fill(status.track.topLeft(), status.track.topRight());
+            fill.setColorAt(0, accentColor.lighter(135));
+            fill.setColorAt(1, accentColor);
+            painter.setBrush(fill);
             painter.drawRoundedRect(QRectF(status.track.left(), status.track.top(), filledWidth,
                 status.track.height()), 3.5, 3.5);
         }
@@ -315,9 +323,22 @@ void QtReportChart::paintEvent(QPaintEvent* event) {
         painter.setPen(mutedColor);
         drawTextRegion(painter, layout.emptyMessage);
     } else {
-        painter.setPen(QPen(accentColor, 2));
+        QPainterPath area;
+        area.moveTo(layout.trendPoints.front());
+        for (int index = 1; index < layout.trendPoints.size(); ++index)
+            area.lineTo(layout.trendPoints[index]);
+        area.lineTo(layout.plot.bottomRight());
+        area.lineTo(layout.plot.bottomLeft());
+        area.closeSubpath();
+        QLinearGradient fill(layout.plot.topLeft(), layout.plot.bottomLeft());
+        auto fillTop = accentColor; fillTop.setAlpha(90);
+        auto fillBottom = accentColor; fillBottom.setAlpha(0);
+        fill.setColorAt(0, fillTop); fill.setColorAt(1, fillBottom);
+        painter.fillPath(area, fill);
+        const auto lineColor = accentColor.lighter(150);
+        painter.setPen(QPen(lineColor, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.drawPolyline(layout.trendPoints);
-        painter.setBrush(accentColor);
+        painter.setBrush(palette().color(QPalette::Window));
         for (const auto& point : layout.trendPoints) painter.drawEllipse(point, 2.5, 2.5);
         painter.setPen(textColor);
         for (const auto& label : layout.valueLabels) drawTextRegion(painter, label.label);

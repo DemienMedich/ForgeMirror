@@ -92,7 +92,43 @@ if(BUILD_QT_GUI)
     target_link_libraries(smoke_qt PRIVATE ForgeMirrorQtUi Qt6::Test)
     add_test(NAME smoke_qt COMMAND smoke_qt)
     set_tests_properties(smoke_qt PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_QT_CTEST_PARTITIONED=1"
+        TIMEOUT 120)
+    # Keep the expensive decision matrix as an explicit default CTest entry.
+    # Direct smoke_qt execution still includes it; no assertions are skipped there.
+    add_test(NAME smoke_qt_task_decisions COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_task_decisions PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_TASK_DECISIONS=1"
+        TIMEOUT 120)
+    # A separate presentation matrix keeps the original suite's timeout and
+    # every existing domain/rollback test intact. This is functional offscreen QA.
+    add_test(NAME smoke_qt_history_cleanup COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_history_cleanup PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_HISTORY_CLEANUP=1"
+        TIMEOUT 120)
+    add_test(NAME smoke_qt_startup_import COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_startup_import PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_STARTUP_IMPORT=1"
+        TIMEOUT 120)
+    add_test(NAME smoke_qt_export_pickers COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_export_pickers PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_EXPORT_PICKERS=1"
+        TIMEOUT 120)
+    add_test(NAME smoke_qt_empty_lists COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_empty_lists PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_EMPTY_LISTS=1"
+        TIMEOUT 120)
+    add_test(NAME smoke_qt_task_filters COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_task_filters PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_TASK_FILTERS=1"
+        TIMEOUT 120)
+    add_test(NAME smoke_qt_control_surfaces COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_control_surfaces PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_CONTROL_SURFACES=1"
+        TIMEOUT 120)
+    add_test(NAME smoke_qt_pomodoro_ui COMMAND smoke_qt)
+    set_tests_properties(smoke_qt_pomodoro_ui PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;PATH=$<TARGET_FILE_DIR:Qt6::Core>;FORGEMIRROR_UI_AUDIT_POMODORO=1"
         TIMEOUT 120)
 endif()
 

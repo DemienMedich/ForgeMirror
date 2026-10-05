@@ -1,5 +1,7 @@
 #include "QtWindow.h"
+#include "QtTaskTitleDelegate.h"
 #include "QtWorkspaceImport.h"
+#include "QtWorkspaceImportDialog.h"
 #include "QtReportChart.h"
 #include "QtProfileAnalytics.h"
 #include "QtLogActivityChart.h"
@@ -48,6 +50,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QDataStream>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <atomic>
@@ -750,6 +753,8 @@ static bool TestVaultEditor() {
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
         QTimer::singleShot(0, [dialog, &lockFailureSeen] {
             lockFailureSeen = !dialog->findChild<QLabel*>("vaultNotice")->text().isEmpty();
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/vault-locked-save.png");
             dialog->reject();
         });
     });
@@ -780,6 +785,8 @@ static bool TestBannerEditor() {
         QTimer::singleShot(0, [&, dialog] {
             staleSaveRejected = !dialog->findChild<QLabel*>("bannerNotice")->text().isEmpty() &&
                 workspace.data.bannerTexts == std::vector<std::string>{u8"Первая фраза", "external banner entry"};
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/banner-stale-save.png");
             if (staleSaveRejected) dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
             else dialog->reject();
         });
@@ -796,7 +803,12 @@ static bool TestBannerEditor() {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         dialog->findChild<QPlainTextEdit*>("bannerText")->setPlainText("LOCKED");
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
-        QTimer::singleShot(0, [dialog, &failureSeen] { failureSeen = !dialog->findChild<QLabel*>("bannerNotice")->text().isEmpty(); dialog->reject(); });
+        QTimer::singleShot(0, [dialog, &failureSeen] {
+            failureSeen = !dialog->findChild<QLabel*>("bannerNotice")->text().isEmpty();
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/banner-locked-save.png");
+            dialog->reject();
+        });
     });
     const bool accepted = ShowBannerEditor(nullptr, workspace); CloseHandle(lock);
     if (accepted || !failureSeen || !stored.open(QIODevice::ReadOnly) || stored.readAll() != before) return false; stored.close();
@@ -1298,6 +1310,9 @@ static bool TestQtAdminAuthParity() {
     QtWindow restarted(workspace); restarted.show(); QApplication::processEvents();
     auto* restartedNavigation = restarted.findChild<QListWidget*>("navigation");
     auto* pomodoroSoundSettings = restarted.findChild<QCheckBox*>("pomodoroSoundEnabled");
+    auto* restoredSettingsToggle = restarted.findChild<QToolButton*>("pomodoroSettingsToggle");
+    if (!restoredSettingsToggle || restoredSettingsToggle->isChecked()) return false;
+    restoredSettingsToggle->click(); QApplication::processEvents();
     if (!restartedNavigation || restartedNavigation->currentRow() != 8 || !pomodoroSoundSettings ||
         !pomodoroSoundSettings->isVisible()) return false;
     QEventLoop startupStability;
@@ -3178,6 +3193,23 @@ static bool TestQtWorkingEditorLayout(QApplication& app) {
         // The helper also bounds the requested size to the available screen.
         // The offscreen test monitor is only 800 px wide, unlike native Windows.
         record(dialog->size() == expectedSize.boundedTo(dialog->maximumSize()), context + " bounded requested size");
+        if (dialog->objectName() == QStringLiteral("projectEditor")) {
+            auto* titleField = dialog->findChild<QLineEdit*>("entryTitle");
+            auto* content = dialog->findChild<QWidget*>("dialogFormContent");
+            auto* form = content ? qobject_cast<QFormLayout*>(content->layout()) : nullptr;
+            auto* label = form && titleField ? form->labelForField(titleField) : nullptr;
+            record(titleField && content && label && std::min(titleField->mapTo(content, QPoint()).y(),
+                label->mapTo(content, QPoint()).y()) <= 2,
+                context + " short form starts at top");
+        }
+        auto* heading = dialog->findChild<QLabel*>("dialogHeading");
+        record(heading && heading->isVisible() && heading->text() == dialog->windowTitle() &&
+            heading->textFormat() == Qt::PlainText, context + " visible plain dialog title");
+        if (heading) {
+            const QRect bounds(heading->mapTo(dialog, QPoint()), heading->size());
+            record(dialog->rect().contains(bounds) && heading->height() >= heading->heightForWidth(heading->width()),
+                context + " complete wrapped dialog title");
+        }
         auto* box = dialog->findChild<QDialogButtonBox*>();
         auto* save = box ? box->button(QDialogButtonBox::Save) : nullptr;
         auto* cancel = box ? box->button(QDialogButtonBox::Cancel) : nullptr;
@@ -3211,6 +3243,8 @@ static bool TestQtWorkingEditorLayout(QApplication& app) {
         for (auto* scroll : dialog->findChildren<QScrollArea*>()) {
             if (!scroll->isVisible()) continue;
             ++visibleScrolls;
+            if (heading) record(heading->mapTo(dialog, QPoint(0, heading->height())).y() <=
+                scroll->mapTo(dialog, QPoint()).y(), context + " heading before content");
             auto* body = scroll->widget();
             record(body && body->width() <= scroll->viewport()->width() &&
                 scroll->horizontalScrollBar()->maximum() == 0, context + " scroll width");
@@ -3258,7 +3292,7 @@ static bool TestQtWorkingEditorLayout(QApplication& app) {
         stage.hints = {"Keep both references"};
         workspace.data.pipelineSteps = {stage};
         record(AppSavePipelineData(directory, workspace.data.pipelineSteps), "fixture pipeline");
-        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = (scale == 100);
         SaveQtDisplaySettings(directory, settings);
         ApplyQtDisplaySettings(app, settings);
         record(SetAdminPassword(directory, "editor-layout-fixture-password") && SetAdminStayLoggedIn(directory, true),
@@ -3302,6 +3336,24 @@ static bool TestQtWorkingEditorLayout(QApplication& app) {
                 description->setPlainText(QString::fromUtf8("Описание остаётся после раскрытия дополнительных полей."));
                 if (page == 1) {
                     if (auto* toggle = dialog->findChild<QToolButton*>("taskAdditionalToggle")) {
+                        if (scale == 100) {
+                            auto* disclosure = dynamic_cast<QtDisclosureButton*>(toggle);
+                            auto* panel = dialog->findChild<QWidget*>("taskAdditionalFields");
+                            if (!disclosure || !panel) { record(false, "task motion hooks"); dialog->reject(); return; }
+                            const QString draftTitle = title->text(), draftDescription = description->toPlainText();
+                            toggle->click();
+                            record(panel->isVisible() && disclosure->indicatorAnimation()->state() ==
+                                (IsQtMotionAllowed(settings) ? QAbstractAnimation::Running : QAbstractAnimation::Stopped), "task motion policy and immediate fields");
+                            const bool advanced = QTest::qWaitFor([&] { return disclosure->indicatorAngle() > 0; }, 180);
+                            const qreal angle = disclosure->indicatorAngle();
+                            record(advanced && angle > 0, "task motion progress");
+                            toggle->click();
+                            if (IsQtMotionAllowed(settings)) record(std::abs(disclosure->indicatorAngle()-angle)<0.001, "task motion reversal");
+                            QTest::qWait(220);
+                            record(!panel->isVisible() && disclosure->indicatorAngle()==0 &&
+                                title->text()==draftTitle && description->toPlainText()==draftDescription, "task motion endpoint and draft");
+                            std::cout << "task editor motion angle=" << angle << '\n';
+                        }
                         toggle->setFocus(); QTest::keyClick(toggle, Qt::Key_Space);
                         QApplication::processEvents(); QApplication::processEvents();
                         inspect(dialog, stem + " additional");
@@ -3422,6 +3474,1228 @@ static void ScheduleQtModalDriver(QApplication& app, const QString& expectedObje
             });
         ready->start();
     });
+}
+
+static bool TestQtHistoryCleanupLayout(QApplication& app) {
+    std::cout << std::unitbuf << "History/cleanup BEGIN\n";
+    try {
+    struct RestoreDisplay {
+        QApplication& app; QFont font; QString style; QVariant base; bool quit;
+        ~RestoreDisplay() { app.setFont(font); app.setStyleSheet(style);
+            app.setProperty("forgeBasePointSize", base); app.setQuitOnLastWindowClosed(quit); }
+    } restore{app, app.font(), app.styleSheet(), app.property("forgeBasePointSize"), app.quitOnLastWindowClosed()};
+    app.setQuitOnLastWindowClosed(false);
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_ADMIN_PASSWORD")) {
+        std::cerr << "History/cleanup fixture BLOCKED: host administrator override present\n";
+        return false; // Presence only, never read/print/replace a host secret.
+    }
+    bool checked = true;
+    int contexts = 0, inspections = 0;
+    const auto record = [&](bool ok, const QString& context) {
+        checked &= ok; if (!ok) std::cerr << "History/cleanup: " << context.toStdString() << '\n';
+    };
+    const auto textPath = [](const std::filesystem::path& path) { return QString::fromUtf8(path.u8string()); };
+    const auto normalized = [](QString text) { return text.replace('\\', '/'); };
+    struct Snapshot { bool readable = true; QMap<QString,QByteArray> entries; };
+    const auto snapshot = [&](const std::filesystem::path& root) {
+        Snapshot out; std::error_code ec;
+        std::filesystem::recursive_directory_iterator it(root, ec), end;
+        for (; !ec && it != end; it.increment(ec)) {
+            const auto relative = textPath(it->path().lexically_relative(root));
+            if (it->is_symlink(ec)) { out.readable = false; break; }
+            if (ec) break;
+            if (it->is_directory(ec)) { out.entries.insert("D/"+relative, {}); continue; }
+            if (!it->is_regular_file(ec)) { out.readable = false; break; }
+            QFile file(textPath(it->path()));
+            if (!file.open(QIODevice::ReadOnly)) { out.readable = false; break; }
+            const auto bytes = file.readAll();
+            if (file.error()!=QFileDevice::NoError || bytes.size()!=file.size()) { out.readable=false; break; }
+            out.entries.insert("F/"+relative, bytes);
+        }
+        out.readable &= !ec; return out;
+    };
+    const auto settle = [&] {
+        QByteArray previous; int stable=0; QElapsedTimer deadline; deadline.start();
+        do {
+            QCoreApplication::sendPostedEvents(nullptr,QEvent::LayoutRequest); QApplication::processEvents();
+            QByteArray state; QDataStream stream(&state,QIODevice::WriteOnly);
+            auto roots=QApplication::topLevelWidgets(); std::sort(roots.begin(),roots.end(),std::less<QWidget*>());
+            for(auto* root:roots) if(root->isVisible()) {
+                auto children=root->findChildren<QWidget*>(); children.prepend(root);
+                for(auto* child:children) if(child->isVisible() && child->window()==root) {
+                    stream << quint64(reinterpret_cast<quintptr>(child)) << child->geometry()
+                        << child->minimumSize() << child->maximumSize();
+                    if(auto* label=qobject_cast<QLabel*>(child);label && label->wordWrap())
+                        stream << label->heightForWidth(label->width());
+                    if(auto* view=qobject_cast<QAbstractScrollArea*>(child)) {
+                        stream << view->viewport()->geometry();
+                        for(auto* bar:{view->horizontalScrollBar(),view->verticalScrollBar()})
+                            stream << bar->minimum() << bar->maximum() << bar->value() << bar->pageStep();
+                    }
+                    if(auto* table=qobject_cast<QTableWidget*>(child)) {
+                        for(int c=0;c<table->columnCount();++c) stream << table->columnWidth(c);
+                        for(int r=0;r<table->rowCount();++r) stream << table->rowHeight(r);
+                    }
+                    if(auto* list=qobject_cast<QListWidget*>(child))
+                        for(int r=0;r<list->count();++r) stream << list->visualItemRect(list->item(r)) << list->item(r)->sizeHint();
+                }
+            }
+            stable=state==previous ? stable+1 : 0; previous=state;
+        } while(stable<3 && deadline.elapsed()<500);
+        record(stable>=3,"bounded three-stable layout/row/scroll snapshots");
+    };
+    const auto fullLabel = [&](QLabel* label,const QString& stem) {
+        record(label && label->isVisible() && !label->text().isEmpty(),stem+" visible context/summary");
+        if(!label) return;
+        record(label->textFormat()==Qt::PlainText && label->wordWrap() &&
+            label->height()>=label->heightForWidth(label->width()),stem+" full plain wrapped context");
+    };
+    const auto common = [&](QDialog* dialog,QSize requested,const QString& stem) {
+        const auto screen=dialog->screen()->availableGeometry().size();
+        const QSize extra(std::max(0,dialog->frameGeometry().width()-dialog->width()),
+            std::max(0,dialog->frameGeometry().height()-dialog->height()));
+        const QSize limit(std::max(1,screen.width()-extra.width()-16),std::max(1,screen.height()-extra.height()-16));
+        const QSize expected=requested.boundedTo(limit).expandedTo(QSize(420,260).boundedTo(limit));
+        record(dialog->size()==expected,stem+" actual screen-bounded requested resize");
+        auto* scroll=dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+        auto* footer=dialog->findChild<QWidget*>("dialogFooter");
+        record(scroll && scroll->widget() && footer,stem+" permanent scroll/footer hooks");
+        if(!scroll || !scroll->widget() || !footer) return;
+        auto* body=scroll->widget();
+        record(body->width()<=scroll->viewport()->width() && scroll->horizontalScrollBar()->maximum()==0,
+            stem+" actual body fits viewport, not merely hidden scrollbar");
+        const auto inDialog=[&](QWidget* w){return QRect(w->mapTo(dialog,QPoint()),w->size());};
+        record(dialog->rect().contains(inDialog(scroll)) && dialog->rect().contains(inDialog(footer)) &&
+            inDialog(scroll).bottom()<inDialog(footer).top(),stem+" separate contained body/footer");
+        for(auto* child:body->findChildren<QWidget*>()) if(child->isVisible() && child->window()==dialog &&
+            (qobject_cast<QLabel*>(child) || qobject_cast<QLineEdit*>(child) || qobject_cast<QAbstractItemView*>(child)))
+            record(body->rect().contains(QRect(child->mapTo(body,QPoint()),child->size())),stem+" allocated body child "+child->objectName());
+        for(auto* button:dialog->findChildren<QPushButton*>()) if(button->isVisible() && button->window()==dialog) {
+            auto* accessible=QAccessible::queryAccessibleInterface(button);
+            const auto accessibleName=button->accessibleName().trimmed().isEmpty() && accessible
+                ? accessible->text(QAccessible::Name).trimmed() : button->accessibleName().trimmed();
+            record(button->width()>=button->sizeHint().width() && button->height()>=button->sizeHint().height() &&
+                !accessibleName.isEmpty(),stem+" intrinsic accessible command "+button->objectName());
+            if(footer->isAncestorOf(button)) record(dialog->rect().contains(inDialog(button)),stem+" persistent command "+button->objectName());
+            if(button->property("primary").toBool()) {
+                QPixmap painted(button->size()); painted.fill(Qt::transparent); button->render(&painted);
+                const QColor background=painted.toImage().pixelColor(button->width()/2,std::max(2,button->height()/4));
+                std::cout << stem.toStdString() << " primary=" << button->objectName().toStdString()
+                    << " renderedBG=" << background.name().toStdString()
+                    << " rect=" << inDialog(button).x() << ',' << inDialog(button).y() << ',' << button->width() << ',' << button->height()
+                    << " hint=" << button->sizeHint().width() << ',' << button->sizeHint().height()
+                    << " footer=" << footer->width() << ',' << footer->height()
+                    << " box=" << button->parentWidget()->width() << ',' << button->parentWidget()->height()
+                    << " orientation=" << (qobject_cast<QDialogButtonBox*>(button->parentWidget())
+                        ? int(qobject_cast<QDialogButtonBox*>(button->parentWidget())->orientation()) : -1) << '\n';
+                record(background==QColor("#7554ad") || background==QColor("#8764bf"),
+                    stem+" actual primary uses unchanged theme accent after polish");
+            }
+        }
+    };
+    // Reachability is existential over REAL view offsets. Per-item scrolling
+    // has heterogeneous column widths; linear interpolation alone is not proof.
+    const auto endpoints = [&](QAbstractItemView* view,const QModelIndex& index,int leftInset,int contentWidth,const QString& stem) {
+        auto* bar=view->horizontalScrollBar(); const int old=bar->value();
+        bar->setValue(bar->minimum()); settle(); const QRect first=view->visualRect(index);
+        bar->setValue(bar->maximum()); settle(); const QRect last=view->visualRect(index);
+        const int travel=first.left()-last.left(), range=bar->maximum()-bar->minimum(), viewport=view->viewport()->width();
+        for(const bool right:{false,true}) {
+            QList<int> candidates{bar->minimum(),bar->maximum(),old};
+            if(range<=64) {
+                for(int value=bar->minimum();value<=bar->maximum();++value) candidates.append(value);
+            } else if(travel>0) {
+                const int firstX=first.left()+leftInset+(right ? contentWidth-1 : 0);
+                const int target=right ? viewport-1 : 0;
+                const int estimate=bar->minimum()+qRound(double(firstX-target)*range/travel);
+                for(int delta=-2;delta<=2;++delta) candidates.append(std::clamp(estimate+delta,bar->minimum(),bar->maximum()));
+            }
+            bool reachable=false; QRect actual; int endpoint=0;
+            for(int value:candidates) {
+                bar->setValue(value); settle(); actual=view->visualRect(index);
+                endpoint=actual.left()+leftInset+(right ? contentWidth-1 : 0);
+                if(endpoint>=0 && endpoint<viewport) { reachable=true; break; }
+            }
+            record(reachable,stem+(right ? " actual right text endpoint reachable" : " actual left text endpoint reachable"));
+            if(!reachable) std::cerr << stem.toStdString() << " mode=" << int(view->horizontalScrollMode())
+                << " range=" << range << " first=" << first.left() << " last=" << last.left()
+                << " actual=" << actual.left() << " endpoint=" << endpoint << " viewport=" << viewport << '\n';
+        }
+        bar->setValue(old); settle();
+    };
+    const auto tableState = [](QTableWidget* table) {
+        QStringList out;
+        for(int r=0;r<table->rowCount();++r) for(int c=0;c<table->columnCount();++c)
+            out << (table->item(r,c) ? table->item(r,c)->text() : QString());
+        return out;
+    };
+    const auto inspectTable = [&](QTableWidget* table,const QString& stem) {
+        ++inspections; if(!table) { record(false,stem+" existing history table"); return; }
+        std::cout << stem.toStdString() << " table=" << table->width() << 'x' << table->height()
+            << " viewport=" << table->viewport()->width() << 'x' << table->viewport()->height()
+            << " rows=" << table->rowCount() << " wrap=" << table->wordWrap()
+            << " elide=" << int(table->textElideMode()) << " H=" << table->horizontalScrollBar()->maximum() << '\n';
+        record(table->editTriggers()==QAbstractItemView::NoEditTriggers && table->wordWrap() &&
+            table->textElideMode()==Qt::ElideNone && !table->accessibleName().isEmpty(),stem+" readonly wrapped nonelided accessible table");
+        record(table->viewport()->height()>=3*table->fontMetrics().lineSpacing(),stem+" at least three actual text rows");
+        auto* header=table->horizontalHeader();
+        for(int c=0;c<table->columnCount();++c) {
+            auto* item=table->horizontalHeaderItem(c); if(!item) {record(false,stem+" real header item");continue;}
+            QStyleOptionHeader option; option.initFrom(header); option.text=item->text();
+            const QSize glyph(header->fontMetrics().horizontalAdvance(item->text()),header->fontMetrics().height());
+            const QSize needed=header->style()->sizeFromContents(QStyle::CT_HeaderSection,&option,glyph,header);
+            record(header->sectionSize(c)>=needed.width() && header->height()>=needed.height(),stem+" complete styled header "+item->text());
+        }
+        for(int r=0;r<table->rowCount();++r) for(int c=0;c<table->columnCount();++c) {
+            auto* item=table->item(r,c); if(!item) {record(false,stem+" existing cell");continue;}
+            const auto index=table->model()->index(r,c);
+            QStyleOptionViewItem option; option.initFrom(table); option.widget=table; option.font=table->font();
+            option.fontMetrics=table->fontMetrics(); option.rect=QRect(0,0,table->columnWidth(c),table->rowHeight(r));
+            if(table->wordWrap()) option.features|=QStyleOptionViewItem::WrapText;
+            auto* delegate=table->itemDelegateForIndex(index);
+            record(delegate && table->rowHeight(r)>=delegate->sizeHint(option,index).height(),stem+" full styled cell glyph height");
+            const auto accessible=item->data(Qt::AccessibleTextRole).toString()+'\n'+item->data(Qt::AccessibleDescriptionRole).toString();
+            record(item->toolTip().contains(item->text()) && accessible.contains(item->text()),stem+" full cell tooltip/accessibility data");
+            endpoints(table,index,0,table->columnWidth(c),stem+QString(" cell%1:%2").arg(r).arg(c));
+        }
+    };
+    const auto modal = [&](QWidget* owner,const QString& expected,const QString& stem,
+                           const std::function<void(QDialog*)>& driver,const std::function<void()>& trigger) {
+        std::cout << stem.toStdString() << " actual modal trigger\n";
+        QElapsedTimer timer; timer.start(); const int loop=QThread::currentThread()->loopLevel()+1;
+        bool visited=false, rescued=false; QTimer watchdog; watchdog.setInterval(10);
+        QObject::connect(&watchdog,&QTimer::timeout,owner,[&] {
+            if(timer.elapsed()<2000) return;
+            if(!rescued) {record(false,stem+" bounded modal watchdog");rescued=true;}
+            if(QThread::currentThread()->loopLevel()<loop) return;
+            if(auto* dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject();
+        });
+        watchdog.start();
+        ScheduleQtModalDriver(app,{},stem,[&](QDialog* dialog){visited=true;++contexts;
+            std::cout << stem.toStdString() << " actual modal driver\n";
+            record(dialog->objectName()==expected,stem+" expected actual modal");
+            if(dialog->objectName()!=expected) {dialog->reject();return;} driver(dialog);
+            if(dialog->isVisible()) dialog->reject();
+        },record);
+        trigger(); watchdog.stop(); settle();
+        std::cout << stem.toStdString() << " actual modal returned\n";
+        record(visited && !rescued && QApplication::activeModalWidget()==nullptr,stem+" actual driver safely completed");
+    };
+    const QString longName=QString::fromUtf8("Профиль с полным длинным именем для истории событий и начисления опыта");
+    const QString longProject=QString::fromUtf8("Длинный проект & полный контекст — исследование сохранённой истории профиля");
+    const QString longTask=QString::fromUtf8("Начисленная задача: проверить полные подписи, цифры XP и русский контекст без сокращений");
+    const QString pendingTitle=QString::fromUtf8("Вторая выполненная задача ожидает XP");
+    const QString details=QString::fromUtf8("Полный контекст & <plain> \"кавычки\"; длинная строка не должна потеряться в истории событий");
+    for(int scale:{90,100,110,125,150,175,200}) {
+        QTemporaryDir temp; if(!temp.isValid()) return false;
+        const auto root=std::filesystem::u8path(temp.path().toUtf8().toStdString());
+        const auto local=root/std::filesystem::u8path(u8"История_и_очистка_изолированной_копии");
+        std::filesystem::create_directories(local);
+        QtDisplaySettings display; display.scalePercent=scale; display.motionEnabled=false; display.minimizeToTray=false;
+        if(!SaveQtDisplaySettings(local,display) || !SetAdminPassword(local,"history-cleanup-fixture") ||
+            !SetAdminStayLoggedIn(local,true)) return false;
+        QtWorkspace workspace(local); Profile profile(longName.toUtf8().toStdString());
+        profile.set_password_encoded(EncodePassword("profile-fixture-only"));
+        const auto created=workspace.storage->create_profile(profile); if(!created) return false;
+        workspace.reload(); QtWindow window(workspace); window.showNormal(); settle();
+        const double base=app.property("forgeBasePointSize").toDouble();
+        record(base>0 && std::abs(app.font().pointSizeF()-base*scale/100.0)<0.01 &&
+            std::abs(window.font().pointSizeF()-app.font().pointSizeF())<0.01,
+            QString("scale%1 observed application/window font ratio").arg(scale));
+        auto* profiles=window.findChild<QComboBox*>("profiles"); auto* nav=window.findChild<QListWidget*>("navigation");
+        auto* history=window.findChild<QPushButton*>("profileActivityHistory"); auto* cleanup=window.findChild<QAction*>("storageCleanup");
+        if(!profiles || !nav || !history || !cleanup) {record(false,"existing main action hooks");return false;}
+        profiles->setCurrentIndex(profiles->findData(QString::fromUtf8(created->id))); nav->setCurrentRow(0); settle();
+        record(history->isVisible() && history->isEnabled() && cleanup->isEnabled(),"authorized isolated profile/admin fixture");
+        if(!checked) return false;
+        for(const bool populated:{false,true}) {
+            if(populated) {
+                TaskEntry awarded; awarded.id="history-layout-awarded"; awarded.title=longTask.toUtf8().toStdString();
+                awarded.project=longProject.toUtf8().toStdString(); awarded.status=2; awarded.createdAt=1700000100;
+                awarded.assignees={created->id}; awarded.participants.push_back({created->id,40,17,8,{}});
+                TaskEntry pending; pending.id="history-layout-pending"; pending.title=pendingTitle.toUtf8().toStdString();
+                pending.project="Short project"; pending.status=2; pending.createdAt=1700000200; pending.assignees={created->id};
+                TaskEntry unrelated; unrelated.id="history-layout-unrelated"; unrelated.title="Must not enter selected profile history";
+                unrelated.status=2; unrelated.createdAt=1700000300; unrelated.assignees={"not-this-profile"};
+                if(!AppSaveTasks(local,{awarded,pending,unrelated}) ||
+                    !AppendProfileAudit(local,created->id,"password_reset",details.toUtf8().toStdString()) ||
+                    !AppendProfileAudit(local,created->id,"wallet_adjustment","credit|12.50|fixture-only") ||
+                    !AppendProfileAudit(local,created->id,"history_layout_unknown",u8"Короткий контекст другой строки")) return false;
+                auto* refresh=window.findChild<QPushButton*>("quickRefresh"); if(!refresh) return false;
+                refresh->click(); settle(); record(workspace.data.tasks.size()==3,"fully reload populated history before snapshot");
+                if(!checked) return false;
+            }
+            const auto before=snapshot(root); record(before.readable && !before.entries.isEmpty(),"read-success pre-history entire fixture snapshot");
+            const QString stem=QString("history-%1-%2").arg(populated?"populated":"empty").arg(scale);
+            modal(&window,"profileActivityHistoryDialog",stem,[&](QDialog* dialog) {
+                auto* tabs=dialog->findChild<QTabWidget*>("profileHistoryTabs");
+                auto* events=dialog->findChild<QTableWidget*>("profileActivityHistoryTable");
+                auto* tasks=dialog->findChild<QTableWidget*>("profileTaskXpHistoryTable");
+                auto* filter=dialog->findChild<QLineEdit*>("profileTaskXpHistoryFilter");
+                auto* context=dialog->findChild<QLabel*>("profileHistoryContext");
+                auto* close=dialog->findChild<QPushButton*>("profileHistoryClose");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>("profileHistoryButtons");
+                record(tabs && tabs->count()==2 && events && tasks && filter,"existing two history tabs/filter");
+                record(context && close && buttons,"new scoped history context/Close/footer hooks");
+                if(!tabs || !events || !tasks || !filter) {dialog->reject();return;}
+                if(context) record(context->text().contains(longName) && context->text().contains(QString::fromUtf8(created->id)) &&
+                    normalized(context->text()).contains(normalized(textPath(local))),stem+" complete selected name/ID/actual root");
+                record(events->rowCount()==(populated?3:0) && tasks->rowCount()==(populated?2:0),stem+" exact selected profile event/task rows");
+                const auto eventData=tableState(events),taskData=tableState(tasks);
+                if(populated) {
+                    record(eventData.contains(details) && eventData.contains("history_layout_unknown"),stem+" exact plain event details and unknown action fallback");
+                    const auto canonical=QString::fromUtf8(AppTaskDisplayTitle(workspace.data.tasks.front()));
+                    record(taskData.contains(canonical) && taskData.contains(longProject) && taskData.contains("17") && taskData.contains("8") &&
+                        taskData.contains(QString::fromUtf8("Выполнена · ждёт XP")),stem+" original canonical title/project/awarded/pending values");
+                }
+                for(QSize requested:{QSize(640,520),QSize(1000,640),QSize(640,520)}) {
+                    dialog->resize(requested); settle(); common(dialog,requested,stem);
+                    if(context) fullLabel(context,stem+" profile context");
+                    for(int tab=0;tab<2;++tab) {
+                        tabs->setCurrentIndex(tab); settle();
+                        inspectTable(tab?tasks:events,stem+QString(" tab%1").arg(tab));
+                        fullLabel(dialog->findChild<QLabel*>(tab?"profileTaskXpHistorySummary":"profileActivityHistorySummary"),stem+" readable summary");
+                    }
+                    record(tableState(events)==eventData && tableState(tasks)==taskData,stem+" resize preserves complete cell contents");
+                }
+                // Baseline hooks/layout can fail without exercising old dialog
+                // default semantics that could open Export from filter Return.
+                if(!checked || !context || !close || !buttons) {dialog->reject();return;}
+                if(populated) {
+                    tabs->setCurrentIndex(1); filter->setText(longProject); settle();
+                    record(tasks->rowCount()==1 && tableState(tasks).contains("17"),stem+" original full project/canonical search retained");
+                    filter->setText("no-match-history-layout"); settle();
+                    record(tasks->rowCount()==0,stem+" no-match distinct from original populated state");
+                    fullLabel(dialog->findChild<QLabel*>("profileTaskXpHistorySummary"),stem+" no-match summary");
+                    filter->setFocus(); QTest::keyClick(filter,Qt::Key_Return); settle();
+                    record(dialog->isVisible() && QApplication::activeModalWidget()==dialog && tasks->rowCount()==0,
+                        stem+" filter Return never exports/closes");
+                    if(!dialog->isVisible()) return;
+                    QTest::keyClick(filter,Qt::Key_Enter,Qt::KeypadModifier); settle();
+                    record(dialog->isVisible() && QApplication::activeModalWidget()==dialog && tasks->rowCount()==0,
+                        stem+" filter numpad Enter never exports/closes");
+                    filter->clear(); settle(); record(tableState(tasks)==taskData,stem+" clear restores full task rows and XP");
+                }
+                if(close && buttons) {
+                    auto* footer=dialog->findChild<QWidget*>("dialogFooter");
+                    record(footer && footer->isAncestorOf(buttons) && buttons->isAncestorOf(close),stem+" permanent Close footer");
+                    close->setFocus(); settle(); record(dialog->focusWidget()==close,stem+" actual Close keyboard focus");
+                    QTest::keyClick(close,Qt::Key_Return); settle(); record(!dialog->isVisible(),stem+" focused Close Return closes locally");
+                } else dialog->reject();
+            },[&]{history->click();});
+            const auto after=snapshot(root); record(after.readable && before.entries==after.entries,stem+" Close preserves ALL read-success paths/bytes");
+            if(!checked) return false;
+        }
+        const auto longDir=std::filesystem::u8path(u8"Неизвестная_папка_с_длинным_полным_именем_для_проверки_очистки");
+        std::cout << "cleanup-" << scale << " creating isolated fixture directories\n";
+        std::filesystem::create_directories(local/longDir/"nested");
+        const auto write=[&](const std::filesystem::path& path,const QByteArray& bytes) {
+            QFile file(textPath(path)); return file.open(QIODevice::WriteOnly|QIODevice::Truncate) && file.write(bytes)==bytes.size();
+        };
+        if(!write(local/longDir/"nested/payload.bin",QByteArray("fixture\0bytes",13)) || !write(local/"short-stray.bin","short\n")) return false;
+        std::vector<QtStorageStrayEntry> expectedInventory; QString inventoryError;
+        record(BuildQtStorageStrayInventory(local,&expectedInventory,&inventoryError) && expectedInventory.size()>=3,
+            "real heterogeneous nested directory/file inventory success");
+        if(!checked) return false;
+        const auto before=snapshot(root); record(before.readable,"read-success pre-cleanup entire fixture snapshot");
+        const QString stem=QString("cleanup-%1").arg(scale);
+        modal(&window,"storageCleanupDialog",stem,[&](QDialog* dialog) {
+            auto* list=dialog->findChild<QListWidget*>("storageCleanupInventory");
+            auto* all=dialog->findChild<QPushButton*>("storageCleanupSelectAll");
+            auto* none=dialog->findChild<QPushButton*>("storageCleanupSelectNone");
+            auto* confirm=dialog->findChild<QPushButton*>("storageCleanupConfirm");
+            auto* cancel=dialog->findChild<QPushButton*>("storageCleanupCancel");
+            auto* context=dialog->findChild<QLabel*>("storageCleanupContext");
+            auto* tools=dialog->findChild<QWidget*>("storageCleanupSelectionTools");
+            auto* buttons=dialog->findChild<QDialogButtonBox*>("storageCleanupButtons");
+            record(list && all && none && confirm && cancel,"existing cleanup inventory/selection/command hooks");
+            record(context && tools && buttons,"new scoped root/selection/footer hooks");
+            if(!list || !all || !none || !confirm || !cancel) {dialog->reject();return;}
+            if(context) record(normalized(context->text()).contains(normalized(textPath(local))),stem+" full actual cleanup root");
+            record(list->count()==int(expectedInventory.size()) && !list->wordWrap() && list->textElideMode()==Qt::ElideNone,
+                stem+" exact original inventory/noelide single-line internal scroll");
+            if(list->count()!=int(expectedInventory.size())) {dialog->reject();return;}
+            QStringList originalLabels,originalRoles;
+            for(int r=0;r<list->count();++r) {
+                auto* item=list->item(r); const auto& expected=expectedInventory[size_t(r)];
+                const QString relative=QString::fromUtf8(expected.relativePath);
+                originalLabels<<item->text(); originalRoles<<item->data(Qt::UserRole).toString();
+                const QString kind=expected.reparsePoint?QString::fromUtf8("ссылка"):expected.directory?QString::fromUtf8("папка"):
+                    QString::fromUtf8("файл · %1 байт").arg(qulonglong(expected.size));
+                record(item->text()==QString("[%1] %2").arg(kind,relative) && item->data(Qt::UserRole).toString()==relative &&
+                    item->checkState()==Qt::Checked && (item->flags()&Qt::ItemIsUserCheckable),stem+" exact kind/size/path/UserRole/default checked");
+                const QString accessible=item->data(Qt::AccessibleTextRole).toString()+'\n'+item->data(Qt::AccessibleDescriptionRole).toString();
+                record(item->toolTip().contains(relative) && accessible.contains(relative),stem+" full inventory tooltip/accessibility");
+            }
+            record(cancel->isDefault() && !confirm->isDefault() && !confirm->autoDefault(),stem+" safe default unchanged");
+            for(QSize requested:{QSize(640,520),QSize(1000,640),QSize(420,520),QSize(640,520)}) {
+                dialog->resize(requested); settle(); common(dialog,requested,stem); ++inspections;
+                for(auto* label:{context,dialog->findChild<QLabel*>("storageCleanupWarning"),dialog->findChild<QLabel*>("storageCleanupSummary")})
+                    fullLabel(label,stem+" full cleanup context");
+                record(list->viewport()->height()>=3*list->fontMetrics().lineSpacing(),stem+" three real inventory text rows");
+                int threeRows=0;
+                for(int r=0;r<std::min(3,list->count());++r) threeRows+=list->sizeHintForRow(r);
+                record(list->viewport()->height()>=threeRows,stem+" minimum three actual styled inventory rows");
+                for(int r=0;r<list->count();++r) {
+                    auto* item=list->item(r); const auto index=list->model()->index(r,0);
+                    record(item->text()==originalLabels[r] && item->data(Qt::UserRole).toString()==originalRoles[r] &&
+                        item->checkState()==Qt::Checked,stem+" resize keeps exact checked draft and approval path");
+                    QStyleOptionViewItem option; option.initFrom(list); option.widget=list; option.font=list->font();
+                    option.fontMetrics=list->fontMetrics(); option.features|=QStyleOptionViewItem::HasCheckIndicator|QStyleOptionViewItem::HasDisplay;
+                    option.checkState=item->checkState(); option.text=item->text(); option.rect=list->visualItemRect(item);
+                    const QRect textRect=list->style()->subElementRect(QStyle::SE_ItemViewItemText,&option,list);
+                    const int inset=std::max(0,textRect.left()-option.rect.left());
+                    const int width=list->fontMetrics().horizontalAdvance(item->text());
+                    record(list->sizeHintForRow(r)>=list->fontMetrics().height(),stem+" complete actual list glyph height");
+                    endpoints(list,index,inset,width,stem+QString(" heterogeneous row%1").arg(r));
+                }
+            }
+            if(!checked || !context || !tools || !buttons) {dialog->reject();return;}
+            none->setFocus(); settle(); record(dialog->focusWidget()==none,stem+" actual SelectNone focus");
+            QTest::keyClick(none,Qt::Key_Return); settle();
+            record(dialog->isVisible() && !confirm->isEnabled(),stem+" local SelectNone Return does not confirm");
+            for(int r=0;r<list->count();++r) record(list->item(r)->checkState()==Qt::Unchecked,stem+" all unchecked after local Return");
+            all->setFocus(); settle(); record(dialog->focusWidget()==all,stem+" actual SelectAll focus");
+            QTest::keyClick(all,Qt::Key_Return); settle();
+            record(dialog->isVisible() && confirm->isEnabled() && confirm->text().contains(QString::number(list->count())) &&
+                cancel->isDefault() && !confirm->isDefault(),stem+" local SelectAll Return restores count and safe default");
+            for(int r=0;r<list->count();++r) record(list->item(r)->checkState()==Qt::Checked,stem+" all checked restored");
+            // Traverse actual focus chain without executing Confirm or inventing focus order.
+            none->setFocus(); QTest::keyClick(none,Qt::Key_Tab); settle(); auto* next=dialog->focusWidget();
+            record(next && next!=none,stem+" Tab leaves selection command");
+            if(next) {QTest::keyClick(next,Qt::Key_Backtab);settle();record(dialog->focusWidget()==none,stem+" Backtab returns selection command");}
+            cancel->setFocus(); settle(); record(dialog->focusWidget()==cancel,stem+" actual safe Cancel focus");
+            QTest::keyClick(cancel,Qt::Key_Return); settle();
+            record(!dialog->isVisible() && dialog->result()==QDialog::Rejected,stem+" focused Cancel Return never confirms");
+        },[&]{cleanup->trigger();});
+        const auto after=snapshot(root); record(after.readable && before.entries==after.entries,stem+" safe Cancel preserves ALL original inventory paths/bytes");
+        if(!checked) return false;
+        window.close(); settle();
+    }
+    record(contexts==21 && inspections==112,"finite all7scales/21modal/112tab-list inspections");
+    std::cout << "History/cleanup contexts=" << contexts << " actual table/list inspections=" << inspections
+        << " commands=Close/SelectNone/SelectAll/Cancel only; Export/Confirm never invoked\n";
+    return checked;
+    } catch(const std::exception& error) {
+        std::cerr << "History/cleanup isolated fixture exception: " << error.what() << '\n';
+        return false;
+    }
+}
+
+static bool TestQtCloudTerminalDecisionLayout(QApplication& app) {
+    struct RestoreDisplay {
+        QApplication& app;
+        QFont font;
+        QString style;
+        QVariant base;
+        bool quit;
+        ~RestoreDisplay() {
+            app.setFont(font); app.setStyleSheet(style); app.setProperty("forgeBasePointSize", base);
+            app.setQuitOnLastWindowClosed(quit);
+        }
+    } restore{app, app.font(), app.styleSheet(), app.property("forgeBasePointSize"), app.quitOnLastWindowClosed()};
+    app.setQuitOnLastWindowClosed(false);
+    // Presence only: never read/print a host password or replace the environment.
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_ADMIN_PASSWORD")) {
+        std::cerr << "Cloud terminal fixture BLOCKED: host administrator override is present\n";
+        return false;
+    }
+    bool checked = true;
+    int contexts = 0, inspections = 0, keyboardCancels = 0, escapes = 0;
+    const auto record = [&](bool ok, const QString& context) {
+        checked &= ok;
+        if (!ok) std::cerr << "Cloud terminal: " << context.toStdString() << '\n';
+    };
+    const auto pathText = [](const std::filesystem::path& path) { return QString::fromUtf8(path.u8string()); };
+    const auto normalized = [](QString value) { return value.replace('\\', '/'); };
+    const auto write = [&](const std::filesystem::path& path, const QByteArray& bytes) {
+        if (!QDir().mkpath(QFileInfo(pathText(path)).absolutePath())) return false;
+        QFile file(pathText(path));
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+    };
+    struct Inventory { bool readable = true; QMap<QString, QByteArray> entries; };
+    const auto inventory = [&](const std::filesystem::path& root) {
+        Inventory result;
+        std::error_code error;
+        std::filesystem::recursive_directory_iterator it(root, error), end;
+        for (; !error && it != end; it.increment(error)) {
+            const QString relative = pathText(it->path().lexically_relative(root));
+            if (it->is_symlink(error)) { result.readable = false; break; }
+            if (error) break;
+            if (it->is_directory(error)) { result.entries.insert("D/" + relative, {}); continue; }
+            if (!it->is_regular_file(error)) { result.readable = false; break; }
+            QFile file(pathText(it->path()));
+            if (!file.open(QIODevice::ReadOnly)) { result.readable = false; break; }
+            const QByteArray bytes = file.readAll();
+            if (file.error() != QFileDevice::NoError || bytes.size() != file.size()) { result.readable = false; break; }
+            result.entries.insert("F/" + relative, bytes);
+        }
+        result.readable &= !error;
+        return result;
+    };
+    const auto settle = [&] {
+        QByteArray previous;
+        int stable = 0;
+        QElapsedTimer deadline; deadline.start();
+        do {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
+            QApplication::processEvents();
+            QByteArray snapshot;
+            QDataStream stream(&snapshot, QIODevice::WriteOnly);
+            auto roots = QApplication::topLevelWidgets();
+            std::sort(roots.begin(), roots.end(), std::less<QWidget*>());
+            for (auto* root : roots) {
+                if (!root->isVisible()) continue;
+                auto widgets = root->findChildren<QWidget*>(); widgets.prepend(root);
+                for (auto* widget : widgets) {
+                    if (!widget->isVisible() || widget->window() != root) continue;
+                    if (auto* text = qobject_cast<QPlainTextEdit*>(widget)) {
+                        for (auto block = text->document()->begin(); block.isValid(); block = block.next())
+                            text->document()->documentLayout()->blockBoundingRect(block);
+                        stream << text->document()->size();
+                    }
+                    stream << quint64(reinterpret_cast<quintptr>(widget)) << widget->geometry()
+                        << widget->minimumSize() << widget->maximumSize();
+                    if (auto* scroll = qobject_cast<QAbstractScrollArea*>(widget))
+                        stream << scroll->viewport()->geometry() << scroll->verticalScrollBar()->maximum()
+                            << scroll->verticalScrollBar()->pageStep() << scroll->horizontalScrollBar()->maximum();
+                }
+            }
+            stable = snapshot == previous ? stable + 1 : 0;
+            previous = snapshot;
+        } while (stable < 3 && deadline.elapsed() < 500);
+        record(stable >= 3, "bounded actual layout/document/scroll convergence");
+    };
+    const auto safeClose = [](QDialog* dialog) {
+        if (auto* box = qobject_cast<QMessageBox*>(dialog))
+            if (auto* cancel = box->button(QMessageBox::Cancel); cancel && cancel->isEnabled()) {
+                cancel->click(); return;
+            }
+        dialog->reject(); // Never fallback to Yes/accept().
+    };
+    const auto inspect = [&](QMessageBox* box, QPlainTextEdit* body, QDialogButtonBox* footer,
+                             QPushButton* apply, QPushButton* cancel, const QString& stem, QSize requested, int scale) {
+        ++inspections;
+        const auto rectInDialog = [box](QWidget* widget) { return QRect(widget->mapTo(box, QPoint()), widget->size()); };
+        const QRect bodyRect = rectInDialog(body), footerRect = rectInDialog(footer);
+        const QSize frameExtra(std::max(0, box->frameGeometry().width() - box->width()),
+            std::max(0, box->frameGeometry().height() - box->height()));
+        const auto screenSize = box->screen()->availableGeometry().size();
+        const QSize availableSize(std::max(1, screenSize.width() - frameExtra.width() - 16),
+            std::max(1, screenSize.height() - frameExtra.height() - 16));
+        const QSize expectedSize = requested.boundedTo(availableSize).expandedTo(QSize(420,260).boundedTo(availableSize));
+        record(box->size() == expectedSize, stem + QString(" actual screen-bounded resize expected=%1x%2 actual=%3x%4")
+            .arg(expectedSize.width()).arg(expectedSize.height()).arg(box->width()).arg(box->height()));
+        record(box->isVisible() && box->width() <= requested.width() && box->height() <= requested.height(),
+            stem + QString(" requested bounds actual=%1x%2").arg(box->width()).arg(box->height()));
+        record(box->rect().contains(bodyRect) && box->rect().contains(footerRect) && bodyRect.bottom() < footerRect.top(),
+            stem + " separate contained body/footer");
+        record(body->isReadOnly() && !body->accessibleName().isEmpty() && body->tabChangesFocus() &&
+            body->lineWrapMode() == QPlainTextEdit::WidgetWidth &&
+            (body->wordWrapMode() == QTextOption::WrapAtWordBoundaryOrAnywhere || body->wordWrapMode() == QTextOption::WrapAnywhere),
+            stem + " real readonly/accessible/anywhere-wrap body");
+        record(body->horizontalScrollBar()->maximum() == 0 &&
+            body->viewport()->height() >= 3 * body->fontMetrics().lineSpacing(),
+            stem + QString(" three actual rows/no horizontal clipping viewport=%1x%2 line=%3 H=%4")
+                .arg(body->viewport()->width()).arg(body->viewport()->height()).arg(body->fontMetrics().lineSpacing())
+                .arg(body->horizontalScrollBar()->maximum()));
+        int measuredRows = 0;
+        const qreal available = body->viewport()->width() - 2 * body->document()->documentMargin();
+        for (auto block = body->document()->begin(); block.isValid(); block = block.next()) {
+            body->document()->documentLayout()->blockBoundingRect(block); // Actual document layout, not invented geometry.
+            auto* layout = block.layout();
+            if (block.text().isEmpty()) continue;
+            record(layout && layout->lineCount() > 0, stem + " actual laid-out text block");
+            if (!layout) continue;
+            for (int index = 0; index < layout->lineCount(); ++index) {
+                ++measuredRows;
+                const auto line = layout->lineAt(index);
+                const auto text = block.text().mid(line.textStart(), line.textLength()).trimmed();
+                const qreal glyphWidth = QFontMetricsF(body->font()).horizontalAdvance(text);
+                record(line.width() <= available + 1 && glyphWidth <= available + 1,
+                    stem + QString(" full actual row glyphs width=%1 available=%2").arg(glyphWidth).arg(available));
+            }
+        }
+        record(measuredRows >= 3, stem + " at least three measured context rows");
+        const auto captures = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!captures.isEmpty() && (scale == 100 || scale == 200)) {
+            record(QDir().mkpath(captures), stem + " capture directory");
+            const auto filename = QStringLiteral("/cloud-decision-%1-%2.png").arg(scale).arg(inspections);
+            record(box->grab().save(captures + filename), stem + " visual capture");
+            std::cout << "Cloud decision capture: " << filename.toStdString() << " " << stem.toStdString() << '\n';
+        }
+        for (auto* button : {apply, cancel}) {
+            record(button->isVisibleTo(box) && button->isEnabled() && !button->accessibleName().isEmpty() &&
+                box->rect().contains(rectInDialog(button)) &&
+                footer->rect().contains(QRect(button->mapTo(footer, QPoint()), button->size())) &&
+                button->width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(),
+                stem + " contained intrinsic command " + button->objectName());
+        }
+        record(apply->height() >= qRound(32.0 * scale / 100.0) && cancel->height() >= qRound(26.0 * scale / 100.0),
+            stem + " actual scaled command minima");
+        record(apply->property("primary").toBool() && !cancel->property("primary").toBool() && !apply->autoDefault() &&
+            box->defaultButton() == cancel && box->escapeButton() != apply && !apply->isDefault(),
+            stem + " deliberate primary/safe default/escape");
+        if (QGuiApplication::platformName() != "offscreen")
+            record(box->screen()->availableGeometry().contains(box->frameGeometry()), stem + " actual native screen bounds");
+        std::cout << stem.toStdString() << " actual=" << box->width() << 'x' << box->height()
+            << " rows=" << measuredRows << " viewport=" << body->viewport()->width() << 'x' << body->viewport()->height()
+            << " min=" << box->minimumWidth() << 'x' << box->minimumHeight()
+            << " max=" << box->maximumWidth() << 'x' << box->maximumHeight()
+            << " footerHint=" << footer->sizeHint().width() << 'x' << footer->sizeHint().height()
+            << " applyHint=" << apply->sizeHint().width() << 'x' << apply->sizeHint().height()
+            << " cancelHint=" << cancel->sizeHint().width() << 'x' << cancel->sizeHint().height() << '\n';
+    };
+
+    QStringList versionParts = QString::fromUtf8(APP_VERSION).split('.');
+    bool patchOk = false;
+    const auto patch = versionParts.size() == 3 ? versionParts[2].toULongLong(&patchOk) : 0;
+    if (!patchOk) return false;
+    const QString newer = versionParts[0] + '.' + versionParts[1] + '.' + QString::number(patch + 1);
+    const QByteArray payload = QByteArray("cloud-terminal-fixture") + '\0' + QByteArray("never-executed");
+    for (const int scale : {90,100,110,125,150,175,200}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        // Siblings stay UNDER QTemporaryDir: staging/backup lives in parent_path.
+        const auto root = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+        const auto local = root / std::filesystem::u8path(u8"Локальное_рабочее_место_для_проверки_полного_пути");
+        const auto cloud = root / std::filesystem::u8path(u8"Облачная_папка_с_длинным_русским_названием_для_сравнения");
+        std::filesystem::create_directories(local / "meta"); std::filesystem::create_directories(cloud / "meta");
+        CloudSyncConfig config;
+        config.enabled = true; config.root = cloud; config.manifest = cloud / "meta/manifest.ini";
+        config.releasesDir = cloud / "releases"; config.autoSyncEnabled = false;
+        config.updateManifestOnPush = false; // No dataUpdatedAt-only count drift.
+        QtDisplaySettings display;
+        display.scalePercent = scale; display.motionEnabled = false; display.minimizeToTray = false;
+        if (!SaveQtDisplaySettings(local, display) || !SaveCloudSyncConfig(local, config) ||
+            !SetAdminPassword(local, "cloud-terminal-fixture-only") || !SetAdminStayLoggedIn(local, true) ||
+            !write(local / "meta/tasks.json", "[{\"id\":\"terminal-local\",\"title\":\"Local task\"}]") ||
+            !write(cloud / "meta/tasks.json", "[{\"id\":\"terminal-cloud\",\"title\":\"Remote task\"}]") ||
+            !write(local / "skills.txt", "Terminal skill\n") || !write(cloud / "orphan-terminal.tmp", "remote-only-preserve-on-cancel\n") ||
+            !write(local / std::filesystem::u8path(u8"spirits/Полный_длинный_относительный_путь_добавляемого_файла_не_сокращать.dat"), "local-only-context\n"))
+            { record(false, QString("scale%1 isolated fixture data/config/admin setup").arg(scale)); return false; }
+        CloudManifest manifest;
+        manifest.appVersion = newer.toUtf8().toStdString();
+        manifest.releaseFile = "ForgeMirrorSetup_" + manifest.appVersion + "_terminal_fixture.exe";
+        manifest.notes = "Synthetic terminal cancellation only; never execute";
+        if (!IsUpdateAvailable(manifest, APP_VERSION) || !SaveCloudManifest(config, local, manifest) ||
+            !write(config.releasesDir / manifest.releaseFile, payload)) {
+            record(false, QString("scale%1 synthetic newer manifest/source-payload setup").arg(scale)); return false;
+        }
+        const auto downloaded = DownloadQtCloudRelease(config, local, manifest);
+        const auto installer = QtCloudReleaseTargetPath(local, manifest);
+        if (!installer || !downloaded.ok || downloaded.path != *installer ||
+            downloaded.sha256 != QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex().toStdString()) {
+            record(false, QString("scale%1 natural download copy/hash/target setup").arg(scale)); return false;
+        }
+        QtWorkspace workspace(local);
+        workspace.modules.cloud = true; // Isolated enabled-module fixture; no global module file write.
+        QtWindow window(workspace);
+        window.showNormal(); settle();
+        auto* navigation = window.findChild<QListWidget*>("navigation");
+        auto* push = window.findChild<QPushButton*>("cloudPushPreview");
+        auto* pull = window.findChild<QPushButton*>("cloudPull");
+        auto* update = window.findChild<QAction*>("cloudReleaseLaunch");
+        if (!navigation || !push || !pull || !update) {
+            record(false, QString("scale%1 existing Cloud navigation/action hooks").arg(scale)); return false;
+        }
+        navigation->setCurrentRow(13); settle();
+        record(!navigation->currentItem()->isHidden() && push->isEnabled() && pull->isEnabled() && update->isEnabled(),
+            QString("scale%1 genuine enabled Cloud actions").arg(scale));
+        if (!checked) return false;
+        const auto preview = PreviewQtCloudWorkspacePush(config, local, CloudRole::Admin);
+        record(preview.sync.ok && preview.sync.changed && preview.filesAdded > 0 && preview.filesReplaced > 0 && preview.filesRemoved > 0,
+            QString("scale%1 real changed add/replace/remove preview").arg(scale));
+        if (!checked) return false;
+        const auto drift = InspectCloudWorkspaceDrift(config, local, 0);
+        for (const QString kind : {QString("push"),QString("pull"),QString("update")}) {
+            QStringList required;
+            if (kind == "push") {
+                required << QString::fromUtf8("Направление: локальная Qt-копия → облачная папка")
+                    << QString::fromUtf8("Источник\n%1").arg(pathText(local))
+                    << QString::fromUtf8("Назначение\n%1").arg(pathText(cloud))
+                    << QString::fromUtf8("Будет добавлено: %1 · заменено: %2 · удалено: %3.")
+                        .arg(preview.filesAdded).arg(preview.filesReplaced).arg(preview.filesRemoved)
+                    << QString::fromUtf8("Файлы облака пока не изменялись.")
+                    << QString::fromUtf8("Будет создан локальный снимок старых облачных файлов. Лишние файлы в облаке будут удалены; конфликт storage.json запрещает операцию.");
+                for (const auto& change : preview.changes) {
+                    const auto operation = !change.existedBefore ? QString::fromUtf8("Добавить: ")
+                        : !change.existsAfter ? QString::fromUtf8("Удалить: ") : QString::fromUtf8("Заменить: ");
+                    required << operation + QString::fromUtf8(change.relativePath);
+                }
+            } else if (kind == "pull") {
+                required << QString::fromUtf8("Направление: облачная папка → локальная Qt-копия")
+                    << QString::fromUtf8("Источник\n%1").arg(pathText(cloud))
+                    << QString::fromUtf8("Назначение\n%1").arg(pathText(local))
+                    << QString::fromUtf8("Облачные файлы заменят соответствующие локальные данные, включая локальные изменения.")
+                    << QString::fromUtf8("Перед применением будет создана полная резервная копия.")
+                    << QString::fromUtf8("Различий в задачах и пайплайне: %1. Конфликт хранилища отменит получение целиком.").arg(drift.issueCount);
+            } else {
+                required << QString::fromUtf8("Действие: запуск скачанного установщика ForgeMirror")
+                    << QString::fromUtf8("Текущая версия\n%1").arg(QString::fromUtf8(APP_VERSION))
+                    << QString::fromUtf8("Новая версия\n%1").arg(newer)
+                    << QString::fromUtf8("Установщик\n%1").arg(pathText(*installer))
+                    << QString::fromUtf8("Версия %1 будет установлена поверх текущей программы. Закройте ForgeMirror, если установщик попросит об этом. Пользовательские данные хранятся отдельно от файлов программы.").arg(newer);
+            }
+            const QString expected = kind == "push" ? "cloudPushConfirm" : kind == "pull" ? "cloudPullConfirm" : "cloudUpdateConfirm";
+            const bool keyboard = scale == 100 || scale == 200;
+            for (const bool escape : keyboard ? std::vector<bool>{false,true} : std::vector<bool>{false}) {
+                const auto before = inventory(root);
+                record(before.readable && !before.entries.isEmpty(), kind + " readable populated pre-decision inventory");
+                if (!checked) return false;
+                const QString stem = QString("cloud-terminal-%1-%2-%3").arg(kind).arg(scale).arg(escape ? "escape" : "cancel");
+                bool visited = false;
+                QElapsedTimer deadline; deadline.start();
+                const int requiredLoopLevel = QThread::currentThread()->loopLevel() + 1;
+                bool watchdogReported = false;
+                QTimer watchdog;
+                watchdog.setInterval(10);
+                QObject::connect(&watchdog, &QTimer::timeout, &watchdog, [&] {
+                    const int limit = QGuiApplication::platformName() == "offscreen" ? 2000 : 6000;
+                    if (deadline.elapsed() < limit) return;
+                    if (!watchdogReported) { record(false, stem + " bounded modal watchdog"); watchdogReported = true; }
+                    // Do not close from events pumped by show(), before actual exec.
+                    // Keep polling until the real nested loop can be rejected safely.
+                    if (QThread::currentThread()->loopLevel() < requiredLoopLevel) return;
+                    if (auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget())) modal->reject();
+                    watchdog.stop();
+                });
+                watchdog.start();
+                // Empty expectedName avoids the helper's pre-readiness wrong-name branch.
+                // Hook/name validation and safe close happen only inside its actual exec gate.
+                ScheduleQtModalDriver(app, {}, stem, [&](QDialog* dialog) {
+                    visited = true; ++contexts;
+                    auto* box = qobject_cast<QMessageBox*>(dialog);
+                    auto* body = dialog->findChild<QPlainTextEdit*>("cloudDecisionBody");
+                    auto* footer = dialog->findChild<QDialogButtonBox*>("cloudDecisionFooter");
+                    auto* apply = dialog->findChild<QPushButton*>("cloudDecisionApply");
+                    auto* cancel = dialog->findChild<QPushButton*>("cloudDecisionCancel");
+                    const bool hooks = box && dialog->objectName() == expected && body && footer && apply && cancel &&
+                        box->button(QMessageBox::Yes) == apply && box->button(QMessageBox::Cancel) == cancel;
+                    record(hooks, stem + " actual QMessageBox-compatible body/footer/button hooks");
+                    if (!hooks) { safeClose(dialog); return; }
+                    record(cancel->hasFocus(), stem + " initial safe Cancel focus");
+                    const QString fullText = body->toPlainText();
+                    record(box->text() == fullText && box->accessibleDescription() == fullText &&
+                        body->accessibleDescription() == fullText && apply->accessibleDescription() == fullText,
+                        stem + " full visible/message/accessibility context equality");
+                    for (const auto& text : required)
+                        record(normalized(fullText).contains(normalized(text)), stem + " complete semantic context: " + text);
+                    for (const QSize size : {QSize(640,520),QSize(1000,640),QSize(640,520)}) {
+                        dialog->resize(size); settle(); inspect(box, body, footer, apply, cancel, stem, size, scale);
+                        record(body->toPlainText() == fullText, stem + " resize preserves full plain context");
+                    }
+                    if (!checked) { safeClose(dialog); return; }
+                    auto last = body->textCursor(); last.movePosition(QTextCursor::End);
+                    body->setTextCursor(last); body->ensureCursorVisible(); settle();
+                    record(body->viewport()->rect().contains(body->cursorRect()) &&
+                        body->textCursor().block() == body->document()->lastBlock(),
+                        stem + " complete last warning block endpoint reachable by body scroll");
+                    last.movePosition(QTextCursor::Start); body->setTextCursor(last);
+                    body->verticalScrollBar()->setValue(0); settle();
+                    if (!checked) { safeClose(dialog); return; }
+                    if (escape) {
+                        body->setFocus(); QTest::keyClick(body, Qt::Key_Escape); settle();
+                        record(!dialog->isVisible(), stem + " Escape safely closes"); ++escapes;
+                    } else if (keyboard) {
+                        body->setFocus(); QTest::keyClick(body, Qt::Key_Return); settle();
+                        record(dialog->isVisible() && body->toPlainText() == fullText, stem + " body Return neither closes nor edits");
+                        if (!dialog->isVisible()) return;
+                        QTest::keyClick(body, Qt::Key_Enter, Qt::KeypadModifier); settle();
+                        record(dialog->isVisible() && body->toPlainText() == fullText, stem + " readonly numpad Enter is nonaction");
+                        if (!dialog->isVisible()) return;
+                        QTest::keyClick(body, Qt::Key_Tab); settle();
+                        record(QApplication::focusWidget() == apply, stem + " body Tab reaches apply without activating it");
+                        record(box->defaultButton() == cancel && cancel->isDefault() &&
+                            !apply->isDefault() && !apply->autoDefault(), stem + " Apply focus preserves safe Cancel default");
+                        QTest::keyClick(apply, Qt::Key_Tab); settle();
+                        record(QApplication::focusWidget() == cancel, stem + " apply Tab reaches safe Cancel");
+                        if (!checked) { safeClose(dialog); return; }
+                        QTest::keyClick(cancel, Qt::Key_Backtab); settle();
+                        record(QApplication::focusWidget() == apply && box->defaultButton() == cancel &&
+                            cancel->isDefault() && !apply->isDefault(), stem + " Cancel Backtab reaches Apply with safe default");
+                        QTest::keyClick(apply, Qt::Key_Backtab); settle();
+                        record(QApplication::focusWidget() == body && dialog->isVisible() && body->toPlainText() == fullText,
+                            stem + " Apply Backtab reaches unchanged readable body without a command");
+                        if (!checked) { safeClose(dialog); return; }
+                        QTest::keyClick(body, Qt::Key_Tab); settle();
+                        record(QApplication::focusWidget() == apply && box->defaultButton() == cancel &&
+                            !apply->isDefault(), stem + " restored forward Tab preserves safe default");
+                        QTest::keyClick(apply, Qt::Key_Tab); settle();
+                        record(QApplication::focusWidget() == cancel && dialog->isVisible() && body->toPlainText() == fullText,
+                            stem + " restored forward Tab reaches Cancel without executing or editing");
+                        if (!checked) { safeClose(dialog); return; }
+                        QTest::keyClick(cancel, Qt::Key_Return); settle();
+                        record(!dialog->isVisible(), stem + " focused Cancel Return safely closes"); ++keyboardCancels;
+                    } else {
+                        cancel->click(); settle(); record(!dialog->isVisible(), stem + " Cancel click safely closes");
+                    }
+                    if (dialog->isVisible()) safeClose(dialog);
+                }, record);
+                if (kind == "push") push->click(); else if (kind == "pull") pull->click(); else update->trigger();
+                watchdog.stop();
+                settle(); // Drain the app-bound initial driver even if an action produced no modal.
+                record(visited && QApplication::activeModalWidget() == nullptr, stem + " actual driver visited/terminal closed");
+                const auto after = inventory(root);
+                record(after.readable && before.entries == after.entries, stem + " Cancel/Escape preserve ALL read-success fixture paths/bytes");
+                if (!checked) return false; // Original missing hooks abort after one safely closed modal.
+            }
+        }
+        window.close(); settle();
+    }
+    record(contexts == 27 && inspections == 81 && keyboardCancels == 6 && escapes == 6,
+        "finite 27-context/81-reflow/6-keyboard-Cancel/6-Escape coverage");
+    std::cout << "Cloud terminal decisions: contexts=" << contexts << " actual reflows=" << inspections
+        << " safe keyboard Cancels=" << keyboardCancels << " Escapes=" << escapes << " update input paths=Cancel/Escape only\n";
+    return checked;
+}
+
+// These two task decisions have their own guards and persistence paths; passing
+// another editor's Save/Cancel does not cover their layout or keyboard behavior.
+static bool TestQtTaskDecisionLayout(QApplication& app) {
+    struct RestoreDisplay {
+        QApplication& app;
+        QFont font;
+        QString style;
+        QVariant base;
+        ~RestoreDisplay() { app.setFont(font); app.setStyleSheet(style); app.setProperty("forgeBasePointSize", base); }
+    } restore{app, app.font(), app.styleSheet(), app.property("forgeBasePointSize")};
+    bool checked = true;
+    int contexts = 0, inspections = 0;
+    const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    if (!artifacts.isEmpty()) checked &= QDir().mkpath(artifacts);
+    auto record = [&](bool ok, const QString& context) {
+        if (!ok) std::cerr << "Task decision layout: " << context.toStdString() << '\n';
+        checked &= ok;
+    };
+    const auto settle = [&] {
+        // Item layout, measured label minima and scrollbars can each post the
+        // next layout pass. Two event pumps do not establish settled geometry.
+        QByteArray previous;
+        int stable = 0;
+        QElapsedTimer deadline; deadline.start();
+        do {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
+            QApplication::processEvents();
+            QByteArray snapshot;
+            QDataStream stream(&snapshot, QIODevice::WriteOnly);
+            auto roots = QApplication::topLevelWidgets();
+            std::sort(roots.begin(), roots.end(), std::less<QWidget*>());
+            for (auto* root : roots) {
+                if (!root->isVisible()) continue;
+                auto widgets = root->findChildren<QWidget*>(); widgets.prepend(root);
+                for (auto* widget : widgets) {
+                    if (!widget->isVisible() || widget->window() != root) continue;
+                    stream << quint64(reinterpret_cast<quintptr>(widget)) << widget->geometry()
+                        << widget->minimumSize() << widget->maximumSize();
+                    if (auto* label = qobject_cast<QLabel*>(widget); label && label->wordWrap())
+                        stream << label->heightForWidth(label->width());
+                    if (auto* scroll = qobject_cast<QAbstractScrollArea*>(widget)) {
+                        stream << scroll->viewport()->size();
+                        for (auto* bar : {scroll->horizontalScrollBar(), scroll->verticalScrollBar()})
+                            stream << bar->minimum() << bar->maximum() << bar->value();
+                    }
+                    if (auto* list = qobject_cast<QListWidget*>(widget))
+                        for (int row = 0; row < std::min(3, list->count()); ++row)
+                            stream << list->visualItemRect(list->item(row)) << list->item(row)->sizeHint();
+                }
+            }
+            stable = snapshot == previous ? stable + 1 : 0;
+            if (stable >= 3) return;
+            previous = snapshot;
+            QTest::qWait(1);
+        } while (deadline.elapsed() < 500);
+        record(false, "geometry did not settle in bounded layout passes");
+    };
+    const auto read = [&](const std::filesystem::path& directory, const char* name) {
+        QFile file(QString::fromStdWString((directory / "meta" / name).wstring()));
+        const bool opened = file.open(QIODevice::ReadOnly);
+        record(opened, QString::fromLatin1(name) + " successful fixture read");
+        return opened ? file.readAll() : QByteArray();
+    };
+    const auto capture = [&](QDialog* dialog, const QString& stem) {
+        if (!artifacts.isEmpty()) record(dialog->grab().save(artifacts + '/' + stem + ".png"), stem + " capture");
+        if (!artifacts.isEmpty()) {
+            auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+            if (!scroll) return;
+            const int previous = scroll->verticalScrollBar()->value();
+            for (const bool bottom : {false, true}) {
+                scroll->verticalScrollBar()->setValue(bottom ? scroll->verticalScrollBar()->maximum() : 0);
+                settle();
+                record(dialog->grab().save(artifacts + '/' + stem + (bottom ? "-bottom.png" : "-top.png")), stem + " scroll capture");
+            }
+            scroll->verticalScrollBar()->setValue(previous);
+            settle();
+        }
+    };
+    const auto inspect = [&](QDialog* dialog, const QString& stem, QSize requested) {
+        ++inspections;
+        record(dialog->size() == requested.boundedTo(dialog->maximumSize()), stem + " bounded requested size");
+        auto* scroll = dialog->findChild<QScrollArea*>("dialogContentScrollArea");
+        auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+        auto* box = dialog->findChild<QDialogButtonBox*>();
+        auto* save = box ? box->button(QDialogButtonBox::Save) : nullptr;
+        auto* cancel = box ? box->button(QDialogButtonBox::Cancel) : nullptr;
+        record(scroll && scroll->widget() && footer && save && cancel, stem + " scroll/footer hooks");
+        if (!scroll || !scroll->widget() || !footer || !save || !cancel) return;
+        auto* body = scroll->widget();
+        if (dialog->objectName() == "pipelineTransition" || dialog->objectName() == "bulkTaskEditDialog") {
+            int contentBottom = 0;
+            for (auto* child : body->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+                if (child->isVisible()) contentBottom = std::max(contentBottom, child->geometry().bottom() + 1);
+            const int blankTail = body->height() - contentBottom;
+            std::cout << stem.toStdString() << " tail=" << blankTail << " contentBottom=" << contentBottom
+                << " bodyHint=" << body->sizeHint().height() << " hfw=" << body->heightForWidth(body->width()) << '\n';
+            record(scroll->verticalScrollBar()->maximum() == 0 || blankTail < scroll->viewport()->height(),
+                stem + " no entire empty scroll viewport after final field");
+        }
+        record(body->width() <= scroll->viewport()->width() && scroll->horizontalScrollBar()->maximum() == 0,
+            stem + " measured body width, not scrollbar policy" + QString(" body=%1x%2 viewport=%3x%4 minHint=%5x%6 H=%7")
+                .arg(body->width()).arg(body->height()).arg(scroll->viewport()->width()).arg(scroll->viewport()->height())
+                .arg(body->minimumSizeHint().width()).arg(body->minimumSizeHint().height()).arg(scroll->horizontalScrollBar()->maximum()));
+        if(body->width()>scroll->viewport()->width() || scroll->horizontalScrollBar()->maximum()!=0) {
+            for(auto* child:body->findChildren<QWidget*>(QString(),Qt::FindDirectChildrenOnly)) if(child->isVisible())
+                std::cerr << "Task decision intrinsic: " << stem.toStdString() << ' ' << child->objectName().toStdString()
+                    << " actual=" << child->width() << 'x' << child->height()
+                    << " hint=" << child->sizeHint().width() << 'x' << child->sizeHint().height()
+                    << " minHint=" << child->minimumSizeHint().width() << 'x' << child->minimumSizeHint().height()
+                    << " min=" << child->minimumWidth() << 'x' << child->minimumHeight() << '\n';
+        }
+        record(footer->isAncestorOf(save) && footer->isAncestorOf(cancel) && save->isDefault() && !cancel->autoDefault(),
+            stem + " permanent sole default commands");
+        int primary = 0;
+        for (auto* button : dialog->findChildren<QPushButton*>()) {
+            if (!button->isVisible() || button->window() != dialog) continue;
+            if (button->property("primary").toBool()) ++primary;
+            record(button->width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(),
+                stem + " intrinsic command " + button->objectName());
+        }
+        record(primary == 1, stem + " one primary");
+        for (auto* command : {save, cancel})
+            record(dialog->rect().contains(QRect(command->mapTo(dialog, QPoint()), command->size())), stem + " visible footer command");
+        for (auto* control : body->findChildren<QWidget*>()) {
+            if (!control->isVisible() || control->window() != dialog ||
+                !(qobject_cast<QLabel*>(control) || qobject_cast<QComboBox*>(control) ||
+                  qobject_cast<QCheckBox*>(control) || qobject_cast<QAbstractSpinBox*>(control) ||
+                  qobject_cast<QAbstractScrollArea*>(control))) continue;
+            record(body->rect().contains(QRect(control->mapTo(body, QPoint()), control->size())),
+                stem + " body bounds " + control->objectName());
+        }
+        for (auto* label : dialog->findChildren<QLabel*>()) {
+            if (!label->isVisible() || label->window() != dialog || label->text().isEmpty()) continue;
+            if (label->wordWrap()) record(label->height() >= label->heightForWidth(label->width()),
+                stem + " complete wrapped text " + label->objectName() + QString(" actual=%1x%2 hfw=%3 min=%4")
+                    .arg(label->width()).arg(label->height()).arg(label->heightForWidth(label->width())).arg(label->minimumHeight()));
+        }
+        for (auto* check : dialog->findChildren<QCheckBox*>()) if (check->isVisible() && check->window() == dialog)
+            record(check->width() >= check->sizeHint().width() && check->height() >= check->sizeHint().height(),
+                stem + " complete checkbox caption " + check->objectName());
+        if (auto* date = dialog->findChild<QDateTimeEdit*>("bulkTaskDeadline"); date && date->isVisible()) {
+            record(date->width() >= date->sizeHint().width() && date->height() >= date->sizeHint().height(), stem + " intrinsic deadline");
+            auto* editor = date->findChild<QLineEdit*>();
+            record(editor && editor->fontMetrics().horizontalAdvance(editor->text()) <= editor->contentsRect().width() &&
+                editor->fontMetrics().height() <= editor->contentsRect().height(), stem + " complete date glyphs");
+        }
+        if (auto* details = dialog->findChild<QTextBrowser*>("transitionDetails"); details && details->isVisible())
+            record(!details->openExternalLinks() && details->viewport()->height() >= 3 * details->fontMetrics().lineSpacing(),
+                stem + " three real criteria lines");
+        if (QGuiApplication::platformName() != "offscreen")
+            record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()), stem + " actual native screen bounds");
+        std::cout << stem.toStdString() << " actual=" << dialog->width() << 'x' << dialog->height()
+            << " body=" << body->width() << 'x' << body->height() << " Hrange=" << scroll->horizontalScrollBar()->maximum() << '\n';
+    };
+    const auto resizeInspect = [&](QDialog* dialog, const QString& stem) {
+        for (const QSize size : {QSize(640,520), QSize(1000,640), QSize(640,520)}) {
+            dialog->resize(size); settle(); inspect(dialog, stem, size);
+        }
+    };
+    const auto cancelReturn = [&](QDialog* dialog, const QString& stem) {
+        auto* cancel = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Cancel);
+        cancel->setFocus(); settle(); record(dialog->focusWidget() == cancel, stem + " Cancel focus");
+        QTest::keyClick(cancel, Qt::Key_Return); settle();
+        record(!dialog->isVisible() && dialog->result() == QDialog::Rejected, stem + " local Return cancels");
+        if (dialog->isVisible()) dialog->reject();
+    };
+    for (int scale : {90,100,110,125,150,175,200}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().toStdString()));
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        if (!SaveQtDisplaySettings(workspace.directory, settings) ||
+            !SetAdminPassword(workspace.directory, "isolated-task-layout") || !SetAdminStayLoggedIn(workspace.directory, true)) return false;
+        ApplyQtDisplaySettings(app, settings);
+        PipelineStep first, second, third;
+        first.id="decision-first"; first.stageCode="01";
+        first.title=u8"Подготовка геометрии и проверка исходных материалов для передачи следующему ответственному";
+        first.doneCriteria=u8"Полная проверка геометрии, всех исходных материалов, технических требований и согласование замечаний с руководителем проекта.";
+        first.nextIds={"decision-second","missing","decision-second","decision-first","decision-third"};
+        second.id="decision-second"; second.stageCode="02";
+        second.title=u8"Проверка длинного названия следующего этапа производства и согласование всех обязательных материалов";
+        second.description=u8"Подробное описание работы следующего этапа. Все сведения сохраняются целиком, включая длинный русский текст и дополнительные требования.";
+        second.input=u8"Полный набор согласованных исходных файлов и результатов проверки предыдущего этапа с перечнем исправлений.";
+        second.owner=u8"Ответственный сотрудник с длинным именем и должностью руководителя отдела производства";
+        third=second; third.id="decision-third"; third.stageCode="03"; third.title=u8"Альтернативный следующий этап проверки и согласования";
+        workspace.data.pipelineSteps={first,second,third};
+        ProjectEntry project; project.id="decision-project";
+        project.name=u8"Большой проект с длинным русским названием для проверки полного контекста при массовом назначении задач";
+        workspace.data.projects={project};
+        std::vector<std::string> profileIds;
+        for (int i=0;i<6;++i) {
+            std::string name=u8"Очень длинное русское имя исполнителя для проверки полного контекста " + std::to_string(i);
+            for (int part=0;part<i;++part) name+=u8" — руководитель отдела производства и проверки материалов";
+            const auto profile=workspace.storage->create_profile(Profile(name));
+            if (!profile || (i>=3 && !workspace.storage->set_archived(profile->id,true))) return false;
+            profileIds.push_back(profile->id);
+        }
+        TaskEntry task; task.id="decision-task";
+        task.title=u8"Полное длинное название задачи проверки исходных материалов и геометрии с сохранением контекста перехода между этапами";
+        task.pipelineStepId=first.id; task.pipelineStep=first.title;
+        TaskEntry other=task; other.id="decision-other"; other.title=u8"Вторая выбранная задача для массового изменения";
+        other.participants.push_back({profileIds.front(),100,0,0,{}});
+        if (!AppSaveProjects(workspace.directory,workspace.data.projects) || !AppSavePipelineData(workspace.directory,workspace.data.pipelineSteps) ||
+            !AppCreateTaskEntry(workspace.directory,workspace.data.tasks,task,"fixture",&workspace.data.taskAudit).ok ||
+            !AppCreateTaskEntry(workspace.directory,workspace.data.tasks,other,"fixture",&workspace.data.taskAudit).ok) return false;
+        const auto suffix=QString::number(scale);
+        for (int state=0;state<5;++state) {
+            workspace.data.pipelineSteps={first,second,third};
+            workspace.data.tasks.front()=task;
+            if (state==1) workspace.data.pipelineSteps.front().nextIds={"missing","decision-first"};
+            if (state==2) workspace.data.tasks.front().pipelineStepId="missing-source";
+            if (state==3) workspace.data.tasks.front().status=2;
+            if (!AppSaveTasks(workspace.directory,workspace.data.tasks)) return false;
+            const auto tasksBefore=read(workspace.directory,"tasks.json"), auditBefore=read(workspace.directory,"task-audit.log");
+            const auto stem=QString("transition-state-%1-%2").arg(state).arg(scale);
+            ++contexts;
+            ScheduleQtModalDriver(app,"pipelineTransition",stem,[&](QDialog* dialog) {
+                auto* choices=dialog->findChild<QComboBox*>("nextStage");
+                auto* ready=dialog->findChild<QCheckBox*>("stageReady");
+                auto* save=dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+                record(choices && ready && !save->isEnabled(),stem+" guarded initial state");
+                if (!choices || !ready) {dialog->reject();return;}
+                record(choices->count()==((state==0||state==4)?2:0),stem+" exact allowed targets");
+                if (choices->count()) {
+                    record(choices->itemData(0).toString()=="decision-second" && choices->itemData(1).toString()=="decision-third",stem+" stable ordered IDs");
+                    ready->setChecked(true); choices->setCurrentIndex(1);
+                    record(!ready->isChecked() && !save->isEnabled(),stem+" changing target resets readiness");
+                    auto* selected=dialog->findChild<QLabel*>("transitionSelectedStage");
+                    record(selected && selected->text().contains(QString::fromUtf8(third.title)),stem+" full selected target context");
+                    auto* details=dialog->findChild<QTextBrowser*>("transitionDetails");
+                    record(details && details->toPlainText().contains(QString::fromUtf8(first.doneCriteria)) &&
+                        details->toPlainText().contains(QString::fromUtf8(third.input)) && details->toPlainText().contains(QString::fromUtf8(third.owner)),stem+" complete criteria input owner");
+                    if(scale==100||scale==200) {
+                        choices->setFocus(); QTest::keyClick(choices,Qt::Key_Tab); settle();
+                        record(dialog->focusWidget()==details,stem+" Tab to readonly criteria");
+                        if(details) QTest::keyClick(details,Qt::Key_Backtab); settle();
+                        record(dialog->focusWidget()==choices,stem+" Shift+Tab returns to target");
+                    }
+                    dialog->findChild<QScrollArea*>("dialogContentScrollArea")->ensureWidgetVisible(ready); settle();
+                    ready->setFocus(); QTest::keyClick(ready,Qt::Key_Space);
+                    record(ready->isChecked() && save->isEnabled(),stem+" keyboard readiness");
+                    if (state==4) {
+                        struct ResetFailure {~ResetFailure(){AppSetRecoveryPrimaryWriteFailureForTests(false);}} reset;
+                        AppSetRecoveryPrimaryWriteFailureForTests(true); save->click();
+                        auto* notice=dialog->findChild<QLabel*>("transitionNotice");
+                        record(dialog->isVisible() && notice && notice->isVisible() && !notice->text().isEmpty() &&
+                            ready->isChecked() && choices->currentData().toString()=="decision-third",stem+" real save failure keeps draft");
+                        // The service appends the successful rollback notice
+                        // to the original write error; it must remain visible.
+                        record(notice && notice->text().startsWith(QString::fromUtf8(
+                            "Не удалось сохранить этап задачи. Изменения полностью отменены.")),
+                            stem+" specific primary write error and rollback notice: "+(notice?notice->text():QString("missing")));
+                        record(workspace.data.tasks.front().pipelineStepId==first.id,stem+" primary write failure rolls back memory");
+                        record(!std::filesystem::exists(workspace.directory/"meta/qt-xp-transaction"),stem+" successful rollback clears journal");
+                    }
+                } else {
+                    auto* notice=dialog->findChild<QLabel*>("transitionNotice");
+                    record(notice && notice->isVisible() && !notice->text().isEmpty(),stem+" full unavailable reason");
+                }
+                resizeInspect(dialog,stem); capture(dialog,stem); cancelReturn(dialog,stem);
+            },record);
+            record(!ShowPipelineTransition(nullptr,workspace,task.id),stem+" cancelled result");
+            record(read(workspace.directory,"tasks.json")==tasksBefore && read(workspace.directory,"task-audit.log")==auditBefore,
+                stem+" Cancel preserves successfully read files");
+        }
+        workspace.data.pipelineSteps={first,second,third}; workspace.data.tasks.front()=task;
+        if (!AppSaveTasks(workspace.directory,workspace.data.tasks)) return false;
+        if(scale==100||scale==200) {
+            const auto stem="transition-keyboard-commit-"+suffix;
+            ++contexts;
+            ScheduleQtModalDriver(app,"pipelineTransition",stem,[&](QDialog* dialog) {
+                auto* ready=dialog->findChild<QCheckBox*>("stageReady");
+                auto* save=dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+                dialog->resize(640,520); settle(); inspect(dialog,stem,QSize(640,520));
+                dialog->findChild<QScrollArea*>("dialogContentScrollArea")->ensureWidgetVisible(ready); settle();
+                ready->setFocus(); QTest::keyClick(ready,Qt::Key_Space);
+                save->setFocus(); QTest::keyClick(save,Qt::Key_Return);
+                record(!dialog->isVisible() && dialog->result()==QDialog::Accepted,stem+" Return executes correct operation");
+                if(dialog->isVisible()) dialog->reject();
+            },record);
+            record(ShowPipelineTransition(nullptr,workspace,task.id),stem+" actual accepted result");
+            record(workspace.data.tasks.front().pipelineStepId==second.id && workspace.data.tasks.front().status==task.status &&
+                workspace.data.tasks[1].pipelineStepId==other.pipelineStepId && workspace.data.taskAudit.back().field=="pipeline",
+                stem+" correct persisted pipeline-only commit");
+            const auto disk=LoadTasksData(workspace.directory);
+            record(!disk.empty() && disk.front().pipelineStepId==second.id,stem+" commit read from disk");
+            workspace.data.tasks.front()=task;
+            if(!AppSaveTasks(workspace.directory,workspace.data.tasks)) return false;
+        }
+        const QStringList modes={"status","priority","project","pipeline","deadline","assignees"};
+        for (int scenario=0;scenario<10;++scenario) {
+            if (scenario==9 && scale!=100 && scale!=200) continue;
+            workspace.reload();
+            workspace.data.tasks.front().status=scenario==8?2:0;
+            if (!AppSaveTasks(workspace.directory,workspace.data.tasks)) return false;
+            const auto savedProfiles=workspace.profiles;
+            const auto tasksBefore=read(workspace.directory,"tasks.json"), auditBefore=read(workspace.directory,"task-audit.log");
+            QtWindow window(workspace); window.show(); settle();
+            // Construction reloads the saved snapshot. Set this isolated
+            // in-memory presentation variant afterwards, never in production.
+            workspace.modules.pipeline=scenario!=9;
+            if (scenario==6) workspace.profiles.clear();
+            if (scenario==7) for(auto& profile:workspace.profiles) profile.archived=true;
+            auto* navigation=window.findChild<QListWidget*>("navigation");
+            auto* table=window.findChild<QTableWidget*>("records");
+            auto* bulk=window.findChild<QPushButton*>("bulkTaskEdit");
+            if (!navigation||!table||!bulk) return false;
+            navigation->setCurrentRow(1); settle(); table->clearSelection();
+            for (const QString id : {QString("decision-task"),QString("decision-other")}) {
+                int row=-1;
+                for(int i=0;i<table->rowCount();++i) if(table->item(i,0)->data(Qt::UserRole).toString()==id) row=i;
+                record(row>=0,"bulk fixture stable row ID");
+                if(row>=0) table->selectionModel()->select(table->model()->index(row,0),QItemSelectionModel::Select|QItemSelectionModel::Rows);
+            }
+            record(bulk->isVisible()&&bulk->isEnabled(),"bulk actual admin launcher");
+            const auto stem=QString("bulk-state-%1-%2").arg(scenario).arg(scale);
+            ++contexts;
+            ScheduleQtModalDriver(app,"bulkTaskEditDialog",stem,[&](QDialog* dialog) {
+                auto* operation=dialog->findChild<QComboBox*>("bulkTaskOperation");
+                auto* target=dialog->findChild<QComboBox*>("bulkTaskTarget");
+                auto* apply=dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save);
+                record(operation&&target,stem+" existing operation hooks");
+                if(!operation||!target){dialog->reject();return;}
+                record(operation->count()==((scenario==8||scenario==9)?5:6),stem+" exact original operation count");
+                if(scenario==8) record(operation->findData("status")==-1 && operation->currentData().toString()=="priority",stem+" completed status guard");
+                if(scenario==9) record(operation->findData("pipeline")==-1,stem+" module guard");
+                const QString mode=scenario<6?modes[scenario]:(scenario<8?QString("assignees"):QString("priority"));
+                operation->setCurrentIndex(operation->findData(mode)); settle();
+                auto* date=dialog->findChild<QDateTimeEdit*>("bulkTaskDeadline");
+                auto* dateLabel=dialog->findChild<QLabel*>("bulkTaskDeadlineLabel");
+                record(date && dateLabel && date->isVisible()==(mode=="deadline") && dateLabel->isVisible()==date->isVisible(),stem+" no orphan deadline label");
+                if(mode=="project"||mode=="pipeline") {
+                    record(target->count()>=2 && target->itemData(0).toString().isEmpty(),stem+" clear target remains");
+                    target->setCurrentIndex(1); settle();
+                    auto* context=dialog->findChild<QLabel*>("bulkTaskSelectedTarget");
+                    record(context && context->text().contains(target->currentText()),stem+" full target visible context");
+                }
+                if(mode=="status") record(target->findData(2)==-1,stem+" XP completion not bulk status");
+                if(mode=="deadline") {
+                    auto* flag=dialog->findChild<QCheckBox*>("bulkTaskHasDeadline");
+                    const auto draft=date->dateTime(); flag->setChecked(false);
+                    record(!date->isEnabled() && date->dateTime()==draft,stem+" remove deadline retains draft");
+                    flag->setChecked(true); record(date->isEnabled(),stem+" deadline reenabled");
+                }
+                if(scale==100||scale==200) {
+                    QWidget* next=mode=="deadline" ? static_cast<QWidget*>(dialog->findChild<QCheckBox*>("bulkTaskHasDeadline")) :
+                        mode=="assignees" ? static_cast<QWidget*>(dialog->findChild<QListWidget*>("bulkTaskAssignees")) : static_cast<QWidget*>(target);
+                    if(next&&next->isVisible()) {
+                        operation->setFocus(); QTest::keyClick(operation,Qt::Key_Tab); settle();
+                        record(dialog->focusWidget()==next,stem+" mode-specific Tab chain");
+                        QTest::keyClick(next,Qt::Key_Backtab); settle();
+                        record(dialog->focusWidget()==operation,stem+" Shift+Tab returns to operation");
+                    }
+                }
+                if(mode=="assignees") {
+                    auto* list=dialog->findChild<QListWidget*>("bulkTaskAssignees");
+                    record(list && !apply->isEnabled(),stem+" active-assignee requirement");
+                    if(list) {
+                        int active=0;
+                        for(int i=0;i<list->count();++i) {
+                            auto* item=list->item(i);
+                            const auto id=item->data(Qt::UserRole).toString().toUtf8().toStdString();
+                            const auto profile=std::find_if(workspace.profiles.begin(),workspace.profiles.end(),[&](const auto& p){return p.id==id;});
+                            record(profile!=workspace.profiles.end() && item->flags().testFlag(Qt::ItemIsUserCheckable)==!profile->archived,
+                                stem+" archived checkability unchanged");
+                            const QString fullName=profile==workspace.profiles.end()?QString():QString::fromUtf8(profile->name);
+                            record(!fullName.isEmpty() && item->text()==fullName && item->toolTip()==fullName &&
+                                item->data(Qt::AccessibleTextRole).toString()==fullName,stem+" exact full name context");
+                            if(item->flags().testFlag(Qt::ItemIsUserCheckable)) ++active;
+                        }
+                        if(active) {
+                            int firstActive=0;
+                            while(!list->item(firstActive)->flags().testFlag(Qt::ItemIsUserCheckable)) ++firstActive;
+                            list->setCurrentRow(firstActive); list->setFocus();
+                            QTest::keyClick(list,Qt::Key_Space);
+                            record(list->item(firstActive)->checkState()==Qt::Checked && apply->isEnabled(),stem+" keyboard checked active enables apply");
+                            const auto checkedId=list->item(firstActive)->data(Qt::UserRole);
+                            operation->setCurrentIndex(operation->findData("priority")); operation->setCurrentIndex(operation->findData("assignees"));
+                            record(list->item(firstActive)->checkState()==Qt::Checked && list->item(firstActive)->data(Qt::UserRole)==checkedId && apply->isEnabled(),stem+" mode roundtrip preserves selection");
+                            auto* hint=dialog->findChild<QLabel*>("bulkTaskHint");
+                            record(hint&&hint->text().contains("1"),stem+" actual participant skip count");
+                        } else {
+                            auto* notice=dialog->findChild<QLabel*>("bulkTaskNotice");
+                            record(!apply->isEnabled() && notice && notice->isVisible() &&
+                                !notice->text().isEmpty() && !notice->accessibleDescription().isEmpty(),stem+" visible empty or archived reason");
+                        }
+                    }
+                }
+                resizeInspect(dialog,stem);
+                if(mode=="assignees") {
+                    auto* list=dialog->findChild<QListWidget*>("bulkTaskAssignees");
+                    if(list&&list->count()>=3) {
+                        list->scrollToTop(); list->horizontalScrollBar()->setValue(0); settle();
+                        std::vector<QRect> origins;
+                        int widest=0;
+                        for(int row=0;row<list->count();++row) {
+                            origins.push_back(list->visualItemRect(list->item(row)));
+                            if(origins.back().width()>origins[widest].width()) widest=row;
+                        }
+                        for(int row=0;row<3;++row) {
+                            const QRect rect=list->visualItemRect(list->item(row));
+                            // Long names deliberately use the list's own H
+                            // scroll. Full QRect containment wrongly demanded
+                            // all text fit simultaneously. Preserve the three
+                            // whole row heights and prove both content ends.
+                            record(rect.top()>=0 && rect.bottom()<list->viewport()->height(),stem+" three complete measured row heights"+
+                                QString(" row=%1 viewport=%2x%3 actual=%4,%5,%6,%7 list=%8x%9 H=%10 V=%11")
+                                .arg(row).arg(list->viewport()->width()).arg(list->viewport()->height())
+                                .arg(rect.x()).arg(rect.y()).arg(rect.width()).arg(rect.height())
+                                .arg(list->width()).arg(list->height()).arg(list->horizontalScrollBar()->maximum()).arg(list->verticalScrollBar()->maximum()));
+                            record(rect.height()>=list->fontMetrics().lineSpacing() &&
+                                rect.height()>=list->style()->pixelMetric(QStyle::PM_IndicatorHeight,nullptr,list),stem+" intrinsic row glyph and check height");
+                            record(rect.left()==0,stem+" full name begins at horizontal origin");
+                        }
+                        const bool longNames=list->visualItemRect(list->item(0)).width()>list->viewport()->width();
+                        record(list->textElideMode()==Qt::ElideNone && (!longNames || list->horizontalScrollBar()->maximum()>0),stem+" long names are scrollable, not elided");
+                        for(int row=0;row<3;++row) {
+                            // Each row has its own native width; shorter names
+                            // need less pan than the global longest-row range.
+                            const int desired=std::max(0,origins[row].right()-list->viewport()->rect().right());
+                            record(desired<=list->horizontalScrollBar()->maximum(),stem+" per-name end lies within scroll range");
+                            list->horizontalScrollBar()->setValue(desired); settle();
+                            const QRect end=list->visualItemRect(list->item(row));
+                            record(list->horizontalScrollBar()->value()==desired && end.right()>=0 &&
+                                end.right()<=list->viewport()->rect().right(),stem+" complete name right edge reachable");
+                        }
+                        list->horizontalScrollBar()->setValue(list->horizontalScrollBar()->maximum()); settle();
+                        record(list->visualItemRect(list->item(widest)).right()==list->viewport()->rect().right(),stem+" widest name reaches global scroll endpoint");
+                        list->horizontalScrollBar()->setValue(0); settle();
+                    }
+                }
+                capture(dialog,stem);
+                if(scenario==1&&(scale==100||scale==200)) {
+                    QTest::keyClick(dialog,Qt::Key_Escape); settle();
+                    record(!dialog->isVisible()&&dialog->result()==QDialog::Rejected,stem+" Escape cancels");
+                    if(dialog->isVisible()) dialog->reject();
+                } else cancelReturn(dialog,stem);
+            },record);
+            if(bulk->isEnabled()) bulk->click();
+            record(read(workspace.directory,"tasks.json")==tasksBefore && read(workspace.directory,"task-audit.log")==auditBefore,
+                stem+" Cancel preserves tasks and audit");
+            window.close(); settle(); workspace.profiles=savedProfiles;
+        }
+    }
+    std::cout << "Task decision layout contexts=" << contexts << " inspections=" << inspections << '\n';
+    return checked;
 }
 
 static bool TestQtCatalogProfileLayout(QApplication& app) {
@@ -3546,7 +4820,7 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
             !workspace.storage->set_active_profile(created->id)) { checked = false; break; }
         workspace.reload();
         const QString profileId = QString::fromStdString(created->id);
-        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = (scale == 100);
         SaveQtDisplaySettings(directory, settings); ApplyQtDisplaySettings(app, settings);
         auto bytes = [&](const QString& path) {
             QFile file(temp.path() + '/' + path);
@@ -3662,6 +4936,30 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
             auto* more = manager->findChild<QPushButton*>("profileMoreActions");
             auto* filterToggle = manager->findChild<QToolButton*>("profileFiltersToggle");
             auto* filtersPanel = manager->findChild<QWidget*>("profileFiltersPanel");
+            const auto inspectMotion = [&](QToolButton* toggle, QWidget* panel, const QString& name) {
+                if (scale != 100 || !toggle || !panel) return;
+                auto* disclosure = dynamic_cast<QtDisclosureButton*>(toggle);
+                if (!disclosure) { record(false, name + " disclosure type"); return; }
+                auto* animation = disclosure->indicatorAnimation();
+                const bool allowed = IsQtMotionAllowed(settings);
+                toggle->click();
+                record(panel->isVisible() && animation->state() ==
+                    (allowed ? QAbstractAnimation::Running : QAbstractAnimation::Stopped), name + " immediate content and policy");
+                // Wait for an actual timer update rather than assuming the first
+                // animation tick is delivered within 40 ms on a busy machine.
+                const bool advanced = QTest::qWaitFor([&] {
+                    return disclosure->indicatorAngle() > 0;
+                }, 180);
+                const qreal angle = disclosure->indicatorAngle();
+                record(advanced, name + " advances");
+                toggle->click();
+                record(!panel->isVisible(), name + " immediate collapse");
+                if (allowed) record(std::abs(disclosure->indicatorAngle() - angle) < 0.001, name + " continuous reversal");
+                QTest::qWait(220);
+                record(disclosure->indicatorAngle() == 0 && animation->state() == QAbstractAnimation::Stopped,
+                    name + " collapsed endpoint");
+                std::cout << name.toStdString() << " policy=" << allowed << " angle=" << angle << '\n';
+            };
             auto* scroll = manager->findChild<QScrollArea*>("dialogContentScrollArea");
             auto* archiveAction = manager->findChild<QAction*>("archiveProfileAction");
             auto* resetAction = manager->findChild<QAction*>("resetProfilePasswordAction");
@@ -3700,6 +4998,7 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
             record(newManagerHooks, stem + " disclosure and command menu hooks");
             if (newManagerHooks) {
                 record(!filterToggle->isChecked() && !filtersPanel->isVisible(), stem + " filters collapsed initially");
+                inspectMotion(filterToggle, filtersPanel, "profile filters motion");
                 filterToggle->setFocus(); QTest::keyClick(filterToggle, Qt::Key_Space); settle();
                 record(filtersPanel->isVisible() && filterToggle->isChecked(), stem + " keyboard filters open");
                 inspect(manager, stem + " filters", QSize(640, 520));
@@ -3851,6 +5150,9 @@ static bool TestQtCatalogProfileLayout(QApplication& app) {
                         credentials->echoMode() == QLineEdit::Password && !reveal->isChecked() && !copyPassword->isEnabled(),
                         stem + " credentials initially collapsed and masked");
                     if (scroll) { scroll->ensureWidgetVisible(credentialsToggle, 0, 0); settle(); }
+                    inspectMotion(credentialsToggle, credentialsPanel, "profile credentials motion");
+                    record(credentials->echoMode() == QLineEdit::Password && !copyPassword->isEnabled(),
+                        stem + " motion preserves credential masking");
                     credentialsToggle->setFocus(); QTest::keyClick(credentialsToggle, Qt::Key_Space); settle();
                     record(credentialsPanel->isVisible() && credentials->echoMode() == QLineEdit::Password,
                         stem + " credentials disclosure does not reveal secret");
@@ -4800,6 +6102,11 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
                     dialog->findChild<QLineEdit*>("walletReason")->setText(longText);
                     ScheduleQtModalDriver(app,"walletConfirmation",stem,[&](QDialog* box) {
                         inspectConfirm(box,stem,scale,QMessageBox::No); auto* confirm=qobject_cast<QMessageBox*>(box);
+                        std::cerr << stem.toStdString() << " frameHeight=" << box->frameGeometry().height()
+                            << " availableHeight=" << (box->screen() ? box->screen()->availableGeometry().height() : 0) << '\n';
+                        record(box->screen() && box->frameGeometry().height() <= box->screen()->availableGeometry().height(),
+                            stem + QString(" confirmation fits available height: frame=%1 available=%2")
+                                .arg(box->frameGeometry().height()).arg(box->screen() ? box->screen()->availableGeometry().height() : 0));
                         record(confirm && confirm->text().contains("12.50"),stem + " numeric amount in confirmation");
                         record(confirm && confirm->text().count(longText)>=2 &&
                             confirm->text().contains(QString::fromUtf8(workspace.data.vault.currencyName)) &&
@@ -5581,6 +6888,46 @@ static bool TestQtStorageHealthReport() {
     for (const auto& entry : treeInventory) allTreePaths.push_back(entry.relativePath);
     if (!RemoveQtStorageStrayEntries(treeRoot, treeInventory, allTreePaths, &removed, &error) || removed != 3 ||
         std::filesystem::exists(treeRoot / "unknown-dir")) return fail("approved recursive directory cleanup");
+    // BEGIN UNICODE STRAY PATH REGRESSION
+    // Scanner identities must stay UTF-8 across native Windows paths, allowed
+    // file classification, inventory and the existing approved cleanup path.
+    const auto unicodeRoot=root/"unicode-cleanup";
+    const std::string unicodeDirectory=u8"Неизвестная_папка_📁";
+    const std::string unicodeChild=unicodeDirectory+u8"/данные_📄.bin";
+    const std::string unicodeStray=u8"лишний_📎.bin";
+    const auto unicodeProfile=std::filesystem::u8path(u8"Профиль_🧑.ini");
+    const auto unicodeReport=std::filesystem::u8path(u8"meta/reports/Отчёт_📊.csv");
+    std::filesystem::create_directories(unicodeRoot/std::filesystem::u8path(unicodeDirectory));
+    std::filesystem::create_directories((unicodeRoot/unicodeReport).parent_path());
+    for(const auto& path:{std::filesystem::u8path(unicodeChild),std::filesystem::u8path(unicodeStray),unicodeProfile,unicodeReport}) {
+        std::ofstream out(unicodeRoot/path,std::ios::binary); out << "unicode fixture keep bytes";
+        if(!out.good()) return fail("Unicode fixture write");
+    }
+    std::vector<std::string> unicodeRoots;
+    const std::set<std::string> expectedUnicodeRoots{unicodeDirectory,unicodeStray};
+    if(!CollectStrayStorageFiles(unicodeRoot,unicodeRoots) ||
+        std::set<std::string>(unicodeRoots.begin(),unicodeRoots.end())!=expectedUnicodeRoots)
+        return fail("UTF-8 scanner roots and Unicode allowed profile/report classification");
+    std::vector<QtStorageStrayEntry> unicodeInventory;
+    if(!BuildQtStorageStrayInventory(unicodeRoot,&unicodeInventory,&error) || unicodeInventory.size()!=3)
+        return fail("Unicode nested inventory without code-page exception");
+    std::vector<std::string> unicodeApproval;
+    for(const auto& entry:unicodeInventory) unicodeApproval.push_back(entry.relativePath);
+    if(std::set<std::string>(unicodeApproval.begin(),unicodeApproval.end())!=
+        std::set<std::string>{unicodeDirectory,unicodeChild,unicodeStray}) return fail("exact UTF-8 inventory identities");
+    removed=0;
+    if(RemoveQtStorageStrayEntries(unicodeRoot,unicodeInventory,{unicodeDirectory},&removed,&error) || removed!=0 ||
+        !std::filesystem::exists(unicodeRoot/std::filesystem::u8path(unicodeChild)))
+        return fail("Unicode partial directory approval still rejected");
+    if(!RemoveQtStorageStrayEntries(unicodeRoot,unicodeInventory,unicodeApproval,&removed,&error) || removed!=3 ||
+        std::filesystem::exists(unicodeRoot/std::filesystem::u8path(unicodeDirectory)) ||
+        std::filesystem::exists(unicodeRoot/std::filesystem::u8path(unicodeStray))) return fail("approved Unicode cleanup");
+    for(const auto& kept:{unicodeProfile,unicodeReport}) {
+        std::ifstream in(unicodeRoot/kept,std::ios::binary);
+        const std::string bytes((std::istreambuf_iterator<char>(in)),std::istreambuf_iterator<char>());
+        if(!in || bytes!="unicode fixture keep bytes") return fail("Unicode allowed data preserved");
+    }
+    // END UNICODE STRAY PATH REGRESSION
     if (ExportQtStorageHealthReport(QString(), report, &error) || error.isEmpty() ||
         ExportQtStorageHealthReport(temp.path(), report, &error)) return fail("invalid destination");
     return true;
@@ -7080,7 +8427,7 @@ static bool TestUiPipelineMapScaling(QApplication& app) {
     }
     bool checked = true;
     for (int scale : {100, 200}) {
-        QtDisplaySettings draft; draft.scalePercent = scale; draft.motionEnabled = false;
+        QtDisplaySettings draft; draft.scalePercent = scale; draft.motionEnabled = (scale == 100);
         ApplyQtDisplaySettings(app, draft);
         for (const QSize size : (scale == 100 ? QList<QSize>{QSize(1040, 740), QSize(720, 520)} : QList<QSize>{QSize(720, 520)})) {
             QTimer::singleShot(0, [&] {
@@ -7106,7 +8453,23 @@ static bool TestUiPipelineMapScaling(QApplication& app) {
                 auto* details = dialog->findChild<QTextBrowser*>("pipelineMapDetails");
                 checked &= selectionVisible && toggle && details && !toggle->isChecked() && !details->isVisible();
                 if (toggle && details) {
-                    toggle->setChecked(true); QApplication::processEvents();
+                    toggle->click();
+                    auto* disclosure = static_cast<QtDisclosureButton*>(toggle);
+                    auto* animation = disclosure->indicatorAnimation();
+                    const bool allowed = IsQtMotionAllowed(draft);
+                    checked &= details->isVisible() && animation->state() ==
+                        (allowed ? QAbstractAnimation::Running : QAbstractAnimation::Stopped);
+                    const bool advanced = QTest::qWaitFor([&] { return disclosure->indicatorAngle() > 0; }, 180);
+                    const qreal sampledAngle = disclosure->indicatorAngle();
+                    checked &= advanced && sampledAngle > 0;
+                    toggle->click();
+                    checked &= !details->isVisible();
+                    if (allowed) checked &= std::abs(disclosure->indicatorAngle() - sampledAngle) < 0.001;
+                    QTest::qWait(220);
+                    checked &= disclosure->indicatorAngle() == 0 && animation->state() == QAbstractAnimation::Stopped;
+                    toggle->click(); QTest::qWait(220);
+                    checked &= disclosure->indicatorAngle() == 90 && animation->state() == QAbstractAnimation::Stopped;
+                    std::cout << "pipeline motion policy=" << allowed << " sampled angle=" << sampledAngle << '\n';
                     checked &= details->isVisible() && details->toPlainText().contains("Source asset") &&
                         details->toPlainText().contains("Checked mesh") && details->toPlainText().contains("Check normals") &&
                         details->toPlainText().contains("missing-audit-stage");
@@ -7148,7 +8511,7 @@ static bool TestUiPipelineMapScaling(QApplication& app) {
                     << " selectedVisible=" << selectionVisible << " fullSelectedVisible=" << fullSelectionVisible << '\n';
                 dialog->reject();
             });
-            if (!ShowQtPipelineMap(nullptr, steps, "audit-20")) checked = false;
+            if (!ShowQtPipelineMap(nullptr, steps, "audit-20", [&draft] { return IsQtMotionAllowed(draft); })) checked = false;
         }
     }
     app.setFont(originalFont); app.setStyleSheet(originalStyle); app.setProperty("forgeBasePointSize", originalBase);
@@ -7232,7 +8595,9 @@ static bool TestQtPipelineDetailsAndFullTextFilter() {
     auto* summary = window.findChild<QLabel*>("summary");
     if (table->rowCount() != 3 || !reset->isVisible() || !summary || !summary->text().contains(QString::fromUtf8("веток: 3")) ||
         table->horizontalHeaderItem(2)->text() != QString::fromUtf8("Ветка") ||
-        !search->placeholderText().contains(QString::fromUtf8("описание"), Qt::CaseInsensitive)) {
+        !search->toolTip().contains(QString::fromUtf8("описание"), Qt::CaseInsensitive) ||
+        search->accessibleDescription() != search->toolTip() ||
+        search->placeholderText() != QString::fromUtf8("Поиск…")) {
         return fail("initial rows or controls");
     }
     search->setText(QStringLiteral("3"));
@@ -7770,6 +9135,393 @@ static bool TestQtTaskAssigneeProfileFilter() {
     return restored && restored->currentData().toString() == QString::fromStdString(participant->id);
 }
 
+static bool TestQtExportPickerLayout(QApplication& app) {
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_ADMIN_PASSWORD")) return false;
+    bool ok = true;
+    int contexts = 0;
+    auto check = [&](bool condition, const QString& where) {
+        if (!condition) std::cerr << "exportPicker: " << where.toStdString() << '\n';
+        ok &= condition;
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+        QtDisplaySettings settings; settings.scalePercent = scale;
+        if (!SaveQtDisplaySettings(workspace.directory, settings) ||
+            !SetAdminPassword(workspace.directory, "export-layout-fixture") ||
+            !SetAdminStayLoggedIn(workspace.directory, true)) return false;
+        ApplyQtDisplaySettings(app, settings);
+        auto profile = workspace.storage->create_profile(Profile(u8"Профиль экспорта"));
+        if (!profile) return false;
+        TaskEntry task; task.id = "export-layout"; task.title = u8"Длинная задача для проверки экспорта";
+        task.createdAt = QDateTime::currentSecsSinceEpoch();
+        task.participants.push_back({profile->id, 100, 0, 0, {}});
+        workspace.data.tasks = {task};
+        if (!AppSaveTasks(workspace.directory, workspace.data.tasks)) return false;
+        const QString exports = temp.path() + QString::fromUtf8("/Папка экспорта с длинным названием");
+        if (!QDir().mkpath(exports) || !QDir().mkpath(temp.path() + "/meta/reports")) return false;
+        QtWindow window(workspace); window.show(); QApplication::processEvents();
+        auto* navigation = window.findChild<QListWidget*>("navigation");
+        auto* table = window.findChild<QTableWidget*>("records");
+        if (!navigation || !table) return false;
+        workspace.data.taskAudit = {{task.createdAt, "test", task.id, "status", "", "created"}};
+        window.recordRuntimeMessage(AppLogLevel::Info, QString::fromUtf8("Проверка экспорта журнала"));
+        struct Entry { int page; const char* control; bool action; const char* suffix; };
+        const Entry entries[] = {{17,"exportReport",false,"csv"}, {6,"exportReport",false,"csv"},
+            {7,"exportAudit",false,"csv"}, {1,"exportTasksCsv",true,"csv"},
+            {1,"exportTasksTxt",true,"txt"}, {16,"exportLogs",false,"txt"}};
+        for (const auto& entry : entries) {
+            navigation->setCurrentRow(entry.page); QApplication::processEvents();
+            auto* button = window.findChild<QPushButton*>(entry.control);
+            auto* action = window.findChild<QAction*>(entry.control);
+            if (entry.action ? !action : !button) return false;
+            const auto stem = QStringLiteral("%1-%2-%3").arg(scale).arg(entry.page).arg(entry.control);
+            bool visited = false;
+            QTimer timer; timer.setSingleShot(true);
+            QObject::connect(&timer, &QTimer::timeout, &window, [&] {
+                auto* picker = qobject_cast<QFileDialog*>(QApplication::activeModalWidget());
+                if (!picker) {
+                    check(false, stem + " actual file dialog");
+                    if (auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget())) modal->reject();
+                    return;
+                }
+                visited = true; ++contexts;
+                check(picker->testOption(QFileDialog::DontUseNativeDialog) &&
+                    picker->acceptMode() == QFileDialog::AcceptSave && picker->fileMode() == QFileDialog::AnyFile,
+                    stem + " original save mode");
+                check(!picker->testOption(QFileDialog::DontConfirmOverwrite), stem + " overwrite confirmation retained");
+                check(picker->defaultSuffix() == QLatin1String(entry.suffix), stem + " original extension");
+                const auto selectedName = QFileInfo(picker->selectedFiles().value(0)).fileName();
+                check(!selectedName.isEmpty(), stem + " suggested filename");
+                picker->setDirectory(exports);
+                picker->selectFile(selectedName);
+                auto* names = picker->findChild<QLineEdit*>("fileNameEdit");
+                auto* folder = picker->findChild<QComboBox*>("lookInCombo");
+                auto* type = picker->findChild<QComboBox*>("fileTypeCombo");
+                auto* buttons = picker->findChild<QDialogButtonBox*>();
+                auto* save = buttons ? buttons->button(QDialogButtonBox::Save) : nullptr;
+                auto* cancel = buttons ? buttons->button(QDialogButtonBox::Cancel) : nullptr;
+                if (!names || !folder || !type || !save || !cancel) { check(false, stem + " file controls"); picker->reject(); return; }
+                const auto originalName = names->text();
+                check(save->text().remove('&') == QString::fromUtf8("Сохранить") &&
+                    cancel->text().remove('&') == QString::fromUtf8("Отмена"), stem + " clear Russian commands");
+                check(picker->labelText(QFileDialog::LookIn) == QString::fromUtf8("Папка:") &&
+                    picker->labelText(QFileDialog::FileName) == QString::fromUtf8("Имя файла:") &&
+                    picker->labelText(QFileDialog::FileType) == QString::fromUtf8("Формат:"), stem + " field labels");
+                check(save->property("primary").toBool() && !cancel->property("primary").toBool(), stem + " one primary command");
+                const char* tools[] = {"backButton", "forwardButton", "toParentButton", "newFolderButton", "listModeButton", "detailModeButton"};
+                for (const char* name : tools) {
+                    auto* tool = picker->findChild<QToolButton*>(name);
+                    check(tool && !tool->icon().isNull() && !tool->toolTip().isEmpty() &&
+                        tool->accessibleName() == tool->toolTip(), stem + " named action " + QLatin1String(name));
+                }
+                for (const auto requested : {QSize(640,520), QSize(780,640), QSize(640,520)}) {
+                    picker->resize(requested); QTest::qWait(10);
+                    const auto available = picker->screen()->availableGeometry();
+                    check(picker->width() <= available.width() && picker->height() <= available.height(), stem + " screen-bounded size");
+                    for (auto* command : {save,cancel}) {
+                        check(picker->rect().contains(QRect(command->mapTo(picker,QPoint()), command->size())), stem + " visible command");
+                        check(command->width() >= command->sizeHint().width() && command->height() >= command->sizeHint().height(), stem + " command glyph bounds");
+                    }
+                    check(names->text() == originalName && names->width() >= 80, stem + " filename retained and editable");
+                    check(folder->width() >= qRound(140 * scale / 100.0), stem + " readable current folder width");
+                    for (const char* name : tools) {
+                        auto* tool = picker->findChild<QToolButton*>(name);
+                        const bool fits = tool && picker->rect().contains(QRect(tool->mapTo(picker,QPoint()),tool->size())) &&
+                            tool->width() >= tool->sizeHint().width() && tool->height() >= tool->sizeHint().height();
+                        check(fits, stem + " toolbar bounds " + QLatin1String(name));
+                        if (!fits && tool && scale == 90 && entry.page == 17 && requested == QSize(780,640))
+                            std::cerr << "toolbar diagnostic " << name << " size=" << tool->width() << 'x' << tool->height()
+                                << " hint=" << tool->sizeHint().width() << 'x' << tool->sizeHint().height()
+                                << " min=" << tool->minimumWidth() << 'x' << tool->minimumHeight()
+                                << " pos=" << tool->mapTo(picker,QPoint()).x() << ',' << tool->mapTo(picker,QPoint()).y() << '\n';
+                    }
+                }
+                const auto painted = save->grab().toImage();
+                int accentPixels = 0;
+                for (int y = 0; y < painted.height(); ++y) for (int x = 0; x < painted.width(); ++x) {
+                    const auto color = painted.pixelColor(x,y);
+                    accentPixels += color == QColor("#7554ad") || color == QColor("#8764bf");
+                }
+                check(accentPixels > painted.width() * painted.height() / 4, stem + " actual primary accent");
+                const auto missing = MissingAccessibleNames(picker);
+                check(missing.isEmpty(), stem + " accessible controls: " + missing.join("; "));
+                const auto screenshots = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+                if (!screenshots.isEmpty() && entry.page == 1 && QString::fromLatin1(entry.suffix) == "csv" && (scale == 100 || scale == 200))
+                    check(picker->grab().save(screenshots + QStringLiteral("/export-picker-%1.png").arg(scale)), stem + " capture");
+                if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(picker);
+                cancel->setFocus();
+                QTest::keyClick(cancel, Qt::Key_Return);
+                check(!picker->isVisible() && picker->result() == QDialog::Rejected, stem + " focused Return cancels");
+                if (picker->isVisible()) picker->reject();
+            });
+            timer.start(0);
+            if (entry.action) action->trigger(); else button->click();
+            timer.stop();
+            check(visited, stem + " dialog opened");
+            check(QDir(exports).entryList(QDir::Files | QDir::NoDotAndDotDot).isEmpty(), stem + " cancel writes no export");
+        }
+        window.close();
+    }
+    ApplyQtDisplaySettings(app, QtDisplaySettings{});
+    std::cout << "exportPicker: " << contexts << " actual dialogs / " << contexts * 3 << " resize inspections\n";
+    return ok && contexts == 42;
+}
+
+static bool TestQtWorkingListEmptyStates(QApplication& app) {
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_ADMIN_PASSWORD")) return false;
+    bool ok = true;
+    int states = 0;
+    auto check = [&](bool condition, const QString& where) {
+        if (!condition) std::cerr << "workingEmpty: " << where.toStdString() << '\n';
+        ok &= condition;
+    };
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) for (bool admin : {false, true}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+        QtDisplaySettings settings; settings.scalePercent = scale; settings.motionEnabled = false;
+        if (!SaveQtDisplaySettings(workspace.directory, settings) ||
+            !SetAdminPassword(workspace.directory, "empty-states-fixture") ||
+            !SetAdminStayLoggedIn(workspace.directory, admin)) return false;
+        ApplyQtDisplaySettings(app, settings);
+        QtWindow window(workspace); window.resize(800,520); window.show();
+        QApplication::processEvents();
+        auto* navigation = window.findChild<QListWidget*>("navigation");
+        auto* table = window.findChild<QTableWidget*>("records");
+        auto* search = window.findChild<QLineEdit*>("search");
+        auto* empty = window.findChild<QWidget*>("listEmptyState");
+        auto* title = window.findChild<QLabel*>("listEmptyTitle");
+        auto* description = window.findChild<QLabel*>("listEmptyDescription");
+        auto* primary = window.findChild<QPushButton*>("primary");
+        auto* pageScroll = window.findChild<QScrollArea*>("pageContentScrollArea");
+        if (!navigation || !table || !search || !empty || !title || !description || !primary || !pageScroll) return false;
+        navigation->setCurrentRow(0);
+        QApplication::processEvents();
+        check(empty->isVisible() && !table->isVisible() && !search->isVisible(),
+            QStringLiteral("no-profile first-run surface"));
+        check(title->text() == QString::fromUtf8("Нет доступного профиля"), QStringLiteral("no-profile heading"));
+        check(description->text().contains(admin ? QString::fromUtf8("Откройте") : QString::fromUtf8("Администратор")),
+            QStringLiteral("no-profile role guidance"));
+        for (const auto* name : {"profileMetrics", "profileViewModes", "profileSkillFilters", "profileAnalyticsCharts",
+                "profileActivityHistory", "profileReportExport"}) {
+            auto* control = window.findChild<QWidget*>(name);
+            check(control && !control->isVisible(), QStringLiteral("no-profile hidden %1").arg(name));
+        }
+        const auto firstRunCaptures = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        if (!firstRunCaptures.isEmpty() && (scale == 100 || scale == 200))
+            check(window.grab().save(firstRunCaptures + QStringLiteral("/no-profile-%1-%2.png").arg(scale).arg(admin)),
+                QStringLiteral("no-profile capture"));
+        if (admin) {
+            const auto created = workspace.storage->create_profile(Profile("First profile"));
+            auto* refresh = window.findChild<QPushButton*>("quickRefresh");
+            auto* profiles = window.findChild<QComboBox*>("profiles");
+            if (!created || !refresh || !profiles) return false;
+            refresh->click();
+            profiles->setCurrentIndex(profiles->findData(QString::fromStdString(created->id)));
+            QApplication::processEvents();
+            check(!profiles->currentData().toString().isEmpty() && empty->isHidden(),
+                QStringLiteral("selected profile replaces first-run state"));
+            for (const auto* name : {"profileMetrics", "profileViewModes"}) {
+                auto* control = window.findChild<QWidget*>(name);
+                check(control && control->isVisible(), QStringLiteral("restored %1").arg(name));
+            }
+        }
+        // Palette roles must remain legible even before a search has any text.
+        const auto background = search->palette().color(QPalette::Base);
+        const auto placeholder = search->palette().color(QPalette::PlaceholderText);
+        const auto luminance = [](const QColor& color) {
+            auto linear = [](double c) { return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055,2.4); };
+            return 0.2126*linear(color.redF()) + 0.7152*linear(color.greenF()) + 0.0722*linear(color.blueF());
+        };
+        const auto composed = QColor::fromRgbF(
+            placeholder.redF()*placeholder.alphaF()+background.redF()*(1-placeholder.alphaF()),
+            placeholder.greenF()*placeholder.alphaF()+background.greenF()*(1-placeholder.alphaF()),
+            placeholder.blueF()*placeholder.alphaF()+background.blueF()*(1-placeholder.alphaF()));
+        const double a=luminance(composed), b=luminance(background);
+        const double contrast=(std::max(a,b)+0.05)/(std::min(a,b)+0.05);
+        check(contrast >= 4.5, QStringLiteral("search placeholder contrast %1; color %2").arg(contrast).arg(placeholder.name(QColor::HexArgb)));
+        workspace.data.tasks.clear(); workspace.data.professions.clear();
+        workspace.data.shortcuts.clear(); workspace.data.bannerTexts.clear();
+        const QString longName = QString::fromUtf8("Длинная рабочая запись для проверки интерфейса и поиска");
+        const int pages[] = {1,5,11,12};
+        for (int page : pages) {
+            if (!admin && (page == 5 || page == 12)) {
+                check(navigation->item(page)->isHidden(), "administrator-only page stays hidden");
+                continue;
+            }
+            check(!navigation->item(page)->isHidden(), "requested page available");
+            navigation->setCurrentRow(page); QTest::qWait(15);
+            const QString stem = QStringLiteral("%1-%2-%3").arg(scale).arg(admin).arg(page);
+            auto inspectEmpty = [&](bool filtered) {
+                ++states;
+                check(table->rowCount() == 0 && table->isHidden() && !empty->isHidden(), stem + " empty replaces table");
+                check(!title->text().isEmpty() && !description->text().isEmpty() &&
+                    title->wordWrap() && description->wordWrap() && title->textFormat() == Qt::PlainText &&
+                    description->textFormat() == Qt::PlainText, stem + " plain wrapped context");
+                check(title->text().contains(QString::fromUtf8("ничего не найдено")) == filtered, stem + " no-data versus no-match");
+                check(empty->accessibleName() == title->text() && empty->accessibleDescription() == description->text(), stem + " accessible context");
+                if (!filtered) {
+                    const bool canCreate = admin || page == 11;
+                    check(description->text().contains(primary->text()) == canCreate &&
+                        description->text().contains(QString::fromUtf8("администратор")) != canCreate,
+                        stem + " role-appropriate next action");
+                } else {
+                    check(description->text().contains(QString::fromUtf8(page == 1 ? "фильтр" : "поиск")), stem + " real recovery control");
+                }
+                for (QSize size : {QSize(800,520),QSize(1120,720),QSize(800,520)}) {
+                    window.resize(size); QTest::qWait(10);
+                    for (auto* label : {title,description}) {
+                        const auto bounds = label->fontMetrics().boundingRect(QRect(0,0,label->contentsRect().width(),10000),
+                            Qt::TextWordWrap | Qt::TextExpandTabs, label->text());
+                        check(label->contentsRect().height() >= bounds.height(), stem + " full text height");
+                        check(empty->rect().contains(QRect(label->mapTo(empty,QPoint()), label->size())), stem + " context bounds");
+                    }
+                    pageScroll->ensureWidgetVisible(description,0,8);
+                    QTest::qWait(5);
+                    for (auto* label : {title,description})
+                        check(pageScroll->viewport()->rect().contains(QRect(label->mapTo(pageScroll->viewport(),QPoint()),label->size())),
+                            stem + " complete context reachable in viewport");
+                    check(pageScroll->horizontalScrollBar()->maximum() == 0, stem + " no outer horizontal scroll");
+                }
+                const auto screenshots = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+                if (!screenshots.isEmpty() && page == 1 && admin && (scale == 100 || scale == 200))
+                    check(window.grab().save(screenshots + QStringLiteral("/tasks-%1-%2.png").arg(filtered ? "filtered" : "empty").arg(scale)), stem + " capture");
+                if (!screenshots.isEmpty() && page != 1 && admin && scale == 100)
+                    check(window.grab().save(screenshots + QStringLiteral("/page-%1-%2.png").arg(page).arg(filtered ? "filtered" : "empty")), stem + " other page capture");
+            };
+            inspectEmpty(false);
+            if (page == 1) { TaskEntry task; task.id="empty-state-task"; task.title=longName.toUtf8().toStdString();
+                task.createdAt=QDateTime::currentSecsSinceEpoch(); workspace.data.tasks={task}; }
+            else if (page == 5) workspace.data.professions={{"empty-state-profession",longName.toUtf8().toStdString(),"description"}};
+            else if (page == 11) workspace.data.shortcuts={{"empty-state-shortcut",longName.toUtf8().toStdString(),temp.path().toUtf8().toStdString()}};
+            else workspace.data.bannerTexts={longName.toUtf8().toStdString()};
+            search->setText("unmatched-empty-state-fixture"); QTest::qWait(15);
+            inspectEmpty(true);
+            // Use the actual existing recovery action. Do not add a duplicate CTA.
+            if (page == 1) {
+                auto* reset = window.findChild<QPushButton*>("taskFilterReset");
+                if (!reset) return false;
+                reset->click();
+            } else {
+                search->setFocus(); search->selectAll(); QTest::keyClick(search,Qt::Key_Backspace);
+            }
+            QTest::qWait(15); ++states;
+            check(search->text().isEmpty() && table->rowCount() == 1 && !table->isHidden() && empty->isHidden(), stem + " populated list restored");
+            auto* cell = table->item(0,0);
+            check(cell && (page == 1
+                ? cell->data(Qt::UserRole).toString() == "empty-state-task" &&
+                    cell->data(Qt::AccessibleDescriptionRole).toString().section('\n',0,0) == longName &&
+                    cell->text().startsWith(longName)
+                : cell->text() == longName), stem + " actual record retained (task status badges preserved)");
+        }
+        window.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "workingEmpty: " << states << " page states (empty / filtered / restored), seven scales, both roles\n";
+    return ok && states == 126;
+}
+
+static bool TestQtJournalEmptyStates(QApplication& app) {
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_ADMIN_PASSWORD")) return false;
+    bool ok = true;
+    int states = 0;
+    auto check = [&](bool value, const QString& message) {
+        if (!value) std::cerr << "journalEmpty: " << message.toStdString() << '\n';
+        ok &= value;
+    };
+    for (int scale : {90,100,110,125,150,175,200}) for (bool admin : {false,true}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+        QtDisplaySettings settings; settings.scalePercent=scale; settings.motionEnabled=false;
+        if (!SaveQtDisplaySettings(workspace.directory, settings) ||
+            !SetAdminPassword(workspace.directory,"journal-fixture") ||
+            !SetAdminStayLoggedIn(workspace.directory,admin)) return false;
+        ApplyQtDisplaySettings(app,settings);
+        workspace.data.taskAudit.clear(); workspace.data.vault.log.clear();
+        QtWindow window(workspace); window.resize(800,520); window.show();
+        QApplication::processEvents();
+        auto* nav=window.findChild<QListWidget*>("navigation");
+        auto* table=window.findChild<QTableWidget*>("records");
+        auto* search=window.findChild<QLineEdit*>("search");
+        auto* empty=window.findChild<QWidget*>("listEmptyState");
+        auto* title=window.findChild<QLabel*>("listEmptyTitle");
+        auto* description=window.findChild<QLabel*>("listEmptyDescription");
+        auto* scroll=window.findChild<QScrollArea*>("pageContentScrollArea");
+        auto* auditReset=window.findChild<QPushButton*>("auditFilterReset");
+        auto* auditActor=window.findChild<QLineEdit*>("auditActorFilter");
+        auto* auditSource=window.findChild<QComboBox*>("auditSourceFilter");
+        auto* levels=window.findChild<QPushButton*>("logPresetAll");
+        if (!nav || !table || !search || !empty || !title || !description || !scroll ||
+            !auditReset || !auditActor || !auditSource || !levels) return false;
+        const QString stem=QStringLiteral("%1-%2").arg(scale).arg(admin);
+        auto inspect = [&](bool filtered, const QString& recovery, const QString& name) {
+            ++states;
+            check(table->rowCount()==0 && table->isHidden() && empty->isVisible(),stem+name+" visible state");
+            check(title->text().contains(QString::fromUtf8("ничего не найдено"))==filtered,stem+name+" no-data/no-match");
+            check(description->text().contains(recovery) && !description->text().contains(QString::fromUtf8("Начните с действия")),stem+name+" truthful recovery");
+            check(empty->accessibleName()==title->text() && empty->accessibleDescription()==description->text() &&
+                title->textFormat()==Qt::PlainText && description->textFormat()==Qt::PlainText,stem+name+" accessibility");
+            for (QSize size : {QSize(800,520),QSize(1120,720),QSize(800,520)}) {
+                window.resize(size); QTest::qWait(10);
+                scroll->ensureWidgetVisible(description,0,8); QTest::qWait(5);
+                for (auto* label : {title,description}) {
+                    const auto bounds=label->fontMetrics().boundingRect(QRect(0,0,label->contentsRect().width(),10000),Qt::TextWordWrap,label->text());
+                    check(label->wordWrap() && label->height()>=bounds.height(),stem+name+" text height");
+                    check(scroll->viewport()->rect().contains(QRect(label->mapTo(scroll->viewport(),QPoint()),label->size())),stem+name+" reachable context");
+                }
+                check(scroll->horizontalScrollBar()->maximum()==0,stem+name+" outer width");
+            }
+            const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+            if (!shots.isEmpty() && (scale==100 || scale==200))
+                check(window.grab().save(shots+QStringLiteral("/journal-%1-%2-%3.png").arg(name).arg(scale).arg(admin)),"capture");
+        };
+        nav->setCurrentRow(7); QTest::qWait(15);
+        if (!admin) {
+            inspect(false,QString::fromUtf8("режиме просмотра"),"audit-empty");
+            check(auditSource->currentIndex()==1 && auditSource->isHidden(),"ordinary audit scope preserved");
+        }
+        workspace.data.taskAudit.push_back({QDateTime::currentSecsSinceEpoch(),"journal-actor","journal-task","title","old","journal-new"});
+        auditActor->setText("journal-no-match"); QTest::qWait(15);
+        inspect(true,QString::fromUtf8("Сбросить"),"audit-filtered");
+        auditReset->click(); QTest::qWait(15);
+        bool found=false;
+        for (int row=0;row<table->rowCount();++row)
+            found |= table->item(row,0)->data(Qt::UserRole).toString()=="journal-task";
+        check(found && !table->isHidden() && empty->isHidden(),"audit reset restores exact record");
+        if (admin) {
+            nav->setCurrentRow(10); QTest::qWait(15);
+            inspect(false,QString::fromUtf8("баланс"),"vault-empty");
+            workspace.data.vault.log.push_back({QDateTime::currentSecsSinceEpoch(),7.5,"journal-operation","journal-note"});
+            search->setText("journal-no-match"); QTest::qWait(15);
+            inspect(true,QString::fromUtf8("поиск"),"vault-filtered");
+            search->setFocus(); search->selectAll(); QTest::keyClick(search,Qt::Key_Backspace); QTest::qWait(15);
+            check(table->rowCount()==1 && !table->isHidden() && empty->isHidden() &&
+                table->item(0,3)->text()=="journal-note","vault real record restored");
+        } else check(nav->item(10)->isHidden(),"vault remains administrator-only");
+        nav->setCurrentRow(16); QTest::qWait(15);
+        const int availableLogs=table->rowCount();
+        check(availableLogs>0,"real startup logs present");
+        search->setText("journal-no-match"); QTest::qWait(15);
+        inspect(true,QString::fromUtf8("Все источники"),"logs-search");
+        search->clear(); QTest::qWait(15);
+        for (const auto* name : {"logInfo","logWarnings","logErrors"}) {
+            auto* level=window.findChild<QCheckBox*>(name); if (!level) return false;
+            level->setChecked(false);
+        }
+        QTest::qWait(15);
+        inspect(true,QString::fromUtf8("Все уровни"),"logs-levels");
+        levels->click(); QTest::qWait(15);
+        check(table->rowCount()==availableLogs && !table->isHidden() && empty->isHidden(),"log level recovery restores records");
+        window.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "journalEmpty: " << states << " empty/filter states, seven scales, permission-aware recovery\n";
+    return ok && states==63;
+}
+
 static bool TestQtVisibleTaskExports() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -7863,6 +9615,98 @@ static bool TestQtTaskFilterReset() {
         settings.taskStatusFilter == 0 && settings.taskPriorityFilter == 0 && settings.taskQuickFilter == 0 &&
         settings.taskCreatedRange == 0 && settings.taskSortMode == 0 && settings.taskProjectId.isEmpty() &&
         settings.taskPipelineStepId.isEmpty() && settings.taskAssigneeProfileId.isEmpty();
+}
+
+static bool TestQtTaskFilterDisclosure(QApplication& app) {
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_ADMIN_PASSWORD")) return false;
+    bool ok=true;
+    auto check=[&](bool value,const QString& label) { if (!value) std::cerr << "taskFilters: " << label.toStdString() << '\n'; ok &= value; };
+    for (int scale : {90,100,110,125,150,175,200}) {
+        QTemporaryDir temp; if (!temp.isValid()) return false;
+        QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+        QtDisplaySettings settings; settings.scalePercent=scale; settings.motionEnabled=(scale==100);
+        if (!SaveQtDisplaySettings(workspace.directory,settings)) return false;
+        ApplyQtDisplaySettings(app,settings);
+        workspace.data.projects={{"p1",u8"Проект для проверки полного контекста фильтра","",0},{"p2","Other","",0}};
+        TaskEntry one; one.id="one"; one.title=u8"Первая задача"; one.priority=0; one.projectId="p1";
+        one.createdAt=QDateTime::currentSecsSinceEpoch();
+        TaskEntry two=one; two.id="two"; two.title=u8"Вторая задача"; two.priority=2; two.projectId="p2";
+        workspace.data.tasks={one,two};
+        if (!AppSaveProjects(workspace.directory,workspace.data.projects) || !AppSaveTasks(workspace.directory,workspace.data.tasks)) return false;
+        QtWindow window(workspace); window.resize(800,520); window.show();
+        auto* nav=window.findChild<QListWidget*>("navigation");
+        if (!nav) return false;
+        nav->setCurrentRow(1); QTest::qWait(15);
+        auto* toggle=window.findChild<QToolButton*>("taskFilterToggle");
+        auto* panel=window.findChild<QWidget*>("taskFilterDetails");
+        auto* summary=window.findChild<QLabel*>("taskFilterSummary");
+        auto* records=window.findChild<QTableWidget*>("records");
+        auto* reset=window.findChild<QPushButton*>("taskFilterReset");
+        auto* priority=window.findChild<QComboBox*>("priorityFilter");
+        auto* project=window.findChild<QComboBox*>("taskProjectFilter");
+        const auto screenshots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        auto capture=[&](const char* state) {
+            if (!screenshots.isEmpty() && (scale==100 || scale==200))
+                check(window.grab().save(screenshots+QStringLiteral("/tasks-%1-%2.png").arg(state).arg(scale)),"capture");
+        };
+        capture("collapsed");
+        if (!toggle || !panel || !summary || !records || !reset || !priority || !project) { check(false,"disclosure controls missing"); window.close(); continue; }
+        check(!toggle->isChecked() && panel->isHidden() && summary->isHidden() && records->rowCount()==2,"unfiltered defaults compact");
+        if (scale==100) {
+            auto* disclosure=static_cast<QtDisclosureButton*>(toggle);
+            auto* animation=disclosure->indicatorAnimation();
+            const bool allowed=IsQtMotionAllowed(settings);
+            toggle->click();
+            check(panel->isVisible() && records->rowCount()==2,"motion does not delay filter content/data");
+            check(animation->state()==(allowed ? QAbstractAnimation::Running : QAbstractAnimation::Stopped),
+                "real task disclosure follows motion policy");
+            const bool advanced = QTest::qWaitFor([&] { return disclosure->indicatorAngle() > 0; }, 180);
+            const qreal angle=disclosure->indicatorAngle();
+            check(advanced && angle>0,"real task disclosure advances");
+            toggle->click();
+            check(panel->isHidden() && records->rowCount()==2,"reversal immediately collapses content");
+            if (allowed) check(std::abs(disclosure->indicatorAngle()-angle)<0.001,"reversal preserves current angle");
+            QTest::qWait(220);
+            check(disclosure->indicatorAngle()==0 && animation->state()==QAbstractAnimation::Stopped,
+                "real task disclosure reaches collapsed endpoint");
+            std::cout << "taskFilters: actual policy=" << allowed << " sampled angle=" << angle << '\n';
+        }
+        const int compactTop=records->geometry().top();
+        if (QGuiApplication::platformName()=="offscreen") QApplication::setActiveWindow(&window);
+        toggle->setFocus(); QTest::keyClick(toggle,Qt::Key_Space); QTest::qWait(20);
+        check(toggle->isChecked() && panel->isVisible() && toggle->hasFocus() && records->rowCount()==2,"keyboard expand preserves data/focus");
+        check(records->geometry().top()>compactTop,"collapsed filters free content height");
+        for (const char* name : {"priorityFilter","taskCreatedRange","taskSortMode","taskAssigneeFilter","taskProjectFilter","taskPipelineFilter"}) {
+            auto* combo=window.findChild<QComboBox*>(name);
+            check(combo && combo->isVisible() && panel->isAncestorOf(combo),QString::fromLatin1(name)+" available in expanded panel");
+        }
+        priority->setCurrentIndex(1); project->setCurrentIndex(project->findData("p1")); QTest::qWait(15);
+        check(records->rowCount()==1 && records->item(0,0)->data(Qt::UserRole).toString()=="one","filters still select correct task");
+        toggle->setFocus(); QTest::keyClick(toggle,Qt::Key_Space); QTest::qWait(20);
+        check(!toggle->isChecked() && panel->isHidden() && summary->isVisible() && toggle->hasFocus(),"keyboard collapse keeps focus and visible context");
+        check(toggle->text().contains("2") && summary->text().contains(priority->currentText()) && summary->text().contains(project->currentText()) &&
+            summary->wordWrap() && summary->textFormat()==Qt::PlainText && toggle->accessibleDescription().contains(project->currentText()),"active settings fully described");
+        check(records->rowCount()==1,"collapse does not reset filters");
+        capture("active-collapsed");
+        const auto persisted=LoadQtDisplaySettings(workspace.directory);
+        check(persisted.taskPriorityFilter==1 && persisted.taskProjectId=="p1","existing persistence retained");
+        if (scale==100) {
+            QtWindow reopened(workspace); reopened.show(); QTest::qWait(15);
+            auto* reopenedToggle=reopened.findChild<QToolButton*>("taskFilterToggle");
+            auto* reopenedPanel=reopened.findChild<QWidget*>("taskFilterDetails");
+            check(reopenedToggle && reopenedToggle->isChecked() && reopenedPanel && reopenedPanel->isVisible(),"saved active filters open on restart");
+            reopened.close();
+        }
+        reset->click(); QTest::qWait(15);
+        check(records->rowCount()==2 && priority->currentIndex()==0 && project->currentIndex()==0 && summary->isHidden() &&
+            !toggle->text().contains("2"),"existing reset clears hidden restrictions");
+        nav->setCurrentRow(0); check(toggle->isHidden() && panel->isHidden() && summary->isHidden(),"task controls do not leak to other pages");
+        nav->setCurrentRow(1); check(!toggle->isChecked() && panel->isHidden(),"explicit compact choice retained within session");
+        window.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "taskFilters: seven scales, expand/filter/collapse/reset/navigation and persisted restart\n";
+    return ok && TestQtTaskFilterReset();
 }
 
 static bool TestQtVisibleTaskSelectionTools() {
@@ -8073,6 +9917,9 @@ static bool TestQtTaskAttentionBadges() {
         awardedCell && !awardedCell->text().contains("XP");
     auto* quick = window.findChild<QComboBox*>("quickTaskFilter");
     if (!badgesPass || !quick) return false;
+    const auto attentionLabels = xpCell->data(QtTaskTitleDelegate::LabelsRole).toStringList();
+    if (!attentionLabels.contains(QStringLiteral("XP")) || !attentionLabels.contains(QStringLiteral("!")) ||
+        normalCell->data(QtTaskTitleDelegate::LabelsRole).toStringList().contains(QStringLiteral("!"))) return false;
     quick->setCurrentIndex(9);
     const auto savedSettings = LoadQtDisplaySettings(directory);
     auto* summary = window.findChild<QLabel*>("summary");
@@ -8083,6 +9930,23 @@ static bool TestQtTaskAttentionBadges() {
     const std::vector<std::pair<int, std::set<std::string>>> riskFilters{
         {10, {"missing-stage"}}, {11, {"unknown-stage", "broken-next-task"}},
         {12, {"branching-task"}}, {13, {"open-handoff"}}};
+    const auto luminance=[](const QColor& color) {
+        auto linear=[](double value){return value<=0.04045 ? value/12.92 : std::pow((value+0.055)/1.055,2.4);};
+        return 0.2126*linear(color.redF())+0.7152*linear(color.greenF())+0.0722*linear(color.blueF());
+    };
+    const QRegularExpression anchors(QStringLiteral("<a style=\"color:([^\"]+)\" href=\"risk:[^\"]+\">"));
+    auto matches=anchors.globalMatch(pipelineSummary->text());
+    int linkCount=0;
+    while(matches.hasNext()) {
+        const QColor foreground(matches.next().captured(1));
+        const double light=luminance(foreground), dark=luminance(window.palette().color(QPalette::Window));
+        const double contrast=(std::max(light,dark)+0.05)/(std::min(light,dark)+0.05);
+        if(!foreground.isValid() || foreground!=window.palette().color(QPalette::Link) || contrast<4.5) {
+            std::cerr<<"Pipeline signal link contrast insufficient: "<<contrast<<'\n'; return false;
+        }
+        ++linkCount;
+    }
+    if(linkCount!=5)return false;
     for (const auto& [index, expectedIds] : riskFilters) {
         quick->setCurrentIndex(index);
         std::set<std::string> actualIds;
@@ -8354,6 +10218,135 @@ static bool TestBulkTaskEditsUi() {
         }) == 2;
 }
 
+static bool TestQtPomodoroPresentation(QApplication& app) {
+    bool ok = true;
+    int states = 0;
+    for (const int scale : {90,100,110,125,150,175,200}) {
+        auto check = [&](bool value, const char* context) {
+            if (!value) { std::cerr << "Pomodoro presentation " << scale << ": " << context << '\n'; ok=false; }
+        };
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        const auto directory=std::filesystem::u8path(temp.path().toUtf8().constData());
+        QtDisplaySettings settings; settings.scalePercent=scale; settings.motionEnabled=false;
+        if (!SaveQtDisplaySettings(directory,settings)) return false;
+        ApplyQtDisplaySettings(app,settings);
+        QtWorkspace workspace(directory);
+        QtWindow window(workspace); window.resize(800,520); window.show();
+        window.findChild<QListWidget*>("navigation")->setCurrentRow(8);
+        QTest::qWait(15);
+        auto* panel=static_cast<QtPomodoro*>(window.findChild<QWidget*>("pomodoroPanel"));
+        auto* toggle=window.findChild<QToolButton*>("pomodoroSettingsToggle");
+        auto* body=window.findChild<QWidget*>("pomodoroSettingsBody");
+        auto* session=window.findChild<QWidget*>("pomodoroSession");
+        auto* summary=window.findChild<QLabel*>("pomodoroSettingsSummary");
+        if (!panel || !toggle || !body || !session || !summary) { check(false,"session/disclosure missing"); continue; }
+        auto* scroll=window.findChild<QScrollArea*>("pageContentScrollArea");
+        auto* start=panel->findChild<QPushButton*>("pomodoroStart");
+        auto* pause=panel->findChild<QPushButton*>("pomodoroPause");
+        auto* next=panel->findChild<QPushButton*>("pomodoroNext");
+        auto* reset=panel->findChild<QPushButton*>("pomodoroReset");
+        auto* phase=panel->findChild<QLabel*>("pomodoroPhase");
+        auto* time=panel->findChild<QLabel*>("pomodoroTime");
+        auto* work=panel->findChild<QSpinBox*>("pomodoroWorkMinutes");
+        auto* sound=panel->findChild<QCheckBox*>("pomodoroSoundEnabled");
+        if (!scroll || !start || !pause || !next || !reset || !phase || !time || !work || !sound) return false;
+        check(time->font().pixelSize()==qRound(30.0*scale/100.0),"timer typography follows text scale");
+        check(time->fontMetrics().horizontalAdvance(time->text())<=time->contentsRect().width() &&
+            time->fontMetrics().height()<=time->contentsRect().height(),"timer glyphs fit");
+        panel->setAdministrator(true); sound->setChecked(false);
+        int rewards=0; panel->setRewardHandler([&](int, std::int64_t){ ++rewards; return QString::fromUtf8("Фокус завершён"); });
+        const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        auto capture=[&](const char* name) {
+            if (!shots.isEmpty() && (scale==100 || scale==200))
+                check(window.grab().save(shots+QStringLiteral("/pomodoro-%1-%2.png").arg(name).arg(scale)),"capture");
+        };
+        auto inspect=[&](QPushButton* active, const QString& expectedPhase) {
+            ++states; QTest::qWait(5);
+            check(phase->text()==expectedPhase,"phase preserved");
+            int visible=0;
+            for (auto* button : {start,pause,next}) {
+                check(session->isAncestorOf(button),"action belongs to timer session");
+                if (button->isVisible()) {
+                    ++visible;
+                    check(button==active && button->property("primary").toBool(),"one contextual primary");
+                    check(button->fontMetrics().horizontalAdvance(button->text()) < button->width()-8,"action text fits");
+                }
+            }
+            check(visible==1 && scroll->horizontalScrollBar()->maximum()==0,"one action and no page overflow");
+            scroll->ensureWidgetVisible(active); QTest::qWait(5);
+            check(scroll->viewport()->rect().contains(QRect(active->mapTo(scroll->viewport(),QPoint()),active->size())),"action reachable");
+        };
+        check(!toggle->isChecked() && body->isHidden() && summary->text().contains("25"),"collapsed settings retain applied context");
+        inspect(start,QString::fromUtf8("Фокус")); capture("idle");
+        if (QGuiApplication::platformName()=="offscreen") QApplication::setActiveWindow(&window);
+        scroll->ensureWidgetVisible(toggle); toggle->setFocus(); QTest::keyClick(toggle,Qt::Key_Space); QTest::qWait(10);
+        check(toggle->isChecked() && body->isVisible() && toggle->hasFocus(),"keyboard disclosure");
+        auto* disclosure=dynamic_cast<QtDisclosureButton*>(toggle);
+        check(disclosure && disclosure->indicatorAngle()==90.0 &&
+            disclosure->indicatorAnimation()->state()==QAbstractAnimation::Stopped,"owner motion-off policy applied");
+        check(scroll->horizontalScrollBar()->maximum()==0,"expanded settings do not overflow");
+        check(!reset->icon().isNull() && !reset->accessibleName().isEmpty() && !reset->toolTip().isEmpty(),"reset icon has context");
+        check(sound->isVisible(),"administrator sound controls exposed");
+        panel->setAdministrator(false); check(!sound->isVisible(),"nonadministrator sound controls hidden");
+        panel->setAdministrator(true);
+        work->setValue(30);
+        panel->findChild<QSpinBox*>("pomodoroCyclesSetting")->setValue(2);
+        QTest::keyClick(toggle,Qt::Key_Space); QTest::qWait(5);
+        check(body->isHidden() && work->value()==30 && summary->text().contains("25"),"collapse preserves unsaved draft, summary remains applied");
+        QTest::keyClick(toggle,Qt::Key_Space); QTest::qWait(5);
+        auto* save=panel->findChild<QPushButton*>("pomodoroSaveSettings");
+        scroll->ensureWidgetVisible(save); save->setFocus(); QTest::keyClick(save,Qt::Key_Space); QTest::qWait(10);
+        check(scroll->viewport()->rect().contains(QRect(save->mapTo(scroll->viewport(),QPoint()),save->size())),"settings save reachable");
+        check(time->text()=="30:00" && summary->text().contains("30"),"save refreshes applied summary and timer");
+        capture("settings");
+        toggle->click();
+        start->setFocus(); QTest::keyClick(start,Qt::Key_Space); panel->advanceSecondsForTest(1);
+        inspect(pause,QString::fromUtf8("Фокус")); capture("running");
+        pause->setFocus(); QTest::keyClick(pause,Qt::Key_Space);
+        const auto paused=time->text(); panel->advanceSecondsForTest(2);
+        check(time->text()==paused,"paused timer unchanged");
+        inspect(start,QString::fromUtf8("Фокус")); capture("paused");
+        start->click(); panel->advanceSecondsForTest(1800);
+        inspect(next,QString::fromUtf8("Фокус")); capture("completed");
+        next->setFocus(); QTest::keyClick(next,Qt::Key_Space);
+        inspect(pause,QString::fromUtf8("Перерыв"));
+        panel->advanceSecondsForTest(300); next->click(); panel->advanceSecondsForTest(1800); next->click();
+        inspect(pause,QString::fromUtf8("Длинный перерыв")); capture("long-break");
+        check(rewards==2,"only completed focus cycles rewarded");
+        reset->setFocus(); QTest::keyClick(reset,Qt::Key_Space);
+        inspect(start,QString::fromUtf8("Фокус")); check(time->text()=="30:00","reset retains saved duration");
+        for (const int width : {1120,1440,800}) {
+            window.resize(width,520); QTest::qWait(10);
+            check(scroll->horizontalScrollBar()->maximum()==0,"reversible responsive layout");
+        }
+        QtPomodoro reopened(nullptr,directory);
+        check(reopened.findChild<QSpinBox*>("pomodoroWorkMinutes")->value()==30 &&
+            reopened.findChild<QLabel*>("pomodoroSettingsSummary")->text().contains("30"),"saved settings reopen");
+        if (scale==100) {
+            reopened.resize(720,580); reopened.show(); QTest::qWait(10);
+            reopened.setMotionPolicy([] { return true; });
+            auto* animated=dynamic_cast<QtDisclosureButton*>(reopened.findChild<QToolButton*>("pomodoroSettingsToggle"));
+            if (!animated) return false;
+            animated->click(); QApplication::processEvents();
+            const QRect bounds=animated->geometry();
+            QTest::qWait(35);
+            check(animated->indicatorAngle()>0 && animated->indicatorAngle()<90 && animated->geometry()==bounds,"local arrow intermediate without button movement");
+            const qreal current=animated->indicatorAngle(); animated->click();
+            check(qAbs(animated->indicatorAngle()-current)<0.01,"reverse starts from current angle");
+            QTest::qWait(180);
+            check(animated->indicatorAngle()==0 && animated->indicatorAnimation()->state()==QAbstractAnimation::Stopped,"reverse settles");
+            animated->click(); QTest::qWait(30); reopened.setMotionPolicy([] { return false; });
+            check(animated->indicatorAngle()==90 && animated->indicatorAnimation()->state()==QAbstractAnimation::Stopped,"motion-off snaps immediately");
+            reopened.close();
+        }
+        window.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "Pomodoro presentation: " << states << " states across seven scales\n";
+    return ok && states==49;
+}
+
 static bool TestPomodoro() {
     auto fail = [](int step) { std::cerr << "Pomodoro step " << step << " failed\n"; return false; };
     QTemporaryDir temp;
@@ -8384,6 +10377,10 @@ static bool TestPomodoro() {
         time->text() != "00:02" || !rewardStatus->text().contains(QString::fromUtf8("фокус короче минимума")) ||
         rewardStatus->toolTip() != QString::fromUtf8("Начисление: +1 за полный фокус")) return fail(1);
     panel.setAdministrator(true);
+    // Sound controls are now deliberately behind the user-facing disclosure.
+    auto* settingsToggle=panel.findChild<QToolButton*>("pomodoroSettingsToggle");
+    if (!settingsToggle || settingsToggle->isChecked()) return fail(27);
+    settingsToggle->click(); QApplication::processEvents();
     auto* focusSound = panel.findChild<QComboBox*>("pomodoroFocusSound");
     auto* soundDirectory = panel.findChild<QLabel*>("pomodoroSoundDirectory");
     auto* soundAvailability = panel.findChild<QLabel*>("pomodoroSoundAvailability");
@@ -8640,6 +10637,8 @@ static bool TestRulesEditor() {
         auto* apply = dialog ? dialog->findChild<QPushButton*>("rulesApplyPreset") : nullptr;
         auto* notice = dialog ? dialog->findChild<QLabel*>("rulesNotice") : nullptr;
         corruptRejected = save && apply && !save->isEnabled() && !apply->isEnabled() && notice && !notice->text().isEmpty();
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (dialog && !artifacts.isEmpty()) dialog->grab().save(artifacts + "/rules-corrupt-preset.png");
         if (auto* modal = qobject_cast<QDialog*>(dialog)) modal->reject();
     });
     if (ShowRulesEditor(nullptr, corruptWorkspace) || !corruptRejected || !corruptPreset.open(QIODevice::ReadOnly) ||
@@ -8654,6 +10653,8 @@ static bool TestRulesEditor() {
         dialog->findChild<QSpinBox*>("rulesLevelBase")->setValue(3456);
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Save)->click();
         failureShown = !dialog->findChild<QLabel*>("rulesNotice")->text().isEmpty();
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/rules-locked-save.png");
         qobject_cast<QDialog*>(dialog)->reject();
     });
     const bool blockedAccepted = ShowRulesEditor(nullptr, workspace);
@@ -8663,6 +10664,621 @@ static bool TestRulesEditor() {
     const auto after = file.readAll(); file.close(); if (after != before) return false;
 #endif
     return true;
+}
+
+static bool TestQtSettingsMotionIntegration(QApplication& app) {
+    struct RestoreDisplay {
+        QApplication& app;
+        QFont font;
+        QString style;
+        QVariant base;
+        bool quitOnLastWindowClosed;
+        ~RestoreDisplay() {
+            app.setFont(font);
+            app.setStyleSheet(style);
+            app.setProperty("forgeBasePointSize", base);
+            app.setQuitOnLastWindowClosed(quitOnLastWindowClosed);
+        }
+    } restore{app, app.font(), app.styleSheet(), app.property("forgeBasePointSize"),
+        app.quitOnLastWindowClosed()};
+    app.setQuitOnLastWindowClosed(false);
+    bool checked = true;
+    int modalContexts = 0;
+    auto record = [&](bool ok, const QString& context) {
+        if (!ok) std::cerr << "Settings motion integration: " << context.toStdString() << '\n';
+        checked &= ok;
+    };
+    auto readIni = [&](const QString& path, QByteArray& bytes, const QString& context) {
+        QFile file(path);
+        const bool opened = file.open(QIODevice::ReadOnly);
+        record(opened, context + " INI opened");
+        if (!opened) return false;
+        bytes = file.readAll();
+        const bool read = file.error() == QFileDevice::NoError && !bytes.isEmpty();
+        record(read, context + " INI read succeeded/nonempty");
+        return read;
+    };
+    // Small event drain, not an animation wait or a layout/native acceptance gate.
+    auto drain = [&] { app.processEvents(QEventLoop::AllEvents, 5); };
+    auto stoppedAt = [](const QtDisclosureButton* button, qreal angle) {
+        return button && button->indicatorAnimation()->state() == QAbstractAnimation::Stopped &&
+            std::abs(button->indicatorAngle() - angle) < 0.001;
+    };
+    QtDisplaySettings initial;
+    initial.scalePercent = 100;
+    initial.motionEnabled = true;
+    initial.deadlineNotificationsWhenClosed = false;
+    ApplyQtDisplaySettings(app, initial);
+
+    // One real settings fixture: Cancel -> Save -> reopen-off. Only motion is
+    // changed through UI; defaults keep deadline scheduling unchanged/off.
+    {
+        QTemporaryDir temp;
+        record(temp.isValid(), "direct temporary workspace");
+        if (!temp.isValid()) return false;
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+        const auto iniPath = temp.path() + "/meta/ui.ini";
+        record(SaveQtDisplaySettings(directory, initial), "direct initial fixture persisted");
+        if (!checked) return false;
+        QtDisplaySettings draft = initial;
+        for (int mode : {0, 1, 2}) { // Cancel, Save, reopen with saved user-off.
+            const QString stem = QStringLiteral("B1 direct %1").arg(
+                mode == 0 ? "Cancel" : mode == 1 ? "Save" : "reopen-off");
+            QByteArray before;
+            if (!readIni(iniPath, before, stem + " before")) return false;
+            const bool originalMotion = draft.motionEnabled;
+            QPointer<QDialog> modal;
+            QPointer<QCheckBox> checkbox;
+            QPointer<QToolButton> geometryGuard, presetsGuard;
+            QPointer<QVariantAnimation> geometryAnimation, presetsAnimation;
+            bool drove = false;
+            // Cancelled automatically on normal return. Failure-only watchdog
+            // accommodates existing readiness helper's bounded native checks;
+            // it does not add a successful-path wait or bypass native policy.
+            QTimer watchdog;
+            watchdog.setSingleShot(true);
+            QObject::connect(&watchdog, &QTimer::timeout, &app, [&] {
+                record(false, stem + " modal watchdog");
+                if (auto* active = qobject_cast<QDialog*>(QApplication::activeModalWidget()))
+                    active->reject();
+            });
+            watchdog.start(6000);
+            ScheduleQtModalDriver(app, "qtDisplaySettings", stem, [&](QDialog* dialog) {
+                ++modalContexts;
+                drove = true;
+                modal = dialog;
+                auto* motion = dialog->findChild<QCheckBox*>("qtMotionEnabled");
+                auto* geometry = dynamic_cast<QtDisclosureButton*>(
+                    dialog->findChild<QToolButton*>("qtAdvancedGeometryToggle"));
+                auto* presets = dynamic_cast<QtDisclosureButton*>(
+                    dialog->findChild<QToolButton*>("qtLayoutPresetsToggle"));
+                auto* geometryPanel = dialog->findChild<QWidget*>("qtAdvancedGeometry");
+                auto* presetsPanel = dialog->findChild<QWidget*>("qtLayoutPresets");
+                auto* presetName = dialog->findChild<QLineEdit*>("qtLayoutPresetName");
+                auto* presetList = dialog->findChild<QComboBox*>("qtLayoutPresetList");
+                auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+                auto* buttons = footer ? footer->findChild<QDialogButtonBox*>() : nullptr;
+                auto* save = buttons ? buttons->button(QDialogButtonBox::Save) : nullptr;
+                auto* cancel = buttons ? buttons->button(QDialogButtonBox::Cancel) : nullptr;
+                record(motion && geometry && presets && geometryPanel && presetsPanel && presetName && presetList && save && cancel,
+                    stem + " actual settings hooks");
+                if (!motion || !geometry || !presets || !geometryPanel || !presetsPanel || !presetName || !presetList || !save || !cancel) {
+                    dialog->reject(); return;
+                }
+                checkbox = motion;
+                geometryGuard = geometry; presetsGuard = presets;
+                geometryAnimation = geometry->indicatorAnimation();
+                presetsAnimation = presets->indicatorAnimation();
+                record(motion->isChecked() == originalMotion && !geometry->isChecked() && !presets->isChecked() &&
+                    geometryPanel->isHidden() && presetsPanel->isHidden() &&
+                    stoppedAt(geometry, 0.0) && stoppedAt(presets, 0.0), stem + " loaded/collapsed state");
+                record(geometry->isVisible() && presets->isVisible() && geometry->isEnabled() && presets->isEnabled(),
+                    stem + " actual widgets visible/enabled (not viewport paint)");
+                // Product caller semantics, no clock changes or event pump
+                // between the two clicks and the immediate checkbox command.
+                const bool allowed = IsQtMotionAllowed(draft); // real policy, read-only
+                geometry->click();
+                presets->click();
+                record(geometry->isChecked() && presets->isChecked() && geometryPanel->isVisible() &&
+                    presetsPanel->isVisible() && geometry->accessibleDescription() == QString::fromUtf8("Развёрнуто") &&
+                    presets->accessibleDescription() == QString::fromUtf8("Развёрнуто"), stem + " immediate expanded semantics");
+                if (originalMotion && allowed) {
+                    const bool bothRunning = geometryAnimation->state() == QAbstractAnimation::Running &&
+                        presetsAnimation->state() == QAbstractAnimation::Running;
+                    record(bothRunning, stem + " both actual animations Running");
+                    std::cout << stem.toStdString() << (bothRunning
+                        ? " RunningBranch=OBSERVED_REAL_POLICY\n"
+                        : " RunningBranch=FAIL_EXPECTED_REAL_POLICY_RUNNING\n");
+                } else {
+                    record(stoppedAt(geometry, 90.0) && stoppedAt(presets, 90.0), stem + " suppressed/off endpoints");
+                    std::cout << stem.toStdString() << (originalMotion
+                        ? " RunningBranch=NOT_OBSERVED_SYSTEM_SUPPRESSED\n"
+                        : " RunningBranch=USER_OFF\n");
+                }
+                presetName->setText("isolated-motion-draft"); // Do not press Save preset.
+                const int selectedPreset = presetList->currentIndex();
+                if (originalMotion) motion->click();
+                // MUST be inspected before any event drain: direct toggled
+                // connections must stop both, regardless of current OS policy.
+                record(!motion->isChecked() && stoppedAt(geometry, 90.0) && stoppedAt(presets, 90.0),
+                    stem + " checkbox off synchronously snaps both actual disclosures");
+                record(geometry->isChecked() && presets->isChecked() && geometryPanel->isVisible() &&
+                    presetsPanel->isVisible() && dialog->isVisible() && draft.motionEnabled == originalMotion,
+                    stem + " draft preview preserves panels/caller value/open modal");
+                record(presetName->text() == "isolated-motion-draft" && presetList->currentIndex() == selectedPreset &&
+                    geometry->accessibleDescription() == QString::fromUtf8("Развёрнуто") &&
+                    presets->accessibleDescription() == QString::fromUtf8("Развёрнуто"), stem + " draft fields/selection/a11y unchanged by motion off");
+                QByteArray preview;
+                if (readIni(iniPath, preview, stem + " preview"))
+                    record(preview == before, stem + " draft preview did not persist");
+                (mode == 1 ? save : cancel)->click();
+                if (dialog->isVisible()) {
+                    record(false, stem + " footer did not close actual modal");
+                    dialog->reject();
+                }
+            }, record);
+            const bool accepted = ShowQtDisplaySettings(nullptr, directory, draft);
+            watchdog.stop();
+            record(drove && accepted == (mode == 1), stem + " actual modal result");
+            record(draft.motionEnabled == (mode == 0), stem + " caller preference after command");
+            QByteArray after;
+            if (!readIni(iniPath, after, stem + " after")) return false;
+            if (mode == 1)
+                record(after != before && after.contains("motionEnabled=0"), stem + " actual Save persisted user-off");
+            else record(after == before, stem + " Cancel retained exact INI bytes");
+            record(modal.isNull() && checkbox.isNull() && geometryGuard.isNull() && presetsGuard.isNull() &&
+                geometryAnimation.isNull() && presetsAnimation.isNull(), stem + " normal modal QObject teardown");
+            drain();
+            record(modal.isNull() && geometryAnimation.isNull() && presetsAnimation.isNull(), stem + " queued teardown stable");
+            if (!checked) return false;
+        }
+    }
+
+    // Separate live-owner fixture: public ApplyQtDisplaySettings alone cannot
+    // update QtWindow::displaySettings_. Trigger its actual menu QAction.
+    {
+        QTemporaryDir temp;
+        record(temp.isValid(), "owner temporary workspace");
+        if (!temp.isValid()) return false;
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+        QtWorkspace workspace(directory);
+        Profile profile(u8"Изолированный профиль B1 motion");
+        const auto info = workspace.storage->create_profile(profile);
+        record(info.has_value() && workspace.storage->set_active_profile(info->id), "owner synthetic active profile");
+        if (!checked) return false;
+        initial.profileViewMode = 0;
+        initial.lastPage = 0;
+        initial.lastProfileId = QString::fromStdString(info->id);
+        record(SaveQtDisplaySettings(directory, initial), "owner initial fixture persisted");
+        if (!checked) return false;
+        QPointer<QtWindow> ownerGuard;
+        QPointer<QToolButton> diagnosticsGuard;
+        QPointer<QVariantAnimation> diagnosticsAnimation;
+        QPointer<QPropertyAnimation> markerAnimation;
+        {
+            QtWindow owner(workspace);
+            ownerGuard = &owner;
+            owner.resize(1120, 720);
+            owner.show(); drain();
+            auto* action = owner.findChild<QAction*>("qtDisplaySettingsAction");
+            auto* navigation = owner.findChild<QListWidget*>("navigation");
+            auto* marker = owner.findChild<QWidget*>("navigationActiveIndicator");
+            auto* markerMotion = owner.findChild<QPropertyAnimation*>("navigationIndicatorAnimation");
+            auto* diagnostics = dynamic_cast<QtDisclosureButton*>(owner.findChild<QToolButton*>("profileDiagnosticsToggle"));
+            auto* panel = owner.findChild<QWidget*>("profileDiagnostics");
+            record(action && navigation && marker && markerMotion && diagnostics && panel, "owner actual hooks");
+            if (!action || !navigation || !marker || !markerMotion || !diagnostics || !panel) return false;
+            record(action->isEnabled() && navigation->currentRow() == 0 && diagnostics->isVisible() &&
+                diagnostics->isEnabled() && !diagnostics->isChecked(), "owner real profile overview initial state");
+            diagnosticsGuard = diagnostics;
+            diagnosticsAnimation = diagnostics->indicatorAnimation();
+            markerAnimation = markerMotion;
+            const bool initiallyAllowed = IsQtMotionAllowed(initial);
+            diagnostics->click();
+            if (initiallyAllowed) {
+                const bool running = diagnosticsAnimation->state() == QAbstractAnimation::Running;
+                record(running, "owner actual initial true policy Running");
+                std::cout << "B1 owner" << (running ? " RunningBranch=OBSERVED_REAL_POLICY\n"
+                    : " RunningBranch=FAIL_EXPECTED_REAL_POLICY_RUNNING\n");
+            } else {
+                record(stoppedAt(diagnostics, 90.0), "owner initial system-suppressed endpoint");
+                std::cout << "B1 owner RunningBranch=NOT_OBSERVED_SYSTEM_SUPPRESSED\n";
+            }
+            record(panel->isVisible(), "diagnostics immediate content");
+            const bool diagnosticsAdvanced = QTest::qWaitFor([&] {
+                return diagnostics->indicatorAngle() > 0;
+            }, 180);
+            const qreal diagnosticsAngle = diagnostics->indicatorAngle();
+            record(diagnosticsAdvanced, "diagnostics actual progress");
+            diagnostics->click();
+            record(!panel->isVisible(), "diagnostics immediate collapse");
+            if (initiallyAllowed) record(std::abs(diagnostics->indicatorAngle()-diagnosticsAngle)<0.001,
+                "diagnostics continuous reversal");
+            QTest::qWait(220);
+            record(stoppedAt(diagnostics, 0.0), "diagnostics collapsed endpoint");
+            std::cout << "diagnostics motion angle=" << diagnosticsAngle << '\n';
+            diagnostics->click(); // Preserve the expanded state for the existing Settings policy test.
+            // The main window may be modal-blocked while Settings is open;
+            // neither its enabled flag nor Running state is required in modal.
+            const auto iniPath = temp.path() + "/meta/ui.ini";
+            QByteArray before;
+            if (!readIni(iniPath, before, "owner before QAction")) return false;
+            QPointer<QDialog> modal;
+            QPointer<QCheckBox> checkbox;
+            bool drove = false;
+            QTimer watchdog;
+            watchdog.setSingleShot(true);
+            QObject::connect(&watchdog, &QTimer::timeout, &app, [&] {
+                record(false, "owner settings modal watchdog");
+                if (auto* active = qobject_cast<QDialog*>(QApplication::activeModalWidget())) active->reject();
+            });
+            watchdog.start(6000);
+            ScheduleQtModalDriver(app, "qtDisplaySettings", "B1 owner QAction Saveoff", [&](QDialog* dialog) {
+                ++modalContexts; drove = true; modal = dialog;
+                auto* motion = dialog->findChild<QCheckBox*>("qtMotionEnabled");
+                auto* footer = dialog->findChild<QWidget*>("dialogFooter");
+                auto* buttons = footer ? footer->findChild<QDialogButtonBox*>() : nullptr;
+                auto* save = buttons ? buttons->button(QDialogButtonBox::Save) : nullptr;
+                record(motion && save && motion->isChecked(), "owner actual settings initialized true");
+                if (!motion || !save) { dialog->reject(); return; }
+                checkbox = motion;
+                motion->click();
+                record(!motion->isChecked(), "owner actual checkbox off");
+                QByteArray preview;
+                if (readIni(iniPath, preview, "owner preview"))
+                    record(preview == before, "owner draft not prematurely persisted");
+                save->click();
+                if (dialog->isVisible()) { record(false, "owner Save remained open"); dialog->reject(); }
+            }, record);
+            action->trigger();
+            watchdog.stop();
+            record(drove && modal.isNull() && checkbox.isNull(), "owner actual settings Save/normal teardown");
+            QByteArray after;
+            if (!readIni(iniPath, after, "owner after QAction")) return false;
+            record(after != before && after.contains("motionEnabled=0") &&
+                !LoadQtDisplaySettings(directory).motionEnabled, "owner actual QAction persisted off");
+            record(diagnostics->isVisible() && panel->isVisible() == diagnostics->isChecked() &&
+                stoppedAt(diagnostics, diagnostics->isChecked() ? 90.0 : 0.0), "owner applied settings snaps live diagnostics");
+            // Subsequent real commands prove live captured owner preference,
+            // not merely the hide/show endpoint caused by opening a modal.
+            for (int command = 0; command < 2; ++command) {
+                const bool wasChecked = diagnostics->isChecked();
+                diagnostics->click();
+                record(diagnostics->isChecked() != wasChecked && panel->isVisible() == diagnostics->isChecked() &&
+                    stoppedAt(diagnostics, diagnostics->isChecked() ? 90.0 : 0.0), "owner subsequent disclosure command uses saved off");
+            }
+            navigation->setCurrentRow(1);
+            drain(); QTest::qWait(1); drain(); // Existing zero-delay marker update.
+            record(navigation->currentRow() == 1 && marker->property("motionSuppressed").toBool() &&
+                markerMotion->state() == QAbstractAnimation::Stopped, "owner subsequent navigation uses saved off");
+            owner.hide();
+        }
+        record(ownerGuard.isNull() && diagnosticsGuard.isNull() && diagnosticsAnimation.isNull() &&
+            markerAnimation.isNull(), "owner normal QObject teardown");
+        drain();
+        record(ownerGuard.isNull() && diagnosticsAnimation.isNull() && markerAnimation.isNull(), "owner queued teardown stable");
+    }
+    record(modalContexts == 4, "exact four actual modal contexts");
+    std::cout << "Settings motion integration modalContexts=" << modalContexts
+              << " FunctionalChecks=" << (checked ? "PASS" : "FAIL") << '\n';
+    return checked;
+}
+
+static bool TestQtSliderPresentation(QApplication& app) {
+    struct Slider : QSlider {
+        Slider() : QSlider(Qt::Horizontal) {}
+        QStyleOptionSlider option() const { QStyleOptionSlider result; initStyleOption(&result); return result; }
+        QRect handle() const { const auto o=option(); return style()->subControlRect(QStyle::CC_Slider,&o,QStyle::SC_SliderHandle,this); }
+    };
+    bool ok=true; int inspections=0;
+    for (const int scale : {90,100,110,125,150,175,200}) {
+        auto check=[&](bool value,const char* context) { if(!value){std::cerr<<"slider "<<scale<<": "<<context<<'\n';ok=false;} };
+        QtDisplaySettings settings; settings.scalePercent=scale; ApplyQtDisplaySettings(app,settings);
+        QWidget host; auto* box=new QVBoxLayout(&host);
+        auto* other=new QPushButton("Focus target"); box->addWidget(other);
+        auto* slider=new Slider; box->addWidget(slider);
+        host.resize(500,qRound(100*scale/100.0)); host.show(); QApplication::setActiveWindow(&host); QTest::qWait(5);
+        auto inspect=[&](bool enabled) {
+            ++inspections; QTest::mouseMove(other,QPoint(2,2)); QTest::qWait(1);
+            const auto rect=slider->handle(); const auto pixels=slider->grab().toImage();
+            const auto color=enabled ? QColor("#b9b9c4") : QColor("#53535d");
+            int rows=0;
+            for(int y=qMax(0,rect.top());y<=qMin(pixels.height()-1,rect.bottom());++y) {
+                const QColor actual=pixels.pixelColor(qBound(0,rect.center().x(),pixels.width()-1),y);
+                if(qAbs(actual.red()-color.red())<8 && qAbs(actual.green()-color.green())<8 && qAbs(actual.blue()-color.blue())<8) ++rows;
+            }
+            check(rows>=qRound(10*scale/100.0),"visible handle extends beyond track");
+            check(slider->rect().contains(rect),"handle stays within input at endpoints");
+        };
+        for(const auto range : {QPair<int,int>{0,100},{60,100},{-314,314},{-157,157},{30,300},{0,300}}) {
+            slider->setRange(range.first,range.second);
+            for(const auto direction : {Qt::LeftToRight,Qt::RightToLeft}) {
+                slider->setLayoutDirection(direction); slider->setEnabled(true); other->setFocus();
+                for(const int value : {range.first,(range.first+range.second)/2,range.second}) { slider->setValue(value); inspect(true); }
+                slider->setFocus(); QTest::keyClick(slider,Qt::Key_Home); check(slider->value()==range.first,"keyboard minimum");
+                QTest::keyClick(slider,Qt::Key_End); check(slider->value()==range.second,"keyboard maximum");
+                slider->setValue((range.first+range.second)/2);
+                const auto bounds=slider->geometry(); const auto thumb=slider->handle();
+                const auto focused=slider->grab().toImage(); other->setFocus(); QApplication::processEvents();
+                check(focused!=slider->grab().toImage() && bounds==slider->geometry() && thumb==slider->handle(),"visible focus without layout change");
+                const int before=slider->value();
+                QTest::mousePress(slider,Qt::LeftButton,Qt::NoModifier,thumb.center());
+                QTest::mouseMove(slider,thumb.center()+QPoint(40,0));
+                QTest::mouseRelease(slider,Qt::LeftButton,Qt::NoModifier,thumb.center()+QPoint(40,0));
+                check(slider->value()!=before,"drag changes value");
+                slider->setEnabled(false); inspect(false);
+                const int disabled=slider->value(); QTest::keyClick(slider,Qt::Key_Home);
+                check(slider->value()==disabled,"disabled value unchanged");
+            }
+        }
+        slider->setEnabled(true); slider->setLayoutDirection(Qt::LeftToRight); slider->setValue(150); other->setFocus();
+        const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        if(!shots.isEmpty() && (scale==100 || scale==200)) check(host.grab().save(shots+QString("/slider-%1.png").arg(scale)),"capture");
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout<<"Slider presentation: "<<inspections<<" paint inspections\n";
+    return ok && inspections==336;
+}
+
+static bool TestQtControlSurfaces(QApplication& app) {
+    bool ok=true;
+    auto check=[&](bool value,const QString& what) {
+        if (!value) std::cerr << "controlSurfaces: " << what.toStdString() << '\n';
+        ok &= value;
+    };
+    for (int scale : {90,100,110,125,150,175,200}) {
+        QtDisplaySettings settings; settings.scalePercent=scale; settings.motionEnabled=false;
+        ApplyQtDisplaySettings(app,settings);
+        QWidget host; auto* layout=new QVBoxLayout(&host);
+        auto* unfocus=new QPushButton(QString::fromUtf8("Проверка поверхности")); layout->addWidget(unfocus);
+        auto* line=new QLineEdit("Example"); layout->addWidget(line);
+        auto* combo=new QComboBox; combo->addItems({"First","Second"}); layout->addWidget(combo);
+        auto* spin=new QSpinBox; spin->setValue(12); layout->addWidget(spin);
+        auto* date=new QDateEdit(QDate(2026,9,30)); date->setDisplayFormat("dd.MM.yyyy"); layout->addWidget(date);
+        auto* plain=new QPlainTextEdit(QString::fromUtf8("Несколько строк\nРедактируемый текст")); layout->addWidget(plain);
+        plain->setFixedHeight(qRound(72*scale/100.0));
+        auto* rich=new QTextEdit(QString::fromUtf8("Описание")); layout->addWidget(rich);
+        rich->setFixedHeight(qRound(64*scale/100.0));
+        auto* table=new QTableWidget(2,2); table->setHorizontalHeaderLabels({QString::fromUtf8("Название"),QString::fromUtf8("Значение")});
+        table->setItem(0,0,new QTableWidgetItem("B")); table->setItem(1,0,new QTableWidgetItem("A"));
+        table->setSortingEnabled(true); layout->addWidget(table);
+        table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        table->setMinimumHeight(qRound(120*scale/100.0));
+        host.resize(qRound(500*scale/100.0),qRound(520*scale/100.0)); host.show();
+        QApplication::setActiveWindow(&host); QApplication::processEvents();
+        struct StyleProbe : QObject {
+            int changes=0;
+            bool eventFilter(QObject*,QEvent* event) override {
+                if (event->type()==QEvent::StyleChange) ++changes;
+                return false;
+            }
+        } probe;
+        host.installEventFilter(&probe);
+        ApplyQtLayoutMetrics(app,100,4,4,4,6,4,8,0,8,6);
+        check(probe.changes==0,"identical metrics do not repolish the widget tree");
+        ApplyQtLayoutMetrics(app,110,4,4,4,6,4,8,0,8,6);
+        check(probe.changes>0,"changed metrics still apply");
+        ApplyQtLayoutMetrics(app,100,4,4,4,6,4,8,0,8,6);
+        QApplication::processEvents();
+        for (QWidget* field : std::array<QWidget*,6>{line,combo,spin,date,plain,rich}) {
+            unfocus->setFocus(); QApplication::processEvents();
+            const auto initial=field->geometry();
+            const auto normal=field->grab().toImage();
+            const QString stem=QStringLiteral("%1-%2").arg(scale).arg(field->metaObject()->className());
+            check(normal.pixelColor(normal.width()-qRound(64*scale/100.0),normal.height()/2)==QColor("#26262c"),stem+" flat base");
+            field->setFocus(Qt::TabFocusReason); QApplication::processEvents();
+            const auto focused=field->grab().toImage();
+            check(field->hasFocus() && focused.pixelColor(focused.width()/2,0)==QColor("#eeeeef"),stem+" focus border");
+            check(field->geometry()==initial,stem+" focus geometry stable");
+            field->setEnabled(false); QApplication::processEvents();
+            check(field->geometry()==initial,stem+" disabled geometry stable");
+            field->setEnabled(true);
+        }
+        combo->setFocus(); QTest::keyClick(combo,Qt::Key_Down);
+        check(combo->currentIndex()==1,"combo keyboard selection");
+        QStyleOptionComboBox comboOption; comboOption.initFrom(combo); comboOption.rect=combo->rect();
+        const auto comboArrow=combo->style()->subControlRect(QStyle::CC_ComboBox,&comboOption,QStyle::SC_ComboBoxArrow,combo);
+        const auto comboPixels=combo->grab().toImage();
+        int arrowPixels=0;
+        for (int y=comboArrow.top()+2;y<comboArrow.bottom()-1;++y)
+            for (int x=comboArrow.left()+2;x<comboArrow.right()-1;++x)
+                if (comboPixels.rect().contains(x,y) && qGray(comboPixels.pixel(x,y))>150) ++arrowPixels;
+        check(arrowPixels>=3,"visible combo disclosure arrow");
+        QTest::mouseClick(combo,Qt::LeftButton,Qt::NoModifier,comboArrow.center()); QApplication::processEvents();
+        check(combo->view()->isVisible(),"combo popup preserved"); combo->hidePopup();
+        combo->setEditable(true); combo->setEditText("Editable"); QApplication::processEvents();
+        check(combo->lineEdit() && combo->lineEdit()->text()=="Editable","editable combo preserves editor");
+        combo->setEditable(false); combo->setCurrentIndex(1);
+        for (QAbstractSpinBox* control : std::array<QAbstractSpinBox*,2>{spin,date}) {
+            unfocus->setFocus(); QApplication::processEvents();
+            QStyleOptionSpinBox option; option.initFrom(control);
+            option.rect=control->rect(); option.frame=true;
+            option.buttonSymbols=control->buttonSymbols();
+            option.stepEnabled=QAbstractSpinBox::StepUpEnabled | QAbstractSpinBox::StepDownEnabled;
+            for (auto sub : {QStyle::SC_SpinBoxUp,QStyle::SC_SpinBoxDown}) {
+                const auto region=control->style()->subControlRect(QStyle::CC_SpinBox,&option,sub,control).adjusted(2,2,-2,-2);
+                const auto pixels=control->grab().toImage();
+                int light=0;
+                int minSpan=10000,maxSpan=0;
+                for (int y=region.top();y<=region.bottom();++y) {
+                    int left=10000,right=-1;
+                    for (int x=region.left();x<=region.right();++x)
+                        if (pixels.rect().contains(x,y) && qGray(pixels.pixel(x,y))>150) { ++light; left=std::min(left,x); right=x; }
+                    if (right>=left) { minSpan=std::min(minSpan,right-left+1); maxSpan=std::max(maxSpan,right-left+1); }
+                }
+                check(light>=3,QStringLiteral("%1-%2 visible step arrow %3").arg(scale).arg(control->metaObject()->className()).arg(int(sub)));
+                check(maxSpan-minSpan>=2,"step arrow has direction, not a rectangular bar");
+            }
+            const auto up=control->style()->subControlRect(QStyle::CC_SpinBox,&option,QStyle::SC_SpinBoxUp,control);
+            const auto down=control->style()->subControlRect(QStyle::CC_SpinBox,&option,QStyle::SC_SpinBoxDown,control);
+            const auto before=control->text();
+            QTest::mouseClick(control,Qt::LeftButton,Qt::NoModifier,up.center());
+            check(control->text()!=before,"visible up arrow changes value");
+            QTest::mouseClick(control,Qt::LeftButton,Qt::NoModifier,down.center());
+            check(control->text()==before,"visible down arrow restores value");
+        }
+        spin->setFocus(); QTest::keyClick(spin,Qt::Key_Up);
+        check(spin->value()==13,"spin keyboard preserved");
+        table->sortItems(0,Qt::AscendingOrder);
+        check(table->item(0,0)->text()=="A","table sorting preserved");
+        const auto header=table->horizontalHeader()->grab().toImage();
+        check(header.pixelColor(header.width()/4,2)==QColor("#2c2c32"),"flat header surface");
+        const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        if (!shots.isEmpty() && (scale==100 || scale==200))
+            check(host.grab().save(shots+QStringLiteral("/controls-%1.png").arg(scale)),"capture");
+        host.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "controlSurfaces: six input families, seven scales, focus/disabled geometry, combo/spin/table interaction\n";
+    return ok;
+}
+
+static bool TestQtControlStateVariants(QApplication& app) {
+    bool ok=true;
+    auto check=[&](bool value,const QString& what) {
+        if (!value) std::cerr << "controlStates: " << what.toStdString() << '\n';
+        ok &= value;
+    };
+    for (int scale : {90,100,110,125,150,175,200}) {
+        QtDisplaySettings settings; settings.scalePercent=scale; settings.motionEnabled=false;
+        ApplyQtDisplaySettings(app,settings);
+        QWidget host; auto* layout=new QVBoxLayout(&host);
+        auto* anchor=new QPushButton(QString::fromUtf8("Состояния полей")); layout->addWidget(anchor);
+        auto* form=new QFormLayout; layout->addLayout(form);
+        auto* line=new QLineEdit("Example"); form->addRow(QString::fromUtf8("Строка"),line);
+        auto* combo=new QComboBox; combo->addItems({"First","Second"}); combo->setEditable(true); form->addRow(QString::fromUtf8("Список"),combo);
+        auto* integer=new QSpinBox; integer->setRange(0,9); integer->setValue(4); form->addRow(QString::fromUtf8("Целое"),integer);
+        auto* decimal=new QDoubleSpinBox; decimal->setRange(0,9); decimal->setValue(4.5); form->addRow(QString::fromUtf8("Дробное"),decimal);
+        auto* date=new QDateEdit(QDate(2026,9,15)); date->setDisplayFormat("dd.MM.yyyy"); date->setCalendarPopup(true); form->addRow(QString::fromUtf8("Дата"),date);
+        auto* time=new QTimeEdit(QTime(12,30)); form->addRow(QString::fromUtf8("Время"),time);
+        auto* plain=new QPlainTextEdit("Plain"); plain->setFixedHeight(qRound(60*scale/100.0)); form->addRow(QString::fromUtf8("Текст"),plain);
+        auto* rich=new QTextEdit("Rich"); rich->setFixedHeight(qRound(60*scale/100.0)); form->addRow(QString::fromUtf8("Описание"),rich);
+        const std::array<QWidget*,8> fields{line,combo,integer,decimal,date,time,plain,rich};
+        auto values=[&] { return QStringList{line->text(),combo->currentText(),integer->text(),decimal->text(),date->text(),time->text(),plain->toPlainText(),rich->toPlainText()}; };
+        auto readonly=[&](bool on) {
+            line->setReadOnly(on); combo->lineEdit()->setReadOnly(on); plain->setReadOnly(on); rich->setReadOnly(on);
+            for (QAbstractSpinBox* spin : std::array<QAbstractSpinBox*,4>{integer,decimal,date,time}) spin->setReadOnly(on);
+        };
+        host.resize(qRound(600*scale/100.0),qRound(470*scale/100.0)); host.show(); QApplication::setActiveWindow(&host); QApplication::processEvents();
+        anchor->setFocus(); const auto original=values();
+        const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        auto capture=[&](const QString& name) {
+            if (!shots.isEmpty() && (scale==100 || scale==200))
+                check(host.grab().save(shots+QStringLiteral("/states-%1-%2.png").arg(name).arg(scale)),"capture");
+        };
+        for (auto* field : fields) field->setEnabled(false);
+        QApplication::processEvents();
+        for (auto* field : fields) {
+            const auto before=field->geometry();
+            QTest::keyClick(field,Qt::Key_Up); QTest::keyClicks(field,"9");
+            const auto pixels=field->grab().toImage();
+            const auto color=pixels.pixelColor(pixels.width()-qRound(64*scale/100.0),pixels.height()/2);
+            check(color==QColor("#202024"),QStringLiteral("%1 %2 disabled surface %3").arg(scale).arg(field->metaObject()->className()).arg(color.name()));
+            check(field->geometry()==before,"disabled geometry stable");
+        }
+        check(values()==original,"disabled fields do not change"); capture("disabled");
+        for (auto* field : fields) field->setEnabled(true);
+        readonly(true); QApplication::processEvents();
+        for (auto* field : fields) {
+            // Editable combo protects its editor; choosing a list item remains a separate allowed action.
+            QWidget* target=field==combo ? static_cast<QWidget*>(combo->lineEdit()) : field;
+            target->setFocus(); QTest::keyClicks(target,"9");
+            if (qobject_cast<QAbstractSpinBox*>(field)) QTest::keyClick(target,Qt::Key_Up);
+        }
+        check(values()==original,"readonly fields do not change"); capture("readonly");
+        readonly(false); anchor->setFocus();
+        auto stepRect=[&](QAbstractSpinBox* spin,QStyle::SubControl sub) {
+            QStyleOptionSpinBox option; option.initFrom(spin); option.rect=spin->rect(); option.buttonSymbols=spin->buttonSymbols();
+            return spin->style()->subControlRect(QStyle::CC_SpinBox,&option,sub,spin);
+        };
+        for (auto* spin : std::array<QAbstractSpinBox*,2>{integer,decimal}) {
+            if (spin==integer) integer->setValue(9); else decimal->setValue(9);
+            const auto before=spin->text();
+            const auto up=stepRect(spin,QStyle::SC_SpinBoxUp);
+            QTest::mouseClick(spin,Qt::LeftButton,Qt::NoModifier,up.center());
+            check(spin->text()==before,"maximum prevents upward step");
+            anchor->setFocus(); QApplication::processEvents();
+            const auto pixels=spin->grab().toImage(); int bright=0,muted=0;
+            const auto interior=up.adjusted(2,2,-2,-2);
+            for (int y=interior.top();y<=interior.bottom();++y) for (int x=interior.left();x<=interior.right();++x)
+                if (pixels.rect().contains(x,y)) {
+                    const int gray=qGray(pixels.pixel(x,y));
+                    if (gray>190) ++bright;
+                    if (gray>=100 && gray<=160) ++muted;
+                }
+            check(bright==0,QStringLiteral("%1 %2 unavailable up arrow is visually muted (%3 bright pixels)").arg(scale).arg(spin->metaObject()->className()).arg(bright));
+            check(muted>0,"unavailable arrow remains visible");
+            QTest::mouseClick(spin,Qt::LeftButton,Qt::NoModifier,stepRect(spin,QStyle::SC_SpinBoxDown).center());
+            check(spin->text()!=before,"available downward step works");
+            if (spin==integer) integer->setValue(0); else decimal->setValue(0);
+            const auto minimumText=spin->text();
+            const auto down=stepRect(spin,QStyle::SC_SpinBoxDown);
+            QTest::mouseClick(spin,Qt::LeftButton,Qt::NoModifier,down.center());
+            check(spin->text()==minimumText,"minimum prevents downward step");
+            anchor->setFocus(); QApplication::processEvents();
+            const auto atMinimum=spin->grab().toImage(); bright=0; muted=0;
+            const auto lower=down.adjusted(2,2,-2,-2);
+            for (int y=lower.top();y<=lower.bottom();++y) for (int x=lower.left();x<=lower.right();++x) {
+                const int gray=qGray(atMinimum.pixel(x,y));
+                if (gray>190) ++bright;
+                if (gray>=100 && gray<=160) ++muted;
+            }
+            check(bright==0 && muted>0,"unavailable down arrow muted and visible");
+            QTest::mouseClick(spin,Qt::LeftButton,Qt::NoModifier,up.center());
+            check(spin->text()!=minimumText,"available upward step works");
+        }
+        integer->setValue(9); decimal->setValue(0); anchor->setFocus(); capture("limits");
+        for (bool accept : {false,true}) {
+            const auto before=date->date(); bool popupSeen=false;
+            QTimer::singleShot(0,&host,[&] {
+                auto* calendar=date->calendarWidget(); popupSeen=calendar && calendar->isVisible();
+                if (!popupSeen) return;
+                auto* previous=calendar->findChild<QToolButton*>("qt_calendar_prevmonth");
+                auto* next=calendar->findChild<QToolButton*>("qt_calendar_nextmonth");
+                check(previous && next,"calendar navigation available");
+                if (previous && next) {
+                    const auto month=calendar->monthShown(); const auto year=calendar->yearShown();
+                    QTest::mouseClick(next,Qt::LeftButton); QTest::mouseClick(previous,Qt::LeftButton);
+                    check(calendar->monthShown()==month && calendar->yearShown()==year,"calendar month navigation round trip");
+                    check(next->iconSize()==QSize(qRound(16*scale/100.0),qRound(16*scale/100.0)),"calendar icons scale");
+                    const auto icon=next->icon().pixmap(next->iconSize()).toImage(); int ink=0,colored=0;
+                    for (int y=0;y<icon.height();++y) for (int x=0;x<icon.width();++x) {
+                        const auto c=icon.pixelColor(x,y); if(c.alpha()<100) continue;
+                        ++ink; if(std::abs(c.red()-c.green())>10 || std::abs(c.green()-c.blue())>10) ++colored;
+                    }
+                    check(ink>0 && colored==0,"calendar uses neutral contour navigation icons");
+                }
+                if (!shots.isEmpty() && !accept && (scale==100 || scale==200))
+                    check(calendar->window()->grab().save(shots+QStringLiteral("/calendar-%1.png").arg(scale)),"calendar capture");
+                auto* target=QApplication::focusWidget();
+                if (!target || !(target==calendar || calendar->isAncestorOf(target))) target=calendar;
+                if (accept) QTest::keyClick(target,Qt::Key_Right);
+                QTest::keyClick(target,accept ? Qt::Key_Return : Qt::Key_Escape);
+            });
+            QStyleOptionComboBox calendarOption; calendarOption.initFrom(date); calendarOption.editable=true;
+            const auto calendarButton=date->style()->subControlRect(QStyle::CC_ComboBox,&calendarOption,QStyle::SC_ComboBoxArrow,date);
+            check(calendarButton.width()==qRound(20*scale/100.0),"calendar hit target scales with field");
+            QTest::mouseClick(date,Qt::LeftButton,Qt::NoModifier,calendarButton.center());
+            QApplication::processEvents();
+            check(popupSeen,"calendar opens from field button");
+            check(!date->calendarWidget()->isVisible(),"calendar closes with keyboard");
+            check(date->date()==(accept ? before.addDays(1) : before),"calendar accept/cancel preserves expected date");
+        }
+        check(time->height()==integer->height(),"time and numeric fields share control height");
+        QApplication::setActiveWindow(&host);
+        for (auto* field : std::array<QWidget*,4>{combo,integer,date,time}) {
+            anchor->setFocus(); QApplication::processEvents();
+            auto pixels=field->grab().toImage();
+            check(pixels.pixelColor(pixels.width()-1,pixels.height()/2)==QColor("#414149"),"arrow preserves outer normal frame");
+            field->setFocus(); QApplication::processEvents(); pixels=field->grab().toImage();
+            check(pixels.pixelColor(pixels.width()-1,pixels.height()/2)==QColor("#eeeeef"),QStringLiteral("%1 %2 focus frame: right=%3 left=%4 focus=%5").arg(scale).arg(field->metaObject()->className()).arg(pixels.pixelColor(pixels.width()-1,pixels.height()/2).name()).arg(pixels.pixelColor(0,pixels.height()/2).name()).arg(field->hasFocus()));
+        }
+        anchor->setFocus();
+        capture("enabled"); host.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "controlStates: eight field families, seven scales, disabled/readonly, limits and calendar accept/cancel\n";
+    return ok;
 }
 
 static bool TestDisplaySettings(QApplication& app) {
@@ -9115,6 +11731,10 @@ static bool TestDisplaySettings(QApplication& app) {
     }
     if (!SetAdminStayLoggedIn(directory, true)) return false;
     QtWorkspace restoredWorkspace(directory);
+    // Mode restoration needs a real profile; no-profile now intentionally hides
+    // all profile-dependent views (covered by the first-run fixture).
+    const auto restoredProfile = restoredWorkspace.storage->create_profile(Profile("Display mode fixture"));
+    if (!restoredProfile || !restoredWorkspace.storage->set_active_profile(restoredProfile->id)) return false;
     QtWindow restoredWindow(restoredWorkspace);
     if (qAbs(restoredWindow.windowOpacity() - 0.86) > 0.01) return false;
     auto* restoredNavigation = restoredWindow.findChild<QListWidget*>("navigation");
@@ -9579,6 +12199,569 @@ static bool PrepareUiVisualAuditWorkspace() {
     return true;
 }
 
+enum class QtStyleCapture { Profile, WorkLists, CatalogLists, Analytics, Services };
+
+static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
+    const bool workLists = mode == QtStyleCapture::WorkLists;
+    const bool catalogLists = mode == QtStyleCapture::CatalogLists;
+    const bool analytics = mode == QtStyleCapture::Analytics;
+    const bool services = mode == QtStyleCapture::Services;
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const bool hadWorkspace = qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+    const auto oldWorkspace = qgetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+    qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE", temp.path().toUtf8());
+    const bool prepared = PrepareUiVisualAuditWorkspace();
+    if (hadWorkspace) qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE", oldWorkspace);
+    else qunsetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+    if (!prepared) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+    auto display = LoadQtDisplaySettings(directory);
+    display.scalePercent = 100;
+    if (!SaveQtDisplaySettings(directory, display)) return false;
+    ApplyQtDisplaySettings(app, display);
+    QtWorkspace workspace(directory);
+    if (services) {
+        workspace.data.bannerTexts = {u8"Одна законченная задача лучше десяти начатых.", u8"Сначала ясность, затем действие."};
+        workspace.data.vault.balance = 125.5;
+        workspace.data.vault.log = {{QDateTime::currentSecsSinceEpoch(), 12.5, u8"Награда", u8"Синтетическая запись для проверки интерфейса"}};
+        if (!SaveBannerTexts(directory, workspace.data.bannerTexts) || !SaveStorageVault(directory, workspace.data.vault)) return false;
+    }
+    if (catalogLists) {
+        workspace.data.professions = {{"style-artist", u8"Художник окружения", u8"Композиция, материалы и освещение"},
+            {"style-designer", u8"Дизайнер интерфейсов", u8"Визуальная система и поведение компонентов"}};
+        PipelineStep research; research.id = "style-research"; research.stageCode = "01";
+        research.title = u8"Референсы и направление"; research.branch = u8"Дизайн";
+        research.owner = u8"Дизайнер"; research.nextIds = {"style-layout"};
+        research.nextStageLabel = u8"К композиции";
+        PipelineStep layout; layout.id = "style-layout"; layout.stageCode = "02";
+        layout.title = u8"Композиция экранов"; layout.branch = u8"Дизайн"; layout.owner = u8"Дизайнер";
+        layout.nextIds = {"style-review"}; layout.nextStageLabel = u8"На проверку";
+        PipelineStep review; review.id = "style-review"; review.stageCode = "03";
+        review.title = u8"Проверка и полировка"; review.branch = u8"Проверка"; review.owner = u8"Команда";
+        workspace.data.pipelineSteps = {research, layout, review};
+        if (!AppSaveProfessionsData(directory, workspace.data.professions) ||
+            !AppSavePipelineData(directory, workspace.data.pipelineSteps)) return false;
+    }
+    QtWindow window(workspace);
+    window.show();
+    auto* nav = window.findChild<QListWidget*>("navigation");
+    auto* scroll = window.findChild<QScrollArea*>("pageContentScrollArea");
+    auto* tasks = window.findChild<QTableWidget*>("profileTaskBriefTable");
+    if (!nav || !scroll || !tasks) return false;
+    nav->setCurrentRow(0);
+    const auto output = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+    if (output.isEmpty() || !QDir().mkpath(output)) return false;
+    const QList<int> pages = services ? QList<int>{9, 10, 12, 13} : analytics ? QList<int>{6, 17, 16} : catalogLists ? QList<int>{3, 4, 5, 7, 11, 16}
+        : workLists ? QList<int>{1, 2} : QList<int>{0};
+    for (int page : pages) {
+      nav->setCurrentRow(page);
+      if (analytics && page == 6) {
+          // Explicit synthetic renderer fixture, not user completion history.
+          auto* chart = static_cast<QtReportChart*>(window.findChild<QWidget*>("statisticsStatusChart"));
+          if (!chart) return false;
+          chart->setCompletionTrend({2, 4, 3, 6, 4, 8, 5, 7, 11, 9, 12, 10});
+      }
+      QStringList initialRows;
+      for (QSize size : {QSize(1120, 720), QSize(1440, 900), QSize(800, 520)}) {
+        window.resize(size); scroll->verticalScrollBar()->setValue(0); QTest::qWait(80);
+        if (nav->currentRow() != page || tasks->rowCount() == 0 || scroll->horizontalScrollBar()->maximum() != 0) return false;
+        if (mode == QtStyleCapture::Profile) for (const auto* name : {"profileOverviewTaskAction0", "profileOverviewQuickXp", "profileViewMode0"}) {
+            auto* action = window.findChild<QPushButton*>(name);
+            if (!action || !action->isVisible() || action->accessibleName().isEmpty()) return false;
+        }
+        if (workLists) {
+            auto* records = window.findChild<QTableWidget*>("records");
+            if (!records || !records->isVisible() || records->rowCount() == 0) return false;
+            QStringList rows;
+            for (int row = 0; row < records->rowCount(); ++row) {
+                if (page == 1) {
+                    auto* status = records->item(row, 4);
+                    if (!status || status->text().isEmpty() || status->icon().isNull()) return false;
+                    if (QFontMetrics(records->font()).horizontalAdvance(status->text()) +
+                        records->iconSize().width() + 12 > records->columnWidth(4)) return false;
+                }
+                auto* name = records->item(row, 0);
+                if (!name || name->data(Qt::UserRole).toString().isEmpty()) return false;
+                if (page == 1) {
+                    const bool focus = name->text().contains(QString::fromUtf8("Фокус]"));
+                    if (name->font().weight() != (focus ? QFont::DemiBold : QFont::Normal)) return false;
+                }
+                if (QFontMetrics(name->font()).horizontalAdvance(name->text()) + 12 > records->columnWidth(0)) {
+                    std::cerr << "Work style title clipped: page=" << page << " width=" << size.width()
+                        << " column=" << records->columnWidth(0) << " text=" << name->text().toStdString() << '\n';
+                    return false;
+                }
+                for (int column = 0; column < records->columnCount(); ++column) {
+                    auto* cell = records->item(row, column);
+                    if (!cell) return false;
+                    rows << cell->data(Qt::UserRole).toString() + QChar(0x1f) + cell->text();
+                }
+            }
+            if (initialRows.isEmpty()) initialRows = rows;
+            else if (initialRows != rows) return false;
+        }
+        if (catalogLists) {
+            auto* records = window.findChild<QTableWidget*>("records");
+            auto* empty = window.findChild<QWidget*>("listEmptyState");
+            if (!records || !empty || (!records->isVisible() && !empty->isVisible())) return false;
+            auto* primary = window.findChild<QPushButton*>("primary");
+            auto* heading = window.findChild<QLabel*>("title");
+            if (!primary || !heading || !heading->property("workList").toBool()) return false;
+            if (page == 3 || page == 4 || page == 5 || page == 11) {
+                if (!primary->isVisible() || primary->icon().isNull() || primary->toolTip().isEmpty() ||
+                    primary->accessibleName() != primary->toolTip()) return false;
+            }
+        }
+        if (analytics) {
+            auto* records = window.findChild<QTableWidget*>("records");
+            if (!records || !records->isVisible() || records->rowCount() == 0) return false;
+            auto* sharedFilters = window.findChild<QWidget*>("listFilters");
+            if (!sharedFilters || sharedFilters->isHidden() != (page == 17)) return false;
+        }
+        if (services) {
+            auto* records = window.findChild<QTableWidget*>("records");
+            if (!records || !records->isVisible() || records->rowCount() == 0) return false;
+            if (page == 10) {
+                for (int row = 0; row < records->rowCount(); ++row) {
+                    const auto* timestamp = records->item(row, 0);
+                    if (!timestamp || QFontMetrics(records->font()).horizontalAdvance(timestamp->text()) + 12
+                        > records->columnWidth(0)) {
+                        std::cerr << "Vault timestamp clipped at width=" << size.width() << '\n';
+                        return false;
+                    }
+                }
+            }
+            auto* primary = window.findChild<QPushButton*>("primary");
+            auto* heading = window.findChild<QLabel*>("title");
+            const auto caption = QString::fromUtf8(page == 9 ? "Изменить" : page == 12 ? "Добавить" : "Настройки");
+            const auto fullName = QString::fromUtf8(page == 9 ? "Изменить правила" : page == 10 ? "Настройки хранилища"
+                : page == 12 ? "Добавить фразу" : "Настроить облако");
+            if (!primary || !heading || !heading->property("workList").toBool() || !primary->isVisible() ||
+                primary->icon().isNull() || primary->text() != caption || primary->toolTip() != fullName ||
+                primary->accessibleName() != fullName) return false;
+        }
+        const QString pageName = (catalogLists || analytics || services) ? QStringLiteral("page-%1").arg(page)
+            : page == 0 ? QStringLiteral("profile") : page == 1 ? QStringLiteral("tasks") : QStringLiteral("projects");
+        if (!window.grab().save(output + QStringLiteral("/%1-%2x%3.png").arg(pageName).arg(size.width()).arg(size.height()))) return false;
+        if (workLists && page == 1) {
+            auto* records = window.findChild<QTableWidget*>("records");
+            records->selectRow(qMin(3, records->rowCount() - 1));
+            records->setFocus();
+            QApplication::processEvents();
+            if (!window.grab().save(output + QStringLiteral("/tasks-selected-%1x%2.png")
+                .arg(size.width()).arg(size.height()))) return false;
+            records->clearSelection();
+        }
+      }
+    }
+    if (catalogLists || services) {
+        nav->setCurrentRow(0); QApplication::processEvents();
+        auto* primary = window.findChild<QPushButton*>("primary");
+        if (!primary || !primary->icon().isNull() ||
+            window.findChild<QLabel*>("title")->property("workList").toBool()) return false;
+    }
+    ApplyQtTheme(app);
+    return true;
+}
+
+static bool TestQtProfileModePresentation(QApplication& app) {
+    bool ok = true;
+    for (int scale : {90, 100, 110, 125, 150, 175, 200}) {
+        QTemporaryDir temp;
+        if (!temp.isValid()) return false;
+        const bool hadWorkspace = qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        const auto oldWorkspace = qgetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE", temp.path().toUtf8());
+        const bool prepared = PrepareUiVisualAuditWorkspace();
+        if (hadWorkspace) qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE", oldWorkspace);
+        else qunsetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        if (!prepared) return false;
+        const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
+        auto display = LoadQtDisplaySettings(directory);
+        display.scalePercent = scale;
+        if (!SaveQtDisplaySettings(directory, display)) return false;
+        ApplyQtDisplaySettings(app, display);
+        QtWorkspace workspace(directory);
+        QtWindow window(workspace);
+        window.resize(800, 520); window.show();
+        auto* nav = window.findChild<QListWidget*>("navigation");
+        auto* scroll = window.findChild<QScrollArea*>("pageContentScrollArea");
+        auto* toggle = window.findChild<QToolButton*>("profileDiagnosticsToggle");
+        auto* rank = window.findChild<QComboBox*>("profileRankChoice");
+        auto* apply = window.findChild<QPushButton*>("profileRankApply");
+        auto* rankControls = window.findChild<QWidget*>("profileRankControls");
+        if (!nav || !scroll || !toggle || !rank || !apply || !rankControls) return false;
+        const auto initialRank = rank->currentData();
+        nav->setCurrentRow(0);
+        const auto screenshots = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        if (!screenshots.isEmpty()) QDir().mkpath(screenshots);
+        for (int width : {800, 1440, 800}) {
+            window.resize(width, 520);
+            for (int mode : {0, 1, 2, 3}) {
+                auto* button = window.findChild<QPushButton*>(QStringLiteral("profileViewMode%1").arg(mode));
+                if (!button) return false;
+                if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(&window);
+                button->setFocus(); QTest::keyClick(button, Qt::Key_Space); QTest::qWait(15);
+                if (!button->isChecked() || LoadQtDisplaySettings(directory).profileViewMode != mode) return false;
+                for (bool expanded : {false, true}) {
+                    if (mode != 0 && expanded) continue;
+                    toggle->setChecked(expanded); QTest::qWait(10);
+                    scroll->ensureWidgetVisible(rankControls); QTest::qWait(5);
+                    for (QWidget* command : {static_cast<QWidget*>(rank), static_cast<QWidget*>(apply)}) {
+                        if (!command->isVisible() || !command->isEnabled() ||
+                            !scroll->viewport()->rect().contains(QRect(command->mapTo(scroll->viewport(), QPoint()), command->size()))) {
+                            std::cerr << "profile rank control unreachable: " << scale << ' ' << width << ' ' << mode << '\n';
+                            ok = false;
+                        }
+                    }
+                    if (rank->currentData() != initialRank || apply->width() < apply->minimumSizeHint().width()) ok = false;
+                    if (scroll->horizontalScrollBar()->maximum() != 0) {
+                        std::cerr << "profile modes: scale=" << scale << " width=" << width << " mode=" << mode
+                            << " expanded=" << expanded << " scroll=" << scroll->horizontalScrollBar()->maximum() << '\n';
+                        for (auto* child : scroll->widget()->findChildren<QWidget*>())
+                            if (child->isVisible() && child->minimumSizeHint().width() > scroll->viewport()->width() - 32)
+                                std::cerr << "  " << child->metaObject()->className() << ' ' << child->objectName().toStdString()
+                                    << " minHint=" << child->minimumSizeHint().width() << " width=" << child->width() << '\n';
+                        ok = false;
+                    }
+                    if (!screenshots.isEmpty() && width == 800) {
+                        ok = window.grab().save(screenshots + QStringLiteral("/profile-rank-%1-mode%2-details%3.png")
+                            .arg(scale).arg(mode).arg(expanded)) && ok;
+                        scroll->verticalScrollBar()->setValue(0); QTest::qWait(5);
+                        ok = window.grab().save(screenshots + QStringLiteral("/profile-%1-mode%2-details%3.png")
+                            .arg(scale).arg(mode).arg(expanded)) && ok;
+                    }
+                }
+            }
+        }
+    }
+    ApplyQtTheme(app);
+    return ok;
+}
+
+static bool TestQtModelSettingsPresentation(QApplication& app) {
+    bool ok=true;
+    for(const int scale : {90,100,110,125,150,175,200}) {
+        auto check=[&](bool value,const char* context){if(!value){std::cerr<<"model presentation "<<scale<<": "<<context<<'\n';ok=false;}};
+        QTemporaryDir temp; if(!temp.isValid()) return false;
+        const bool hadWorkspace=qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        const auto oldWorkspace=qgetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE",temp.path().toUtf8());
+        const bool prepared=PrepareUiVisualAuditWorkspace();
+        if(hadWorkspace)qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE",oldWorkspace);else qunsetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        if(!prepared)return false;
+        const auto directory=std::filesystem::u8path(temp.path().toUtf8().constData());
+        QtDisplaySettings display; display.scalePercent=scale; display.motionEnabled=false;
+        if(!SaveQtDisplaySettings(directory,display))return false;
+        ApplyQtDisplaySettings(app,display);
+        QtWorkspace workspace(directory); workspace.modules.view3d=true;
+        QtWindow window(workspace); window.resize(800,520); window.show();
+        auto* nav=window.findChild<QListWidget*>("navigation"); nav->setCurrentRow(15); QTest::qWait(10);
+        auto* scroll=window.findChild<QScrollArea*>("pageContentScrollArea");
+        auto* rotate=window.findChild<QCheckBox*>("modelAutoRotate");
+        auto* speed=window.findChild<QSlider*>("modelSpeed");
+        if(!scroll || !rotate || !speed)return false;
+        if(nav->currentRow()!=15){check(false,"actual settings page");return false;}
+        auto* sourceCard=window.findChild<QFrame*>("modelSourceCard");
+        auto* viewCard=window.findChild<QFrame*>("modelViewCard");
+        auto* saveAction=window.findChild<QPushButton*>("primary");
+        if(!sourceCard || !viewCard || !saveAction)return false;
+        check(sourceCard->isVisible() && viewCard->isVisible() &&
+            sourceCard->isAncestorOf(window.findChild<QComboBox*>("modelChoice")) &&
+            viewCard->isAncestorOf(speed),"model source and view grouped separately");
+        check(saveAction->text()==QString::fromUtf8("Сохранить") &&
+            saveAction->toolTip()==QString::fromUtf8("Сохранить настройки") &&
+            saveAction->accessibleName()==saveAction->toolTip(),"concise save retains full context");
+        rotate->setChecked(true);
+        for(const auto* name : {"modelYaw","modelPitch","modelZoom","modelSpeed"}) {
+            auto* slider=window.findChild<QSlider*>(name);
+            auto* value=window.findChild<QLabel*>(QString::fromLatin1(name)+"Value");
+            if(!slider || !value){check(false,"readout missing");continue;}
+            for(const int raw : {slider->minimum(),slider->maximum(),100}) {
+                slider->setValue(raw); QTest::qWait(2);
+                check(value->fontMetrics().horizontalAdvance(value->text())<=value->contentsRect().width(),"full value fits");
+                check(!slider->accessibleName().isEmpty() && slider->accessibleDescription()==value->text() &&
+                    slider->toolTip().contains(value->text()),"value and units accessible");
+                scroll->ensureWidgetVisible(slider); QTest::qWait(2);
+                check(scroll->viewport()->rect().contains(QRect(slider->mapTo(scroll->viewport(),QPoint()),slider->size())),"slider reachable");
+            }
+            const auto expected=QString::fromLatin1(name)=="modelZoom" ? QStringLiteral("100 %") :
+                QLocale().toString(57.3,'f',1)+QString::fromUtf8(QString::fromLatin1(name)=="modelSpeed" ? " °/с" : " °");
+            check(value->text()==expected,"degrees and percent conversion");
+            if(QGuiApplication::platformName()=="offscreen")QApplication::setActiveWindow(&window);
+            slider->setFocus(); QTest::keyClick(slider,Qt::Key_Right); QTest::qWait(2);
+            check(slider->value()==101 && slider->accessibleDescription()==value->text(),"keyboard keeps readout synchronized");
+        }
+        rotate->setChecked(false); const int before=speed->value();
+        QTest::keyClick(speed,Qt::Key_Right);
+        check(!speed->isEnabled() && speed->value()==before,"inactive auto-rotation retains speed");
+        rotate->setChecked(true); check(speed->isEnabled() && speed->value()==before,"re-enabled speed retained");
+        for(const int width : {800,1120,1440,800}) {
+            window.resize(width,520); QTest::qWait(30);
+            check(scroll->horizontalScrollBar()->maximum()==0,"responsive form without page overflow");
+            auto* header=window.findChild<QScrollArea*>("headerScrollArea");
+            auto* headerContent=window.findChild<QWidget*>("headerContent");
+            if(!header || !headerContent)return false;
+            if(header->horizontalScrollBar()->maximum()!=0) {
+                std::cerr<<"header resize scale="<<scale<<" width="<<window.width()<<" central="<<window.centralWidget()->width()
+                    <<" available="<<headerContent->property("headerAvailableWidth").toInt()<<" required="<<headerContent->property("headerRequiredWidth").toInt()
+                    <<" hint="<<headerContent->sizeHint().width()<<" viewport="<<header->viewport()->width()<<" content="<<headerContent->width()<<'\n';
+                for(auto* widget : headerContent->findChildren<QWidget*>(QString(),Qt::FindDirectChildrenOnly))
+                    std::cerr<<widget->objectName().toStdString()<<" visible="<<widget->isVisible()<<" hint="<<widget->sizeHint().width()<<" min="<<widget->minimumSizeHint().width()<<" actual="<<widget->width()<<'\n';
+            }
+            check(header->horizontalScrollBar()->maximum()==0,"header fits after expanding and shrinking");
+        }
+        bool acknowledged=false;
+        QTimer::singleShot(0,[&] {
+            if(auto* message=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                acknowledged=message->text()==QString::fromUtf8("Настройки 3D сохранены.");
+                message->accept();
+            }
+        });
+        window.findChild<QPushButton*>("primary")->click();
+        check(acknowledged,"real save acknowledged");
+        const auto saved=LoadQtModelSettings(directory);
+        check(qAbs(saved.yaw-1.01f)<0.0001 && qAbs(saved.pitch-1.01f)<0.0001 &&
+            qAbs(saved.zoom-1.01f)<0.0001 && qAbs(saved.autoSpeed-1.01f)<0.0001 && saved.autoRotate,"original raw units persist");
+        nav->setCurrentRow(1); nav->setCurrentRow(15); QTest::qWait(10);
+        check(speed->value()==101 && window.findChild<QLabel*>("modelZoomValue")->text()=="101 %","readouts restored after navigation");
+        for(const int page : {0,8,14,15,1,15}) {
+            nav->setCurrentRow(page); QTest::qWait(20);
+            auto* header=window.findChild<QScrollArea*>("headerScrollArea");
+            auto* content=window.findChild<QWidget*>("headerContent");
+            check(nav->currentRow()==page,"header audit actual page");
+            auto* sharedFilters=window.findChild<QWidget*>("listFilters");
+            check(sharedFilters && ((page==8 || page==14 || page==15) ? sharedFilters->isHidden()
+                : page==1 ? sharedFilters->isVisible() : true),"shared filters belong only to list pages");
+            if(header->horizontalScrollBar()->maximum()!=0)
+                std::cerr<<"header after page="<<page<<" scale="<<scale<<" required="<<content->property("headerRequiredWidth").toInt()
+                    <<" available="<<content->property("headerAvailableWidth").toInt()<<" hint="<<content->sizeHint().width()
+                    <<" scroll="<<header->horizontalScrollBar()->maximum()<<'\n';
+            check(header->horizontalScrollBar()->maximum()==0,"header fits after page transition");
+            for(const auto* name : {"quickCloudSync","pomodoroQuickButton","quickShortcutLauncher"}) {
+                auto* button=window.findChild<QToolButton*>(name);
+                if(!button){check(false,"header control missing");continue;}
+                check(button->isVisible()!=button->property("headerResponsiveFolded").toBool(),"actual visibility agrees with folding mask");
+            }
+        }
+        const auto modules=workspace.modules;
+        workspace.modules.cloud=false; workspace.modules.shortcuts=false; workspace.modules.pomodoro=false;
+        nav->setCurrentRow(0); QTest::qWait(15);
+        for(const auto* name : {"quickCloudSync","pomodoroQuickButton","quickShortcutLauncher"})
+            check(!window.findChild<QToolButton*>(name)->isVisible(),"disabled module has no toolbar control");
+        for(const auto* name : {"headerOverflowCloud","headerOverflowPomodoro","headerOverflowShortcuts"})
+            check(!window.findChild<QAction*>(name)->isVisible(),"disabled module has no overflow entry");
+        workspace.modules=modules; nav->setCurrentRow(15); QTest::qWait(15);
+        const std::array<std::pair<const char*,const char*>,3> foldedModules{{
+            {"quickCloudSync","headerOverflowCloud"},{"pomodoroQuickButton","headerOverflowPomodoro"},{"quickShortcutLauncher","headerOverflowShortcuts"}}};
+        for(const auto& names : foldedModules) {
+            const auto* button=window.findChild<QToolButton*>(names.first);
+            const auto* action=window.findChild<QAction*>(names.second);
+            check(button && action && action->isVisible()==button->property("headerResponsiveFolded").toBool() &&
+                action->isVisible()!=button->isVisible(),"enabled module exists exactly once in toolbar or overflow");
+        }
+        check(window.findChild<QScrollArea*>("headerScrollArea")->horizontalScrollBar()->maximum()==0,"module restoration keeps header compact");
+        scroll->verticalScrollBar()->setValue(0); QTest::qWait(5);
+        const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        if(!shots.isEmpty() && (scale==100 || scale==200))check(window.grab().save(shots+QString("/model-settings-%1.png").arg(scale)),"capture");
+        if(!shots.isEmpty() && scale==100) {
+            window.resize(1120,720); QTest::qWait(30);
+            scroll->verticalScrollBar()->setValue(0);
+            check(window.grab().save(shots+"/model-settings-wide.png"),"wide settings capture");
+            nav->setCurrentRow(14); QTest::qWait(30);
+            auto* settingsAction=window.findChild<QPushButton*>("openModelSettings");
+            check(settingsAction && settingsAction->isVisible() && !settingsAction->icon().isNull() &&
+                !settingsAction->accessibleName().isEmpty(),"viewer settings icon retains context");
+            check(window.grab().save(shots+"/model-viewer-wide.png"),"viewer capture");
+        }
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    return ok;
+}
+
+static bool TestQtAdminStatsPresentation(QApplication& app) {
+    bool ok=true;
+    auto check=[&](bool value,const QString& message) {
+        if (!value) std::cerr << "adminStatsDesign: " << message.toStdString() << '\n';
+        ok &= value;
+    };
+    for (int scale : {90,100,110,125,150,175,200}) {
+        QTemporaryDir temp; if (!temp.isValid()) return false;
+        const auto oldWorkspace=qgetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        const bool hadWorkspace=qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE",temp.path().toUtf8());
+        const bool prepared=PrepareUiVisualAuditWorkspace();
+        if (hadWorkspace) qputenv("FORGEMIRROR_UI_AUDIT_WORKSPACE",oldWorkspace); else qunsetenv("FORGEMIRROR_UI_AUDIT_WORKSPACE");
+        if (!prepared) return false;
+        QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+        const QString longName=QString::fromUtf8("Александра Константинопольская — руководитель направления визуальной разработки");
+        if (!workspace.storage->set_active_profile(LoadQtDisplaySettings(workspace.directory).lastProfileId.toStdString())) return false;
+        auto longProfile=workspace.storage->load_profile(); if (!longProfile) return false;
+        longProfile->set_name(longName.toUtf8().toStdString());
+        if (!workspace.storage->save_profile(*longProfile)) return false;
+        workspace.reload();
+        auto settings=LoadQtDisplaySettings(workspace.directory);
+        settings.scalePercent=scale; settings.motionEnabled=false; settings.adminStatsAutoRefresh=false;
+        if (!SaveQtDisplaySettings(workspace.directory,settings)) return false;
+        ApplyQtDisplaySettings(app,settings);
+        QtWindow window(workspace); window.resize(800,520); window.show(); QApplication::setActiveWindow(&window);
+        auto* nav=window.findChild<QListWidget*>("navigation");
+        auto* cards=window.findChild<QWidget*>("adminStatsKpiRow");
+        auto* table=window.findChild<QTableWidget*>("records");
+        auto* view=window.findChild<QComboBox*>("adminStatsView");
+        auto* search=window.findChild<QLineEdit*>("adminProfileStatsSearch");
+        auto* reset=window.findChild<QPushButton*>("adminStatsReset");
+        auto* automatic=window.findChild<QCheckBox*>("adminStatsAutoRefresh");
+        auto* interval=window.findChild<QWidget*>("adminStatsRefreshIntervalField");
+        auto* seconds=window.findChild<QSpinBox*>("adminStatsRefreshSeconds");
+        auto* empty=window.findChild<QWidget*>("listEmptyState");
+        auto* emptyTitle=window.findChild<QLabel*>("listEmptyTitle");
+        auto* description=window.findChild<QLabel*>("listEmptyDescription");
+        auto* scroll=window.findChild<QScrollArea*>("pageContentScrollArea");
+        if (!nav || !cards || !table || !view || !search || !reset || !automatic || !interval ||
+            !seconds || !empty || !emptyTitle || !description || !scroll) return false;
+        nav->setCurrentRow(17); QTest::qWait(10);
+        check(!nav->item(17)->isHidden() && table->rowCount()==4,"admin fixture has four profiles");
+        auto profileIds=[&] {
+            QStringList ids;
+            for(int row=0;row<table->rowCount();++row) if(auto* item=table->item(row,0)) ids.append(item->text());
+            ids.sort(); return ids;
+        };
+        const auto initialIds=profileIds();
+        bool longNameFound=false;
+        for (int row=0;row<table->rowCount();++row) if (auto* cell=table->item(row,1))
+            if (cell->text()==longName) { longNameFound=true; check(cell->toolTip()==longName,"long profile name retained in tooltip"); }
+        check(longNameFound,"long profile fixture reaches real statistics");
+        check(interval->isHidden() && !seconds->isEnabled(),"disabled refresh interval takes no space");
+        const int initialNameWidth=table->columnWidth(1);
+        for (int width : {800,1120,1440,800}) {
+            window.resize(width,width==800 ? 520 : 640); QTest::qWait(10);
+            QMap<int,int> rows;
+            QList<QRect> bounds;
+            for (int index=0;index<4;++index) {
+                auto* card=cards->findChild<QFrame*>(QStringLiteral("adminStatsKpiCard_%1").arg(index));
+                if (!card) return false;
+                const auto rect=card->geometry(); ++rows[rect.top()]; bounds.append(rect);
+                check(cards->rect().contains(rect),QStringLiteral("%1 width%2 card bounds").arg(scale).arg(width));
+                for (auto* label : card->findChildren<QLabel*>()) if (!label->isHidden()) {
+                    check(label->contentsRect().width()>=label->fontMetrics().horizontalAdvance(label->text()),"complete KPI text");
+                    check(label->contentsRect().height()>=label->fontMetrics().height(),"complete KPI line height");
+                }
+            }
+            const int first=rows.first();
+            check(first==1 || first==2 || first==4,"balanced metric column count");
+            for (int count : rows) check(count==first,"no orphan metric row");
+            for (int i=0;i<bounds.size();++i) for (int j=i+1;j<bounds.size();++j)
+                check(!bounds[i].intersects(bounds[j]),"metric cards do not overlap");
+            check(scroll->horizontalScrollBar()->maximum()==0,"no outer horizontal scrolling");
+            if (width==800) check(table->columnWidth(1)==initialNameWidth,"profile name width returns after narrowing");
+        }
+        const auto shots=qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+        auto capture=[&](const QString& state) {
+            if (!shots.isEmpty() && (scale==100 || scale==200))
+                check(window.grab().save(shots+QStringLiteral("/admin-stats-%1-%2.png").arg(state).arg(scale)),"capture");
+        };
+        auto inspectHeaders=[&](const QString& context) {
+            auto* header=table->horizontalHeader();
+            for (int column=0;column<table->columnCount();++column) {
+                const auto* item=table->horizontalHeaderItem(column); if (!item) continue;
+                QStyleOptionHeader option; option.initFrom(header); option.orientation=Qt::Horizontal;
+                option.rect=QRect(0,0,table->columnWidth(column),header->height()); option.text=item->text();
+                option.sortIndicator=QStyleOptionHeader::SortDown;
+                const auto label=header->style()->subElementRect(QStyle::SE_HeaderLabel,&option,header);
+                auto font=header->font(); font.setBold(true); const QFontMetrics metrics(font);
+                check(label.width()>=metrics.horizontalAdvance(item->text()),QStringLiteral("%1 %2 column%3 header=%4 text=%5 available=%6")
+                    .arg(scale).arg(context).arg(column).arg(item->text()).arg(metrics.horizontalAdvance(item->text())).arg(label.width()));
+                check(item->toolTip()==item->text(),"full header tooltip");
+            }
+        };
+        scroll->verticalScrollBar()->setValue(0); capture("overview");
+        scroll->ensureWidgetVisible(automatic); automatic->setFocus(); QTest::keyClick(automatic,Qt::Key_Space); QTest::qWait(5);
+        check(automatic->isChecked() && interval->isVisible() && seconds->isEnabled(),"keyboard enables interval");
+        seconds->setValue(37); automatic->setFocus(); QTest::keyClick(automatic,Qt::Key_Space);
+        check(!automatic->isChecked() && interval->isHidden() && seconds->value()==37,"hiding preserves interval");
+        check(LoadQtDisplaySettings(workspace.directory).adminStatsRefreshSeconds==37,"interval preference saved");
+        for (int mode=0;mode<8;++mode) {
+            view->setCurrentIndex(mode); QTest::qWait(5);
+            check(table->columnCount()==(mode<6 ? 9 : 3),"all existing stats views retained");
+            inspectHeaders(QStringLiteral("profiles-%1").arg(mode));
+            const int flexible=mode==6 ? 2 : 1;
+            const int oldWidth=table->columnWidth(flexible);
+            window.resize(1440,640); QTest::qWait(5); window.resize(800,520); QTest::qWait(5);
+            check(table->columnWidth(flexible)==oldWidth,"each stats view width returns after narrowing");
+            const int expectedFirst=qRound((mode<6 ? 72 : 170)*scale/100.0);
+            check(table->columnWidth(0)==expectedFirst,"fixed stats column scales with text");
+            search->setText("no-such-profile-fixture"); QTest::qWait(5);
+            if (mode<6) {
+                check(table->rowCount()==0 && table->isHidden() && empty->isVisible(),"filtered view explains empty result");
+                check(emptyTitle->text().contains(QString::fromUtf8("ничего не найдено")) &&
+                    description->text().contains(QString::fromUtf8("сброса")),"empty result includes recovery");
+                check(empty->accessibleDescription()==description->text(),"accessible empty context");
+                scroll->ensureWidgetVisible(description,0,4); QTest::qWait(5);
+                const auto text=description->fontMetrics().boundingRect(QRect(0,0,description->width(),10000),Qt::TextWordWrap,description->text());
+                check(description->height()>=text.height(),"empty context wraps completely");
+                if(mode==0) capture("filtered");
+            } else check(table->rowCount()>0 && !table->isHidden(),"aggregate zero rows remain available");
+            search->clear();
+        }
+        reset->click(); QTest::qWait(5);
+        check(view->currentIndex()==0 && profileIds()==initialIds && empty->isHidden() && table->isVisible(),"reset restores exact profile set");
+        nav->setCurrentRow(0); QApplication::processEvents(); check(cards->isHidden() && interval->isHidden(),"stats controls do not leak to profile page");
+        nav->setCurrentRow(17); QApplication::processEvents(); check(table->rowCount()==4,"navigation preserves working stats");
+        auto* reportView=window.findChild<QComboBox*>("reportView");
+        auto* reportRange=window.findChild<QComboBox*>("reportDateRange");
+        auto* compare=window.findChild<QCheckBox*>("reportComparePrevious");
+        if (!reportView || !reportRange || !compare) return false;
+        nav->setCurrentRow(6);
+        reportRange->setCurrentIndex(1);
+        for(bool comparison : {false,true}) for(int mode=0;mode<8;++mode) {
+            compare->setChecked(comparison);
+            reportView->setCurrentIndex(mode); QTest::qWait(5);
+            inspectHeaders(QStringLiteral("report-%1").arg(mode));
+            QStringList beforeRows;
+            for(int row=0;row<table->rowCount();++row) {
+                QStringList cells;
+                for(int column=0;column<table->columnCount();++column) if(auto* cell=table->item(row,column)) {
+                    cells.append(cell->text());
+                    check(cell->toolTip()==cell->text(),"full report cell tooltip");
+                    const bool numeric=column>0 && table->horizontalHeaderItem(column)->text()!=QStringLiteral("ID");
+                    if(numeric) check((cell->textAlignment() & Qt::AlignRight)!=0,"report numbers align right");
+                }
+                beforeRows.append(cells.join(QChar(0x1f)));
+            }
+            beforeRows.sort();
+            table->sortItems(0,Qt::DescendingOrder); QApplication::processEvents();
+            QStringList afterRows;
+            for(int row=0;row<table->rowCount();++row) {
+                QStringList cells; for(int column=0;column<table->columnCount();++column)
+                    if(auto* cell=table->item(row,column)) cells.append(cell->text());
+                afterRows.append(cells.join(QChar(0x1f)));
+            }
+            afterRows.sort(); check(afterRows==beforeRows,"sorting preserves complete report rows");
+            const int initialWidth=table->columnWidth(0);
+            window.resize(1440,640); QTest::qWait(5); window.resize(800,520); QTest::qWait(5);
+            check(table->columnWidth(0)==initialWidth,"report first column resize is reversible");
+            if(table->rowCount()>0) {
+                table->scrollToItem(table->item(0,table->columnCount()-1),QAbstractItemView::PositionAtCenter);
+                QApplication::processEvents();
+                check(table->visualItemRect(table->item(0,table->columnCount()-1)).intersects(table->viewport()->rect()),"last report column reachable");
+                table->horizontalScrollBar()->setValue(0);
+            }
+            if(mode==1 && !comparison) {
+                bool found=false;
+                for(int row=0;row<table->rowCount();++row) if(table->item(row,0)->text()==longName) found=true;
+                check(found,"employee report retains long profile name");
+                scroll->ensureWidgetVisible(table,0,0); QTest::qWait(5); capture("report-employees");
+            }
+        }
+        window.close();
+    }
+    ApplyQtDisplaySettings(app,QtDisplaySettings{});
+    std::cout << "adminStatsDesign: seven scales, four widths, eight views, filter recovery and refresh controls\n";
+    return ok;
+}
+
 static bool TestQtAllPagesFitAtMinimumWidth() {
     QTemporaryDir temp;
     if (!temp.isValid()) return false;
@@ -9629,6 +12812,33 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
     auto* overflowMenu = window.findChild<QMenu*>("headerOverflowMenu");
     if (!overflow || !overflowMenu || overflow->menu() != overflowMenu ||
         !overflow->isVisible() || !overflow->isEnabled()) return false;
+    if (overflow->icon().isNull() || !overflow->text().isEmpty() ||
+        overflow->toolButtonStyle() != Qt::ToolButtonIconOnly ||
+        overflow->accessibleName().isEmpty() || overflow->toolTip() != overflow->accessibleName()) {
+        std::cerr << "Overflow must use a named, font-independent icon\n";
+        return false;
+    }
+    // Three separate dots must survive every supported raster scale and state.
+    // Inspect alpha columns rather than platform-dependent font glyphs.
+    for (int percent : {90, 100, 110, 125, 150, 175, 200}) {
+        const int size = qRound(18 * percent / 100.0);
+        for (auto mode : {QIcon::Normal, QIcon::Active, QIcon::Disabled, QIcon::Selected}) {
+            const auto pixels = overflow->icon().pixmap(QSize(size, size), mode).toImage();
+            int groups = 0;
+            bool previous = false;
+            for (int x = 0; x < pixels.width(); ++x) {
+                bool painted = false;
+                for (int y = 0; y < pixels.height(); ++y)
+                    painted |= qAlpha(pixels.pixel(x, y)) > 32;
+                if (painted && !previous) ++groups;
+                previous = painted;
+            }
+            if (groups != 3) {
+                std::cerr << "Overflow dots missing or merged at " << percent << "%\n";
+                return false;
+            }
+        }
+    }
     for (const auto& [widgetName, actionName] : foldedActions) {
         auto* widget = window.findChild<QWidget*>(widgetName);
         auto* action = window.findChild<QAction*>(actionName);
@@ -9752,9 +12962,33 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
             }
         }
         if (page == 2 && records->rowCount() > 0) {
+            const QString signalValues = records->item(0,6)->text() + ":" + records->item(0,7)->text();
+            for (int column : {6,7}) {
+                const QString full = column == 6 ? QString::fromUtf8("Просрочено") : QString::fromUtf8("Ждут XP");
+                if (records->isColumnHidden(column) || records->horizontalHeaderItem(column)->toolTip()!=full ||
+                    records->horizontalHeaderItem(column)->data(Qt::AccessibleTextRole).toString()!=full) return false;
+            }
+            window.resize(800 + 7 * auditScale, 720);
+            QApplication::processEvents(); QApplication::processEvents();
+            if (records->horizontalHeaderItem(6)->text()!=QString::fromUtf8("Просрочено") ||
+                records->horizontalHeaderItem(7)->text()!=QString::fromUtf8("Ждут XP")) return false;
+            window.resize(800,520);
+            QApplication::processEvents(); QApplication::processEvents();
+            if (signalValues != records->item(0,6)->text()+":"+records->item(0,7)->text()) return false;
+            if (!artifacts.isEmpty()) {
+                pageScroll->ensureWidgetVisible(records,0,0); QApplication::processEvents();
+                window.grab().save(artifacts + QStringLiteral("/projects-table-visible.png"));
+                pageScroll->verticalScrollBar()->setValue(0); QApplication::processEvents();
+            }
             if (records->horizontalScrollBar()->maximum() != 0 || records->columnWidth(0) < 120 ||
                 !records->isColumnHidden(1) || !detailsToggle->isVisible() || detailsToggle->isChecked()) {
                 std::cerr << "Projects did not keep the name and working signals readable at minimum width\n";
+                std::cerr << "Project metrics: viewport=" << records->viewport()->width()
+                    << " title=" << records->columnWidth(0) << " hscroll=" << records->horizontalScrollBar()->maximum()
+                    << " descriptionHidden=" << records->isColumnHidden(1)
+                    << " detailsVisible=" << detailsToggle->isVisible() << " detailsChecked=" << detailsToggle->isChecked() << '\n';
+                for (int column=0; column<records->columnCount(); ++column)
+                    if (!records->isColumnHidden(column)) std::cerr << "visible column " << column << " width=" << records->columnWidth(column) << '\n';
                 return false;
             }
             records->selectRow(0);
@@ -9870,6 +13104,29 @@ static bool TestDisclosureMotionContract() {
     host.resize(320, 180); host.show(); QApplication::processEvents();
     auto* animation = button->indicatorAnimation();
     if (!animation || animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 0) return false;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_MOTION_TIMING")) {
+        // Opt-in diagnostic: use the real event loop, without moving the animation clock.
+        // Signal intervals measure application updates, not display presentation/FPS.
+        QList<qint64> timestamps;
+        QElapsedTimer clock;
+        const auto connection = QObject::connect(animation, &QVariantAnimation::valueChanged, &host,
+            [&](const QVariant&) { if (clock.isValid()) timestamps.append(clock.elapsed()); });
+        for (const bool expanded : {true, false}) {
+            timestamps.clear(); clock.start();
+            button->setChecked(expanded);
+            QTest::qWait(250);
+            qint64 maximumGap = 0;
+            for (int i = 1; i < timestamps.size(); ++i)
+                maximumGap = std::max(maximumGap, timestamps[i] - timestamps[i - 1]);
+            std::cout << "Disclosure timing: platform=" << QGuiApplication::platformName().toStdString()
+                << " expanded=" << expanded << " updates=" << timestamps.size()
+                << " lastUpdateMs=" << (timestamps.isEmpty() ? -1 : timestamps.back())
+                << " maxSignalGapMs=" << maximumGap << '\n';
+            if (animation->state() != QAbstractAnimation::Stopped ||
+                button->indicatorAngle() != (expanded ? 90 : 0)) return false;
+        }
+        QObject::disconnect(connection);
+    }
     button->setFocus();
     host.activateWindow(); QApplication::processEvents();
     QTest::keyClick(button, Qt::Key_Space);
@@ -9900,12 +13157,115 @@ static bool TestDisclosureMotionContract() {
     motionAllowed = true; button->setChecked(true); button->hide();
     if (animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 90) return false;
     button->show(); button->setChecked(false); button->setEnabled(false);
-    return animation->state() == QAbstractAnimation::Stopped && button->indicatorAngle() == 0;
+    if (animation->state() != QAbstractAnimation::Stopped || button->indicatorAngle() != 0) return false;
+
+    const auto fail = [](const char* context) {
+        std::cerr << "Disclosure lifecycle: " << context << '\n';
+        return false;
+    };
+    const auto stoppedAt = [](QtDisclosureButton* target, qreal angle) {
+        return target->indicatorAnimation()->state() == QAbstractAnimation::Stopped &&
+            std::abs(target->indicatorAngle() - angle) <= 0.001;
+    };
+    // Above: deterministic clock assertions after one actual event-loop sample.
+    // Below: lifecycle events and deletion use a running real event loop only.
+    button->setEnabled(true);
+    QApplication::processEvents();
+    if (!stoppedAt(button, 0)) return fail("enabling the button replayed the closed state");
+    button->setChecked(true);
+    if (animation->state() != QAbstractAnimation::Running) return fail("parent-disable fixture did not start");
+    host.setEnabled(false);
+    if (!stoppedAt(button, 90) || !content->isVisible() || button->accessibleDescription() != "expanded")
+        return fail("parent disable did not synchronously preserve expanded semantics");
+    host.setEnabled(true);
+    QTest::qWait(220); // More than one full transition: no delayed replay after restore.
+    if (!stoppedAt(button, 90)) return fail("parent enable replayed the expanded state");
+    button->setChecked(false);
+    if (animation->state() != QAbstractAnimation::Running) return fail("parent-hide fixture did not start");
+    host.hide();
+    if (!stoppedAt(button, 0) || content->isVisible() || button->accessibleDescription() != "collapsed")
+        return fail("parent hide did not synchronously preserve collapsed semantics");
+    host.show(); QTest::qWait(220);
+    if (!stoppedAt(button, 0) || button->geometry() != geometry || button->sizeHint() != hint)
+        return fail("parent show replayed motion or changed the button layout");
+
+    QWidget initialHost;
+    auto* initialLayout = new QVBoxLayout(&initialHost);
+    auto* initial = new QtDisclosureButton(&initialHost); // Empty policy means no motion.
+    initial->setText(QString::fromUtf8("Подробности"));
+    initialLayout->addWidget(initial);
+    initial->setChecked(true);
+    if (!stoppedAt(initial, 90)) return fail("initially checked hidden button did not snap");
+    initialHost.resize(320, 120); initialHost.show(); QApplication::processEvents();
+    if (!stoppedAt(initial, 90)) return fail("initial checked show replayed motion");
+    initial->setChecked(false);
+    if (!stoppedAt(initial, 0)) return fail("empty policy allowed motion");
+    initial->setMotionPolicy([] { return true; });
+    if (!stoppedAt(initial, 0)) return fail("replacing the policy replayed the current state");
+    initial->setChecked(true);
+    if (initial->indicatorAnimation()->state() != QAbstractAnimation::Running)
+        return fail("policy-replacement fixture did not start");
+    initial->setMotionPolicy([] { return false; });
+    if (!stoppedAt(initial, 90)) return fail("replacement false policy did not stop immediately");
+    initial->setMotionPolicy([] { return true; });
+    if (!stoppedAt(initial, 90)) return fail("replacement true policy replayed motion");
+    initial->setChecked(false);
+    if (initial->indicatorAnimation()->state() != QAbstractAnimation::Running)
+        return fail("empty-policy replacement fixture did not start");
+    initial->setMotionPolicy({});
+    if (!stoppedAt(initial, 0)) return fail("replacement empty policy did not stop immediately");
+    initialHost.hide();
+
+    const auto deleteWhileRunning = [&](bool deleteParent) {
+        int valueChanges = 0;
+        bool removedTargetCallback = false;
+        auto owner = std::make_unique<QWidget>();
+        auto* ownerLayout = new QVBoxLayout(owner.get());
+        auto* target = new QtDisclosureButton(owner.get(), [] { return true; });
+        target->setText(QString::fromUtf8("Подробности")); ownerLayout->addWidget(target);
+        QPointer<QWidget> ownerGuard(owner.get());
+        QPointer<QtDisclosureButton> targetGuard(target);
+        QPointer<QVariantAnimation> animationGuard(target->indicatorAnimation());
+        QObject::connect(animationGuard.data(), &QVariantAnimation::valueChanged, qApp,
+            [&](const QVariant&) { ++valueChanges; });
+        owner->resize(320, 120); owner->show(); QApplication::processEvents();
+        target->setChecked(true);
+        const bool inFlight = QTest::qWaitFor([&] {
+            return animationGuard && animationGuard->state() == QAbstractAnimation::Running &&
+                target->indicatorAngle() > 0 && target->indicatorAngle() < 90;
+        }, 600);
+        if (!inFlight) return fail(deleteParent ? "parent deletion had no real in-flight sample" :
+            "button deletion had no real in-flight sample");
+        const qreal sampledAngle = target->indicatorAngle();
+        QTimer::singleShot(0, target, [&] { removedTargetCallback = true; });
+        if (deleteParent) owner.reset(); else delete target;
+        if (!targetGuard.isNull() || !animationGuard.isNull() ||
+            (deleteParent ? !ownerGuard.isNull() : ownerGuard.isNull()))
+            return fail("deleted disclosure/animation ownership did not clear QPointer");
+        const int changesAtDeletion = valueChanges;
+        QTest::qWait(220); // Drain queued target work and more than a full transition.
+        if (removedTargetCallback || valueChanges != changesAtDeletion || !targetGuard.isNull() ||
+            !animationGuard.isNull()) return fail("a removed disclosure still received animation/queued work");
+        std::cout << "Disclosure lifecycle: real in-flight deletion=" << (deleteParent ? "parent" : "button")
+            << " sampledAngle=" << sampledAngle << " ownership/queued-cancellation PASS\n";
+        return true;
+    };
+    return deleteWhileRunning(false) && deleteWhileRunning(true);
 }
 
 static bool TestNavigationMotionLifecycle() {
     // Two fresh workspaces exercise the real scheduled navigation transition.
     // No forced animation clock/end value and no system setting is changed.
+    const auto fail = [](const char* context) {
+        std::cerr << "Navigation lifecycle: " << context << '\n';
+        return false;
+    };
+    struct RestoreQuitPolicy {
+        bool previous = qApp->quitOnLastWindowClosed();
+        ~RestoreQuitPolicy() { qApp->setQuitOnLastWindowClosed(previous); }
+    } restoreQuitPolicy;
+    qApp->setQuitOnLastWindowClosed(false); // Deliberate top-level deletion is not an application exit.
+    bool observedRunning = false;
     for (const bool enabled : {true, false}) {
         QTemporaryDir temp;
         if (!temp.isValid()) return false;
@@ -9931,10 +13291,13 @@ static bool TestNavigationMotionLifecycle() {
         navigation->setCurrentRow(1);
         QApplication::processEvents();
         const bool allowed = IsQtMotionAllowed(settings);
+        if (enabled && !allowed)
+            std::cout << "Navigation lifecycle: Running branch NOT OBSERVED; current system policy suppresses motion\n";
         if (allowed && animation->state() != QAbstractAnimation::Running) {
             std::cerr << "Navigation lifecycle did not start the real transition\n";
             return false;
         }
+        observedRunning |= animation->state() == QAbstractAnimation::Running;
         if (!allowed && (animation->state() != QAbstractAnimation::Stopped || marker->geometry() != target(1)))
             return false;
         window.hide();
@@ -9943,7 +13306,9 @@ static bool TestNavigationMotionLifecycle() {
             return false;
         }
         window.show();
-        QApplication::processEvents();
+        QTest::qWait(220);
+        if (animation->state() != QAbstractAnimation::Stopped || marker->geometry() != target(1))
+            return fail("show replayed the selected-row transition");
         navigation->setCurrentRow(0);
         QApplication::processEvents();
         if (allowed && animation->state() != QAbstractAnimation::Running) return false;
@@ -9953,8 +13318,143 @@ static bool TestNavigationMotionLifecycle() {
             return false;
         }
         window.setEnabled(true);
+        QTest::qWait(220);
+        if (animation->state() != QAbstractAnimation::Stopped || marker->geometry() != target(0))
+            return fail("window enable replayed the selected-row transition");
+
+        const auto startNextRow = [&] {
+            navigation->setCurrentRow(navigation->currentRow() == 0 ? 1 : 0);
+            QApplication::processEvents();
+            if (allowed && animation->state() != QAbstractAnimation::Running)
+                return fail("a real scheduled transition did not start");
+            if (!allowed && (animation->state() != QAbstractAnimation::Stopped ||
+                marker->geometry() != target(navigation->currentRow())))
+                return fail("saved-off/system-off did not snap a scheduled transition");
+            observedRunning |= animation->state() == QAbstractAnimation::Running;
+            return true;
+        };
+        const auto stoppedAtSelection = [&] {
+            return animation->state() == QAbstractAnimation::Stopped &&
+                marker->geometry() == target(navigation->currentRow());
+        };
+        if (!startNextRow()) return false;
+        navigation->setEnabled(false);
+        if (!stoppedAtSelection()) return fail("navigation-only disable did not stop immediately");
+        navigation->setEnabled(true); QTest::qWait(220);
+        if (!stoppedAtSelection()) return fail("navigation-only enable replayed motion");
+
+        if (!startNextRow()) return false;
+        auto* viewport = navigation->viewport();
+        viewport->setEnabled(false);
+        if (!stoppedAtSelection()) return fail("viewport-only disable did not stop immediately");
+        viewport->setEnabled(true); QTest::qWait(220);
+        if (!stoppedAtSelection()) return fail("viewport-only enable replayed motion");
+
+        // After hide/disable the offscreen QWindow may report active while
+        // QWidget's active-window state is cleared. Establish widget-unit focus
+        // explicitly there; this is not native activation/keyboard evidence.
+        if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(&window);
+        else {
+            window.raise(); window.activateWindow();
+            if (!QTest::qWaitForWindowActive(&window, 2000))
+                return fail("resize fixture window did not reactivate");
+        }
+        navigation->setFocus(Qt::TabFocusReason); QApplication::processEvents();
+        if (!navigation->hasFocus()) {
+            std::cerr << "Navigation focus diagnostic policy=" << navigation->focusPolicy()
+                << " visible=" << navigation->isVisible() << " enabled=" << navigation->isEnabled()
+                << " viewportEnabled=" << viewport->isEnabled() << " windowActive=" << window.isActiveWindow()
+                << " actualFocus=" << (QApplication::focusWidget() ? QApplication::focusWidget()->objectName().toStdString() : "null")
+                << " storedFocus=" << (window.focusWidget() ? window.focusWidget()->objectName().toStdString() : "null") << '\n';
+            return fail("resize fixture has no real navigation focus");
+        }
+        if (!startNextRow()) return false;
+        QPointer<QWidget> focusBeforeResize(QApplication::focusWidget());
+        window.resize(1000, 640); QApplication::processEvents();
+        if (!stoppedAtSelection()) return fail("viewport resize left marker motion running or at old geometry");
+        if (QApplication::focusWidget() != focusBeforeResize.data())
+            return fail("presentation resize changed keyboard focus");
+
+        window.resize(800, 520); QApplication::processEvents();
+        auto* scroll = navigation->verticalScrollBar();
+        scroll->setValue(scroll->minimum()); QApplication::processEvents();
+        if (scroll->maximum() > scroll->minimum()) {
+            if (!startNextRow()) return false;
+            QPointer<QWidget> focusBeforeScroll(QApplication::focusWidget());
+            if (!focusBeforeScroll || focusBeforeScroll->window() != &window)
+                return fail("scroll fixture has no real window focus");
+            scroll->setValue(scroll->maximum()); QApplication::processEvents();
+            const QRect selected = navigation->visualItemRect(navigation->currentItem());
+            if (animation->state() != QAbstractAnimation::Stopped ||
+                (viewport->rect().intersects(selected) ? marker->geometry() != target(navigation->currentRow()) :
+                    marker->isVisible())) return fail("scroll did not snap or hide the marker for its actual selected row");
+            if (QApplication::focusWidget() != focusBeforeScroll.data())
+                return fail("presentation scroll changed keyboard focus");
+        } else {
+            std::cout << "Navigation lifecycle: scroll interruption NOT OBSERVED; fixture has no vertical range\n";
+        }
+        std::cout << "Navigation lifecycle: savedMotion=" << enabled << " actualAllowed=" << allowed
+            << " hide/disable/viewport/resize PASS; scrollRange=" << scroll->maximum() - scroll->minimum()
+            << " focusScope=" << (QGuiApplication::platformName() == "offscreen" ? "explicit-widget-fixture" : "native-activation") << '\n';
         window.close();
     }
+
+    // Real in-flight destruction in its own fresh fixture, not a forced end
+    // value or a fake Windows predicate. Also leave a row-update callback queued.
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const auto directory = std::filesystem::u8path(temp.path().toUtf8().toStdString());
+    QtDisplaySettings settings;
+    settings.motionEnabled = true;
+    if (!SaveQtDisplaySettings(directory, settings)) return false;
+    QtWorkspace workspace(directory);
+    int valueChanges = 0;
+    bool removedWindowCallback = false;
+    auto owner = std::make_unique<QtWindow>(workspace);
+    auto* navigation = owner->findChild<QListWidget*>("navigation");
+    auto* marker = owner->findChild<QWidget*>("navigationActiveIndicator");
+    auto* animation = owner->findChild<QPropertyAnimation*>("navigationIndicatorAnimation");
+    if (!navigation || !marker || !animation) return false;
+    QPointer<QtWindow> windowGuard(owner.get());
+    QPointer<QListWidget> navigationGuard(navigation);
+    QPointer<QWidget> markerGuard(marker);
+    QPointer<QPropertyAnimation> animationGuard(animation);
+    QObject::connect(animation, &QPropertyAnimation::valueChanged, qApp,
+        [&](const QVariant&) { ++valueChanges; });
+    owner->resize(1120, 720); owner->show(); QApplication::processEvents();
+    navigation->setCurrentRow(0); QTest::qWait(200);
+    const QRect previousGeometry = marker->geometry();
+    navigation->setCurrentRow(1); QApplication::processEvents();
+    const bool allowed = IsQtMotionAllowed(settings);
+    if (allowed) {
+        const QRect selected = navigation->visualItemRect(navigation->currentItem());
+        const QRect target(selected.left() + 2, selected.top() + 6, 3, std::max(12, selected.height() - 12));
+        if (!QTest::qWaitFor([&] {
+            return animation->state() == QAbstractAnimation::Running &&
+                marker->geometry() != previousGeometry && marker->geometry() != target;
+        }, 600)) return fail("window deletion had no real in-flight sample");
+        observedRunning = true;
+        navigation->setCurrentRow(0); // Existing context-bound marker update is queued, not pumped.
+        if (animation->state() != QAbstractAnimation::Running)
+            return fail("window deletion lost its in-flight state before destruction");
+    } else {
+        if (animation->state() != QAbstractAnimation::Stopped)
+            return fail("system-off destruction fixture unexpectedly ran motion");
+        std::cout << "Navigation lifecycle: in-flight destruction NOT OBSERVED; current system policy suppresses motion\n";
+    }
+    const QRect sampledGeometry = marker->geometry();
+    QTimer::singleShot(0, owner.get(), [&] { removedWindowCallback = true; });
+    owner.reset();
+    if (!windowGuard.isNull() || !navigationGuard.isNull() || !markerGuard.isNull() || !animationGuard.isNull())
+        return fail("deleted window/marker/animation ownership did not clear QPointer");
+    const int changesAtDeletion = valueChanges;
+    QTest::qWait(220);
+    if (removedWindowCallback || valueChanges != changesAtDeletion || !windowGuard.isNull() ||
+        !animationGuard.isNull()) return fail("a removed window still received animation/queued work");
+    std::cout << "Navigation lifecycle: destruction actualAllowed=" << allowed << " sampledY="
+        << sampledGeometry.y() << " ownership/queued-cancellation PASS\n";
+    if (!observedRunning)
+        std::cout << "Navigation lifecycle: Running interruption gates remain UNOBSERVED, not Windows SPI acceptance\n";
     return true;
 }
 
@@ -10040,9 +13540,10 @@ static bool TestNavigationVisualContract() {
     auto* cloudStatusTimer = window.findChild<QTimer*>("cloudQuickStatusTimer");
     auto* cloudButton = window.findChild<QToolButton*>("quickCloudSync");
     if (!displayAction || !cloudStatusTimer || !cloudStatusTimer->isActive() || !cloudButton) return false;
-    const std::array<std::pair<const char*, int>, 7> iconControls{{
+    const std::array<std::pair<const char*, int>, 8> iconControls{{
         {"profileIdentityCopy", 18}, {"quickRefresh", 18}, {"quickShortcutLauncher", 18},
-        {"pomodoroQuickButton", 14}, {"quickCloudSync", 14}, {"editEntry", 16}, {"deleteEntry", 16}}};
+        {"pomodoroQuickButton", 14}, {"quickCloudSync", 14}, {"editEntry", 16}, {"deleteEntry", 16},
+        {"headerOverflowButton", 18}}};
     auto iconsFitScale = [&](int percent) {
         const QSize navigationSize(qRound(18 * percent / 100.0), qRound(18 * percent / 100.0));
         if (navigation->iconSize() != navigationSize) {
@@ -10224,6 +13725,106 @@ static bool TestQtModuleToggleParity() {
     if (navigation->currentRow() != 0 || title->text() != QString::fromUtf8("Профиль")) return false;
     window.close();
     return true;
+}
+
+static bool TestWorkspaceImportDecision(QApplication& app) {
+    QTemporaryDir temp;
+    if (!temp.isValid()) return false;
+    const QString source = temp.path() + QString::fromUtf8("/Исходные данные & архив/Очень_длинное_название_папки_без_пробелов_для_переноса_пути");
+    const QString destination = temp.path() + QString::fromUtf8("/Копия Qt/Новая_папка_с_длинным_названием_и_символами_🌿");
+    if (!QDir().mkpath(source)) return false;
+    QFile marker(source + "/preserved.txt");
+    if (!marker.open(QIODevice::WriteOnly) || marker.write("source bytes") != 12) return false;
+    marker.close();
+    bool ok = true;
+    int inspected = 0;
+    int decisions = 0;
+    auto check = [&](bool condition, const char* label, int percent) {
+        if (!condition) std::cerr << "workspaceImportDecision " << percent << "%: " << label << '\n';
+        ok &= condition;
+        return condition;
+    };
+    for (const int percent : {90, 100, 110, 125, 150, 175, 200}) {
+        QtDisplaySettings settings;
+        settings.scalePercent = percent;
+        ApplyQtDisplaySettings(app, settings);
+        for (int action = 0; action < 4; ++action) {
+            QtWorkspaceImportDialog dialog(source, destination);
+            bool visited = false;
+            QTimer::singleShot(0, &dialog, [&] {
+                visited = true;
+                ++decisions;
+                auto* context = dialog.findChild<QTextBrowser*>("workspaceImportContext");
+                auto* copy = dialog.findChild<QPushButton*>("workspaceImportCopy");
+                auto* empty = dialog.findChild<QPushButton*>("workspaceImportEmpty");
+                auto* cancel = dialog.findChild<QPushButton*>("workspaceImportCancel");
+                auto* footer = dialog.findChild<QWidget*>("dialogFooter");
+                if (!check(context && copy && empty && cancel && footer, "required controls", percent)) {
+                    dialog.reject(); return;
+                }
+                if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(&dialog);
+                check(context->isReadOnly() && !context->openExternalLinks() && !context->openLinks(), "read-only context", percent);
+                check(context->toPlainText().contains(source) && context->toPlainText().contains(destination), "literal complete paths", percent);
+                check(context->accessibleDescription() == context->toPlainText(), "complete accessible context", percent);
+                check(cancel->isDefault() && !copy->isDefault() && !empty->isDefault(), "safe default", percent);
+                check(MissingAccessibleNames(&dialog).isEmpty(), "accessible controls", percent);
+                if (action == 0) {
+                    for (const QSize requested : {QSize(640, 520), QSize(420, 380), QSize(780, 640), QSize(640, 520)}) {
+                        dialog.resize(requested.boundedTo(dialog.maximumSize()));
+                        QTest::qWait(10);
+                        ++inspected;
+                        const QRect footerBounds(footer->mapTo(&dialog, QPoint()), footer->size());
+                        check(dialog.rect().contains(footerBounds), "persistent footer bounds", percent);
+                        for (auto* button : {copy, empty, cancel}) {
+                            const QRect bounds(button->mapTo(&dialog, QPoint()), button->size());
+                            check(footerBounds.contains(bounds), "command containment", percent);
+                            check(button->width() >= button->sizeHint().width() && button->height() >= button->sizeHint().height(), "intrinsic command size", percent);
+                        }
+                        check(context->horizontalScrollBar()->maximum() == 0, "wrapped context", percent);
+                        auto* scroll = context->verticalScrollBar();
+                        scroll->setValue(scroll->maximum());
+                        QTest::qWait(1);
+                        check(scroll->value() == scroll->maximum(), "context end reachable", percent);
+                    }
+                    cancel->setFocus();
+                    QTest::keyClick(cancel, Qt::Key_Tab);
+                    check(context->hasFocus(), "Tab reaches context", percent);
+                    QTest::keyClick(context, Qt::Key_Tab);
+                    if (!copy->hasFocus() && QApplication::focusWidget())
+                        std::cerr << "workspaceImportDecision focus after context: "
+                            << QApplication::focusWidget()->metaObject()->className() << '/'
+                            << QApplication::focusWidget()->objectName().toStdString() << '\n';
+                    check(copy->hasFocus(), "Tab reaches copy", percent);
+                    QTest::keyClick(copy, Qt::Key_Backtab);
+                    check(context->hasFocus(), "Backtab reaches context", percent);
+                    cancel->setFocus();
+                    context->verticalScrollBar()->setValue(0);
+                    dialog.scrollArea()->verticalScrollBar()->setValue(0);
+                    const auto screenshotRoot = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+                    if (!screenshotRoot.isEmpty() && (percent == 100 || percent == 200))
+                        check(dialog.grab().save(screenshotRoot + QStringLiteral("/startup-import-%1.png").arg(percent)), "save scoped screenshot", percent);
+                    QTest::keyClick(cancel, Qt::Key_Return);
+                } else if (action == 1) {
+                    copy->setFocus(); QTest::keyClick(copy, Qt::Key_Return);
+                } else if (action == 2) {
+                    empty->setFocus(); QTest::keyClick(empty, Qt::Key_Enter, Qt::KeypadModifier);
+                } else QTest::keyClick(&dialog, Qt::Key_Escape);
+                check(!dialog.isVisible(), "local key closes dialog", percent);
+                if (dialog.isVisible()) dialog.reject();
+            });
+            dialog.exec();
+            check(visited, "real modal visited", percent);
+            const auto expected = action == 1 ? QMessageBox::Yes : action == 2 ? QMessageBox::No : QMessageBox::Cancel;
+            check(dialog.choice() == expected, "choice retains original startup branch", percent);
+            check(!QFileInfo::exists(destination), "presentation does not create destination", percent);
+            if (!marker.open(QIODevice::ReadOnly)) return false;
+            check(marker.readAll() == "source bytes", "source preserved", percent);
+            marker.close();
+        }
+    }
+    ApplyQtDisplaySettings(app, QtDisplaySettings{});
+    std::cout << "workspaceImportDecision: " << decisions << " modal choices, " << inspected << " resize inspections\n";
+    return ok && decisions == 28 && inspected == 28;
 }
 
 static bool TestWorkspaceImportSnapshot() {
@@ -10711,16 +14312,25 @@ static bool TestQtRecentProfileActions() {
         return false;
     }
     const auto metricCards = metrics->findChildren<QFrame*>(QString(), Qt::FindDirectChildrenOnly);
-    if (metricCards.size() != 5 || metrics->height() <= metricCards.first()->height()) return false;
-    const int firstMetricY = metricCards.first()->y();
-    bool wrappedMetrics = false;
-    for (const auto* metric : metricCards) {
-        if (metric->geometry().right() >= metrics->width()) {
-            return false;
+    if (metricCards.size() != 5) return false;
+    // Real Segoe UI can fit all five compact metrics on one row. Accept either
+    // row count, but never clipped text, overlapping cards or content overflow.
+    for (int index = 0; index < metricCards.size(); ++index) {
+        const auto* metric = metricCards[index];
+        if (!metrics->rect().contains(metric->geometry())) return false;
+        for (int other = index + 1; other < metricCards.size(); ++other)
+            if (metric->geometry().intersects(metricCards[other]->geometry())) return false;
+        for (const auto* label : metric->findChildren<QLabel*>()) {
+            const auto available = label->contentsRect();
+            if (label->fontMetrics().horizontalAdvance(label->text()) > available.width() ||
+                label->fontMetrics().height() > available.height()) {
+                std::cerr << "Recent XP metric text clipped: " << label->text().toUtf8().constData()
+                    << " text=" << label->fontMetrics().horizontalAdvance(label->text()) << 'x' << label->fontMetrics().height()
+                    << " available=" << available.width() << 'x' << available.height() << '\n';
+                return false;
+            }
         }
-        wrappedMetrics |= metric->y() != firstMetricY;
     }
-    if (!wrappedMetrics) return false;
 
     auto* mainColumns = window.findChild<QWidget*>("profileMainColumns");
     auto* mainLayout = mainColumns ? qobject_cast<QBoxLayout*>(mainColumns->layout()) : nullptr;
@@ -10736,7 +14346,11 @@ static bool TestQtRecentProfileActions() {
     }
     diagnosticsToggle->click();
     QApplication::processEvents();
-    if (!diagnostics->isVisible() || !summary->isVisible() || pageScroll->horizontalScrollBar()->maximum() != 0) return false;
+    if (!diagnostics->isVisible() || !summary->isVisible() || pageScroll->horizontalScrollBar()->maximum() != 0) {
+        std::cerr << "Recent XP expanded diagnostics: visible=" << diagnostics->isVisible()
+            << " summary=" << summary->isVisible() << " overflow=" << pageScroll->horizontalScrollBar()->maximum() << '\n';
+        return false;
+    }
     diagnosticsToggle->click();
     window.resize(1120, 720);
     QApplication::processEvents();
@@ -10757,7 +14371,7 @@ static bool TestQtRecentProfileActions() {
         text.contains(QString::fromUtf8("+8 глобального / +16 навыкового XP")) &&
         text.contains(QString::fromUtf8("+1 в истории")) &&
         summary->accessibleDescription().contains(QString::fromUtf8("3 из 4"));
-    if (!feedIsCorrect) return false;
+    if (!feedIsCorrect) { std::cerr << "Recent XP feed contents: " << text.toUtf8().constData() << '\n'; return false; }
 
     const std::array<QPushButton*, 3> modes = {modeAnalytics, modeFocus, modeTasks};
     for (int index = 0; index < int(modes.size()); ++index) {
@@ -10847,9 +14461,47 @@ static bool TestQtCommandHelpProcess() {
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
+#ifdef Q_OS_WIN
+    // The offscreen plugin does not discover the Windows system fonts itself.
+    // Measuring fallback boxes cannot establish readable text or real bounds.
+    if (QGuiApplication::platformName() == "offscreen") {
+        const QDir fonts(QDir(qEnvironmentVariable("WINDIR")).filePath("Fonts"));
+        for (const auto* file : {"segoeui.ttf", "segoeuib.ttf"}) {
+            if (QFontDatabase::addApplicationFont(fonts.filePath(QString::fromLatin1(file))) < 0) {
+                std::cerr << "smoke_qt: cannot load Windows Segoe UI for offscreen text checks\n";
+                return 1;
+            }
+        }
+        QFontDatabase::addApplicationFont(fonts.filePath(QStringLiteral("seguiemj.ttf")));
+        const auto font = QRawFont::fromFont(QFont(QStringLiteral("Segoe UI"), 10));
+        if (!font.isValid() || !font.supportsCharacter(uint('W')) || !font.supportsCharacter(uint(0x0416))) {
+            std::cerr << "smoke_qt: Latin/Cyrillic glyphs unavailable\n";
+            return 1;
+        }
+        std::cout << "smoke_qt offscreen font: " << font.familyName().toStdString() << '\n';
+    }
+#endif
     ApplyQtTheme(app);
     DialogAccessibilityAuditor dialogAccessibilityAuditor;
     app.installEventFilter(&dialogAccessibilityAuditor);
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PROFILE_STYLE"))
+        return CaptureQtStyle(app, QtStyleCapture::Profile) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORK_STYLE"))
+        return CaptureQtStyle(app, QtStyleCapture::WorkLists) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CATALOG_STYLE"))
+        return CaptureQtStyle(app, QtStyleCapture::CatalogLists) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_ANALYTICS_STYLE"))
+        return CaptureQtStyle(app, QtStyleCapture::Analytics) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SERVICE_STYLE"))
+        return CaptureQtStyle(app, QtStyleCapture::Services) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PROFILE_MODES"))
+        return TestQtProfileModePresentation(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SLIDERS"))
+        return TestQtSliderPresentation(app) && TestQtModelSettingsPresentation(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_POMODORO"))
+        return TestQtPomodoroPresentation(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CONTROL_SURFACES"))
+        return TestQtControlSurfaces(app) && TestQtControlStateVariants(app) && TestQtSliderPresentation(app) && TestQtModelSettingsPresentation(app) && TestQtProfileModePresentation(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PROFILE_LAYOUT"))
         return TestQtRecentProfileActions() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_RELATIVE_WORKSPACE"))
@@ -10860,12 +14512,30 @@ int main(int argc, char** argv) {
         return TestQtCommandHelpDialogLayout() && TestQtCommandHelpProcess() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISPLAY_DIALOG"))
         return TestDisplaySettings(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SETTINGS_MOTION"))
+        return TestQtSettingsMotionIntegration(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PIPELINE_MAP"))
         return TestUiPipelineMapScaling(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_PIPELINE_EDITOR"))
         return TestPipelineEditor() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_WORKING_EDITORS"))
         return TestQtWorkingEditorLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_HISTORY_CLEANUP"))
+        return TestQtHistoryCleanupLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_STARTUP_IMPORT"))
+        return TestWorkspaceImportDecision(app) && TestWorkspaceImportSnapshot() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_EXPORT_PICKERS"))
+        return TestQtExportPickerLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_EMPTY_LISTS"))
+        return TestQtWorkingListEmptyStates(app) && TestQtJournalEmptyStates(app) && TestQtAdminStatsPresentation(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_ADMIN_STATS"))
+        return TestQtAdminStatsPresentation(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_TASK_FILTERS"))
+        return TestQtTaskFilterDisclosure(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CLOUD_TERMINALS"))
+        return TestQtCloudTerminalDecisionLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_TASK_DECISIONS"))
+        return TestQtTaskDecisionLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_INLINE_PROJECT"))
         return TestQtTaskInlineProjectCreation() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CATALOG_PROFILES"))
@@ -10882,6 +14552,8 @@ int main(int argc, char** argv) {
         return TestQtChartReadability(app) && TestStatisticsTrendBeyondAuditPageLimit() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_DISCLOSURE"))
         return TestDisclosureMotionContract() ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_MOTION_LIFECYCLE"))
+        return TestDisclosureMotionContract() && TestNavigationMotionLifecycle() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_NAVIGATION"))
         return TestNavigationVisualContract() ? 0 : 1;
     if (!qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_WORKSPACE").trimmed().isEmpty())
@@ -10915,6 +14587,11 @@ int main(int argc, char** argv) {
     if (!TestProfileSession()) { std::cerr << "Profile session failed\n"; return 1; }
     if (!TestPipelineTransition()) { std::cerr << "Pipeline transition failed\n"; return 1; }
     if (!TestQtWorkingEditorLayout(app)) { std::cerr << "Working editor layout failed\n"; return 1; }
+    // CTest runs this unchanged matrix in smoke_qt_task_decisions. Preserve the
+    // complete standalone suite when the explicit partition flag is absent.
+    if (qEnvironmentVariable("FORGEMIRROR_QT_CTEST_PARTITIONED") != QStringLiteral("1") &&
+        !TestQtTaskDecisionLayout(app)) { std::cerr << "Task decision layout failed\n"; return 1; }
+    if (!TestQtCloudTerminalDecisionLayout(app)) { std::cerr << "Cloud terminal decision layout failed\n"; return 1; }
     if (!TestQtCatalogProfileLayout(app)) { std::cerr << "Catalog/profile layout failed\n"; return 1; }
     if (!TestQtXpDialogLayout(app)) { std::cerr << "XP dialog layout failed\n"; return 1; }
     if (!TestQtServiceEditorLayout(app)) { std::cerr << "Service editor layout failed\n"; return 1; }
@@ -10940,6 +14617,7 @@ int main(int argc, char** argv) {
     if (!TestCloudQuickHeader()) { std::cerr << "Cloud quick header failed\n"; return 1; }
     if (!TestNavigationClock()) { std::cerr << "Navigation clock failed\n"; return 1; }
     if (!TestRulesEditor()) { std::cerr << "Rules editor failed\n"; return 1; }
+    if (!TestQtSettingsMotionIntegration(app)) { std::cerr << "Qt settings motion integration failed\n"; return 1; }
     if (!TestDisplaySettings(app)) { std::cerr << "Display settings failed\n"; return 1; }
     if (!TestWindowDecorationHotkey()) { std::cerr << "Window decoration hotkey failed\n"; return 1; }
     if (!TestQtUiSettingsReset()) { std::cerr << "Qt UI settings reset failed\n"; return 1; }
@@ -11180,8 +14858,8 @@ int main(int argc, char** argv) {
     auto* recentAchievement0 = window.findChild<QLabel*>("profileRecentAchievement0");
     auto* recentAchievement1 = window.findChild<QLabel*>("profileRecentAchievement1");
     auto* recentAchievementOverflow = window.findChild<QLabel*>("profileAchievementOverflow");
-    if (!profileCollectionSummary || !profileCollectionSummary->text().contains(QString::fromUtf8("Навыков: 4")) ||
-        !profileCollectionSummary->text().contains(QString::fromUtf8("Ачивок активных: 3 / 4")) ||
+    if (!profileCollectionSummary || !profileCollectionSummary->text().contains(QString::fromUtf8("Навыки: 4")) ||
+        !profileCollectionSummary->text().contains(QString::fromUtf8("Активные достижения: 3 / 4")) ||
         !profileCollectionSummary->text().contains(QString::fromUtf8("Бонус: +16.5%")) ||
         !profileAchievementPreview || !profileAchievementPreview->isVisible() || !recentAchievement0 ||
         !recentAchievement0->toolTip().contains(QString::fromUtf8("Недавно истекла")) || recentAchievement0->isEnabled() ||
@@ -11345,7 +15023,8 @@ int main(int argc, char** argv) {
     nav->setCurrentRow(13);
     auto* cloudPull = window.findChild<QPushButton*>("cloudPull");
     auto* storageResolve = window.findChild<QPushButton*>("storageResolve");
-    if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настроить облако") ||
+    if (nav->item(13)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Настройки") ||
+        primary->accessibleName() != QString::fromUtf8("Настроить облако") ||
         !cloudPull || !cloudPull->isVisible() || cloudPull->isEnabled() || !storageResolve || !storageResolve->isVisible() || storageResolve->isEnabled() ||
         !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Ручные pull"))) return fail("Cloud guarded pull page unavailable");
     const auto expectedCloudUpdate = QDateTime::fromSecsSinceEpoch(displayCloudManifest.dataUpdatedAt).toString("yyyy-MM-dd HH:mm");
@@ -11458,7 +15137,8 @@ int main(int argc, char** argv) {
     auto* modelFilterReset = window.findChild<QPushButton*>("modelFilterReset");
     auto* modelChoiceRefresh = window.findChild<QPushButton*>("modelChoiceRefresh");
     auto* modelColor = window.findChild<QPushButton*>("modelColor");
-    if (!modelYaw || !primary->isVisible() || primary->text() != QString::fromUtf8("Сохранить настройки"))
+    if (!modelYaw || !primary->isVisible() || primary->text() != QString::fromUtf8("Сохранить") ||
+        primary->accessibleName() != QString::fromUtf8("Сохранить настройки"))
         return fail("3D viewer settings controls unavailable");
     if (!modelChoice || !modelFilter || !modelChoiceCount || !modelFilterReset || !modelChoiceRefresh || !modelColor)
         return fail("3D model list filter controls unavailable");
@@ -11754,13 +15434,15 @@ int main(int argc, char** argv) {
         return fail("Direct skill XP missing from admin core audit");
     if (!workspace.storage->save_profile(*directXpOriginal)) return fail("Direct XP fixture restore failed");
     nav->setCurrentRow(10);
-    if (!primary->isVisible() || primary->text() != QString::fromUtf8("Настройки хранилища") ||
+    if (!primary->isVisible() || primary->text() != QString::fromUtf8("Настройки") ||
+        primary->accessibleName() != QString::fromUtf8("Настройки хранилища") ||
         !window.findChild<QLabel*>("summary")->text().contains(QString::fromUtf8("Баланс хранилища")))
         return fail("Vault page unavailable");
     QTimer::singleShot(0, [] { if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject(); });
     primary->click();
     nav->setCurrentRow(12);
-    if (nav->item(12)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Добавить фразу"))
+    if (nav->item(12)->isHidden() || !primary->isVisible() || primary->text() != QString::fromUtf8("Добавить") ||
+        primary->accessibleName() != QString::fromUtf8("Добавить фразу"))
         return fail("Banner page unavailable");
     QTimer::singleShot(0, [] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -11857,7 +15539,8 @@ int main(int argc, char** argv) {
     const auto reportArtifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     if (!reportArtifacts.isEmpty()) window.grab().save(reportArtifacts + "/statistics-export.png");
     nav->setCurrentRow(9);
-    if (!primary->isVisible() || primary->text() != QString::fromUtf8("Изменить правила") || table->rowCount() != 13)
+    if (!primary->isVisible() || primary->text() != QString::fromUtf8("Изменить") ||
+        primary->accessibleName() != QString::fromUtf8("Изменить правила") || table->rowCount() != 13)
         return fail("Rules page unavailable");
     QTimer::singleShot(0, [] {
         auto* dialog = QApplication::activeModalWidget();

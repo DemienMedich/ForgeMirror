@@ -19,7 +19,17 @@ enum class QtActionIcon {
     AddXp,
     Details,
     ChevronRight,
-    ChevronDown
+    ChevronDown,
+    NewFolder,
+    List,
+    Table,
+    More,
+    Add,
+    Settings,
+    StatusNew,
+    StatusActive,
+    StatusDone,
+    Search
 };
 
 // Shared compact action symbols; colors follow the caller's palette and icon state.
@@ -40,6 +50,37 @@ inline QIcon CreateQtActionIcon(QtActionIcon action, const QPalette& palette, qr
         QPainterPath path;
 
         switch (action) {
+        case QtActionIcon::StatusNew:
+            painter.drawEllipse(QPointF(10.0, 10.0), 5.5, 5.5);
+            break;
+        case QtActionIcon::StatusActive:
+            painter.drawEllipse(QPointF(10.0, 10.0), 5.5, 5.5);
+            painter.setBrush(color);
+            painter.drawPie(QRectF(4.5, 4.5, 11.0, 11.0), 90 * 16, -180 * 16);
+            break;
+        case QtActionIcon::StatusDone:
+            path.moveTo(4.5, 10.0);
+            path.lineTo(8.0, 13.5);
+            path.lineTo(15.5, 6.0);
+            painter.drawPath(path);
+            break;
+        case QtActionIcon::Search:
+            painter.drawEllipse(QPointF(8.5, 8.5), 5.0, 5.0);
+            painter.drawLine(QPointF(12.0, 12.0), QPointF(16.5, 16.5));
+            break;
+        case QtActionIcon::Settings:
+            for (int row = 0; row < 3; ++row) {
+                const qreal y = 5.0 + row * 5.0;
+                const qreal x = row == 0 ? 7.0 : row == 1 ? 13.0 : 9.0;
+                painter.drawLine(QPointF(3.0, y), QPointF(x - 1.8, y));
+                painter.drawLine(QPointF(x + 1.8, y), QPointF(17.0, y));
+                painter.drawEllipse(QPointF(x, y), 1.8, 1.8);
+            }
+            break;
+        case QtActionIcon::Add:
+            painter.drawLine(QPointF(10.0, 4.5), QPointF(10.0, 15.5));
+            painter.drawLine(QPointF(4.5, 10.0), QPointF(15.5, 10.0));
+            break;
         case QtActionIcon::Edit:
             path.moveTo(4.5, 12.5);
             path.lineTo(13.0, 4.0);
@@ -146,6 +187,36 @@ inline QIcon CreateQtActionIcon(QtActionIcon action, const QPalette& palette, qr
             painter.drawEllipse(QRectF(3.5, 3.5, 13.0, 13.0));
             painter.drawPoint(QPointF(10.0, 6.5));
             painter.drawLine(QPointF(10.0, 9.0), QPointF(10.0, 13.5));
+            break;
+        case QtActionIcon::NewFolder:
+            path.moveTo(3.0, 7.0);
+            path.lineTo(3.0, 4.5);
+            path.lineTo(8.0, 4.5);
+            path.lineTo(10.0, 7.0);
+            path.lineTo(17.0, 7.0);
+            path.lineTo(17.0, 15.5);
+            path.lineTo(3.0, 15.5);
+            path.closeSubpath();
+            painter.drawPath(path);
+            painter.drawLine(QPointF(8.0, 11.0), QPointF(12.0, 11.0));
+            painter.drawLine(QPointF(10.0, 9.0), QPointF(10.0, 13.0));
+            break;
+        case QtActionIcon::List:
+            for (qreal y : {5.0, 10.0, 15.0}) {
+                painter.drawPoint(QPointF(4.0, y));
+                painter.drawLine(QPointF(8.0, y), QPointF(16.0, y));
+            }
+            break;
+        case QtActionIcon::Table:
+            painter.drawRoundedRect(QRectF(3.5, 4.5, 13.0, 11.0), 1.0, 1.0);
+            painter.drawLine(QPointF(3.5, 8.0), QPointF(16.5, 8.0));
+            painter.drawLine(QPointF(8.0, 4.5), QPointF(8.0, 15.5));
+            break;
+        case QtActionIcon::More:
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(color);
+            for (qreal x : {4.0, 10.0, 16.0})
+                painter.drawEllipse(QPointF(x, 10.0), 1.5, 1.5);
             break;
         case QtActionIcon::ChevronRight:
             path.moveTo(7.0, 4.5);

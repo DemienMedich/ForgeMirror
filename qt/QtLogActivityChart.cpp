@@ -222,7 +222,10 @@ void QtLogActivityChart::paintEvent(QPaintEvent* event) {
         painter.drawRoundedRect(background, 2.0, 2.0);
         if (maximum > 0 && values_[size_t(index)] > 0) {
             const qreal filledHeight = background.height() * values_[size_t(index)] / maximum;
-            painter.setBrush(accent);
+            QLinearGradient fill(background.bottomLeft(), background.topLeft());
+            fill.setColorAt(0, accent);
+            fill.setColorAt(1, accent.lighter(145));
+            painter.setBrush(fill);
             painter.drawRoundedRect(QRectF(background.left(), background.bottom() - filledHeight,
                 background.width(), filledHeight), 2.0, 2.0);
         }

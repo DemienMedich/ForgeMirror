@@ -1354,7 +1354,7 @@ ModuleToggles LoadModuleToggles() {
 namespace {
 
 bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
-    const std::string relStr = rel.generic_string();
+    const std::string relStr = rel.generic_u8string();
     if (relStr.empty()) return true;
     const std::unordered_set<std::string> allowedDirs = {
         "", "archive", "achievements", "achievements/icons", "spirits", "meta", "meta/patch-notes",
@@ -1363,9 +1363,9 @@ bool IsAllowedStorageEntry(const std::filesystem::path& rel, bool isDir) {
     if (isDir) {
         return allowedDirs.find(relStr) != allowedDirs.end();
     }
-    const std::string parent = rel.parent_path().generic_string();
-    const std::string name = rel.filename().string();
-    const std::string ext = rel.extension().string();
+    const std::string parent = rel.parent_path().generic_u8string();
+    const std::string name = rel.filename().generic_u8string();
+    const std::string ext = rel.extension().generic_u8string();
     const std::unordered_set<std::string> allowedMetaFiles = {
         "pipeline.json", "tasks.json", "projects.json", "gameplay.ini", "shortcuts.json", "ui.ini", "cloud.ini",
         "professions.txt", "banner.json", "storage.json", "profile-audit.log", "task-audit.log", "tasks.json.lock",
@@ -1404,7 +1404,7 @@ bool CollectStrayStorageFiles(const std::filesystem::path& storageDir, std::vect
         auto rel = std::filesystem::relative(entry.path(), storageDir, ec);
         if (ec) break;
         if (!IsAllowedStorageEntry(rel, entry.is_directory())) {
-            outList.push_back(rel.generic_string());
+            outList.push_back(rel.generic_u8string());
             if (entry.is_directory()) {
                 it.disable_recursion_pending();
             }
