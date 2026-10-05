@@ -114,11 +114,13 @@ public:
         notice_->setTextFormat(Qt::PlainText); notice_->setWordWrap(true);
         notice_->setAccessibleName(QString::fromUtf8("Ошибка имени пресета")); notice_->hide();
         auto* footer = new QWidget(this); footer->setObjectName("dialogFooter");
+        footer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+        hint->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
         auto* footerLayout = new QVBoxLayout(footer); footerLayout->setContentsMargins(0, 0, 0, 0);
         footerLayout->setSpacing(parent->scaledMetric(8)); footerLayout->addWidget(notice_);
         if (column && buttons) {
             column->removeWidget(buttons); footerLayout->addWidget(buttons);
-            column->addWidget(hint); column->addWidget(footer);
+            column->addWidget(hint); column->addStretch(1); column->addWidget(footer);
             column->setSpacing(parent->scaledMetric(8)); column->setSizeConstraint(QLayout::SetMinimumSize);
         } else if (layout()) {
             layout()->addWidget(hint); layout()->addWidget(footer);
