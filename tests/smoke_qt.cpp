@@ -4187,8 +4187,25 @@ static bool TestQtCloudTerminalDecisionLayout(QApplication& app) {
                         stem + " full visible/message/accessibility context equality");
                     for (const auto& text : required)
                         record(normalized(fullText).contains(normalized(text)), stem + " complete semantic context: " + text);
+                    if (QGuiApplication::platformName() != "offscreen")
+                        record(dialog->screen()->availableGeometry().contains(dialog->frameGeometry()),
+                            stem + " initial native placement before test resizing");
                     for (const QSize size : {QSize(640,520),QSize(1000,640),QSize(640,520)}) {
-                        dialog->resize(size); settle(); inspect(box, body, footer, apply, cancel, stem, size, scale);
+                        dialog->resize(size); settle();
+                        // Programmatic resize retains the top-left corner; unlike an
+                        // on-screen user resize it can grow below the work area.
+                        // Position the test window without changing its measured size.
+                        if (QGuiApplication::platformName() != "offscreen") {
+                            const auto available = dialog->screen()->availableGeometry();
+                            const auto frame = dialog->frameGeometry();
+                            const int left = std::clamp(frame.left(), available.left(),
+                                std::max(available.left(), available.right() - frame.width() + 1));
+                            const int top = std::clamp(frame.top(), available.top(),
+                                std::max(available.top(), available.bottom() - frame.height() + 1));
+                            dialog->move(dialog->pos() + QPoint(left - frame.left(), top - frame.top()));
+                            settle();
+                        }
+                        inspect(box, body, footer, apply, cancel, stem, size, scale);
                         record(body->toPlainText() == fullText, stem + " resize preserves full plain context");
                     }
                     if (!checked) { safeClose(dialog); return; }
