@@ -4036,8 +4036,14 @@ static bool TestQtCloudTerminalDecisionLayout(QApplication& app) {
         record(apply->property("primary").toBool() && !cancel->property("primary").toBool() && !apply->autoDefault() &&
             box->defaultButton() == cancel && box->escapeButton() != apply && !apply->isDefault(),
             stem + " deliberate primary/safe default/escape");
-        if (QGuiApplication::platformName() != "offscreen")
-            record(box->screen()->availableGeometry().contains(box->frameGeometry()), stem + " actual native screen bounds");
+        if (QGuiApplication::platformName() != "offscreen") {
+            const auto available = box->screen()->availableGeometry();
+            const auto frame = box->frameGeometry();
+            record(available.contains(frame), stem + QString(" actual native screen bounds frame=%1,%2 %3x%4 available=%5,%6 %7x%8 requested=%9x%10")
+                .arg(frame.x()).arg(frame.y()).arg(frame.width()).arg(frame.height())
+                .arg(available.x()).arg(available.y()).arg(available.width()).arg(available.height())
+                .arg(requested.width()).arg(requested.height()));
+        }
         std::cout << stem.toStdString() << " actual=" << box->width() << 'x' << box->height()
             << " rows=" << measuredRows << " viewport=" << body->viewport()->width() << 'x' << body->viewport()->height()
             << " min=" << box->minimumWidth() << 'x' << box->minimumHeight()
