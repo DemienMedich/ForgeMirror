@@ -1135,7 +1135,12 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
     notice->setAccessibleName(QString::fromUtf8("Контекст выбранного файла и безопасное закрытие"));
     dialog.footerLayout()->addWidget(notice);
     const auto updateContext = [tabs, notice] {
-        notice->setText(QString::fromUtf8("%1. Замена — после подтверждения и резервной копии. Закрытие не изменяет файлы.").arg(tabs->tabText(tabs->currentIndex())));
+        const auto context = QString::fromUtf8("%1. Замена — после подтверждения и резервной копии. Закрытие не изменяет файлы.").arg(tabs->tabText(tabs->currentIndex()));
+        // The replacement warning is already visible above the tabs. Keep the
+        // persistent footer short so scaled text does not displace the comparison.
+        notice->setText(QString::fromUtf8("Закрытие не меняет файлы."));
+        notice->setAccessibleDescription(context);
+        notice->setToolTip(context);
     };
     QObject::connect(tabs, &QTabWidget::currentChanged, &dialog, updateContext); updateContext();
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog); buttons->setObjectName("cloudConflictButtons");

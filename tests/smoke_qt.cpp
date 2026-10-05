@@ -5713,6 +5713,13 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
         record(body->width() <= scroll->viewport()->width() && scroll->horizontalScrollBar()->maximum() == 0,
             stem + " no outer horizontal overflow");
         record(dialog->rect().contains(QRect(footer->mapTo(dialog, QPoint()), footer->size())), stem + " persistent footer bounds");
+        if (auto* notice = dialog->findChild<QLabel*>("cloudConflictNotice")) {
+            record(footer->height() * 5 <= dialog->height() * 2,
+                stem + " cloud footer leaves most space for comparison");
+            record(notice->accessibleDescription().contains(QString::fromUtf8("резервной копии")) &&
+                notice->accessibleDescription().contains(QString::fromUtf8("после подтверждения")),
+                stem + " cloud replacement safeguards remain accessible");
+        }
         int primaries = 0, defaults = 0;
         for (auto* button : dialog->findChildren<QPushButton*>()) {
             if (!button->isVisible() || button->window() != dialog) continue;
