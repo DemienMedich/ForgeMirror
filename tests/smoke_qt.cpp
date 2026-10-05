@@ -13549,6 +13549,18 @@ static bool TestNavigationVisualContract() {
         {"pomodoroQuickButton", 14}, {"quickCloudSync", 14}, {"editEntry", 16}, {"deleteEntry", 16},
         {"headerOverflowButton", 18}}};
     auto iconsFitScale = [&](int percent) {
+        auto* header = window.findChild<QScrollArea*>("headerScrollArea");
+        const auto headerFits = [&] {
+            if (!header || !header->widget()) return false;
+            for (auto* control : header->widget()->findChildren<QWidget*>()) {
+                if (!control->isVisibleTo(header) ||
+                    (!qobject_cast<QAbstractButton*>(control) && !qobject_cast<QComboBox*>(control))) continue;
+                const QRect bounds(control->mapTo(header->viewport(), QPoint()), control->size());
+                if (bounds.top() < 0 || bounds.bottom() >= header->viewport()->height()) return false;
+            }
+            return true;
+        };
+        const bool settledHeaderFits = QTest::qWaitFor(headerFits, 1000);
         const QSize navigationSize(qRound(18 * percent / 100.0), qRound(18 * percent / 100.0));
         if (navigation->iconSize() != navigationSize) {
             std::cerr << "Navigation icon size drifted at " << percent << "%\n";
@@ -13566,6 +13578,11 @@ static bool TestNavigationVisualContract() {
         if (!artifacts.isEmpty()) {
             QDir().mkpath(artifacts);
             window.grab().save(artifacts + QStringLiteral("/navigation-icons-%1.png").arg(percent));
+        }
+        if (!settledHeaderFits) {
+            std::cerr << "Header clips visible controls after layout settled at " << percent
+                      << "%: viewportHeight=" << (header ? header->viewport()->height() : -1) << '\n';
+            return false;
         }
         return true;
     };

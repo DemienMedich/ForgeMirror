@@ -4651,6 +4651,13 @@ void QtWindow::updateResponsiveHeader() {
     headerContent_->setProperty("headerAvailableWidth", availableWidth);
     headerLayout->invalidate();
     headerLayout->activate();
+    // QScrollArea caches its initial size hint. A later text-scale change can
+    // otherwise grow the controls inside a 50px viewport with no vertical bar.
+    // Reserve exactly one measured row, including the horizontal fallback bar.
+    const int scrollbarHeight = requiredWidth() > availableWidth
+        ? headerScroll_->style()->pixelMetric(QStyle::PM_ScrollBarExtent, nullptr, headerScroll_) : 0;
+    headerScroll_->setFixedHeight(headerLayout->sizeHint().height()
+        + 2 * headerScroll_->frameWidth() + scrollbarHeight);
 }
 
 void QtWindow::updateResponsiveShell() {

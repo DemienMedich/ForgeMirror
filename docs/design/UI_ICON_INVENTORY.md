@@ -27,3 +27,15 @@ build-qt/release-candidate-0.6.101-build.log: Qt9/9 PASS191.20с, smoke_core OK.
 
 Добавлено необязательное сохранение кадров в существующий TestNavigationVisualContract (FORGEMIRROR_QT_TEST_ARTIFACTS), без изменения приложения. Build exit0; NAVIGATION exit0, build-qt/icon-review-0.6.101.log.
 Просмотрены build-qt/icon-review-0.6.101/navigation-icons-100.png и navigation-icons-200.png. При100 верхнее недоступное копирование различимо, линейные значки согласованы. При200 верхняя панель визуально обрезает низ контролов. Это не PASS: следующий шаг — проверить установившуюся геометрию после смены масштаба и обычный запуск200, прежде чем менять продукт. Иконки не являются подтверждённой причиной. Недоступные пункты навигации скрыты в этом viewer fixture, поэтому кадр не доказывает их disabled-отрисовку.
+
+## Исправление высоты шапки после масштабирования
+
+05.10.2026. Подтверждённый BEFORE: новая проверка ждёт до1000мс и сравнивает вертикальные границы реально видимых кнопок/combo с viewport headerScrollArea. NAVIGATION exit1: Header clips visible controls after layout settled at200%, viewportHeight50. Лог header-bounds-before.log, кадры header-bounds-before.
+
+QtWindow::updateResponsiveHeader теперь задаёт высоту QScrollArea по sizeHint однострочного layout с рамкой и резервом горизонтального scrollbar при необходимости. Не изменены рисунки, команды, палитра или данные.
+
+AFTER: NAVIGATION offscreen exit0; просмотрен header-bounds-after/navigation-icons-200.png — все контролы целиком. Полный Qt9/9 PASS200.86с (header-bounds-regression.log), smoke_core OK (header-bounds-core.log).
+
+Native NAVIGATION прошёл проверки границ и сохранил кадр200: header-bounds-native/navigation-icons-200.png просмотрен, верхние контролы целиком. Весь native-run exit1 позже на hover: курсор в ожидаемых координатах, QWidget::widgetAt возвращает null, underMouse false; focus pass. Это не полный native PASS и не доказательство неисправности hover самого приложения. Лог header-bounds-native.log сохранён. Нужна адресная проверка pointer state с подтверждённым активным/неперекрытым окном, без повторения всей визуальной матрицы.
+
+Фикс находится в исходниках после0.6.101; ранее собранный Setup0.6.101 его не содержит. Новый релиз в этом проходе не объявлялся.
