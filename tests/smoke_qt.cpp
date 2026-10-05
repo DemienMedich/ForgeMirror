@@ -6016,6 +6016,16 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
                     record(picker && picker->testOption(QFileDialog::DontUseNativeDialog) &&
                         picker->fileMode()==(folder ? QFileDialog::Directory : QFileDialog::ExistingFile),pickerContext + " original Qt picker mode");
                     if (picker && folder) record(picker->testOption(QFileDialog::ShowDirsOnly),pickerContext + " directory-only option");
+                    if (picker) {
+                        record(picker->acceptMode() == QFileDialog::AcceptOpen &&
+                            picker->labelText(QFileDialog::Accept) == QString::fromUtf8(folder ? "Выбрать" : "Открыть"),
+                            pickerContext + " open picker retains correct action semantics");
+                        for (const char* action : {"backButton", "forwardButton", "toParentButton", "newFolderButton", "listModeButton", "detailModeButton"}) {
+                            auto* tool = picker->findChild<QToolButton*>(QLatin1String(action));
+                            record(tool && !tool->icon().isNull() && !tool->accessibleName().isEmpty() &&
+                                tool->toolTip() == tool->accessibleName(), pickerContext + " named shared action " + action);
+                        }
+                    }
                     if (picker) for (const auto* name : {"lookInCombo","fileTypeCombo"}) {
                         auto* combo=picker->findChild<QComboBox*>(QString::fromLatin1(name));
                         record(combo && !combo->accessibleName().isEmpty(),pickerContext + " actual named picker combo " + name);

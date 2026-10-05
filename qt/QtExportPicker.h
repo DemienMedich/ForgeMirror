@@ -8,21 +8,23 @@
 // Presentation only, for the existing widget-based export pickers. Native
 // pickers, file models, filters, overwrite checks and export handlers stay owned
 // by Qt/the caller. Child names below are covered by the actual-dialog tests.
-inline void PrepareQtExportPicker(QFileDialog& dialog) {
+inline void PrepareQtFilePicker(QFileDialog& dialog) {
     if (!dialog.testOption(QFileDialog::DontUseNativeDialog)) return;
+    const bool saving = dialog.acceptMode() == QFileDialog::AcceptSave;
+    const bool directory = dialog.fileMode() == QFileDialog::Directory;
     dialog.setAccessibleName(dialog.windowTitle());
     dialog.setLabelText(QFileDialog::LookIn, QString::fromUtf8("Папка:"));
-    dialog.setLabelText(QFileDialog::FileName, QString::fromUtf8("Имя файла:"));
+    dialog.setLabelText(QFileDialog::FileName, QString::fromUtf8(directory ? "Папка:" : "Имя файла:"));
     dialog.setLabelText(QFileDialog::FileType, QString::fromUtf8("Формат:"));
-    dialog.setLabelText(QFileDialog::Accept, QString::fromUtf8("Сохранить"));
+    dialog.setLabelText(QFileDialog::Accept, QString::fromUtf8(saving ? "Сохранить" : directory ? "Выбрать" : "Открыть"));
     dialog.setLabelText(QFileDialog::Reject, QString::fromUtf8("Отмена"));
     auto name = [&](const char* object, const char* label) {
         if (auto* widget = dialog.findChild<QWidget*>(QLatin1String(object)))
             widget->setAccessibleName(QString::fromUtf8(label));
     };
-    name("lookInCombo", "Папка сохранения");
-    name("fileNameEdit", "Имя сохраняемого файла");
-    name("fileTypeCombo", "Формат сохраняемого файла");
+    name("lookInCombo", saving ? "Папка сохранения" : "Текущая папка");
+    name("fileNameEdit", saving ? "Имя сохраняемого файла" : directory ? "Выбранная папка" : "Имя выбираемого файла");
+    name("fileTypeCombo", saving ? "Формат сохраняемого файла" : "Тип выбираемого объекта");
     name("sidebar", "Избранные папки");
     name("listView", "Файлы и папки");
     name("treeView", "Подробный список файлов и папок");
@@ -94,15 +96,18 @@ inline void PrepareQtExportPicker(QFileDialog& dialog) {
     }
 
     if (auto* box = dialog.findChild<QDialogButtonBox*>()) {
-        for (auto role : {QDialogButtonBox::Save, QDialogButtonBox::Cancel}) {
+        const auto acceptRole = saving ? QDialogButtonBox::Save : QDialogButtonBox::Open;
+        for (auto role : {acceptRole, QDialogButtonBox::Cancel}) {
             if (auto* button = box->button(role)) {
                 button->setAccessibleName(button->text().remove('&'));
-                button->setProperty("primary", role == QDialogButtonBox::Save);
+                button->setProperty("primary", role == acceptRole);
                 button->style()->unpolish(button);
                 button->style()->polish(button);
                 button->setMinimumSize(button->sizeHint().expandedTo(
-                    QSize(0, qRound((role == QDialogButtonBox::Save ? 32 : 26) * scale))));
+                    QSize(0, qRound((role == acceptRole ? 32 : 26) * scale))));
             }
         }
     }
 }
+
+inline void PrepareQtExportPicker(QFileDialog& dialog) { PrepareQtFilePicker(dialog); }

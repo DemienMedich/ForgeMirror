@@ -8985,6 +8985,7 @@ void QtWindow::createEntry(bool edit) {
             QFileDialog picker(&dialog, QString::fromUtf8("Выберите файл ярлыка")); picker.setOption(QFileDialog::DontUseNativeDialog);
             picker.setObjectName("shortcutFilePicker");
             picker.setFileMode(QFileDialog::ExistingFile);
+            PrepareQtFilePicker(picker);
             if (auto* folder = picker.findChild<QComboBox*>(QStringLiteral("lookInCombo"))) {
                 folder->setAccessibleName(QString::fromUtf8("Папка файла ярлыка"));
                 folder->setAccessibleDescription(QString::fromUtf8("Выбор папки существующего локального файла."));
@@ -9001,6 +9002,7 @@ void QtWindow::createEntry(bool edit) {
             picker.setOption(QFileDialog::DontUseNativeDialog);
             picker.setOption(QFileDialog::ShowDirsOnly);
             picker.setFileMode(QFileDialog::Directory);
+            PrepareQtFilePicker(picker);
             if (auto* folder = picker.findChild<QComboBox*>(QStringLiteral("lookInCombo"))) {
                 folder->setAccessibleName(QString::fromUtf8("Папка ярлыка"));
                 folder->setAccessibleDescription(QString::fromUtf8("Выбор существующей локальной папки."));
