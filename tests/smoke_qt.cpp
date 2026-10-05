@@ -5534,6 +5534,10 @@ static bool TestQtServiceEditorLayout(QApplication& app) {
                                         Qt::TextWordWrap, table->item(0, 1)->text()).height();
                                     record(table->rowHeight(0) >= measuredHeight, stem + " full wrapped history row glyph height");
                                     record(table->item(0, 0)->data(Qt::AccessibleTextRole).toString().contains("2023"), stem + " complete timestamp context");
+                                    record(table->verticalScrollMode() == QAbstractItemView::ScrollPerPixel &&
+                                        (table->item(0, 0)->textAlignment() & Qt::AlignTop) &&
+                                        (table->item(0, 1)->textAlignment() & Qt::AlignTop),
+                                        stem + " tall history row starts with readable date and scrolls within row");
                                 }
                             } else {
                                 auto* historyNotice = nested->findChild<QLabel*>("rulesHistoryNotice");

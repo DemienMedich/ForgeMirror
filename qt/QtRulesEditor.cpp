@@ -216,6 +216,7 @@ void showRulesHistory(QWidget* parent, const std::filesystem::path& directory) {
     table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers); table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setWordWrap(true); table->setTextElideMode(Qt::ElideNone);
+    table->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table->setMinimumHeight(dialog.scaledMetric(128));
     table->verticalHeader()->hide();
@@ -232,8 +233,10 @@ void showRulesHistory(QWidget* parent, const std::filesystem::path& directory) {
             const int row = table->rowCount(); table->insertRow(row);
             const auto timestamp = time.toLocalTime().toString(Qt::ISODate);
             auto* date = new QTableWidgetItem(time.toLocalTime().toString(QStringLiteral("dd.MM.yyyy\nHH:mm:ss")));
+            date->setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
             date->setToolTip(timestamp); date->setData(Qt::AccessibleTextRole, timestamp);
             auto* changes = new QTableWidgetItem(entry.value("changes").toString());
+            changes->setTextAlignment(Qt::AlignLeft | Qt::AlignTop);
             changes->setToolTip(changes->text()); changes->setData(Qt::AccessibleTextRole, changes->text());
             table->setItem(row, 0, date); table->setItem(row, 1, changes);
         }
