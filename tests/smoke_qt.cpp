@@ -13562,6 +13562,11 @@ static bool TestNavigationVisualContract() {
                 return false;
             }
         }
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QDir().mkpath(artifacts);
+            window.grab().save(artifacts + QStringLiteral("/navigation-icons-%1.png").arg(percent));
+        }
         return true;
     };
     auto changeScale = [&](int percent) {
