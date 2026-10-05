@@ -1,6 +1,7 @@
 #include "QtCloudSettings.h"
 #include "CloudSync.h"
 #include "QtScrollableDialog.h"
+#include "QtExportPicker.h"
 #include <QtWidgets>
 #include <algorithm>
 #include <cctype>
@@ -160,6 +161,7 @@ bool ShowCloudSettings(QWidget* parent, const std::filesystem::path& workspaceDi
         QFileDialog picker(&dialog, QString::fromUtf8("Папка синхронизации"), root->text());
         picker.setFileMode(QFileDialog::Directory);
         picker.setOptions(QFileDialog::ShowDirsOnly | QFileDialog::DontUseNativeDialog);
+        PrepareQtFilePicker(picker);
         if (auto* folder = picker.findChild<QComboBox*>(QStringLiteral("lookInCombo"))) {
             folder->setAccessibleName(QString::fromUtf8("Папка синхронизации"));
             folder->setAccessibleDescription(rootDetails);

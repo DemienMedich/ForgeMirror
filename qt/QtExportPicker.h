@@ -5,7 +5,7 @@
 #include <QtWidgets>
 #include <algorithm>
 
-// Presentation only, for the existing widget-based export pickers. Native
+// Presentation only, for the existing widget-based file/folder pickers. Native
 // pickers, file models, filters, overwrite checks and export handlers stay owned
 // by Qt/the caller. Child names below are covered by the actual-dialog tests.
 inline void PrepareQtFilePicker(QFileDialog& dialog) {
