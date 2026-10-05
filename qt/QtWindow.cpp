@@ -1790,7 +1790,6 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     taskPipelineSummary_->setTextInteractionFlags(Qt::TextBrowserInteraction);
     taskPipelineSummary_->setOpenExternalLinks(false);
     taskPipelineSummary_->setWordWrap(true);
-    content->addWidget(taskPipelineSummary_);
     statisticsChart_ = new QtReportChart;
     content->addWidget(statisticsChart_);
     modelSettings_ = LoadQtModelSettings(workspace_.directory);
@@ -2851,6 +2850,11 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     table_->verticalHeader()->setDefaultSectionSize(scaledUiMetric(displaySettings_.compactRows ? 24 : 28, displaySettings_.scalePercent));
     table_->horizontalHeader()->setStretchLastSection(true);
     content->addWidget(table_, 1);
+    // Detailed pipeline diagnostics are secondary to the task list. Keeping
+    // their wrapped links below it prevents a long summary from displacing
+    // the work area at large text scales; all existing filter links remain.
+    content->addWidget(taskPipelineSummary_);
+    QWidget::setTabOrder(table_, taskPipelineSummary_);
     bottomActions_ = new QWidget;
     bottomActions_->setObjectName("bottomActions");
     auto* bottom = new QtFlowLayout(bottomActions_);

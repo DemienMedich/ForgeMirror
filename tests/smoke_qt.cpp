@@ -9931,6 +9931,12 @@ static bool TestQtTaskAttentionBadges() {
     auto* search = window.findChild<QLineEdit*>("search");
     if (table->rowCount() != 5 || savedSettings.taskQuickFilter != 9 || !summary || !pipelineSummary || !search ||
         !pipelineSummary->text().contains(QString::fromUtf8("href=\"risk:branching\""))) return false;
+    auto* taskContent = table->parentWidget();
+    if (!taskContent || pipelineSummary->parentWidget() != taskContent || !taskContent->layout() ||
+        taskContent->layout()->indexOf(table) >= taskContent->layout()->indexOf(pipelineSummary)) {
+        std::cerr << "Pipeline diagnostics displace the primary task list\n";
+        return false;
+    }
     const std::vector<std::pair<int, std::set<std::string>>> riskFilters{
         {10, {"missing-stage"}}, {11, {"unknown-stage", "broken-next-task"}},
         {12, {"branching-task"}}, {13, {"open-handoff"}}};
