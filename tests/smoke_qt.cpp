@@ -5512,7 +5512,15 @@ static bool TestQtServiceEditorLayout(QApplication& app) {
                             ScheduleQtModalDriver(app, {}, stem + " preset name", [&](QDialog* nested) {
                                 auto* input = qobject_cast<QInputDialog*>(nested);
                                 if (!input) { record(false, stem + " compatible QInputDialog"); nested->reject(); return; }
-                                presetVisited = true; input->resize(640, 520); settle();
+                                presetVisited = true;
+                                if (scale == 100)
+                                    record(input->height() <= 260, stem + " short preset opens compactly");
+                                for (auto* label : input->findChildren<QLabel*>())
+                                    if (label->isVisible() && label->wordWrap() && !label->text().isEmpty())
+                                        record(label->height() >= label->heightForWidth(label->width()),
+                                            stem + " initial preset label readable");
+                                capture(input, stem + "-preset-initial", scale);
+                                input->resize(640, 520); settle();
                                 auto* field = input->findChild<QLineEdit*>();
                                 auto* inputBox = input->findChild<QDialogButtonBox*>();
                                 auto* ok = inputBox ? inputBox->button(QDialogButtonBox::Ok) : nullptr;

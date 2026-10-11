@@ -147,7 +147,12 @@ public:
             if (validName(text.trimmed())) { notice_->clear(); notice_->hide();
                 if (input_) input_->setAccessibleDescription(nameDetails()); }
         });
-        setMinimumSize(420, 220); setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX); resize(560, 320);
+        setMinimumSize(420, 220); setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+        ensurePolished();
+        if (layout()) layout()->activate();
+        const int initialHeight = layout() && layout()->hasHeightForWidth()
+            ? layout()->heightForWidth(560) : sizeHint().height();
+        resize(560, std::max(220, initialHeight));
     }
     void accept() override {
         if (!validName(textValue().trimmed())) {
