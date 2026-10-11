@@ -5,6 +5,27 @@
 #include <QStyle>
 #include <QWidget>
 #include <QStyledItemDelegate>
+#include <QAbstractItemView>
+
+// A cell widget owns its visible content. Retain the model value for sorting,
+// copying and accessibility, but paint only the underlying selection/background.
+class QtCellWidgetDelegate final : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override {
+        const auto* view = qobject_cast<const QAbstractItemView*>(parent());
+        if (!view || !view->indexWidget(index)) {
+            QStyledItemDelegate::paint(painter, option, index);
+            return;
+        }
+        QStyleOptionViewItem content(option);
+        initStyleOption(&content, index);
+        content.text.clear();
+        auto* style = content.widget ? content.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &content, painter, content.widget);
+    }
+};
 
 // Keep the complete display text for accessibility, copying and exports;
 // render task attention labels as separate, quiet chips in the title cell.

@@ -2837,6 +2837,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     emptyLayout->addStretch(1);
     content->addWidget(listEmptyState_, 1);
     table_ = new QTableWidget;
+    table_->setItemDelegate(new QtCellWidgetDelegate(table_));
     table_->setItemDelegateForColumn(0, new QtTaskTitleDelegate(table_));
     table_->setObjectName("records");
     table_->horizontalHeader()->setObjectName("recordsHeader");

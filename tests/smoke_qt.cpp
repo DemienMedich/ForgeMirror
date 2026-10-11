@@ -12820,6 +12820,34 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
             view->setCurrentIndex(mode); QTest::qWait(5);
             check(table->columnCount()==(mode<6 ? 9 : 3),"all existing stats views retained");
             inspectHeaders(QStringLiteral("profiles-%1").arg(mode));
+            if (mode >= 6 && table->rowCount() > 0) {
+                const int column = mode == 6 ? 2 : 1;
+                auto* item = table->item(0, column);
+                const auto index = table->model()->index(0, column);
+                check(table->cellWidget(0, column) != nullptr, "bar widget present");
+                const QString original = item->text();
+                const bool sorting = table->isSortingEnabled();
+                table->setSortingEnabled(false);
+                auto renderUnderlying = [&](bool selected) {
+                    QImage image(240, 40, QImage::Format_ARGB32_Premultiplied);
+                    image.fill(Qt::transparent);
+                    QPainter painter(&image);
+                    QStyleOptionViewItem option;
+                    option.initFrom(table); option.widget = table;
+                    option.rect = image.rect();
+                    option.state.setFlag(QStyle::State_Selected, selected);
+                    table->itemDelegateForIndex(index)->paint(&painter, option, index);
+                    return image;
+                };
+                for (bool selected : {false, true}) {
+                    const auto before = renderUnderlying(selected);
+                    item->setText(QStringLiteral("DUPLICATE-TEXT-REGRESSION"));
+                    check(renderUnderlying(selected) == before, "bar background does not paint model text");
+                    item->setText(original);
+                }
+                check(item->text() == original && !original.isEmpty(), "bar model value preserved");
+                table->setSortingEnabled(sorting);
+            }
             scroll->ensureWidgetVisible(table,0,4);
             QApplication::processEvents();
             capture(QStringLiteral("view-%1").arg(mode));
