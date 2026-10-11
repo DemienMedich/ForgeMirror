@@ -12528,6 +12528,14 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                         scroll->verticalScrollBar()->setValue(0); QTest::qWait(5);
                         ok = window.grab().save(screenshots + QStringLiteral("/profile-%1-mode%2-details%3.png")
                             .arg(scale).arg(mode).arg(expanded)) && ok;
+                        if (scale == 100 || scale == 200) {
+                            scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
+                            QTest::qWait(5);
+                            ok = window.grab().save(screenshots + QStringLiteral("/profile-bottom-%1-mode%2-details%3.png")
+                                .arg(scale).arg(mode).arg(expanded)) && ok;
+                            scroll->verticalScrollBar()->setValue(0);
+                            QTest::qWait(5);
+                        }
                     }
                 }
             }
