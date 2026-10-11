@@ -12820,6 +12820,9 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
             view->setCurrentIndex(mode); QTest::qWait(5);
             check(table->columnCount()==(mode<6 ? 9 : 3),"all existing stats views retained");
             inspectHeaders(QStringLiteral("profiles-%1").arg(mode));
+            scroll->ensureWidgetVisible(table,0,4);
+            QApplication::processEvents();
+            capture(QStringLiteral("view-%1").arg(mode));
             const int flexible=mode==6 ? 2 : 1;
             const int oldWidth=table->columnWidth(flexible);
             window.resize(1440,640); QTest::qWait(5); window.resize(800,520); QTest::qWait(5);
@@ -12853,6 +12856,9 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
             compare->setChecked(comparison);
             reportView->setCurrentIndex(mode); QTest::qWait(5);
             inspectHeaders(QStringLiteral("report-%1").arg(mode));
+            scroll->ensureWidgetVisible(table,0,4);
+            QApplication::processEvents();
+            capture(QStringLiteral("report-%1-compare-%2").arg(mode).arg(comparison ? 1 : 0));
             QStringList beforeRows;
             for(int row=0;row<table->rowCount();++row) {
                 QStringList cells;
