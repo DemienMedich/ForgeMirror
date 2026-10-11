@@ -5,3 +5,4 @@
 До: profile-task-columns-before.log exit1 с clipped header/deadline. После: native PROFILE_MODES exit0, profile-task-columns-after.log; полный Qt9/9 PASS204.00с, profile-task-columns-full.log; core OK. Дополненный capture проверяет достижение последнего столбца и сохраняет right endpoint: native profile-task-right-after.log exit0. Просмотрены левый край100/200 и правый край200; последний заголовок «Этап процесса» читаем. Это не обещание одновременной видимости всех колонок при200%.
 
 Каноническая версия поднята до0.6.107 для новой поставки. Установщик и lifecycle этой версии ещё НЕ проверены; установленная0.6.106 не менялась. Не считать кандидат готовым до package/Setup/install-update-uninstall/clean-PATH.
+Поставка0.6.107 проверена отдельно: см. ../releases/ForgeMirror-0.6.107.md. Установленная рабочая версия пока0.6.106.
