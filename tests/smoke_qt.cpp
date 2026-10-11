@@ -12501,6 +12501,23 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                 if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(&window);
                 button->setFocus(); QTest::keyClick(button, Qt::Key_Space); QTest::qWait(15);
                 if (!button->isChecked() || LoadQtDisplaySettings(directory).profileViewMode != mode) return false;
+                if (mode == 3) {
+                    auto* tasks = window.findChild<QTableWidget*>("records");
+                    if (!tasks || tasks->columnCount() != 5) return false;
+                    for (int column = 0; column < 5; ++column) {
+                        if (tasks->columnWidth(column) < tasks->horizontalHeader()->sectionSizeHint(column)) {
+                            std::cerr << "profile tasks clipped header: " << scale << ' ' << width << ' ' << column << '\n';
+                            ok = false;
+                        }
+                    }
+                    for (int row = 0; row < tasks->rowCount(); ++row) {
+                        const auto* deadline = tasks->item(row, 2);
+                        if (!deadline || tasks->columnWidth(2) < tasks->fontMetrics().horizontalAdvance(deadline->text()) + 16) {
+                            std::cerr << "profile tasks clipped deadline: " << scale << ' ' << width << '\n';
+                            ok = false;
+                        }
+                    }
+                }
                 for (bool expanded : {false, true}) {
                     if (mode != 0 && expanded) continue;
                     toggle->setChecked(expanded); QTest::qWait(10);
@@ -12533,6 +12550,18 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                             QTest::qWait(5);
                             ok = window.grab().save(screenshots + QStringLiteral("/profile-bottom-%1-mode%2-details%3.png")
                                 .arg(scale).arg(mode).arg(expanded)) && ok;
+                            if (mode == 3) {
+                                auto* tasks = window.findChild<QTableWidget*>("records");
+                                auto* horizontal = tasks->horizontalScrollBar();
+                                const int previous = horizontal->value();
+                                horizontal->setValue(horizontal->maximum());
+                                QTest::qWait(5);
+                                const int last = tasks->columnCount() - 1;
+                                const int right = tasks->columnViewportPosition(last) + tasks->columnWidth(last);
+                                if (right > tasks->viewport()->width() || right <= 0) ok = false;
+                                ok = window.grab().save(screenshots + QStringLiteral("/profile-bottom-right-%1.png").arg(scale)) && ok;
+                                horizontal->setValue(previous);
+                            }
                             scroll->verticalScrollBar()->setValue(0);
                             QTest::qWait(5);
                         }

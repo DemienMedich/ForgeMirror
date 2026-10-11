@@ -6945,8 +6945,21 @@ void QtWindow::render() {
         constexpr int widths[] = {38, 184, 58, 54, 74, 58};
         for (int col = 0; col < table_->columnCount(); ++col) table_->setColumnWidth(col, widths[col]);
     } else if (page == ProfilePage && profileMode == 3 && table_->columnCount() == 5) {
-        constexpr int widths[] = {148, 72, 82, 96, 94};
-        for (int col = 0; col < table_->columnCount(); ++col) table_->setColumnWidth(col, widths[col]);
+        // Preserve readable columns at large UI scales; scroll the table rather
+        // than reducing dates and headers to indistinguishable fragments.
+        constexpr int widths[] = {200, 100, 150, 160, 160};
+        auto* header = table_->horizontalHeader();
+        for (int col = 0; col < table_->columnCount(); ++col) {
+            int width = std::max(scaledUiMetric(widths[col], displaySettings_.scalePercent),
+                header->sectionSizeHint(col));
+            if (col == 1 || col == 2) {
+                for (int row = 0; row < table_->rowCount(); ++row)
+                    if (const auto* item = table_->item(row, col))
+                        width = std::max(width, table_->fontMetrics().horizontalAdvance(item->text()) +
+                            scaledUiMetric(16, displaySettings_.scalePercent));
+            }
+            table_->setColumnWidth(col, width);
+        }
     }
     if (page == Tasks) updateTaskColumnLayout();
     if (page == Projects) updateProjectColumnLayout();
@@ -6962,7 +6975,7 @@ void QtWindow::render() {
     if (page == Pipeline) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
         " Порядок совпадает с сохранённым порядком этапов. Ветка, ответственный и следующий шаг в узком окне доступны в подробностях."));
     // Give free width to readable content instead of stretching the final numeric column.
-    if (page != AdminProfileStats && page != Statistics) {
+    if (page != AdminProfileStats && page != Statistics && !(page == ProfilePage && profileMode == 3)) {
         int stretchColumn = 0;
         if (page == Catalog) stretchColumn = 2;
         else if (page == Vault) stretchColumn = 3;
