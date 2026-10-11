@@ -10955,6 +10955,18 @@ static bool TestQtSettingsMotionIntegration(QApplication& app) {
             diagnosticsAnimation = diagnostics->indicatorAnimation();
             markerAnimation = markerMotion;
             const bool initiallyAllowed = IsQtMotionAllowed(initial);
+            // Exercise the OS policy before changing the application's own setting.
+            if (!initiallyAllowed) {
+                navigation->setCurrentRow(1);
+                drain(); QTest::qWait(1); drain();
+                record(LoadQtDisplaySettings(directory).motionEnabled &&
+                    navigation->currentRow() == 1 && marker->property("motionSuppressed").toBool() &&
+                    markerMotion->state() == QAbstractAnimation::Stopped,
+                    "owner system-suppressed navigation with user motion still on");
+                navigation->setCurrentRow(0);
+                drain(); QTest::qWait(1); drain();
+                std::cout << "B1 navigation SystemSuppressedWithUserOn=CHECKED\n";
+            }
             diagnostics->click();
             if (initiallyAllowed) {
                 const bool running = diagnosticsAnimation->state() == QAbstractAnimation::Running;
