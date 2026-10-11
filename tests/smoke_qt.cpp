@@ -5839,6 +5839,15 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
         if (QGuiApplication::platformName() != "offscreen")
             record(confirm->screen()->availableGeometry().contains(confirm->frameGeometry()), context + " confirmation screen bounds");
         capture(confirm, context, scale);
+        if (auto* body = confirm->findChild<QPlainTextEdit*>("conflictConfirmBody")) {
+            auto* scroll = body->verticalScrollBar();
+            const int previous = scroll->value();
+            scroll->setValue(scroll->maximum());
+            settle();
+            capture(confirm, context + "-body-bottom", scale);
+            scroll->setValue(previous);
+            settle();
+        }
     };
     const QStringList fileStems{"tasks", "pipeline", "projects", "banner", "gameplay", "professions", "skills"};
     for (const int scale : {90,100,110,125,150,175,200}) {
