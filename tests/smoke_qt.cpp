@@ -13024,9 +13024,11 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
     auto* search = window.findChild<QLineEdit*>("search");
     auto* emptyState = window.findChild<QWidget*>("listEmptyState");
     auto* emptyTitle = window.findChild<QLabel*>("listEmptyTitle");
+    auto* emptyDescription = window.findChild<QLabel*>("listEmptyDescription");
     auto* detailsToggle = window.findChild<QPushButton*>("detailsToggle");
     auto* details = window.findChild<QTextBrowser*>("details");
-    if (!records || !search || !emptyState || !emptyTitle || !emptyTitle->wordWrap() || !detailsToggle || !details) return false;
+    if (!records || !search || !emptyState || !emptyTitle || !emptyTitle->wordWrap() ||
+        !emptyDescription || !emptyDescription->wordWrap() || !detailsToggle || !details) return false;
     const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
     for (int page = 0; page < navigation->count(); ++page) {
         if (!navigation->item(page) || navigation->item(page)->isHidden()) {
@@ -13137,10 +13139,18 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
             if (records->rowCount() != 0 || records->isVisible() || !emptyState->isVisible() ||
                 !emptyTitle->text().contains(QString::fromUtf8("ничего не найдено")) ||
                 pageScroll->horizontalScrollBar()->maximum() != 0) return false;
+            pageScroll->ensureWidgetVisible(emptyDescription, 0, 8);
+            QApplication::processEvents();
+            const QRect titleBounds(emptyTitle->mapTo(pageScroll->viewport(), QPoint()), emptyTitle->size());
+            const QRect descriptionBounds(emptyDescription->mapTo(pageScroll->viewport(), QPoint()), emptyDescription->size());
+            if (emptyDescription->text().isEmpty() || !emptyDescription->isVisible() ||
+                !pageScroll->viewport()->rect().contains(titleBounds) ||
+                !pageScroll->viewport()->rect().contains(descriptionBounds)) {
+                std::cerr << "Filtered catalog explanation is not fully reachable: page=" << page << '\n';
+                return false;
+            }
             if (!artifacts.isEmpty()) {
                 if (!QDir().mkpath(artifacts)) return false;
-                pageScroll->ensureWidgetVisible(emptyTitle, 0, 8);
-                QApplication::processEvents();
                 if (!window.grab().save(artifacts + QStringLiteral("/page-%1-no-matches-800.png").arg(page)))
                     return false;
             }
@@ -13150,6 +13160,13 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
             reset->click();
             QApplication::processEvents();
             if (!search->text().isEmpty() || !records->isVisible() || emptyState->isVisible()) return false;
+            if (records->rowCount() == 0) return false;
+            if (!artifacts.isEmpty()) {
+                pageScroll->ensureWidgetVisible(records, 0, 8);
+                QApplication::processEvents();
+                if (!window.grab().save(artifacts + QStringLiteral("/page-%1-restored-800.png").arg(page)))
+                    return false;
+            }
         }
         const int horizontalRange = pageScroll->horizontalScrollBar()->maximum();
         if (horizontalRange != 0) {
