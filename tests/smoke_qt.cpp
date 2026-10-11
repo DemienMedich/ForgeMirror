@@ -10684,6 +10684,8 @@ static bool TestRulesEditor() {
         }
         combo->setCurrentIndex(combo->findData(QStringLiteral("Migration baseline")));
         base->setValue(1234); apply->click(); restoredPreset = base->value() == 2345;
+        const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+        if (!artifacts.isEmpty()) { QDir().mkpath(artifacts); dialog->grab().save(artifacts + "/rules-preset-restored.png"); }
         QTimer::singleShot(0, [&] {
             auto* historyDialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             auto* table = historyDialog ? historyDialog->findChild<QTableWidget*>("rulesHistoryTable") : nullptr;
