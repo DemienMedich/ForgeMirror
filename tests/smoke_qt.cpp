@@ -9403,12 +9403,12 @@ static bool TestQtWorkingListEmptyStates(QApplication& app) {
         const double a=luminance(composed), b=luminance(background);
         const double contrast=(std::max(a,b)+0.05)/(std::min(a,b)+0.05);
         check(contrast >= 4.5, QStringLiteral("search placeholder contrast %1; color %2").arg(contrast).arg(placeholder.name(QColor::HexArgb)));
-        workspace.data.tasks.clear(); workspace.data.professions.clear();
+        workspace.data.tasks.clear(); workspace.data.professions.clear(); workspace.data.projects.clear();
         workspace.data.shortcuts.clear(); workspace.data.bannerTexts.clear();
         const QString longName = QString::fromUtf8("Длинная рабочая запись для проверки интерфейса и поиска");
-        const int pages[] = {1,5,11,12};
+        const int pages[] = {1,2,5,11,12};
         for (int page : pages) {
-            if (!admin && (page == 5 || page == 12)) {
+            if (!admin && (page == 2 || page == 5 || page == 12)) {
                 check(navigation->item(page)->isHidden(), "administrator-only page stays hidden");
                 continue;
             }
@@ -9429,7 +9429,7 @@ static bool TestQtWorkingListEmptyStates(QApplication& app) {
                         description->text().contains(QString::fromUtf8("администратор")) != canCreate,
                         stem + " role-appropriate next action");
                 } else {
-                    check(description->text().contains(QString::fromUtf8(page == 1 ? "фильтр" : "поиск")), stem + " real recovery control");
+                    check(description->text().contains(QString::fromUtf8(page == 1 || page == 2 ? "фильтр" : "поиск")), stem + " real recovery control");
                 }
                 for (QSize size : {QSize(800,520),QSize(1120,720),QSize(800,520)}) {
                     window.resize(size); QTest::qWait(10);
@@ -9451,18 +9451,22 @@ static bool TestQtWorkingListEmptyStates(QApplication& app) {
                     check(window.grab().save(screenshots + QStringLiteral("/tasks-%1-%2.png").arg(filtered ? "filtered" : "empty").arg(scale)), stem + " capture");
                 if (!screenshots.isEmpty() && page != 1 && admin && scale == 100)
                     check(window.grab().save(screenshots + QStringLiteral("/page-%1-%2.png").arg(page).arg(filtered ? "filtered" : "empty")), stem + " other page capture");
+                if (!screenshots.isEmpty() && page == 2 && admin && scale == 200)
+                    check(window.grab().save(screenshots + QStringLiteral("/projects-%1-200.png").arg(filtered ? "filtered" : "empty")), stem + " project capture");
             };
             inspectEmpty(false);
             if (page == 1) { TaskEntry task; task.id="empty-state-task"; task.title=longName.toUtf8().toStdString();
                 task.createdAt=QDateTime::currentSecsSinceEpoch(); workspace.data.tasks={task}; }
+            else if (page == 2) { ProjectEntry project; project.id="empty-state-project";
+                project.name=longName.toUtf8().toStdString(); workspace.data.projects={project}; }
             else if (page == 5) workspace.data.professions={{"empty-state-profession",longName.toUtf8().toStdString(),"description"}};
             else if (page == 11) workspace.data.shortcuts={{"empty-state-shortcut",longName.toUtf8().toStdString(),temp.path().toUtf8().toStdString()}};
             else workspace.data.bannerTexts={longName.toUtf8().toStdString()};
             search->setText("unmatched-empty-state-fixture"); QTest::qWait(15);
             inspectEmpty(true);
             // Use the actual existing recovery action. Do not add a duplicate CTA.
-            if (page == 1) {
-                auto* reset = window.findChild<QPushButton*>("taskFilterReset");
+            if (page == 1 || page == 2) {
+                auto* reset = window.findChild<QPushButton*>(page == 1 ? "taskFilterReset" : "projectFilterReset");
                 if (!reset) return false;
                 reset->click();
             } else {
@@ -9481,7 +9485,7 @@ static bool TestQtWorkingListEmptyStates(QApplication& app) {
     }
     ApplyQtDisplaySettings(app,QtDisplaySettings{});
     std::cout << "workingEmpty: " << states << " page states (empty / filtered / restored), seven scales, both roles\n";
-    return ok && states == 126;
+    return ok && states == 147;
 }
 
 static bool TestQtJournalEmptyStates(QApplication& app) {
