@@ -13096,8 +13096,13 @@ static bool TestQtAllPagesFitAtMinimumWidth() {
             if (records->rowCount() != 0 || records->isVisible() || !emptyState->isVisible() ||
                 !emptyTitle->text().contains(QString::fromUtf8("ничего не найдено")) ||
                 pageScroll->horizontalScrollBar()->maximum() != 0) return false;
-            if (!artifacts.isEmpty())
-                window.grab().save(artifacts + QStringLiteral("/page-%1-no-matches-800.png").arg(page));
+            if (!artifacts.isEmpty()) {
+                if (!QDir().mkpath(artifacts)) return false;
+                pageScroll->ensureWidgetVisible(emptyTitle, 0, 8);
+                QApplication::processEvents();
+                if (!window.grab().save(artifacts + QStringLiteral("/page-%1-no-matches-800.png").arg(page)))
+                    return false;
+            }
             auto* reset = window.findChild<QPushButton*>(page == 2 ? "projectFilterReset" :
                 page == 3 ? "catalogFilterReset" : "pipelineFilterReset");
             if (!reset) return false;
