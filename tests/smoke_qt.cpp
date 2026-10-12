@@ -12576,6 +12576,21 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                 if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(&window);
                 button->setFocus(); QTest::keyClick(button, Qt::Key_Space); QTest::qWait(15);
                 if (!button->isChecked() || LoadQtDisplaySettings(directory).profileViewMode != mode) return false;
+                if (mode == 1) {
+                    auto* skills = window.findChild<QTableWidget*>("records");
+                    if (!skills || skills->columnCount() != 6) return false;
+                    for (int column = 0; column < 6; ++column) {
+                        if (skills->columnWidth(column) < skills->horizontalHeader()->sectionSizeHint(column)) {
+                            std::cerr << "profile skills clipped header: " << scale << ' ' << width << ' ' << column << '\n';
+                            ok = false;
+                        }
+                        if (column == 1) continue;
+                        const int actualWidth = skills->columnWidth(column);
+                        skills->resizeColumnToContents(column);
+                        if (actualWidth < skills->columnWidth(column)) ok = false;
+                        skills->setColumnWidth(column, actualWidth);
+                    }
+                }
                 if (mode == 3) {
                     auto* tasks = window.findChild<QTableWidget*>("records");
                     if (!tasks || tasks->columnCount() != 5) return false;

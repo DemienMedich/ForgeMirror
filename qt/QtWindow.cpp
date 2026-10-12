@@ -4571,6 +4571,7 @@ bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
         updateProjectColumnLayout();
         updateShortcutColumnLayout();
         updateCloudColumnLayout();
+        updateProfileSkillColumnLayout();
         updatePipelineColumnLayout();
         updateStatisticsColumnLayout();
     }
@@ -4750,6 +4751,26 @@ void QtWindow::updateTaskColumnLayout() {
         table_->setColumnWidth(column, scaledUiMetric(widths[column], displaySettings_.scalePercent));
     }
     table_->setProperty("taskColumnLayoutUpdating", false);
+}
+
+void QtWindow::updateProfileSkillColumnLayout() {
+    if (!table_ || !navigation_ || navigation_->currentRow() != ProfilePage ||
+        displaySettings_.profileViewMode != 1 || table_->columnCount() != 6) return;
+    auto* header = table_->horizontalHeader();
+    header->setSectionResizeMode(QHeaderView::Interactive);
+    table_->setSortingEnabled(true);
+    constexpr int widths[] = {38, 184, 58, 54, 74, 58};
+    int otherWidth = 0;
+    for (int col = 0; col < 6; ++col) {
+        if (col == 1) continue;
+        table_->resizeColumnToContents(col);
+        const int width = std::max({scaledUiMetric(widths[col], displaySettings_.scalePercent),
+            header->sectionSizeHint(col), table_->columnWidth(col)});
+        table_->setColumnWidth(col, width);
+        otherWidth += width;
+    }
+    table_->setColumnWidth(1, std::max({scaledUiMetric(184, displaySettings_.scalePercent),
+        header->sectionSizeHint(1), table_->viewport()->width() - otherWidth}));
 }
 
 void QtWindow::updateCloudColumnLayout() {
@@ -6975,8 +6996,7 @@ void QtWindow::render() {
             table_->setColumnWidth(col, std::clamp(table_->columnWidth(col), 96, 280));
     }
     if (page == ProfilePage && profileMode == 1 && table_->columnCount() == 6) {
-        constexpr int widths[] = {38, 184, 58, 54, 74, 58};
-        for (int col = 0; col < table_->columnCount(); ++col) table_->setColumnWidth(col, widths[col]);
+        updateProfileSkillColumnLayout();
     } else if (page == ProfilePage && profileMode == 3 && table_->columnCount() == 5) {
         // Preserve readable columns at large UI scales; scroll the table rather
         // than reducing dates and headers to indistinguishable fragments.
@@ -7010,7 +7030,7 @@ void QtWindow::render() {
     if (page == Pipeline) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
         " Порядок совпадает с сохранённым порядком этапов. Ветка, ответственный и следующий шаг в узком окне доступны в подробностях."));
     // Give free width to readable content instead of stretching the final numeric column.
-    if (page != AdminProfileStats && page != Statistics && page != Shortcuts && page != Cloud && !(page == ProfilePage && profileMode == 3)) {
+    if (page != AdminProfileStats && page != Statistics && page != Shortcuts && page != Cloud && !(page == ProfilePage && (profileMode == 1 || profileMode == 3))) {
         int stretchColumn = 0;
         if (page == Catalog) stretchColumn = 2;
         else if (page == Vault) stretchColumn = 3;

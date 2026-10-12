@@ -114,6 +114,7 @@ private:
     void updateProjectColumnLayout();
     void updateShortcutColumnLayout();
     void updateCloudColumnLayout();
+    void updateProfileSkillColumnLayout();
     void updateTaskColumnLayout();
     void updateStatisticsColumnLayout();
     void updatePipelineColumnLayout();
