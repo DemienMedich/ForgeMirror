@@ -10629,6 +10629,10 @@ static bool TestPomodoroQuickHeader() {
 static bool TestCloudQuickHeader() {
     QTemporaryDir temp; if (!temp.isValid()) return false;
     QtWorkspace workspace(std::filesystem::u8path(temp.path().toUtf8().constData()));
+    const int requestedScale=qEnvironmentVariableIntValue("FORGEMIRROR_CLOUD_TEST_SCALE");
+    const int scale=requestedScale ? requestedScale : 100;
+    QtDisplaySettings display; display.scalePercent=scale;
+    if(!SaveQtDisplaySettings(workspace.directory,display))return false;
     QtWindow window(workspace);
     window.show(); QApplication::processEvents();
     auto* button = window.findChild<QToolButton*>("quickCloudSync");
@@ -10664,7 +10668,7 @@ static bool TestCloudQuickHeader() {
         if(!configuration || !availability || scroll->horizontalScrollBar()->maximum()!=0)return false;
         for(int width : {800,1440,1120}) {
             window.resize(width,720); QTest::qWait(20);
-            if(table->columnWidth(1)<320 || scroll->horizontalScrollBar()->maximum()!=0)return false;
+            if(table->columnWidth(1)<qRound(320.0*scale/100) || scroll->horizontalScrollBar()->maximum()!=0)return false;
             const int labelWidth=table->columnWidth(0);
             table->resizeColumnToContents(0);
             if(labelWidth!=table->columnWidth(0))return false;
