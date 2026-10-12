@@ -4570,6 +4570,7 @@ bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
         updateTaskColumnLayout();
         updateProjectColumnLayout();
         updateShortcutColumnLayout();
+        updateCloudColumnLayout();
         updatePipelineColumnLayout();
         updateStatisticsColumnLayout();
     }
@@ -4749,6 +4750,17 @@ void QtWindow::updateTaskColumnLayout() {
         table_->setColumnWidth(column, scaledUiMetric(widths[column], displaySettings_.scalePercent));
     }
     table_->setProperty("taskColumnLayoutUpdating", false);
+}
+
+void QtWindow::updateCloudColumnLayout() {
+    if (!table_ || !navigation_ || navigation_->currentRow() != Cloud || table_->columnCount() != 2) return;
+    auto* header=table_->horizontalHeader();
+    header->setSectionResizeMode(QHeaderView::Interactive);
+    table_->resizeColumnToContents(0);
+    const int labelWidth=std::max(header->sectionSizeHint(0),table_->columnWidth(0));
+    table_->setColumnWidth(0,labelWidth);
+    table_->setColumnWidth(1,std::max({scaledUiMetric(320,displaySettings_.scalePercent),
+        header->sectionSizeHint(1),table_->viewport()->width()-labelWidth}));
 }
 
 void QtWindow::updateShortcutColumnLayout() {
@@ -6985,6 +6997,7 @@ void QtWindow::render() {
     if (page == Tasks) updateTaskColumnLayout();
     if (page == Projects) updateProjectColumnLayout();
     if (page == Shortcuts) updateShortcutColumnLayout();
+    if (page == Cloud) updateCloudColumnLayout();
     if (page == Pipeline) updatePipelineColumnLayout();
     QStringList accessibleColumns;
     for (int col = 0; col < table_->columnCount(); ++col)
@@ -6997,7 +7010,7 @@ void QtWindow::render() {
     if (page == Pipeline) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
         " Порядок совпадает с сохранённым порядком этапов. Ветка, ответственный и следующий шаг в узком окне доступны в подробностях."));
     // Give free width to readable content instead of stretching the final numeric column.
-    if (page != AdminProfileStats && page != Statistics && page != Shortcuts && !(page == ProfilePage && profileMode == 3)) {
+    if (page != AdminProfileStats && page != Statistics && page != Shortcuts && page != Cloud && !(page == ProfilePage && profileMode == 3)) {
         int stretchColumn = 0;
         if (page == Catalog) stretchColumn = 2;
         else if (page == Vault) stretchColumn = 3;

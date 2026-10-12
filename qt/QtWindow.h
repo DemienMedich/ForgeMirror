@@ -113,6 +113,7 @@ private:
     void updateResponsiveHeader();
     void updateProjectColumnLayout();
     void updateShortcutColumnLayout();
+    void updateCloudColumnLayout();
     void updateTaskColumnLayout();
     void updateStatisticsColumnLayout();
     void updatePipelineColumnLayout();

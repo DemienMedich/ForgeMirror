@@ -10662,6 +10662,14 @@ static bool TestCloudQuickHeader() {
                 availability=table->item(row,1)->text()==QString::fromUtf8("Не найдена");
         }
         if(!configuration || !availability || scroll->horizontalScrollBar()->maximum()!=0)return false;
+        for(int width : {800,1440,1120}) {
+            window.resize(width,720); QTest::qWait(20);
+            if(table->columnWidth(1)<320 || scroll->horizontalScrollBar()->maximum()!=0)return false;
+            const int labelWidth=table->columnWidth(0);
+            table->resizeColumnToContents(0);
+            if(labelWidth!=table->columnWidth(0))return false;
+            if(width==1440 && table->columnWidth(1)<table->viewport()->width()-labelWidth)return false;
+        }
         if(!shots.isEmpty()) {
             if(!QDir().mkpath(shots) || !window.grab().save(shots+"/cloud-page-"+state+".png"))return false;
         }
