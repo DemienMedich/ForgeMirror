@@ -4569,6 +4569,7 @@ bool QtWindow::eventFilter(QObject* watched, QEvent* event) {
     if (table_ && watched == table_->viewport() && event->type() == QEvent::Resize) {
         updateTaskColumnLayout();
         updateProjectColumnLayout();
+        updateShortcutColumnLayout();
         updatePipelineColumnLayout();
         updateStatisticsColumnLayout();
     }
@@ -4748,6 +4749,24 @@ void QtWindow::updateTaskColumnLayout() {
         table_->setColumnWidth(column, scaledUiMetric(widths[column], displaySettings_.scalePercent));
     }
     table_->setProperty("taskColumnLayoutUpdating", false);
+}
+
+void QtWindow::updateShortcutColumnLayout() {
+    if (!table_ || !navigation_ || navigation_->currentRow() != Shortcuts || table_->columnCount() != 3) return;
+    auto* header = table_->horizontalHeader();
+    header->setSectionResizeMode(QHeaderView::Interactive);
+    const int scale = displaySettings_.scalePercent;
+    const int titleWidth = std::max(scaledUiMetric(200, scale), header->sectionSizeHint(0));
+    table_->resizeColumnToContents(2);
+    int statusWidth = std::max(header->sectionSizeHint(2), table_->columnWidth(2));
+    for (int row=0; row<table_->rowCount(); ++row)
+        if (const auto* item=table_->item(row,2))
+            statusWidth=std::max(statusWidth, table_->fontMetrics().horizontalAdvance(item->text()) + scaledUiMetric(20,scale));
+    const int pathWidth = std::max({scaledUiMetric(200,scale), header->sectionSizeHint(1),
+        table_->viewport()->width()-titleWidth-statusWidth});
+    table_->setColumnWidth(0,titleWidth);
+    table_->setColumnWidth(1,pathWidth);
+    table_->setColumnWidth(2,statusWidth);
 }
 
 void QtWindow::updateProjectColumnLayout() {
@@ -6964,6 +6983,7 @@ void QtWindow::render() {
     }
     if (page == Tasks) updateTaskColumnLayout();
     if (page == Projects) updateProjectColumnLayout();
+    if (page == Shortcuts) updateShortcutColumnLayout();
     if (page == Pipeline) updatePipelineColumnLayout();
     QStringList accessibleColumns;
     for (int col = 0; col < table_->columnCount(); ++col)
@@ -6976,7 +6996,7 @@ void QtWindow::render() {
     if (page == Pipeline) table_->setAccessibleDescription(table_->accessibleDescription() + QString::fromUtf8(
         " Порядок совпадает с сохранённым порядком этапов. Ветка, ответственный и следующий шаг в узком окне доступны в подробностях."));
     // Give free width to readable content instead of stretching the final numeric column.
-    if (page != AdminProfileStats && page != Statistics && !(page == ProfilePage && profileMode == 3)) {
+    if (page != AdminProfileStats && page != Statistics && page != Shortcuts && !(page == ProfilePage && profileMode == 3)) {
         int stretchColumn = 0;
         if (page == Catalog) stretchColumn = 2;
         else if (page == Vault) stretchColumn = 3;

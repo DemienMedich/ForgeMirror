@@ -112,6 +112,7 @@ private:
     void updateResponsiveShell();
     void updateResponsiveHeader();
     void updateProjectColumnLayout();
+    void updateShortcutColumnLayout();
     void updateTaskColumnLayout();
     void updateStatisticsColumnLayout();
     void updatePipelineColumnLayout();

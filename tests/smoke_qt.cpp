@@ -9494,6 +9494,18 @@ static bool TestQtWorkingListEmptyStates(QApplication& app) {
                     stem + " missing target explained and cannot launch");
                 check(table->item(0,1)->text() == missing && table->item(0,1)->toolTip() == missing,
                     stem + " complete missing path retained");
+                for (int width : {800, 1440, 800}) {
+                    window.resize(width,520); QTest::qWait(15);
+                    check(table->columnWidth(1) >= qRound(200 * scale / 100.0), stem + " readable path width");
+                    const int statusWidth = table->columnWidth(2);
+                    table->resizeColumnToContents(2);
+                    check(statusWidth >= table->columnWidth(2), stem + " full styled status cell");
+                    table->setColumnWidth(2,statusWidth);
+                    for (int column=0; column<3; ++column)
+                        check(table->columnWidth(column) >= table->horizontalHeader()->sectionSizeHint(column),
+                            stem + " complete shortcut header");
+                    check(pageScroll->horizontalScrollBar()->maximum()==0, stem + " shortcut page fits");
+                }
                 const auto shots = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
                 if (!shots.isEmpty() && admin && (scale == 100 || scale == 200)) {
                     table->scrollToItem(table->item(0,2));
