@@ -9480,6 +9480,27 @@ static bool TestQtWorkingListEmptyStates(QApplication& app) {
                     cell->data(Qt::AccessibleDescriptionRole).toString().section('\n',0,0) == longName &&
                     cell->text().startsWith(longName)
                 : cell->text() == longName), stem + " actual record retained (task status badges preserved)");
+            if (page == 11) {
+                auto* open = window.findChild<QPushButton*>("openShortcut");
+                if (!open) return false;
+                table->selectRow(0); QApplication::processEvents();
+                check(open->isEnabled(), stem + " existing target available without launching");
+                const auto missing = temp.path() + QStringLiteral("/missing-folder/never-launch-this-file.txt");
+                check(!QFileInfo::exists(missing), stem + " isolated target is absent");
+                workspace.data.shortcuts.front().path = missing.toUtf8().toStdString();
+                search->setText("unmatched-empty-state-fixture"); search->clear();
+                table->selectRow(0); QApplication::processEvents();
+                check(!open->isEnabled() && table->item(0,2)->text() == QString::fromUtf8("Файл не найден"),
+                    stem + " missing target explained and cannot launch");
+                check(table->item(0,1)->text() == missing && table->item(0,1)->toolTip() == missing,
+                    stem + " complete missing path retained");
+                const auto shots = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
+                if (!shots.isEmpty() && admin && (scale == 100 || scale == 200)) {
+                    table->scrollToItem(table->item(0,2));
+                    pageScroll->ensureWidgetVisible(table,0,4); QApplication::processEvents();
+                    check(window.grab().save(shots + QStringLiteral("/shortcut-missing-%1.png").arg(scale)), stem + " missing capture");
+                }
+            }
         }
         window.close();
     }
