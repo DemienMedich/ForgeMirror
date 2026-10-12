@@ -4979,6 +4979,7 @@ void QtWindow::loadSelectedModel() {
         if (modelPath.is_relative()) modelPath = workspace_.directory / modelPath;
     }
     const auto result = modelViewer_->loadModel(modelPath);
+    modelLoadError_ = result.ok ? QString() : result.error;
     modelStatus_->setText(result.ok
         ? QString::fromUtf8("%1 треугольников · %2").arg(result.triangles).arg(QFileInfo(modelSettings_.modelPath).fileName())
         : result.error);
@@ -5297,7 +5298,7 @@ void QtWindow::render() {
         if (page == ModelViewerPage) {
             modelStatus_->setText(modelViewer_->triangleCount()
                 ? QString::fromUtf8("%1 треугольников · %2").arg(modelViewer_->triangleCount()).arg(QFileInfo(modelPath_->text()).fileName())
-                : QString::fromUtf8("Модель не загружена"));
+                : modelLoadError_.isEmpty() ? QString::fromUtf8("Модель не загружена") : modelLoadError_);
         } else {
             restoringModelSettings_ = true;
             modelPath_->setText(modelSettings_.modelPath);

@@ -12742,6 +12742,31 @@ static bool TestQtModelSettingsPresentation(QApplication& app) {
                 !settingsAction->accessibleName().isEmpty(),"viewer settings icon retains context");
             check(window.grab().save(shots+"/model-viewer-wide.png"),"viewer capture");
         }
+        auto* viewer=dynamic_cast<QtModelViewer*>(window.findChild<QWidget*>("modelViewport"));
+        auto* path=window.findChild<QLineEdit*>("modelPath");
+        auto* status=window.findChild<QLabel*>("modelStatus");
+        if(!viewer || !path || !status)return false;
+        QFile model(temp.path()+"/presentation.obj");
+        if(!model.open(QIODevice::WriteOnly))return false;
+        model.write("v 0 1 0\nv -1 -1 0\nv 1 -1 0\nv 0 0 1\nf 1 2 3\nf 1 4 2\nf 1 3 4\nf 2 4 3\n");
+        model.close();
+        nav->setCurrentRow(15); rotate->setChecked(false);
+        path->setText(model.fileName());
+        QMetaObject::invokeMethod(path,"editingFinished",Qt::DirectConnection);
+        nav->setCurrentRow(14); window.resize(1120,720); QTest::qWait(20);
+        check(viewer->triangleCount()==4 && status->text().contains("presentation.obj"),"loaded model status");
+        auto captureModel=[&](const char* state){
+            if(!shots.isEmpty() && (scale==100 || scale==200))
+                check(window.grab().save(shots+QString("/model-%1-%2.png").arg(state).arg(scale)),"model state capture");
+        };
+        captureModel("loaded");
+        nav->setCurrentRow(15);
+        path->setText(temp.path()+"/missing.obj");
+        QMetaObject::invokeMethod(path,"editingFinished",Qt::DirectConnection);
+        nav->setCurrentRow(14); QTest::qWait(20);
+        check(viewer->triangleCount()==0 && status->text()==QString::fromUtf8("Не удалось открыть OBJ."),"missing model explains failure and clears geometry");
+        check(scroll->horizontalScrollBar()->maximum()==0,"model error page fits");
+        captureModel("missing");
     }
     ApplyQtDisplaySettings(app,QtDisplaySettings{});
     return ok;

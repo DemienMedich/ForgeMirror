@@ -260,6 +260,7 @@ private:
     QCheckBox* modelAutoRotate_;
     QPushButton* modelColor_;
     QLabel* modelStatus_;
+    QString modelLoadError_;
     QTimer* modelTimer_;
     bool restoringModelSettings_ = false;
     void rebuildModelChoices();
