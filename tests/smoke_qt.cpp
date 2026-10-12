@@ -10646,7 +10646,37 @@ static bool TestCloudQuickHeader() {
     openCloud->trigger(); QApplication::processEvents();
     if (navigation->currentRow() != 13) return false;
     button->click(); QApplication::processEvents();
-    return window.statusBar()->currentMessage() == QString::fromUtf8("Облако отключено в настройках.");
+    if (window.statusBar()->currentMessage() != QString::fromUtf8("Облако отключено в настройках.")) return false;
+    auto* table=window.findChild<QTableWidget*>("records");
+    auto* scroll=window.findChild<QScrollArea*>("pageContentScrollArea");
+    if(!table || !scroll)return false;
+    const auto shots=qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+    auto inspect=[&](const QString& state,const QString& enabled) {
+        navigation->setCurrentRow(0); navigation->setCurrentRow(13);
+        window.resize(1120,720); QTest::qWait(300);
+        bool configuration=false, availability=false;
+        for(int row=0;row<table->rowCount();++row) {
+            if(table->item(row,0)->text()==QString::fromUtf8("Конфигурация"))
+                configuration=table->item(row,1)->text()==enabled;
+            if(table->item(row,0)->text()==QString::fromUtf8("Доступность папки"))
+                availability=table->item(row,1)->text()==QString::fromUtf8("Не найдена");
+        }
+        if(!configuration || !availability || scroll->horizontalScrollBar()->maximum()!=0)return false;
+        if(!shots.isEmpty()) {
+            if(!QDir().mkpath(shots) || !window.grab().save(shots+"/cloud-page-"+state+".png"))return false;
+        }
+        return true;
+    };
+    if(!inspect("unconfigured",QString::fromUtf8("Выключена")))return false;
+    CloudSyncConfig config;
+    config.enabled=true; config.autoSyncEnabled=false;
+    config.root=workspace.directory / "missing-cloud-root";
+    config.manifest=config.root / "meta/manifest.ini"; config.releasesDir=config.root / "releases";
+    if(!SaveCloudSyncConfig(workspace.directory,config) ||
+        !inspect("missing-root",QString::fromUtf8("Включена")))return false;
+    config.enabled=false;
+    return SaveCloudSyncConfig(workspace.directory,config) && inspect("disabled",QString::fromUtf8("Выключена")) &&
+        !std::filesystem::exists(config.root);
 }
 
 static bool TestNavigationClock() {
@@ -14804,6 +14834,8 @@ int main(int argc, char** argv) {
         return TestQtTaskFilterDisclosure(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CLOUD_TERMINALS"))
         return TestQtCloudTerminalDecisionLayout(app) ? 0 : 1;
+    if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_CLOUD_PAGE"))
+        return TestCloudQuickHeader() ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_TASK_DECISIONS"))
         return TestQtTaskDecisionLayout(app) ? 0 : 1;
     if (qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_INLINE_PROJECT"))
