@@ -12977,6 +12977,14 @@ static bool TestQtModelSettingsPresentation(QApplication& app) {
         auto captureModel=[&](const char* state){
             if(!shots.isEmpty() && (scale==100 || scale==200))
                 check(window.grab().save(shots+QString("/model-%1-%2.png").arg(state).arg(scale)),"model state capture");
+            window.showNormal(); window.resize(800,520); QTest::qWait(30);
+            check(window.size()==QSize(800,520),"actual narrow model window");
+            check(scroll->horizontalScrollBar()->maximum()==0 && viewer->isVisible() &&
+                viewer->width()>0 && viewer->height()>0,"narrow model viewport available");
+            scroll->verticalScrollBar()->setValue(0); QTest::qWait(10);
+            if(!shots.isEmpty() && (scale==100 || scale==200))
+                check(window.grab().save(shots+QString("/model-%1-narrow-%2.png").arg(state).arg(scale)),"narrow model state capture");
+            window.resize(1120,720); QTest::qWait(20);
         };
         captureModel("loaded");
         nav->setCurrentRow(15);
