@@ -5917,15 +5917,19 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
         record(!ShowCloudConflictResolver(nullptr, local, {}, true, true), "cloud-" + suffix + " cancelled");
         unchanged(beforeCloud, temporary.path(), "cloud-" + suffix);
         if (scale == 100 || scale == 200) {
+            record(write(local / "skills.txt", "sk_decision|Local skill before paired restore|1|prof=pr_decision|Description\n"),
+                "paired restore local fixture");
+            record(ApplyQtCloudCatalogPair(local, cloud).ok, "paired restore snapshot fixture");
             for (const auto& actionName : {QString("pushCloudTasks"), QString("tasksRestore0"),
-                     QString("applyCloudSkills"), QString("pushCloudSkills")}) {
+                     QString("applyCloudSkills"), QString("pushCloudSkills"), QString("skillsRestore0")}) {
+                const bool catalogVariant = actionName.endsWith("Skills") || actionName == "skillsRestore0";
                 const QString stem = "cloud-variant-" + actionName + '-' + suffix;
                 const auto beforeVariant = snapshot(temporary.path());
                 ++modalContexts;
                 ScheduleQtModalDriver(app, "cloudConflictResolver", stem, [&](QDialog* dialog) {
                     auto* tabs = dialog->findChild<QTabWidget*>("cloudConflictTabs");
                     if (!tabs) { record(false, stem + " tabs"); dialog->reject(); return; }
-                    tabs->setCurrentIndex(actionName.endsWith("Skills") ? 6 : 0); settle();
+                    tabs->setCurrentIndex(catalogVariant ? 6 : 0); settle();
                     auto* action = dialog->findChild<QPushButton*>(actionName);
                     record(action && action->isEnabled(), stem + " original action available");
                     if (!action || !action->isEnabled()) { dialog->reject(); return; }
@@ -5933,7 +5937,7 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
                         inspectConfirm(nested, stem, scale, QMessageBox::Cancel);
                         auto* box = qobject_cast<QMessageBox*>(nested);
                         if (!box) { nested->reject(); return; }
-                        if (actionName.endsWith("Skills"))
+                        if (catalogVariant)
                             record(box->text().contains("skills.txt") && box->text().contains("meta/professions.txt"),
                                 stem + " both catalog targets explained");
                         else record(box->text().contains("meta/tasks.json"), stem + " task target explained");
