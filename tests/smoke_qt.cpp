@@ -12639,6 +12639,15 @@ static bool TestQtProfileModePresentation(QApplication& app) {
         if (!SaveQtDisplaySettings(directory, display)) return false;
         ApplyQtDisplaySettings(app, display);
         QtWorkspace workspace(directory);
+        const auto longSkillName = QString::fromUtf8("Проектирование интерфейсов — состояния, навигация и доступность <UI> & UX");
+        const auto longSkillBytes = longSkillName.toUtf8().toStdString();
+        if (!workspace.catalog.add_skill(longSkillBytes, 1.0, "Long title presentation fixture")) return false;
+        const auto longSkillId = workspace.catalog.id_for_name(longSkillBytes);
+        if (!workspace.storage->set_active_profile(display.lastProfileId.toStdString())) return false;
+        auto fixtureProfile = workspace.storage->load_profile();
+        if (!longSkillId || !fixtureProfile) return false;
+        fixtureProfile->add_skill(*longSkillId, 1, 1.0);
+        if (!workspace.storage->save_profile(*fixtureProfile)) return false;
         QtWindow window(workspace);
         window.resize(800, 520); window.show();
         auto* nav = window.findChild<QListWidget*>("navigation");
@@ -12663,6 +12672,15 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                 if (mode == 1) {
                     auto* skills = window.findChild<QTableWidget*>("records");
                     if (!skills || skills->columnCount() != 6) return false;
+                    bool longSkillFound = false;
+                    for (int rowIndex = 0; rowIndex < skills->rowCount(); ++rowIndex) {
+                        const auto* cell = skills->item(rowIndex, 1);
+                        if (cell && cell->text() == longSkillName) {
+                            longSkillFound = true;
+                            if (!cell->toolTip().contains(longSkillName.toHtmlEscaped())) return false;
+                        }
+                    }
+                    if (!longSkillFound) return false;
                     for (int column = 0; column < 6; ++column) {
                         if (skills->columnWidth(column) < skills->horizontalHeader()->sectionSizeHint(column)) {
                             std::cerr << "profile skills clipped header: " << scale << ' ' << width << ' ' << column << '\n';
