@@ -32,3 +32,11 @@ SHA256: B1A342C526AF9248535074BEA13013EDE9F35C417AB360296724720BFE7D968A.
 Удаление и helper завершились0; тестовая папка приложения и запись удаления исчезли. Внешний workspace marker сохранил SHA2567BB6463B30F9E301FED333CDF8960CA9497B602CCD8EEB46AE42693FDEA15A4D.
 
 Доставка в рабочую установку ещё не выполнена. Эта поставка не означает завершения всей визуальной приёмки.
+
+## Доставка — 16.10.2026
+
+Уточняет предыдущий статус кандидата: настоящий dist Setup0.6.113 установлен поверх0.6.112, exit0. Программа перед обновлением не работала. Installed ProductVersion и Uninstall DisplayVersion0.6.113, EXE побайтно совпал с проверенным пакетом. Clean PATH запуск установленного EXE с новым изолированным --storage-dir/--smoke-test: exit0, stderr0; qwindows.dll присутствует. Рабочий профиль не открывался.
+
+Все90файлов Qt workspace и legacy AppData сохранили SHA256. Приватные перечни в Git не включены. Доказательства: build-qt/delivery-0.6.113-b47bfe61b113469a8d80eebbda55793c (install.log, userdata-before.json, startup.err, hub-before.json).
+
+Локальные Z:\CPP\PharosHub\package\config\apps.json и HKCU Software/Pharos/Hub/installed/forge-mirror согласованы с0.6.113; путь EXE прежний. Другие записи Hub семантически неизменны. Облачный manifest не публиковался, живое нажатие кнопки Hub в этом проходе не проверялось.
