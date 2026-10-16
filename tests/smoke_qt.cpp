@@ -12641,6 +12641,24 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
         }
       }
     }
+    if (catalogLists) {
+        window.hide();
+        if (!SetAdminStayLoggedIn(directory, false)) return false;
+        QtWindow viewer(workspace); viewer.showNormal(); viewer.resize(800,520);
+        auto* viewerNav = viewer.findChild<QListWidget*>("navigation");
+        auto* viewerTable = viewer.findChild<QTableWidget*>("records");
+        if (!viewerNav || !viewerTable || !viewerNav->item(5)->isHidden()) return false;
+        for (int page : {3,4}) {
+            viewerNav->setCurrentRow(page); QTest::qWait(40);
+            if (viewerTable->rowCount()==0) return false;
+            viewerTable->selectRow(0);
+            for (const auto* name : {"primary", "editEntry", "deleteEntry"}) {
+                auto* action = viewer.findChild<QWidget*>(name);
+                if (!action || (action->isVisible() && action->isEnabled())) return false;
+            }
+            if (!viewer.grab().save(output + QStringLiteral("/catalog-viewer-%1.png").arg(page))) return false;
+        }
+    }
     if (catalogLists || services) {
         nav->setCurrentRow(0); QApplication::processEvents();
         auto* primary = window.findChild<QPushButton*>("primary");
