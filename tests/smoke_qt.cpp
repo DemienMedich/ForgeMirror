@@ -13281,6 +13281,27 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
                 scroll->ensureWidgetVisible(table,0,0); QTest::qWait(5); capture("report-employees");
             }
         }
+        reportRange->setCurrentIndex(4);
+        auto* reportFrom = window.findChild<QDateEdit*>("reportDateFrom");
+        auto* reportTo = window.findChild<QDateEdit*>("reportDateTo");
+        if (!reportFrom || !reportTo) return false;
+        reportFrom->setDate(QDate::currentDate().addDays(-75));
+        reportTo->setDate(QDate::currentDate().addDays(-20));
+        compare->setChecked(true);
+        QTest::qWait(30);
+        scroll->ensureWidgetVisible(reportTo,0,4); QTest::qWait(20);
+        const int dateBottom = reportTo->mapTo(scroll->viewport(), QPoint(0, reportTo->height())).y();
+        if (dateBottom > scroll->viewport()->height() - 4) {
+            auto* bar = scroll->verticalScrollBar();
+            bar->setValue(bar->value() + dateBottom - scroll->viewport()->height() + 4);
+            QTest::qWait(20);
+        }
+        check(scroll->viewport()->rect().contains(QRect(reportTo->mapTo(scroll->viewport(), QPoint()), reportTo->size())),
+            "custom report end date fully visible after scrolling");
+        check(reportFrom->isVisible() && reportTo->isVisible() && compare->isEnabled(),
+            "custom report dates and comparison available");
+        check(scroll->horizontalScrollBar()->maximum()==0,"custom report range fits page width");
+        capture("report-custom-range");
         window.close();
     }
     ApplyQtDisplaySettings(app,QtDisplaySettings{});

@@ -2594,13 +2594,18 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     labelForAccessibility(reportTo_, QString::fromUtf8("Конец периода отчёта"));
     reportCustomRange_ = new QWidget;
     reportCustomRange_->setObjectName("reportCustomRange");
-    auto* reportDateLayout = new QHBoxLayout(reportCustomRange_);
+    auto* reportDateLayout = new QtFlowLayout(reportCustomRange_, 4, 4);
     reportDateLayout->setContentsMargins(0, 0, 0, 0);
-    reportDateLayout->setSpacing(4);
-    reportDateLayout->addWidget(new QLabel(QString::fromUtf8("с")));
-    reportDateLayout->addWidget(reportFrom_);
-    reportDateLayout->addWidget(new QLabel(QString::fromUtf8("по")));
-    reportDateLayout->addWidget(reportTo_);
+    const auto addReportDate = [&](const QString& caption, QDateEdit* field) {
+        auto* pair = new QWidget(reportCustomRange_);
+        auto* row = new QHBoxLayout(pair);
+        row->setContentsMargins(0, 0, 0, 0); row->setSpacing(4);
+        auto* label = new QLabel(caption, pair); label->setBuddy(field);
+        row->addWidget(label); row->addWidget(field);
+        reportDateLayout->addWidget(pair);
+    };
+    addReportDate(QString::fromUtf8("с"), reportFrom_);
+    addReportDate(QString::fromUtf8("по"), reportTo_);
     filters->addWidget(reportCustomRange_);
     projectsOverdue_ = new QCheckBox(QString::fromUtf8("Просроченные"));
     projectsOverdue_->setObjectName("projectsOverdueOnly");
