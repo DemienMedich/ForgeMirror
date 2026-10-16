@@ -10445,7 +10445,9 @@ static bool TestQtPomodoroPresentation(QApplication& app) {
         if (!SaveQtDisplaySettings(directory,settings)) return false;
         ApplyQtDisplaySettings(app,settings);
         QtWorkspace workspace(directory);
-        QtWindow window(workspace); window.resize(800,520); window.show();
+        QtWindow window(workspace); window.showNormal(); window.resize(800,520);
+        QTest::qWait(20);
+        check(window.size()==QSize(800,520),"actual narrow window size");
         window.findChild<QListWidget*>("navigation")->setCurrentRow(8);
         QTest::qWait(15);
         auto* panel=static_cast<QtPomodoro*>(window.findChild<QWidget*>("pomodoroPanel"));
