@@ -9348,6 +9348,23 @@ static bool TestQtExportPickerLayout(QApplication& app) {
                     check(existing.open(QIODevice::ReadOnly) && existing.readAll() == marker, stem + " existing bytes preserved");
                     existing.close();
                     check(existing.remove(), stem + " remove isolated fixture");
+                    if (entry.page == 1 && QString::fromLatin1(entry.suffix) == "csv") {
+                        const QString invalidPath = exports + "/missing-directory/report.csv";
+                        names->setText(invalidPath); QTest::qWait(20);
+                        save->click();
+                        check(!picker->isVisible() && picker->result() == QDialog::Accepted,
+                            stem + " invalid target reaches export writer");
+                        QTimer::singleShot(0, &window, [&, stem, screenshots] {
+                            auto* error = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+                            check(error && !error->text().isEmpty(), stem + " writer error shown");
+                            if (!error) return;
+                            check(error->screen()->availableGeometry().contains(error->frameGeometry()), stem + " writer error on screen");
+                            if (!screenshots.isEmpty())
+                                check(error->grab().save(screenshots + "/path-error-" + stem + ".png"), stem + " writer error capture");
+                            error->accept();
+                        });
+                        return;
+                    }
                 }
                 if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(picker);
                 cancel->setFocus();
