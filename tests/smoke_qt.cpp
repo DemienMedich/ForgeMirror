@@ -15065,7 +15065,7 @@ static bool TestQtRecentProfileActions() {
 static bool TestQtCommandHelpDialogLayout() {
     const QString rawHelpText = QString::fromUtf8(
         "Usage: Z:/workspace/package/ForgeMirrorQt.exe [options]\n"
-        "ForgeMirror Qt — изолированный клиент переноса\n\n"
+        "ForgeMirror — задачи, проекты и личный прогресс\n\n"
         "Options:\n"
         "  --storage-dir <path>  Explicit test workspace (never use the production directory).\n"
         "  --smoke-test          Open the real window and exit after one second.");
@@ -15413,6 +15413,9 @@ int main(int argc, char** argv) {
     task.pipelineStep = stage.title;
     if (!AppCreateTaskEntry(workspace.directory, workspace.data.tasks, task, "test").ok) return fail("Task fixture failed");
     QtWindow window(workspace);
+    if (!window.windowTitle().startsWith(QString::fromUtf8("ForgeMirror · ")) ||
+        window.windowTitle().contains("migration", Qt::CaseInsensitive))
+        return fail("Window title still exposes migration prototype wording");
     window.show();
     QApplication::processEvents();
     auto* nav = window.findChild<QListWidget*>("navigation");

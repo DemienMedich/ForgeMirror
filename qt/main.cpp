@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     QCoreApplication::setApplicationVersion(APP_VERSION);
     ApplyQtTheme(app);
     QCommandLineParser parser;
-    parser.setApplicationDescription(QString::fromUtf8("ForgeMirror Qt — изолированный клиент переноса"));
+    parser.setApplicationDescription(QString::fromUtf8("ForgeMirror — задачи, проекты и личный прогресс"));
     const auto helpOption = parser.addHelpOption();
     const auto versionOption = parser.addVersionOption();
     parser.addOption({"storage-dir", "Explicit test workspace (never use the production directory).", "path"});

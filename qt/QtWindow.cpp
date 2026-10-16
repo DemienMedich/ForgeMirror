@@ -1031,7 +1031,7 @@ QtWindow::QtWindow(QtWorkspace& workspace) : workspace_(workspace), profileSessi
     lastReminderCheckAt_ = loadReminderCheckAt(workspace_.directory).value_or(QDateTime::currentSecsSinceEpoch());
     ApplyQtDisplaySettings(*qApp, displaySettings_);
     setWindowOpacity(displaySettings_.windowOpacityPercent / 100.0);
-    setWindowTitle(QString::fromUtf8("ForgeMirror · Qt migration · ") + APP_VERSION);
+    setWindowTitle(QString::fromUtf8("ForgeMirror · ") + APP_VERSION);
     resize(1120, 720);
     setMinimumSize(800, 520);
     setWindowFlag(Qt::FramelessWindowHint, !displaySettings_.decorated);
