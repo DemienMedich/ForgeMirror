@@ -5887,6 +5887,13 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
                 tabs->setCurrentIndex(index); settle();
                 const QString stem = "cloud-" + fileStems[index] + '-' + suffix;
                 resizeInspect(dialog, stem); capture(dialog, stem, scale);
+                if (auto* content = dialog->findChild<QScrollArea*>("dialogContentScrollArea")) {
+                    const int previous = content->verticalScrollBar()->value();
+                    content->verticalScrollBar()->setValue(content->verticalScrollBar()->maximum());
+                    settle(); QTest::qWait(30); capture(dialog, stem + "-bottom", scale);
+                    content->verticalScrollBar()->setValue(previous);
+                    settle();
+                }
                 auto* comparison = dialog->findChild<QTableWidget*>(fileStems[index] + "Comparison");
                 auto* backups = dialog->findChild<QTableWidget*>(fileStems[index] + "Backups");
                 record(comparison && comparison->rowCount() == 2 && comparison->columnCount() == 3 &&
