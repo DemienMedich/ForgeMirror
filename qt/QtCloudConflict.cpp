@@ -391,6 +391,25 @@ private:
     }
 };
 
+class ConflictTabs final : public QTabWidget {
+public:
+    ConflictTabs() {
+        connect(this, &QTabWidget::currentChanged, this, [this] { updateGeometry(); });
+    }
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override {
+        const auto* page = currentWidget();
+        if (!page || !page->layout()) return QTabWidget::sizeHint().height();
+        const int frame = 2 * style()->pixelMetric(QStyle::PM_DefaultFrameWidth, nullptr, this);
+        const auto* layout = page->layout();
+        const int height = layout->hasHeightForWidth()
+            ? layout->totalHeightForWidth(std::max(1, width - frame)) : layout->totalSizeHint().height();
+        return height + tabBar()->sizeHint().height() + frame;
+    }
+    QSize sizeHint() const override { return QSize(480, heightForWidth(width())); }
+    QSize minimumSizeHint() const override { return QSize(0, heightForWidth(width())); }
+};
+
 class DecisionTable final : public QTableWidget {
 public:
     explicit DecisionTable(bool backups, QWidget* parent = nullptr)
@@ -973,7 +992,7 @@ bool ShowCloudConflictResolver(QWidget* parent, const std::filesystem::path& wor
     form->setVerticalSpacing(dialog.scaledMetric(8));
     auto* intro = new QLabel(QString::fromUtf8("Выберите направление для отдельного файла. Любая замена требует подтверждения и резервной копии."));
     intro->setTextFormat(Qt::PlainText); intro->setWordWrap(true); intro->setProperty("warning", true); form->addRow(intro);
-    auto* tabs = new QTabWidget; tabs->setObjectName("cloudConflictTabs");
+    auto* tabs = new ConflictTabs; tabs->setObjectName("cloudConflictTabs");
     tabs->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); tabs->setUsesScrollButtons(true);
     tabs->setAccessibleName(QString::fromUtf8("Файл для сравнения"));
     form->addRow(tabs);

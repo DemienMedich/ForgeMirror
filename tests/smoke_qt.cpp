@@ -5891,6 +5891,12 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
                     const int previous = content->verticalScrollBar()->value();
                     content->verticalScrollBar()->setValue(content->verticalScrollBar()->maximum());
                     settle(); QTest::qWait(30); capture(dialog, stem + "-bottom", scale);
+                    auto* page = tabs->currentWidget();
+                    int lastContentBottom = 0;
+                    for (auto* child : page->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+                        if (child->isVisible()) lastContentBottom = std::max(lastContentBottom, child->geometry().bottom() + 1);
+                    record(lastContentBottom > 0 && page->height() - lastContentBottom <= std::max(64, 2 * page->fontMetrics().height()),
+                        stem + " no blank tail inherited from another tab");
                     content->verticalScrollBar()->setValue(previous);
                     settle();
                 }
