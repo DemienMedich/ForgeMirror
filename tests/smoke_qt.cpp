@@ -12761,6 +12761,36 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                 }
             }
         }
+        window.hide();
+        if (!SetAdminStayLoggedIn(directory, false)) return false;
+        QtWorkspace viewerWorkspace(directory);
+        QtWindow viewer(viewerWorkspace);
+        viewer.showNormal(); viewer.resize(800, 520);
+        QTest::qWait(20);
+        if (viewer.size() != QSize(800, 520)) return false;
+        auto* viewerScroll = viewer.findChild<QScrollArea*>("pageContentScrollArea");
+        auto* viewerNav = viewer.findChild<QListWidget*>("navigation");
+        if (!viewerScroll || !viewerNav) return false;
+        viewerNav->setCurrentRow(0);
+        for (int mode : {0, 1, 2, 3}) {
+            auto* choice = viewer.findChild<QPushButton*>(QStringLiteral("profileViewMode%1").arg(mode));
+            if (!choice) return false;
+            choice->click(); QTest::qWait(20);
+            if (!choice->isChecked()) return false;
+            for (const auto* name : {"profileRankControls", "directXp", "adjustProfileWallet"}) {
+                auto* restricted = viewer.findChild<QWidget*>(name);
+                if (!restricted || restricted->isVisible()) return false;
+            }
+            if (viewerScroll->horizontalScrollBar()->maximum() != 0) return false;
+            if (!screenshots.isEmpty() && (scale == 100 || scale == 200)) {
+                for (int bottom : {0, 1}) {
+                    viewerScroll->verticalScrollBar()->setValue(bottom ? viewerScroll->verticalScrollBar()->maximum() : 0);
+                    QTest::qWait(5);
+                    ok = viewer.grab().save(screenshots + QStringLiteral("/profile-viewer-%1-mode%2-bottom%3.png")
+                        .arg(scale).arg(mode).arg(bottom)) && ok;
+                }
+            }
+        }
     }
     ApplyQtTheme(app);
     return ok;
