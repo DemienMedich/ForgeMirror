@@ -5916,6 +5916,37 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
         }, record);
         record(!ShowCloudConflictResolver(nullptr, local, {}, true, true), "cloud-" + suffix + " cancelled");
         unchanged(beforeCloud, temporary.path(), "cloud-" + suffix);
+        if (scale == 100 || scale == 200) {
+            for (const auto& actionName : {QString("pushCloudTasks"), QString("tasksRestore0"),
+                     QString("applyCloudSkills"), QString("pushCloudSkills")}) {
+                const QString stem = "cloud-variant-" + actionName + '-' + suffix;
+                const auto beforeVariant = snapshot(temporary.path());
+                ++modalContexts;
+                ScheduleQtModalDriver(app, "cloudConflictResolver", stem, [&](QDialog* dialog) {
+                    auto* tabs = dialog->findChild<QTabWidget*>("cloudConflictTabs");
+                    if (!tabs) { record(false, stem + " tabs"); dialog->reject(); return; }
+                    tabs->setCurrentIndex(actionName.endsWith("Skills") ? 6 : 0); settle();
+                    auto* action = dialog->findChild<QPushButton*>(actionName);
+                    record(action && action->isEnabled(), stem + " original action available");
+                    if (!action || !action->isEnabled()) { dialog->reject(); return; }
+                    ScheduleQtModalDriver(app, "cloudConflictConfirm", stem, [&](QDialog* nested) {
+                        inspectConfirm(nested, stem, scale, QMessageBox::Cancel);
+                        auto* box = qobject_cast<QMessageBox*>(nested);
+                        if (!box) { nested->reject(); return; }
+                        if (actionName.endsWith("Skills"))
+                            record(box->text().contains("skills.txt") && box->text().contains("meta/professions.txt"),
+                                stem + " both catalog targets explained");
+                        else record(box->text().contains("meta/tasks.json"), stem + " task target explained");
+                        box->button(QMessageBox::Cancel)->click();
+                    }, record);
+                    action->click();
+                    record(dialog->isVisible(), stem + " cancel preserves comparison");
+                    dialog->reject();
+                }, record);
+                record(!ShowCloudConflictResolver(nullptr, local), stem + " cancelled");
+                unchanged(beforeVariant, temporary.path(), stem);
+            }
+        }
         // Missing source keeps read-only comparison reachable and disables its destructive action.
         const auto cloudTasks = read(cloud / "meta/tasks.json", "cloud task source");
         std::filesystem::remove(cloud / "meta/tasks.json");
