@@ -459,7 +459,8 @@ bool ShowRulesEditor(QWidget* parent, QtWorkspace& workspace) {
     QObject::connect(deletePreset, &QPushButton::clicked, &dialog, [&] {
         const auto name = presetCombo->currentData().toString(); if (name.isEmpty()) return;
         if (QMessageBox::question(&dialog, QString::fromUtf8("Удалить пресет"),
-            QString::fromUtf8("Удалить локальный пресет «%1»?").arg(name)) != QMessageBox::Yes) return;
+            QString::fromUtf8("Удалить локальный пресет «%1»?").arg(name),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
         QJsonArray presets; if (!readArray(presetsPath, presets)) { showNotice(QString::fromUtf8("Не удалось прочитать пресеты.")); return; }
         for (int i = presets.size() - 1; i >= 0; --i)
             if (presets[i].toObject().value("name").toString() == name) presets.removeAt(i);
