@@ -13206,6 +13206,14 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
             scroll->ensureWidgetVisible(table,0,4);
             QApplication::processEvents();
             capture(QStringLiteral("report-%1-compare-%2").arg(mode).arg(comparison ? 1 : 0));
+            if (comparison) {
+                auto* horizontal = table->horizontalScrollBar();
+                const int originalPosition = horizontal->value();
+                horizontal->setValue(horizontal->maximum());
+                QTest::qWait(20);
+                capture(QStringLiteral("report-%1-compare-right").arg(mode));
+                horizontal->setValue(originalPosition);
+            }
             QStringList beforeRows;
             for(int row=0;row<table->rowCount();++row) {
                 QStringList cells;
