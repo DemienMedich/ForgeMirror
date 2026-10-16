@@ -12708,6 +12708,22 @@ static bool TestQtProfileModePresentation(QApplication& app) {
                         if (cell && cell->text() == longSkillName) {
                             longSkillFound = true;
                             if (!cell->toolTip().contains(longSkillName.toHtmlEscaped())) return false;
+                            if (!screenshots.isEmpty() && width == 800 && (scale == 100 || scale == 200)) {
+                                scroll->ensureWidgetVisible(skills);
+                                skills->scrollToItem(cell, QAbstractItemView::PositionAtCenter);
+                                QTest::qWait(20);
+                                const QPoint position = skills->visualItemRect(cell).center();
+                                QHelpEvent help(QEvent::ToolTip, position, skills->viewport()->mapToGlobal(position));
+                                QApplication::sendEvent(skills->viewport(), &help);
+                                QTest::qWait(350);
+                                QWidget* popup = nullptr;
+                                for (auto* top : QApplication::topLevelWidgets())
+                                    if (top->isVisible() && top->windowType() == Qt::ToolTip) popup = top;
+                                if (!popup || !popup->screen()->availableGeometry().contains(popup->frameGeometry()) ||
+                                    !QToolTip::text().contains(longSkillName.toHtmlEscaped())) return false;
+                                ok = popup->grab().save(screenshots + QStringLiteral("/profile-skill-tooltip-%1.png").arg(scale)) && ok;
+                                QToolTip::hideText();
+                            }
                         }
                     }
                     if (!longSkillFound) return false;
