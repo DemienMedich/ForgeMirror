@@ -12491,9 +12491,9 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
     ApplyQtDisplaySettings(app, display);
     QtWorkspace workspace(directory);
     if (services) {
-        workspace.data.bannerTexts = {u8"Одна законченная задача лучше десяти начатых.", u8"Сначала ясность, затем действие."};
+        workspace.data.bannerTexts = {u8"Одна законченная задача лучше десяти начатых. Проверяйте контекст <UI> & UX: длинная фраза должна читаться полностью, а не только до многоточия в строке таблицы.", u8"Сначала ясность, затем действие."};
         workspace.data.vault.balance = 125.5;
-        workspace.data.vault.log = {{QDateTime::currentSecsSinceEpoch(), 12.5, u8"Награда", u8"Синтетическая запись для проверки интерфейса"}};
+        workspace.data.vault.log = {{QDateTime::currentSecsSinceEpoch(), 12.5, u8"Награда", u8"Синтетическая запись для проверки интерфейса <UI> & UX. Полное примечание должно быть доступно с клавиатуры без растягивания таблицы и без необходимости удерживать указатель над строкой."}};
         if (!SaveBannerTexts(directory, workspace.data.bannerTexts) || !SaveStorageVault(directory, workspace.data.vault)) return false;
     }
     if (catalogLists) {
@@ -12613,6 +12613,21 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
         const QString pageName = (catalogLists || analytics || services) ? QStringLiteral("page-%1").arg(page)
             : page == 0 ? QStringLiteral("profile") : page == 1 ? QStringLiteral("tasks") : QStringLiteral("projects");
         if (!window.grab().save(output + QStringLiteral("/%1-%2x%3.png").arg(pageName).arg(size.width()).arg(size.height()))) return false;
+        if (services && (page == 10 || page == 12)) {
+            auto* records = window.findChild<QTableWidget*>("records");
+            auto* toggle = window.findChild<QPushButton*>("detailsToggle");
+            auto* details = window.findChild<QTextBrowser*>("details");
+            if (!records || !toggle || !details || !toggle->isVisible()) return false;
+            records->selectRow(0);
+            const auto text = records->item(0, page == 10 ? 3 : 0)->text();
+            toggle->setFocus(); QTest::keyClick(toggle, Qt::Key_Space); QTest::qWait(30);
+            if (!details->isVisible() || !details->toPlainText().contains(text)) return false;
+            scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum()); QTest::qWait(30);
+            details->verticalScrollBar()->setValue(details->verticalScrollBar()->maximum()); QTest::qWait(30);
+            if (!window.grab().save(output + QStringLiteral("/%1-details-%2.png").arg(pageName).arg(size.width()))) return false;
+            QTest::keyClick(toggle, Qt::Key_Space);
+            if (details->isVisible()) return false;
+        }
         if (workLists && page == 1) {
             auto* records = window.findChild<QTableWidget*>("records");
             records->selectRow(qMin(3, records->rowCount() - 1));
