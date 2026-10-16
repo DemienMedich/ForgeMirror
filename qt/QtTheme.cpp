@@ -1,4 +1,5 @@
 #include "QtTheme.h"
+#include "QtStandardTranslations.h"
 #include "QtActionIcons.h"
 #include <QtWidgets>
 #include <algorithm>
@@ -257,6 +258,7 @@ void ApplyQtLayoutMetrics(QApplication& app, int spacingPercent, int cornerRadiu
 }
 
 void ApplyQtTheme(QApplication& app) {
+    InstallQtStandardTranslations(app);
     QApplication::setStyle(new ForgeMirrorStyle);
     QPalette palette;
     palette.setColor(QPalette::Window, QColor("#202024"));

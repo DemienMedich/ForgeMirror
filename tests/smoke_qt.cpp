@@ -9330,6 +9330,11 @@ static bool TestQtExportPickerLayout(QApplication& app) {
                         if (!confirmation) { check(false, stem + " overwrite confirmation opened"); picker->reject(); return; }
                         confirmationVisited = true;
                         auto* no = confirmation->button(QMessageBox::No);
+                        auto* yes = confirmation->button(QMessageBox::Yes);
+                        check(confirmation->text() == existingName + QString::fromUtf8(" уже существует.\nЗаменить его?"),
+                            stem + " Russian overwrite context");
+                        check(yes && yes->text().remove('&') == QString::fromUtf8("Да") &&
+                            no && no->text().remove('&') == QString::fromUtf8("Нет"), stem + " Russian overwrite commands");
                         check(no && no->isVisible(), stem + " overwrite rejection available");
                         check(confirmation->screen()->availableGeometry().contains(confirmation->frameGeometry()),
                             stem + " overwrite on screen");
