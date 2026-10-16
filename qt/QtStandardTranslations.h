@@ -13,6 +13,15 @@ public:
     QString translate(const char* context, const char* source, const char*, int) const override {
         const auto ctx = QLatin1String(context);
         const auto text = QLatin1String(source);
+        if (ctx == QLatin1String("QFileSystemModel")) {
+            if (text == QLatin1String("Name")) return QString::fromUtf8("Имя");
+            if (text == QLatin1String("Size")) return QString::fromUtf8("Размер");
+            if (text == QLatin1String("Type")) return QString::fromUtf8("Тип");
+            if (text == QLatin1String("Date Modified")) return QString::fromUtf8("Дата изменения");
+            if (text == QLatin1String("Computer")) return QString::fromUtf8("Компьютер");
+        }
+        if ((ctx == QLatin1String("QFileSystemModel") || ctx == QLatin1String("QFileDialog")) &&
+            text == QLatin1String("My Computer")) return QString::fromUtf8("Мой компьютер");
         if (ctx == QLatin1String("QFileDialog") &&
             text == QLatin1String("%1 already exists.\nDo you want to replace it?"))
             return QString::fromUtf8("%1 уже существует.\nЗаменить его?");

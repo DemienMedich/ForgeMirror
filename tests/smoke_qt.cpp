@@ -9265,6 +9265,12 @@ static bool TestQtExportPickerLayout(QApplication& app) {
                 auto* cancel = buttons ? buttons->button(QDialogButtonBox::Cancel) : nullptr;
                 if (!names || !folder || !type || !save || !cancel) { check(false, stem + " file controls"); picker->reject(); return; }
                 const auto originalName = names->text();
+                auto* files = picker->findChild<QTreeView*>("treeView");
+                check(files && files->model()->headerData(0, Qt::Horizontal).toString() == QString::fromUtf8("Имя") &&
+                    files->model()->headerData(1, Qt::Horizontal).toString() == QString::fromUtf8("Размер") &&
+                    files->model()->headerData(2, Qt::Horizontal).toString() == QString::fromUtf8("Тип") &&
+                    files->model()->headerData(3, Qt::Horizontal).toString() == QString::fromUtf8("Дата изменения"),
+                    stem + " Russian file columns");
                 check(save->text().remove('&') == QString::fromUtf8("Сохранить") &&
                     cancel->text().remove('&') == QString::fromUtf8("Отмена"), stem + " clear Russian commands");
                 check(picker->labelText(QFileDialog::LookIn) == QString::fromUtf8("Папка:") &&
