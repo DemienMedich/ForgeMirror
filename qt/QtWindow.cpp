@@ -8547,9 +8547,6 @@ void QtWindow::exportTasks(bool textFormat) {
     dialog.setDefaultSuffix(suffix);
     dialog.selectFile(suggested);
     PrepareQtExportPicker(dialog);
-    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) return;
-    auto path = dialog.selectedFiles().front();
-    if (!path.endsWith(QLatin1Char('.') + suffix, Qt::CaseInsensitive)) path += QLatin1Char('.') + suffix;
 
     auto csvCell = [](QString value) {
         value.replace(QLatin1Char('"'), QStringLiteral("\"\""));
@@ -8603,13 +8600,20 @@ void QtWindow::exportTasks(bool textFormat) {
             if (!task->description.empty()) bytes += (QStringLiteral("  ") + clean(q(task->description)) + QLatin1Char('\n')).toUtf8();
         }
     }
-    QSaveFile output(path);
-    if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
-        message("Не удалось атомарно сохранить экспорт задач: " + output.errorString().toStdString());
+    while (dialog.exec() == QDialog::Accepted && !dialog.selectedFiles().isEmpty()) {
+        auto path = dialog.selectedFiles().front();
+        if (!path.endsWith(QLatin1Char('.') + suffix, Qt::CaseInsensitive)) path += QLatin1Char('.') + suffix;
+        QSaveFile output(path);
+        if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+            const auto error = output.errorString();
+            output.cancelWriting();
+            message("Не удалось сохранить экспорт задач. Исправьте путь или выберите другую папку: " + error.toStdString());
+            continue;
+        }
+        statusBar()->showMessage(QString::fromUtf8("Экспортировано видимых задач: %1 · %2")
+            .arg(visibleTasks.size()).arg(QDir::toNativeSeparators(path)), 7000);
         return;
     }
-    statusBar()->showMessage(QString::fromUtf8("Экспортировано видимых задач: %1 · %2")
-        .arg(visibleTasks.size()).arg(QDir::toNativeSeparators(path)), 7000);
 }
 
 void QtWindow::exportLogs() {

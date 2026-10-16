@@ -9348,13 +9348,14 @@ static bool TestQtExportPickerLayout(QApplication& app) {
                     check(existing.open(QIODevice::ReadOnly) && existing.readAll() == marker, stem + " existing bytes preserved");
                     existing.close();
                     check(existing.remove(), stem + " remove isolated fixture");
-                    if (entry.page == 1 && QString::fromLatin1(entry.suffix) == "csv") {
-                        const QString invalidPath = exports + "/missing-directory/report.csv";
+                    if (entry.page == 1) {
+                        const QString invalidPath = exports + "/missing-directory/report." + entry.suffix;
+                        const QString recoveredPath = exports + "/recovered-export." + entry.suffix;
                         names->setText(invalidPath); QTest::qWait(20);
                         save->click();
                         check(!picker->isVisible() && picker->result() == QDialog::Accepted,
                             stem + " invalid target reaches export writer");
-                        QTimer::singleShot(0, &window, [&, stem, screenshots] {
+                        QTimer::singleShot(0, &window, [&, stem, screenshots, invalidPath, recoveredPath] {
                             auto* error = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
                             check(error && !error->text().isEmpty(), stem + " writer error shown");
                             if (!error) return;
@@ -9362,6 +9363,21 @@ static bool TestQtExportPickerLayout(QApplication& app) {
                             if (!screenshots.isEmpty())
                                 check(error->grab().save(screenshots + "/path-error-" + stem + ".png"), stem + " writer error capture");
                             error->accept();
+                            QTimer::singleShot(0, &window, [&, stem, screenshots, invalidPath, recoveredPath] {
+                                auto* retry = qobject_cast<QFileDialog*>(QApplication::activeModalWidget());
+                                check(retry && retry->selectedFiles().value(0) == invalidPath, stem + " retry retains failed path");
+                                if (!retry) return;
+                                if (!screenshots.isEmpty())
+                                    check(retry->grab().save(screenshots + "/retry-" + stem + ".png"), stem + " retry capture");
+                                if (scale == 100) retry->reject();
+                                else {
+                                    auto* retryName = retry->findChild<QLineEdit*>("fileNameEdit");
+                                    auto* retryButtons = retry->findChild<QDialogButtonBox*>();
+                                    if (!retryName || !retryButtons) { check(false, stem + " retry controls"); retry->reject(); return; }
+                                    retryName->setText(recoveredPath); QTest::qWait(20);
+                                    retryButtons->button(QDialogButtonBox::Save)->click();
+                                }
+                            });
                         });
                         return;
                     }
@@ -9376,6 +9392,13 @@ static bool TestQtExportPickerLayout(QApplication& app) {
             if (entry.action) action->trigger(); else button->click();
             timer.stop();
             check(visited, stem + " dialog opened");
+            if (scale == 200 && entry.page == 1) {
+                QFile recovered(exports + "/recovered-export." + entry.suffix);
+                check(recovered.open(QIODevice::ReadOnly) &&
+                    recovered.readAll().contains(QByteArray::fromStdString(task.title)), stem + " corrected export contains task");
+                recovered.close();
+                check(recovered.remove(), stem + " remove corrected export fixture");
+            }
             check(QDir(exports).entryList(QDir::Files | QDir::NoDotAndDotDot).isEmpty(), stem + " cancel writes no export");
         }
         window.close();
