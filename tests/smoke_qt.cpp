@@ -12530,14 +12530,16 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
         if (!SaveBannerTexts(directory, workspace.data.bannerTexts) || !SaveStorageVault(directory, workspace.data.vault)) return false;
     }
     if (catalogLists) {
+        if (!workspace.catalog.add_skill(u8"Проектирование интерфейсов — длинное название <UI> & UX", 1.0,
+            u8"Проверка полного описания навыка без расширения рабочей таблицы.")) return false;
         workspace.data.professions = {{"style-artist", u8"Художник окружения", u8"Композиция, материалы и освещение"},
             {"style-designer", u8"Дизайнер интерфейсов", u8"Визуальная система и поведение компонентов"}};
         PipelineStep research; research.id = "style-research"; research.stageCode = "01";
         research.title = u8"Референсы и направление"; research.branch = u8"Дизайн";
         research.owner = u8"Дизайнер"; research.nextIds = {"style-layout"};
-        research.nextStageLabel = u8"К композиции";
+        research.nextStageLabel = u8"К композиции экранов — проверить состояния, доступность и переходы <UI> & UX";
         PipelineStep layout; layout.id = "style-layout"; layout.stageCode = "02";
-        layout.title = u8"Композиция экранов"; layout.branch = u8"Дизайн"; layout.owner = u8"Дизайнер";
+        layout.title = u8"Композиция экранов — длинное название с состояниями <UI> & UX"; layout.branch = u8"Дизайн"; layout.owner = u8"Дизайнер";
         layout.nextIds = {"style-review"}; layout.nextStageLabel = u8"На проверку";
         PipelineStep review; review.id = "style-review"; review.stageCode = "03";
         review.title = u8"Проверка и полировка"; review.branch = u8"Проверка"; review.owner = u8"Команда";
@@ -12683,6 +12685,35 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
             viewerNav->setCurrentRow(page); QTest::qWait(40);
             if (viewerTable->rowCount()==0) return false;
             viewerTable->selectRow(0);
+            auto* toggle = viewer.findChild<QPushButton*>("detailsToggle");
+            auto* details = viewer.findChild<QTextBrowser*>("details");
+            auto* viewerScroll = viewer.findChild<QScrollArea*>("pageContentScrollArea");
+            if (!toggle || !details || !viewerScroll) return false;
+            int longRow = -1;
+            for (int row = 0; row < viewerTable->rowCount(); ++row)
+                for (int column = 0; column < viewerTable->columnCount(); ++column)
+                    if (auto* cell = viewerTable->item(row, column); cell && cell->text().contains("<UI> & UX")) longRow = row;
+            if (longRow < 0) return false;
+            viewerTable->selectRow(longRow);
+            if (!toggle->isChecked()) toggle->click();
+            QTest::qWait(30);
+            if (!details->isVisible() || !details->toPlainText().contains("<UI> & UX")) return false;
+            viewerScroll->verticalScrollBar()->setValue(viewerScroll->verticalScrollBar()->maximum());
+            details->verticalScrollBar()->setValue(0); QTest::qWait(20);
+            if (!viewer.grab().save(output + QStringLiteral("/catalog-long-details-%1.png").arg(page))) return false;
+            if (page == 4) {
+                for (int row = 0; row < viewerTable->rowCount(); ++row) {
+                    auto* next = viewerTable->item(row, 4);
+                    if (!next || !next->text().contains("<UI> & UX")) continue;
+                    viewerTable->selectRow(row); QTest::qWait(20);
+                    if (!details->toPlainText().contains(next->text()) ||
+                        !details->toHtml().contains("pipeline:style-layout")) return false;
+                    details->verticalScrollBar()->setValue(details->verticalScrollBar()->maximum());
+                    QTest::qWait(20);
+                    if (!viewer.grab().save(output + "/catalog-long-next-link.png")) return false;
+                }
+            }
+            toggle->click();
             for (const auto* name : {"primary", "editEntry", "deleteEntry"}) {
                 auto* action = viewer.findChild<QWidget*>(name);
                 if (!action || (action->isVisible() && action->isEnabled())) return false;
