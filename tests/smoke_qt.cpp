@@ -9311,6 +9311,39 @@ static bool TestQtExportPickerLayout(QApplication& app) {
                 const auto screenshots = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
                 if (!screenshots.isEmpty() && entry.page == 1 && QString::fromLatin1(entry.suffix) == "csv" && (scale == 100 || scale == 200))
                     check(picker->grab().save(screenshots + QStringLiteral("/export-picker-%1.png").arg(scale)), stem + " capture");
+                if (scale == 100 || scale == 200) {
+                    const QString existingName = QStringLiteral("existing-export.%1").arg(entry.suffix);
+                    const QString existingPath = exports + "/" + existingName;
+                    const QByteArray marker("existing export must survive rejection\n");
+                    QFile existing(existingPath);
+                    if (!existing.open(QIODevice::WriteOnly) || existing.write(marker) != marker.size()) {
+                        check(false, stem + " overwrite fixture"); picker->reject(); return;
+                    }
+                    existing.close();
+                    picker->selectFile(existingName);
+                    names->setText(existingName);
+                    QTest::qWait(20);
+                    check(save->isEnabled(), stem + " overwrite save enabled");
+                    bool confirmationVisited = false;
+                    QTimer::singleShot(0, picker, [&] {
+                        auto* confirmation = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+                        if (!confirmation) { check(false, stem + " overwrite confirmation opened"); picker->reject(); return; }
+                        confirmationVisited = true;
+                        auto* no = confirmation->button(QMessageBox::No);
+                        check(no && no->isVisible(), stem + " overwrite rejection available");
+                        check(confirmation->screen()->availableGeometry().contains(confirmation->frameGeometry()),
+                            stem + " overwrite on screen");
+                        if (!screenshots.isEmpty())
+                            check(confirmation->grab().save(screenshots + "/overwrite-" + stem + ".png"), stem + " overwrite capture");
+                        if (no) no->click(); else confirmation->reject();
+                    });
+                    save->click();
+                    QTest::qWait(20);
+                    check(confirmationVisited && picker->isVisible(), stem + " overwrite rejection returns to picker");
+                    check(existing.open(QIODevice::ReadOnly) && existing.readAll() == marker, stem + " existing bytes preserved");
+                    existing.close();
+                    check(existing.remove(), stem + " remove isolated fixture");
+                }
                 if (QGuiApplication::platformName() == "offscreen") QApplication::setActiveWindow(picker);
                 cancel->setFocus();
                 QTest::keyClick(cancel, Qt::Key_Return);
