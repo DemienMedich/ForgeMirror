@@ -10859,7 +10859,7 @@ static bool TestRulesEditor() {
     if (history.size() != 1 || !history.first().toObject().value("changes").toString().contains(QString::fromUtf8("База уровня")) ||
         history.first().toObject().value("before").toObject().value("levelBaseXp").toInt() != 1500 ||
         history.first().toObject().value("after").toObject().value("levelBaseXp").toInt() != 2345) return false;
-    bool restoredPreset = false, historyViewed = false, deleteCancelled = false;
+    bool restoredPreset = false, historyViewed = false, deleteCancelled = false, deleteConfirmed = false;
     QTimer::singleShot(0, [&] {
         auto* dialog = QApplication::activeModalWidget();
         auto* combo = dialog ? dialog->findChild<QComboBox*>("rulesPresetCombo") : nullptr;
@@ -10896,10 +10896,24 @@ static bool TestRulesEditor() {
             QFile retained(temp.path() + "/meta/qt-rules-presets.json");
             deleteCancelled = retained.open(QIODevice::ReadOnly) &&
                 QJsonDocument::fromJson(retained.readAll()).array() == presets && base->value() == 2345;
+            retained.close();
+            QTimer::singleShot(0, [] {
+                auto* confirmation = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+                if (confirmation && confirmation->button(QMessageBox::Yes))
+                    confirmation->button(QMessageBox::Yes)->click();
+            });
+            remove->click();
+            auto* notice = dialog->findChild<QLabel*>("rulesNotice");
+            deleteConfirmed = retained.open(QIODevice::ReadOnly) &&
+                QJsonDocument::fromJson(retained.readAll()).array().isEmpty() &&
+                combo->findData(QStringLiteral("Migration baseline")) < 0 && base->value() == 2345 &&
+                notice && notice->isVisible() && notice->text() == QString::fromUtf8("Пресет удалён.");
+            const auto artifacts = qEnvironmentVariable("FORGEMIRROR_QT_TEST_ARTIFACTS");
+            if (!artifacts.isEmpty()) dialog->grab().save(artifacts + "/rules-preset-deleted.png");
         }
         qobject_cast<QDialog*>(dialog)->reject();
     });
-    if (ShowRulesEditor(nullptr, workspace) || !restoredPreset || !historyViewed || !deleteCancelled || LoadGameplayConfig(workspace.directory).levelBaseXp != 2345) return false;
+    if (ShowRulesEditor(nullptr, workspace) || !restoredPreset || !historyViewed || !deleteCancelled || !deleteConfirmed || LoadGameplayConfig(workspace.directory).levelBaseXp != 2345) return false;
     QTemporaryDir corruptTemp; if (!corruptTemp.isValid()) return false;
     QtWorkspace corruptWorkspace(std::filesystem::u8path(corruptTemp.path().toUtf8().constData()));
     const QByteArray corruptPresetBytes("{broken preset data");
