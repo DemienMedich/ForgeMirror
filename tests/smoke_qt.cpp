@@ -12520,6 +12520,11 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
     const auto directory = std::filesystem::u8path(temp.path().toUtf8().constData());
     auto display = LoadQtDisplaySettings(directory);
     display.scalePercent = 100;
+    if (catalogLists && qEnvironmentVariableIsSet("FORGEMIRROR_UI_AUDIT_SCALE")) {
+        const int scale = qEnvironmentVariableIntValue("FORGEMIRROR_UI_AUDIT_SCALE");
+        if (scale != 100 && scale != 200) return false;
+        display.scalePercent = scale;
+    }
     if (!SaveQtDisplaySettings(directory, display)) return false;
     ApplyQtDisplaySettings(app, display);
     QtWorkspace workspace(directory);
