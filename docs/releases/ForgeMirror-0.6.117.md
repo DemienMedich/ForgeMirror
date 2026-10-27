@@ -25,3 +25,11 @@ ProductVersion, uninstall DisplayVersion, --version и настоящий HWND-�
 Локальные apps.json в Z:\CPP\PharosHub\package\config и HKCU Software/Pharos/Hub/installed/forge-mirror согласованы:0.6.117, C:/Users/mrdem/AppData/Local/Programs/ForgeMirror/ForgeMirrorQt.exe. Другие приложения Hub семантически не менялись. Живое нажатие Hub не проверялось; облачный manifest не публиковался. Приватные перечни/резервные записи находятся только в delivery-папке.
 
 Это завершённая поставка данного изменения, не автоматическое закрытие общей эстетической приёмки.
+
+## Публикация в PharosHub — 27.10.2026
+
+По прямому запросу пользователя manifest общей папки Z:\Yandex.Disk\PharosHub\releases\forge-mirror обновлён с 0.6.104 до 0.6.117 штатным publish-release.ps1. Executable: ForgeMirrorQt.exe. Исходные 31 файла сверены с ForgeMirror-0.6.117-package.json; после публикации повторно проверены все SHA-256. Старый payload сохранён. Setup скопирован в installers/forge-mirror/ForgeMirrorSetup_0.6.117.exe, рядом .sha256; хеш совпадает с указанным выше.
+
+HubInstallTests --real-release выполнил установку опубликованного пакета с изолированными настройками (exit0). Установленная тестовая копия совпала с исходной по SHA-256 и ProductVersion=0.6.117; запуск с системным PATH, без QT_PLUGIN_PATH/QT_QPA_PLATFORM_PLUGIN_PATH, новым --storage-dir и --smoke-test: exit0, stderr0. Доказательства: build-qt/hub-publication-0.6.117 (предыдущий manifest, install.log, startup-error.log, result.json). Пользовательская установка и данные этой проверкой не менялись.
+
+Проверена публикация в локальной синхронизируемой папке Яндекс.Диска; завершение загрузки на сервер и получение на другом компьютере не подтверждались. В Hub требуется обновить список. Переустановка самого Hub не требуется.
