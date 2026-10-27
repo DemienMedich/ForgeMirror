@@ -16438,6 +16438,15 @@ int main(int argc, char** argv) {
         !table->item(0, 4)->text().contains(QString::fromUtf8("автопрокрутки Qt-журнала 19")))
         return fail("Qt application log did not append and autoscroll to a new entry");
     logAutoScroll->setChecked(false);
+    const int readingRow = std::min(10, table->rowCount() - 1);
+    table->selectRow(readingRow);
+    const QString readingMessage = table->item(readingRow, 4)->text();
+    table->scrollToItem(table->item(readingRow, 4), QAbstractItemView::PositionAtCenter);
+    QApplication::processEvents();
+    window.statusBar()->showMessage(QString::fromUtf8("Новая запись во время чтения журнала без автопрокрутки"));
+    QApplication::processEvents();
+    if (table->currentRow() < 0 || table->item(table->currentRow(), 4)->text() != readingMessage)
+        return fail("Qt log update lost the selected entry while autoscroll was disabled");
     logWarnings->setChecked(false);
     logSourceFilter->setCurrentIndex(0);
     const auto startupLogToken = QString::fromUtf8("рабочее пространство загружено");

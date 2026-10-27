@@ -6892,7 +6892,11 @@ void QtWindow::render() {
             const QStringList values{QString::number(total), timeText(it->timestamp), level, q(it->source), q(it->message)};
             if (!values.join(' ').contains(search_->text(), Qt::CaseInsensitive)) continue;
             ++visible;
-            row(std::to_string(total), values);
+            // Row numbers shift whenever a newer event arrives. Restore the
+            // reader's selection by the displayed event, not its current rank.
+            // Identical events intentionally share this UI-only identity.
+            const QJsonArray identity{QString::number(it->timestamp), int(it->level), q(it->source), q(it->message)};
+            row("log:" + QJsonDocument(identity).toJson(QJsonDocument::Compact).toStdString(), values);
         }
         summary_->setText(QString::fromUtf8("Показано: %1 из %2 · Инфо: %3 · Предупреждения: %4 · Ошибки: %5 · %6")
             .arg(visible).arg(total).arg(infoCount).arg(warningCount).arg(errorCount)
