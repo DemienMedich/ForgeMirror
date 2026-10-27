@@ -13346,6 +13346,12 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
                 const int originalPosition = horizontal->value();
                 horizontal->setValue(horizontal->maximum());
                 QTest::qWait(20);
+                const int lastColumn = table->columnCount() - 1;
+                auto* reportHeader = table->horizontalHeader();
+                check(horizontal->value() == horizontal->maximum(), "report capture reaches horizontal endpoint");
+                check(reportHeader->sectionViewportPosition(lastColumn) >= 0 &&
+                    reportHeader->sectionViewportPosition(lastColumn) + reportHeader->sectionSize(lastColumn) <=
+                        reportHeader->viewport()->width(), "last report header is fully inside the viewport");
                 capture(QStringLiteral("report-%1-compare-right").arg(mode));
                 horizontal->setValue(originalPosition);
             }
