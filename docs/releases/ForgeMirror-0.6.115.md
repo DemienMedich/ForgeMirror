@@ -2,6 +2,8 @@
 
 ## Доставка — 27.10.2026
 
+Уточнение фактической сверки Hub: apps.json перед доставкой указывал на build-qt/release-candidate-0.6.104/ForgeMirrorQt.exe, хотя registry уже указывал на установленный EXE. После обнаружения путь apps.json исправлен на C:/Users/mrdem/AppData/Local/Programs/ForgeMirror/ForgeMirrorQt.exe; повторная проверка точного равенства executable/version с registry прошла. Ниже «путь прежний» относится к установленному EXE и registry, а не к ошибочной исходной записи apps.json.
+
 Обновляет исторический статус ниже: настоящий dist Setup установлен поверх0.6.114, exit0. Приложение было закрыто. Installed EXE0.6.115 побайтно совпал с проверенным пакетом; все90 ранее существовавших файлов рабочих данных сохранили SHA256. Запуск установленного EXE без среды разработки в PATH и с новым изолированным --storage-dir: exit0, stderr0; qwindows.dll присутствует. Рабочий профиль не открывался.
 
 Доказательства: build-qt/delivery-0.6.115-e07255b4c8d74fbdad981794bab0a4cc (install.log, startup.err, приватный userdata-before.json и резервные записи Hub). Приватные перечни не включены в Git. Локальные apps.json в Z:\CPP\PharosHub\package\config и HKCU Software/Pharos/Hub/installed/forge-mirror согласованы с0.6.115; путь Qt EXE прежний. Другие записи Hub семантически неизменны. Живое нажатие кнопки Hub не проверялось, облачный manifest не публиковался.
