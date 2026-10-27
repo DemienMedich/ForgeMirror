@@ -5692,6 +5692,14 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
         const auto after = snapshot(directory);
         record(before.okay && after.okay, context + " snapshot read success");
         record(before.okay && after.okay && before.files == after.files, context + " all file bytes unchanged");
+        if (before.okay && after.okay && before.files != after.files) {
+            for (auto it = before.files.cbegin(); it != before.files.cend(); ++it)
+                if (!after.files.contains(it.key()) || after.files.value(it.key()) != it.value())
+                    std::cerr << "Decision forms changed or removed test file: " << it.key().toStdString() << '\n';
+            for (auto it = after.files.cbegin(); it != after.files.cend(); ++it)
+                if (!before.files.contains(it.key()))
+                    std::cerr << "Decision forms added test file: " << it.key().toStdString() << '\n';
+        }
     };
     const auto write = [](const std::filesystem::path& target, const QByteArray& bytes) {
         QFile file(QString::fromUtf8(target.u8string()));
