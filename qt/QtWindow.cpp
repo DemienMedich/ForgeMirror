@@ -5177,7 +5177,7 @@ void QtWindow::render() {
     listEmptyState_->hide();
     bottomActions_->setVisible(!timerPage && !modelPage);
     const bool hasDetails = page == Tasks || page == Statistics || page == Pipeline || page == Projects || page == Catalog ||
-        page == Vault || page == Banner;
+        page == Vault || page == Banner || page == Audit || page == Logs;
     detailsToggle_->setText(page == Pipeline ? QString::fromUtf8("Подробности этапа") : QString::fromUtf8("Подробности"));
     const auto searchHelp = page == Pipeline
         ? QString::fromUtf8("Название, код, ветка, описание, контроль…")

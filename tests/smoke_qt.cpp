@@ -12610,6 +12610,8 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
     auto* scroll = window.findChild<QScrollArea*>("pageContentScrollArea");
     auto* tasks = window.findChild<QTableWidget*>("profileTaskBriefTable");
     if (!nav || !scroll || !tasks) return false;
+    const QString journalLongText = QString::fromUtf8("Длинное событие журнала <UI> & UX: полный контекст должен читаться с клавиатуры в раскрываемых подробностях, без удерживания указателя над строкой и без растягивания рабочей таблицы.");
+    if (catalogLists || analytics) window.recordRuntimeMessage(AppLogLevel::Warning, journalLongText);
     nav->setCurrentRow(0);
     const auto output = qEnvironmentVariable("FORGEMIRROR_UI_AUDIT_SCREENSHOTS");
     if (output.isEmpty() || !QDir().mkpath(output)) return false;
@@ -12705,15 +12707,28 @@ static bool CaptureQtStyle(QApplication& app, QtStyleCapture mode) {
         const QString pageName = (catalogLists || analytics || services) ? QStringLiteral("page-%1").arg(page)
             : page == 0 ? QStringLiteral("profile") : page == 1 ? QStringLiteral("tasks") : QStringLiteral("projects");
         if (!window.grab().save(output + QStringLiteral("/%1-%2x%3.png").arg(pageName).arg(size.width()).arg(size.height()))) return false;
-        if (services && (page == 10 || page == 12)) {
+        if ((services && (page == 10 || page == 12)) || ((catalogLists || analytics) && (page == 7 || page == 16))) {
             auto* records = window.findChild<QTableWidget*>("records");
             auto* toggle = window.findChild<QPushButton*>("detailsToggle");
             auto* details = window.findChild<QTextBrowser*>("details");
             if (!records || !toggle || !details || !toggle->isVisible()) return false;
-            records->selectRow(0);
-            const auto text = records->item(0, page == 10 ? 3 : 0)->text();
+            int selectedRow = 0;
+            const int textColumn = page == 10 ? 3 : page == 16 ? 4 : page == 7 ? 6 : 0;
+            if (page == 7 || page == 16) {
+                selectedRow = -1;
+                for (int row = 0; row < records->rowCount(); ++row)
+                    if (records->item(row, textColumn)->text() == journalLongText) { selectedRow = row; break; }
+                if (selectedRow < 0) { std::cerr << "journal details fixture missing page=" << page << '\n'; return false; }
+            }
+            records->selectRow(selectedRow);
+            const auto text = records->item(selectedRow, textColumn)->text();
+            if ((page == 7 || page == 16) && text != journalLongText) return false;
             toggle->setFocus(); QTest::keyClick(toggle, Qt::Key_Space); QTest::qWait(30);
-            if (!details->isVisible() || !details->toPlainText().contains(text)) return false;
+            if (!details->isVisible() || !details->toPlainText().contains(text)) {
+                std::cerr << "details content page=" << page << " visible=" << details->isVisible()
+                    << " checked=" << toggle->isChecked() << " actual=" << details->toPlainText().toStdString() << '\n';
+                return false;
+            }
             scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum()); QTest::qWait(30);
             details->verticalScrollBar()->setValue(details->verticalScrollBar()->maximum()); QTest::qWait(30);
             if (!window.grab().save(output + QStringLiteral("/%1-details-%2.png").arg(pageName).arg(size.width()))) return false;
