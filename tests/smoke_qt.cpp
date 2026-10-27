@@ -5991,6 +5991,14 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
         const auto created = workspace.storage->create_profile(profile); if (!created) return false;
         if (!workspace.storage->set_active_profile(created->id)) return false;
         QtWindow window(workspace); window.showNormal(); settle();
+        // The startup reminder check writes asynchronously after 2500 ms.
+        // Finish it before taking byte-for-byte Cancel snapshots; otherwise
+        // unrelated housekeeping can look like a dialog mutation.
+        const QString reminderState = QString::fromUtf8((local / "meta/qt-reminder-state.json").u8string());
+        QElapsedTimer reminderReady; reminderReady.start();
+        while (!QFileInfo::exists(reminderState) && reminderReady.elapsed() < 5000) QTest::qWait(20);
+        record(QFileInfo::exists(reminderState), "startup reminder state settled before dialog snapshots");
+        if (auto* timer = window.findChild<QTimer*>("deadlineReminderTimer")) timer->stop();
         auto* nav=window.findChild<QListWidget*>("navigation"); auto* adjust=window.findChild<QPushButton*>("adjustProfileWallet");
         auto* create=window.findChild<QPushButton*>("primary"); auto* help=window.findChild<QAction*>("shortcutHelpAction");
         if (!nav || !adjust || !create || !help) return false;
@@ -6128,6 +6136,7 @@ static bool TestQtDecisionFormsLayout(QApplication& app) {
                 if (!write(target,"{broken")) { record(false,"invalid conflict fixture write"); return; }
                 const auto before=snapshot(temporary.path());
                 const QString stem=QString("%1-invalid-%2").arg(storage ? "storage" : "cloud").arg(scale);
+                if (qEnvironmentVariableIsSet("FORGEMIRROR_DIAG_REMINDER_DELAY")) QTest::qWait(3000);
                 bool warningShown=false;
                 ++modalContexts;
                 ScheduleQtModalDriver(app,storage ? "storageConflictResolver" : "cloudConflictResolver",stem,[&](QDialog* dialog) {
