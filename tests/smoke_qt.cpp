@@ -13171,6 +13171,8 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
         if (!workspace.storage->set_active_profile(LoadQtDisplaySettings(workspace.directory).lastProfileId.toStdString())) return false;
         auto longProfile=workspace.storage->load_profile(); if (!longProfile) return false;
         longProfile->set_name(longName.toUtf8().toStdString());
+        longProfile->set_last_task_timestamp(QDateTime::currentSecsSinceEpoch() - 40LL * 86400);
+        longProfile->start_penalty_recovery(3);
         if (!workspace.storage->save_profile(*longProfile)) return false;
         workspace.reload();
         auto settings=LoadQtDisplaySettings(workspace.directory);
@@ -13256,6 +13258,13 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
         check(LoadQtDisplaySettings(workspace.directory).adminStatsRefreshSeconds==37,"interval preference saved");
         for (int mode=0;mode<8;++mode) {
             view->setCurrentIndex(mode); QTest::qWait(5);
+            if (mode == 4 || mode == 5) {
+                check(table->rowCount() > 0, "inactive and recovery views contain a real fixture");
+                bool found = false;
+                for (int row = 0; row < table->rowCount(); ++row)
+                    found |= table->item(row, 1) && table->item(row, 1)->text() == longName;
+                check(found, "inactive and recovery views retain the expected long profile name");
+            }
             check(table->columnCount()==(mode<6 ? 9 : 3),"all existing stats views retained");
             inspectHeaders(QStringLiteral("profiles-%1").arg(mode));
             if (mode >= 6 && table->rowCount() > 0) {
@@ -13289,6 +13298,13 @@ static bool TestQtAdminStatsPresentation(QApplication& app) {
             scroll->ensureWidgetVisible(table,0,4);
             QApplication::processEvents();
             capture(QStringLiteral("view-%1").arg(mode));
+            if (mode == 4 || mode == 5) {
+                const int previous = table->horizontalScrollBar()->value();
+                table->horizontalScrollBar()->setValue(table->horizontalScrollBar()->maximum());
+                QApplication::processEvents();
+                capture(QStringLiteral("view-%1-right").arg(mode));
+                table->horizontalScrollBar()->setValue(previous);
+            }
             const int flexible=mode==6 ? 2 : 1;
             const int oldWidth=table->columnWidth(flexible);
             window.resize(1440,640); QTest::qWait(5); window.resize(800,520); QTest::qWait(5);
